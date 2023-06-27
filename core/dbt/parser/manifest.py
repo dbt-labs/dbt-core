@@ -525,7 +525,7 @@ class ManifestLoader:
             # determine whether they need processing.
             start_process = time.perf_counter()
             self.process_sources(self.root_project.project_name)
-            self.process_refs(self.root_project.project_name)
+            self.process_refs(self.root_project.project_name, self.root_project.dependencies)
             self.process_docs(self.root_project)
             self.process_metrics(self.root_project)
             self.check_valid_group_config()
@@ -551,7 +551,11 @@ class ManifestLoader:
             external_nodes_modified = self.inject_external_nodes()
             if external_nodes_modified:
                 self.manifest.rebuild_ref_lookup()
-                self.process_refs(self.root_project.project_name)
+                self.process_refs(
+                    self.root_project.project_name,
+                    self.root_project.dependencies,
+                    self.root_project.dependencies,
+                )
                 # parent and child maps will be rebuilt by write_manifest
 
         # Log the publication artifact for this project
@@ -1090,23 +1094,23 @@ class ManifestLoader:
 
     # Takes references in 'refs' array of nodes and exposures, finds the target
     # node, and updates 'depends_on.nodes' with the unique id
-    def process_refs(self, current_project: str):
+    def process_refs(self, current_project: str, dependencies: Optional[Dict[str, Project]]):
         for node in self.manifest.nodes.values():
             if node.created_at < self.started_at:
                 continue
-            _process_refs(self.manifest, current_project, node)
+            _process_refs(self.manifest, current_project, node, dependencies)
         for exposure in self.manifest.exposures.values():
             if exposure.created_at < self.started_at:
                 continue
-            _process_refs(self.manifest, current_project, exposure)
+            _process_refs(self.manifest, current_project, exposure, dependencies)
         for metric in self.manifest.metrics.values():
             if metric.created_at < self.started_at:
                 continue
-            _process_refs(self.manifest, current_project, metric)
+            _process_refs(self.manifest, current_project, metric, dependencies)
         for semantic_model in self.manifest.semantic_models.values():
             if semantic_model.created_at < self.started_at:
                 continue
-            _process_refs(self.manifest, current_project, semantic_model)
+            _process_refs(self.manifest, current_project, semantic_model, dependencies)
             self.update_semantic_model(semantic_model)
 
     # Takes references in 'metrics' array of nodes and exposures, finds the target
@@ -1424,8 +1428,12 @@ def _process_docs_for_metrics(context: Dict[str, Any], metric: Metric) -> None:
     metric.description = get_rendered(metric.description, context)
 
 
-def _process_refs(manifest: Manifest, current_project: str, node) -> None:
+def _process_refs(
+    manifest: Manifest, current_project: str, node, dependencies: Optional[Mapping[str, Project]]
+) -> None:
     """Given a manifest and node in that manifest, process its refs"""
+
+    dependencies = dependencies or {}
 
     if isinstance(node, SeedNode):
         return
@@ -1477,6 +1485,22 @@ def _process_refs(manifest: Manifest, current_project: str, node) -> None:
                     ref_unique_id=target_model.unique_id,
                     access=AccessType.Private,
                     scope=dbt.utils.cast_to_str(target_model.group),
+                )
+        elif (
+            isinstance(target_model, ModelNode)
+            and target_model.access == AccessType.Protected
+            # don't raise this reference error for ad hoc 'preview' queries
+            and node.resource_type != NodeType.SqlOperation
+            and node.resource_type != NodeType.RPCCall  # TODO: rm
+        ):
+            dependency = dependencies.get(target_model.package_name)
+            restrict_package_access = dependency.restrict_access if dependency else False
+            if node.package_name != target_model.package_name and restrict_package_access:
+                raise dbt.exceptions.DbtReferenceError(
+                    unique_id=node.unique_id,
+                    ref_unique_id=target_model.unique_id,
+                    access=AccessType.Protected,
+                    scope=target_model.package_name,
                 )
 
         target_model_id = target_model.unique_id
@@ -1630,7 +1654,7 @@ def process_macro(config: RuntimeConfig, manifest: Manifest, macro: Macro) -> No
 def process_node(config: RuntimeConfig, manifest: Manifest, node: ManifestNode):
 
     _process_sources_for_node(manifest, config.project_name, node)
-    _process_refs(manifest, config.project_name, node)
+    _process_refs(manifest, config.project_name, node, config.dependencies)
     ctx = generate_runtime_docs_context(config, node, manifest, config.project_name)
     _process_docs_for_node(ctx, node)
 

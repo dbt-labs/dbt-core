@@ -521,18 +521,17 @@ class RuntimeRefResolver(BaseRefResolver):
             and self.model.resource_type != NodeType.SqlOperation
             and self.model.resource_type != NodeType.RPCCall  # TODO: rm
         ):
-            dependency = self.config.dependencies.get(target_model.package_name)
-            restrict_package_access = dependency.restrict_access if dependency else False
-            if (
-                not self.model.package_name
-                or self.model.package_name != target_model.package_name
-                and restrict_package_access
-            ):
+            dependencies = self.config.dependencies or {}
+            target_dependency = dependencies.get(target_model.package_name)
+            restrict_package_access = (
+                target_dependency.restrict_access if target_dependency else False
+            )
+            if self.model.package_name != target_model.package_name and restrict_package_access:
                 raise DbtReferenceError(
                     unique_id=self.model.unique_id,
                     ref_unique_id=target_model.unique_id,
                     access=AccessType.Protected,
-                    scope=cast_to_str(target_model.package_name),
+                    scope=target_model.package_name,
                 )
 
         self.validate(target_model, target_name, target_package, target_version)
