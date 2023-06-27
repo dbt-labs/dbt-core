@@ -554,7 +554,6 @@ class ManifestLoader:
                 self.process_refs(
                     self.root_project.project_name,
                     self.root_project.dependencies,
-                    self.root_project.dependencies,
                 )
                 # parent and child maps will be rebuilt by write_manifest
 
