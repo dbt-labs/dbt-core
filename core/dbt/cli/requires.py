@@ -252,12 +252,7 @@ def manifest(*args0, write=True, write_perf_info=False):
                 if write and ctx.obj["flags"].write_json:
                     write_manifest(manifest, ctx.obj["runtime_config"].project_target_path)
                     pm = get_plugin_manager(ctx.obj["runtime_config"])
-                    plugin_artifacts = pm.get_manifest_artifacts(
-                        manifest,
-                        runtime_config.project_name,
-                        runtime_config.credentials.type,
-                        runtime_config.quoting,
-                    )
+                    plugin_artifacts = pm.get_manifest_artifacts(manifest)
                     for path, plugin_artifact in plugin_artifacts.items():
                         plugin_artifact.write(path)
 

@@ -21,17 +21,35 @@ def dbt_hook(func):
 
 
 class dbtPlugin:
-    def __init__(self, name: str, project: Project):
-        self.name = name
+    def __init__(self, project: Project):
         self.project = project
+        self.initialize()
+
+    @property
+    def name(self) -> str:
+        return self.__class__.__name__
+
+    def initialize(self) -> None:
+        """
+        Initialize the plugin. This function may be overridden by subclasses that have
+        additional initialization steps.
+        """
+        pass
 
     def get_nodes(self) -> PluginNodes:
-        """TODO"""
-        raise NotImplementedError
+        """
+        Provide PluginNodes to dbt for injection into dbt's DAG.
+        Currently the only node types that are accepted are model nodes.
+        """
+        raise NotImplementedError(f"get_nodes hook not implemented for {self.name}")
 
     def get_manifest_artifacts(self, manifest: Manifest) -> PluginArtifacts:
-        """TODO"""
-        raise NotImplementedError
+        """
+        Given a manifest, provide PluginArtifacts derived for writing by core.
+        PluginArtifacts share the same lifecycle as the manifest.json file -- they
+        will either be written or not depending on whether the manifest is written.
+        """
+        raise NotImplementedError(f"get_manifest_artifacts hook not implemented for {self.name}")
 
 
 class PluginManager:
@@ -76,14 +94,11 @@ class PluginManager:
                     assert issubclass(
                         plugin_cls, dbtPlugin
                     ), f"'plugin' in {name} must be subclass of dbtPlugin"
-
-                    plugin = plugin_cls(name=name, project=project)
+                    plugin = plugin_cls(project=project)
                     plugins.append(plugin)
         return cls(plugins=plugins)
 
-    def get_manifest_artifacts(
-        self, manifest: Manifest, project_name: str, adapter_type: str, quoting: Dict[str, str]
-    ) -> PluginArtifacts:
+    def get_manifest_artifacts(self, manifest: Manifest) -> PluginArtifacts:
         plugin_artifacts = {}
         for hook_method in self.hooks.get("get_manifest_artifacts", []):
             plugin_artifact = hook_method(manifest)
