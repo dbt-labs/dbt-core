@@ -55,6 +55,11 @@ semantic_models:
         expr: user_id
 """
 
+schema_without_semantic_model_yml = """models:
+  - name: fct_revenue
+    description: This is the model fct_revenue. It should be able to use doc blocks
+"""
+
 fct_revenue_sql = """select
   1 as id,
   10 as user_id,
@@ -85,12 +90,12 @@ class TestSemanticModelParsing:
         )
         assert len(semantic_model.measures) == 5
 
-    @pytest.mark.skip("Restore this test when partial parsing is implemented.")
-    def test_semantic_model_partial_parsing(self, project):
+    def test_semantic_model_changed_partial_parsing(self, project):
         # First, use the default schema.yml to define our semantic model, and
         # run the dbt parse command
         runner = dbtRunner()
         result = runner.invoke(["parse"])
+        assert result.success
 
         # Next, modify the default schema.yml to change a detail of the semantic
         # model.
@@ -99,8 +104,27 @@ class TestSemanticModelParsing:
 
         # Now, run the dbt parse command again.
         result = runner.invoke(["parse"])
+        assert result.success
 
         # Finally, verify that the manifest reflects the partially parsed change
         manifest = result.result
         semantic_model = manifest.semantic_models["semanticmodel.test.revenue"]
         assert semantic_model.dimensions[0].type_params.time_granularity == TimeGranularity.WEEK
+
+    def test_semantic_model_deleted_partial_parsing(self, project):
+        # First, use the default schema.yml to define our semantic model, and
+        # run the dbt parse command
+        runner = dbtRunner()
+        result = runner.invoke(["parse"])
+        assert result.success
+        assert "semanticmodel.test.revenue" in result.result.semantic_models
+
+        # Next, modify the default schema.yml to remove the semantic model.
+        write_file(schema_without_semantic_model_yml, project.project_root, "models", "schema.yml")
+
+        # Now, run the dbt parse command again.
+        result = runner.invoke(["parse"])
+        assert result.success
+
+        # Finally, verify that the manifest reflects the deletion
+        assert "semanticmodel.test.revenue" not in result.result.semantic_models
