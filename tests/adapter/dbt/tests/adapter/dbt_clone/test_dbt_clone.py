@@ -1,7 +1,7 @@
+import pytest
 import os
 import shutil
 from copy import deepcopy
-import pytest
 from collections import Counter
 from dbt.exceptions import DbtRuntimeError
 from dbt.tests.util import run_dbt
@@ -200,4 +200,18 @@ class BaseCloneNotPossible(BaseClone):
 
 
 class TestPostgresCloneNotPossible(BaseCloneNotPossible):
+    @pytest.fixture(autouse=True)
+    def clean_up(self, project):
+        yield
+        with project.adapter.connection_named("__test"):
+            relation = project.adapter.Relation.create(
+                database=project.database, schema=f"{project.test_schema}_seeds"
+            )
+            project.adapter.drop_schema(relation)
+
+            relation = project.adapter.Relation.create(
+                database=project.database, schema=project.test_schema
+            )
+            project.adapter.drop_schema(relation)
+
     pass
