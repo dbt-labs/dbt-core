@@ -577,7 +577,7 @@ def run(ctx, **kwargs):
     return results, success
 
 
-# dbt run
+# dbt retry
 @cli.command("retry")
 @click.pass_context
 @p.project_dir

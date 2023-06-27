@@ -1,0 +1,6 @@
+kind: Fixes
+body: Allow semantic model measure exprs to be defined with ints and bools in yaml
+time: 2023-06-14T13:49:33.544552-07:00
+custom:
+  Author: QMalcolm
+  Issue: "7865"

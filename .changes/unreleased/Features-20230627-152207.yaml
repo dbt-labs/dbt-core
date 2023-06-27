@@ -1,0 +1,6 @@
+kind: Features
+body: allow setting enabled and depends_on_nodes from ModelNodeArgs
+time: 2023-06-27T15:22:07.313639-04:00
+custom:
+  Author: michelleark
+  Issue: "7506"
