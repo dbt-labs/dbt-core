@@ -25,7 +25,7 @@ with open(os.path.join(this_directory, "README.md")) as f:
 
 
 package_name = "dbt-core"
-package_version = "1.6.0b4"
+package_version = "1.6.0b6"
 description = """With dbt, data analysts and engineers can build analytics \
 the way engineers build applications."""
 
@@ -51,7 +51,7 @@ setup(
         # Pin to the patch or minor version, and bump in each new minor version of dbt-core.
         "agate~=1.7.0",
         "Jinja2~=3.1.2",
-        "mashumaro[msgpack]~=3.7.0",
+        "mashumaro[msgpack]~=3.8.1",
         # ----
         # Legacy: This package has not been updated since 2019, and it is unused in dbt's logging system (since v1.0)
         # The dependency here will be removed along with the removal of 'legacy logging', in a future release of dbt-core

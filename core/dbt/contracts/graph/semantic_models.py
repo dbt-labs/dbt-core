@@ -120,8 +120,8 @@ class Entity(dbtClassMixin):
 @dataclass
 class MeasureAggregationParameters(dbtClassMixin):
     percentile: Optional[float] = None
-    use_discrete_percentile: Optional[bool] = None
-    use_approximate_percentile: Optional[bool] = None
+    use_discrete_percentile: bool = False
+    use_approximate_percentile: bool = False
 
 
 @dataclass
