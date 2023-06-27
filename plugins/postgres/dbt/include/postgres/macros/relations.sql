@@ -74,3 +74,7 @@
 
   {{ return(load_result('relations').table) }}
 {% endmacro %}
+
+{% macro postgres_get_relations() %}
+  {{ return(postgres__get_relations()) }}
+{% endmacro %}
