@@ -35,7 +35,8 @@ class dbtPlugin:
 
 
 class PluginManager:
-    PLUGIN_PREFIX = "dbt_"
+    PLUGIN_MODULE_PREFIX = "dbt_"
+    PLUGIN_ATTR_NAME = "plugins"
 
     def __init__(self, plugins: List[dbtPlugin]):
         self._plugins = plugins
@@ -64,20 +65,20 @@ class PluginManager:
         discovered_dbt_modules = {
             name: importlib.import_module(name)
             for _, name, _ in pkgutil.iter_modules()
-            if name.startswith(cls.PLUGIN_PREFIX)
+            if name.startswith(cls.PLUGIN_MODULE_PREFIX)
         }
 
         plugins = []
         for name, module in discovered_dbt_modules.items():
-            if hasattr(module, "plugin"):
-                plugin_cls = getattr(module, "plugin")
-                assert issubclass(
-                    plugin_cls, dbtPlugin
-                ), f"'plugin' in {name} must be subclass of dbtPlugin"
+            if hasattr(module, cls.PLUGIN_ATTR_NAME):
+                available_plugins = getattr(module, cls.PLUGIN_ATTR_NAME, [])
+                for plugin_cls in available_plugins:
+                    assert issubclass(
+                        plugin_cls, dbtPlugin
+                    ), f"'plugin' in {name} must be subclass of dbtPlugin"
 
-                plugin = plugin_cls(name=name, project=project)
-                plugins.append(plugin)
-
+                    plugin = plugin_cls(name=name, project=project)
+                    plugins.append(plugin)
         return cls(plugins=plugins)
 
     def get_manifest_artifacts(
