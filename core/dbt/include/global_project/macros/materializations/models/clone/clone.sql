@@ -48,6 +48,7 @@
 
       -- reuse the view materialization
       -- TODO: support actual dispatch for materialization macros
+      -- Tracking ticket: https://github.com/dbt-labs/dbt-core/issues/7799
       {% set search_name = "materialization_view_" ~ adapter.type() %}
       {% if not search_name in context %}
           {% set search_name = "materialization_view_default" %}
