@@ -36,7 +36,7 @@ from dbt.events.types import (
     EndRunResult,
     NothingToDo,
 )
-from dbt.events.contextvars import log_contextvars
+from dbt.events.contextvars import log_contextvars, task_contextvars
 from dbt.contracts.graph.nodes import SourceDefinition, ResultNode
 from dbt.contracts.results import NodeStatus, RunExecutionResult, RunningStatus
 from dbt.contracts.state import PreviousState
@@ -422,25 +422,30 @@ class GraphRunnableTask(ConfiguredTask):
         """
         Run dbt for the query, based on the graph.
         """
-        self._runtime_initialize()
+        # We set up a context manager here with "task_contextvars" because we
+        # we need the project_root in runtime_initialize.
+        with task_contextvars(project_root=self.config.project_root):
+            self._runtime_initialize()
 
-        if self._flattened_nodes is None:
-            raise DbtInternalError("after _runtime_initialize, _flattened_nodes was still None")
+            if self._flattened_nodes is None:
+                raise DbtInternalError(
+                    "after _runtime_initialize, _flattened_nodes was still None"
+                )
 
-        if len(self._flattened_nodes) == 0:
-            with TextOnly():
-                fire_event(Formatting(""))
-            warn_or_error(NothingToDo())
-            result = self.get_result(
-                results=[],
-                generated_at=datetime.utcnow(),
-                elapsed_time=0.0,
-            )
-        else:
-            with TextOnly():
-                fire_event(Formatting(""))
-            selected_uids = frozenset(n.unique_id for n in self._flattened_nodes)
-            result = self.execute_with_hooks(selected_uids)
+            if len(self._flattened_nodes) == 0:
+                with TextOnly():
+                    fire_event(Formatting(""))
+                warn_or_error(NothingToDo())
+                result = self.get_result(
+                    results=[],
+                    generated_at=datetime.utcnow(),
+                    elapsed_time=0.0,
+                )
+            else:
+                with TextOnly():
+                    fire_event(Formatting(""))
+                selected_uids = frozenset(n.unique_id for n in self._flattened_nodes)
+                result = self.execute_with_hooks(selected_uids)
 
         # We have other result types here too, including FreshnessResult
         if isinstance(result, RunExecutionResult):
