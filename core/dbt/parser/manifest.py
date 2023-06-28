@@ -740,7 +740,7 @@ class ManifestLoader:
             manifest_nodes_modified = True
 
         # Inject any newly-available external nodes
-        pm = get_plugin_manager(self.root_project)
+        pm = get_plugin_manager(self.root_project.project_name)
         plugin_model_nodes = pm.get_nodes().models
         for node_arg in plugin_model_nodes.values():
             node = ModelNode.from_args(node_arg)

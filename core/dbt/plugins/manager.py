@@ -2,7 +2,6 @@ import importlib
 import pkgutil
 from typing import Dict, List, Callable
 
-from dbt.config.project import Project
 from dbt.contracts.graph.manifest import Manifest
 from dbt.exceptions import DbtRuntimeError
 from dbt.plugins.contracts import PluginArtifacts
@@ -21,8 +20,8 @@ def dbt_hook(func):
 
 
 class dbtPlugin:
-    def __init__(self, project: Project):
-        self.project = project
+    def __init__(self, project_name: str):
+        self.project_name = project_name
         self.initialize()
 
     @property
@@ -79,7 +78,7 @@ class PluginManager:
                         self.hooks[hook_name] = [hook]
 
     @classmethod
-    def from_modules(cls, project: Project) -> "PluginManager":
+    def from_modules(cls, project_name: str) -> "PluginManager":
         discovered_dbt_modules = {
             name: importlib.import_module(name)
             for _, name, _ in pkgutil.iter_modules()
@@ -94,20 +93,20 @@ class PluginManager:
                     assert issubclass(
                         plugin_cls, dbtPlugin
                     ), f"'plugin' in {name} must be subclass of dbtPlugin"
-                    plugin = plugin_cls(project=project)
+                    plugin = plugin_cls(project_name=project_name)
                     plugins.append(plugin)
         return cls(plugins=plugins)
 
     def get_manifest_artifacts(self, manifest: Manifest) -> PluginArtifacts:
-        plugin_artifacts = {}
+        all_plugin_artifacts = {}
         for hook_method in self.hooks.get("get_manifest_artifacts", []):
-            plugin_artifact = hook_method(manifest)
-            plugin_artifacts.update(plugin_artifact)
-        return plugin_artifacts
+            plugin_artifacts = hook_method(manifest)
+            all_plugin_artifacts.update(plugin_artifacts)
+        return all_plugin_artifacts
 
     def get_nodes(self) -> PluginNodes:
-        plugin_nodes = PluginNodes()
+        all_plugin_nodes = PluginNodes()
         for hook_method in self.hooks.get("get_nodes", []):
             plugin_nodes = hook_method()
-            plugin_nodes.update(plugin_nodes)
-        return plugin_nodes
+            all_plugin_nodes.update(plugin_nodes)
+        return all_plugin_nodes

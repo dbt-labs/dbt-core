@@ -162,7 +162,7 @@ def project(func):
         ctx.obj["project"] = project
 
         # Plugins
-        set_up_plugin_manager(project=project)
+        set_up_plugin_manager(project_name=project.project_name)
 
         if dbt.tracking.active_user is not None:
             project_id = None if project is None else project.hashed_name()
@@ -250,8 +250,8 @@ def manifest(*args0, write=True, write_perf_info=False):
 
                 ctx.obj["manifest"] = manifest
                 if write and ctx.obj["flags"].write_json:
-                    write_manifest(manifest, ctx.obj["runtime_config"].project_target_path)
-                    pm = get_plugin_manager(ctx.obj["runtime_config"])
+                    write_manifest(manifest, runtime_config.project_target_path)
+                    pm = get_plugin_manager(runtime_config.project_name)
                     plugin_artifacts = pm.get_manifest_artifacts(manifest)
                     for path, plugin_artifact in plugin_artifacts.items():
                         plugin_artifact.write(path)
