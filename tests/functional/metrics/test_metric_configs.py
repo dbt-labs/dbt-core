@@ -1,7 +1,7 @@
 import pytest
 from hologram import ValidationError
 from dbt.contracts.graph.model_config import MetricConfig
-from dbt.exceptions import CompilationError
+from dbt.exceptions import CompilationError, ParsingError
 from dbt.tests.util import run_dbt, update_config_file, get_manifest
 
 
@@ -160,3 +160,33 @@ class TestInvalidMetric(MetricConfigTests):
             run_dbt(["parse"])
         expected_msg = "'True and False' is not of type 'boolean'"
         assert expected_msg in str(excinfo.value)
+
+
+class TestDisabledMetric(MetricConfigTests):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "people.sql": models_people_sql,
+            "schema.yml": models_people_metrics_yml,
+        }
+
+    def test_disabling_upstream_metric_errors(self, project):
+        run_dbt(["parse"])  # shouldn't error out yet
+
+        new_enabled_config = {
+            "metrics": {
+                "test": {
+                    "number_of_people": {
+                        "enabled": False,
+                    },
+                }
+            }
+        }
+
+        update_config_file(new_enabled_config, project.project_root, "dbt_project.yml")
+        with pytest.raises(ParsingError) as excinfo:
+            run_dbt(["parse"])
+            expected_msg = (
+                "The metric `number_of_people` is disabled and thus cannot be referenced."
+            )
+            assert expected_msg in str(excinfo.value)
