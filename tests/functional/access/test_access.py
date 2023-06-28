@@ -184,8 +184,23 @@ models:
   access: protected
 """
 
-ref_protected_package_model_sql = """
+dbt_integration_project__schema_yml_private_model = """
+version: 2
+models:
+- name: table_model
+  access: private
+  group: package
+"""
+
+ref_package_model_sql = """
    select * from {{ ref('dbt_integration_project', 'table_model') }}
+"""
+
+schema_yml_ref_package_model = """
+version: 2
+models:
+- name: ref_package_model
+  group: package
 """
 
 
@@ -283,7 +298,7 @@ class TestUnrestrictedPackageAccess:
 
     @pytest.fixture(scope="class")
     def models(self):
-        return {"ref_protected_package_model.sql": ref_protected_package_model_sql}
+        return {"ref_protected_package_model.sql": ref_package_model_sql}
 
     def test_unrestricted_protected_ref(self, project):
         write_file(
@@ -328,9 +343,27 @@ class TestRestrictedPackageAccess:
 
     @pytest.fixture(scope="class")
     def models(self):
-        return {"ref_protected_package_model.sql": ref_protected_package_model_sql}
+        return {
+            "ref_package_model.sql": ref_package_model_sql,
+            "schema.yml": schema_yml_ref_package_model,
+        }
 
     def test_restricted_protected_ref(self, project):
         run_dbt(["deps"])
+        with pytest.raises(DbtReferenceError):
+            run_dbt(["parse"])
+
+    def test_restricted_private_ref(self, project):
+        run_dbt(["deps"])
+
+        # Set table_model.access to private
+        write_file(
+            dbt_integration_project__schema_yml_private_model,
+            project.project_root,
+            "dbt_integration_project",
+            "models",
+            "schema.yml",
+        )
+
         with pytest.raises(DbtReferenceError):
             run_dbt(["parse"])

@@ -500,7 +500,9 @@ class RuntimeRefResolver(BaseRefResolver):
                 target_version=target_version,
                 disabled=isinstance(target_model, Disabled),
             )
-        elif self.manifest.is_invalid_private_ref(self.model, target_model):
+        elif self.manifest.is_invalid_private_ref(
+            self.model, target_model, self.config.dependencies
+        ):
             raise DbtReferenceError(
                 unique_id=self.model.unique_id,
                 ref_unique_id=target_model.unique_id,

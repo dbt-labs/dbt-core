@@ -1472,7 +1472,7 @@ def _process_refs(
             )
 
             continue
-        elif manifest.is_invalid_private_ref(node, target_model):
+        elif manifest.is_invalid_private_ref(node, target_model, dependencies):
             raise dbt.exceptions.DbtReferenceError(
                 unique_id=node.unique_id,
                 ref_unique_id=target_model.unique_id,

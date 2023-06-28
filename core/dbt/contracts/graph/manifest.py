@@ -1127,7 +1127,10 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
                 return result
         return None
 
-    def is_invalid_private_ref(self, node: GraphMemberNode, target_model: MaybeNonSource) -> bool:
+    def is_invalid_private_ref(
+        self, node: GraphMemberNode, target_model: MaybeNonSource, dependencies: Optional[Mapping]
+    ) -> bool:
+        dependencies = dependencies or {}
         if not isinstance(target_model, ModelNode):
             return False
 
@@ -1137,10 +1140,15 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             and node.resource_type != NodeType.SqlOperation
             and node.resource_type != NodeType.RPCCall  # TODO: rm
         )
+        target_dependency = dependencies.get(target_model.package_name)
+        restrict_package_access = target_dependency.restrict_access if target_dependency else False
 
         # TODO: SemanticModel and SourceDefinition do not have group, and so should not be able to make _any_ private ref.
         return is_private_ref and (
-            not hasattr(node, "group") or not node.group or node.group != target_model.group
+            not hasattr(node, "group")
+            or not node.group
+            or node.group != target_model.group
+            or restrict_package_access
         )
 
     def is_invalid_protected_ref(
