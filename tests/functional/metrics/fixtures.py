@@ -50,10 +50,8 @@ metrics:
     description: "The average tenure per person"
     type: ratio
     type_params:
-      numerator:
-        name: years_tenure
-      denominator:
-        name: people
+      numerator: collective_tenure
+      denominator: number_of_people
 
   - name: average_tenure_plus_one
     label: "Average tenure, plus 1"
