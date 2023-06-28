@@ -59,7 +59,7 @@ class TestPluginManager:
         assert pm.hooks["get_nodes"][0] == get_nodes_plugins[0].get_nodes
         assert pm.hooks["get_nodes"][1] == get_nodes_plugins[1].get_nodes
 
-    def test_plugin_manager_multiple_hooks(self, get_nodes_plugin, get_artifacts_plugin):
+    def test_plugin_manager_init_multiple_hooks(self, get_nodes_plugin, get_artifacts_plugin):
         pm = PluginManager(plugins=[get_nodes_plugin, get_artifacts_plugin])
         assert len(pm.hooks) == 2
 

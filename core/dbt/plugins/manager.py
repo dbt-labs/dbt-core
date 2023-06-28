@@ -27,7 +27,10 @@ class dbtPlugin:
 
     def __init__(self, project_name: str):
         self.project_name = project_name
-        self.initialize()
+        try:
+            self.initialize()
+        except Exception as e:
+            raise DbtRuntimeError(f"initialize: {e}")
 
     @property
     def name(self) -> str:
