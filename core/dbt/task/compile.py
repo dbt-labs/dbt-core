@@ -143,7 +143,16 @@ class CompileTask(GraphRunnableTask):
                 # keep track of the node added to the manifest
                 self._inline_node_id = sql_node.unique_id
             except CompilationError as exc:
-                fire_event(ParseNodeError(exc=str(exc.msg), node_info=sql_node.node_info))
+                fire_event(
+                    ParseNodeError(
+                        exc=str(exc.msg),
+                        node_info={
+                            "node_path": "sql/inline_query",
+                            "node_name": "inline_query",
+                            "unique_id": "sqloperation.test.inline_query",
+                        },
+                    )
+                )
                 raise DbtException("Error parsing inline query")
         super()._runtime_initialize()
 
