@@ -188,6 +188,10 @@ class TestCompile:
         assert len(manifest.nodes) == 4
         dbt = dbtRunner(manifest=manifest)
         dbt = dbtRunner()
+        dbt.invoke(
+            ["compile", "--inline", "select * from {{ ref('second_model') }}"],
+            populate_cache=False,
+        )
         assert len(manifest.nodes) == 4
 
     def test_compile_inline_syntax_error(self, project, mocker):
