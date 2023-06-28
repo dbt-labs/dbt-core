@@ -117,7 +117,7 @@ class TestSemanticModelParsing:
         runner = dbtRunner()
         result = runner.invoke(["parse"])
         assert result.success
-        assert "semanticmodel.test.revenue" in result.result.semantic_models
+        assert "semantic_model.test.revenue" in result.result.semantic_models
 
         # Next, modify the default schema.yml to remove the semantic model.
         write_file(schema_without_semantic_model_yml, project.project_root, "models", "schema.yml")
