@@ -1,7 +1,9 @@
 import pytest
 
-from dbt.tests.util import run_dbt, get_manifest
+from dbt.cli.main import dbtRunner
+from dbt.contracts.graph.manifest import Manifest
 from dbt.exceptions import ParsingError
+from dbt.tests.util import run_dbt, get_manifest
 
 
 from tests.functional.metrics.fixtures import (
@@ -35,17 +37,39 @@ class TestSimpleMetrics:
         self,
         project,
     ):
-        # initial run
-        results = run_dbt(["run"])
-        assert len(results) == 1
+        runner = dbtRunner()
+        result = runner.invoke(["parse"])
+        assert result.success
+        assert isinstance(result.result, Manifest)
         manifest = get_manifest(project.project_root)
         metric_ids = list(manifest.metrics.keys())
         expected_metric_ids = [
             "metric.test.number_of_people",
             "metric.test.collective_tenure",
             "metric.test.collective_window",
+            "metric.test.average_tenure",
+            "metric.test.average_tenure_minus_people",
         ]
         assert metric_ids == expected_metric_ids
+
+        assert (
+            len(manifest.metrics["metric.test.number_of_people"].type_params.input_measures) == 1
+        )
+        assert (
+            len(manifest.metrics["metric.test.collective_tenure"].type_params.input_measures) == 1
+        )
+        assert (
+            len(manifest.metrics["metric.test.collective_window"].type_params.input_measures) == 1
+        )
+        assert len(manifest.metrics["metric.test.average_tenure"].type_params.input_measures) == 2
+        assert (
+            len(
+                manifest.metrics[
+                    "metric.test.average_tenure_minus_people"
+                ].type_params.input_measures
+            )
+            == 3
+        )
 
 
 class TestInvalidRefMetrics:
