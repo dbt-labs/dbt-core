@@ -11,6 +11,7 @@ from tests.functional.compile.fixtures import (
     first_ephemeral_model_sql,
     second_ephemeral_model_sql,
     third_ephemeral_model_sql,
+    with_recursive_model_sql,
     schema_yml,
     model_multiline_jinja,
 )
@@ -56,6 +57,7 @@ class TestEphemeralModels:
             "first_ephemeral_model.sql": first_ephemeral_model_sql,
             "second_ephemeral_model.sql": second_ephemeral_model_sql,
             "third_ephemeral_model.sql": third_ephemeral_model_sql,
+            "with_recursive_model.sql": with_recursive_model_sql,
         }
 
     def test_first_selector(self, project):
@@ -102,6 +104,20 @@ class TestEphemeralModels:
             ")select * from __dbt__cte__second_ephemeral_model",
             "union all",
             "select 2 as fun",
+        ]
+
+    def test_with_recursive_cte(self, project):
+        run_dbt(["compile"])
+
+        assert get_lines("with_recursive_model") == [
+            "with recursive  __dbt__cte__first_ephemeral_model as (",
+            "select 1 as fun",
+            "),t(n) as (",
+            "    select * from __dbt__cte__first_ephemeral_model",
+            "  union all",
+            "    select n+1 from t where n < 100",
+            ")",
+            "select sum(n) from t;",
         ]
 
 

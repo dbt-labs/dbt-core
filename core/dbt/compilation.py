@@ -340,6 +340,10 @@ class Compiler:
         for token in parsed.tokens:
             if token.is_keyword and token.normalized == "WITH":
                 with_stmt = token
+            elif token.is_keyword and token.normalized == "RECURSIVE" and with_stmt is not None:
+                with_stmt = token
+                break
+            elif not token.is_whitespace and with_stmt is not None:
                 break
 
         if with_stmt is None:
