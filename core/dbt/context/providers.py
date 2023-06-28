@@ -1382,7 +1382,8 @@ class ModelContext(ProviderContext):
             # If the model is deferred and the adapter doesn't support zero-copy cloning, then select * from the prod
             # relation
             if getattr(self.model, "defer_relation", None):
-                return f"select * from {self.model.defer_relation.relation_name}"  # type: ignore[union-attr]
+                # TODO https://github.com/dbt-labs/dbt-core/issues/7976
+                return f"select * from {self.model.defer_relation.relation_name or str(self.defer_relation)}"  # type: ignore[union-attr]
             elif getattr(self.model, "extra_ctes_injected", None):
                 # TODO CT-211
                 return self.model.compiled_code  # type: ignore[union-attr]
@@ -1394,7 +1395,8 @@ class ModelContext(ProviderContext):
     @contextproperty
     def compiled_code(self) -> Optional[str]:
         if getattr(self.model, "defer_relation", None):
-            return f"select * from {self.model.defer_relation.relation_name}"  # type: ignore[union-attr]
+            # TODO https://github.com/dbt-labs/dbt-core/issues/7976
+            return f"select * from {self.model.defer_relation.relation_name or str(self.defer_relation)}"  # type: ignore[union-attr]
         elif getattr(self.model, "extra_ctes_injected", None):
             # TODO CT-211
             return self.model.compiled_code  # type: ignore[union-attr]
