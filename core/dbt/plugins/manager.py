@@ -20,6 +20,11 @@ def dbt_hook(func):
 
 
 class dbtPlugin:
+    """
+    EXPERIMENTAL: dbtPlugin is the base class for creating plugins.
+    Its interface is **not** stable and will likely change between dbt-core versions.
+    """
+
     def __init__(self, project_name: str):
         self.project_name = project_name
         self.initialize()
