@@ -36,7 +36,7 @@ class TestMetricEnabledConfigProjectLevel(MetricConfigTests):
     def project_config_update(self):
         return {
             "metrics": {
-                "number_of_people": {
+                "average_tenure_minus_people": {
                     "enabled": True,
                 },
             }
@@ -45,12 +45,12 @@ class TestMetricEnabledConfigProjectLevel(MetricConfigTests):
     def test_enabled_metric_config_dbt_project(self, project):
         run_dbt(["parse"])
         manifest = get_manifest(project.project_root)
-        assert "metric.test.number_of_people" in manifest.metrics
+        assert "metric.test.average_tenure_minus_people" in manifest.metrics
 
         new_enabled_config = {
             "metrics": {
                 "test": {
-                    "number_of_people": {
+                    "average_tenure_minus_people": {
                         "enabled": False,
                     },
                 }
@@ -59,7 +59,7 @@ class TestMetricEnabledConfigProjectLevel(MetricConfigTests):
         update_config_file(new_enabled_config, project.project_root, "dbt_project.yml")
         run_dbt(["parse"])
         manifest = get_manifest(project.project_root)
-        assert "metric.test.number_of_people" not in manifest.metrics
+        assert "metric.test.average_tenure_minus_people" not in manifest.metrics
         assert "metric.test.collective_tenure" in manifest.metrics
 
 
