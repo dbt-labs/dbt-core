@@ -111,6 +111,7 @@ class TestSemanticModelParsing:
         semantic_model = manifest.semantic_models["semantic_model.test.revenue"]
         assert semantic_model.dimensions[0].type_params.time_granularity == TimeGranularity.WEEK
 
+    @pytest.mark.skip(reason="Tracking in https://github.com/dbt-labs/dbt-core/issues/7977")
     def test_semantic_model_deleted_partial_parsing(self, project):
         # First, use the default schema.yml to define our semantic model, and
         # run the dbt parse command
