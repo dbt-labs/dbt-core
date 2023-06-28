@@ -82,7 +82,7 @@ class TestSemanticModelParsing:
         assert isinstance(result.result, Manifest)
         manifest = result.result
         assert len(manifest.semantic_models) == 1
-        semantic_model = manifest.semantic_models["semanticmodel.test.revenue"]
+        semantic_model = manifest.semantic_models["semantic_model.test.revenue"]
         assert semantic_model.node_relation.alias == "fct_revenue"
         assert (
             semantic_model.node_relation.relation_name
@@ -108,7 +108,7 @@ class TestSemanticModelParsing:
 
         # Finally, verify that the manifest reflects the partially parsed change
         manifest = result.result
-        semantic_model = manifest.semantic_models["semanticmodel.test.revenue"]
+        semantic_model = manifest.semantic_models["semantic_model.test.revenue"]
         assert semantic_model.dimensions[0].type_params.time_granularity == TimeGranularity.WEEK
 
     def test_semantic_model_deleted_partial_parsing(self, project):
