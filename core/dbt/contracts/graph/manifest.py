@@ -22,8 +22,6 @@ from typing import (
 from typing_extensions import Protocol
 from uuid import UUID
 
-from dbt.contracts.publication import PublicationConfig
-
 from dbt.contracts.graph.nodes import (
     BaseNode,
     Documentation,
@@ -57,7 +55,7 @@ from dbt.helper_types import PathSet
 from dbt.events.functions import fire_event
 from dbt.events.types import MergedFromState, UnpinnedRefNewVersionAvailable
 from dbt.events.contextvars import get_node_info
-from dbt.node_types import NodeType
+from dbt.node_types import NodeType, AccessType
 from dbt.flags import get_flags, MP_CONTEXT
 from dbt import tracking
 import dbt.utils
@@ -700,7 +698,6 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     source_patches: MutableMapping[SourceKey, SourcePatch] = field(default_factory=dict)
     disabled: MutableMapping[str, List[GraphMemberNode]] = field(default_factory=dict)
     env_vars: MutableMapping[str, str] = field(default_factory=dict)
-    publications: MutableMapping[str, PublicationConfig] = field(default_factory=dict)
     semantic_models: MutableMapping[str, SemanticModel] = field(default_factory=dict)
 
     _doc_lookup: Optional[DocLookup] = field(
@@ -851,7 +848,6 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             disabled={k: _deepcopy(v) for k, v in self.disabled.items()},
             files={k: _deepcopy(v) for k, v in self.files.items()},
             state_check=_deepcopy(self.state_check),
-            publications={k: _deepcopy(v) for k, v in self.publications.items()},
             semantic_models={k: _deepcopy(v) for k, v in self.semantic_models.items()},
         )
         copy.build_flat_graph()
@@ -1127,6 +1123,50 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
                 return result
         return None
 
+    def is_invalid_private_ref(
+        self, node: GraphMemberNode, target_model: MaybeNonSource, dependencies: Optional[Mapping]
+    ) -> bool:
+        dependencies = dependencies or {}
+        if not isinstance(target_model, ModelNode):
+            return False
+
+        is_private_ref = (
+            target_model.access == AccessType.Private
+            # don't raise this reference error for ad hoc 'preview' queries
+            and node.resource_type != NodeType.SqlOperation
+            and node.resource_type != NodeType.RPCCall  # TODO: rm
+        )
+        target_dependency = dependencies.get(target_model.package_name)
+        restrict_package_access = target_dependency.restrict_access if target_dependency else False
+
+        # TODO: SemanticModel and SourceDefinition do not have group, and so should not be able to make _any_ private ref.
+        return is_private_ref and (
+            not hasattr(node, "group")
+            or not node.group
+            or node.group != target_model.group
+            or restrict_package_access
+        )
+
+    def is_invalid_protected_ref(
+        self, node: GraphMemberNode, target_model: MaybeNonSource, dependencies: Optional[Mapping]
+    ) -> bool:
+        dependencies = dependencies or {}
+        if not isinstance(target_model, ModelNode):
+            return False
+
+        is_protected_ref = (
+            target_model.access == AccessType.Protected
+            # don't raise this reference error for ad hoc 'preview' queries
+            and node.resource_type != NodeType.SqlOperation
+            and node.resource_type != NodeType.RPCCall  # TODO: rm
+        )
+        target_dependency = dependencies.get(target_model.package_name)
+        restrict_package_access = target_dependency.restrict_access if target_dependency else False
+
+        return is_protected_ref and (
+            node.package_name != target_model.package_name and restrict_package_access
+        )
+
     # Called by RunTask.defer_to_manifest
     def merge_from_artifact(
         self,
@@ -1301,7 +1341,6 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             self.source_patches,
             self.disabled,
             self.env_vars,
-            self.publications,
             self.semantic_models,
             self._doc_lookup,
             self._source_lookup,

@@ -571,9 +571,7 @@ class ModelNode(CompiledNode):
 
     @classmethod
     def from_args(cls, args: ModelNodeArgs) -> "ModelNode":
-        unique_id = f"{NodeType.Model}.{args.package_name}.{args.name}"
-        if args.version:
-            unique_id = f"{unique_id}.{args.version}"
+        unique_id = args.unique_id
 
         # build unrendered config -- for usage in ParsedNode.same_contents
         unrendered_config = {}

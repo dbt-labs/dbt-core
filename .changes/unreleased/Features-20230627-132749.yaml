@@ -1,0 +1,6 @@
+kind: Features
+body: Add restrict-access to dbt_project.yml
+time: 2023-06-27T13:27:49.114257-04:00
+custom:
+  Author: michelleark
+  Issue: "7713"

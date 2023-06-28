@@ -87,6 +87,7 @@ def get_flag_dict():
         "introspect",
         "target_path",
         "log_path",
+        "invocation_command",
     }
     return {key: getattr(GLOBAL_FLAGS, key.upper(), None) for key in flag_attr}
 

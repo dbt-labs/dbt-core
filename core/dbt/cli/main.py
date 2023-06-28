@@ -77,7 +77,6 @@ class dbtRunner:
             dbt_ctx.obj = {
                 "manifest": self.manifest,
                 "callbacks": self.callbacks,
-                "_publications": kwargs.get("publications"),
             }
 
             for key, value in kwargs.items():

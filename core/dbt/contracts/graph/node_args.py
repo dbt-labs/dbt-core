@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Optional, List
 
 from dbt.contracts.graph.unparsed import NodeVersion
-from dbt.node_types import AccessType
+from dbt.node_types import NodeType, AccessType
 
 
 @dataclass
@@ -21,3 +21,11 @@ class ModelNodeArgs:
     generated_at: datetime = field(default_factory=datetime.utcnow)
     depends_on_nodes: List[str] = field(default_factory=list)
     enabled: bool = True
+
+    @property
+    def unique_id(self):
+        unique_id = f"{NodeType.Model}.{self.package_name}.{self.name}"
+        if self.version:
+            unique_id = f"{unique_id}.{self.verison}"
+
+        return unique_id

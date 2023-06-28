@@ -506,19 +506,24 @@ class RuntimeRefResolver(BaseRefResolver):
                 target_version=target_version,
                 disabled=isinstance(target_model, Disabled),
             )
-        elif (
-            target_model.resource_type == NodeType.Model
-            and target_model.access == AccessType.Private
-            # don't raise this reference error for ad hoc 'preview' queries
-            and self.model.resource_type != NodeType.SqlOperation
-            and self.model.resource_type != NodeType.RPCCall  # TODO: rm
+        elif self.manifest.is_invalid_private_ref(
+            self.model, target_model, self.config.dependencies
         ):
-            if not self.model.group or self.model.group != target_model.group:
-                raise DbtReferenceError(
-                    unique_id=self.model.unique_id,
-                    ref_unique_id=target_model.unique_id,
-                    group=cast_to_str(target_model.group),
-                )
+            raise DbtReferenceError(
+                unique_id=self.model.unique_id,
+                ref_unique_id=target_model.unique_id,
+                access=AccessType.Private,
+                scope=cast_to_str(target_model.group),
+            )
+        elif self.manifest.is_invalid_protected_ref(
+            self.model, target_model, self.config.dependencies
+        ):
+            raise DbtReferenceError(
+                unique_id=self.model.unique_id,
+                ref_unique_id=target_model.unique_id,
+                access=AccessType.Protected,
+                scope=target_model.package_name,
+            )
 
         self.validate(target_model, target_name, target_package, target_version)
         return self.create_relation(target_model)
