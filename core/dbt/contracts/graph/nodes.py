@@ -260,7 +260,7 @@ class MacroDependsOn(dbtClassMixin, Replaceable):
 @dataclass
 class DeferRelation(HasRelationMetadata):
     alias: str
-    relation_name: str
+    relation_name: Optional[str]
 
     @property
     def identifier(self):
