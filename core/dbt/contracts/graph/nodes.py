@@ -582,6 +582,15 @@ class ModelNode(CompiledNode):
     @classmethod
     def from_args(cls, args: ModelNodeArgs) -> "ModelNode":
         unique_id = f"{NodeType.Model}.{args.package_name}.{args.name}"
+        if args.version:
+            unique_id = f"{unique_id}.{args.version}"
+
+        # build unrendered config -- for usage in ParsedNode.same_contents
+        unrendered_config = {}
+        unrendered_config["alias"] = args.identifier
+        unrendered_config["schema"] = args.schema
+        if args.database:
+            unrendered_config["database"] = args.database
 
         return cls(
             resource_type=NodeType.Model,
@@ -597,8 +606,12 @@ class ModelNode(CompiledNode):
             alias=args.identifier,
             deprecation_date=args.deprecation_date,
             checksum=FileHash.from_contents(f"{unique_id},{args.generated_at}"),
+            access=AccessType(args.access),
             original_file_path="",
             path="",
+            unrendered_config=unrendered_config,
+            depends_on=DependsOn(nodes=args.depends_on_nodes),
+            config=NodeConfig(enabled=args.enabled),
         )
 
     @property

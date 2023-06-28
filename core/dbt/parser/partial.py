@@ -417,6 +417,14 @@ class PartialParsing:
                 self._schedule_for_parsing(
                     "metrics", metric, metric.name, self.delete_schema_metric
                 )
+            elif unique_id in self.saved_manifest.semantic_models:
+                semantic_model = self.saved_manifest.semantic_models[unique_id]
+                self._schedule_for_parsing(
+                    "semantic_models",
+                    semantic_model,
+                    semantic_model.name,
+                    self.delete_schema_semantic_model,
+                )
             elif unique_id in self.saved_manifest.macros:
                 macro = self.saved_manifest.macros[unique_id]
                 file_id = macro.file_id
@@ -600,7 +608,7 @@ class PartialParsing:
             env_var_changes = self.env_vars_changed_schema_files[schema_file.file_id]
 
         # models, seeds, snapshots, analyses
-        for dict_key in ["models", "seeds", "snapshots", "analyses", "semantic_models"]:
+        for dict_key in ["models", "seeds", "snapshots", "analyses"]:
             key_diff = self.get_diff_for(dict_key, saved_yaml_dict, new_yaml_dict)
             if key_diff["changed"]:
                 for elem in key_diff["changed"]:
@@ -662,6 +670,7 @@ class PartialParsing:
         handle_change("exposures", self.delete_schema_exposure)
         handle_change("metrics", self.delete_schema_metric)
         handle_change("groups", self.delete_schema_group)
+        handle_change("semantic_models", self.delete_schema_semantic_model)
 
     def _handle_element_change(
         self, schema_file, saved_yaml_dict, new_yaml_dict, env_var_changes, dict_key: str, delete
@@ -871,6 +880,18 @@ class PartialParsing:
                         self.schedule_nodes_for_parsing(self.saved_manifest.child_map[unique_id])
                     self.saved_manifest.metrics.pop(unique_id)
                     schema_file.metrics.remove(unique_id)
+            elif unique_id in self.saved_manifest.disabled:
+                self.delete_disabled(unique_id, schema_file.file_id)
+
+    def delete_schema_semantic_model(self, schema_file, semantic_model_dict):
+        semantic_model_name = semantic_model_dict["name"]
+        semantic_models = schema_file.semantic_models.copy()
+        for unique_id in semantic_models:
+            if unique_id in self.saved_manifest.semantic_models:
+                semantic_model = self.saved_manifest.semantic_models[unique_id]
+                if semantic_model.name == semantic_model_name:
+                    self.saved_manifest.semantic_models.pop(unique_id)
+                    schema_file.semantic_models.remove(unique_id)
             elif unique_id in self.saved_manifest.disabled:
                 self.delete_disabled(unique_id, schema_file.file_id)
 

@@ -776,6 +776,7 @@ class ManifestLoader:
                         schema=public_node.schema,
                         identifier=public_node.identifier,
                         deprecation_date=public_node.deprecation_date,
+                        access=AccessType.Public,
                     )
                 )
 
