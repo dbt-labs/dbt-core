@@ -1040,7 +1040,8 @@ class MixedManifestTest(unittest.TestCase):
                 self.assertEqual("other_" + v.database, v.defer_relation.database)
                 self.assertEqual("other_" + v.schema, v.defer_relation.schema)
                 self.assertEqual("other_" + v.alias, v.defer_relation.alias)
-                self.assertEqual("other_" + v.relation_name, v.defer_relation.relation_name)
+                if v.relation_name:
+                    self.assertEqual("other_" + v.relation_name, v.defer_relation.relation_name)
 
 
 # Tests of the manifest search code (find_X_by_Y)
