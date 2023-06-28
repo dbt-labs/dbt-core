@@ -35,7 +35,7 @@ from dbt.contracts.graph.nodes import (
     ManifestNode,
     Metric,
     ModelNode,
-    RelationalNode,
+    DeferRelation,
     ResultNode,
     SemanticModel,
     SourceDefinition,
@@ -1177,8 +1177,12 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         refables = set(NodeType.refable())
         for unique_id, node in other.nodes.items():
             current = self.nodes.get(unique_id)
-            if current and (node.resource_type in refables and not node.is_ephemeral):
-                defer_relation = RelationalNode(node.database, node.schema, node.alias)
+            if current and (
+                node.resource_type in refables and not node.is_ephemeral and node.relation_name
+            ):
+                defer_relation = DeferRelation(
+                    node.database, node.schema, node.alias, node.relation_name
+                )
                 self.nodes[unique_id] = current.replace(defer_relation=defer_relation)
 
     # Methods that were formerly in ParseResult

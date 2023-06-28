@@ -258,8 +258,9 @@ class MacroDependsOn(dbtClassMixin, Replaceable):
 
 
 @dataclass
-class RelationalNode(HasRelationMetadata):
+class DeferRelation(HasRelationMetadata):
     alias: str
+    relation_name: str
 
     @property
     def identifier(self):
@@ -273,17 +274,6 @@ class DependsOn(MacroDependsOn):
     def add_node(self, value: str):
         if value not in self.nodes:
             self.nodes.append(value)
-
-
-@dataclass
-class DeferRelation(dbtClassMixin):
-    alias: str
-    database: Optional[str]
-    schema: str
-
-    @property
-    def identifier(self):
-        return self.alias
 
 
 @dataclass
