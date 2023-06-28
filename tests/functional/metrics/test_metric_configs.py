@@ -122,11 +122,19 @@ class TestDisabledMetricRef(MetricConfigTests):
         assert "metric.test.number_of_people" in manifest.metrics
         assert "metric.test.collective_tenure" in manifest.metrics
         assert "model.test.people_metrics" in manifest.nodes
+        assert "metric.test.average_tenure" in manifest.metrics
+        assert "metric.test.average_tenure_minus_people" in manifest.metrics
 
         new_enabled_config = {
             "metrics": {
                 "test": {
                     "number_of_people": {
+                        "enabled": False,
+                    },
+                    "average_tenure_minus_people": {
+                        "enabled": False,
+                    },
+                    "average_tenure": {
                         "enabled": False,
                     },
                 }
