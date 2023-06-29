@@ -621,7 +621,11 @@ class StateSelectorMethod(SelectorMethod):
                 previous_node = manifest.metrics[node]
 
             keyword_args = {}
-            if checker.__name__ in ["same_contract", "check_modified_content", "check_unmodified_content"]:
+            if checker.__name__ in [
+                "same_contract",
+                "check_modified_content",
+                "check_unmodified_content",
+            ]:
                 keyword_args["adapter_type"] = adapter_type  # type: ignore
 
             if checker(previous_node, real_node, **keyword_args):  # type: ignore
