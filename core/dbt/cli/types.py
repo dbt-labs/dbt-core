@@ -8,6 +8,7 @@ class Command(Enum):
     BUILD = "build"
     CLEAN = "clean"
     COMPILE = "compile"
+    CLONE = "clone"
     DOCS_GENERATE = "generate"
     DOCS_SERVE = "serve"
     DEBUG = "debug"
@@ -22,6 +23,7 @@ class Command(Enum):
     SNAPSHOT = "snapshot"
     SOURCE_FRESHNESS = "freshness"
     TEST = "test"
+    RETRY = "retry"
 
     @classmethod
     def from_str(cls, s: str) -> "Command":

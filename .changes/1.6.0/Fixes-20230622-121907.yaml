@@ -1,0 +1,6 @@
+kind: Fixes
+body: 'Fix: safe remove of external nodes from nodes.depends_on'
+time: 2023-06-22T12:19:07.657855-04:00
+custom:
+  Author: michelleark
+  Issue: "7924"

@@ -1,0 +1,6 @@
+kind: Fixes
+body: Allow dbt show --inline preview of private models
+time: 2023-06-09T19:15:46.716379-04:00
+custom:
+  Author: jtcohen6
+  Issue: "7837"

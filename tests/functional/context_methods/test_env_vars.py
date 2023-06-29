@@ -34,6 +34,7 @@ select
     -- runtime variables
     '{{ run_started_at }}' as run_started_at,
     '{{ invocation_id }}'  as invocation_id,
+    '{{ thread_id }}'  as thread_id,
 
     '{{ env_var("DBT_TEST_ENV_VAR") }}' as env_var,
     '{{ env_var("DBT_TEST_IGNORE_DEFAULT", "ignored_default_val") }}' as env_var_ignore_default,
@@ -114,6 +115,7 @@ class TestEnvVars:
             "target.pass",
             "run_started_at",
             "invocation_id",
+            "thread_id",
             "env_var",
         ]
         field_list = ", ".join(['"{}"'.format(f) for f in fields])

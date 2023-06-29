@@ -1,0 +1,6 @@
+kind: Fixes
+body: Allow project dependencies to use miscellaneous keys
+time: 2023-06-09T12:19:30.469487-05:00
+custom:
+  Author: emmyoop
+  Issue: "7497"

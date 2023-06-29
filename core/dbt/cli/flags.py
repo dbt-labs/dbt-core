@@ -76,7 +76,9 @@ def args_to_context(args: List[str]) -> Context:
 class Flags:
     """Primary configuration artifact for running dbt"""
 
-    def __init__(self, ctx: Context = None, user_config: UserConfig = None) -> None:
+    def __init__(
+        self, ctx: Optional[Context] = None, user_config: Optional[UserConfig] = None
+    ) -> None:
 
         # Set the default flags.
         for key, value in FLAGS_DEFAULTS.items():
@@ -203,6 +205,9 @@ class Flags:
         if not user_config:
             profiles_dir = getattr(self, "PROFILES_DIR", None)
             user_config = read_user_config(profiles_dir) if profiles_dir else None
+
+        # Add entire invocation command to flags
+        object.__setattr__(self, "INVOCATION_COMMAND", "dbt " + " ".join(sys.argv[1:]))
 
         # Overwrite default assignments with user config if available.
         if user_config:
@@ -337,7 +342,9 @@ def command_params(command: CliCommand, args_dict: Dict[str, Any]) -> CommandPar
 
         spinal_cased = k.replace("_", "-")
 
-        if v in (None, False):
+        if k == "macro" and command == CliCommand.RUN_OPERATION:
+            add_fn(v)
+        elif v in (None, False):
             add_fn(f"--no-{spinal_cased}")
         elif v is True:
             add_fn(f"--{spinal_cased}")
@@ -369,6 +376,7 @@ def command_args(command: CliCommand) -> ArgsList:
     CMD_DICT: Dict[CliCommand, ClickCommand] = {
         CliCommand.BUILD: cli.build,
         CliCommand.CLEAN: cli.clean,
+        CliCommand.CLONE: cli.clone,
         CliCommand.COMPILE: cli.compile,
         CliCommand.DOCS_GENERATE: cli.docs_generate,
         CliCommand.DOCS_SERVE: cli.docs_serve,
@@ -384,6 +392,7 @@ def command_args(command: CliCommand) -> ArgsList:
         CliCommand.SNAPSHOT: cli.snapshot,
         CliCommand.SOURCE_FRESHNESS: cli.freshness,
         CliCommand.TEST: cli.test,
+        CliCommand.RETRY: cli.retry,
     }
     click_cmd: Optional[ClickCommand] = CMD_DICT.get(command, None)
     if click_cmd is None:

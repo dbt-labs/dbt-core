@@ -5,7 +5,7 @@ import yaml
 import json
 import warnings
 from datetime import datetime
-from typing import Dict, List
+from typing import Dict, List, Optional
 from contextlib import contextmanager
 from dbt.adapters.factory import Adapter
 
@@ -20,7 +20,6 @@ from dbt.events.functions import (
 )
 from dbt.events.base_types import EventLevel
 from dbt.events.types import Note
-from dbt.contracts.publication import PublicationArtifact
 
 
 # =============================================================================
@@ -71,9 +70,8 @@ from dbt.contracts.publication import PublicationArtifact
 # If the command is expected to fail, pass in "expect_pass=False"):
 #   run_dbt("test"], expect_pass=False)
 def run_dbt(
-    args: List[str] = None,
+    args: Optional[List[str]] = None,
     expect_pass: bool = True,
-    publications: List[PublicationArtifact] = None,
 ):
     # Ignore logbook warnings
     warnings.filterwarnings("ignore", category=DeprecationWarning, module="logbook")
@@ -99,7 +97,7 @@ def run_dbt(
         args.extend(["--profiles-dir", profiles_dir])
 
     dbt = dbtRunner()
-    res = dbt.invoke(args, publications=publications)
+    res = dbt.invoke(args)
 
     # the exception is immediately raised to be caught in tests
     # using a pattern like `with pytest.raises(SomeException):`
@@ -117,14 +115,13 @@ def run_dbt(
 # start with the "--debug" flag. The structured schema log CI test
 # will turn the logs into json, so you have to be prepared for that.
 def run_dbt_and_capture(
-    args: List[str] = None,
+    args: Optional[List[str]] = None,
     expect_pass: bool = True,
-    publications: List[PublicationArtifact] = None,
 ):
     try:
         stringbuf = StringIO()
         capture_stdout_logs(stringbuf)
-        res = run_dbt(args, expect_pass=expect_pass, publications=publications)
+        res = run_dbt(args, expect_pass=expect_pass)
         stdout = stringbuf.getvalue()
 
     finally:

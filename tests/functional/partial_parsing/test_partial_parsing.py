@@ -74,6 +74,7 @@ from tests.functional.partial_parsing.fixtures import (
 from dbt.exceptions import CompilationError, ParsingError, DuplicateVersionedUnversionedError
 from dbt.contracts.files import ParseFileType
 from dbt.contracts.results import TestStatus
+
 import re
 import os
 

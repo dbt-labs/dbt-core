@@ -384,7 +384,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         return {
             self.Relation.create_from(self.config, node).without_identifier()
             for node in manifest.nodes.values()
-            if (node.is_relational and not node.is_ephemeral_model)
+            if (node.is_relational and not node.is_ephemeral_model and not node.is_external_node)
         }
 
     def _get_catalog_schemas(self, manifest: Manifest) -> SchemaSearchMap:
@@ -415,7 +415,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         return info_schema_name_map
 
     def _relations_cache_for_schemas(
-        self, manifest: Manifest, cache_schemas: Set[BaseRelation] = None
+        self, manifest: Manifest, cache_schemas: Optional[Set[BaseRelation]] = None
     ) -> None:
         """Populate the relations cache for the given schemas. Returns an
         iterable of the schemas populated, as strings.
@@ -451,7 +451,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         self,
         manifest: Manifest,
         clear: bool = False,
-        required_schemas: Set[BaseRelation] = None,
+        required_schemas: Optional[Set[BaseRelation]] = None,
     ) -> None:
         """Run a query that gets a populated cache of the relations in the
         database and set the cache on this adapter.
@@ -986,7 +986,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         manifest: Optional[Manifest] = None,
         project: Optional[str] = None,
         context_override: Optional[Dict[str, Any]] = None,
-        kwargs: Dict[str, Any] = None,
+        kwargs: Optional[Dict[str, Any]] = None,
         text_only_columns: Optional[Iterable[str]] = None,
     ) -> AttrDict:
         """Look macro_name up in the manifest and execute its results.
@@ -1346,7 +1346,8 @@ class BaseAdapter(metaclass=AdapterMeta):
         rendered_column_constraints = []
 
         for v in raw_columns.values():
-            rendered_column_constraint = [f"{v['name']} {v['data_type']}"]
+            col_name = cls.quote(v["name"]) if v.get("quote") else v["name"]
+            rendered_column_constraint = [f"{col_name} {v['data_type']}"]
             for con in v.get("constraints", None):
                 constraint = cls._parse_column_constraint(con)
                 c = cls.process_parsed_constraint(constraint, cls.render_column_constraint)

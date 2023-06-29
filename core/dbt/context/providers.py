@@ -32,13 +32,13 @@ from dbt.contracts.graph.manifest import Manifest, Disabled
 from dbt.contracts.graph.nodes import (
     Macro,
     Exposure,
-    Metric,
     SeedNode,
     SourceDefinition,
     Resource,
     ManifestNode,
     RefArgs,
     AccessType,
+    SemanticModel,
 )
 from dbt.contracts.graph.metrics import MetricReference, ResolvedMetricReference
 from dbt.contracts.graph.unparsed import NodeVersion
@@ -133,6 +133,25 @@ class BaseDatabaseWrapper:
         search_prefixes = get_adapter_type_names(self._adapter.type()) + ["default"]
         return search_prefixes
 
+    def _get_search_packages(self, namespace: Optional[str] = None) -> List[Optional[str]]:
+        search_packages: List[Optional[str]] = [None]
+
+        if namespace is None:
+            search_packages = [None]
+        elif isinstance(namespace, str):
+            macro_search_order = self._adapter.config.get_macro_search_order(namespace)
+            if macro_search_order:
+                search_packages = macro_search_order
+            elif not macro_search_order and namespace in self._adapter.config.dependencies:
+                search_packages = [self.config.project_name, namespace]
+        else:
+            raise CompilationError(
+                f"In adapter.dispatch, got a {type(namespace)} macro_namespace argument "
+                f'("{namespace}"), but macro_namespace should be None or a string.'
+            )
+
+        return search_packages
+
     def dispatch(
         self,
         macro_name: str,
@@ -154,20 +173,7 @@ class BaseDatabaseWrapper:
         if packages is not None:
             raise MacroDispatchArgError(macro_name)
 
-        namespace = macro_namespace
-
-        if namespace is None:
-            search_packages = [None]
-        elif isinstance(namespace, str):
-            search_packages = self._adapter.config.get_macro_search_order(namespace)
-            if not search_packages and namespace in self._adapter.config.dependencies:
-                search_packages = [self.config.project_name, namespace]
-        else:
-            # Not a string and not None so must be a list
-            raise CompilationError(
-                f"In adapter.dispatch, got a list macro_namespace argument "
-                f'("{macro_namespace}"), but macro_namespace should be None or a string.'
-            )
+        search_packages = self._get_search_packages(macro_namespace)
 
         attempts = []
 
@@ -191,7 +197,7 @@ class BaseDatabaseWrapper:
                     return macro
 
         searched = ", ".join(repr(a) for a in attempts)
-        msg = f"In dispatch: No macro named '{macro_name}' found\n    Searched for: {searched}"
+        msg = f"In dispatch: No macro named '{macro_name}' found within namespace: '{macro_namespace}'\n    Searched for: {searched}"
         raise CompilationError(msg)
 
 
@@ -285,6 +291,7 @@ class BaseSourceResolver(BaseResolver):
 
 
 class BaseMetricResolver(BaseResolver):
+    @abc.abstractmethod
     def resolve(self, name: str, package: Optional[str] = None) -> MetricReference:
         ...
 
@@ -499,26 +506,30 @@ class RuntimeRefResolver(BaseRefResolver):
                 target_version=target_version,
                 disabled=isinstance(target_model, Disabled),
             )
-        elif (
-            target_model.resource_type == NodeType.Model
-            and target_model.access == AccessType.Private
+        elif self.manifest.is_invalid_private_ref(
+            self.model, target_model, self.config.dependencies
         ):
-            if not self.model.group or self.model.group != target_model.group:
-                raise DbtReferenceError(
-                    unique_id=self.model.unique_id,
-                    ref_unique_id=target_model.unique_id,
-                    group=cast_to_str(target_model.group),
-                )
+            raise DbtReferenceError(
+                unique_id=self.model.unique_id,
+                ref_unique_id=target_model.unique_id,
+                access=AccessType.Private,
+                scope=cast_to_str(target_model.group),
+            )
+        elif self.manifest.is_invalid_protected_ref(
+            self.model, target_model, self.config.dependencies
+        ):
+            raise DbtReferenceError(
+                unique_id=self.model.unique_id,
+                ref_unique_id=target_model.unique_id,
+                access=AccessType.Protected,
+                scope=target_model.package_name,
+            )
 
         self.validate(target_model, target_name, target_package, target_version)
         return self.create_relation(target_model)
 
     def create_relation(self, target_model: ManifestNode) -> RelationProxy:
-        if target_model.is_public_node:
-            # Get quoting from publication artifact
-            pub_metadata = self.manifest.publications[target_model.package_name].metadata
-            return self.Relation.create_from_node(pub_metadata, target_model)
-        elif target_model.is_ephemeral_model:
+        if target_model.is_ephemeral_model:
             self.model.set_cte(target_model.unique_id, None)
             return self.Relation.create_ephemeral_from_node(self.config, target_model)
         else:
@@ -531,10 +542,7 @@ class RuntimeRefResolver(BaseRefResolver):
         target_package: Optional[str],
         target_version: Optional[NodeVersion],
     ) -> None:
-        if (
-            resolved.unique_id not in self.model.depends_on.nodes
-            and resolved.unique_id not in self.model.depends_on.public_nodes
-        ):
+        if resolved.unique_id not in self.model.depends_on.nodes:
             args = self._repack_args(target_name, target_package, target_version)
             raise RefBadContextError(node=self.model, args=args)
 
@@ -1370,20 +1378,30 @@ class ModelContext(ProviderContext):
     @contextproperty
     def sql(self) -> Optional[str]:
         # only doing this in sql model for backward compatible
-        if (
-            getattr(self.model, "extra_ctes_injected", None)
-            and self.model.language == ModelLanguage.sql  # type: ignore[union-attr]
-        ):
-            # TODO CT-211
-            return self.model.compiled_code  # type: ignore[union-attr]
-        return None
+        if self.model.language == ModelLanguage.sql:  # type: ignore[union-attr]
+            # If the model is deferred and the adapter doesn't support zero-copy cloning, then select * from the prod
+            # relation
+            if getattr(self.model, "defer_relation", None):
+                # TODO https://github.com/dbt-labs/dbt-core/issues/7976
+                return f"select * from {self.model.defer_relation.relation_name or str(self.defer_relation)}"  # type: ignore[union-attr]
+            elif getattr(self.model, "extra_ctes_injected", None):
+                # TODO CT-211
+                return self.model.compiled_code  # type: ignore[union-attr]
+            else:
+                return None
+        else:
+            return None
 
     @contextproperty
     def compiled_code(self) -> Optional[str]:
-        if getattr(self.model, "extra_ctes_injected", None):
+        if getattr(self.model, "defer_relation", None):
+            # TODO https://github.com/dbt-labs/dbt-core/issues/7976
+            return f"select * from {self.model.defer_relation.relation_name or str(self.defer_relation)}"  # type: ignore[union-attr]
+        elif getattr(self.model, "extra_ctes_injected", None):
             # TODO CT-211
             return self.model.compiled_code  # type: ignore[union-attr]
-        return None
+        else:
+            return None
 
     @contextproperty
     def database(self) -> str:
@@ -1427,6 +1445,20 @@ class ModelContext(ProviderContext):
         if self.model.resource_type == NodeType.Operation:
             return None
         return self.db_wrapper.Relation.create_from(self.config, self.model)
+
+    @contextproperty
+    def defer_relation(self) -> Optional[RelationProxy]:
+        """
+        For commands which add information about this node's corresponding
+        production version (via a --state artifact), access the Relation
+        object for that stateful other
+        """
+        if getattr(self.model, "defer_relation", None):
+            return self.db_wrapper.Relation.create_from_node(
+                self.config, self.model.defer_relation  # type: ignore
+            )
+        else:
+            return None
 
 
 # This is called by '_context_for', used in 'render_with_context'
@@ -1534,7 +1566,8 @@ def generate_parse_exposure(
     }
 
 
-class MetricRefResolver(BaseResolver):
+# applies to SemanticModels
+class SemanticModelRefResolver(BaseResolver):
     def __call__(self, *args, **kwargs) -> str:
         package = None
         if len(args) == 1:
@@ -1547,34 +1580,30 @@ class MetricRefResolver(BaseResolver):
         version = kwargs.get("version") or kwargs.get("v")
         self.validate_args(name, package, version)
 
+        # "model" here is any node
         self.model.refs.append(RefArgs(package=package, name=name, version=version))
         return ""
 
     def validate_args(self, name, package, version):
         if not isinstance(name, str):
             raise ParsingError(
-                f"In a metrics section in {self.model.original_file_path} "
+                f"In a semantic model or metrics section in {self.model.original_file_path} "
                 "the name argument to ref() must be a string"
             )
 
 
-def generate_parse_metrics(
-    metric: Metric,
+# used for semantic models
+def generate_parse_semantic_models(
+    semantic_model: SemanticModel,
     config: RuntimeConfig,
     manifest: Manifest,
     package_name: str,
 ) -> Dict[str, Any]:
     project = config.load_dependencies()[package_name]
     return {
-        "ref": MetricRefResolver(
+        "ref": SemanticModelRefResolver(
             None,
-            metric,
-            project,
-            manifest,
-        ),
-        "metric": ParseMetricResolver(
-            None,
-            metric,
+            semantic_model,
             project,
             manifest,
         ),

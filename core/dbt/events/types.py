@@ -655,6 +655,14 @@ class CacheDumpGraph(DebugLevel):
 # Skipping E032, E033, E034
 
 
+class AdapterRegistered(InfoLevel):
+    def code(self):
+        return "E034"
+
+    def message(self) -> str:
+        return f"Registered adapter: {self.adapter_name}{self.adapter_version}"
+
+
 class AdapterImportError(InfoLevel):
     def code(self):
         return "E035"
@@ -800,14 +808,6 @@ class InputFileDiffError(DebugLevel):
 
     def message(self) -> str:
         return f"Error processing file diff: {self.category}, {self.file_id}"
-
-
-class PublicationArtifactChanged(DebugLevel):
-    def code(self):
-        return "I002"
-
-    def message(self) -> str:
-        return f"The publication artifact for {self.project_name} has been {self.action}."
 
 
 # Skipping I003, I004, I005, I006, I007
@@ -1203,6 +1203,19 @@ class DeprecatedReference(WarnLevel):
         return msg
 
 
+class UnsupportedConstraintMaterialization(WarnLevel):
+    def code(self):
+        return "I068"
+
+    def message(self) -> str:
+        msg = (
+            f"Constraint types are not supported for {self.materialized} materializations and will "
+            "be ignored.  Set 'warn_unsupported: false' on this constraint to ignore this warning."
+        )
+
+        return line_wrap_message(warning_tag(msg))
+
+
 # =======================================================
 # M - Deps generation
 # =======================================================
@@ -1448,19 +1461,6 @@ class NoNodesForSelectionCriteria(WarnLevel):
 
     def message(self) -> str:
         return f"The selection criterion '{self.spec_raw}' does not match any nodes"
-
-
-# =======================================================
-# Q - Node execution
-# =======================================================
-
-
-class PublicationArtifactAvailable(DebugLevel):
-    def code(self):
-        return "P001"
-
-    def message(self) -> str:
-        return "Publication artifact available"
 
 
 # =======================================================

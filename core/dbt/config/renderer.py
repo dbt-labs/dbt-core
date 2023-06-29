@@ -4,7 +4,7 @@ import os
 from datetime import date
 
 from dbt.clients.jinja import get_rendered, catch_jinja
-from dbt.constants import SECRET_ENV_PREFIX
+from dbt.constants import SECRET_ENV_PREFIX, DEPENDENCIES_FILE_NAME
 from dbt.context.target import TargetContext
 from dbt.context.secret import SecretContext, SECRET_PLACEHOLDER
 from dbt.context.base import BaseContext
@@ -132,10 +132,15 @@ class DbtProjectYamlRenderer(BaseRenderer):
         rendered_project["project-root"] = project_root
         return rendered_project
 
-    def render_packages(self, packages: Dict[str, Any]):
+    def render_packages(self, packages: Dict[str, Any], packages_specified_path: str):
         """Render the given packages dict"""
+        packages = packages or {}  # Sometimes this is none in tests
         package_renderer = self.get_package_renderer()
-        return package_renderer.render_data(packages)
+        if packages_specified_path == DEPENDENCIES_FILE_NAME:
+            # We don't want to render the "packages" dictionary that came from dependencies.yml
+            return packages
+        else:
+            return package_renderer.render_data(packages)
 
     def render_selectors(self, selectors: Dict[str, Any]):
         return self.render_data(selectors)
