@@ -28,11 +28,11 @@ docs dbt-labs/docs.getdbt.com/#
 
 ### Checklist
 
-- [ ] I have read [the contributing guide](https://github.com/dbt-labs/dbt-core/blob/main/CONTRIBUTING.md) and understand what's expected of me
-- [ ] I have run this code in development and it appears to resolve the stated issue
-  Tests - choose one:
-- [ ] This PR includes tests
-- [ ] Tests are not required or are not relevant for this PR
-  Interfaces - choose one:
-- [ ] This PR has no interface changes (e.g. macros, cli, logs, json artifacts, config files, adapter interface, etc)
-- [ ] This PR has already received feedback and approval from Product or DX.
+- [ ] I have read [the contributing guide](https://github.com/dbt-labs/dbt-core/blob/main/CONTRIBUTING.md) and understand what's expected of me  
+- [ ] I have run this code in development and it appears to resolve the stated issue  
+Tests - choose one:  
+- [ ] This PR includes tests  
+- [ ] Tests are not required or are not relevant for this PR  
+Interfaces - choose one:  
+- [ ] This PR has no interface changes (e.g. macros, cli, logs, json artifacts, config files, adapter interface, etc)  
+- [ ] This PR has already received feedback and approval from Product or DX.  
