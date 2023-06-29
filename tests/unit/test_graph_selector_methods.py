@@ -843,6 +843,14 @@ def test_select_fqn(manifest):
     assert search_manifest_using_method(manifest, method, "versioned_model.v1") == {
         "versioned_model.v1"
     }
+    # version selection with _ instead of '.'
+    assert search_manifest_using_method(manifest, method, "versioned_model_v1") == {
+        "versioned_model.v1"
+    }
+    # version selection with _ instead of '.' - latest version
+    assert search_manifest_using_method(manifest, method, "versioned_model_v2") == {
+        "versioned_model.v2"
+    }
     # wildcards
     assert search_manifest_using_method(manifest, method, "*.*.*_model") == {
         "mynamespace.union_model",

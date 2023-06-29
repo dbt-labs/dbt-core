@@ -62,7 +62,7 @@ def is_selected_node(fqn: List[str], node_selector: str, is_versioned: bool) -> 
         if fqn[-2] == node_selector:
             return True
         # If this is a versioned model, then the last two segments should be allowed to exactly match
-        elif fqn[-2:] == flat_node_selector[-2:]:
+        elif "_".join(fqn[-2:]) == "_".join(flat_node_selector[-2:]):
             return True
     else:
         if fqn[-1] == node_selector:
