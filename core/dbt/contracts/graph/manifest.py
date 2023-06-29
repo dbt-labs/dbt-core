@@ -1012,7 +1012,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             model = self.ref_lookup.find(time_spine_model_name, None, None, self)
             if not model:
                 raise ParsingError(
-                    "Semantic models require a 'metricflow_time_spine' model. See Metricflow docs."
+                    "The semantic layer requires a 'metricflow_time_spine' model in the project, but none was found. Guidance on creating this model can be found on our docs site (https://docs.getdbt.com/docs/build/metricflow-time-spine)"
                 )
             # Create time_spine_table_config, set it in project_config, and add to semantic manifest
             time_spine_table_config = PydanticTimeSpineTableConfiguration(
