@@ -66,6 +66,24 @@ fct_revenue_sql = """select
   1000 as revenue,
   current_timestamp as created_at"""
 
+metricflow_time_spine_sql = """
+with days as (
+    {{dbt_utils.date_spine('day'
+    , "to_date('01/01/2000','mm/dd/yyyy')"
+    , "to_date('01/01/2027','mm/dd/yyyy')"
+    )
+    }}
+),
+
+final as (
+    select cast(date_day as date) as date_day
+    from days
+)
+
+select *
+from final
+"""
+
 
 class TestSemanticModelParsing:
     @pytest.fixture(scope="class")
@@ -73,6 +91,7 @@ class TestSemanticModelParsing:
         return {
             "schema.yml": schema_yml,
             "fct_revenue.sql": fct_revenue_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
         }
 
     def test_semantic_model_parsing(self, project):
@@ -117,7 +136,7 @@ class TestSemanticModelParsing:
         runner = dbtRunner()
         result = runner.invoke(["parse"])
         assert result.success
-        assert "semanticmodel.test.revenue" in result.result.semantic_models
+        assert "semantic_model.test.revenue" in result.result.semantic_models
 
         # Next, modify the default schema.yml to remove the semantic model.
         write_file(schema_without_semantic_model_yml, project.project_root, "models", "schema.yml")
@@ -127,4 +146,4 @@ class TestSemanticModelParsing:
         assert result.success
 
         # Finally, verify that the manifest reflects the deletion
-        assert "semanticmodel.test.revenue" not in result.result.semantic_models
+        assert "semantic_model.test.revenue" not in result.result.semantic_models
