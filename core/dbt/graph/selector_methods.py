@@ -351,6 +351,8 @@ class FileSelectorMethod(SelectorMethod):
         for node, real_node in self.all_nodes(included_nodes):
             if fnmatch(Path(real_node.original_file_path).name, selector):
                 yield node
+            elif fnmatch(Path(real_node.original_file_path).stem, selector):
+                yield node
 
 
 class PackageSelectorMethod(SelectorMethod):

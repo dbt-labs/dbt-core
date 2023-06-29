@@ -1028,6 +1028,15 @@ def test_select_file(manifest):
     assert not search_manifest_using_method(manifest, method, "missing.py")
     assert search_manifest_using_method(manifest, method, "table_*.csv") == {"table_model_csv"}
 
+    # stem selector match
+    assert search_manifest_using_method(manifest, method, "union_model") == {
+        "union_model",
+        "mynamespace.union_model",
+    }
+    assert search_manifest_using_method(manifest, method, "versioned_model_v1") == {
+        "versioned_model.v1"
+    }
+
 
 def test_select_package(manifest):
     methods = MethodManager(manifest, None)
