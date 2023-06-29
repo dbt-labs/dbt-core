@@ -1216,7 +1216,7 @@ class UnsupportedConstraintMaterialization(WarnLevel):
         return line_wrap_message(warning_tag(msg))
 
 
-class ParseNodeError(ErrorLevel):
+class ParseInlineNodeError(ErrorLevel):
     def code(self):
         return "I069"
 

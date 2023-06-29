@@ -5,7 +5,7 @@ from dbt.contracts.graph.manifest import WritableManifest
 from dbt.contracts.results import RunStatus, RunResult
 from dbt.events.base_types import EventLevel
 from dbt.events.functions import fire_event
-from dbt.events.types import CompiledNode, Note, ParseNodeError
+from dbt.events.types import CompiledNode, Note, ParseInlineNodeError
 from dbt.exceptions import (
     CompilationError,
     DbtInternalError,
@@ -144,7 +144,7 @@ class CompileTask(GraphRunnableTask):
                 self._inline_node_id = sql_node.unique_id
             except CompilationError as exc:
                 fire_event(
-                    ParseNodeError(
+                    ParseInlineNodeError(
                         exc=str(exc.msg),
                         node_info={
                             "node_path": "sql/inline_query",

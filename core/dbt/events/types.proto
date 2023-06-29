@@ -1228,13 +1228,13 @@ message UnsupportedConstraintMaterializationMsg {
 }
 
 // I069
-message ParseNodeError{
+message ParseInlineNodeError{
     NodeInfo node_info = 1;
     string exc = 2;
 }
-message ParseNodeErrorMsg {
+message ParseInlineNodeErrorMsg {
     EventInfo info = 1;
-    ParseNodeError data = 2;
+    ParseInlineNodeError data = 2;
 }
 
 // M - Deps generation
