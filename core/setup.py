@@ -68,9 +68,8 @@ setup(
         "pathspec>=0.9,<0.12",
         "isodate>=0.6,<0.7",
         # ----
-        # There is a difficult-to-reproduce bug in sqlparse==0.4.4 for ephemeral model compilation
-        # For context: dbt-core#7396 + dbt-core#7515
-        "sqlparse>=0.2.3,<0.4.4",
+        # There was a pin to below 0.4.4 for a while due to a bug in Ubuntu/sqlparse 0.4.4
+        "sqlparse>=0.2.3",
         # ----
         # These are major-version-0 packages also maintained by dbt-labs. Accept patches.
         "dbt-extractor~=0.4.1",
