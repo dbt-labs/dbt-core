@@ -18,6 +18,7 @@ import dbt.utils
 LOG_VERSION = 3
 metadata_vars: Optional[Dict[str, str]] = None
 
+
 # These are the logging events issued by the "clean" command,
 # where we can't count on having a log directory. We've removed
 # the "class" flags on the events in types.py. If necessary we
