@@ -122,6 +122,8 @@ from dbt.version import __version__
 from dbt.dataclass_schema import StrEnum, dbtClassMixin
 from dbt.plugins import get_plugin_manager
 
+from dbt_semantic_interfaces.enum_extension import assert_values_exhausted
+from dbt_semantic_interfaces.type_enums import MetricType
 
 PARSING_STATE = DbtProcessState("parsing")
 PERF_INFO_FILE_NAME = "perf_info.json"
@@ -1064,16 +1066,15 @@ class ManifestLoader:
     # node, and updates 'depends_on.nodes' with the unique id
     def process_metrics(self, config: RuntimeConfig):
         current_project = config.project_name
+        for metric in self.manifest.metrics.values():
+            if metric.created_at < self.started_at:
+                continue
+            _process_metric_node(self.manifest, current_project, metric)
+            _process_metrics_for_node(self.manifest, current_project, metric)
         for node in self.manifest.nodes.values():
             if node.created_at < self.started_at:
                 continue
             _process_metrics_for_node(self.manifest, current_project, node)
-        for metric in self.manifest.metrics.values():
-            # TODO: Can we do this if the metric is derived & depends on
-            # some other metric for its definition? Maybe....
-            if metric.created_at < self.started_at:
-                continue
-            _process_metrics_for_node(self.manifest, current_project, metric)
         for exposure in self.manifest.exposures.values():
             if exposure.created_at < self.started_at:
                 continue
@@ -1437,6 +1438,63 @@ def _process_refs(
 
         target_model_id = target_model.unique_id
         node.depends_on.add_node(target_model_id)
+
+
+def _process_metric_node(
+    manifest: Manifest,
+    current_project: str,
+    metric: Metric,
+) -> None:
+    """Sets a metric's input_measures"""
+
+    # This ensures that if this metrics input_measures have already been set
+    # we skip the work. This could happen either due to recursion or if multiple
+    # metrics derive from another given metric.
+    # NOTE: This does not protect against infinite loops
+    if len(metric.type_params.input_measures) > 0:
+        return
+
+    if metric.type is MetricType.SIMPLE or metric.type is MetricType.CUMULATIVE:
+        assert (
+            metric.type_params.measure is not None
+        ), f"{metric} should have a measure defined, but it does not."
+        metric.type_params.input_measures.append(metric.type_params.measure)
+
+    elif metric.type is MetricType.DERIVED or metric.type is MetricType.RATIO:
+        input_metrics = metric.input_metrics
+        if metric.type is MetricType.RATIO:
+            if metric.type_params.numerator is None or metric.type_params.denominator is None:
+                raise dbt.exceptions.ParsingError(
+                    "Invalid ratio metric. Both a numerator and denominator must be specified",
+                    node=metric,
+                )
+            input_metrics = [metric.type_params.numerator, metric.type_params.denominator]
+
+        for input_metric in input_metrics:
+            target_metric = manifest.resolve_metric(
+                target_metric_name=input_metric.name,
+                target_metric_package=None,
+                current_project=current_project,
+                node_package=metric.package_name,
+            )
+
+            if target_metric is None:
+                raise dbt.exceptions.ParsingError(
+                    f"The metric `{input_metric.name}` does not exist but was referenced.",
+                    node=metric,
+                )
+            elif isinstance(target_metric, Disabled):
+                raise dbt.exceptions.ParsingError(
+                    f"The metric `{input_metric.name}` is disabled and thus cannot be referenced.",
+                    node=metric,
+                )
+
+            _process_metric_node(
+                manifest=manifest, current_project=current_project, metric=target_metric
+            )
+            metric.type_params.input_measures.extend(target_metric.type_params.input_measures)
+    else:
+        assert_values_exhausted(metric.type)
 
 
 def _process_metrics_for_node(

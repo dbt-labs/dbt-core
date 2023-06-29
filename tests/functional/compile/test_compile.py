@@ -1,10 +1,11 @@
 import json
 import pathlib
 import pytest
+import re
 
 from dbt.cli.main import dbtRunner
 from dbt.exceptions import DbtRuntimeError, TargetNotFoundError
-from dbt.tests.util import run_dbt, run_dbt_and_capture
+from dbt.tests.util import run_dbt, run_dbt_and_capture, read_file
 from tests.functional.compile.fixtures import (
     first_model_sql,
     second_model_sql,
@@ -17,9 +18,13 @@ from tests.functional.compile.fixtures import (
 )
 
 
-def get_lines(model_name):
-    from dbt.tests.util import read_file
+def norm_whitespace(string):
+    _RE_COMBINE_WHITESPACE = re.compile(r"\s+")
+    string = _RE_COMBINE_WHITESPACE.sub(" ", string).strip()
+    return string
 
+
+def get_lines(model_name):
     f = read_file("target", "compiled", "test", "models", model_name + ".sql")
     return [line for line in f.splitlines() if line]
 
@@ -90,21 +95,22 @@ class TestEphemeralModels:
     def test_no_selector(self, project):
         run_dbt(["compile"])
 
-        assert get_lines("first_ephemeral_model") == ["select 1 as fun"]
-        assert get_lines("second_ephemeral_model") == [
-            "with __dbt__cte__first_ephemeral_model as (",
-            "select 1 as fun",
-            ")select * from __dbt__cte__first_ephemeral_model",
-        ]
-        assert get_lines("third_ephemeral_model") == [
-            "with __dbt__cte__first_ephemeral_model as (",
-            "select 1 as fun",
-            "),  __dbt__cte__second_ephemeral_model as (",
-            "select * from __dbt__cte__first_ephemeral_model",
-            ")select * from __dbt__cte__second_ephemeral_model",
-            "union all",
-            "select 2 as fun",
-        ]
+        sql = read_file("target", "compiled", "test", "models", "first_ephemeral_model.sql")
+        assert norm_whitespace(sql) == norm_whitespace("select 1 as fun")
+        sql = read_file("target", "compiled", "test", "models", "second_ephemeral_model.sql")
+        expected_sql = """with __dbt__cte__first_ephemeral_model as (
+            select 1 as fun
+            ) select * from __dbt__cte__first_ephemeral_model"""
+        assert norm_whitespace(sql) == norm_whitespace(expected_sql)
+        sql = read_file("target", "compiled", "test", "models", "third_ephemeral_model.sql")
+        expected_sql = """with __dbt__cte__first_ephemeral_model as (
+            select 1 as fun
+            ),  __dbt__cte__second_ephemeral_model as (
+            select * from __dbt__cte__first_ephemeral_model
+            ) select * from __dbt__cte__second_ephemeral_model
+            union all
+            select 2 as fun"""
+        assert norm_whitespace(sql) == norm_whitespace(expected_sql)
 
     def test_with_recursive_cte(self, project):
         run_dbt(["compile"])
@@ -112,7 +118,7 @@ class TestEphemeralModels:
         assert get_lines("with_recursive_model") == [
             "with recursive  __dbt__cte__first_ephemeral_model as (",
             "select 1 as fun",
-            "),t(n) as (",
+            "), t(n) as (",
             "    select * from __dbt__cte__first_ephemeral_model",
             "  union all",
             "    select n+1 from t where n < 100",

@@ -1378,20 +1378,30 @@ class ModelContext(ProviderContext):
     @contextproperty
     def sql(self) -> Optional[str]:
         # only doing this in sql model for backward compatible
-        if (
-            getattr(self.model, "extra_ctes_injected", None)
-            and self.model.language == ModelLanguage.sql  # type: ignore[union-attr]
-        ):
-            # TODO CT-211
-            return self.model.compiled_code  # type: ignore[union-attr]
-        return None
+        if self.model.language == ModelLanguage.sql:  # type: ignore[union-attr]
+            # If the model is deferred and the adapter doesn't support zero-copy cloning, then select * from the prod
+            # relation
+            if getattr(self.model, "defer_relation", None):
+                # TODO https://github.com/dbt-labs/dbt-core/issues/7976
+                return f"select * from {self.model.defer_relation.relation_name or str(self.defer_relation)}"  # type: ignore[union-attr]
+            elif getattr(self.model, "extra_ctes_injected", None):
+                # TODO CT-211
+                return self.model.compiled_code  # type: ignore[union-attr]
+            else:
+                return None
+        else:
+            return None
 
     @contextproperty
     def compiled_code(self) -> Optional[str]:
-        if getattr(self.model, "extra_ctes_injected", None):
+        if getattr(self.model, "defer_relation", None):
+            # TODO https://github.com/dbt-labs/dbt-core/issues/7976
+            return f"select * from {self.model.defer_relation.relation_name or str(self.defer_relation)}"  # type: ignore[union-attr]
+        elif getattr(self.model, "extra_ctes_injected", None):
             # TODO CT-211
             return self.model.compiled_code  # type: ignore[union-attr]
-        return None
+        else:
+            return None
 
     @contextproperty
     def database(self) -> str:
@@ -1435,6 +1445,20 @@ class ModelContext(ProviderContext):
         if self.model.resource_type == NodeType.Operation:
             return None
         return self.db_wrapper.Relation.create_from(self.config, self.model)
+
+    @contextproperty
+    def defer_relation(self) -> Optional[RelationProxy]:
+        """
+        For commands which add information about this node's corresponding
+        production version (via a --state artifact), access the Relation
+        object for that stateful other
+        """
+        if getattr(self.model, "defer_relation", None):
+            return self.db_wrapper.Relation.create_from_node(
+                self.config, self.model.defer_relation  # type: ignore
+            )
+        else:
+            return None
 
 
 # This is called by '_context_for', used in 'render_with_context'

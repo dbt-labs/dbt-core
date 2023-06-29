@@ -91,7 +91,7 @@ REQUIRED_PARSED_NODE_KEYS = frozenset(
         "latest_version",
         "constraints",
         "deprecation_date",
-        "state_relation",
+        "defer_relation",
     }
 )
 
@@ -664,41 +664,6 @@ class ManifestTest(unittest.TestCase):
         copy = original.deepcopy()
         self.assertEqual(original.flat_graph, copy.flat_graph)
 
-    def test_add_from_artifact(self):
-        original_nodes = deepcopy(self.nested_nodes)
-        other_nodes = deepcopy(self.nested_nodes)
-
-        nested2 = other_nodes.pop("model.root.nested")
-        nested2.name = "nested2"
-        nested2.alias = "nested2"
-        nested2.fqn = ["root", "nested2"]
-
-        other_nodes["model.root.nested2"] = nested2
-
-        for k, v in other_nodes.items():
-            v.database = "other_" + v.database
-            v.schema = "other_" + v.schema
-            v.alias = "other_" + v.alias
-
-            other_nodes[k] = v
-
-        original_manifest = Manifest(nodes=original_nodes)
-        other_manifest = Manifest(nodes=other_nodes)
-        original_manifest.add_from_artifact(other_manifest.writable_manifest())
-
-        # new node added should not be in original manifest
-        assert "model.root.nested2" not in original_manifest.nodes
-
-        # old node removed should not have state relation in original manifest
-        assert original_manifest.nodes["model.root.nested"].state_relation is None
-
-        # for all other nodes, check that state relation is updated
-        for k, v in original_manifest.nodes.items():
-            if k != "model.root.nested":
-                self.assertEqual("other_" + v.database, v.state_relation.database)
-                self.assertEqual("other_" + v.schema, v.state_relation.schema)
-                self.assertEqual("other_" + v.alias, v.state_relation.alias)
-
 
 class MixedManifestTest(unittest.TestCase):
     def setUp(self):
@@ -1038,6 +1003,45 @@ class MixedManifestTest(unittest.TestCase):
             else:
                 self.assertEqual(frozenset(node), REQUIRED_PARSED_NODE_KEYS)
         self.assertEqual(compiled_count, 2)
+
+    def test_add_from_artifact(self):
+        original_nodes = deepcopy(self.nested_nodes)
+        other_nodes = deepcopy(self.nested_nodes)
+
+        nested2 = other_nodes.pop("model.root.nested")
+        nested2.name = "nested2"
+        nested2.alias = "nested2"
+        nested2.fqn = ["root", "nested2"]
+
+        other_nodes["model.root.nested2"] = nested2
+
+        for k, v in other_nodes.items():
+            v.database = "other_" + v.database
+            v.schema = "other_" + v.schema
+            v.alias = "other_" + v.alias
+            if v.relation_name:
+                v.relation_name = "other_" + v.relation_name
+
+            other_nodes[k] = v
+
+        original_manifest = Manifest(nodes=original_nodes)
+        other_manifest = Manifest(nodes=other_nodes)
+        original_manifest.add_from_artifact(other_manifest.writable_manifest())
+
+        # new node added should not be in original manifest
+        assert "model.root.nested2" not in original_manifest.nodes
+
+        # old node removed should not have state relation in original manifest
+        assert original_manifest.nodes["model.root.nested"].defer_relation is None
+
+        # for all other nodes, check that state relation is updated
+        for k, v in original_manifest.nodes.items():
+            if v.defer_relation:
+                self.assertEqual("other_" + v.database, v.defer_relation.database)
+                self.assertEqual("other_" + v.schema, v.defer_relation.schema)
+                self.assertEqual("other_" + v.alias, v.defer_relation.alias)
+                if v.relation_name:
+                    self.assertEqual("other_" + v.relation_name, v.defer_relation.relation_name)
 
 
 # Tests of the manifest search code (find_X_by_Y)
