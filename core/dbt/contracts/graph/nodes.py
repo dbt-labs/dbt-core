@@ -258,8 +258,9 @@ class MacroDependsOn(dbtClassMixin, Replaceable):
 
 
 @dataclass
-class RelationalNode(HasRelationMetadata):
+class DeferRelation(HasRelationMetadata):
     alias: str
+    relation_name: Optional[str]
 
     @property
     def identifier(self):
@@ -273,17 +274,6 @@ class DependsOn(MacroDependsOn):
     def add_node(self, value: str):
         if value not in self.nodes:
             self.nodes.append(value)
-
-
-@dataclass
-class StateRelation(dbtClassMixin):
-    alias: str
-    database: Optional[str]
-    schema: str
-
-    @property
-    def identifier(self):
-        return self.alias
 
 
 @dataclass
@@ -577,7 +567,7 @@ class ModelNode(CompiledNode):
     version: Optional[NodeVersion] = None
     latest_version: Optional[NodeVersion] = None
     deprecation_date: Optional[datetime] = None
-    state_relation: Optional[StateRelation] = None
+    defer_relation: Optional[DeferRelation] = None
 
     @classmethod
     def from_args(cls, args: ModelNodeArgs) -> "ModelNode":
@@ -796,7 +786,7 @@ class SeedNode(ParsedNode):  # No SQLDefaults!
     # and we need the root_path to load the seed later
     root_path: Optional[str] = None
     depends_on: MacroDependsOn = field(default_factory=MacroDependsOn)
-    state_relation: Optional[StateRelation] = None
+    defer_relation: Optional[DeferRelation] = None
 
     def same_seeds(self, other: "SeedNode") -> bool:
         # for seeds, we check the hashes. If the hashes are different types,
@@ -991,7 +981,7 @@ class IntermediateSnapshotNode(CompiledNode):
 class SnapshotNode(CompiledNode):
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Snapshot]})
     config: SnapshotConfig
-    state_relation: Optional[StateRelation] = None
+    defer_relation: Optional[DeferRelation] = None
 
 
 # ====================================

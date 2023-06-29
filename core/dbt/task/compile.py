@@ -9,9 +9,9 @@ from dbt.events.types import CompiledNode, Note, ParseInlineNodeError
 from dbt.exceptions import (
     CompilationError,
     DbtInternalError,
-    DbtRuntimeError,
     Exception as DbtException,
 )
+
 from dbt.graph import ResourceTypeSelector
 from dbt.node_types import NodeType
 from dbt.parser.manifest import write_manifest, process_node
@@ -102,18 +102,7 @@ class CompileTask(GraphRunnableTask):
             )
 
     def _get_deferred_manifest(self) -> Optional[WritableManifest]:
-        if not self.args.defer:
-            return None
-
-        state = self.previous_defer_state or self.previous_state
-        if not state:
-            raise DbtRuntimeError(
-                "Received a --defer argument, but no value was provided to --state"
-            )
-
-        if not state.manifest:
-            raise DbtRuntimeError(f'Could not find manifest in --state path: "{state}"')
-        return state.manifest
+        return super()._get_deferred_manifest() if self.args.defer else None
 
     def defer_to_manifest(self, adapter, selected_uids: AbstractSet[str]):
         deferred_manifest = self._get_deferred_manifest()

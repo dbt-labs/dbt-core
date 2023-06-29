@@ -54,6 +54,7 @@ import dbt.tracking
 import dbt.exceptions
 from dbt.flags import get_flags
 import dbt.utils
+from dbt.contracts.graph.manifest import WritableManifest
 
 RESULT_FILE_NAME = "run_results.json"
 RUNNING_STATE = DbtProcessState("running")
@@ -585,3 +586,14 @@ class GraphRunnableTask(ConfiguredTask):
 
     def task_end_messages(self, results):
         print_run_end_messages(results)
+
+    def _get_deferred_manifest(self) -> Optional[WritableManifest]:
+        state = self.previous_defer_state or self.previous_state
+        if not state:
+            raise DbtRuntimeError(
+                "--state or --defer-state are required for deferral, but neither was provided"
+            )
+
+        if not state.manifest:
+            raise DbtRuntimeError(f'Could not find manifest in --state path: "{state}"')
+        return state.manifest

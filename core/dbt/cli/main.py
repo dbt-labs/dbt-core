@@ -23,6 +23,7 @@ from dbt.contracts.results import (
 from dbt.events.base_types import EventMsg
 from dbt.task.build import BuildTask
 from dbt.task.clean import CleanTask
+from dbt.task.clone import CloneTask
 from dbt.task.compile import CompileTask
 from dbt.task.debug import DebugTask
 from dbt.task.deps import DepsTask
@@ -597,6 +598,43 @@ def run(ctx, **kwargs):
 def retry(ctx, **kwargs):
     """Retry the nodes that failed in the previous run."""
     task = RetryTask(
+        ctx.obj["flags"],
+        ctx.obj["runtime_config"],
+        ctx.obj["manifest"],
+    )
+
+    results = task.run()
+    success = task.interpret_results(results)
+    return results, success
+
+
+# dbt clone
+@cli.command("clone")
+@click.pass_context
+@p.defer_state
+@p.exclude
+@p.full_refresh
+@p.profile
+@p.profiles_dir
+@p.project_dir
+@p.resource_type
+@p.select
+@p.selector
+@p.state  # required
+@p.target
+@p.target_path
+@p.threads
+@p.vars
+@p.version_check
+@requires.preflight
+@requires.profile
+@requires.project
+@requires.runtime_config
+@requires.manifest
+@requires.postflight
+def clone(ctx, **kwargs):
+    """Create clones of selected nodes based on their location in the manifest provided to --state."""
+    task = CloneTask(
         ctx.obj["flags"],
         ctx.obj["runtime_config"],
         ctx.obj["manifest"],

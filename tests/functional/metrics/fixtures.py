@@ -50,10 +50,8 @@ metrics:
     description: "The average tenure per person"
     type: ratio
     type_params:
-      numerator:
-        name: years_tenure
-      denominator:
-        name: people
+      numerator: collective_tenure
+      denominator: number_of_people
 
   - name: average_tenure_plus_one
     label: "Average tenure, plus 1"
@@ -97,6 +95,24 @@ metrics:
         name: years_tenure
         filter: "{{dimension('loves_dbt')}} is true"
       window: 14 days
+
+  - name: average_tenure
+    label: Average Tenure
+    description: The average tenure of our people
+    type: ratio
+    type_params:
+      numerator: collective_tenure
+      denominator: number_of_people
+
+  - name: average_tenure_minus_people
+    label: Average Tenure minus People
+    description: Well this isn't really useful is it?
+    type: derived
+    type_params:
+      expr: average_tenure - number_of_people
+      metrics:
+        - average_tenure
+        - number_of_people
 
 """
 

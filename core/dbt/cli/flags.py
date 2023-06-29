@@ -376,6 +376,7 @@ def command_args(command: CliCommand) -> ArgsList:
     CMD_DICT: Dict[CliCommand, ClickCommand] = {
         CliCommand.BUILD: cli.build,
         CliCommand.CLEAN: cli.clean,
+        CliCommand.CLONE: cli.clone,
         CliCommand.COMPILE: cli.compile,
         CliCommand.DOCS_GENERATE: cli.docs_generate,
         CliCommand.DOCS_SERVE: cli.docs_serve,
