@@ -191,7 +191,6 @@ class TestCompile:
         manifest = parse_result.result
         assert len(manifest.nodes) == 4
         dbt = dbtRunner(manifest=manifest)
-        dbt = dbtRunner()
         dbt.invoke(
             ["compile", "--inline", "select * from {{ ref('second_model') }}"],
             populate_cache=False,
@@ -200,19 +199,17 @@ class TestCompile:
 
     def test_compile_inline_syntax_error(self, project, mocker):
         patched_fire_event = mocker.patch("dbt.task.compile.fire_event")
-        dbt = dbtRunner()
-        res = dbt.invoke(["compile", "--inline", "select * from {{ ref(1) }}"])
-        # Event for parsing error
+        with pytest.raises(DbtException, match="Error parsing inline query"):
+            run_dbt(["compile", "--inline", "select * from {{ ref(1) }}"])
+        # Event for parsing error fired
         patched_fire_event.assert_called_once()
-        assert str(res.exception) == "Error parsing inline query"
 
     def test_compile_inline_ref_node_not_exist(self, project, mocker):
         patched_fire_event = mocker.patch("dbt.task.compile.fire_event")
-        dbt = dbtRunner()
-        res = dbt.invoke(["compile", "--inline", "select * from {{ ref('i') }}"])
-        # Event for parsing error
+        with pytest.raises(DbtException, match="Error parsing inline query"):
+            run_dbt(["compile", "--inline", "select * from {{ ref('third_model') }}"])
+        # Event for parsing error fired
         patched_fire_event.assert_called_once()
-        assert str(res.exception) == "Error parsing inline query"
 
     def test_graph_summary_output(self, project):
         """Ensure that the compile command generates a file named graph_summary.json
