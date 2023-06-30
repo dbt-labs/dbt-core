@@ -18,6 +18,8 @@ from typing import (
 )
 from itertools import chain
 import time
+
+from dbt.contracts.graph.semantic_manifest import SemanticManifest
 from dbt.events.base_types import EventLevel
 import json
 import pprint
@@ -1651,7 +1653,8 @@ def process_node(config: RuntimeConfig, manifest: Manifest, node: ManifestNode):
 
 def write_semantic_manifest(manifest: Manifest, target_path: str) -> None:
     path = os.path.join(target_path, SEMANTIC_MANIFEST_FILE_NAME)
-    write_file(path, manifest.pydantic_semantic_manifest.json())
+    semantic_manifest = SemanticManifest(manifest)
+    semantic_manifest.write_json_to_file(path)
 
 
 def write_manifest(manifest: Manifest, target_path: str):
