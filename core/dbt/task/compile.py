@@ -5,8 +5,14 @@ from dbt.contracts.graph.manifest import WritableManifest
 from dbt.contracts.results import RunStatus, RunResult
 from dbt.events.base_types import EventLevel
 from dbt.events.functions import fire_event
-from dbt.events.types import CompiledNode, Note
-from dbt.exceptions import DbtInternalError, DbtRuntimeError
+from dbt.events.types import CompiledNode, Note, ParseInlineNodeError
+from dbt.exceptions import (
+    CompilationError,
+    DbtInternalError,
+    DbtRuntimeError,
+    Exception as DbtException,
+)
+
 from dbt.graph import ResourceTypeSelector
 from dbt.node_types import NodeType
 from dbt.parser.manifest import write_manifest, process_node
@@ -129,14 +135,26 @@ class CompileTask(GraphRunnableTask):
 
     def _runtime_initialize(self):
         if getattr(self.args, "inline", None):
-            block_parser = SqlBlockParser(
-                project=self.config, manifest=self.manifest, root_project=self.config
-            )
-            sql_node = block_parser.parse_remote(self.args.inline, "inline_query")
-            process_node(self.config, self.manifest, sql_node)
-            # keep track of the node added to the manifest
-            self._inline_node_id = sql_node.unique_id
-
+            try:
+                block_parser = SqlBlockParser(
+                    project=self.config, manifest=self.manifest, root_project=self.config
+                )
+                sql_node = block_parser.parse_remote(self.args.inline, "inline_query")
+                process_node(self.config, self.manifest, sql_node)
+                # keep track of the node added to the manifest
+                self._inline_node_id = sql_node.unique_id
+            except CompilationError as exc:
+                fire_event(
+                    ParseInlineNodeError(
+                        exc=str(exc.msg),
+                        node_info={
+                            "node_path": "sql/inline_query",
+                            "node_name": "inline_query",
+                            "unique_id": "sqloperation.test.inline_query",
+                        },
+                    )
+                )
+                raise DbtException("Error parsing inline query")
         super()._runtime_initialize()
 
     def after_run(self, adapter, results):

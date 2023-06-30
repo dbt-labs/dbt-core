@@ -1,7 +1,7 @@
 import pytest
 
 from dbt.cli.main import dbtRunner
-from dbt.exceptions import DbtRuntimeError, TargetNotFoundError
+from dbt.exceptions import DbtRuntimeError, Exception as DbtException
 from dbt.tests.util import run_dbt, run_dbt_and_capture
 from tests.functional.compile.fixtures import (
     first_model_sql,
@@ -137,9 +137,7 @@ class TestCompile:
         assert "Compiled node 'second_model' is:" in log_output
 
     def test_inline_fail(self, project):
-        with pytest.raises(
-            TargetNotFoundError, match="depends on a node named 'third_model' which was not found"
-        ):
+        with pytest.raises(DbtException, match="Error parsing inline query"):
             run_dbt(["compile", "--inline", "select * from {{ ref('third_model') }}"])
 
     def test_multiline_jinja(self, project):
@@ -174,3 +172,17 @@ class TestCompile:
             populate_cache=False,
         )
         assert len(manifest.nodes) == 4
+
+    def test_compile_inline_syntax_error(self, project, mocker):
+        patched_fire_event = mocker.patch("dbt.task.compile.fire_event")
+        with pytest.raises(DbtException, match="Error parsing inline query"):
+            run_dbt(["compile", "--inline", "select * from {{ ref(1) }}"])
+        # Event for parsing error fired
+        patched_fire_event.assert_called_once()
+
+    def test_compile_inline_ref_node_not_exist(self, project, mocker):
+        patched_fire_event = mocker.patch("dbt.task.compile.fire_event")
+        with pytest.raises(DbtException, match="Error parsing inline query"):
+            run_dbt(["compile", "--inline", "select * from {{ ref('third_model') }}"])
+        # Event for parsing error fired
+        patched_fire_event.assert_called_once()

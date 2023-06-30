@@ -1205,6 +1205,16 @@ message UnsupportedConstraintMaterializationMsg {
     UnsupportedConstraintMaterialization data = 2;
 }
 
+// I069
+message ParseInlineNodeError{
+    NodeInfo node_info = 1;
+    string exc = 2;
+}
+message ParseInlineNodeErrorMsg {
+    EventInfo info = 1;
+    ParseInlineNodeError data = 2;
+}
+
 // M - Deps generation
 
 // M001
