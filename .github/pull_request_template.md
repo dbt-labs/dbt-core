@@ -1,5 +1,5 @@
 resolves #  
-docs dbt-labs/docs.getdbt.com/#  
+[docs](https://github.com/dbt-labs/docs.getdbt.com/issues/new/choose) dbt-labs/docs.getdbt.com/#  
 
 <!---
   Include the number of the issue addressed by this PR above if applicable.
@@ -8,7 +8,8 @@ docs dbt-labs/docs.getdbt.com/#
 
   Include the number of the docs issue that was opened for this issue. If
   this change has no user-facing implications, "N/A" suffices instead. New
-  docs tickets can be created[here](https://github.com/dbt-labs/docs.getdbt.com/issues/new/choose).
+  docs tickets can be created by clicking the link above or by going to
+  https://github.com/dbt-labs/docs.getdbt.com/issues/new/choose.
 -->
 
 ### Problem
