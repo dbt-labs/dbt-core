@@ -289,6 +289,15 @@ class BaseAdapter(metaclass=AdapterMeta):
         """
         return self.connections.execute(sql=sql, auto_begin=auto_begin, fetch=fetch, limit=limit)
 
+    def dry_run(self, sql: str) -> AdapterResponse:
+        """Submit the given SQL for validation, but not execution.
+
+        This is a thin wrapper around ConnectionManager.dry_run.
+
+        :param str sql: The sql to validate
+        """
+        return self.connections.dry_run(sql=sql)
+
     @available.parse(lambda *a, **k: [])
     def get_column_schema_from_query(self, sql: str) -> List[BaseColumn]:
         """Get a list of the Columns with names and data types from the given sql."""
@@ -785,7 +794,6 @@ class BaseAdapter(metaclass=AdapterMeta):
         schema: str,
         identifier: str,
     ) -> List[BaseRelation]:
-
         matches = []
 
         search = self._make_match_kwargs(database, schema, identifier)
@@ -1063,7 +1071,6 @@ class BaseAdapter(metaclass=AdapterMeta):
         schemas: Set[str],
         manifest: Manifest,
     ) -> agate.Table:
-
         kwargs = {"information_schema": information_schema, "schemas": schemas}
         table = self.execute_macro(
             GET_CATALOG_MACRO_NAME,
@@ -1453,7 +1460,6 @@ join diff_count using (id)
 def catch_as_completed(
     futures,  # typing: List[Future[agate.Table]]
 ) -> Tuple[agate.Table, List[Exception]]:
-
     # catalogs: agate.Table = agate.Table(rows=[])
     tables: List[agate.Table] = []
     exceptions: List[Exception] = []

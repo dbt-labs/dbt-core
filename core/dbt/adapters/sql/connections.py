@@ -52,7 +52,6 @@ class SQLConnectionManager(BaseConnectionManager):
         bindings: Optional[Any] = None,
         abridge_sql_log: bool = False,
     ) -> Tuple[Connection, Any]:
-
         connection = self.get_thread_connection()
         if auto_begin and connection.transaction_open is False:
             self.begin()
@@ -151,6 +150,18 @@ class SQLConnectionManager(BaseConnectionManager):
         else:
             table = dbt.clients.agate_helper.empty_table()
         return response, table
+
+    def dry_run(self, sql: str) -> AdapterResponse:
+        """Submit the given SQL to the engine for validation, but not execution.
+
+        By default we simply prefix the query with the explain keyword and allow the
+        exceptions thrown by the underlying engine on invalid SQL inputs to bubble up
+        to the exception handler.
+
+        :param sql str: The sql to validate
+        """
+        explain_sql = f"explain {sql}"
+        return self.execute(explain_sql, auto_begin=True)[0]
 
     def add_begin_query(self):
         return self.add_query("BEGIN", auto_begin=False)

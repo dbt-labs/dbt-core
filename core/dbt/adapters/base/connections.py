@@ -65,6 +65,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         - commit
         - clear_transaction
         - execute
+        - dry_run
 
     You must also set the 'TYPE' class attribute with a class-unique constant
     string.
@@ -412,3 +413,14 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         :rtype: Tuple[AdapterResponse, agate.Table]
         """
         raise dbt.exceptions.NotImplementedError("`execute` is not implemented for this adapter!")
+
+    def dry_run(self, sql: str) -> AdapterResponse:
+        """Submit the given SQL to the engine for validation, but not execution.
+
+        This should throw an appropriate exception if the input SQL is invalid, although
+        in practice that will generally be handled by delegating to execute() and
+        allowing the error handler to take care of the rest.
+
+        :param sql str: The sql to validate
+        """
+        raise dbt.exceptions.NotImplementedError("`dry_run` is not implemented for this adapter!")
