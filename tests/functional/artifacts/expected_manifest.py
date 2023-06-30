@@ -29,6 +29,7 @@ def get_rendered_model_config(**updates):
         "persist_docs": {},
         "full_refresh": None,
         "on_schema_change": "ignore",
+        "on_configuration_change": "apply",
         "meta": {},
         "unique_key": None,
         "grants": {},
@@ -59,6 +60,7 @@ def get_rendered_seed_config(**updates):
         "quote_columns": True,
         "full_refresh": None,
         "on_schema_change": "ignore",
+        "on_configuration_change": "apply",
         "database": None,
         "schema": None,
         "alias": None,
@@ -96,6 +98,7 @@ def get_rendered_snapshot_config(**updates):
         "persist_docs": {},
         "full_refresh": None,
         "on_schema_change": "ignore",
+        "on_configuration_change": "apply",
         "strategy": "check",
         "check_cols": "all",
         "unique_key": "id",
@@ -263,6 +266,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "refs": [{"name": "seed", "package": None, "version": None}],
                 "sources": [],
                 "depends_on": {"nodes": ["seed.test.seed"], "macros": []},
+                "deprecation_date": None,
                 "unique_id": "model.test.model",
                 "fqn": ["test", "model"],
                 "metrics": [],
@@ -355,6 +359,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "refs": [{"name": "seed", "package": None, "version": None}],
                 "sources": [],
                 "depends_on": {"nodes": ["seed.test.seed"], "macros": []},
+                "deprecation_date": None,
                 "unique_id": "model.test.second_model",
                 "fqn": ["test", "second_model"],
                 "metrics": [],
@@ -881,6 +886,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
             "doc.test.macro_arg_info": ANY,
         },
         "disabled": {},
+        "semantic_models": {},
     }
 
 
@@ -913,7 +919,11 @@ def expected_references_manifest(project):
                 "columns": {},
                 "config": get_rendered_model_config(materialized="ephemeral"),
                 "sources": [["my_source", "my_table"]],
-                "depends_on": {"macros": [], "nodes": ["source.test.my_source.my_table"]},
+                "depends_on": {
+                    "macros": [],
+                    "nodes": ["source.test.my_source.my_table"],
+                },
+                "deprecation_date": None,
                 "deferred": False,
                 "description": "",
                 "docs": {"node_color": None, "show": True},
@@ -975,7 +985,11 @@ def expected_references_manifest(project):
                 "config": get_rendered_model_config(materialized="table", group="test_group"),
                 "contract": {"checksum": None, "enforced": False},
                 "sources": [],
-                "depends_on": {"macros": [], "nodes": ["model.test.ephemeral_copy"]},
+                "depends_on": {
+                    "macros": [],
+                    "nodes": ["model.test.ephemeral_copy"],
+                },
+                "deprecation_date": None,
                 "deferred": False,
                 "description": "A summmary table of the ephemeral copy of the seed data",
                 "docs": {"node_color": None, "show": True},
@@ -1040,7 +1054,11 @@ def expected_references_manifest(project):
                 "config": get_rendered_model_config(),
                 "contract": {"checksum": None, "enforced": False},
                 "database": project.database,
-                "depends_on": {"macros": [], "nodes": ["model.test.ephemeral_summary"]},
+                "depends_on": {
+                    "macros": [],
+                    "nodes": ["model.test.ephemeral_summary"],
+                },
+                "deprecation_date": None,
                 "deferred": False,
                 "description": "A view of the summary of the ephemeral copy of the seed data",
                 "docs": {"node_color": None, "show": True},
@@ -1246,7 +1264,10 @@ def expected_references_manifest(project):
         "exposures": {
             "exposure.test.notebook_exposure": {
                 "created_at": ANY,
-                "depends_on": {"macros": [], "nodes": ["model.test.view_summary"]},
+                "depends_on": {
+                    "macros": [],
+                    "nodes": ["model.test.view_summary"],
+                },
                 "description": "A description of the complex exposure",
                 "label": None,
                 "config": {
@@ -1424,6 +1445,7 @@ def expected_references_manifest(project):
                 ],
             }
         },
+        "semantic_models": {},
     }
 
 
@@ -1485,6 +1507,7 @@ def expected_versions_manifest(project):
                 "depends_on": {"macros": [], "nodes": []},
                 "deferred": False,
                 "description": "A versioned model",
+                "deprecation_date": ANY,
                 "docs": {"node_color": None, "show": True},
                 "fqn": ["test", "versioned_model", "v1"],
                 "group": "test_group",
@@ -1555,6 +1578,7 @@ def expected_versions_manifest(project):
                 "depends_on": {"macros": [], "nodes": []},
                 "deferred": False,
                 "description": "A versioned model",
+                "deprecation_date": None,
                 "docs": {"node_color": None, "show": True},
                 "fqn": ["test", "versioned_model", "v2"],
                 "group": "test_group",
@@ -1602,12 +1626,10 @@ def expected_versions_manifest(project):
                     "macros": [],
                     "nodes": [
                         "model.test.versioned_model.v2",
-                        "model.test.versioned_model.v2",
-                        "model.test.versioned_model.v2",
-                        "model.test.versioned_model.v2",
                         "model.test.versioned_model.v1",
                     ],
                 },
+                "deprecation_date": None,
                 "deferred": False,
                 "description": "",
                 "docs": {"node_color": None, "show": True},
@@ -1813,7 +1835,10 @@ def expected_versions_manifest(project):
         "exposures": {
             "exposure.test.notebook_exposure": {
                 "created_at": ANY,
-                "depends_on": {"macros": [], "nodes": ["model.test.versioned_model.v2"]},
+                "depends_on": {
+                    "macros": [],
+                    "nodes": ["model.test.versioned_model.v2"],
+                },
                 "description": "notebook_info",
                 "label": None,
                 "config": {
@@ -1862,9 +1887,6 @@ def expected_versions_manifest(project):
             "model.test.versioned_model.v2": [
                 "exposure.test.notebook_exposure",
                 "model.test.ref_versioned_model",
-                "model.test.ref_versioned_model",
-                "model.test.ref_versioned_model",
-                "model.test.ref_versioned_model",
                 "test.test.unique_versioned_model_v2_first_name.998430d28e",
             ],
             "model.test.ref_versioned_model": [],
@@ -1878,9 +1900,6 @@ def expected_versions_manifest(project):
             "model.test.versioned_model.v2": [],
             "model.test.ref_versioned_model": [
                 "model.test.versioned_model.v1",
-                "model.test.versioned_model.v2",
-                "model.test.versioned_model.v2",
-                "model.test.versioned_model.v2",
                 "model.test.versioned_model.v2",
             ],
             "exposure.test.notebook_exposure": ["model.test.versioned_model.v2"],
@@ -1905,4 +1924,5 @@ def expected_versions_manifest(project):
         },
         "disabled": {},
         "macros": {},
+        "semantic_models": {},
     }

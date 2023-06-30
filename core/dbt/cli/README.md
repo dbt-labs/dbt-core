@@ -1,3 +1,25 @@
+# Adding a new command
+
+## `main.py`
+Add the new command with all necessary decorators. Every command will need at minimum:
+- a decorator for the click group it belongs to which also names the command
+- the postflight decorator (must come before other decorators from the `requires` module for error handling)
+- the preflight decorator
+```py
+@cli.command("my-new-command")
+@requires.postflight
+@requires.preflight
+def my_new_command(ctx, **kwargs):
+    ...
+```
+
+## `types.py`
+Add an entry to the `Command` enum with your new command. Commands that are sub-commands should have entries
+that represent their full command path (e.g. `source freshness -> SOURCE_FRESHNESS`, `docs serve -> DOCS_SERVE`).
+
+## `flags.py`
+Add the new command to the dictionary within the `command_args` function.
+
 # Exception Handling
 
 ## `requires.py`

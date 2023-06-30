@@ -19,14 +19,10 @@ metrics_schema_yml = """version: 2
 
 metrics:
   - name: metric
-    model: ref('model')
     label: "label"
-
-    calculation_method: count_distinct
-    expression: id
-
-    timestamp: first_order
-    time_grains: [day]
+    type: simple
+    type_params:
+      measure: "distinct_metrics"
 """
 
 simple_exposure_yml = """

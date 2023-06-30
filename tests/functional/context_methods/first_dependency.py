@@ -25,7 +25,8 @@ clean-targets:         # directories to be removed by `dbt clean`
 vars:
   first_dep:
     first_dep_global: 'first_dep_global_value_overridden'
-
+    test_config_root_override: 'configured_from_dependency'
+    test_config_package: 'configured_from_dependency'
 
 seeds:
   quote_columns: True
@@ -42,6 +43,24 @@ first_dependency__seeds__first_dep_expected_csv = """first_dep_global,from_root
 first_dep_global_value_overridden,root_first_value
 """
 
+first_dependency__models__nested__first_dep_model_var_expected_csv = """test_config_root_override,test_config_package
+configured_from_root,configured_from_dependency
+"""
+
+first_dependency__models__nested__first_dep_model_var_sql = """
+select
+    '{{ config.get("test_config_root_override") }}' as test_config_root_override,
+    '{{ config.get("test_config_package") }}' as test_config_package
+"""
+
+first_dependency__model_var_in_config_schema = """
+models:
+- name: first_dep_model
+  config:
+    test_config_root_override: "{{ var('test_config_root_override') }}"
+    test_config_package: "{{ var('test_config_package') }}"
+"""
+
 
 class FirstDependencyProject:
     @pytest.fixture(scope="class")
@@ -54,5 +73,23 @@ class FirstDependencyProject:
                 }
             },
             "seeds": {"first_dep_expected.csv": first_dependency__seeds__first_dep_expected_csv},
+        }
+        write_project_files(project.project_root, "first_dependency", first_dependency_files)
+
+
+class FirstDependencyConfigProject:
+    @pytest.fixture(scope="class")
+    def first_dependency(self, project):
+        first_dependency_files = {
+            "dbt_project.yml": first_dependency__dbt_project_yml,
+            "models": {
+                "nested": {
+                    "first_dep_model.sql": first_dependency__models__nested__first_dep_model_var_sql,
+                    "schema.yml": first_dependency__model_var_in_config_schema,
+                }
+            },
+            "seeds": {
+                "first_dep_expected.csv": first_dependency__models__nested__first_dep_model_var_expected_csv
+            },
         }
         write_project_files(project.project_root, "first_dependency", first_dependency_files)

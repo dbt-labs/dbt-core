@@ -5,7 +5,7 @@ import yaml
 import json
 import warnings
 from datetime import datetime
-from typing import Dict, List
+from typing import Dict, List, Optional
 from contextlib import contextmanager
 from dbt.adapters.factory import Adapter
 
@@ -69,7 +69,10 @@ from dbt.events.types import Note
 #   run_dbt(["run", "--vars", "seed_name: base"])
 # If the command is expected to fail, pass in "expect_pass=False"):
 #   run_dbt("test"], expect_pass=False)
-def run_dbt(args: List[str] = None, expect_pass=True):
+def run_dbt(
+    args: Optional[List[str]] = None,
+    expect_pass: bool = True,
+):
     # Ignore logbook warnings
     warnings.filterwarnings("ignore", category=DeprecationWarning, module="logbook")
 
@@ -111,7 +114,10 @@ def run_dbt(args: List[str] = None, expect_pass=True):
 # If you want the logs that are normally written to a file, you must
 # start with the "--debug" flag. The structured schema log CI test
 # will turn the logs into json, so you have to be prepared for that.
-def run_dbt_and_capture(args: List[str] = None, expect_pass=True):
+def run_dbt_and_capture(
+    args: Optional[List[str]] = None,
+    expect_pass: bool = True,
+):
     try:
         stringbuf = StringIO()
         capture_stdout_logs(stringbuf)
@@ -121,12 +127,23 @@ def run_dbt_and_capture(args: List[str] = None, expect_pass=True):
     finally:
         stop_capture_stdout_logs()
 
-    # Json logs will have lots of escape characters which will
-    # make checks for strings in the logs fail, so remove those.
-    if '{"code":' in stdout:
-        stdout = stdout.replace("\\", "")
-
     return res, stdout
+
+
+def get_logging_events(log_output, event_name):
+    logging_events = []
+    for log_line in log_output.split("\n"):
+        # skip empty lines
+        if len(log_line) == 0:
+            continue
+        # The adapter logging also shows up, so skip non-json lines
+        if not log_line.startswith("{"):
+            continue
+        if event_name in log_line:
+            log_dct = json.loads(log_line)
+            if log_dct["info"]["name"] == event_name:
+                logging_events.append(log_dct)
+    return logging_events
 
 
 # Used in test cases to get the manifest from the partial parsing file

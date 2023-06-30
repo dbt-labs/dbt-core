@@ -1,0 +1,6 @@
+kind: "Dependencies"
+body: "Bump mypy from 0.981 to 1.0.1"
+time: 2023-02-22T16:28:07.00000Z
+custom:
+  Author: dependabot[bot]
+  PR: 7027

@@ -19,11 +19,11 @@ from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.results import (
     CatalogArtifact,
     RunExecutionResult,
-    RunOperationResultsArtifact,
 )
 from dbt.events.base_types import EventMsg
 from dbt.task.build import BuildTask
 from dbt.task.clean import CleanTask
+from dbt.task.clone import CloneTask
 from dbt.task.compile import CompileTask
 from dbt.task.debug import DebugTask
 from dbt.task.deps import DepsTask
@@ -31,6 +31,7 @@ from dbt.task.freshness import FreshnessTask
 from dbt.task.generate import GenerateTask
 from dbt.task.init import InitTask
 from dbt.task.list import ListTask
+from dbt.task.retry import RetryTask
 from dbt.task.run import RunTask
 from dbt.task.run_operation import RunOperationTask
 from dbt.task.seed import SeedTask
@@ -53,8 +54,7 @@ class dbtRunnerResult:
         List[str],  # list/ls
         Manifest,  # parse
         None,  # clean, deps, init, source
-        RunExecutionResult,  # build, compile, run, seed, snapshot, test
-        RunOperationResultsArtifact,  # run-operation
+        RunExecutionResult,  # build, compile, run, seed, snapshot, test, run-operation
     ] = None
 
 
@@ -62,8 +62,8 @@ class dbtRunnerResult:
 class dbtRunner:
     def __init__(
         self,
-        manifest: Manifest = None,
-        callbacks: List[Callable[[EventMsg], None]] = None,
+        manifest: Optional[Manifest] = None,
+        callbacks: Optional[List[Callable[[EventMsg], None]]] = None,
     ):
         self.manifest = manifest
 
@@ -180,6 +180,7 @@ def cli(ctx, **kwargs):
 @p.selector
 @p.show
 @p.state
+@p.defer_state
 @p.deprecated_state
 @p.store_failures
 @p.target
@@ -213,6 +214,7 @@ def build(ctx, **kwargs):
 @p.profiles_dir
 @p.project_dir
 @p.target
+@p.target_path
 @p.vars
 @requires.postflight
 @requires.preflight
@@ -250,6 +252,7 @@ def docs(ctx, **kwargs):
 @p.selector
 @p.empty_catalog
 @p.state
+@p.defer_state
 @p.deprecated_state
 @p.target
 @p.target_path
@@ -284,19 +287,18 @@ def docs_generate(ctx, **kwargs):
 @p.profiles_dir
 @p.project_dir
 @p.target
+@p.target_path
 @p.vars
 @requires.postflight
 @requires.preflight
 @requires.profile
 @requires.project
 @requires.runtime_config
-@requires.manifest
 def docs_serve(ctx, **kwargs):
     """Serve the documentation website for your project"""
     task = ServeTask(
         ctx.obj["flags"],
         ctx.obj["runtime_config"],
-        ctx.obj["manifest"],
     )
 
     results = task.run()
@@ -323,6 +325,7 @@ def docs_serve(ctx, **kwargs):
 @p.selector
 @p.inline
 @p.state
+@p.defer_state
 @p.deprecated_state
 @p.target
 @p.target_path
@@ -369,6 +372,7 @@ def compile(ctx, **kwargs):
 @p.selector
 @p.inline
 @p.state
+@p.defer_state
 @p.deprecated_state
 @p.target
 @p.target_path
@@ -398,6 +402,7 @@ def show(ctx, **kwargs):
 # dbt debug
 @cli.command("debug")
 @click.pass_context
+@p.debug_connection
 @p.config_dir
 @p.profile
 @p.profiles_dir_exists_false
@@ -408,7 +413,7 @@ def show(ctx, **kwargs):
 @requires.postflight
 @requires.preflight
 def debug(ctx, **kwargs):
-    """Test the database connection and show information for debugging purposes. Not to be confused with the --debug option which increases verbosity."""
+    """Show information on the current dbt environment and check dependencies, then test the database connection. Not to be confused with the --debug option which increases verbosity."""
 
     task = DebugTask(
         ctx.obj["flags"],
@@ -424,7 +429,7 @@ def debug(ctx, **kwargs):
 @cli.command("deps")
 @click.pass_context
 @p.profile
-@p.profiles_dir
+@p.profiles_dir_exists_false
 @p.project_dir
 @p.target
 @p.vars
@@ -446,7 +451,7 @@ def deps(ctx, **kwargs):
 # for backwards compatibility, accept 'project_name' as an optional positional argument
 @click.argument("project_name", required=False)
 @p.profile
-@p.profiles_dir
+@p.profiles_dir_exists_false
 @p.project_dir
 @p.skip_profile_setup
 @p.target
@@ -477,8 +482,10 @@ def init(ctx, **kwargs):
 @p.raw_select
 @p.selector
 @p.state
+@p.defer_state
 @p.deprecated_state
 @p.target
+@p.target_path
 @p.vars
 @requires.postflight
 @requires.preflight
@@ -545,6 +552,7 @@ def parse(ctx, **kwargs):
 @p.select
 @p.selector
 @p.state
+@p.defer_state
 @p.deprecated_state
 @p.target
 @p.target_path
@@ -570,6 +578,73 @@ def run(ctx, **kwargs):
     return results, success
 
 
+# dbt retry
+@cli.command("retry")
+@click.pass_context
+@p.project_dir
+@p.profiles_dir
+@p.vars
+@p.profile
+@p.target
+@p.state
+@p.threads
+@p.fail_fast
+@requires.postflight
+@requires.preflight
+@requires.profile
+@requires.project
+@requires.runtime_config
+@requires.manifest
+def retry(ctx, **kwargs):
+    """Retry the nodes that failed in the previous run."""
+    task = RetryTask(
+        ctx.obj["flags"],
+        ctx.obj["runtime_config"],
+        ctx.obj["manifest"],
+    )
+
+    results = task.run()
+    success = task.interpret_results(results)
+    return results, success
+
+
+# dbt clone
+@cli.command("clone")
+@click.pass_context
+@p.defer_state
+@p.exclude
+@p.full_refresh
+@p.profile
+@p.profiles_dir
+@p.project_dir
+@p.resource_type
+@p.select
+@p.selector
+@p.state  # required
+@p.target
+@p.target_path
+@p.threads
+@p.vars
+@p.version_check
+@requires.preflight
+@requires.profile
+@requires.project
+@requires.runtime_config
+@requires.manifest
+@requires.postflight
+def clone(ctx, **kwargs):
+    """Create clones of selected nodes based on their location in the manifest provided to --state."""
+    task = CloneTask(
+        ctx.obj["flags"],
+        ctx.obj["runtime_config"],
+        ctx.obj["manifest"],
+    )
+
+    results = task.run()
+    success = task.interpret_results(results)
+    return results, success
+
+
 # dbt run operation
 @cli.command("run-operation")
 @click.pass_context
@@ -579,6 +654,8 @@ def run(ctx, **kwargs):
 @p.profiles_dir
 @p.project_dir
 @p.target
+@p.target_path
+@p.threads
 @p.vars
 @requires.postflight
 @requires.preflight
@@ -611,6 +688,7 @@ def run_operation(ctx, **kwargs):
 @p.selector
 @p.show
 @p.state
+@p.defer_state
 @p.deprecated_state
 @p.target
 @p.target_path
@@ -649,8 +727,10 @@ def seed(ctx, **kwargs):
 @p.select
 @p.selector
 @p.state
+@p.defer_state
 @p.deprecated_state
 @p.target
+@p.target_path
 @p.threads
 @p.vars
 @requires.postflight
@@ -690,8 +770,10 @@ def source(ctx, **kwargs):
 @p.select
 @p.selector
 @p.state
+@p.defer_state
 @p.deprecated_state
 @p.target
+@p.target_path
 @p.threads
 @p.vars
 @requires.postflight
@@ -735,6 +817,7 @@ cli.commands["source"].add_command(snapshot_freshness, "snapshot-freshness")  # 
 @p.select
 @p.selector
 @p.state
+@p.defer_state
 @p.deprecated_state
 @p.store_failures
 @p.target

@@ -1,0 +1,6 @@
+kind: Features
+body: Add merge as valid incremental strategy for postgres
+time: 2023-02-11T16:32:36.2260502+01:00
+custom:
+  Author: rainermensing
+  Issue: "1880"

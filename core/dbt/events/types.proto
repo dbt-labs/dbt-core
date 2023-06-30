@@ -385,6 +385,15 @@ message ConfigTargetPathDeprecationMsg {
     ConfigTargetPathDeprecation data = 2;
 }
 
+// D012
+message CollectFreshnessReturnSignature {
+}
+
+message CollectFreshnessReturnSignatureMsg {
+    EventInfo info = 1;
+    CollectFreshnessReturnSignature data = 2;
+}
+
 // E - DB Adapter
 
 // E001
@@ -662,6 +671,19 @@ message CacheDumpGraphMsg {
 
 // Skipping E032, E033, E034
 
+
+
+// E034
+message AdapterRegistered {
+    string adapter_name = 1;
+    string adapter_version = 2;
+}
+
+message AdapterRegisteredMsg {
+    EventInfo info = 1;
+    AdapterRegistered data = 2;
+}
+
 // E035
 message AdapterImportError {
     string exc = 1;
@@ -864,26 +886,6 @@ message ParsePerfInfoPath {
 message ParsePerfInfoPathMsg {
     EventInfo info = 1;
     ParsePerfInfoPath data = 2;
-}
-
-// I011
-message GenericTestFileParse {
-    string path = 1;
-}
-
-message GenericTestFileParseMsg {
-    EventInfo info = 1;
-    GenericTestFileParse data = 2;
-}
-
-// I012
-message MacroFileParse {
-    string path = 1;
-}
-
-message MacroFileParseMsg {
-    EventInfo info = 1;
-    MacroFileParse data = 2;
 }
 
 // Skipping I013
@@ -1145,7 +1147,7 @@ message JinjaLogInfo {
 
 message  JinjaLogInfoMsg {
     EventInfo info = 1;
-     JinjaLogInfo data = 2;
+    JinjaLogInfo data = 2;
 }
 
 // I063
@@ -1158,6 +1160,73 @@ message JinjaLogDebugMsg {
     EventInfo info = 1;
     JinjaLogDebug data = 2;
 }
+
+// I064
+message UnpinnedRefNewVersionAvailable {
+    NodeInfo node_info = 1;
+    string ref_node_name  = 2;
+    string ref_node_package = 3;
+    string ref_node_version = 4;
+    string ref_max_version = 5;
+}
+
+message UnpinnedRefNewVersionAvailableMsg {
+    EventInfo info = 1;
+    UnpinnedRefNewVersionAvailable data = 2;
+}
+
+// I065
+message DeprecatedModel {
+    string model_name = 1;
+    string model_version = 2;
+    string deprecation_date = 3;
+}
+
+message DeprecatedModelMsg {
+    EventInfo info = 1;
+    DeprecatedModel data = 2;
+}
+
+// I066
+message UpcomingReferenceDeprecation {
+    string model_name = 1;
+    string ref_model_package = 2;
+    string ref_model_name = 3;
+    string ref_model_version = 4;
+    string ref_model_latest_version = 5;
+    string ref_model_deprecation_date = 6;
+}
+
+message UpcomingReferenceDeprecationMsg {
+    EventInfo info = 1;
+    UpcomingReferenceDeprecation data = 2;
+}
+
+// I067
+message DeprecatedReference {
+    string model_name = 1;
+    string ref_model_package = 2;
+    string ref_model_name = 3;
+    string ref_model_version = 4;
+    string ref_model_latest_version = 5;
+    string ref_model_deprecation_date = 6;
+}
+
+message DeprecatedReferenceMsg {
+    EventInfo info = 1;
+    DeprecatedReference data = 2;
+}
+
+// I068
+message UnsupportedConstraintMaterialization {
+    string materialized = 1;
+}
+
+message UnsupportedConstraintMaterializationMsg {
+    EventInfo info = 1;
+    UnsupportedConstraintMaterialization data = 2;
+}
+
 
 // M - Deps generation
 

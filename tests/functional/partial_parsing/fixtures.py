@@ -349,17 +349,11 @@ metrics:
     label: New Customers
     model: customers
     description: "The number of paid customers who are using the product"
-    calculation_method: count
-    expression: user_id
-    timestamp: signup_date
-    time_grains: [day, week, month]
-    dimensions:
-      - plan
-      - country
-    filters:
-      - field: is_paying
-        value: True
-        operator: '='
+    type: simple
+    type_params:
+      measure:
+        name: customers
+        filter: "{{dimension('loves_dbt')}} is true"
     +meta:
         is_okr: True
     tags:
@@ -431,32 +425,23 @@ env_var_metrics_yml = """
 
 metrics:
 
-  - model: "ref('people')"
-    name: number_of_people
+  - name: number_of_people
     description: Total count of people
     label: "Number of people"
-    calculation_method: count
-    expression: "*"
-    timestamp: created_at
-    time_grains: [day, week, month]
-    dimensions:
-      - favorite_color
-      - loves_dbt
+    type: simple
+    type_params:
+      measure: people
     meta:
         my_meta: '{{ env_var("ENV_VAR_METRICS") }}'
 
-  - model: "ref('people')"
-    name: collective_tenure
+  - name: collective_tenure
     description: Total number of years of team experience
     label: "Collective tenure"
-    calculation_method: sum
-    expression: tenure
-    timestamp: created_at
-    time_grains: [day]
-    filters:
-      - field: loves_dbt
-        operator: is
-        value: 'true'
+    type: simple
+    type_params:
+      measure:
+        name: years_tenure
+        filter: "{{dimension('loves_dbt')}} is true"
 
 """
 
@@ -587,32 +572,23 @@ people_metrics_yml = """
 
 metrics:
 
-  - model: "ref('people')"
-    name: number_of_people
+  - name: number_of_people
     description: Total count of people
     label: "Number of people"
-    calculation_method: count
-    expression: "*"
-    timestamp: created_at
-    time_grains: [day, week, month]
-    dimensions:
-      - favorite_color
-      - loves_dbt
+    type: simple
+    type_params:
+      measure: people
     meta:
         my_meta: 'testing'
 
-  - model: "ref('people')"
-    name: collective_tenure
+  - name: collective_tenure
     description: Total number of years of team experience
     label: "Collective tenure"
-    calculation_method: sum
-    expression: tenure
-    timestamp: created_at
-    time_grains: [day]
-    filters:
-      - field: loves_dbt
-        operator: is
-        value: 'true'
+    type: simple
+    type_params:
+      measure:
+        name: years_tenure
+        filter: "{{dimension('loves_dbt')}} is true"
 
 """
 
@@ -625,6 +601,11 @@ select 1 as id, 'Jeremy' as first_name, 'Cohen' as last_name, 'indigo' as favori
 
 orders_sql = """
 select 1 as id, 101 as user_id, 'pending' as status
+
+"""
+
+orders_downstream_sql = """
+select * from {{ ref('orders') }}
 
 """
 
@@ -881,8 +862,18 @@ models:
       description: "The first model"
       versions:
         - v: 1
-          defined_in: model_one
         - v: 2
+"""
+
+models_versions_defined_in_schema_yml = """
+
+models:
+    - name: model_one
+      description: "The first model"
+      versions:
+        - v: 1
+        - v: 2
+          defined_in: model_one_different
 """
 
 models_versions_updated_schema_yml = """
@@ -893,8 +884,8 @@ models:
       description: "The first model"
       versions:
         - v: 1
-          defined_in: model_one
         - v: 2
+          defined_in: model_one_different
 """
 
 my_macro_sql = """
@@ -970,32 +961,23 @@ people_metrics2_yml = """
 
 metrics:
 
-  - model: "ref('people')"
-    name: number_of_people
+  - name: number_of_people
     description: Total count of people
     label: "Number of people"
-    calculation_method: count
-    expression: "*"
-    timestamp: created_at
-    time_grains: [day, week, month]
-    dimensions:
-      - favorite_color
-      - loves_dbt
+    type: simple
+    type_params:
+      measure: people
     meta:
         my_meta: 'replaced'
 
-  - model: "ref('people')"
-    name: collective_tenure
+  - name: collective_tenure
     description: Total number of years of team experience
     label: "Collective tenure"
-    calculation_method: sum
-    expression: tenure
-    timestamp: created_at
-    time_grains: [day]
-    filters:
-      - field: loves_dbt
-        operator: is
-        value: 'true'
+    type: simple
+    type_params:
+      measure:
+        name: years_tenure
+        filter: "{{dimension('loves_dbt')}} is true"
 
 """
 
@@ -1037,6 +1019,47 @@ groups:
 
 models:
   - name: orders
+    description: "Some order data"
+"""
+
+
+groups_schema_yml_two_groups_private_orders_valid_access = """
+
+groups:
+  - name: test_group
+    owner:
+      name: test_group_owner
+  - name: test_group2
+    owner:
+      name: test_group_owner2
+
+models:
+  - name: orders
+    group: test_group
+    access: private
+    description: "Some order data"
+  - name: orders_downstream
+    group: test_group
+    description: "Some order data"
+"""
+
+groups_schema_yml_two_groups_private_orders_invalid_access = """
+
+groups:
+  - name: test_group
+    owner:
+      name: test_group_owner
+  - name: test_group2
+    owner:
+      name: test_group_owner2
+
+models:
+  - name: orders
+    group: test_group2
+    access: private
+    description: "Some order data"
+  - name: orders_downstream
+    group: test_group
     description: "Some order data"
 """
 
@@ -1121,17 +1144,12 @@ people_metrics3_yml = """
 
 metrics:
 
-  - model: "ref('people')"
-    name: number_of_people
+  - name: number_of_people
     description: Total count of people
     label: "Number of people"
-    calculation_method: count
-    expression: "*"
-    timestamp: created_at
-    time_grains: [day, week, month]
-    dimensions:
-      - favorite_color
-      - loves_dbt
+    type: simple
+    type_params:
+      measure: people
     meta:
         my_meta: 'replaced'
 

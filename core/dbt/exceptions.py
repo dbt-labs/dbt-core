@@ -3,11 +3,11 @@ import json
 import re
 import io
 import agate
-from typing import Any, Dict, List, Mapping, Optional, Union
+from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
 
 from dbt.dataclass_schema import ValidationError
 from dbt.events.helpers import env_secrets, scrub_secrets
-from dbt.node_types import NodeType
+from dbt.node_types import NodeType, AccessType
 from dbt.ui import line_wrap_message
 
 import dbt.dataclass_schema
@@ -212,11 +212,21 @@ class ContractBreakingChangeError(DbtRuntimeError):
     MESSAGE = "Breaking Change to Contract"
 
     def __init__(
-        self, contract_enforced_disabled, columns_removed, column_type_changes, node=None
+        self,
+        contract_enforced_disabled: bool,
+        columns_removed: List[str],
+        column_type_changes: List[Tuple[str, str, str]],
+        enforced_column_constraint_removed: List[Tuple[str, str]],
+        enforced_model_constraint_removed: List[Tuple[str, List[str]]],
+        materialization_changed: List[str],
+        node=None,
     ):
         self.contract_enforced_disabled = contract_enforced_disabled
         self.columns_removed = columns_removed
         self.column_type_changes = column_type_changes
+        self.enforced_column_constraint_removed = enforced_column_constraint_removed
+        self.enforced_model_constraint_removed = enforced_model_constraint_removed
+        self.materialization_changed = materialization_changed
         super().__init__(self.message(), node)
 
     @property
@@ -236,6 +246,27 @@ class ContractBreakingChangeError(DbtRuntimeError):
             )
             breaking_changes.append(
                 f"Columns with data_type changes: \n - {column_type_changes_str}"
+            )
+        if self.enforced_column_constraint_removed:
+            column_constraint_changes_str = "\n  - ".join(
+                [f"{c[0]} ({c[1]})" for c in self.enforced_column_constraint_removed]
+            )
+            breaking_changes.append(
+                f"Enforced column level constraints were removed: \n - {column_constraint_changes_str}"
+            )
+        if self.enforced_model_constraint_removed:
+            model_constraint_changes_str = "\n  - ".join(
+                [f"{c[0]} -> {c[1]}" for c in self.enforced_model_constraint_removed]
+            )
+            breaking_changes.append(
+                f"Enforced model level constraints were removed: \n - {model_constraint_changes_str}"
+            )
+        if self.materialization_changed:
+            materialization_changes_str = "\n  - ".join(
+                f"{self.materialization_changed[0]} -> {self.materialization_changed[1]}"
+            )
+            breaking_changes.append(
+                f"Materialization changed with enforced constraints: \n - {materialization_changes_str}"
             )
 
         reasons = "\n\n".join(breaking_changes)
@@ -264,6 +295,11 @@ class ParsingError(DbtRuntimeError):
     @property
     def type(self):
         return "Parsing"
+
+
+class dbtPluginError(DbtRuntimeError):
+    CODE = 10020
+    MESSAGE = "Plugin Error"
 
 
 # TODO: this isn't raised in the core codebase.  Is it raised elsewhere?
@@ -375,7 +411,7 @@ class DbtProfileError(DbtConfigError):
 
 
 class SemverError(Exception):
-    def __init__(self, msg: str = None):
+    def __init__(self, msg: Optional[str] = None):
         self.msg = msg
         if msg is not None:
             super().__init__(msg)
@@ -651,6 +687,15 @@ class UnknownGitCloningProblemError(DbtRuntimeError):
         Something went wrong while cloning {self.repo}
         Check the debug logs for more information
         """
+        return msg
+
+
+class NoAdaptersAvailableError(DbtRuntimeError):
+    def __init__(self):
+        super().__init__(msg=self.get_message())
+
+    def get_message(self) -> str:
+        msg = "No adapters available. Learn how to install an adapter by going to https://docs.getdbt.com/docs/connect-adapters#install-using-the-cli"
         return msg
 
 
@@ -1019,6 +1064,17 @@ class DuplicateMacroNameError(CompilationError):
         return msg
 
 
+class MacroResultAlreadyLoadedError(CompilationError):
+    def __init__(self, result_name):
+        self.result_name = result_name
+        super().__init__(msg=self.get_message())
+
+    def get_message(self) -> str:
+        msg = f"The 'statement' result named '{self.result_name}' has already been loaded into a variable"
+
+        return msg
+
+
 # parser level exceptions
 class DictParseError(ParsingError):
     def __init__(self, exc: ValidationError, node):
@@ -1163,26 +1219,31 @@ class SnapshopConfigError(ParsingError):
 
 
 class DbtReferenceError(ParsingError):
-    def __init__(self, unique_id: str, ref_unique_id: str, group: str):
+    def __init__(self, unique_id: str, ref_unique_id: str, access: AccessType, scope: str):
         self.unique_id = unique_id
         self.ref_unique_id = ref_unique_id
-        self.group = group
+        self.access = access
+        self.scope = scope
+        self.scope_type = "group" if self.access == AccessType.Private else "package"
         super().__init__(msg=self.get_message())
 
     def get_message(self) -> str:
         return (
             f"Node {self.unique_id} attempted to reference node {self.ref_unique_id}, "
-            f"which is not allowed because the referenced node is private to the {self.group} group."
+            f"which is not allowed because the referenced node is {self.access} to the '{self.scope}' {self.scope_type}."
         )
 
 
 class InvalidAccessTypeError(ParsingError):
-    def __init__(self, unique_id: str, field_value: str):
+    def __init__(self, unique_id: str, field_value: str, materialization: Optional[str] = None):
         self.unique_id = unique_id
         self.field_value = field_value
-        msg = (
-            f"Node {self.unique_id} has an invalid value ({self.field_value}) for the access field"
+        self.materialization = materialization
+
+        with_materialization = (
+            f"with '{self.materialization}' materialization " if self.materialization else ""
         )
+        msg = f"Node {self.unique_id} {with_materialization}has an invalid value ({self.field_value}) for the access field"
         super().__init__(msg=msg)
 
 
@@ -1349,7 +1410,7 @@ class TargetNotFoundError(CompilationError):
 
         target_package_string = ""
         if self.target_package is not None:
-            target_package_string = f"in package '{self.target_package}' "
+            target_package_string = f"in package or project '{self.target_package}' "
 
         msg = (
             f"{resource_type_title} '{unique_id}' ({original_file_path}) depends on a "
@@ -1763,17 +1824,19 @@ class UninstalledPackagesFoundError(CompilationError):
         self,
         count_packages_specified: int,
         count_packages_installed: int,
+        packages_specified_path: str,
         packages_install_path: str,
     ):
         self.count_packages_specified = count_packages_specified
         self.count_packages_installed = count_packages_installed
+        self.packages_specified_path = packages_specified_path
         self.packages_install_path = packages_install_path
         super().__init__(msg=self.get_message())
 
     def get_message(self) -> str:
         msg = (
             f"dbt found {self.count_packages_specified} package(s) "
-            "specified in packages.yml, but only "
+            f"specified in {self.packages_specified_path}, but only "
             f"{self.count_packages_installed} package(s) installed "
             f'in {self.packages_install_path}. Run "dbt deps" to '
             "install package dependencies."
@@ -1946,6 +2009,23 @@ class AmbiguousAliasError(CompilationError):
             "cannot create two resources with identical database representations. "
             "To fix this,\nchange the configuration of one of these resources:"
             f"\n- {self.node_1.unique_id} ({self.node_1.original_file_path})\n- {self.node_2.unique_id} ({self.node_2.original_file_path})"
+        )
+        return msg
+
+
+class AmbiguousResourceNameRefError(CompilationError):
+    def __init__(self, duped_name, unique_ids, node=None):
+        self.duped_name = duped_name
+        self.unique_ids = unique_ids
+        self.packages = [unique_id.split(".")[1] for unique_id in unique_ids]
+        super().__init__(msg=self.get_message(), node=node)
+
+    def get_message(self) -> str:
+        formatted_unique_ids = "'{0}'".format("', '".join(self.unique_ids))
+        formatted_packages = "'{0}'".format("' or '".join(self.packages))
+        msg = (
+            f"When referencing '{self.duped_name}', dbt found nodes in multiple packages: {formatted_unique_ids}"
+            f"\nTo fix this, use two-argument 'ref', with the package name first: {formatted_packages}"
         )
         return msg
 
@@ -2145,6 +2225,26 @@ To fix this, change the name of one of these resources:
         return msg
 
 
+class DuplicateVersionedUnversionedError(ParsingError):
+    def __init__(self, versioned_node, unversioned_node):
+        self.versioned_node = versioned_node
+        self.unversioned_node = unversioned_node
+        super().__init__(msg=self.get_message())
+
+    def get_message(self) -> str:
+        msg = f"""
+dbt found versioned and unversioned models with the name "{self.versioned_node.name}".
+
+Since these resources have the same name, dbt will be unable to find the correct resource
+when looking for ref('{self.versioned_node.name}').
+
+To fix this, change the name of the unversioned resource
+{self.unversioned_node.unique_id} ({self.unversioned_node.original_file_path})
+or add the unversioned model to the versions in {self.versioned_node.patch_path}
+    """.strip()
+        return msg
+
+
 class PropertyYMLError(CompilationError):
     def __init__(self, path: str, issue: str):
         self.path = path
@@ -2302,7 +2402,7 @@ class RPCCompiling(DbtRuntimeError):
     CODE = 10010
     MESSAGE = 'RPC server is compiling the project, call the "status" method for' " compile status"
 
-    def __init__(self, msg: str = None, node=None):
+    def __init__(self, msg: Optional[str] = None, node=None):
         if msg is None:
             msg = "compile in progress"
         super().__init__(msg, node)

@@ -9,10 +9,11 @@ from dbt.adapters.base.plugin import AdapterPlugin
 from dbt.adapters.protocol import AdapterConfig, AdapterProtocol, RelationProtocol
 from dbt.contracts.connection import AdapterRequiredConfig, Credentials
 from dbt.events.functions import fire_event
-from dbt.events.types import AdapterImportError, PluginLoadError
+from dbt.events.types import AdapterImportError, PluginLoadError, AdapterRegistered
 from dbt.exceptions import DbtInternalError, DbtRuntimeError
 from dbt.include.global_project import PACKAGE_PATH as GLOBAL_PROJECT_PATH
 from dbt.include.global_project import PROJECT_NAME as GLOBAL_PROJECT_NAME
+from dbt.semver import VersionSpecifier
 
 Adapter = AdapterProtocol
 
@@ -89,7 +90,13 @@ class AdapterContainer:
     def register_adapter(self, config: AdapterRequiredConfig) -> None:
         adapter_name = config.credentials.type
         adapter_type = self.get_adapter_class_by_name(adapter_name)
-
+        adapter_version = import_module(f".{adapter_name}.__version__", "dbt.adapters").version
+        adapter_version_specifier = VersionSpecifier.from_version_string(
+            adapter_version
+        ).to_version_string()
+        fire_event(
+            AdapterRegistered(adapter_name=adapter_name, adapter_version=adapter_version_specifier)
+        )
         with self.lock:
             if adapter_name in self.adapters:
                 # this shouldn't really happen...
@@ -158,6 +165,9 @@ class AdapterContainer:
     def get_adapter_type_names(self, name: Optional[str]) -> List[str]:
         return [p.adapter.type() for p in self.get_adapter_plugins(name)]
 
+    def get_adapter_constraint_support(self, name: Optional[str]) -> List[str]:
+        return self.lookup_adapter(name).CONSTRAINT_SUPPORT  # type: ignore
+
 
 FACTORY: AdapterContainer = AdapterContainer()
 
@@ -212,6 +222,10 @@ def get_adapter_package_names(name: Optional[str]) -> List[str]:
 
 def get_adapter_type_names(name: Optional[str]) -> List[str]:
     return FACTORY.get_adapter_type_names(name)
+
+
+def get_adapter_constraint_support(name: Optional[str]) -> List[str]:
+    return FACTORY.get_adapter_constraint_support(name)
 
 
 @contextmanager

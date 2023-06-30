@@ -52,10 +52,11 @@ class ConfiguredVar(Var):
         adapter_type = self._config.credentials.type
         lookup = FQNLookup(self._project_name)
         active_vars = self._config.vars.vars_for(lookup, adapter_type)
-        all_vars = MultiDict([active_vars])
 
+        all_vars = MultiDict()
         if self._config.project_name != my_config.project_name:
             all_vars.add(my_config.vars.vars_for(lookup, adapter_type))
+        all_vars.add(active_vars)
 
         if var_name in all_vars:
             return all_vars[var_name]
@@ -118,7 +119,9 @@ class MacroResolvingContext(ConfiguredContext):
 
 
 def generate_schema_yml_context(
-    config: AdapterRequiredConfig, project_name: str, schema_yaml_vars: SchemaYamlVars = None
+    config: AdapterRequiredConfig,
+    project_name: str,
+    schema_yaml_vars: Optional[SchemaYamlVars] = None,
 ) -> Dict[str, Any]:
     ctx = SchemaYamlContext(config, project_name, schema_yaml_vars)
     return ctx.to_dict()

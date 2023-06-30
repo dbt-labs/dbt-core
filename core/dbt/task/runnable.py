@@ -36,8 +36,8 @@ from dbt.events.types import (
     EndRunResult,
     NothingToDo,
 )
-from dbt.events.contextvars import log_contextvars
-from dbt.contracts.graph.nodes import SourceDefinition, ResultNode
+from dbt.events.contextvars import log_contextvars, task_contextvars
+from dbt.contracts.graph.nodes import ResultNode
 from dbt.contracts.results import NodeStatus, RunExecutionResult, RunningStatus
 from dbt.contracts.state import PreviousState
 from dbt.exceptions import (
@@ -54,32 +54,40 @@ import dbt.tracking
 import dbt.exceptions
 from dbt.flags import get_flags
 import dbt.utils
+from dbt.contracts.graph.manifest import WritableManifest
 
 RESULT_FILE_NAME = "run_results.json"
 RUNNING_STATE = DbtProcessState("running")
 
 
 class GraphRunnableTask(ConfiguredTask):
-
     MARK_DEPENDENT_ERRORS_STATUSES = [NodeStatus.Error]
 
     def __init__(self, args, config, manifest):
         super().__init__(args, config, manifest)
-        self.job_queue: Optional[GraphQueue] = None
         self._flattened_nodes: Optional[List[ResultNode]] = None
-
-        self.run_count: int = 0
-        self.num_nodes: int = 0
-        self.node_results = []
-        self._skipped_children = {}
         self._raise_next_tick = None
+        self._skipped_children = {}
+        self.job_queue: Optional[GraphQueue] = None
+        self.node_results = []
+        self.num_nodes: int = 0
         self.previous_state: Optional[PreviousState] = None
-        self.set_previous_state()
+        self.previous_defer_state: Optional[PreviousState] = None
+        self.run_count: int = 0
+        self.started_at: float = 0
 
-    def set_previous_state(self):
-        if self.args.state is not None:
+        if self.args.state:
             self.previous_state = PreviousState(
-                path=self.args.state, current_path=Path(self.config.target_path)
+                state_path=self.args.state,
+                target_path=Path(self.config.target_path),
+                project_root=Path(self.config.project_root),
+            )
+
+        if self.args.defer_state:
+            self.previous_defer_state = PreviousState(
+                state_path=self.args.defer_state,
+                target_path=Path(self.config.target_path),
+                project_root=Path(self.config.project_root),
             )
 
     def index_offset(self, value: int) -> int:
@@ -155,7 +163,7 @@ class GraphRunnableTask(ConfiguredTask):
         raise NotImplementedError("Not Implemented")
 
     def result_path(self):
-        return os.path.join(self.config.target_path, RESULT_FILE_NAME)
+        return os.path.join(self.config.project_target_path, RESULT_FILE_NAME)
 
     def get_runner(self, node):
         adapter = get_adapter(self.config)
@@ -295,17 +303,21 @@ class GraphRunnableTask(ConfiguredTask):
         if self.manifest is None:
             raise DbtInternalError("manifest was None in _handle_result")
 
-        if isinstance(node, SourceDefinition):
-            self.manifest.update_source(node)
-        else:
-            self.manifest.update_node(node)
-
         if result.status in self.MARK_DEPENDENT_ERRORS_STATUSES:
             if is_ephemeral:
                 cause = result
             else:
                 cause = None
             self._mark_dependent_errors(node.unique_id, result, cause)
+
+        interim_run_result = self.get_result(
+            results=self.node_results,
+            elapsed_time=time.time() - self.started_at,
+            generated_at=datetime.utcnow(),
+        )
+
+        if self.args.write_json and hasattr(interim_run_result, "write"):
+            interim_run_result.write(self.result_path())
 
     def _cancel_connections(self, pool):
         """Given a pool, cancel all adapter connections and wait until all
@@ -370,7 +382,9 @@ class GraphRunnableTask(ConfiguredTask):
         for dep_node_id in self.graph.get_dependent_nodes(node_id):
             self._skipped_children[dep_node_id] = cause
 
-    def populate_adapter_cache(self, adapter, required_schemas: Set[BaseRelation] = None):
+    def populate_adapter_cache(
+        self, adapter, required_schemas: Optional[Set[BaseRelation]] = None
+    ):
         if not self.args.populate_cache:
             return
 
@@ -398,14 +412,14 @@ class GraphRunnableTask(ConfiguredTask):
 
     def execute_with_hooks(self, selected_uids: AbstractSet[str]):
         adapter = get_adapter(self.config)
-        started = time.time()
+        self.started_at = time.time()
         try:
             self.before_run(adapter, selected_uids)
             res = self.execute_nodes()
             self.after_run(adapter, res)
         finally:
             adapter.cleanup_connections()
-            elapsed = time.time() - started
+            elapsed = time.time() - self.started_at
             self.print_results_line(self.node_results, elapsed)
             result = self.get_result(
                 results=self.node_results, elapsed_time=elapsed, generated_at=datetime.utcnow()
@@ -413,32 +427,34 @@ class GraphRunnableTask(ConfiguredTask):
 
         return result
 
-    def write_result(self, result):
-        result.write(self.result_path())
-
     def run(self):
         """
         Run dbt for the query, based on the graph.
         """
-        self._runtime_initialize()
+        # We set up a context manager here with "task_contextvars" because we
+        # we need the project_root in runtime_initialize.
+        with task_contextvars(project_root=self.config.project_root):
+            self._runtime_initialize()
 
-        if self._flattened_nodes is None:
-            raise DbtInternalError("after _runtime_initialize, _flattened_nodes was still None")
+            if self._flattened_nodes is None:
+                raise DbtInternalError(
+                    "after _runtime_initialize, _flattened_nodes was still None"
+                )
 
-        if len(self._flattened_nodes) == 0:
-            with TextOnly():
-                fire_event(Formatting(""))
-            warn_or_error(NothingToDo())
-            result = self.get_result(
-                results=[],
-                generated_at=datetime.utcnow(),
-                elapsed_time=0.0,
-            )
-        else:
-            with TextOnly():
-                fire_event(Formatting(""))
-            selected_uids = frozenset(n.unique_id for n in self._flattened_nodes)
-            result = self.execute_with_hooks(selected_uids)
+            if len(self._flattened_nodes) == 0:
+                with TextOnly():
+                    fire_event(Formatting(""))
+                warn_or_error(NothingToDo())
+                result = self.get_result(
+                    results=[],
+                    generated_at=datetime.utcnow(),
+                    elapsed_time=0.0,
+                )
+            else:
+                with TextOnly():
+                    fire_event(Formatting(""))
+                selected_uids = frozenset(n.unique_id for n in self._flattened_nodes)
+                result = self.execute_with_hooks(selected_uids)
 
         # We have other result types here too, including FreshnessResult
         if isinstance(result, RunExecutionResult):
@@ -452,9 +468,10 @@ class GraphRunnableTask(ConfiguredTask):
                 )
             )
 
-        if get_flags().WRITE_JSON:
-            write_manifest(self.manifest, self.config.target_path)
-            self.write_result(result)
+        if self.args.write_json:
+            write_manifest(self.manifest, self.config.project_target_path)
+            if hasattr(result, "write"):
+                result.write(self.result_path())
 
         self.task_end_messages(result.results)
         return result
@@ -569,3 +586,14 @@ class GraphRunnableTask(ConfiguredTask):
 
     def task_end_messages(self, results):
         print_run_end_messages(results)
+
+    def _get_deferred_manifest(self) -> Optional[WritableManifest]:
+        state = self.previous_defer_state or self.previous_state
+        if not state:
+            raise DbtRuntimeError(
+                "--state or --defer-state are required for deferral, but neither was provided"
+            )
+
+        if not state.manifest:
+            raise DbtRuntimeError(f'Could not find manifest in --state path: "{state}"')
+        return state.manifest

@@ -32,6 +32,16 @@ select {{
 }} as fun
 """
 
+with_recursive_model_sql = """
+{{ config(materialized = 'ephemeral') }}
+with recursive t(n) as (
+    select * from {{ ref('first_ephemeral_model') }}
+  union all
+    select n+1 from t where n < 100
+)
+select sum(n) from t;
+"""
+
 schema_yml = """
 version: 2
 

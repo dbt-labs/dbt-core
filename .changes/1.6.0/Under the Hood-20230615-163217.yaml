@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Upgrade to dbt-semantic-interfaces v0.1.0dev5
+time: 2023-06-15T16:32:17.602189-07:00
+custom:
+  Author: QMalcolm
+  Issue: "7853"

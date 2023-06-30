@@ -91,6 +91,11 @@ class ConfigTargetPathDeprecation(DBTDeprecation):
     _event = "ConfigTargetPathDeprecation"
 
 
+class CollectFreshnessReturnSignature(DBTDeprecation):
+    _name = "collect-freshness-return-signature"
+    _event = "CollectFreshnessReturnSignature"
+
+
 def renamed_env_var(old_name: str, new_name: str):
     class EnvironmentVariableRenamed(DBTDeprecation):
         _name = f"environment-variable-renamed:{old_name}"
@@ -128,6 +133,7 @@ deprecations_list: List[DBTDeprecation] = [
     ExposureNameDeprecation(),
     ConfigLogPathDeprecation(),
     ConfigTargetPathDeprecation(),
+    CollectFreshnessReturnSignature(),
 ]
 
 deprecations: Dict[str, DBTDeprecation] = {d.name: d for d in deprecations_list}

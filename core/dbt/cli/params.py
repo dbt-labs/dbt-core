@@ -43,7 +43,7 @@ compile_docs = click.option(
 config_dir = click.option(
     "--config-dir",
     envvar=None,
-    help="Show the configured location for the profiles.yml file and exit",
+    help="Print a system-specific command to access the directory that the current dbt project is searching for a profiles.yml. Then, exit. This flag renders other debug step flags no-ops.",
     is_flag=True,
 )
 
@@ -293,6 +293,8 @@ profiles_dir = click.option(
 )
 
 # `dbt debug` uses this because it implements custom behaviour for non-existent profiles.yml directories
+# `dbt deps` does not load a profile at all
+# `dbt init` will write profiles.yml if it doesn't yet exist
 profiles_dir_exists_false = click.option(
     "--profiles-dir",
     envvar="DBT_PROFILES_DIR",
@@ -424,12 +426,25 @@ empty_catalog = click.option(
 state = click.option(
     "--state",
     envvar="DBT_STATE",
-    help="If set, use the given directory as the source for JSON files to compare with this project.",
+    help="Unless overridden, use this state directory for both state comparison and deferral.",
     type=click.Path(
         dir_okay=True,
         file_okay=False,
         readable=True,
-        resolve_path=True,
+        resolve_path=False,
+        path_type=Path,
+    ),
+)
+
+defer_state = click.option(
+    "--defer-state",
+    envvar="DBT_DEFER_STATE",
+    help="Override the state directory for deferral only.",
+    type=click.Path(
+        dir_okay=True,
+        file_okay=False,
+        readable=True,
+        resolve_path=False,
         path_type=Path,
     ),
 )
@@ -474,6 +489,13 @@ target_path = click.option(
     envvar="DBT_TARGET_PATH",
     help="Configure the 'target-path'. Only applies this setting for the current run. Overrides the 'DBT_TARGET_PATH' if it is set.",
     type=click.Path(),
+)
+
+debug_connection = click.option(
+    "--connection",
+    envvar=None,
+    help="Test the connection to the target database independent of dependency checks.",
+    is_flag=True,
 )
 
 threads = click.option(

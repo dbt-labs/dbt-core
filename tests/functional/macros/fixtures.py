@@ -129,3 +129,28 @@ macros__deprecated_adapter_macro = """
     {{ adapter_macro('some_macro', arg1, arg2) }}
 {%- endmacro %}
 """
+
+macros__incorrect_dispatch = """
+{% macro cowsay() %}
+  {{ return(adapter.dispatch('cowsay', 'farm_utils')()) }}
+{%- endmacro %}
+
+{% macro default__cowsay() %}
+  'moo'
+{% endmacro %}
+"""
+
+# Note the difference between `test_utils` below and `farm_utils` above
+models__incorrect_dispatch = """
+select {{ test_utils.cowsay() }} as cowsay
+"""
+
+dbt_project__incorrect_dispatch = """
+name: 'test_utils'
+version: '1.0'
+config-version: 2
+
+profile: 'default'
+
+macro-paths: ["macros"]
+"""

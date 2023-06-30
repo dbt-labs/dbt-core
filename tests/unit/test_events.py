@@ -133,11 +133,13 @@ sample_values = [
     types.EnvironmentVariableRenamed(old_name="", new_name=""),
     types.ConfigLogPathDeprecation(deprecated_path=""),
     types.ConfigTargetPathDeprecation(deprecated_path=""),
+    types.CollectFreshnessReturnSignature(),
     # E - DB Adapter ======================
     types.AdapterEventDebug(),
     types.AdapterEventInfo(),
     types.AdapterEventWarning(),
     types.AdapterEventError(),
+    types.AdapterRegistered(adapter_name="dbt-awesome", adapter_version="1.2.3"),
     types.NewConnection(conn_type="", conn_name=""),
     types.ConnectionReused(conn_name=""),
     types.ConnectionLeftOpenInCleanup(conn_name=""),
@@ -185,8 +187,6 @@ sample_values = [
     types.InvalidValueForField(field_name="test", field_value="test"),
     types.ValidationWarning(resource_type="model", field_name="access", node_name="my_macro"),
     types.ParsePerfInfoPath(path=""),
-    types.GenericTestFileParse(path=""),
-    types.MacroFileParse(path=""),
     types.PartialParsingErrorProcessingFile(file=""),
     types.PartialParsingFile(file_id=""),
     types.PartialParsingError(exc_info={}),
@@ -228,6 +228,25 @@ sample_values = [
     types.JinjaLogWarning(),
     types.JinjaLogInfo(msg=""),
     types.JinjaLogDebug(msg=""),
+    types.UnpinnedRefNewVersionAvailable(
+        ref_node_name="", ref_node_package="", ref_node_version="", ref_max_version=""
+    ),
+    types.DeprecatedModel(model_name="", model_version="", deprecation_date=""),
+    types.DeprecatedReference(
+        model_name="",
+        ref_model_name="",
+        ref_model_package="",
+        ref_model_deprecation_date="",
+        ref_model_latest_version="",
+    ),
+    types.UpcomingReferenceDeprecation(
+        model_name="",
+        ref_model_name="",
+        ref_model_package="",
+        ref_model_deprecation_date="",
+        ref_model_latest_version="",
+    ),
+    types.UnsupportedConstraintMaterialization(materialized=""),
     # M - Deps generation ======================
     types.GitSparseCheckoutSubdirectory(subdir=""),
     types.GitProgressCheckoutRevision(revision=""),

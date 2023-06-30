@@ -4,14 +4,16 @@ from dataclasses import dataclass
 from importlib import import_module
 from multiprocessing import get_context
 from pprint import pformat as pf
-from typing import Callable, Dict, List, Set, Union
+from typing import Any, Callable, Dict, List, Optional, Set, Union
 
-from click import Context, get_current_context
-from click.core import Command, Group, ParameterSource
+from click import Context, get_current_context, Parameter
+from click.core import Command as ClickCommand, Group, ParameterSource
 from dbt.cli.exceptions import DbtUsageException
 from dbt.cli.resolvers import default_log_path, default_project_dir
+from dbt.cli.types import Command as CliCommand
 from dbt.config.profile import read_user_config
 from dbt.contracts.project import UserConfig
+from dbt.exceptions import DbtInternalError
 from dbt.deprecations import renamed_env_var
 from dbt.helper_types import WarnErrorOptions
 
@@ -37,6 +39,9 @@ DEPRECATED_PARAMS = {
 }
 
 
+WHICH_KEY = "which"
+
+
 def convert_config(config_name, config_value):
     """Convert the values from config and original set_from_args to the correct type."""
     ret = config_value
@@ -58,10 +63,10 @@ def args_to_context(args: List[str]) -> Context:
     sub_command_name, sub_command, args = cli.resolve_command(cli_ctx, args)
 
     # Handle source and docs group.
-    if type(sub_command) == Group:
+    if isinstance(sub_command, Group):
         sub_command_name, sub_command, args = sub_command.resolve_command(cli_ctx, args)
 
-    assert type(sub_command) == Command
+    assert isinstance(sub_command, ClickCommand)
     sub_command_ctx = sub_command.make_context(sub_command_name, args)
     sub_command_ctx.parent = cli_ctx
     return sub_command_ctx
@@ -71,7 +76,9 @@ def args_to_context(args: List[str]) -> Context:
 class Flags:
     """Primary configuration artifact for running dbt"""
 
-    def __init__(self, ctx: Context = None, user_config: UserConfig = None) -> None:
+    def __init__(
+        self, ctx: Optional[Context] = None, user_config: Optional[UserConfig] = None
+    ) -> None:
 
         # Set the default flags.
         for key, value in FLAGS_DEFAULTS.items():
@@ -199,6 +206,9 @@ class Flags:
             profiles_dir = getattr(self, "PROFILES_DIR", None)
             user_config = read_user_config(profiles_dir) if profiles_dir else None
 
+        # Add entire invocation command to flags
+        object.__setattr__(self, "INVOCATION_COMMAND", "dbt " + " ".join(sys.argv[1:]))
+
         # Overwrite default assignments with user config if available.
         if user_config:
             param_assigned_from_default_copy = params_assigned_from_default.copy()
@@ -277,3 +287,118 @@ class Flags:
         # It is necessary to remove this attr from the class so it does
         # not get pickled when written to disk as json.
         object.__delattr__(self, "deprecated_env_var_warnings")
+
+    @classmethod
+    def from_dict(cls, command: CliCommand, args_dict: Dict[str, Any]) -> "Flags":
+        command_arg_list = command_params(command, args_dict)
+        ctx = args_to_context(command_arg_list)
+        flags = cls(ctx=ctx)
+        flags.fire_deprecations()
+        return flags
+
+
+CommandParams = List[str]
+
+
+def command_params(command: CliCommand, args_dict: Dict[str, Any]) -> CommandParams:
+    """Given a command and a dict, returns a list of strings representing
+    the CLI params for that command. The order of this list is consistent with
+    which flags are expected at the parent level vs the command level.
+
+    e.g. fn("run", {"defer": True, "print": False}) -> ["--no-print", "run", "--defer"]
+
+    The result of this function can be passed in to the args_to_context function
+    to produce a click context to instantiate Flags with.
+    """
+
+    cmd_args = set(command_args(command))
+    prnt_args = set(parent_args())
+    default_args = set([x.lower() for x in FLAGS_DEFAULTS.keys()])
+
+    res = command.to_list()
+
+    for k, v in args_dict.items():
+        k = k.lower()
+
+        # if a "which" value exists in the args dict, it should match the command provided
+        if k == WHICH_KEY:
+            if v != command.value:
+                raise DbtInternalError(
+                    f"Command '{command.value}' does not match value of which: '{v}'"
+                )
+            continue
+
+        # param was assigned from defaults and should not be included
+        if k not in (cmd_args | prnt_args) - default_args:
+            continue
+
+        # if the param is in parent args, it should come before the arg name
+        # e.g. ["--print", "run"] vs ["run", "--print"]
+        add_fn = res.append
+        if k in prnt_args:
+
+            def add_fn(x):
+                res.insert(0, x)
+
+        spinal_cased = k.replace("_", "-")
+
+        if k == "macro" and command == CliCommand.RUN_OPERATION:
+            add_fn(v)
+        elif v in (None, False):
+            add_fn(f"--no-{spinal_cased}")
+        elif v is True:
+            add_fn(f"--{spinal_cased}")
+        else:
+            add_fn(f"--{spinal_cased}={v}")
+
+    return res
+
+
+ArgsList = List[str]
+
+
+def parent_args() -> ArgsList:
+    """Return a list representing the params the base click command takes."""
+    from dbt.cli.main import cli
+
+    return format_params(cli.params)
+
+
+def command_args(command: CliCommand) -> ArgsList:
+    """Given a command, return a list of strings representing the params
+    that command takes. This function only returns params assigned to a
+    specific command, not those of its parent command.
+
+    e.g. fn("run") -> ["defer", "favor_state", "exclude", ...]
+    """
+    import dbt.cli.main as cli
+
+    CMD_DICT: Dict[CliCommand, ClickCommand] = {
+        CliCommand.BUILD: cli.build,
+        CliCommand.CLEAN: cli.clean,
+        CliCommand.CLONE: cli.clone,
+        CliCommand.COMPILE: cli.compile,
+        CliCommand.DOCS_GENERATE: cli.docs_generate,
+        CliCommand.DOCS_SERVE: cli.docs_serve,
+        CliCommand.DEBUG: cli.debug,
+        CliCommand.DEPS: cli.deps,
+        CliCommand.INIT: cli.init,
+        CliCommand.LIST: cli.list,
+        CliCommand.PARSE: cli.parse,
+        CliCommand.RUN: cli.run,
+        CliCommand.RUN_OPERATION: cli.run_operation,
+        CliCommand.SEED: cli.seed,
+        CliCommand.SHOW: cli.show,
+        CliCommand.SNAPSHOT: cli.snapshot,
+        CliCommand.SOURCE_FRESHNESS: cli.freshness,
+        CliCommand.TEST: cli.test,
+        CliCommand.RETRY: cli.retry,
+    }
+    click_cmd: Optional[ClickCommand] = CMD_DICT.get(command, None)
+    if click_cmd is None:
+        raise DbtInternalError(f"No command found for name '{command.name}'")
+    return format_params(click_cmd.params)
+
+
+def format_params(params: List[Parameter]) -> ArgsList:
+    return [str(x.name) for x in params if not str(x.name).lower().startswith("deprecated_")]

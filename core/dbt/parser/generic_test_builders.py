@@ -1,9 +1,7 @@
 import re
 from copy import deepcopy
-from dataclasses import dataclass
 from typing import (
     Generic,
-    TypeVar,
     Dict,
     Any,
     Tuple,
@@ -14,12 +12,8 @@ from typing import (
 from dbt.clients.jinja import get_rendered, GENERIC_TEST_KWARGS_NAME
 from dbt.contracts.graph.nodes import UnpatchedSourceDefinition
 from dbt.contracts.graph.unparsed import (
-    TestDef,
     NodeVersion,
-    UnparsedAnalysisUpdate,
-    UnparsedMacroUpdate,
     UnparsedNodeUpdate,
-    UnparsedExposure,
     UnparsedModelUpdate,
 )
 from dbt.exceptions import (
@@ -34,9 +28,8 @@ from dbt.exceptions import (
     TestNameNotStringError,
     UnexpectedTestNamePatternError,
     UndefinedMacroError,
-    DbtInternalError,
 )
-from dbt.parser.search import FileBlock
+from dbt.parser.common import Testable
 from dbt.utils import md5
 
 
@@ -83,150 +76,6 @@ def synthesize_generic_test_names(
     return short_name, full_name
 
 
-@dataclass
-class YamlBlock(FileBlock):
-    data: Dict[str, Any]
-
-    @classmethod
-    def from_file_block(cls, src: FileBlock, data: Dict[str, Any]):
-        return cls(
-            file=src.file,
-            data=data,
-        )
-
-
-Versioned = TypeVar("Versioned", bound=UnparsedModelUpdate)
-
-Testable = TypeVar("Testable", UnparsedNodeUpdate, UnpatchedSourceDefinition, UnparsedModelUpdate)
-
-ColumnTarget = TypeVar(
-    "ColumnTarget",
-    UnparsedModelUpdate,
-    UnparsedNodeUpdate,
-    UnparsedAnalysisUpdate,
-    UnpatchedSourceDefinition,
-)
-
-Target = TypeVar(
-    "Target",
-    UnparsedNodeUpdate,
-    UnparsedMacroUpdate,
-    UnparsedAnalysisUpdate,
-    UnpatchedSourceDefinition,
-    UnparsedExposure,
-    UnparsedModelUpdate,
-)
-
-
-@dataclass
-class TargetBlock(YamlBlock, Generic[Target]):
-    target: Target
-
-    @property
-    def name(self):
-        return self.target.name
-
-    @property
-    def columns(self):
-        return []
-
-    @property
-    def tests(self) -> List[TestDef]:
-        return []
-
-    @classmethod
-    def from_yaml_block(cls, src: YamlBlock, target: Target) -> "TargetBlock[Target]":
-        return cls(
-            file=src.file,
-            data=src.data,
-            target=target,
-        )
-
-
-@dataclass
-class TargetColumnsBlock(TargetBlock[ColumnTarget], Generic[ColumnTarget]):
-    @property
-    def columns(self):
-        if self.target.columns is None:
-            return []
-        else:
-            return self.target.columns
-
-
-@dataclass
-class TestBlock(TargetColumnsBlock[Testable], Generic[Testable]):
-    @property
-    def tests(self) -> List[TestDef]:
-        if self.target.tests is None:
-            return []
-        else:
-            return self.target.tests
-
-    @property
-    def quote_columns(self) -> Optional[bool]:
-        return self.target.quote_columns
-
-    @classmethod
-    def from_yaml_block(cls, src: YamlBlock, target: Testable) -> "TestBlock[Testable]":
-        return cls(
-            file=src.file,
-            data=src.data,
-            target=target,
-        )
-
-
-@dataclass
-class VersionedTestBlock(TestBlock, Generic[Versioned]):
-    @property
-    def columns(self):
-        if not self.target.versions:
-            return super().columns
-        else:
-            raise DbtInternalError(".columns for VersionedTestBlock with versions")
-
-    @property
-    def tests(self) -> List[TestDef]:
-        if not self.target.versions:
-            return super().tests
-        else:
-            raise DbtInternalError(".tests for VersionedTestBlock with versions")
-
-    @classmethod
-    def from_yaml_block(cls, src: YamlBlock, target: Versioned) -> "VersionedTestBlock[Versioned]":
-        return cls(
-            file=src.file,
-            data=src.data,
-            target=target,
-        )
-
-
-@dataclass
-class GenericTestBlock(TestBlock[Testable], Generic[Testable]):
-    test: Dict[str, Any]
-    column_name: Optional[str]
-    tags: List[str]
-    version: Optional[NodeVersion]
-
-    @classmethod
-    def from_test_block(
-        cls,
-        src: TestBlock,
-        test: Dict[str, Any],
-        column_name: Optional[str],
-        tags: List[str],
-        version: Optional[NodeVersion],
-    ) -> "GenericTestBlock":
-        return cls(
-            file=src.file,
-            data=src.data,
-            target=src.target,
-            test=test,
-            column_name=column_name,
-            tags=tags,
-            version=version,
-        )
-
-
 class TestBuilder(Generic[Testable]):
     """An object to hold assorted test settings and perform basic parsing
 
@@ -264,7 +113,7 @@ class TestBuilder(Generic[Testable]):
         target: Testable,
         package_name: str,
         render_ctx: Dict[str, Any],
-        column_name: str = None,
+        column_name: Optional[str] = None,
         version: Optional[NodeVersion] = None,
     ) -> None:
         test_name, test_args = self.extract_test_args(test, column_name)

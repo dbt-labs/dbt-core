@@ -38,6 +38,7 @@ from .project import Project
 from .renderer import DbtProjectYamlRenderer, ProfileRenderer
 
 
+# Called by RuntimeConfig.collect_parts class method
 def load_project(
     project_root: str,
     version_check: bool,
@@ -150,6 +151,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             clean_targets=project.clean_targets,
             log_path=project.log_path,
             packages_install_path=project.packages_install_path,
+            packages_specified_path=project.packages_specified_path,
             quoting=quoting,
             models=project.models,
             on_run_start=project.on_run_start,
@@ -170,6 +172,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             config_version=project.config_version,
             unrendered=project.unrendered,
             project_env_vars=project.project_env_vars,
+            restrict_access=project.restrict_access,
             profile_env_vars=profile.profile_env_vars,
             profile_name=profile.profile_name,
             target_name=profile.target_name,
@@ -236,6 +239,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
         except ValidationError as e:
             raise ConfigContractBrokenError(e) from e
 
+    # Called by RuntimeConfig.from_args
     @classmethod
     def collect_parts(cls: Type["RuntimeConfig"], args: Any) -> Tuple[Project, Profile]:
         # profile_name from the project
@@ -250,7 +254,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
         project = load_project(project_root, bool(flags.VERSION_CHECK), profile, cli_vars)
         return project, profile
 
-    # Called in main.py, lib.py, task/base.py
+    # Called in task/base.py, in BaseTask.from_args
     @classmethod
     def from_args(cls, args: Any) -> "RuntimeConfig":
         """Given arguments, read in dbt_project.yml from the current directory,
@@ -271,7 +275,11 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
         )
 
     def get_metadata(self) -> ManifestMetadata:
-        return ManifestMetadata(project_id=self.hashed_name(), adapter_type=self.credentials.type)
+        return ManifestMetadata(
+            project_name=self.project_name,
+            project_id=self.hashed_name(),
+            adapter_type=self.credentials.type,
+        )
 
     def _get_v2_config_paths(
         self,
@@ -358,6 +366,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
                     raise UninstalledPackagesFoundError(
                         count_packages_specified,
                         count_packages_installed,
+                        self.packages_specified_path,
                         self.packages_install_path,
                     )
                 project_paths = itertools.chain(internal_packages, self._get_project_directories())

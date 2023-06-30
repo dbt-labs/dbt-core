@@ -1,13 +1,18 @@
+import datetime
 import re
 
 from dbt import deprecations
 from dbt.node_types import NodeType
+from dbt.contracts.graph.semantic_models import (
+    Defaults,
+    DimensionValidityParams,
+    MeasureAggregationParameters,
+)
 from dbt.contracts.util import (
     AdditionalPropertiesMixin,
     Mergeable,
     Replaceable,
 )
-from dbt.contracts.graph.manifest_upgrade import rename_metric_attr
 
 # trigger the PathEncoder
 import dbt.helper_types  # noqa:F401
@@ -154,6 +159,7 @@ class UnparsedVersion(dbtClassMixin):
     columns: Sequence[Union[dbt.helper_types.IncludeExclude, UnparsedColumn]] = field(
         default_factory=list
     )
+    deprecation_date: Optional[datetime.datetime] = None
 
     def __lt__(self, other):
         try:
@@ -192,6 +198,8 @@ class UnparsedVersion(dbtClassMixin):
             else:
                 self._unparsed_columns.append(column)
 
+        self.deprecation_date = normalize_date(self.deprecation_date)
+
 
 @dataclass
 class UnparsedAnalysisUpdate(HasConfig, HasColumnDocs, HasColumnProps, HasYamlMetadata):
@@ -210,6 +218,7 @@ class UnparsedModelUpdate(UnparsedNodeUpdate):
     access: Optional[str] = None
     latest_version: Optional[NodeVersion] = None
     versions: Sequence[UnparsedVersion] = field(default_factory=list)
+    deprecation_date: Optional[datetime.datetime] = None
 
     def __post_init__(self):
         if self.latest_version:
@@ -228,6 +237,8 @@ class UnparsedModelUpdate(UnparsedNodeUpdate):
             seen_versions.add(str(version.v))
 
         self._version_map = {version.v: version for version in self.versions}
+
+        self.deprecation_date = normalize_date(self.deprecation_date)
 
     def get_columns_for_version(self, version: NodeVersion) -> List[UnparsedColumn]:
         if version not in self._version_map:
@@ -587,25 +598,47 @@ class MetricTime(dbtClassMixin, Mergeable):
 
 
 @dataclass
-class UnparsedMetric(dbtClassMixin, Replaceable):
+class UnparsedMetricInputMeasure(dbtClassMixin):
+    name: str
+    filter: Optional[str] = None
+    alias: Optional[str] = None
+
+
+@dataclass
+class UnparsedMetricInput(dbtClassMixin):
+    name: str
+    filter: Optional[str] = None
+    alias: Optional[str] = None
+    offset_window: Optional[str] = None
+    offset_to_grain: Optional[str] = None  # str is really a TimeGranularity Enum
+
+
+@dataclass
+class UnparsedMetricTypeParams(dbtClassMixin):
+    measure: Optional[Union[UnparsedMetricInputMeasure, str]] = None
+    numerator: Optional[Union[UnparsedMetricInput, str]] = None
+    denominator: Optional[Union[UnparsedMetricInput, str]] = None
+    expr: Optional[Union[str, bool]] = None
+    window: Optional[str] = None
+    grain_to_date: Optional[str] = None  # str is really a TimeGranularity Enum
+    metrics: Optional[List[Union[UnparsedMetricInput, str]]] = None
+
+
+@dataclass
+class UnparsedMetric(dbtClassMixin):
     name: str
     label: str
-    calculation_method: str
-    expression: str
+    type: str
+    type_params: UnparsedMetricTypeParams
     description: str = ""
-    timestamp: Optional[str] = None
-    time_grains: List[str] = field(default_factory=list)
-    dimensions: List[str] = field(default_factory=list)
-    window: Optional[MetricTime] = None
-    model: Optional[str] = None
-    filters: List[MetricFilter] = field(default_factory=list)
+    filter: Optional[str] = None
+    # metadata: Optional[Unparsedetadata] = None # TODO
     meta: Dict[str, Any] = field(default_factory=dict)
     tags: List[str] = field(default_factory=list)
     config: Dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def validate(cls, data):
-        data = rename_metric_attr(data, raise_deprecation_warning=True)
         super(UnparsedMetric, cls).validate(data)
         if "name" in data:
             errors = []
@@ -625,22 +658,6 @@ class UnparsedMetric(dbtClassMixin, Replaceable):
                     f"The metric name '{data['name']}' is invalid.  It {', '.join(e for e in errors)}"
                 )
 
-        if data.get("timestamp") is None and data.get("time_grains") is not None:
-            raise ValidationError(
-                f"The metric '{data['name']} has time_grains defined but is missing a timestamp dimension."
-            )
-
-        if data.get("timestamp") is None and data.get("window") is not None:
-            raise ValidationError(
-                f"The metric '{data['name']} has a window defined but is missing a timestamp dimension."
-            )
-
-        if data.get("model") is None and data.get("calculation_method") != "derived":
-            raise ValidationError("Non-derived metrics require a 'model' property")
-
-        if data.get("model") is not None and data.get("calculation_method") == "derived":
-            raise ValidationError("Derived metrics cannot have a 'model' property")
-
 
 @dataclass
 class UnparsedGroup(dbtClassMixin, Replaceable):
@@ -652,3 +669,78 @@ class UnparsedGroup(dbtClassMixin, Replaceable):
         super(UnparsedGroup, cls).validate(data)
         if data["owner"].get("name") is None and data["owner"].get("email") is None:
             raise ValidationError("Group owner must have at least one of 'name' or 'email'.")
+
+
+#
+# semantic interfaces unparsed objects
+#
+
+
+@dataclass
+class UnparsedEntity(dbtClassMixin):
+    name: str
+    type: str  # EntityType enum
+    description: Optional[str] = None
+    role: Optional[str] = None
+    expr: Optional[str] = None
+
+
+@dataclass
+class UnparsedNonAdditiveDimension(dbtClassMixin):
+    name: str
+    window_choice: str  # AggregationType enum
+    window_grouples: List[str]
+
+
+@dataclass
+class UnparsedMeasure(dbtClassMixin):
+    name: str
+    agg: str  # actually an enum
+    description: Optional[str] = None
+    create_metric: bool = False
+    expr: Optional[Union[str, bool, int]] = None
+    agg_params: Optional[MeasureAggregationParameters] = None
+    non_additive_dimension: Optional[UnparsedNonAdditiveDimension] = None
+    agg_time_dimension: Optional[str] = None
+
+
+@dataclass
+class UnparsedDimensionTypeParams(dbtClassMixin):
+    time_granularity: str  # TimeGranularity enum
+    validity_params: Optional[DimensionValidityParams] = None
+
+
+@dataclass
+class UnparsedDimension(dbtClassMixin):
+    name: str
+    type: str  # actually an enum
+    description: Optional[str] = None
+    is_partition: bool = False
+    type_params: Optional[UnparsedDimensionTypeParams] = None
+    expr: Optional[str] = None
+
+
+@dataclass
+class UnparsedSemanticModel(dbtClassMixin):
+    name: str
+    model: str  # looks like "ref(...)"
+    description: Optional[str] = None
+    defaults: Optional[Defaults] = None
+    entities: List[UnparsedEntity] = field(default_factory=list)
+    measures: List[UnparsedMeasure] = field(default_factory=list)
+    dimensions: List[UnparsedDimension] = field(default_factory=list)
+
+
+def normalize_date(d: Optional[datetime.date]) -> Optional[datetime.datetime]:
+    """Convert date to datetime (at midnight), and add local time zone if naive"""
+    if d is None:
+        return None
+
+    # convert date to datetime
+    dt = d if type(d) == datetime.datetime else datetime.datetime(d.year, d.month, d.day)
+
+    if not dt.tzinfo:
+        # date is naive, re-interpret as system time zone
+        dt = dt.astimezone()
+
+    return dt
