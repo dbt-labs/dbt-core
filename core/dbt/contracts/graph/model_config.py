@@ -495,7 +495,7 @@ class NodeConfig(NodeAndTestConfig):
         if (
             self.contract.enforced
             and self.materialized == "incremental"
-            and (self.on_schema_change != "append_new_columns" or self.on_schema_change != "fail")
+            and self.on_schema_change not in ("append_new_columns", "fail")
         ):
             raise ValidationError(
                 f"Invalid value for on_schema_change: {self.on_schema_change}. Models "
