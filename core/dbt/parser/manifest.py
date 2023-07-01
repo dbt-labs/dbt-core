@@ -1447,7 +1447,7 @@ def _process_metric_node(
     current_project: str,
     metric: Metric,
 ) -> None:
-    """Sets a metric's input_measures"""
+    """Sets a metric's `input_measures` and `depends_on` properties"""
 
     # This ensures that if this metrics input_measures have already been set
     # we skip the work. This could happen either due to recursion or if multiple
@@ -1461,6 +1461,18 @@ def _process_metric_node(
             metric.type_params.measure is not None
         ), f"{metric} should have a measure defined, but it does not."
         metric.type_params.input_measures.append(metric.type_params.measure)
+        target_semantic_model = manifest.resolve_semantic_model_for_measure(
+            target_measure_name=metric.type_params.measure.name,
+            current_project=current_project,
+            node_package=metric.package_name,
+        )
+        if target_semantic_model is None:
+            raise dbt.exceptions.ParsingError(
+                f"A semantic model having a measure `{metric.type_params.measure.name}` does not exist but was referenced.",
+                node=metric,
+            )
+
+        metric.depends_on.add_node(target_semantic_model.unique_id)
 
     elif metric.type is MetricType.DERIVED or metric.type is MetricType.RATIO:
         input_metrics = metric.input_metrics
