@@ -1,9 +1,11 @@
 import enum
+from collections import defaultdict
 from dataclasses import dataclass, field
 from itertools import chain, islice
 from mashumaro.mixins.msgpack import DataClassMessagePackMixin
 from multiprocessing.synchronize import Lock
 from typing import (
+    DefaultDict,
     Dict,
     List,
     Optional,
@@ -295,6 +297,49 @@ class MetricLookup(dbtClassMixin):
                 f"Metric {unique_id} found in cache but not found in manifest"
             )
         return manifest.metrics[unique_id]
+
+
+class SemanticModelByMeasureLookup(dbtClassMixin):
+    """Lookup utility for finding SemanticModel by measure
+
+    This is possible because measure names are supposed to be unique across
+    the semantic models in a manifest.
+    """
+
+    def __init__(self, manifest: "Manifest"):
+        self.storage: DefaultDict[str, Dict[PackageName, UniqueID]] = defaultdict(dict)
+        self.populate(manifest)
+
+    def get_unique_id(self, search_name: str, package: Optional[PackageName]):
+        return find_unique_id_for_package(self.storage, search_name, package)
+
+    def find(
+        self, search_name: str, package: Optional[PackageName], manifest: "Manifest"
+    ) -> Optional[SemanticModel]:
+        """Tries to find a SemanticModel based on a measure name"""
+        unique_id = self.get_unique_id(search_name, package)
+        if unique_id is not None:
+            return self.perform_lookup(unique_id, manifest)
+        return None
+
+    def add(self, semantic_model: SemanticModel):
+        """Sets all measures for a SemanticModel as paths to the SemanticModel's `unique_id`"""
+        for measure in semantic_model.measures:
+            self.storage[measure.name][semantic_model.package_name] = semantic_model.unique_id
+
+    def populate(self, manifest: "Manifest"):
+        """Populate storage with all the measure + package paths to the Manifest's SemanticModels"""
+        for semantic_model in manifest.semantic_models.values():
+            self.add(semantic_model=semantic_model)
+
+    def perform_lookup(self, unique_id: UniqueID, manifest: "Manifest") -> SemanticModel:
+        """Tries to get a SemanticModel from the Manifest"""
+        semantic_model = manifest.semantic_models.get(unique_id)
+        if semantic_model is None:
+            raise dbt.exceptions.DbtInternalError(
+                f"Semantic model `{unique_id}` found in cache but not found in manifest"
+            )
+        return semantic_model
 
 
 # This handles both models/seeds/snapshots and sources/metrics/exposures
@@ -710,6 +755,9 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     _metric_lookup: Optional[MetricLookup] = field(
         default=None, metadata={"serialize": lambda x: None, "deserialize": lambda x: None}
     )
+    _semantic_model_by_measure_lookup: Optional[SemanticModelByMeasureLookup] = field(
+        default=None, metadata={"serialize": lambda x: None, "deserialize": lambda x: None}
+    )
     _disabled_lookup: Optional[DisabledLookup] = field(
         default=None, metadata={"serialize": lambda x: None, "deserialize": lambda x: None}
     )
@@ -960,6 +1008,13 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             self._metric_lookup = MetricLookup(self)
         return self._metric_lookup
 
+    @property
+    def semantic_model_by_measure_lookup(self) -> SemanticModelByMeasureLookup:
+        """Gets (and creates if necessary) the lookup utility for getting SemanticModels by measures"""
+        if self._semantic_model_by_measure_lookup is None:
+            self._semantic_model_by_measure_lookup = SemanticModelByMeasureLookup(self)
+        return self._semantic_model_by_measure_lookup
+
     def rebuild_ref_lookup(self):
         self._ref_lookup = RefableLookup(self)
 
@@ -1085,6 +1140,25 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
                 disabled = self.disabled_lookup.find(f"{target_metric_name}", pkg)
         if disabled:
             return Disabled(disabled[0])
+        return None
+
+    def resolve_semantic_model_for_measure(
+        self,
+        target_measure_name: str,
+        current_project: str,
+        node_package: str,
+        target_package: Optional[str] = None,
+    ) -> Optional[SemanticModel]:
+        """Tries to find the SemanticModel that a measure belongs to"""
+        candidates = _packages_to_search(current_project, node_package, target_package)
+
+        for pkg in candidates:
+            semantic_model = self.semantic_model_by_measure_lookup.find(
+                target_measure_name, pkg, self
+            )
+            if semantic_model is not None:
+                return semantic_model
+
         return None
 
     # Called by DocsRuntimeContext.doc
@@ -1328,6 +1402,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             self._source_lookup,
             self._ref_lookup,
             self._metric_lookup,
+            self._semantic_model_by_measure_lookup,
             self._disabled_lookup,
             self._analysis_lookup,
         )
