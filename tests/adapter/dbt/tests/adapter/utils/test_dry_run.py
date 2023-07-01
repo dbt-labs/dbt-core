@@ -2,8 +2,8 @@ from typing import Type
 
 import pytest
 
-from dbt.exceptions import DbtRuntimeError
 from dbt.adapters.base.impl import BaseAdapter
+from dbt.exceptions import DbtRuntimeError, InvalidConnectionError
 
 
 class BaseDryRunMethod:
@@ -57,9 +57,15 @@ class BaseDryRunMethod:
         expected_exception: Type[Exception],
     ) -> None:
         """Executes a dry run query on invalid SQL, expecting the exception."""
-        with pytest.raises(expected_exception):
+        with pytest.raises(expected_exception=expected_exception) as excinfo:
             with adapter.connection_named("test_invalid_dry_run"):
                 adapter.dry_run(invalid_sql)
+
+        # InvalidConnectionError is a subclass of DbtRuntimeError, but it typically
+        # indicates a problem with test configuration rather than the expected error
+        # from an invalid dry_run invocation.
+        if excinfo.type == InvalidConnectionError:
+            raise ValueError("Unexpected InvalidConnectionError.") from excinfo.value
 
 
 class TestDryRunMethod(BaseDryRunMethod):

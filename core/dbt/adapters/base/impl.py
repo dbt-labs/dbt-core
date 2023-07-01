@@ -290,13 +290,15 @@ class BaseAdapter(metaclass=AdapterMeta):
         return self.connections.execute(sql=sql, auto_begin=auto_begin, fetch=fetch, limit=limit)
 
     def dry_run(self, sql: str) -> AdapterResponse:
-        """Submit the given SQL for validation, but not execution.
+        """Submit the given SQL to the engine for validation, but not execution.
 
-        This is a thin wrapper around ConnectionManager.dry_run.
+        This should throw an appropriate exception if the input SQL is invalid, although
+        in practice that will generally be handled by delegating to an existing method
+        for execution and allowing the error handler to take care of the rest.
 
         :param str sql: The sql to validate
         """
-        return self.connections.dry_run(sql=sql)
+        raise NotImplementedError("`dry_run` is not implemented for this adapter!")
 
     @available.parse(lambda *a, **k: [])
     def get_column_schema_from_query(self, sql: str) -> List[BaseColumn]:
