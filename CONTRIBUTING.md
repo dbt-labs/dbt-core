@@ -8,7 +8,7 @@
 4. [Running `dbt-core` in development](#running-dbt-core-in-development)
 5. [Testing dbt-core](#testing)
 6. [Debugging](#debugging)
-7. [Adding or modifying a changelog entry](##adding-or-modifying-a-changelog-entry)
+7. [Adding or modifying a changelog entry](#adding-or-modifying-a-changelog-entry)
 8. [Submitting a Pull Request](#submitting-a-pull-request)
 
 ## About this document
