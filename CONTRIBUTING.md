@@ -5,7 +5,7 @@
 1. [About this document](#about-this-document)
 2. [Getting the code](#getting-the-code)
 3. [Setting up an environment](#setting-up-an-environment)
-4. [Running `dbt-core` in development](#running-dbt-core-in-development)
+4. [Running dbt-core in development](#running-dbt-core-in-development)
 5. [Testing dbt-core](#testing)
 6. [Debugging](#debugging)
 7. [Adding or modifying a changelog entry](#adding-or-modifying-a-changelog-entry)
