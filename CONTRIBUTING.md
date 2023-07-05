@@ -5,10 +5,10 @@
 1. [About this document](#about-this-document)
 2. [Getting the code](#getting-the-code)
 3. [Setting up an environment](#setting-up-an-environment)
-4. [Running `dbt` in development](#running-dbt-core-in-development)
+4. [Running dbt-core in development](#running-dbt-core-in-development)
 5. [Testing dbt-core](#testing)
 6. [Debugging](#debugging)
-7. [Adding a changelog entry](#adding-a-changelog-entry)
+7. [Adding or modifying a changelog entry](#adding-or-modifying-a-changelog-entry)
 8. [Submitting a Pull Request](#submitting-a-pull-request)
 
 ## About this document
@@ -113,7 +113,7 @@ When installed in this way, any changes you make to your local copy of the sourc
 
 With your virtualenv activated, the `dbt` script should point back to the source code you've cloned on your machine. You can verify this by running `which dbt`. This command should show you a path to an executable in your virtualenv.
 
-Configure your [profile](https://docs.getdbt.com/docs/configure-your-profile) as necessary to connect to your target databases. It may be a good idea to add a new profile pointing to a local Postgres instance, or a specific test sandbox within your data warehouse if appropriate.
+Configure your [profile](https://docs.getdbt.com/docs/configure-your-profile) as necessary to connect to your target databases. It may be a good idea to add a new profile pointing to a local Postgres instance, or a specific test sandbox within your data warehouse if appropriate. Make sure to create a profile before running integration tests.
 
 ## Testing
 

@@ -1216,6 +1216,14 @@ class UnsupportedConstraintMaterialization(WarnLevel):
         return line_wrap_message(warning_tag(msg))
 
 
+class ParseInlineNodeError(ErrorLevel):
+    def code(self):
+        return "I069"
+
+    def message(self) -> str:
+        return "Error while parsing node: " + self.node_info.node_name + "\n" + self.exc
+
+
 # =======================================================
 # M - Deps generation
 # =======================================================

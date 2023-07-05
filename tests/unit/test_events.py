@@ -247,6 +247,7 @@ sample_values = [
         ref_model_latest_version="",
     ),
     types.UnsupportedConstraintMaterialization(materialized=""),
+    types.ParseInlineNodeError(exc=""),
     # M - Deps generation ======================
     types.GitSparseCheckoutSubdirectory(subdir=""),
     types.GitProgressCheckoutRevision(revision=""),

@@ -4,8 +4,9 @@
 """Generated protocol buffer code."""
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import descriptor_pool as _descriptor_pool
+from google.protobuf import message as _message
+from google.protobuf import reflection as _reflection
 from google.protobuf import symbol_database as _symbol_database
-from google.protobuf.internal import builder as _builder
 # @@protoc_insertion_point(imports)
 
 _sym_db = _symbol_database.Default()
@@ -15,11 +16,3464 @@ from google.protobuf import timestamp_pb2 as google_dot_protobuf_dot_timestamp__
 from google.protobuf import struct_pb2 as google_dot_protobuf_dot_struct__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0btypes.proto\x12\x0bproto_types\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1cgoogle/protobuf/struct.proto\"\x91\x02\n\tEventInfo\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x0c\n\x04\x63ode\x18\x02 \x01(\t\x12\x0b\n\x03msg\x18\x03 \x01(\t\x12\r\n\x05level\x18\x04 \x01(\t\x12\x15\n\rinvocation_id\x18\x05 \x01(\t\x12\x0b\n\x03pid\x18\x06 \x01(\x05\x12\x0e\n\x06thread\x18\x07 \x01(\t\x12&\n\x02ts\x18\x08 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x30\n\x05\x65xtra\x18\t \x03(\x0b\x32!.proto_types.EventInfo.ExtraEntry\x12\x10\n\x08\x63\x61tegory\x18\n \x01(\t\x1a,\n\nExtraEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"\x7f\n\rTimingInfoMsg\x12\x0c\n\x04name\x18\x01 \x01(\t\x12.\n\nstarted_at\x18\x02 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x30\n\x0c\x63ompleted_at\x18\x03 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\"V\n\x0cNodeRelation\x12\x10\n\x08\x64\x61tabase\x18\n \x01(\t\x12\x0e\n\x06schema\x18\x0b \x01(\t\x12\r\n\x05\x61lias\x18\x0c \x01(\t\x12\x15\n\rrelation_name\x18\r \x01(\t\"\x91\x02\n\x08NodeInfo\x12\x11\n\tnode_path\x18\x01 \x01(\t\x12\x11\n\tnode_name\x18\x02 \x01(\t\x12\x11\n\tunique_id\x18\x03 \x01(\t\x12\x15\n\rresource_type\x18\x04 \x01(\t\x12\x14\n\x0cmaterialized\x18\x05 \x01(\t\x12\x13\n\x0bnode_status\x18\x06 \x01(\t\x12\x17\n\x0fnode_started_at\x18\x07 \x01(\t\x12\x18\n\x10node_finished_at\x18\x08 \x01(\t\x12%\n\x04meta\x18\t \x01(\x0b\x32\x17.google.protobuf.Struct\x12\x30\n\rnode_relation\x18\n \x01(\x0b\x32\x19.proto_types.NodeRelation\"\xd1\x01\n\x0cRunResultMsg\x12\x0e\n\x06status\x18\x01 \x01(\t\x12\x0f\n\x07message\x18\x02 \x01(\t\x12/\n\x0btiming_info\x18\x03 \x03(\x0b\x32\x1a.proto_types.TimingInfoMsg\x12\x0e\n\x06thread\x18\x04 \x01(\t\x12\x16\n\x0e\x65xecution_time\x18\x05 \x01(\x02\x12\x31\n\x10\x61\x64\x61pter_response\x18\x06 \x01(\x0b\x32\x17.google.protobuf.Struct\x12\x14\n\x0cnum_failures\x18\x07 \x01(\x05\"G\n\x0fReferenceKeyMsg\x12\x10\n\x08\x64\x61tabase\x18\x01 \x01(\t\x12\x0e\n\x06schema\x18\x02 \x01(\t\x12\x12\n\nidentifier\x18\x03 \x01(\t\"6\n\x0eGenericMessage\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\"9\n\x11MainReportVersion\x12\x0f\n\x07version\x18\x01 \x01(\t\x12\x13\n\x0blog_version\x18\x02 \x01(\x05\"j\n\x14MainReportVersionMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12,\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1e.proto_types.MainReportVersion\"r\n\x0eMainReportArgs\x12\x33\n\x04\x61rgs\x18\x01 \x03(\x0b\x32%.proto_types.MainReportArgs.ArgsEntry\x1a+\n\tArgsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"d\n\x11MainReportArgsMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12)\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1b.proto_types.MainReportArgs\"+\n\x15MainTrackingUserState\x12\x12\n\nuser_state\x18\x01 \x01(\t\"r\n\x18MainTrackingUserStateMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x30\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\".proto_types.MainTrackingUserState\"5\n\x0fMergedFromState\x12\x12\n\nnum_merged\x18\x01 \x01(\x05\x12\x0e\n\x06sample\x18\x02 \x03(\t\"f\n\x12MergedFromStateMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12*\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1c.proto_types.MergedFromState\"A\n\x14MissingProfileTarget\x12\x14\n\x0cprofile_name\x18\x01 \x01(\t\x12\x13\n\x0btarget_name\x18\x02 \x01(\t\"p\n\x17MissingProfileTargetMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12/\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32!.proto_types.MissingProfileTarget\"(\n\x11InvalidOptionYAML\x12\x13\n\x0boption_name\x18\x01 \x01(\t\"j\n\x14InvalidOptionYAMLMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12,\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1e.proto_types.InvalidOptionYAML\"!\n\x12LogDbtProjectError\x12\x0b\n\x03\x65xc\x18\x01 \x01(\t\"l\n\x15LogDbtProjectErrorMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12-\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1f.proto_types.LogDbtProjectError\"3\n\x12LogDbtProfileError\x12\x0b\n\x03\x65xc\x18\x01 \x01(\t\x12\x10\n\x08profiles\x18\x02 \x03(\t\"l\n\x15LogDbtProfileErrorMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12-\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1f.proto_types.LogDbtProfileError\"!\n\x12StarterProjectPath\x12\x0b\n\x03\x64ir\x18\x01 \x01(\t\"l\n\x15StarterProjectPathMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12-\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1f.proto_types.StarterProjectPath\"$\n\x15\x43onfigFolderDirectory\x12\x0b\n\x03\x64ir\x18\x01 \x01(\t\"r\n\x18\x43onfigFolderDirectoryMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x30\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\".proto_types.ConfigFolderDirectory\"\'\n\x14NoSampleProfileFound\x12\x0f\n\x07\x61\x64\x61pter\x18\x01 \x01(\t\"p\n\x17NoSampleProfileFoundMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12/\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32!.proto_types.NoSampleProfileFound\"6\n\x18ProfileWrittenWithSample\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x0c\n\x04path\x18\x02 \x01(\t\"x\n\x1bProfileWrittenWithSampleMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x33\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32%.proto_types.ProfileWrittenWithSample\"B\n$ProfileWrittenWithTargetTemplateYAML\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x0c\n\x04path\x18\x02 \x01(\t\"\x90\x01\n\'ProfileWrittenWithTargetTemplateYAMLMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12?\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x31.proto_types.ProfileWrittenWithTargetTemplateYAML\"C\n%ProfileWrittenWithProjectTemplateYAML\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x0c\n\x04path\x18\x02 \x01(\t\"\x92\x01\n(ProfileWrittenWithProjectTemplateYAMLMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12@\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x32.proto_types.ProfileWrittenWithProjectTemplateYAML\"\x12\n\x10SettingUpProfile\"h\n\x13SettingUpProfileMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12+\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1d.proto_types.SettingUpProfile\"\x1c\n\x1aInvalidProfileTemplateYAML\"|\n\x1dInvalidProfileTemplateYAMLMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x35\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\'.proto_types.InvalidProfileTemplateYAML\"(\n\x18ProjectNameAlreadyExists\x12\x0c\n\x04name\x18\x01 \x01(\t\"x\n\x1bProjectNameAlreadyExistsMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x33\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32%.proto_types.ProjectNameAlreadyExists\"K\n\x0eProjectCreated\x12\x14\n\x0cproject_name\x18\x01 \x01(\t\x12\x10\n\x08\x64ocs_url\x18\x02 \x01(\t\x12\x11\n\tslack_url\x18\x03 \x01(\t\"d\n\x11ProjectCreatedMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12)\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1b.proto_types.ProjectCreated\"@\n\x1aPackageRedirectDeprecation\x12\x10\n\x08old_name\x18\x01 \x01(\t\x12\x10\n\x08new_name\x18\x02 \x01(\t\"|\n\x1dPackageRedirectDeprecationMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x35\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\'.proto_types.PackageRedirectDeprecation\"\x1f\n\x1dPackageInstallPathDeprecation\"\x82\x01\n PackageInstallPathDeprecationMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x38\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32*.proto_types.PackageInstallPathDeprecation\"H\n\x1b\x43onfigSourcePathDeprecation\x12\x17\n\x0f\x64\x65precated_path\x18\x01 \x01(\t\x12\x10\n\x08\x65xp_path\x18\x02 \x01(\t\"~\n\x1e\x43onfigSourcePathDeprecationMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x36\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32(.proto_types.ConfigSourcePathDeprecation\"F\n\x19\x43onfigDataPathDeprecation\x12\x17\n\x0f\x64\x65precated_path\x18\x01 \x01(\t\x12\x10\n\x08\x65xp_path\x18\x02 \x01(\t\"z\n\x1c\x43onfigDataPathDeprecationMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x34\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32&.proto_types.ConfigDataPathDeprecation\"?\n\x19\x41\x64\x61pterDeprecationWarning\x12\x10\n\x08old_name\x18\x01 \x01(\t\x12\x10\n\x08new_name\x18\x02 \x01(\t\"z\n\x1c\x41\x64\x61pterDeprecationWarningMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x34\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32&.proto_types.AdapterDeprecationWarning\".\n\x17MetricAttributesRenamed\x12\x13\n\x0bmetric_name\x18\x01 \x01(\t\"v\n\x1aMetricAttributesRenamedMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x32\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32$.proto_types.MetricAttributesRenamed\"+\n\x17\x45xposureNameDeprecation\x12\x10\n\x08\x65xposure\x18\x01 \x01(\t\"v\n\x1a\x45xposureNameDeprecationMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x32\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32$.proto_types.ExposureNameDeprecation\"^\n\x13InternalDeprecation\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x0e\n\x06reason\x18\x02 \x01(\t\x12\x18\n\x10suggested_action\x18\x03 \x01(\t\x12\x0f\n\x07version\x18\x04 \x01(\t\"n\n\x16InternalDeprecationMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12.\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32 .proto_types.InternalDeprecation\"@\n\x1a\x45nvironmentVariableRenamed\x12\x10\n\x08old_name\x18\x01 \x01(\t\x12\x10\n\x08new_name\x18\x02 \x01(\t\"|\n\x1d\x45nvironmentVariableRenamedMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x35\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\'.proto_types.EnvironmentVariableRenamed\"3\n\x18\x43onfigLogPathDeprecation\x12\x17\n\x0f\x64\x65precated_path\x18\x01 \x01(\t\"x\n\x1b\x43onfigLogPathDeprecationMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x33\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32%.proto_types.ConfigLogPathDeprecation\"6\n\x1b\x43onfigTargetPathDeprecation\x12\x17\n\x0f\x64\x65precated_path\x18\x01 \x01(\t\"~\n\x1e\x43onfigTargetPathDeprecationMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x36\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32(.proto_types.ConfigTargetPathDeprecation\"!\n\x1f\x43ollectFreshnessReturnSignature\"\x86\x01\n\"CollectFreshnessReturnSignatureMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12:\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32,.proto_types.CollectFreshnessReturnSignature\"\x87\x01\n\x11\x41\x64\x61pterEventDebug\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x10\n\x08\x62\x61se_msg\x18\x03 \x01(\t\x12(\n\x04\x61rgs\x18\x04 \x01(\x0b\x32\x1a.google.protobuf.ListValue\"j\n\x14\x41\x64\x61pterEventDebugMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12,\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1e.proto_types.AdapterEventDebug\"\x86\x01\n\x10\x41\x64\x61pterEventInfo\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x10\n\x08\x62\x61se_msg\x18\x03 \x01(\t\x12(\n\x04\x61rgs\x18\x04 \x01(\x0b\x32\x1a.google.protobuf.ListValue\"h\n\x13\x41\x64\x61pterEventInfoMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12+\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1d.proto_types.AdapterEventInfo\"\x89\x01\n\x13\x41\x64\x61pterEventWarning\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x10\n\x08\x62\x61se_msg\x18\x03 \x01(\t\x12(\n\x04\x61rgs\x18\x04 \x01(\x0b\x32\x1a.google.protobuf.ListValue\"n\n\x16\x41\x64\x61pterEventWarningMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12.\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32 .proto_types.AdapterEventWarning\"\x99\x01\n\x11\x41\x64\x61pterEventError\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x10\n\x08\x62\x61se_msg\x18\x03 \x01(\t\x12(\n\x04\x61rgs\x18\x04 \x01(\x0b\x32\x1a.google.protobuf.ListValue\x12\x10\n\x08\x65xc_info\x18\x05 \x01(\t\"j\n\x14\x41\x64\x61pterEventErrorMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12,\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1e.proto_types.AdapterEventError\"_\n\rNewConnection\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12\x11\n\tconn_type\x18\x02 \x01(\t\x12\x11\n\tconn_name\x18\x03 \x01(\t\"b\n\x10NewConnectionMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12(\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1a.proto_types.NewConnection\"=\n\x10\x43onnectionReused\x12\x11\n\tconn_name\x18\x01 \x01(\t\x12\x16\n\x0eorig_conn_name\x18\x02 \x01(\t\"h\n\x13\x43onnectionReusedMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12+\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1d.proto_types.ConnectionReused\"0\n\x1b\x43onnectionLeftOpenInCleanup\x12\x11\n\tconn_name\x18\x01 \x01(\t\"~\n\x1e\x43onnectionLeftOpenInCleanupMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x36\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32(.proto_types.ConnectionLeftOpenInCleanup\".\n\x19\x43onnectionClosedInCleanup\x12\x11\n\tconn_name\x18\x01 \x01(\t\"z\n\x1c\x43onnectionClosedInCleanupMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x34\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32&.proto_types.ConnectionClosedInCleanup\"_\n\x0eRollbackFailed\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12\x11\n\tconn_name\x18\x02 \x01(\t\x12\x10\n\x08\x65xc_info\x18\x03 \x01(\t\"d\n\x11RollbackFailedMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12)\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1b.proto_types.RollbackFailed\"O\n\x10\x43onnectionClosed\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12\x11\n\tconn_name\x18\x02 \x01(\t\"h\n\x13\x43onnectionClosedMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12+\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1d.proto_types.ConnectionClosed\"Q\n\x12\x43onnectionLeftOpen\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12\x11\n\tconn_name\x18\x02 \x01(\t\"l\n\x15\x43onnectionLeftOpenMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12-\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1f.proto_types.ConnectionLeftOpen\"G\n\x08Rollback\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12\x11\n\tconn_name\x18\x02 \x01(\t\"X\n\x0bRollbackMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12#\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x15.proto_types.Rollback\"@\n\tCacheMiss\x12\x11\n\tconn_name\x18\x01 \x01(\t\x12\x10\n\x08\x64\x61tabase\x18\x02 \x01(\t\x12\x0e\n\x06schema\x18\x03 \x01(\t\"Z\n\x0c\x43\x61\x63heMissMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12$\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x16.proto_types.CacheMiss\"b\n\rListRelations\x12\x10\n\x08\x64\x61tabase\x18\x01 \x01(\t\x12\x0e\n\x06schema\x18\x02 \x01(\t\x12/\n\trelations\x18\x03 \x03(\x0b\x32\x1c.proto_types.ReferenceKeyMsg\"b\n\x10ListRelationsMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12(\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1a.proto_types.ListRelations\"`\n\x0e\x43onnectionUsed\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12\x11\n\tconn_type\x18\x02 \x01(\t\x12\x11\n\tconn_name\x18\x03 \x01(\t\"d\n\x11\x43onnectionUsedMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12)\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1b.proto_types.ConnectionUsed\"T\n\x08SQLQuery\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12\x11\n\tconn_name\x18\x02 \x01(\t\x12\x0b\n\x03sql\x18\x03 \x01(\t\"X\n\x0bSQLQueryMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12#\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x15.proto_types.SQLQuery\"[\n\x0eSQLQueryStatus\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12\x0e\n\x06status\x18\x02 \x01(\t\x12\x0f\n\x07\x65lapsed\x18\x03 \x01(\x02\"d\n\x11SQLQueryStatusMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12)\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1b.proto_types.SQLQueryStatus\"H\n\tSQLCommit\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12\x11\n\tconn_name\x18\x02 \x01(\t\"Z\n\x0cSQLCommitMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12$\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x16.proto_types.SQLCommit\"a\n\rColTypeChange\x12\x11\n\torig_type\x18\x01 \x01(\t\x12\x10\n\x08new_type\x18\x02 \x01(\t\x12+\n\x05table\x18\x03 \x01(\x0b\x32\x1c.proto_types.ReferenceKeyMsg\"b\n\x10\x43olTypeChangeMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12(\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1a.proto_types.ColTypeChange\"@\n\x0eSchemaCreation\x12.\n\x08relation\x18\x01 \x01(\x0b\x32\x1c.proto_types.ReferenceKeyMsg\"d\n\x11SchemaCreationMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12)\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1b.proto_types.SchemaCreation\"<\n\nSchemaDrop\x12.\n\x08relation\x18\x01 \x01(\x0b\x32\x1c.proto_types.ReferenceKeyMsg\"\\\n\rSchemaDropMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12%\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x17.proto_types.SchemaDrop\"\xde\x01\n\x0b\x43\x61\x63heAction\x12\x0e\n\x06\x61\x63tion\x18\x01 \x01(\t\x12-\n\x07ref_key\x18\x02 \x01(\x0b\x32\x1c.proto_types.ReferenceKeyMsg\x12/\n\tref_key_2\x18\x03 \x01(\x0b\x32\x1c.proto_types.ReferenceKeyMsg\x12/\n\tref_key_3\x18\x04 \x01(\x0b\x32\x1c.proto_types.ReferenceKeyMsg\x12.\n\x08ref_list\x18\x05 \x03(\x0b\x32\x1c.proto_types.ReferenceKeyMsg\"^\n\x0e\x43\x61\x63heActionMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12&\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x18.proto_types.CacheAction\"\x98\x01\n\x0e\x43\x61\x63heDumpGraph\x12\x33\n\x04\x64ump\x18\x01 \x03(\x0b\x32%.proto_types.CacheDumpGraph.DumpEntry\x12\x14\n\x0c\x62\x65\x66ore_after\x18\x02 \x01(\t\x12\x0e\n\x06\x61\x63tion\x18\x03 \x01(\t\x1a+\n\tDumpEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"d\n\x11\x43\x61\x63heDumpGraphMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12)\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1b.proto_types.CacheDumpGraph\"B\n\x11\x41\x64\x61pterRegistered\x12\x14\n\x0c\x61\x64\x61pter_name\x18\x01 \x01(\t\x12\x17\n\x0f\x61\x64\x61pter_version\x18\x02 \x01(\t\"j\n\x14\x41\x64\x61pterRegisteredMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12,\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1e.proto_types.AdapterRegistered\"!\n\x12\x41\x64\x61pterImportError\x12\x0b\n\x03\x65xc\x18\x01 \x01(\t\"l\n\x15\x41\x64\x61pterImportErrorMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12-\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1f.proto_types.AdapterImportError\"#\n\x0fPluginLoadError\x12\x10\n\x08\x65xc_info\x18\x01 \x01(\t\"f\n\x12PluginLoadErrorMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12*\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1c.proto_types.PluginLoadError\"Z\n\x14NewConnectionOpening\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12\x18\n\x10\x63onnection_state\x18\x02 \x01(\t\"p\n\x17NewConnectionOpeningMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12/\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32!.proto_types.NewConnectionOpening\"8\n\rCodeExecution\x12\x11\n\tconn_name\x18\x01 \x01(\t\x12\x14\n\x0c\x63ode_content\x18\x02 \x01(\t\"b\n\x10\x43odeExecutionMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12(\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1a.proto_types.CodeExecution\"6\n\x13\x43odeExecutionStatus\x12\x0e\n\x06status\x18\x01 \x01(\t\x12\x0f\n\x07\x65lapsed\x18\x02 \x01(\x02\"n\n\x16\x43odeExecutionStatusMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12.\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32 .proto_types.CodeExecutionStatus\"%\n\x16\x43\x61talogGenerationError\x12\x0b\n\x03\x65xc\x18\x01 \x01(\t\"t\n\x19\x43\x61talogGenerationErrorMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x31\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32#.proto_types.CatalogGenerationError\"-\n\x13WriteCatalogFailure\x12\x16\n\x0enum_exceptions\x18\x01 \x01(\x05\"n\n\x16WriteCatalogFailureMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12.\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32 .proto_types.WriteCatalogFailure\"\x1e\n\x0e\x43\x61talogWritten\x12\x0c\n\x04path\x18\x01 \x01(\t\"d\n\x11\x43\x61talogWrittenMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12)\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1b.proto_types.CatalogWritten\"\x14\n\x12\x43\x61nnotGenerateDocs\"l\n\x15\x43\x61nnotGenerateDocsMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12-\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1f.proto_types.CannotGenerateDocs\"\x11\n\x0f\x42uildingCatalog\"f\n\x12\x42uildingCatalogMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12*\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1c.proto_types.BuildingCatalog\"-\n\x18\x44\x61tabaseErrorRunningHook\x12\x11\n\thook_type\x18\x01 \x01(\t\"x\n\x1b\x44\x61tabaseErrorRunningHookMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x33\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32%.proto_types.DatabaseErrorRunningHook\"4\n\x0cHooksRunning\x12\x11\n\tnum_hooks\x18\x01 \x01(\x05\x12\x11\n\thook_type\x18\x02 \x01(\t\"`\n\x0fHooksRunningMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\'\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x19.proto_types.HooksRunning\"T\n\x14\x46inishedRunningStats\x12\x11\n\tstat_line\x18\x01 \x01(\t\x12\x11\n\texecution\x18\x02 \x01(\t\x12\x16\n\x0e\x65xecution_time\x18\x03 \x01(\x02\"p\n\x17\x46inishedRunningStatsMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12/\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32!.proto_types.FinishedRunningStats\"<\n\x15\x43onstraintNotEnforced\x12\x12\n\nconstraint\x18\x01 \x01(\t\x12\x0f\n\x07\x61\x64\x61pter\x18\x02 \x01(\t\"r\n\x18\x43onstraintNotEnforcedMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x30\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\".proto_types.ConstraintNotEnforced\"=\n\x16\x43onstraintNotSupported\x12\x12\n\nconstraint\x18\x01 \x01(\t\x12\x0f\n\x07\x61\x64\x61pter\x18\x02 \x01(\t\"t\n\x19\x43onstraintNotSupportedMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x31\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32#.proto_types.ConstraintNotSupported\"7\n\x12InputFileDiffError\x12\x10\n\x08\x63\x61tegory\x18\x01 \x01(\t\x12\x0f\n\x07\x66ile_id\x18\x02 \x01(\t\"l\n\x15InputFileDiffErrorMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12-\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1f.proto_types.InputFileDiffError\"?\n\x14InvalidValueForField\x12\x12\n\nfield_name\x18\x01 \x01(\t\x12\x13\n\x0b\x66ield_value\x18\x02 \x01(\t\"p\n\x17InvalidValueForFieldMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12/\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32!.proto_types.InvalidValueForField\"Q\n\x11ValidationWarning\x12\x15\n\rresource_type\x18\x01 \x01(\t\x12\x12\n\nfield_name\x18\x02 \x01(\t\x12\x11\n\tnode_name\x18\x03 \x01(\t\"j\n\x14ValidationWarningMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12,\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1e.proto_types.ValidationWarning\"!\n\x11ParsePerfInfoPath\x12\x0c\n\x04path\x18\x01 \x01(\t\"j\n\x14ParsePerfInfoPathMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12,\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1e.proto_types.ParsePerfInfoPath\"1\n!PartialParsingErrorProcessingFile\x12\x0c\n\x04\x66ile\x18\x01 \x01(\t\"\x8a\x01\n$PartialParsingErrorProcessingFileMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12<\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32..proto_types.PartialParsingErrorProcessingFile\"\x86\x01\n\x13PartialParsingError\x12?\n\x08\x65xc_info\x18\x01 \x03(\x0b\x32-.proto_types.PartialParsingError.ExcInfoEntry\x1a.\n\x0c\x45xcInfoEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"n\n\x16PartialParsingErrorMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12.\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32 .proto_types.PartialParsingError\"\x1b\n\x19PartialParsingSkipParsing\"z\n\x1cPartialParsingSkipParsingMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x34\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32&.proto_types.PartialParsingSkipParsing\"&\n\x14UnableToPartialParse\x12\x0e\n\x06reason\x18\x01 \x01(\t\"p\n\x17UnableToPartialParseMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12/\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32!.proto_types.UnableToPartialParse\"f\n\x12StateCheckVarsHash\x12\x10\n\x08\x63hecksum\x18\x01 \x01(\t\x12\x0c\n\x04vars\x18\x02 \x01(\t\x12\x0f\n\x07profile\x18\x03 \x01(\t\x12\x0e\n\x06target\x18\x04 \x01(\t\x12\x0f\n\x07version\x18\x05 \x01(\t\"l\n\x15StateCheckVarsHashMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12-\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1f.proto_types.StateCheckVarsHash\"\x1a\n\x18PartialParsingNotEnabled\"x\n\x1bPartialParsingNotEnabledMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x33\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32%.proto_types.PartialParsingNotEnabled\"C\n\x14ParsedFileLoadFailed\x12\x0c\n\x04path\x18\x01 \x01(\t\x12\x0b\n\x03\x65xc\x18\x02 \x01(\t\x12\x10\n\x08\x65xc_info\x18\x03 \x01(\t\"p\n\x17ParsedFileLoadFailedMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12/\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32!.proto_types.ParsedFileLoadFailed\"H\n\x15PartialParsingEnabled\x12\x0f\n\x07\x64\x65leted\x18\x01 \x01(\x05\x12\r\n\x05\x61\x64\x64\x65\x64\x18\x02 \x01(\x05\x12\x0f\n\x07\x63hanged\x18\x03 \x01(\x05\"r\n\x18PartialParsingEnabledMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x30\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\".proto_types.PartialParsingEnabled\"8\n\x12PartialParsingFile\x12\x0f\n\x07\x66ile_id\x18\x01 \x01(\t\x12\x11\n\toperation\x18\x02 \x01(\t\"l\n\x15PartialParsingFileMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12-\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1f.proto_types.PartialParsingFile\"\xaf\x01\n\x1fInvalidDisabledTargetInTestNode\x12\x1b\n\x13resource_type_title\x18\x01 \x01(\t\x12\x11\n\tunique_id\x18\x02 \x01(\t\x12\x1a\n\x12original_file_path\x18\x03 \x01(\t\x12\x13\n\x0btarget_kind\x18\x04 \x01(\t\x12\x13\n\x0btarget_name\x18\x05 \x01(\t\x12\x16\n\x0etarget_package\x18\x06 \x01(\t\"\x86\x01\n\"InvalidDisabledTargetInTestNodeMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12:\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32,.proto_types.InvalidDisabledTargetInTestNode\"7\n\x18UnusedResourceConfigPath\x12\x1b\n\x13unused_config_paths\x18\x01 \x03(\t\"x\n\x1bUnusedResourceConfigPathMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x33\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32%.proto_types.UnusedResourceConfigPath\"3\n\rSeedIncreased\x12\x14\n\x0cpackage_name\x18\x01 \x01(\t\x12\x0c\n\x04name\x18\x02 \x01(\t\"b\n\x10SeedIncreasedMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12(\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1a.proto_types.SeedIncreased\">\n\x18SeedExceedsLimitSamePath\x12\x14\n\x0cpackage_name\x18\x01 \x01(\t\x12\x0c\n\x04name\x18\x02 \x01(\t\"x\n\x1bSeedExceedsLimitSamePathMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x33\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32%.proto_types.SeedExceedsLimitSamePath\"D\n\x1eSeedExceedsLimitAndPathChanged\x12\x14\n\x0cpackage_name\x18\x01 \x01(\t\x12\x0c\n\x04name\x18\x02 \x01(\t\"\x84\x01\n!SeedExceedsLimitAndPathChangedMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x39\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32+.proto_types.SeedExceedsLimitAndPathChanged\"\\\n\x1fSeedExceedsLimitChecksumChanged\x12\x14\n\x0cpackage_name\x18\x01 \x01(\t\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x15\n\rchecksum_name\x18\x03 \x01(\t\"\x86\x01\n\"SeedExceedsLimitChecksumChangedMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12:\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32,.proto_types.SeedExceedsLimitChecksumChanged\"%\n\x0cUnusedTables\x12\x15\n\runused_tables\x18\x01 \x03(\t\"`\n\x0fUnusedTablesMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\'\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x19.proto_types.UnusedTables\"\x87\x01\n\x17WrongResourceSchemaFile\x12\x12\n\npatch_name\x18\x01 \x01(\t\x12\x15\n\rresource_type\x18\x02 \x01(\t\x12\x1c\n\x14plural_resource_type\x18\x03 \x01(\t\x12\x10\n\x08yaml_key\x18\x04 \x01(\t\x12\x11\n\tfile_path\x18\x05 \x01(\t\"v\n\x1aWrongResourceSchemaFileMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x32\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32$.proto_types.WrongResourceSchemaFile\"K\n\x10NoNodeForYamlKey\x12\x12\n\npatch_name\x18\x01 \x01(\t\x12\x10\n\x08yaml_key\x18\x02 \x01(\t\x12\x11\n\tfile_path\x18\x03 \x01(\t\"h\n\x13NoNodeForYamlKeyMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12+\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1d.proto_types.NoNodeForYamlKey\"+\n\x15MacroNotFoundForPatch\x12\x12\n\npatch_name\x18\x01 \x01(\t\"r\n\x18MacroNotFoundForPatchMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x30\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\".proto_types.MacroNotFoundForPatch\"\xb8\x01\n\x16NodeNotFoundOrDisabled\x12\x1a\n\x12original_file_path\x18\x01 \x01(\t\x12\x11\n\tunique_id\x18\x02 \x01(\t\x12\x1b\n\x13resource_type_title\x18\x03 \x01(\t\x12\x13\n\x0btarget_name\x18\x04 \x01(\t\x12\x13\n\x0btarget_kind\x18\x05 \x01(\t\x12\x16\n\x0etarget_package\x18\x06 \x01(\t\x12\x10\n\x08\x64isabled\x18\x07 \x01(\t\"t\n\x19NodeNotFoundOrDisabledMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x31\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32#.proto_types.NodeNotFoundOrDisabled\"H\n\x0fJinjaLogWarning\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12\x0b\n\x03msg\x18\x02 \x01(\t\"f\n\x12JinjaLogWarningMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12*\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1c.proto_types.JinjaLogWarning\"E\n\x0cJinjaLogInfo\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12\x0b\n\x03msg\x18\x02 \x01(\t\"`\n\x0fJinjaLogInfoMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\'\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x19.proto_types.JinjaLogInfo\"F\n\rJinjaLogDebug\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12\x0b\n\x03msg\x18\x02 \x01(\t\"b\n\x10JinjaLogDebugMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12(\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1a.proto_types.JinjaLogDebug\"\xae\x01\n\x1eUnpinnedRefNewVersionAvailable\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12\x15\n\rref_node_name\x18\x02 \x01(\t\x12\x18\n\x10ref_node_package\x18\x03 \x01(\t\x12\x18\n\x10ref_node_version\x18\x04 \x01(\t\x12\x17\n\x0fref_max_version\x18\x05 \x01(\t\"\x84\x01\n!UnpinnedRefNewVersionAvailableMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x39\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32+.proto_types.UnpinnedRefNewVersionAvailable\"V\n\x0f\x44\x65precatedModel\x12\x12\n\nmodel_name\x18\x01 \x01(\t\x12\x15\n\rmodel_version\x18\x02 \x01(\t\x12\x18\n\x10\x64\x65precation_date\x18\x03 \x01(\t\"f\n\x12\x44\x65precatedModelMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12*\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1c.proto_types.DeprecatedModel\"\xc6\x01\n\x1cUpcomingReferenceDeprecation\x12\x12\n\nmodel_name\x18\x01 \x01(\t\x12\x19\n\x11ref_model_package\x18\x02 \x01(\t\x12\x16\n\x0eref_model_name\x18\x03 \x01(\t\x12\x19\n\x11ref_model_version\x18\x04 \x01(\t\x12 \n\x18ref_model_latest_version\x18\x05 \x01(\t\x12\"\n\x1aref_model_deprecation_date\x18\x06 \x01(\t\"\x80\x01\n\x1fUpcomingReferenceDeprecationMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x37\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32).proto_types.UpcomingReferenceDeprecation\"\xbd\x01\n\x13\x44\x65precatedReference\x12\x12\n\nmodel_name\x18\x01 \x01(\t\x12\x19\n\x11ref_model_package\x18\x02 \x01(\t\x12\x16\n\x0eref_model_name\x18\x03 \x01(\t\x12\x19\n\x11ref_model_version\x18\x04 \x01(\t\x12 \n\x18ref_model_latest_version\x18\x05 \x01(\t\x12\"\n\x1aref_model_deprecation_date\x18\x06 \x01(\t\"n\n\x16\x44\x65precatedReferenceMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12.\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32 .proto_types.DeprecatedReference\"<\n$UnsupportedConstraintMaterialization\x12\x14\n\x0cmaterialized\x18\x01 \x01(\t\"\x90\x01\n\'UnsupportedConstraintMaterializationMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12?\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x31.proto_types.UnsupportedConstraintMaterialization\"/\n\x1dGitSparseCheckoutSubdirectory\x12\x0e\n\x06subdir\x18\x01 \x01(\t\"\x82\x01\n GitSparseCheckoutSubdirectoryMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x38\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32*.proto_types.GitSparseCheckoutSubdirectory\"/\n\x1bGitProgressCheckoutRevision\x12\x10\n\x08revision\x18\x01 \x01(\t\"~\n\x1eGitProgressCheckoutRevisionMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x36\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32(.proto_types.GitProgressCheckoutRevision\"4\n%GitProgressUpdatingExistingDependency\x12\x0b\n\x03\x64ir\x18\x01 \x01(\t\"\x92\x01\n(GitProgressUpdatingExistingDependencyMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12@\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x32.proto_types.GitProgressUpdatingExistingDependency\".\n\x1fGitProgressPullingNewDependency\x12\x0b\n\x03\x64ir\x18\x01 \x01(\t\"\x86\x01\n\"GitProgressPullingNewDependencyMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12:\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32,.proto_types.GitProgressPullingNewDependency\"\x1d\n\x0eGitNothingToDo\x12\x0b\n\x03sha\x18\x01 \x01(\t\"d\n\x11GitNothingToDoMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12)\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1b.proto_types.GitNothingToDo\"E\n\x1fGitProgressUpdatedCheckoutRange\x12\x11\n\tstart_sha\x18\x01 \x01(\t\x12\x0f\n\x07\x65nd_sha\x18\x02 \x01(\t\"\x86\x01\n\"GitProgressUpdatedCheckoutRangeMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12:\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32,.proto_types.GitProgressUpdatedCheckoutRange\"*\n\x17GitProgressCheckedOutAt\x12\x0f\n\x07\x65nd_sha\x18\x01 \x01(\t\"v\n\x1aGitProgressCheckedOutAtMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x32\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32$.proto_types.GitProgressCheckedOutAt\")\n\x1aRegistryProgressGETRequest\x12\x0b\n\x03url\x18\x01 \x01(\t\"|\n\x1dRegistryProgressGETRequestMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x35\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\'.proto_types.RegistryProgressGETRequest\"=\n\x1bRegistryProgressGETResponse\x12\x0b\n\x03url\x18\x01 \x01(\t\x12\x11\n\tresp_code\x18\x02 \x01(\x05\"~\n\x1eRegistryProgressGETResponseMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x36\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32(.proto_types.RegistryProgressGETResponse\"_\n\x1dSelectorReportInvalidSelector\x12\x17\n\x0fvalid_selectors\x18\x01 \x01(\t\x12\x13\n\x0bspec_method\x18\x02 \x01(\t\x12\x10\n\x08raw_spec\x18\x03 \x01(\t\"\x82\x01\n SelectorReportInvalidSelectorMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x38\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32*.proto_types.SelectorReportInvalidSelector\"\x15\n\x13\x44\x65psNoPackagesFound\"n\n\x16\x44\x65psNoPackagesFoundMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12.\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32 .proto_types.DepsNoPackagesFound\"/\n\x17\x44\x65psStartPackageInstall\x12\x14\n\x0cpackage_name\x18\x01 \x01(\t\"v\n\x1a\x44\x65psStartPackageInstallMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x32\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32$.proto_types.DepsStartPackageInstall\"\'\n\x0f\x44\x65psInstallInfo\x12\x14\n\x0cversion_name\x18\x01 \x01(\t\"f\n\x12\x44\x65psInstallInfoMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12*\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1c.proto_types.DepsInstallInfo\"-\n\x13\x44\x65psUpdateAvailable\x12\x16\n\x0eversion_latest\x18\x01 \x01(\t\"n\n\x16\x44\x65psUpdateAvailableMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12.\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32 .proto_types.DepsUpdateAvailable\"\x0e\n\x0c\x44\x65psUpToDate\"`\n\x0f\x44\x65psUpToDateMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\'\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x19.proto_types.DepsUpToDate\",\n\x14\x44\x65psListSubdirectory\x12\x14\n\x0csubdirectory\x18\x01 \x01(\t\"p\n\x17\x44\x65psListSubdirectoryMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12/\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32!.proto_types.DepsListSubdirectory\".\n\x1a\x44\x65psNotifyUpdatesAvailable\x12\x10\n\x08packages\x18\x01 \x03(\t\"|\n\x1d\x44\x65psNotifyUpdatesAvailableMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x35\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\'.proto_types.DepsNotifyUpdatesAvailable\"1\n\x11RetryExternalCall\x12\x0f\n\x07\x61ttempt\x18\x01 \x01(\x05\x12\x0b\n\x03max\x18\x02 \x01(\x05\"j\n\x14RetryExternalCallMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12,\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1e.proto_types.RetryExternalCall\"#\n\x14RecordRetryException\x12\x0b\n\x03\x65xc\x18\x01 \x01(\t\"p\n\x17RecordRetryExceptionMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12/\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32!.proto_types.RecordRetryException\".\n\x1fRegistryIndexProgressGETRequest\x12\x0b\n\x03url\x18\x01 \x01(\t\"\x86\x01\n\"RegistryIndexProgressGETRequestMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12:\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32,.proto_types.RegistryIndexProgressGETRequest\"B\n RegistryIndexProgressGETResponse\x12\x0b\n\x03url\x18\x01 \x01(\t\x12\x11\n\tresp_code\x18\x02 \x01(\x05\"\x88\x01\n#RegistryIndexProgressGETResponseMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12;\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32-.proto_types.RegistryIndexProgressGETResponse\"2\n\x1eRegistryResponseUnexpectedType\x12\x10\n\x08response\x18\x01 \x01(\t\"\x84\x01\n!RegistryResponseUnexpectedTypeMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x39\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32+.proto_types.RegistryResponseUnexpectedType\"2\n\x1eRegistryResponseMissingTopKeys\x12\x10\n\x08response\x18\x01 \x01(\t\"\x84\x01\n!RegistryResponseMissingTopKeysMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x39\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32+.proto_types.RegistryResponseMissingTopKeys\"5\n!RegistryResponseMissingNestedKeys\x12\x10\n\x08response\x18\x01 \x01(\t\"\x8a\x01\n$RegistryResponseMissingNestedKeysMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12<\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32..proto_types.RegistryResponseMissingNestedKeys\"3\n\x1fRegistryResponseExtraNestedKeys\x12\x10\n\x08response\x18\x01 \x01(\t\"\x86\x01\n\"RegistryResponseExtraNestedKeysMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12:\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32,.proto_types.RegistryResponseExtraNestedKeys\"(\n\x18\x44\x65psSetDownloadDirectory\x12\x0c\n\x04path\x18\x01 \x01(\t\"x\n\x1b\x44\x65psSetDownloadDirectoryMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x33\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32%.proto_types.DepsSetDownloadDirectory\"-\n\x0c\x44\x65psUnpinned\x12\x10\n\x08revision\x18\x01 \x01(\t\x12\x0b\n\x03git\x18\x02 \x01(\t\"`\n\x0f\x44\x65psUnpinnedMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\'\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x19.proto_types.DepsUnpinned\"/\n\x1bNoNodesForSelectionCriteria\x12\x10\n\x08spec_raw\x18\x01 \x01(\t\"~\n\x1eNoNodesForSelectionCriteriaMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x36\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32(.proto_types.NoNodesForSelectionCriteria\"*\n\x1bRunningOperationCaughtError\x12\x0b\n\x03\x65xc\x18\x01 \x01(\t\"~\n\x1eRunningOperationCaughtErrorMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x36\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32(.proto_types.RunningOperationCaughtError\"\x11\n\x0f\x43ompileComplete\"f\n\x12\x43ompileCompleteMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12*\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1c.proto_types.CompileComplete\"\x18\n\x16\x46reshnessCheckComplete\"t\n\x19\x46reshnessCheckCompleteMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x31\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32#.proto_types.FreshnessCheckComplete\"\x1c\n\nSeedHeader\x12\x0e\n\x06header\x18\x01 \x01(\t\"\\\n\rSeedHeaderMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12%\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x17.proto_types.SeedHeader\"3\n\x12SQLRunnerException\x12\x0b\n\x03\x65xc\x18\x01 \x01(\t\x12\x10\n\x08\x65xc_info\x18\x02 \x01(\t\"l\n\x15SQLRunnerExceptionMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12-\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1f.proto_types.SQLRunnerException\"\xa8\x01\n\rLogTestResult\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x0e\n\x06status\x18\x03 \x01(\t\x12\r\n\x05index\x18\x04 \x01(\x05\x12\x12\n\nnum_models\x18\x05 \x01(\x05\x12\x16\n\x0e\x65xecution_time\x18\x06 \x01(\x02\x12\x14\n\x0cnum_failures\x18\x07 \x01(\x05\"b\n\x10LogTestResultMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12(\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1a.proto_types.LogTestResult\"k\n\x0cLogStartLine\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12\x13\n\x0b\x64\x65scription\x18\x02 \x01(\t\x12\r\n\x05index\x18\x03 \x01(\x05\x12\r\n\x05total\x18\x04 \x01(\x05\"`\n\x0fLogStartLineMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\'\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x19.proto_types.LogStartLine\"\x95\x01\n\x0eLogModelResult\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12\x13\n\x0b\x64\x65scription\x18\x02 \x01(\t\x12\x0e\n\x06status\x18\x03 \x01(\t\x12\r\n\x05index\x18\x04 \x01(\x05\x12\r\n\x05total\x18\x05 \x01(\x05\x12\x16\n\x0e\x65xecution_time\x18\x06 \x01(\x02\"d\n\x11LogModelResultMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12)\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1b.proto_types.LogModelResult\"\xfa\x01\n\x11LogSnapshotResult\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12\x13\n\x0b\x64\x65scription\x18\x02 \x01(\t\x12\x0e\n\x06status\x18\x03 \x01(\t\x12\r\n\x05index\x18\x04 \x01(\x05\x12\r\n\x05total\x18\x05 \x01(\x05\x12\x16\n\x0e\x65xecution_time\x18\x06 \x01(\x02\x12\x34\n\x03\x63\x66g\x18\x07 \x03(\x0b\x32\'.proto_types.LogSnapshotResult.CfgEntry\x1a*\n\x08\x43\x66gEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"j\n\x14LogSnapshotResultMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12,\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1e.proto_types.LogSnapshotResult\"\xb9\x01\n\rLogSeedResult\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12\x0e\n\x06status\x18\x02 \x01(\t\x12\x16\n\x0eresult_message\x18\x03 \x01(\t\x12\r\n\x05index\x18\x04 \x01(\x05\x12\r\n\x05total\x18\x05 \x01(\x05\x12\x16\n\x0e\x65xecution_time\x18\x06 \x01(\x02\x12\x0e\n\x06schema\x18\x07 \x01(\t\x12\x10\n\x08relation\x18\x08 \x01(\t\"b\n\x10LogSeedResultMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12(\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1a.proto_types.LogSeedResult\"\xad\x01\n\x12LogFreshnessResult\x12\x0e\n\x06status\x18\x01 \x01(\t\x12(\n\tnode_info\x18\x02 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12\r\n\x05index\x18\x03 \x01(\x05\x12\r\n\x05total\x18\x04 \x01(\x05\x12\x16\n\x0e\x65xecution_time\x18\x05 \x01(\x02\x12\x13\n\x0bsource_name\x18\x06 \x01(\t\x12\x12\n\ntable_name\x18\x07 \x01(\t\"l\n\x15LogFreshnessResultMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12-\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1f.proto_types.LogFreshnessResult\"\"\n\rLogCancelLine\x12\x11\n\tconn_name\x18\x01 \x01(\t\"b\n\x10LogCancelLineMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12(\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1a.proto_types.LogCancelLine\"\x1f\n\x0f\x44\x65\x66\x61ultSelector\x12\x0c\n\x04name\x18\x01 \x01(\t\"f\n\x12\x44\x65\x66\x61ultSelectorMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12*\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1c.proto_types.DefaultSelector\"5\n\tNodeStart\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\"Z\n\x0cNodeStartMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12$\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x16.proto_types.NodeStart\"g\n\x0cNodeFinished\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12-\n\nrun_result\x18\x02 \x01(\x0b\x32\x19.proto_types.RunResultMsg\"`\n\x0fNodeFinishedMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\'\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x19.proto_types.NodeFinished\"+\n\x1bQueryCancelationUnsupported\x12\x0c\n\x04type\x18\x01 \x01(\t\"~\n\x1eQueryCancelationUnsupportedMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x36\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32(.proto_types.QueryCancelationUnsupported\"O\n\x0f\x43oncurrencyLine\x12\x13\n\x0bnum_threads\x18\x01 \x01(\x05\x12\x13\n\x0btarget_name\x18\x02 \x01(\t\x12\x12\n\nnode_count\x18\x03 \x01(\x05\"f\n\x12\x43oncurrencyLineMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12*\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1c.proto_types.ConcurrencyLine\"E\n\x19WritingInjectedSQLForNode\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\"z\n\x1cWritingInjectedSQLForNodeMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x34\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32&.proto_types.WritingInjectedSQLForNode\"9\n\rNodeCompiling\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\"b\n\x10NodeCompilingMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12(\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1a.proto_types.NodeCompiling\"9\n\rNodeExecuting\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\"b\n\x10NodeExecutingMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12(\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1a.proto_types.NodeExecuting\"m\n\x10LogHookStartLine\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12\x11\n\tstatement\x18\x02 \x01(\t\x12\r\n\x05index\x18\x03 \x01(\x05\x12\r\n\x05total\x18\x04 \x01(\x05\"h\n\x13LogHookStartLineMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12+\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1d.proto_types.LogHookStartLine\"\x93\x01\n\x0eLogHookEndLine\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12\x11\n\tstatement\x18\x02 \x01(\t\x12\x0e\n\x06status\x18\x03 \x01(\t\x12\r\n\x05index\x18\x04 \x01(\x05\x12\r\n\x05total\x18\x05 \x01(\x05\x12\x16\n\x0e\x65xecution_time\x18\x06 \x01(\x02\"d\n\x11LogHookEndLineMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12)\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1b.proto_types.LogHookEndLine\"\x93\x01\n\x0fSkippingDetails\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12\x15\n\rresource_type\x18\x02 \x01(\t\x12\x0e\n\x06schema\x18\x03 \x01(\t\x12\x11\n\tnode_name\x18\x04 \x01(\t\x12\r\n\x05index\x18\x05 \x01(\x05\x12\r\n\x05total\x18\x06 \x01(\x05\"f\n\x12SkippingDetailsMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12*\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1c.proto_types.SkippingDetails\"\r\n\x0bNothingToDo\"^\n\x0eNothingToDoMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12&\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x18.proto_types.NothingToDo\",\n\x1dRunningOperationUncaughtError\x12\x0b\n\x03\x65xc\x18\x01 \x01(\t\"\x82\x01\n RunningOperationUncaughtErrorMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x38\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32*.proto_types.RunningOperationUncaughtError\"\x93\x01\n\x0c\x45ndRunResult\x12*\n\x07results\x18\x01 \x03(\x0b\x32\x19.proto_types.RunResultMsg\x12\x14\n\x0c\x65lapsed_time\x18\x02 \x01(\x02\x12\x30\n\x0cgenerated_at\x18\x03 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x0f\n\x07success\x18\x04 \x01(\x08\"`\n\x0f\x45ndRunResultMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\'\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x19.proto_types.EndRunResult\"\x11\n\x0fNoNodesSelected\"f\n\x12NoNodesSelectedMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12*\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1c.proto_types.NoNodesSelected\"w\n\x10\x43ommandCompleted\x12\x0f\n\x07\x63ommand\x18\x01 \x01(\t\x12\x0f\n\x07success\x18\x02 \x01(\x08\x12\x30\n\x0c\x63ompleted_at\x18\x03 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x0f\n\x07\x65lapsed\x18\x04 \x01(\x02\"h\n\x13\x43ommandCompletedMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12+\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1d.proto_types.CommandCompleted\"k\n\x08ShowNode\x12\x11\n\tnode_name\x18\x01 \x01(\t\x12\x0f\n\x07preview\x18\x02 \x01(\t\x12\x11\n\tis_inline\x18\x03 \x01(\x08\x12\x15\n\routput_format\x18\x04 \x01(\t\x12\x11\n\tunique_id\x18\x05 \x01(\t\"X\n\x0bShowNodeMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12#\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x15.proto_types.ShowNode\"p\n\x0c\x43ompiledNode\x12\x11\n\tnode_name\x18\x01 \x01(\t\x12\x10\n\x08\x63ompiled\x18\x02 \x01(\t\x12\x11\n\tis_inline\x18\x03 \x01(\x08\x12\x15\n\routput_format\x18\x04 \x01(\t\x12\x11\n\tunique_id\x18\x05 \x01(\t\"`\n\x0f\x43ompiledNodeMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\'\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x19.proto_types.CompiledNode\"b\n\x17\x43\x61tchableExceptionOnRun\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12\x0b\n\x03\x65xc\x18\x02 \x01(\t\x12\x10\n\x08\x65xc_info\x18\x03 \x01(\t\"v\n\x1a\x43\x61tchableExceptionOnRunMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x32\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32$.proto_types.CatchableExceptionOnRun\"5\n\x12InternalErrorOnRun\x12\x12\n\nbuild_path\x18\x01 \x01(\t\x12\x0b\n\x03\x65xc\x18\x02 \x01(\t\"l\n\x15InternalErrorOnRunMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12-\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1f.proto_types.InternalErrorOnRun\"K\n\x15GenericExceptionOnRun\x12\x12\n\nbuild_path\x18\x01 \x01(\t\x12\x11\n\tunique_id\x18\x02 \x01(\t\x12\x0b\n\x03\x65xc\x18\x03 \x01(\t\"r\n\x18GenericExceptionOnRunMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x30\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\".proto_types.GenericExceptionOnRun\"N\n\x1aNodeConnectionReleaseError\x12\x11\n\tnode_name\x18\x01 \x01(\t\x12\x0b\n\x03\x65xc\x18\x02 \x01(\t\x12\x10\n\x08\x65xc_info\x18\x03 \x01(\t\"|\n\x1dNodeConnectionReleaseErrorMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x35\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\'.proto_types.NodeConnectionReleaseError\"\x1f\n\nFoundStats\x12\x11\n\tstat_line\x18\x01 \x01(\t\"\\\n\rFoundStatsMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12%\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x17.proto_types.FoundStats\"\x17\n\x15MainKeyboardInterrupt\"r\n\x18MainKeyboardInterruptMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x30\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\".proto_types.MainKeyboardInterrupt\"#\n\x14MainEncounteredError\x12\x0b\n\x03\x65xc\x18\x01 \x01(\t\"p\n\x17MainEncounteredErrorMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12/\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32!.proto_types.MainEncounteredError\"%\n\x0eMainStackTrace\x12\x13\n\x0bstack_trace\x18\x01 \x01(\t\"d\n\x11MainStackTraceMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12)\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1b.proto_types.MainStackTrace\"@\n\x13SystemCouldNotWrite\x12\x0c\n\x04path\x18\x01 \x01(\t\x12\x0e\n\x06reason\x18\x02 \x01(\t\x12\x0b\n\x03\x65xc\x18\x03 \x01(\t\"n\n\x16SystemCouldNotWriteMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12.\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32 .proto_types.SystemCouldNotWrite\"!\n\x12SystemExecutingCmd\x12\x0b\n\x03\x63md\x18\x01 \x03(\t\"l\n\x15SystemExecutingCmdMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12-\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1f.proto_types.SystemExecutingCmd\"\x1c\n\x0cSystemStdOut\x12\x0c\n\x04\x62msg\x18\x01 \x01(\t\"`\n\x0fSystemStdOutMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\'\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x19.proto_types.SystemStdOut\"\x1c\n\x0cSystemStdErr\x12\x0c\n\x04\x62msg\x18\x01 \x01(\t\"`\n\x0fSystemStdErrMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\'\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x19.proto_types.SystemStdErr\",\n\x16SystemReportReturnCode\x12\x12\n\nreturncode\x18\x01 \x01(\x05\"t\n\x19SystemReportReturnCodeMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x31\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32#.proto_types.SystemReportReturnCode\"p\n\x13TimingInfoCollected\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12/\n\x0btiming_info\x18\x02 \x01(\x0b\x32\x1a.proto_types.TimingInfoMsg\"n\n\x16TimingInfoCollectedMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12.\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32 .proto_types.TimingInfoCollected\"&\n\x12LogDebugStackTrace\x12\x10\n\x08\x65xc_info\x18\x01 \x01(\t\"l\n\x15LogDebugStackTraceMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12-\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1f.proto_types.LogDebugStackTrace\"\x1e\n\x0e\x43heckCleanPath\x12\x0c\n\x04path\x18\x01 \x01(\t\"d\n\x11\x43heckCleanPathMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12)\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1b.proto_types.CheckCleanPath\" \n\x10\x43onfirmCleanPath\x12\x0c\n\x04path\x18\x01 \x01(\t\"h\n\x13\x43onfirmCleanPathMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12+\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1d.proto_types.ConfirmCleanPath\"\"\n\x12ProtectedCleanPath\x12\x0c\n\x04path\x18\x01 \x01(\t\"l\n\x15ProtectedCleanPathMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12-\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1f.proto_types.ProtectedCleanPath\"\x14\n\x12\x46inishedCleanPaths\"l\n\x15\x46inishedCleanPathsMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12-\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1f.proto_types.FinishedCleanPaths\"5\n\x0bOpenCommand\x12\x10\n\x08open_cmd\x18\x01 \x01(\t\x12\x14\n\x0cprofiles_dir\x18\x02 \x01(\t\"^\n\x0eOpenCommandMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12&\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x18.proto_types.OpenCommand\"\x19\n\nFormatting\x12\x0b\n\x03msg\x18\x01 \x01(\t\"\\\n\rFormattingMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12%\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x17.proto_types.Formatting\"0\n\x0fServingDocsPort\x12\x0f\n\x07\x61\x64\x64ress\x18\x01 \x01(\t\x12\x0c\n\x04port\x18\x02 \x01(\x05\"f\n\x12ServingDocsPortMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12*\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1c.proto_types.ServingDocsPort\"%\n\x15ServingDocsAccessInfo\x12\x0c\n\x04port\x18\x01 \x01(\t\"r\n\x18ServingDocsAccessInfoMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x30\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\".proto_types.ServingDocsAccessInfo\"\x15\n\x13ServingDocsExitInfo\"n\n\x16ServingDocsExitInfoMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12.\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32 .proto_types.ServingDocsExitInfo\"J\n\x10RunResultWarning\x12\x15\n\rresource_type\x18\x01 \x01(\t\x12\x11\n\tnode_name\x18\x02 \x01(\t\x12\x0c\n\x04path\x18\x03 \x01(\t\"h\n\x13RunResultWarningMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12+\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1d.proto_types.RunResultWarning\"J\n\x10RunResultFailure\x12\x15\n\rresource_type\x18\x01 \x01(\t\x12\x11\n\tnode_name\x18\x02 \x01(\t\x12\x0c\n\x04path\x18\x03 \x01(\t\"h\n\x13RunResultFailureMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12+\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1d.proto_types.RunResultFailure\"k\n\tStatsLine\x12\x30\n\x05stats\x18\x01 \x03(\x0b\x32!.proto_types.StatsLine.StatsEntry\x1a,\n\nStatsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\x05:\x02\x38\x01\"Z\n\x0cStatsLineMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12$\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x16.proto_types.StatsLine\"\x1d\n\x0eRunResultError\x12\x0b\n\x03msg\x18\x01 \x01(\t\"d\n\x11RunResultErrorMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12)\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1b.proto_types.RunResultError\")\n\x17RunResultErrorNoMessage\x12\x0e\n\x06status\x18\x01 \x01(\t\"v\n\x1aRunResultErrorNoMessageMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x32\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32$.proto_types.RunResultErrorNoMessage\"\x1f\n\x0fSQLCompiledPath\x12\x0c\n\x04path\x18\x01 \x01(\t\"f\n\x12SQLCompiledPathMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12*\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1c.proto_types.SQLCompiledPath\"-\n\x14\x43heckNodeTestFailure\x12\x15\n\rrelation_name\x18\x01 \x01(\t\"p\n\x17\x43heckNodeTestFailureMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12/\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32!.proto_types.CheckNodeTestFailure\"\"\n\x13\x46irstRunResultError\x12\x0b\n\x03msg\x18\x01 \x01(\t\"n\n\x16\x46irstRunResultErrorMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12.\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32 .proto_types.FirstRunResultError\"\'\n\x18\x41\x66terFirstRunResultError\x12\x0b\n\x03msg\x18\x01 \x01(\t\"x\n\x1b\x41\x66terFirstRunResultErrorMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x33\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32%.proto_types.AfterFirstRunResultError\"W\n\x0f\x45ndOfRunSummary\x12\x12\n\nnum_errors\x18\x01 \x01(\x05\x12\x14\n\x0cnum_warnings\x18\x02 \x01(\x05\x12\x1a\n\x12keyboard_interrupt\x18\x03 \x01(\x08\"f\n\x12\x45ndOfRunSummaryMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12*\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1c.proto_types.EndOfRunSummary\"U\n\x13LogSkipBecauseError\x12\x0e\n\x06schema\x18\x01 \x01(\t\x12\x10\n\x08relation\x18\x02 \x01(\t\x12\r\n\x05index\x18\x03 \x01(\x05\x12\r\n\x05total\x18\x04 \x01(\x05\"n\n\x16LogSkipBecauseErrorMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12.\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32 .proto_types.LogSkipBecauseError\"\x14\n\x12\x45nsureGitInstalled\"l\n\x15\x45nsureGitInstalledMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12-\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1f.proto_types.EnsureGitInstalled\"\x1a\n\x18\x44\x65psCreatingLocalSymlink\"x\n\x1b\x44\x65psCreatingLocalSymlinkMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x33\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32%.proto_types.DepsCreatingLocalSymlink\"\x19\n\x17\x44\x65psSymlinkNotAvailable\"v\n\x1a\x44\x65psSymlinkNotAvailableMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x32\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32$.proto_types.DepsSymlinkNotAvailable\"\x11\n\x0f\x44isableTracking\"f\n\x12\x44isableTrackingMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12*\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1c.proto_types.DisableTracking\"\x1e\n\x0cSendingEvent\x12\x0e\n\x06kwargs\x18\x01 \x01(\t\"`\n\x0fSendingEventMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\'\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x19.proto_types.SendingEvent\"\x12\n\x10SendEventFailure\"h\n\x13SendEventFailureMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12+\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1d.proto_types.SendEventFailure\"\r\n\x0b\x46lushEvents\"^\n\x0e\x46lushEventsMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12&\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x18.proto_types.FlushEvents\"\x14\n\x12\x46lushEventsFailure\"l\n\x15\x46lushEventsFailureMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12-\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1f.proto_types.FlushEventsFailure\"-\n\x19TrackingInitializeFailure\x12\x10\n\x08\x65xc_info\x18\x01 \x01(\t\"z\n\x1cTrackingInitializeFailureMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x34\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32&.proto_types.TrackingInitializeFailure\"&\n\x17RunResultWarningMessage\x12\x0b\n\x03msg\x18\x01 \x01(\t\"v\n\x1aRunResultWarningMessageMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x32\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32$.proto_types.RunResultWarningMessage\"\x1a\n\x0b\x44\x65\x62ugCmdOut\x12\x0b\n\x03msg\x18\x01 \x01(\t\"^\n\x0e\x44\x65\x62ugCmdOutMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12&\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x18.proto_types.DebugCmdOut\"\x1d\n\x0e\x44\x65\x62ugCmdResult\x12\x0b\n\x03msg\x18\x01 \x01(\t\"d\n\x11\x44\x65\x62ugCmdResultMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12)\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1b.proto_types.DebugCmdResult\"\x19\n\nListCmdOut\x12\x0b\n\x03msg\x18\x01 \x01(\t\"\\\n\rListCmdOutMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12%\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x17.proto_types.ListCmdOut\"\x13\n\x04Note\x12\x0b\n\x03msg\x18\x01 \x01(\t\"P\n\x07NoteMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x1f\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x11.proto_types.Noteb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0btypes.proto\x12\x0bproto_types\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1cgoogle/protobuf/struct.proto\"\x91\x02\n\tEventInfo\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x0c\n\x04\x63ode\x18\x02 \x01(\t\x12\x0b\n\x03msg\x18\x03 \x01(\t\x12\r\n\x05level\x18\x04 \x01(\t\x12\x15\n\rinvocation_id\x18\x05 \x01(\t\x12\x0b\n\x03pid\x18\x06 \x01(\x05\x12\x0e\n\x06thread\x18\x07 \x01(\t\x12&\n\x02ts\x18\x08 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x30\n\x05\x65xtra\x18\t \x03(\x0b\x32!.proto_types.EventInfo.ExtraEntry\x12\x10\n\x08\x63\x61tegory\x18\n \x01(\t\x1a,\n\nExtraEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"\x7f\n\rTimingInfoMsg\x12\x0c\n\x04name\x18\x01 \x01(\t\x12.\n\nstarted_at\x18\x02 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x30\n\x0c\x63ompleted_at\x18\x03 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\"V\n\x0cNodeRelation\x12\x10\n\x08\x64\x61tabase\x18\n \x01(\t\x12\x0e\n\x06schema\x18\x0b \x01(\t\x12\r\n\x05\x61lias\x18\x0c \x01(\t\x12\x15\n\rrelation_name\x18\r \x01(\t\"\x91\x02\n\x08NodeInfo\x12\x11\n\tnode_path\x18\x01 \x01(\t\x12\x11\n\tnode_name\x18\x02 \x01(\t\x12\x11\n\tunique_id\x18\x03 \x01(\t\x12\x15\n\rresource_type\x18\x04 \x01(\t\x12\x14\n\x0cmaterialized\x18\x05 \x01(\t\x12\x13\n\x0bnode_status\x18\x06 \x01(\t\x12\x17\n\x0fnode_started_at\x18\x07 \x01(\t\x12\x18\n\x10node_finished_at\x18\x08 \x01(\t\x12%\n\x04meta\x18\t \x01(\x0b\x32\x17.google.protobuf.Struct\x12\x30\n\rnode_relation\x18\n \x01(\x0b\x32\x19.proto_types.NodeRelation\"\xd1\x01\n\x0cRunResultMsg\x12\x0e\n\x06status\x18\x01 \x01(\t\x12\x0f\n\x07message\x18\x02 \x01(\t\x12/\n\x0btiming_info\x18\x03 \x03(\x0b\x32\x1a.proto_types.TimingInfoMsg\x12\x0e\n\x06thread\x18\x04 \x01(\t\x12\x16\n\x0e\x65xecution_time\x18\x05 \x01(\x02\x12\x31\n\x10\x61\x64\x61pter_response\x18\x06 \x01(\x0b\x32\x17.google.protobuf.Struct\x12\x14\n\x0cnum_failures\x18\x07 \x01(\x05\"G\n\x0fReferenceKeyMsg\x12\x10\n\x08\x64\x61tabase\x18\x01 \x01(\t\x12\x0e\n\x06schema\x18\x02 \x01(\t\x12\x12\n\nidentifier\x18\x03 \x01(\t\"6\n\x0eGenericMessage\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\"9\n\x11MainReportVersion\x12\x0f\n\x07version\x18\x01 \x01(\t\x12\x13\n\x0blog_version\x18\x02 \x01(\x05\"j\n\x14MainReportVersionMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12,\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1e.proto_types.MainReportVersion\"r\n\x0eMainReportArgs\x12\x33\n\x04\x61rgs\x18\x01 \x03(\x0b\x32%.proto_types.MainReportArgs.ArgsEntry\x1a+\n\tArgsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"d\n\x11MainReportArgsMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12)\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1b.proto_types.MainReportArgs\"+\n\x15MainTrackingUserState\x12\x12\n\nuser_state\x18\x01 \x01(\t\"r\n\x18MainTrackingUserStateMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x30\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\".proto_types.MainTrackingUserState\"5\n\x0fMergedFromState\x12\x12\n\nnum_merged\x18\x01 \x01(\x05\x12\x0e\n\x06sample\x18\x02 \x03(\t\"f\n\x12MergedFromStateMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12*\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1c.proto_types.MergedFromState\"A\n\x14MissingProfileTarget\x12\x14\n\x0cprofile_name\x18\x01 \x01(\t\x12\x13\n\x0btarget_name\x18\x02 \x01(\t\"p\n\x17MissingProfileTargetMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12/\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32!.proto_types.MissingProfileTarget\"(\n\x11InvalidOptionYAML\x12\x13\n\x0boption_name\x18\x01 \x01(\t\"j\n\x14InvalidOptionYAMLMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12,\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1e.proto_types.InvalidOptionYAML\"!\n\x12LogDbtProjectError\x12\x0b\n\x03\x65xc\x18\x01 \x01(\t\"l\n\x15LogDbtProjectErrorMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12-\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1f.proto_types.LogDbtProjectError\"3\n\x12LogDbtProfileError\x12\x0b\n\x03\x65xc\x18\x01 \x01(\t\x12\x10\n\x08profiles\x18\x02 \x03(\t\"l\n\x15LogDbtProfileErrorMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12-\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1f.proto_types.LogDbtProfileError\"!\n\x12StarterProjectPath\x12\x0b\n\x03\x64ir\x18\x01 \x01(\t\"l\n\x15StarterProjectPathMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12-\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1f.proto_types.StarterProjectPath\"$\n\x15\x43onfigFolderDirectory\x12\x0b\n\x03\x64ir\x18\x01 \x01(\t\"r\n\x18\x43onfigFolderDirectoryMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x30\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\".proto_types.ConfigFolderDirectory\"\'\n\x14NoSampleProfileFound\x12\x0f\n\x07\x61\x64\x61pter\x18\x01 \x01(\t\"p\n\x17NoSampleProfileFoundMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12/\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32!.proto_types.NoSampleProfileFound\"6\n\x18ProfileWrittenWithSample\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x0c\n\x04path\x18\x02 \x01(\t\"x\n\x1bProfileWrittenWithSampleMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x33\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32%.proto_types.ProfileWrittenWithSample\"B\n$ProfileWrittenWithTargetTemplateYAML\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x0c\n\x04path\x18\x02 \x01(\t\"\x90\x01\n\'ProfileWrittenWithTargetTemplateYAMLMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12?\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x31.proto_types.ProfileWrittenWithTargetTemplateYAML\"C\n%ProfileWrittenWithProjectTemplateYAML\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x0c\n\x04path\x18\x02 \x01(\t\"\x92\x01\n(ProfileWrittenWithProjectTemplateYAMLMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12@\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x32.proto_types.ProfileWrittenWithProjectTemplateYAML\"\x12\n\x10SettingUpProfile\"h\n\x13SettingUpProfileMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12+\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1d.proto_types.SettingUpProfile\"\x1c\n\x1aInvalidProfileTemplateYAML\"|\n\x1dInvalidProfileTemplateYAMLMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x35\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\'.proto_types.InvalidProfileTemplateYAML\"(\n\x18ProjectNameAlreadyExists\x12\x0c\n\x04name\x18\x01 \x01(\t\"x\n\x1bProjectNameAlreadyExistsMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x33\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32%.proto_types.ProjectNameAlreadyExists\"K\n\x0eProjectCreated\x12\x14\n\x0cproject_name\x18\x01 \x01(\t\x12\x10\n\x08\x64ocs_url\x18\x02 \x01(\t\x12\x11\n\tslack_url\x18\x03 \x01(\t\"d\n\x11ProjectCreatedMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12)\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1b.proto_types.ProjectCreated\"@\n\x1aPackageRedirectDeprecation\x12\x10\n\x08old_name\x18\x01 \x01(\t\x12\x10\n\x08new_name\x18\x02 \x01(\t\"|\n\x1dPackageRedirectDeprecationMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x35\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\'.proto_types.PackageRedirectDeprecation\"\x1f\n\x1dPackageInstallPathDeprecation\"\x82\x01\n PackageInstallPathDeprecationMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x38\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32*.proto_types.PackageInstallPathDeprecation\"H\n\x1b\x43onfigSourcePathDeprecation\x12\x17\n\x0f\x64\x65precated_path\x18\x01 \x01(\t\x12\x10\n\x08\x65xp_path\x18\x02 \x01(\t\"~\n\x1e\x43onfigSourcePathDeprecationMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x36\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32(.proto_types.ConfigSourcePathDeprecation\"F\n\x19\x43onfigDataPathDeprecation\x12\x17\n\x0f\x64\x65precated_path\x18\x01 \x01(\t\x12\x10\n\x08\x65xp_path\x18\x02 \x01(\t\"z\n\x1c\x43onfigDataPathDeprecationMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x34\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32&.proto_types.ConfigDataPathDeprecation\"?\n\x19\x41\x64\x61pterDeprecationWarning\x12\x10\n\x08old_name\x18\x01 \x01(\t\x12\x10\n\x08new_name\x18\x02 \x01(\t\"z\n\x1c\x41\x64\x61pterDeprecationWarningMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x34\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32&.proto_types.AdapterDeprecationWarning\".\n\x17MetricAttributesRenamed\x12\x13\n\x0bmetric_name\x18\x01 \x01(\t\"v\n\x1aMetricAttributesRenamedMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x32\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32$.proto_types.MetricAttributesRenamed\"+\n\x17\x45xposureNameDeprecation\x12\x10\n\x08\x65xposure\x18\x01 \x01(\t\"v\n\x1a\x45xposureNameDeprecationMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x32\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32$.proto_types.ExposureNameDeprecation\"^\n\x13InternalDeprecation\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x0e\n\x06reason\x18\x02 \x01(\t\x12\x18\n\x10suggested_action\x18\x03 \x01(\t\x12\x0f\n\x07version\x18\x04 \x01(\t\"n\n\x16InternalDeprecationMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12.\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32 .proto_types.InternalDeprecation\"@\n\x1a\x45nvironmentVariableRenamed\x12\x10\n\x08old_name\x18\x01 \x01(\t\x12\x10\n\x08new_name\x18\x02 \x01(\t\"|\n\x1d\x45nvironmentVariableRenamedMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x35\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\'.proto_types.EnvironmentVariableRenamed\"3\n\x18\x43onfigLogPathDeprecation\x12\x17\n\x0f\x64\x65precated_path\x18\x01 \x01(\t\"x\n\x1b\x43onfigLogPathDeprecationMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x33\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32%.proto_types.ConfigLogPathDeprecation\"6\n\x1b\x43onfigTargetPathDeprecation\x12\x17\n\x0f\x64\x65precated_path\x18\x01 \x01(\t\"~\n\x1e\x43onfigTargetPathDeprecationMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x36\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32(.proto_types.ConfigTargetPathDeprecation\"!\n\x1f\x43ollectFreshnessReturnSignature\"\x86\x01\n\"CollectFreshnessReturnSignatureMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12:\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32,.proto_types.CollectFreshnessReturnSignature\"\x87\x01\n\x11\x41\x64\x61pterEventDebug\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x10\n\x08\x62\x61se_msg\x18\x03 \x01(\t\x12(\n\x04\x61rgs\x18\x04 \x01(\x0b\x32\x1a.google.protobuf.ListValue\"j\n\x14\x41\x64\x61pterEventDebugMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12,\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1e.proto_types.AdapterEventDebug\"\x86\x01\n\x10\x41\x64\x61pterEventInfo\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x10\n\x08\x62\x61se_msg\x18\x03 \x01(\t\x12(\n\x04\x61rgs\x18\x04 \x01(\x0b\x32\x1a.google.protobuf.ListValue\"h\n\x13\x41\x64\x61pterEventInfoMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12+\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1d.proto_types.AdapterEventInfo\"\x89\x01\n\x13\x41\x64\x61pterEventWarning\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x10\n\x08\x62\x61se_msg\x18\x03 \x01(\t\x12(\n\x04\x61rgs\x18\x04 \x01(\x0b\x32\x1a.google.protobuf.ListValue\"n\n\x16\x41\x64\x61pterEventWarningMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12.\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32 .proto_types.AdapterEventWarning\"\x99\x01\n\x11\x41\x64\x61pterEventError\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x10\n\x08\x62\x61se_msg\x18\x03 \x01(\t\x12(\n\x04\x61rgs\x18\x04 \x01(\x0b\x32\x1a.google.protobuf.ListValue\x12\x10\n\x08\x65xc_info\x18\x05 \x01(\t\"j\n\x14\x41\x64\x61pterEventErrorMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12,\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1e.proto_types.AdapterEventError\"_\n\rNewConnection\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12\x11\n\tconn_type\x18\x02 \x01(\t\x12\x11\n\tconn_name\x18\x03 \x01(\t\"b\n\x10NewConnectionMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12(\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1a.proto_types.NewConnection\"=\n\x10\x43onnectionReused\x12\x11\n\tconn_name\x18\x01 \x01(\t\x12\x16\n\x0eorig_conn_name\x18\x02 \x01(\t\"h\n\x13\x43onnectionReusedMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12+\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1d.proto_types.ConnectionReused\"0\n\x1b\x43onnectionLeftOpenInCleanup\x12\x11\n\tconn_name\x18\x01 \x01(\t\"~\n\x1e\x43onnectionLeftOpenInCleanupMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x36\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32(.proto_types.ConnectionLeftOpenInCleanup\".\n\x19\x43onnectionClosedInCleanup\x12\x11\n\tconn_name\x18\x01 \x01(\t\"z\n\x1c\x43onnectionClosedInCleanupMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x34\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32&.proto_types.ConnectionClosedInCleanup\"_\n\x0eRollbackFailed\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12\x11\n\tconn_name\x18\x02 \x01(\t\x12\x10\n\x08\x65xc_info\x18\x03 \x01(\t\"d\n\x11RollbackFailedMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12)\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1b.proto_types.RollbackFailed\"O\n\x10\x43onnectionClosed\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12\x11\n\tconn_name\x18\x02 \x01(\t\"h\n\x13\x43onnectionClosedMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12+\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1d.proto_types.ConnectionClosed\"Q\n\x12\x43onnectionLeftOpen\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12\x11\n\tconn_name\x18\x02 \x01(\t\"l\n\x15\x43onnectionLeftOpenMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12-\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1f.proto_types.ConnectionLeftOpen\"G\n\x08Rollback\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12\x11\n\tconn_name\x18\x02 \x01(\t\"X\n\x0bRollbackMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12#\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x15.proto_types.Rollback\"@\n\tCacheMiss\x12\x11\n\tconn_name\x18\x01 \x01(\t\x12\x10\n\x08\x64\x61tabase\x18\x02 \x01(\t\x12\x0e\n\x06schema\x18\x03 \x01(\t\"Z\n\x0c\x43\x61\x63heMissMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12$\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x16.proto_types.CacheMiss\"b\n\rListRelations\x12\x10\n\x08\x64\x61tabase\x18\x01 \x01(\t\x12\x0e\n\x06schema\x18\x02 \x01(\t\x12/\n\trelations\x18\x03 \x03(\x0b\x32\x1c.proto_types.ReferenceKeyMsg\"b\n\x10ListRelationsMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12(\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1a.proto_types.ListRelations\"`\n\x0e\x43onnectionUsed\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12\x11\n\tconn_type\x18\x02 \x01(\t\x12\x11\n\tconn_name\x18\x03 \x01(\t\"d\n\x11\x43onnectionUsedMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12)\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1b.proto_types.ConnectionUsed\"T\n\x08SQLQuery\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12\x11\n\tconn_name\x18\x02 \x01(\t\x12\x0b\n\x03sql\x18\x03 \x01(\t\"X\n\x0bSQLQueryMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12#\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x15.proto_types.SQLQuery\"[\n\x0eSQLQueryStatus\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12\x0e\n\x06status\x18\x02 \x01(\t\x12\x0f\n\x07\x65lapsed\x18\x03 \x01(\x02\"d\n\x11SQLQueryStatusMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12)\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1b.proto_types.SQLQueryStatus\"H\n\tSQLCommit\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12\x11\n\tconn_name\x18\x02 \x01(\t\"Z\n\x0cSQLCommitMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12$\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x16.proto_types.SQLCommit\"a\n\rColTypeChange\x12\x11\n\torig_type\x18\x01 \x01(\t\x12\x10\n\x08new_type\x18\x02 \x01(\t\x12+\n\x05table\x18\x03 \x01(\x0b\x32\x1c.proto_types.ReferenceKeyMsg\"b\n\x10\x43olTypeChangeMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12(\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1a.proto_types.ColTypeChange\"@\n\x0eSchemaCreation\x12.\n\x08relation\x18\x01 \x01(\x0b\x32\x1c.proto_types.ReferenceKeyMsg\"d\n\x11SchemaCreationMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12)\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1b.proto_types.SchemaCreation\"<\n\nSchemaDrop\x12.\n\x08relation\x18\x01 \x01(\x0b\x32\x1c.proto_types.ReferenceKeyMsg\"\\\n\rSchemaDropMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12%\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x17.proto_types.SchemaDrop\"\xde\x01\n\x0b\x43\x61\x63heAction\x12\x0e\n\x06\x61\x63tion\x18\x01 \x01(\t\x12-\n\x07ref_key\x18\x02 \x01(\x0b\x32\x1c.proto_types.ReferenceKeyMsg\x12/\n\tref_key_2\x18\x03 \x01(\x0b\x32\x1c.proto_types.ReferenceKeyMsg\x12/\n\tref_key_3\x18\x04 \x01(\x0b\x32\x1c.proto_types.ReferenceKeyMsg\x12.\n\x08ref_list\x18\x05 \x03(\x0b\x32\x1c.proto_types.ReferenceKeyMsg\"^\n\x0e\x43\x61\x63heActionMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12&\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x18.proto_types.CacheAction\"\x98\x01\n\x0e\x43\x61\x63heDumpGraph\x12\x33\n\x04\x64ump\x18\x01 \x03(\x0b\x32%.proto_types.CacheDumpGraph.DumpEntry\x12\x14\n\x0c\x62\x65\x66ore_after\x18\x02 \x01(\t\x12\x0e\n\x06\x61\x63tion\x18\x03 \x01(\t\x1a+\n\tDumpEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"d\n\x11\x43\x61\x63heDumpGraphMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12)\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1b.proto_types.CacheDumpGraph\"B\n\x11\x41\x64\x61pterRegistered\x12\x14\n\x0c\x61\x64\x61pter_name\x18\x01 \x01(\t\x12\x17\n\x0f\x61\x64\x61pter_version\x18\x02 \x01(\t\"j\n\x14\x41\x64\x61pterRegisteredMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12,\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1e.proto_types.AdapterRegistered\"!\n\x12\x41\x64\x61pterImportError\x12\x0b\n\x03\x65xc\x18\x01 \x01(\t\"l\n\x15\x41\x64\x61pterImportErrorMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12-\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1f.proto_types.AdapterImportError\"#\n\x0fPluginLoadError\x12\x10\n\x08\x65xc_info\x18\x01 \x01(\t\"f\n\x12PluginLoadErrorMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12*\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1c.proto_types.PluginLoadError\"Z\n\x14NewConnectionOpening\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12\x18\n\x10\x63onnection_state\x18\x02 \x01(\t\"p\n\x17NewConnectionOpeningMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12/\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32!.proto_types.NewConnectionOpening\"8\n\rCodeExecution\x12\x11\n\tconn_name\x18\x01 \x01(\t\x12\x14\n\x0c\x63ode_content\x18\x02 \x01(\t\"b\n\x10\x43odeExecutionMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12(\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1a.proto_types.CodeExecution\"6\n\x13\x43odeExecutionStatus\x12\x0e\n\x06status\x18\x01 \x01(\t\x12\x0f\n\x07\x65lapsed\x18\x02 \x01(\x02\"n\n\x16\x43odeExecutionStatusMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12.\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32 .proto_types.CodeExecutionStatus\"%\n\x16\x43\x61talogGenerationError\x12\x0b\n\x03\x65xc\x18\x01 \x01(\t\"t\n\x19\x43\x61talogGenerationErrorMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x31\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32#.proto_types.CatalogGenerationError\"-\n\x13WriteCatalogFailure\x12\x16\n\x0enum_exceptions\x18\x01 \x01(\x05\"n\n\x16WriteCatalogFailureMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12.\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32 .proto_types.WriteCatalogFailure\"\x1e\n\x0e\x43\x61talogWritten\x12\x0c\n\x04path\x18\x01 \x01(\t\"d\n\x11\x43\x61talogWrittenMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12)\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1b.proto_types.CatalogWritten\"\x14\n\x12\x43\x61nnotGenerateDocs\"l\n\x15\x43\x61nnotGenerateDocsMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12-\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1f.proto_types.CannotGenerateDocs\"\x11\n\x0f\x42uildingCatalog\"f\n\x12\x42uildingCatalogMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12*\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1c.proto_types.BuildingCatalog\"-\n\x18\x44\x61tabaseErrorRunningHook\x12\x11\n\thook_type\x18\x01 \x01(\t\"x\n\x1b\x44\x61tabaseErrorRunningHookMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x33\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32%.proto_types.DatabaseErrorRunningHook\"4\n\x0cHooksRunning\x12\x11\n\tnum_hooks\x18\x01 \x01(\x05\x12\x11\n\thook_type\x18\x02 \x01(\t\"`\n\x0fHooksRunningMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\'\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x19.proto_types.HooksRunning\"T\n\x14\x46inishedRunningStats\x12\x11\n\tstat_line\x18\x01 \x01(\t\x12\x11\n\texecution\x18\x02 \x01(\t\x12\x16\n\x0e\x65xecution_time\x18\x03 \x01(\x02\"p\n\x17\x46inishedRunningStatsMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12/\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32!.proto_types.FinishedRunningStats\"<\n\x15\x43onstraintNotEnforced\x12\x12\n\nconstraint\x18\x01 \x01(\t\x12\x0f\n\x07\x61\x64\x61pter\x18\x02 \x01(\t\"r\n\x18\x43onstraintNotEnforcedMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x30\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\".proto_types.ConstraintNotEnforced\"=\n\x16\x43onstraintNotSupported\x12\x12\n\nconstraint\x18\x01 \x01(\t\x12\x0f\n\x07\x61\x64\x61pter\x18\x02 \x01(\t\"t\n\x19\x43onstraintNotSupportedMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x31\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32#.proto_types.ConstraintNotSupported\"7\n\x12InputFileDiffError\x12\x10\n\x08\x63\x61tegory\x18\x01 \x01(\t\x12\x0f\n\x07\x66ile_id\x18\x02 \x01(\t\"l\n\x15InputFileDiffErrorMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12-\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1f.proto_types.InputFileDiffError\"?\n\x14InvalidValueForField\x12\x12\n\nfield_name\x18\x01 \x01(\t\x12\x13\n\x0b\x66ield_value\x18\x02 \x01(\t\"p\n\x17InvalidValueForFieldMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12/\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32!.proto_types.InvalidValueForField\"Q\n\x11ValidationWarning\x12\x15\n\rresource_type\x18\x01 \x01(\t\x12\x12\n\nfield_name\x18\x02 \x01(\t\x12\x11\n\tnode_name\x18\x03 \x01(\t\"j\n\x14ValidationWarningMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12,\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1e.proto_types.ValidationWarning\"!\n\x11ParsePerfInfoPath\x12\x0c\n\x04path\x18\x01 \x01(\t\"j\n\x14ParsePerfInfoPathMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12,\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1e.proto_types.ParsePerfInfoPath\"1\n!PartialParsingErrorProcessingFile\x12\x0c\n\x04\x66ile\x18\x01 \x01(\t\"\x8a\x01\n$PartialParsingErrorProcessingFileMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12<\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32..proto_types.PartialParsingErrorProcessingFile\"\x86\x01\n\x13PartialParsingError\x12?\n\x08\x65xc_info\x18\x01 \x03(\x0b\x32-.proto_types.PartialParsingError.ExcInfoEntry\x1a.\n\x0c\x45xcInfoEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"n\n\x16PartialParsingErrorMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12.\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32 .proto_types.PartialParsingError\"\x1b\n\x19PartialParsingSkipParsing\"z\n\x1cPartialParsingSkipParsingMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x34\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32&.proto_types.PartialParsingSkipParsing\"&\n\x14UnableToPartialParse\x12\x0e\n\x06reason\x18\x01 \x01(\t\"p\n\x17UnableToPartialParseMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12/\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32!.proto_types.UnableToPartialParse\"f\n\x12StateCheckVarsHash\x12\x10\n\x08\x63hecksum\x18\x01 \x01(\t\x12\x0c\n\x04vars\x18\x02 \x01(\t\x12\x0f\n\x07profile\x18\x03 \x01(\t\x12\x0e\n\x06target\x18\x04 \x01(\t\x12\x0f\n\x07version\x18\x05 \x01(\t\"l\n\x15StateCheckVarsHashMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12-\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1f.proto_types.StateCheckVarsHash\"\x1a\n\x18PartialParsingNotEnabled\"x\n\x1bPartialParsingNotEnabledMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x33\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32%.proto_types.PartialParsingNotEnabled\"C\n\x14ParsedFileLoadFailed\x12\x0c\n\x04path\x18\x01 \x01(\t\x12\x0b\n\x03\x65xc\x18\x02 \x01(\t\x12\x10\n\x08\x65xc_info\x18\x03 \x01(\t\"p\n\x17ParsedFileLoadFailedMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12/\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32!.proto_types.ParsedFileLoadFailed\"H\n\x15PartialParsingEnabled\x12\x0f\n\x07\x64\x65leted\x18\x01 \x01(\x05\x12\r\n\x05\x61\x64\x64\x65\x64\x18\x02 \x01(\x05\x12\x0f\n\x07\x63hanged\x18\x03 \x01(\x05\"r\n\x18PartialParsingEnabledMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x30\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\".proto_types.PartialParsingEnabled\"8\n\x12PartialParsingFile\x12\x0f\n\x07\x66ile_id\x18\x01 \x01(\t\x12\x11\n\toperation\x18\x02 \x01(\t\"l\n\x15PartialParsingFileMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12-\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1f.proto_types.PartialParsingFile\"\xaf\x01\n\x1fInvalidDisabledTargetInTestNode\x12\x1b\n\x13resource_type_title\x18\x01 \x01(\t\x12\x11\n\tunique_id\x18\x02 \x01(\t\x12\x1a\n\x12original_file_path\x18\x03 \x01(\t\x12\x13\n\x0btarget_kind\x18\x04 \x01(\t\x12\x13\n\x0btarget_name\x18\x05 \x01(\t\x12\x16\n\x0etarget_package\x18\x06 \x01(\t\"\x86\x01\n\"InvalidDisabledTargetInTestNodeMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12:\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32,.proto_types.InvalidDisabledTargetInTestNode\"7\n\x18UnusedResourceConfigPath\x12\x1b\n\x13unused_config_paths\x18\x01 \x03(\t\"x\n\x1bUnusedResourceConfigPathMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x33\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32%.proto_types.UnusedResourceConfigPath\"3\n\rSeedIncreased\x12\x14\n\x0cpackage_name\x18\x01 \x01(\t\x12\x0c\n\x04name\x18\x02 \x01(\t\"b\n\x10SeedIncreasedMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12(\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1a.proto_types.SeedIncreased\">\n\x18SeedExceedsLimitSamePath\x12\x14\n\x0cpackage_name\x18\x01 \x01(\t\x12\x0c\n\x04name\x18\x02 \x01(\t\"x\n\x1bSeedExceedsLimitSamePathMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x33\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32%.proto_types.SeedExceedsLimitSamePath\"D\n\x1eSeedExceedsLimitAndPathChanged\x12\x14\n\x0cpackage_name\x18\x01 \x01(\t\x12\x0c\n\x04name\x18\x02 \x01(\t\"\x84\x01\n!SeedExceedsLimitAndPathChangedMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x39\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32+.proto_types.SeedExceedsLimitAndPathChanged\"\\\n\x1fSeedExceedsLimitChecksumChanged\x12\x14\n\x0cpackage_name\x18\x01 \x01(\t\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x15\n\rchecksum_name\x18\x03 \x01(\t\"\x86\x01\n\"SeedExceedsLimitChecksumChangedMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12:\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32,.proto_types.SeedExceedsLimitChecksumChanged\"%\n\x0cUnusedTables\x12\x15\n\runused_tables\x18\x01 \x03(\t\"`\n\x0fUnusedTablesMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\'\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x19.proto_types.UnusedTables\"\x87\x01\n\x17WrongResourceSchemaFile\x12\x12\n\npatch_name\x18\x01 \x01(\t\x12\x15\n\rresource_type\x18\x02 \x01(\t\x12\x1c\n\x14plural_resource_type\x18\x03 \x01(\t\x12\x10\n\x08yaml_key\x18\x04 \x01(\t\x12\x11\n\tfile_path\x18\x05 \x01(\t\"v\n\x1aWrongResourceSchemaFileMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x32\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32$.proto_types.WrongResourceSchemaFile\"K\n\x10NoNodeForYamlKey\x12\x12\n\npatch_name\x18\x01 \x01(\t\x12\x10\n\x08yaml_key\x18\x02 \x01(\t\x12\x11\n\tfile_path\x18\x03 \x01(\t\"h\n\x13NoNodeForYamlKeyMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12+\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1d.proto_types.NoNodeForYamlKey\"+\n\x15MacroNotFoundForPatch\x12\x12\n\npatch_name\x18\x01 \x01(\t\"r\n\x18MacroNotFoundForPatchMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x30\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\".proto_types.MacroNotFoundForPatch\"\xb8\x01\n\x16NodeNotFoundOrDisabled\x12\x1a\n\x12original_file_path\x18\x01 \x01(\t\x12\x11\n\tunique_id\x18\x02 \x01(\t\x12\x1b\n\x13resource_type_title\x18\x03 \x01(\t\x12\x13\n\x0btarget_name\x18\x04 \x01(\t\x12\x13\n\x0btarget_kind\x18\x05 \x01(\t\x12\x16\n\x0etarget_package\x18\x06 \x01(\t\x12\x10\n\x08\x64isabled\x18\x07 \x01(\t\"t\n\x19NodeNotFoundOrDisabledMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x31\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32#.proto_types.NodeNotFoundOrDisabled\"H\n\x0fJinjaLogWarning\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12\x0b\n\x03msg\x18\x02 \x01(\t\"f\n\x12JinjaLogWarningMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12*\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1c.proto_types.JinjaLogWarning\"E\n\x0cJinjaLogInfo\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12\x0b\n\x03msg\x18\x02 \x01(\t\"`\n\x0fJinjaLogInfoMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\'\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x19.proto_types.JinjaLogInfo\"F\n\rJinjaLogDebug\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12\x0b\n\x03msg\x18\x02 \x01(\t\"b\n\x10JinjaLogDebugMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12(\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1a.proto_types.JinjaLogDebug\"\xae\x01\n\x1eUnpinnedRefNewVersionAvailable\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12\x15\n\rref_node_name\x18\x02 \x01(\t\x12\x18\n\x10ref_node_package\x18\x03 \x01(\t\x12\x18\n\x10ref_node_version\x18\x04 \x01(\t\x12\x17\n\x0fref_max_version\x18\x05 \x01(\t\"\x84\x01\n!UnpinnedRefNewVersionAvailableMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x39\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32+.proto_types.UnpinnedRefNewVersionAvailable\"V\n\x0f\x44\x65precatedModel\x12\x12\n\nmodel_name\x18\x01 \x01(\t\x12\x15\n\rmodel_version\x18\x02 \x01(\t\x12\x18\n\x10\x64\x65precation_date\x18\x03 \x01(\t\"f\n\x12\x44\x65precatedModelMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12*\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1c.proto_types.DeprecatedModel\"\xc6\x01\n\x1cUpcomingReferenceDeprecation\x12\x12\n\nmodel_name\x18\x01 \x01(\t\x12\x19\n\x11ref_model_package\x18\x02 \x01(\t\x12\x16\n\x0eref_model_name\x18\x03 \x01(\t\x12\x19\n\x11ref_model_version\x18\x04 \x01(\t\x12 \n\x18ref_model_latest_version\x18\x05 \x01(\t\x12\"\n\x1aref_model_deprecation_date\x18\x06 \x01(\t\"\x80\x01\n\x1fUpcomingReferenceDeprecationMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x37\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32).proto_types.UpcomingReferenceDeprecation\"\xbd\x01\n\x13\x44\x65precatedReference\x12\x12\n\nmodel_name\x18\x01 \x01(\t\x12\x19\n\x11ref_model_package\x18\x02 \x01(\t\x12\x16\n\x0eref_model_name\x18\x03 \x01(\t\x12\x19\n\x11ref_model_version\x18\x04 \x01(\t\x12 \n\x18ref_model_latest_version\x18\x05 \x01(\t\x12\"\n\x1aref_model_deprecation_date\x18\x06 \x01(\t\"n\n\x16\x44\x65precatedReferenceMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12.\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32 .proto_types.DeprecatedReference\"<\n$UnsupportedConstraintMaterialization\x12\x14\n\x0cmaterialized\x18\x01 \x01(\t\"\x90\x01\n\'UnsupportedConstraintMaterializationMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12?\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x31.proto_types.UnsupportedConstraintMaterialization\"M\n\x14ParseInlineNodeError\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12\x0b\n\x03\x65xc\x18\x02 \x01(\t\"p\n\x17ParseInlineNodeErrorMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12/\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32!.proto_types.ParseInlineNodeError\"/\n\x1dGitSparseCheckoutSubdirectory\x12\x0e\n\x06subdir\x18\x01 \x01(\t\"\x82\x01\n GitSparseCheckoutSubdirectoryMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x38\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32*.proto_types.GitSparseCheckoutSubdirectory\"/\n\x1bGitProgressCheckoutRevision\x12\x10\n\x08revision\x18\x01 \x01(\t\"~\n\x1eGitProgressCheckoutRevisionMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x36\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32(.proto_types.GitProgressCheckoutRevision\"4\n%GitProgressUpdatingExistingDependency\x12\x0b\n\x03\x64ir\x18\x01 \x01(\t\"\x92\x01\n(GitProgressUpdatingExistingDependencyMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12@\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x32.proto_types.GitProgressUpdatingExistingDependency\".\n\x1fGitProgressPullingNewDependency\x12\x0b\n\x03\x64ir\x18\x01 \x01(\t\"\x86\x01\n\"GitProgressPullingNewDependencyMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12:\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32,.proto_types.GitProgressPullingNewDependency\"\x1d\n\x0eGitNothingToDo\x12\x0b\n\x03sha\x18\x01 \x01(\t\"d\n\x11GitNothingToDoMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12)\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1b.proto_types.GitNothingToDo\"E\n\x1fGitProgressUpdatedCheckoutRange\x12\x11\n\tstart_sha\x18\x01 \x01(\t\x12\x0f\n\x07\x65nd_sha\x18\x02 \x01(\t\"\x86\x01\n\"GitProgressUpdatedCheckoutRangeMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12:\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32,.proto_types.GitProgressUpdatedCheckoutRange\"*\n\x17GitProgressCheckedOutAt\x12\x0f\n\x07\x65nd_sha\x18\x01 \x01(\t\"v\n\x1aGitProgressCheckedOutAtMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x32\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32$.proto_types.GitProgressCheckedOutAt\")\n\x1aRegistryProgressGETRequest\x12\x0b\n\x03url\x18\x01 \x01(\t\"|\n\x1dRegistryProgressGETRequestMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x35\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\'.proto_types.RegistryProgressGETRequest\"=\n\x1bRegistryProgressGETResponse\x12\x0b\n\x03url\x18\x01 \x01(\t\x12\x11\n\tresp_code\x18\x02 \x01(\x05\"~\n\x1eRegistryProgressGETResponseMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x36\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32(.proto_types.RegistryProgressGETResponse\"_\n\x1dSelectorReportInvalidSelector\x12\x17\n\x0fvalid_selectors\x18\x01 \x01(\t\x12\x13\n\x0bspec_method\x18\x02 \x01(\t\x12\x10\n\x08raw_spec\x18\x03 \x01(\t\"\x82\x01\n SelectorReportInvalidSelectorMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x38\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32*.proto_types.SelectorReportInvalidSelector\"\x15\n\x13\x44\x65psNoPackagesFound\"n\n\x16\x44\x65psNoPackagesFoundMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12.\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32 .proto_types.DepsNoPackagesFound\"/\n\x17\x44\x65psStartPackageInstall\x12\x14\n\x0cpackage_name\x18\x01 \x01(\t\"v\n\x1a\x44\x65psStartPackageInstallMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x32\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32$.proto_types.DepsStartPackageInstall\"\'\n\x0f\x44\x65psInstallInfo\x12\x14\n\x0cversion_name\x18\x01 \x01(\t\"f\n\x12\x44\x65psInstallInfoMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12*\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1c.proto_types.DepsInstallInfo\"-\n\x13\x44\x65psUpdateAvailable\x12\x16\n\x0eversion_latest\x18\x01 \x01(\t\"n\n\x16\x44\x65psUpdateAvailableMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12.\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32 .proto_types.DepsUpdateAvailable\"\x0e\n\x0c\x44\x65psUpToDate\"`\n\x0f\x44\x65psUpToDateMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\'\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x19.proto_types.DepsUpToDate\",\n\x14\x44\x65psListSubdirectory\x12\x14\n\x0csubdirectory\x18\x01 \x01(\t\"p\n\x17\x44\x65psListSubdirectoryMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12/\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32!.proto_types.DepsListSubdirectory\".\n\x1a\x44\x65psNotifyUpdatesAvailable\x12\x10\n\x08packages\x18\x01 \x03(\t\"|\n\x1d\x44\x65psNotifyUpdatesAvailableMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x35\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\'.proto_types.DepsNotifyUpdatesAvailable\"1\n\x11RetryExternalCall\x12\x0f\n\x07\x61ttempt\x18\x01 \x01(\x05\x12\x0b\n\x03max\x18\x02 \x01(\x05\"j\n\x14RetryExternalCallMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12,\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1e.proto_types.RetryExternalCall\"#\n\x14RecordRetryException\x12\x0b\n\x03\x65xc\x18\x01 \x01(\t\"p\n\x17RecordRetryExceptionMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12/\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32!.proto_types.RecordRetryException\".\n\x1fRegistryIndexProgressGETRequest\x12\x0b\n\x03url\x18\x01 \x01(\t\"\x86\x01\n\"RegistryIndexProgressGETRequestMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12:\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32,.proto_types.RegistryIndexProgressGETRequest\"B\n RegistryIndexProgressGETResponse\x12\x0b\n\x03url\x18\x01 \x01(\t\x12\x11\n\tresp_code\x18\x02 \x01(\x05\"\x88\x01\n#RegistryIndexProgressGETResponseMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12;\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32-.proto_types.RegistryIndexProgressGETResponse\"2\n\x1eRegistryResponseUnexpectedType\x12\x10\n\x08response\x18\x01 \x01(\t\"\x84\x01\n!RegistryResponseUnexpectedTypeMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x39\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32+.proto_types.RegistryResponseUnexpectedType\"2\n\x1eRegistryResponseMissingTopKeys\x12\x10\n\x08response\x18\x01 \x01(\t\"\x84\x01\n!RegistryResponseMissingTopKeysMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x39\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32+.proto_types.RegistryResponseMissingTopKeys\"5\n!RegistryResponseMissingNestedKeys\x12\x10\n\x08response\x18\x01 \x01(\t\"\x8a\x01\n$RegistryResponseMissingNestedKeysMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12<\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32..proto_types.RegistryResponseMissingNestedKeys\"3\n\x1fRegistryResponseExtraNestedKeys\x12\x10\n\x08response\x18\x01 \x01(\t\"\x86\x01\n\"RegistryResponseExtraNestedKeysMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12:\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32,.proto_types.RegistryResponseExtraNestedKeys\"(\n\x18\x44\x65psSetDownloadDirectory\x12\x0c\n\x04path\x18\x01 \x01(\t\"x\n\x1b\x44\x65psSetDownloadDirectoryMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x33\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32%.proto_types.DepsSetDownloadDirectory\"-\n\x0c\x44\x65psUnpinned\x12\x10\n\x08revision\x18\x01 \x01(\t\x12\x0b\n\x03git\x18\x02 \x01(\t\"`\n\x0f\x44\x65psUnpinnedMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\'\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x19.proto_types.DepsUnpinned\"/\n\x1bNoNodesForSelectionCriteria\x12\x10\n\x08spec_raw\x18\x01 \x01(\t\"~\n\x1eNoNodesForSelectionCriteriaMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x36\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32(.proto_types.NoNodesForSelectionCriteria\"*\n\x1bRunningOperationCaughtError\x12\x0b\n\x03\x65xc\x18\x01 \x01(\t\"~\n\x1eRunningOperationCaughtErrorMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x36\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32(.proto_types.RunningOperationCaughtError\"\x11\n\x0f\x43ompileComplete\"f\n\x12\x43ompileCompleteMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12*\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1c.proto_types.CompileComplete\"\x18\n\x16\x46reshnessCheckComplete\"t\n\x19\x46reshnessCheckCompleteMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x31\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32#.proto_types.FreshnessCheckComplete\"\x1c\n\nSeedHeader\x12\x0e\n\x06header\x18\x01 \x01(\t\"\\\n\rSeedHeaderMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12%\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x17.proto_types.SeedHeader\"3\n\x12SQLRunnerException\x12\x0b\n\x03\x65xc\x18\x01 \x01(\t\x12\x10\n\x08\x65xc_info\x18\x02 \x01(\t\"l\n\x15SQLRunnerExceptionMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12-\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1f.proto_types.SQLRunnerException\"\xa8\x01\n\rLogTestResult\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x0e\n\x06status\x18\x03 \x01(\t\x12\r\n\x05index\x18\x04 \x01(\x05\x12\x12\n\nnum_models\x18\x05 \x01(\x05\x12\x16\n\x0e\x65xecution_time\x18\x06 \x01(\x02\x12\x14\n\x0cnum_failures\x18\x07 \x01(\x05\"b\n\x10LogTestResultMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12(\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1a.proto_types.LogTestResult\"k\n\x0cLogStartLine\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12\x13\n\x0b\x64\x65scription\x18\x02 \x01(\t\x12\r\n\x05index\x18\x03 \x01(\x05\x12\r\n\x05total\x18\x04 \x01(\x05\"`\n\x0fLogStartLineMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\'\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x19.proto_types.LogStartLine\"\x95\x01\n\x0eLogModelResult\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12\x13\n\x0b\x64\x65scription\x18\x02 \x01(\t\x12\x0e\n\x06status\x18\x03 \x01(\t\x12\r\n\x05index\x18\x04 \x01(\x05\x12\r\n\x05total\x18\x05 \x01(\x05\x12\x16\n\x0e\x65xecution_time\x18\x06 \x01(\x02\"d\n\x11LogModelResultMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12)\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1b.proto_types.LogModelResult\"\xfa\x01\n\x11LogSnapshotResult\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12\x13\n\x0b\x64\x65scription\x18\x02 \x01(\t\x12\x0e\n\x06status\x18\x03 \x01(\t\x12\r\n\x05index\x18\x04 \x01(\x05\x12\r\n\x05total\x18\x05 \x01(\x05\x12\x16\n\x0e\x65xecution_time\x18\x06 \x01(\x02\x12\x34\n\x03\x63\x66g\x18\x07 \x03(\x0b\x32\'.proto_types.LogSnapshotResult.CfgEntry\x1a*\n\x08\x43\x66gEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"j\n\x14LogSnapshotResultMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12,\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1e.proto_types.LogSnapshotResult\"\xb9\x01\n\rLogSeedResult\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12\x0e\n\x06status\x18\x02 \x01(\t\x12\x16\n\x0eresult_message\x18\x03 \x01(\t\x12\r\n\x05index\x18\x04 \x01(\x05\x12\r\n\x05total\x18\x05 \x01(\x05\x12\x16\n\x0e\x65xecution_time\x18\x06 \x01(\x02\x12\x0e\n\x06schema\x18\x07 \x01(\t\x12\x10\n\x08relation\x18\x08 \x01(\t\"b\n\x10LogSeedResultMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12(\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1a.proto_types.LogSeedResult\"\xad\x01\n\x12LogFreshnessResult\x12\x0e\n\x06status\x18\x01 \x01(\t\x12(\n\tnode_info\x18\x02 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12\r\n\x05index\x18\x03 \x01(\x05\x12\r\n\x05total\x18\x04 \x01(\x05\x12\x16\n\x0e\x65xecution_time\x18\x05 \x01(\x02\x12\x13\n\x0bsource_name\x18\x06 \x01(\t\x12\x12\n\ntable_name\x18\x07 \x01(\t\"l\n\x15LogFreshnessResultMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12-\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1f.proto_types.LogFreshnessResult\"\"\n\rLogCancelLine\x12\x11\n\tconn_name\x18\x01 \x01(\t\"b\n\x10LogCancelLineMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12(\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1a.proto_types.LogCancelLine\"\x1f\n\x0f\x44\x65\x66\x61ultSelector\x12\x0c\n\x04name\x18\x01 \x01(\t\"f\n\x12\x44\x65\x66\x61ultSelectorMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12*\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1c.proto_types.DefaultSelector\"5\n\tNodeStart\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\"Z\n\x0cNodeStartMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12$\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x16.proto_types.NodeStart\"g\n\x0cNodeFinished\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12-\n\nrun_result\x18\x02 \x01(\x0b\x32\x19.proto_types.RunResultMsg\"`\n\x0fNodeFinishedMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\'\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x19.proto_types.NodeFinished\"+\n\x1bQueryCancelationUnsupported\x12\x0c\n\x04type\x18\x01 \x01(\t\"~\n\x1eQueryCancelationUnsupportedMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x36\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32(.proto_types.QueryCancelationUnsupported\"O\n\x0f\x43oncurrencyLine\x12\x13\n\x0bnum_threads\x18\x01 \x01(\x05\x12\x13\n\x0btarget_name\x18\x02 \x01(\t\x12\x12\n\nnode_count\x18\x03 \x01(\x05\"f\n\x12\x43oncurrencyLineMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12*\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1c.proto_types.ConcurrencyLine\"E\n\x19WritingInjectedSQLForNode\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\"z\n\x1cWritingInjectedSQLForNodeMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x34\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32&.proto_types.WritingInjectedSQLForNode\"9\n\rNodeCompiling\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\"b\n\x10NodeCompilingMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12(\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1a.proto_types.NodeCompiling\"9\n\rNodeExecuting\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\"b\n\x10NodeExecutingMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12(\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1a.proto_types.NodeExecuting\"m\n\x10LogHookStartLine\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12\x11\n\tstatement\x18\x02 \x01(\t\x12\r\n\x05index\x18\x03 \x01(\x05\x12\r\n\x05total\x18\x04 \x01(\x05\"h\n\x13LogHookStartLineMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12+\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1d.proto_types.LogHookStartLine\"\x93\x01\n\x0eLogHookEndLine\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12\x11\n\tstatement\x18\x02 \x01(\t\x12\x0e\n\x06status\x18\x03 \x01(\t\x12\r\n\x05index\x18\x04 \x01(\x05\x12\r\n\x05total\x18\x05 \x01(\x05\x12\x16\n\x0e\x65xecution_time\x18\x06 \x01(\x02\"d\n\x11LogHookEndLineMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12)\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1b.proto_types.LogHookEndLine\"\x93\x01\n\x0fSkippingDetails\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12\x15\n\rresource_type\x18\x02 \x01(\t\x12\x0e\n\x06schema\x18\x03 \x01(\t\x12\x11\n\tnode_name\x18\x04 \x01(\t\x12\r\n\x05index\x18\x05 \x01(\x05\x12\r\n\x05total\x18\x06 \x01(\x05\"f\n\x12SkippingDetailsMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12*\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1c.proto_types.SkippingDetails\"\r\n\x0bNothingToDo\"^\n\x0eNothingToDoMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12&\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x18.proto_types.NothingToDo\",\n\x1dRunningOperationUncaughtError\x12\x0b\n\x03\x65xc\x18\x01 \x01(\t\"\x82\x01\n RunningOperationUncaughtErrorMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x38\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32*.proto_types.RunningOperationUncaughtError\"\x93\x01\n\x0c\x45ndRunResult\x12*\n\x07results\x18\x01 \x03(\x0b\x32\x19.proto_types.RunResultMsg\x12\x14\n\x0c\x65lapsed_time\x18\x02 \x01(\x02\x12\x30\n\x0cgenerated_at\x18\x03 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x0f\n\x07success\x18\x04 \x01(\x08\"`\n\x0f\x45ndRunResultMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\'\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x19.proto_types.EndRunResult\"\x11\n\x0fNoNodesSelected\"f\n\x12NoNodesSelectedMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12*\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1c.proto_types.NoNodesSelected\"w\n\x10\x43ommandCompleted\x12\x0f\n\x07\x63ommand\x18\x01 \x01(\t\x12\x0f\n\x07success\x18\x02 \x01(\x08\x12\x30\n\x0c\x63ompleted_at\x18\x03 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x0f\n\x07\x65lapsed\x18\x04 \x01(\x02\"h\n\x13\x43ommandCompletedMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12+\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1d.proto_types.CommandCompleted\"k\n\x08ShowNode\x12\x11\n\tnode_name\x18\x01 \x01(\t\x12\x0f\n\x07preview\x18\x02 \x01(\t\x12\x11\n\tis_inline\x18\x03 \x01(\x08\x12\x15\n\routput_format\x18\x04 \x01(\t\x12\x11\n\tunique_id\x18\x05 \x01(\t\"X\n\x0bShowNodeMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12#\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x15.proto_types.ShowNode\"p\n\x0c\x43ompiledNode\x12\x11\n\tnode_name\x18\x01 \x01(\t\x12\x10\n\x08\x63ompiled\x18\x02 \x01(\t\x12\x11\n\tis_inline\x18\x03 \x01(\x08\x12\x15\n\routput_format\x18\x04 \x01(\t\x12\x11\n\tunique_id\x18\x05 \x01(\t\"`\n\x0f\x43ompiledNodeMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\'\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x19.proto_types.CompiledNode\"b\n\x17\x43\x61tchableExceptionOnRun\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12\x0b\n\x03\x65xc\x18\x02 \x01(\t\x12\x10\n\x08\x65xc_info\x18\x03 \x01(\t\"v\n\x1a\x43\x61tchableExceptionOnRunMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x32\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32$.proto_types.CatchableExceptionOnRun\"5\n\x12InternalErrorOnRun\x12\x12\n\nbuild_path\x18\x01 \x01(\t\x12\x0b\n\x03\x65xc\x18\x02 \x01(\t\"l\n\x15InternalErrorOnRunMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12-\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1f.proto_types.InternalErrorOnRun\"K\n\x15GenericExceptionOnRun\x12\x12\n\nbuild_path\x18\x01 \x01(\t\x12\x11\n\tunique_id\x18\x02 \x01(\t\x12\x0b\n\x03\x65xc\x18\x03 \x01(\t\"r\n\x18GenericExceptionOnRunMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x30\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\".proto_types.GenericExceptionOnRun\"N\n\x1aNodeConnectionReleaseError\x12\x11\n\tnode_name\x18\x01 \x01(\t\x12\x0b\n\x03\x65xc\x18\x02 \x01(\t\x12\x10\n\x08\x65xc_info\x18\x03 \x01(\t\"|\n\x1dNodeConnectionReleaseErrorMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x35\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\'.proto_types.NodeConnectionReleaseError\"\x1f\n\nFoundStats\x12\x11\n\tstat_line\x18\x01 \x01(\t\"\\\n\rFoundStatsMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12%\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x17.proto_types.FoundStats\"\x17\n\x15MainKeyboardInterrupt\"r\n\x18MainKeyboardInterruptMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x30\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\".proto_types.MainKeyboardInterrupt\"#\n\x14MainEncounteredError\x12\x0b\n\x03\x65xc\x18\x01 \x01(\t\"p\n\x17MainEncounteredErrorMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12/\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32!.proto_types.MainEncounteredError\"%\n\x0eMainStackTrace\x12\x13\n\x0bstack_trace\x18\x01 \x01(\t\"d\n\x11MainStackTraceMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12)\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1b.proto_types.MainStackTrace\"@\n\x13SystemCouldNotWrite\x12\x0c\n\x04path\x18\x01 \x01(\t\x12\x0e\n\x06reason\x18\x02 \x01(\t\x12\x0b\n\x03\x65xc\x18\x03 \x01(\t\"n\n\x16SystemCouldNotWriteMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12.\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32 .proto_types.SystemCouldNotWrite\"!\n\x12SystemExecutingCmd\x12\x0b\n\x03\x63md\x18\x01 \x03(\t\"l\n\x15SystemExecutingCmdMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12-\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1f.proto_types.SystemExecutingCmd\"\x1c\n\x0cSystemStdOut\x12\x0c\n\x04\x62msg\x18\x01 \x01(\t\"`\n\x0fSystemStdOutMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\'\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x19.proto_types.SystemStdOut\"\x1c\n\x0cSystemStdErr\x12\x0c\n\x04\x62msg\x18\x01 \x01(\t\"`\n\x0fSystemStdErrMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\'\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x19.proto_types.SystemStdErr\",\n\x16SystemReportReturnCode\x12\x12\n\nreturncode\x18\x01 \x01(\x05\"t\n\x19SystemReportReturnCodeMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x31\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32#.proto_types.SystemReportReturnCode\"p\n\x13TimingInfoCollected\x12(\n\tnode_info\x18\x01 \x01(\x0b\x32\x15.proto_types.NodeInfo\x12/\n\x0btiming_info\x18\x02 \x01(\x0b\x32\x1a.proto_types.TimingInfoMsg\"n\n\x16TimingInfoCollectedMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12.\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32 .proto_types.TimingInfoCollected\"&\n\x12LogDebugStackTrace\x12\x10\n\x08\x65xc_info\x18\x01 \x01(\t\"l\n\x15LogDebugStackTraceMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12-\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1f.proto_types.LogDebugStackTrace\"\x1e\n\x0e\x43heckCleanPath\x12\x0c\n\x04path\x18\x01 \x01(\t\"d\n\x11\x43heckCleanPathMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12)\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1b.proto_types.CheckCleanPath\" \n\x10\x43onfirmCleanPath\x12\x0c\n\x04path\x18\x01 \x01(\t\"h\n\x13\x43onfirmCleanPathMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12+\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1d.proto_types.ConfirmCleanPath\"\"\n\x12ProtectedCleanPath\x12\x0c\n\x04path\x18\x01 \x01(\t\"l\n\x15ProtectedCleanPathMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12-\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1f.proto_types.ProtectedCleanPath\"\x14\n\x12\x46inishedCleanPaths\"l\n\x15\x46inishedCleanPathsMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12-\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1f.proto_types.FinishedCleanPaths\"5\n\x0bOpenCommand\x12\x10\n\x08open_cmd\x18\x01 \x01(\t\x12\x14\n\x0cprofiles_dir\x18\x02 \x01(\t\"^\n\x0eOpenCommandMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12&\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x18.proto_types.OpenCommand\"\x19\n\nFormatting\x12\x0b\n\x03msg\x18\x01 \x01(\t\"\\\n\rFormattingMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12%\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x17.proto_types.Formatting\"0\n\x0fServingDocsPort\x12\x0f\n\x07\x61\x64\x64ress\x18\x01 \x01(\t\x12\x0c\n\x04port\x18\x02 \x01(\x05\"f\n\x12ServingDocsPortMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12*\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1c.proto_types.ServingDocsPort\"%\n\x15ServingDocsAccessInfo\x12\x0c\n\x04port\x18\x01 \x01(\t\"r\n\x18ServingDocsAccessInfoMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x30\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\".proto_types.ServingDocsAccessInfo\"\x15\n\x13ServingDocsExitInfo\"n\n\x16ServingDocsExitInfoMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12.\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32 .proto_types.ServingDocsExitInfo\"J\n\x10RunResultWarning\x12\x15\n\rresource_type\x18\x01 \x01(\t\x12\x11\n\tnode_name\x18\x02 \x01(\t\x12\x0c\n\x04path\x18\x03 \x01(\t\"h\n\x13RunResultWarningMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12+\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1d.proto_types.RunResultWarning\"J\n\x10RunResultFailure\x12\x15\n\rresource_type\x18\x01 \x01(\t\x12\x11\n\tnode_name\x18\x02 \x01(\t\x12\x0c\n\x04path\x18\x03 \x01(\t\"h\n\x13RunResultFailureMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12+\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1d.proto_types.RunResultFailure\"k\n\tStatsLine\x12\x30\n\x05stats\x18\x01 \x03(\x0b\x32!.proto_types.StatsLine.StatsEntry\x1a,\n\nStatsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\x05:\x02\x38\x01\"Z\n\x0cStatsLineMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12$\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x16.proto_types.StatsLine\"\x1d\n\x0eRunResultError\x12\x0b\n\x03msg\x18\x01 \x01(\t\"d\n\x11RunResultErrorMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12)\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1b.proto_types.RunResultError\")\n\x17RunResultErrorNoMessage\x12\x0e\n\x06status\x18\x01 \x01(\t\"v\n\x1aRunResultErrorNoMessageMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x32\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32$.proto_types.RunResultErrorNoMessage\"\x1f\n\x0fSQLCompiledPath\x12\x0c\n\x04path\x18\x01 \x01(\t\"f\n\x12SQLCompiledPathMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12*\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1c.proto_types.SQLCompiledPath\"-\n\x14\x43heckNodeTestFailure\x12\x15\n\rrelation_name\x18\x01 \x01(\t\"p\n\x17\x43heckNodeTestFailureMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12/\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32!.proto_types.CheckNodeTestFailure\"\"\n\x13\x46irstRunResultError\x12\x0b\n\x03msg\x18\x01 \x01(\t\"n\n\x16\x46irstRunResultErrorMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12.\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32 .proto_types.FirstRunResultError\"\'\n\x18\x41\x66terFirstRunResultError\x12\x0b\n\x03msg\x18\x01 \x01(\t\"x\n\x1b\x41\x66terFirstRunResultErrorMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x33\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32%.proto_types.AfterFirstRunResultError\"W\n\x0f\x45ndOfRunSummary\x12\x12\n\nnum_errors\x18\x01 \x01(\x05\x12\x14\n\x0cnum_warnings\x18\x02 \x01(\x05\x12\x1a\n\x12keyboard_interrupt\x18\x03 \x01(\x08\"f\n\x12\x45ndOfRunSummaryMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12*\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1c.proto_types.EndOfRunSummary\"U\n\x13LogSkipBecauseError\x12\x0e\n\x06schema\x18\x01 \x01(\t\x12\x10\n\x08relation\x18\x02 \x01(\t\x12\r\n\x05index\x18\x03 \x01(\x05\x12\r\n\x05total\x18\x04 \x01(\x05\"n\n\x16LogSkipBecauseErrorMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12.\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32 .proto_types.LogSkipBecauseError\"\x14\n\x12\x45nsureGitInstalled\"l\n\x15\x45nsureGitInstalledMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12-\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1f.proto_types.EnsureGitInstalled\"\x1a\n\x18\x44\x65psCreatingLocalSymlink\"x\n\x1b\x44\x65psCreatingLocalSymlinkMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x33\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32%.proto_types.DepsCreatingLocalSymlink\"\x19\n\x17\x44\x65psSymlinkNotAvailable\"v\n\x1a\x44\x65psSymlinkNotAvailableMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x32\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32$.proto_types.DepsSymlinkNotAvailable\"\x11\n\x0f\x44isableTracking\"f\n\x12\x44isableTrackingMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12*\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1c.proto_types.DisableTracking\"\x1e\n\x0cSendingEvent\x12\x0e\n\x06kwargs\x18\x01 \x01(\t\"`\n\x0fSendingEventMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\'\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x19.proto_types.SendingEvent\"\x12\n\x10SendEventFailure\"h\n\x13SendEventFailureMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12+\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1d.proto_types.SendEventFailure\"\r\n\x0b\x46lushEvents\"^\n\x0e\x46lushEventsMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12&\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x18.proto_types.FlushEvents\"\x14\n\x12\x46lushEventsFailure\"l\n\x15\x46lushEventsFailureMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12-\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1f.proto_types.FlushEventsFailure\"-\n\x19TrackingInitializeFailure\x12\x10\n\x08\x65xc_info\x18\x01 \x01(\t\"z\n\x1cTrackingInitializeFailureMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x34\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32&.proto_types.TrackingInitializeFailure\"&\n\x17RunResultWarningMessage\x12\x0b\n\x03msg\x18\x01 \x01(\t\"v\n\x1aRunResultWarningMessageMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x32\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32$.proto_types.RunResultWarningMessage\"\x1a\n\x0b\x44\x65\x62ugCmdOut\x12\x0b\n\x03msg\x18\x01 \x01(\t\"^\n\x0e\x44\x65\x62ugCmdOutMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12&\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x18.proto_types.DebugCmdOut\"\x1d\n\x0e\x44\x65\x62ugCmdResult\x12\x0b\n\x03msg\x18\x01 \x01(\t\"d\n\x11\x44\x65\x62ugCmdResultMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12)\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1b.proto_types.DebugCmdResult\"\x19\n\nListCmdOut\x12\x0b\n\x03msg\x18\x01 \x01(\t\"\\\n\rListCmdOutMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12%\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x17.proto_types.ListCmdOut\"\x13\n\x04Note\x12\x0b\n\x03msg\x18\x01 \x01(\t\"P\n\x07NoteMsg\x12$\n\x04info\x18\x01 \x01(\x0b\x32\x16.proto_types.EventInfo\x12\x1f\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x11.proto_types.Noteb\x06proto3')
 
-_globals = globals()
-_builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
-_builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'types_pb2', _globals)
+
+
+_EVENTINFO = DESCRIPTOR.message_types_by_name['EventInfo']
+_EVENTINFO_EXTRAENTRY = _EVENTINFO.nested_types_by_name['ExtraEntry']
+_TIMINGINFOMSG = DESCRIPTOR.message_types_by_name['TimingInfoMsg']
+_NODERELATION = DESCRIPTOR.message_types_by_name['NodeRelation']
+_NODEINFO = DESCRIPTOR.message_types_by_name['NodeInfo']
+_RUNRESULTMSG = DESCRIPTOR.message_types_by_name['RunResultMsg']
+_REFERENCEKEYMSG = DESCRIPTOR.message_types_by_name['ReferenceKeyMsg']
+_GENERICMESSAGE = DESCRIPTOR.message_types_by_name['GenericMessage']
+_MAINREPORTVERSION = DESCRIPTOR.message_types_by_name['MainReportVersion']
+_MAINREPORTVERSIONMSG = DESCRIPTOR.message_types_by_name['MainReportVersionMsg']
+_MAINREPORTARGS = DESCRIPTOR.message_types_by_name['MainReportArgs']
+_MAINREPORTARGS_ARGSENTRY = _MAINREPORTARGS.nested_types_by_name['ArgsEntry']
+_MAINREPORTARGSMSG = DESCRIPTOR.message_types_by_name['MainReportArgsMsg']
+_MAINTRACKINGUSERSTATE = DESCRIPTOR.message_types_by_name['MainTrackingUserState']
+_MAINTRACKINGUSERSTATEMSG = DESCRIPTOR.message_types_by_name['MainTrackingUserStateMsg']
+_MERGEDFROMSTATE = DESCRIPTOR.message_types_by_name['MergedFromState']
+_MERGEDFROMSTATEMSG = DESCRIPTOR.message_types_by_name['MergedFromStateMsg']
+_MISSINGPROFILETARGET = DESCRIPTOR.message_types_by_name['MissingProfileTarget']
+_MISSINGPROFILETARGETMSG = DESCRIPTOR.message_types_by_name['MissingProfileTargetMsg']
+_INVALIDOPTIONYAML = DESCRIPTOR.message_types_by_name['InvalidOptionYAML']
+_INVALIDOPTIONYAMLMSG = DESCRIPTOR.message_types_by_name['InvalidOptionYAMLMsg']
+_LOGDBTPROJECTERROR = DESCRIPTOR.message_types_by_name['LogDbtProjectError']
+_LOGDBTPROJECTERRORMSG = DESCRIPTOR.message_types_by_name['LogDbtProjectErrorMsg']
+_LOGDBTPROFILEERROR = DESCRIPTOR.message_types_by_name['LogDbtProfileError']
+_LOGDBTPROFILEERRORMSG = DESCRIPTOR.message_types_by_name['LogDbtProfileErrorMsg']
+_STARTERPROJECTPATH = DESCRIPTOR.message_types_by_name['StarterProjectPath']
+_STARTERPROJECTPATHMSG = DESCRIPTOR.message_types_by_name['StarterProjectPathMsg']
+_CONFIGFOLDERDIRECTORY = DESCRIPTOR.message_types_by_name['ConfigFolderDirectory']
+_CONFIGFOLDERDIRECTORYMSG = DESCRIPTOR.message_types_by_name['ConfigFolderDirectoryMsg']
+_NOSAMPLEPROFILEFOUND = DESCRIPTOR.message_types_by_name['NoSampleProfileFound']
+_NOSAMPLEPROFILEFOUNDMSG = DESCRIPTOR.message_types_by_name['NoSampleProfileFoundMsg']
+_PROFILEWRITTENWITHSAMPLE = DESCRIPTOR.message_types_by_name['ProfileWrittenWithSample']
+_PROFILEWRITTENWITHSAMPLEMSG = DESCRIPTOR.message_types_by_name['ProfileWrittenWithSampleMsg']
+_PROFILEWRITTENWITHTARGETTEMPLATEYAML = DESCRIPTOR.message_types_by_name['ProfileWrittenWithTargetTemplateYAML']
+_PROFILEWRITTENWITHTARGETTEMPLATEYAMLMSG = DESCRIPTOR.message_types_by_name['ProfileWrittenWithTargetTemplateYAMLMsg']
+_PROFILEWRITTENWITHPROJECTTEMPLATEYAML = DESCRIPTOR.message_types_by_name['ProfileWrittenWithProjectTemplateYAML']
+_PROFILEWRITTENWITHPROJECTTEMPLATEYAMLMSG = DESCRIPTOR.message_types_by_name['ProfileWrittenWithProjectTemplateYAMLMsg']
+_SETTINGUPPROFILE = DESCRIPTOR.message_types_by_name['SettingUpProfile']
+_SETTINGUPPROFILEMSG = DESCRIPTOR.message_types_by_name['SettingUpProfileMsg']
+_INVALIDPROFILETEMPLATEYAML = DESCRIPTOR.message_types_by_name['InvalidProfileTemplateYAML']
+_INVALIDPROFILETEMPLATEYAMLMSG = DESCRIPTOR.message_types_by_name['InvalidProfileTemplateYAMLMsg']
+_PROJECTNAMEALREADYEXISTS = DESCRIPTOR.message_types_by_name['ProjectNameAlreadyExists']
+_PROJECTNAMEALREADYEXISTSMSG = DESCRIPTOR.message_types_by_name['ProjectNameAlreadyExistsMsg']
+_PROJECTCREATED = DESCRIPTOR.message_types_by_name['ProjectCreated']
+_PROJECTCREATEDMSG = DESCRIPTOR.message_types_by_name['ProjectCreatedMsg']
+_PACKAGEREDIRECTDEPRECATION = DESCRIPTOR.message_types_by_name['PackageRedirectDeprecation']
+_PACKAGEREDIRECTDEPRECATIONMSG = DESCRIPTOR.message_types_by_name['PackageRedirectDeprecationMsg']
+_PACKAGEINSTALLPATHDEPRECATION = DESCRIPTOR.message_types_by_name['PackageInstallPathDeprecation']
+_PACKAGEINSTALLPATHDEPRECATIONMSG = DESCRIPTOR.message_types_by_name['PackageInstallPathDeprecationMsg']
+_CONFIGSOURCEPATHDEPRECATION = DESCRIPTOR.message_types_by_name['ConfigSourcePathDeprecation']
+_CONFIGSOURCEPATHDEPRECATIONMSG = DESCRIPTOR.message_types_by_name['ConfigSourcePathDeprecationMsg']
+_CONFIGDATAPATHDEPRECATION = DESCRIPTOR.message_types_by_name['ConfigDataPathDeprecation']
+_CONFIGDATAPATHDEPRECATIONMSG = DESCRIPTOR.message_types_by_name['ConfigDataPathDeprecationMsg']
+_ADAPTERDEPRECATIONWARNING = DESCRIPTOR.message_types_by_name['AdapterDeprecationWarning']
+_ADAPTERDEPRECATIONWARNINGMSG = DESCRIPTOR.message_types_by_name['AdapterDeprecationWarningMsg']
+_METRICATTRIBUTESRENAMED = DESCRIPTOR.message_types_by_name['MetricAttributesRenamed']
+_METRICATTRIBUTESRENAMEDMSG = DESCRIPTOR.message_types_by_name['MetricAttributesRenamedMsg']
+_EXPOSURENAMEDEPRECATION = DESCRIPTOR.message_types_by_name['ExposureNameDeprecation']
+_EXPOSURENAMEDEPRECATIONMSG = DESCRIPTOR.message_types_by_name['ExposureNameDeprecationMsg']
+_INTERNALDEPRECATION = DESCRIPTOR.message_types_by_name['InternalDeprecation']
+_INTERNALDEPRECATIONMSG = DESCRIPTOR.message_types_by_name['InternalDeprecationMsg']
+_ENVIRONMENTVARIABLERENAMED = DESCRIPTOR.message_types_by_name['EnvironmentVariableRenamed']
+_ENVIRONMENTVARIABLERENAMEDMSG = DESCRIPTOR.message_types_by_name['EnvironmentVariableRenamedMsg']
+_CONFIGLOGPATHDEPRECATION = DESCRIPTOR.message_types_by_name['ConfigLogPathDeprecation']
+_CONFIGLOGPATHDEPRECATIONMSG = DESCRIPTOR.message_types_by_name['ConfigLogPathDeprecationMsg']
+_CONFIGTARGETPATHDEPRECATION = DESCRIPTOR.message_types_by_name['ConfigTargetPathDeprecation']
+_CONFIGTARGETPATHDEPRECATIONMSG = DESCRIPTOR.message_types_by_name['ConfigTargetPathDeprecationMsg']
+_COLLECTFRESHNESSRETURNSIGNATURE = DESCRIPTOR.message_types_by_name['CollectFreshnessReturnSignature']
+_COLLECTFRESHNESSRETURNSIGNATUREMSG = DESCRIPTOR.message_types_by_name['CollectFreshnessReturnSignatureMsg']
+_ADAPTEREVENTDEBUG = DESCRIPTOR.message_types_by_name['AdapterEventDebug']
+_ADAPTEREVENTDEBUGMSG = DESCRIPTOR.message_types_by_name['AdapterEventDebugMsg']
+_ADAPTEREVENTINFO = DESCRIPTOR.message_types_by_name['AdapterEventInfo']
+_ADAPTEREVENTINFOMSG = DESCRIPTOR.message_types_by_name['AdapterEventInfoMsg']
+_ADAPTEREVENTWARNING = DESCRIPTOR.message_types_by_name['AdapterEventWarning']
+_ADAPTEREVENTWARNINGMSG = DESCRIPTOR.message_types_by_name['AdapterEventWarningMsg']
+_ADAPTEREVENTERROR = DESCRIPTOR.message_types_by_name['AdapterEventError']
+_ADAPTEREVENTERRORMSG = DESCRIPTOR.message_types_by_name['AdapterEventErrorMsg']
+_NEWCONNECTION = DESCRIPTOR.message_types_by_name['NewConnection']
+_NEWCONNECTIONMSG = DESCRIPTOR.message_types_by_name['NewConnectionMsg']
+_CONNECTIONREUSED = DESCRIPTOR.message_types_by_name['ConnectionReused']
+_CONNECTIONREUSEDMSG = DESCRIPTOR.message_types_by_name['ConnectionReusedMsg']
+_CONNECTIONLEFTOPENINCLEANUP = DESCRIPTOR.message_types_by_name['ConnectionLeftOpenInCleanup']
+_CONNECTIONLEFTOPENINCLEANUPMSG = DESCRIPTOR.message_types_by_name['ConnectionLeftOpenInCleanupMsg']
+_CONNECTIONCLOSEDINCLEANUP = DESCRIPTOR.message_types_by_name['ConnectionClosedInCleanup']
+_CONNECTIONCLOSEDINCLEANUPMSG = DESCRIPTOR.message_types_by_name['ConnectionClosedInCleanupMsg']
+_ROLLBACKFAILED = DESCRIPTOR.message_types_by_name['RollbackFailed']
+_ROLLBACKFAILEDMSG = DESCRIPTOR.message_types_by_name['RollbackFailedMsg']
+_CONNECTIONCLOSED = DESCRIPTOR.message_types_by_name['ConnectionClosed']
+_CONNECTIONCLOSEDMSG = DESCRIPTOR.message_types_by_name['ConnectionClosedMsg']
+_CONNECTIONLEFTOPEN = DESCRIPTOR.message_types_by_name['ConnectionLeftOpen']
+_CONNECTIONLEFTOPENMSG = DESCRIPTOR.message_types_by_name['ConnectionLeftOpenMsg']
+_ROLLBACK = DESCRIPTOR.message_types_by_name['Rollback']
+_ROLLBACKMSG = DESCRIPTOR.message_types_by_name['RollbackMsg']
+_CACHEMISS = DESCRIPTOR.message_types_by_name['CacheMiss']
+_CACHEMISSMSG = DESCRIPTOR.message_types_by_name['CacheMissMsg']
+_LISTRELATIONS = DESCRIPTOR.message_types_by_name['ListRelations']
+_LISTRELATIONSMSG = DESCRIPTOR.message_types_by_name['ListRelationsMsg']
+_CONNECTIONUSED = DESCRIPTOR.message_types_by_name['ConnectionUsed']
+_CONNECTIONUSEDMSG = DESCRIPTOR.message_types_by_name['ConnectionUsedMsg']
+_SQLQUERY = DESCRIPTOR.message_types_by_name['SQLQuery']
+_SQLQUERYMSG = DESCRIPTOR.message_types_by_name['SQLQueryMsg']
+_SQLQUERYSTATUS = DESCRIPTOR.message_types_by_name['SQLQueryStatus']
+_SQLQUERYSTATUSMSG = DESCRIPTOR.message_types_by_name['SQLQueryStatusMsg']
+_SQLCOMMIT = DESCRIPTOR.message_types_by_name['SQLCommit']
+_SQLCOMMITMSG = DESCRIPTOR.message_types_by_name['SQLCommitMsg']
+_COLTYPECHANGE = DESCRIPTOR.message_types_by_name['ColTypeChange']
+_COLTYPECHANGEMSG = DESCRIPTOR.message_types_by_name['ColTypeChangeMsg']
+_SCHEMACREATION = DESCRIPTOR.message_types_by_name['SchemaCreation']
+_SCHEMACREATIONMSG = DESCRIPTOR.message_types_by_name['SchemaCreationMsg']
+_SCHEMADROP = DESCRIPTOR.message_types_by_name['SchemaDrop']
+_SCHEMADROPMSG = DESCRIPTOR.message_types_by_name['SchemaDropMsg']
+_CACHEACTION = DESCRIPTOR.message_types_by_name['CacheAction']
+_CACHEACTIONMSG = DESCRIPTOR.message_types_by_name['CacheActionMsg']
+_CACHEDUMPGRAPH = DESCRIPTOR.message_types_by_name['CacheDumpGraph']
+_CACHEDUMPGRAPH_DUMPENTRY = _CACHEDUMPGRAPH.nested_types_by_name['DumpEntry']
+_CACHEDUMPGRAPHMSG = DESCRIPTOR.message_types_by_name['CacheDumpGraphMsg']
+_ADAPTERREGISTERED = DESCRIPTOR.message_types_by_name['AdapterRegistered']
+_ADAPTERREGISTEREDMSG = DESCRIPTOR.message_types_by_name['AdapterRegisteredMsg']
+_ADAPTERIMPORTERROR = DESCRIPTOR.message_types_by_name['AdapterImportError']
+_ADAPTERIMPORTERRORMSG = DESCRIPTOR.message_types_by_name['AdapterImportErrorMsg']
+_PLUGINLOADERROR = DESCRIPTOR.message_types_by_name['PluginLoadError']
+_PLUGINLOADERRORMSG = DESCRIPTOR.message_types_by_name['PluginLoadErrorMsg']
+_NEWCONNECTIONOPENING = DESCRIPTOR.message_types_by_name['NewConnectionOpening']
+_NEWCONNECTIONOPENINGMSG = DESCRIPTOR.message_types_by_name['NewConnectionOpeningMsg']
+_CODEEXECUTION = DESCRIPTOR.message_types_by_name['CodeExecution']
+_CODEEXECUTIONMSG = DESCRIPTOR.message_types_by_name['CodeExecutionMsg']
+_CODEEXECUTIONSTATUS = DESCRIPTOR.message_types_by_name['CodeExecutionStatus']
+_CODEEXECUTIONSTATUSMSG = DESCRIPTOR.message_types_by_name['CodeExecutionStatusMsg']
+_CATALOGGENERATIONERROR = DESCRIPTOR.message_types_by_name['CatalogGenerationError']
+_CATALOGGENERATIONERRORMSG = DESCRIPTOR.message_types_by_name['CatalogGenerationErrorMsg']
+_WRITECATALOGFAILURE = DESCRIPTOR.message_types_by_name['WriteCatalogFailure']
+_WRITECATALOGFAILUREMSG = DESCRIPTOR.message_types_by_name['WriteCatalogFailureMsg']
+_CATALOGWRITTEN = DESCRIPTOR.message_types_by_name['CatalogWritten']
+_CATALOGWRITTENMSG = DESCRIPTOR.message_types_by_name['CatalogWrittenMsg']
+_CANNOTGENERATEDOCS = DESCRIPTOR.message_types_by_name['CannotGenerateDocs']
+_CANNOTGENERATEDOCSMSG = DESCRIPTOR.message_types_by_name['CannotGenerateDocsMsg']
+_BUILDINGCATALOG = DESCRIPTOR.message_types_by_name['BuildingCatalog']
+_BUILDINGCATALOGMSG = DESCRIPTOR.message_types_by_name['BuildingCatalogMsg']
+_DATABASEERRORRUNNINGHOOK = DESCRIPTOR.message_types_by_name['DatabaseErrorRunningHook']
+_DATABASEERRORRUNNINGHOOKMSG = DESCRIPTOR.message_types_by_name['DatabaseErrorRunningHookMsg']
+_HOOKSRUNNING = DESCRIPTOR.message_types_by_name['HooksRunning']
+_HOOKSRUNNINGMSG = DESCRIPTOR.message_types_by_name['HooksRunningMsg']
+_FINISHEDRUNNINGSTATS = DESCRIPTOR.message_types_by_name['FinishedRunningStats']
+_FINISHEDRUNNINGSTATSMSG = DESCRIPTOR.message_types_by_name['FinishedRunningStatsMsg']
+_CONSTRAINTNOTENFORCED = DESCRIPTOR.message_types_by_name['ConstraintNotEnforced']
+_CONSTRAINTNOTENFORCEDMSG = DESCRIPTOR.message_types_by_name['ConstraintNotEnforcedMsg']
+_CONSTRAINTNOTSUPPORTED = DESCRIPTOR.message_types_by_name['ConstraintNotSupported']
+_CONSTRAINTNOTSUPPORTEDMSG = DESCRIPTOR.message_types_by_name['ConstraintNotSupportedMsg']
+_INPUTFILEDIFFERROR = DESCRIPTOR.message_types_by_name['InputFileDiffError']
+_INPUTFILEDIFFERRORMSG = DESCRIPTOR.message_types_by_name['InputFileDiffErrorMsg']
+_INVALIDVALUEFORFIELD = DESCRIPTOR.message_types_by_name['InvalidValueForField']
+_INVALIDVALUEFORFIELDMSG = DESCRIPTOR.message_types_by_name['InvalidValueForFieldMsg']
+_VALIDATIONWARNING = DESCRIPTOR.message_types_by_name['ValidationWarning']
+_VALIDATIONWARNINGMSG = DESCRIPTOR.message_types_by_name['ValidationWarningMsg']
+_PARSEPERFINFOPATH = DESCRIPTOR.message_types_by_name['ParsePerfInfoPath']
+_PARSEPERFINFOPATHMSG = DESCRIPTOR.message_types_by_name['ParsePerfInfoPathMsg']
+_PARTIALPARSINGERRORPROCESSINGFILE = DESCRIPTOR.message_types_by_name['PartialParsingErrorProcessingFile']
+_PARTIALPARSINGERRORPROCESSINGFILEMSG = DESCRIPTOR.message_types_by_name['PartialParsingErrorProcessingFileMsg']
+_PARTIALPARSINGERROR = DESCRIPTOR.message_types_by_name['PartialParsingError']
+_PARTIALPARSINGERROR_EXCINFOENTRY = _PARTIALPARSINGERROR.nested_types_by_name['ExcInfoEntry']
+_PARTIALPARSINGERRORMSG = DESCRIPTOR.message_types_by_name['PartialParsingErrorMsg']
+_PARTIALPARSINGSKIPPARSING = DESCRIPTOR.message_types_by_name['PartialParsingSkipParsing']
+_PARTIALPARSINGSKIPPARSINGMSG = DESCRIPTOR.message_types_by_name['PartialParsingSkipParsingMsg']
+_UNABLETOPARTIALPARSE = DESCRIPTOR.message_types_by_name['UnableToPartialParse']
+_UNABLETOPARTIALPARSEMSG = DESCRIPTOR.message_types_by_name['UnableToPartialParseMsg']
+_STATECHECKVARSHASH = DESCRIPTOR.message_types_by_name['StateCheckVarsHash']
+_STATECHECKVARSHASHMSG = DESCRIPTOR.message_types_by_name['StateCheckVarsHashMsg']
+_PARTIALPARSINGNOTENABLED = DESCRIPTOR.message_types_by_name['PartialParsingNotEnabled']
+_PARTIALPARSINGNOTENABLEDMSG = DESCRIPTOR.message_types_by_name['PartialParsingNotEnabledMsg']
+_PARSEDFILELOADFAILED = DESCRIPTOR.message_types_by_name['ParsedFileLoadFailed']
+_PARSEDFILELOADFAILEDMSG = DESCRIPTOR.message_types_by_name['ParsedFileLoadFailedMsg']
+_PARTIALPARSINGENABLED = DESCRIPTOR.message_types_by_name['PartialParsingEnabled']
+_PARTIALPARSINGENABLEDMSG = DESCRIPTOR.message_types_by_name['PartialParsingEnabledMsg']
+_PARTIALPARSINGFILE = DESCRIPTOR.message_types_by_name['PartialParsingFile']
+_PARTIALPARSINGFILEMSG = DESCRIPTOR.message_types_by_name['PartialParsingFileMsg']
+_INVALIDDISABLEDTARGETINTESTNODE = DESCRIPTOR.message_types_by_name['InvalidDisabledTargetInTestNode']
+_INVALIDDISABLEDTARGETINTESTNODEMSG = DESCRIPTOR.message_types_by_name['InvalidDisabledTargetInTestNodeMsg']
+_UNUSEDRESOURCECONFIGPATH = DESCRIPTOR.message_types_by_name['UnusedResourceConfigPath']
+_UNUSEDRESOURCECONFIGPATHMSG = DESCRIPTOR.message_types_by_name['UnusedResourceConfigPathMsg']
+_SEEDINCREASED = DESCRIPTOR.message_types_by_name['SeedIncreased']
+_SEEDINCREASEDMSG = DESCRIPTOR.message_types_by_name['SeedIncreasedMsg']
+_SEEDEXCEEDSLIMITSAMEPATH = DESCRIPTOR.message_types_by_name['SeedExceedsLimitSamePath']
+_SEEDEXCEEDSLIMITSAMEPATHMSG = DESCRIPTOR.message_types_by_name['SeedExceedsLimitSamePathMsg']
+_SEEDEXCEEDSLIMITANDPATHCHANGED = DESCRIPTOR.message_types_by_name['SeedExceedsLimitAndPathChanged']
+_SEEDEXCEEDSLIMITANDPATHCHANGEDMSG = DESCRIPTOR.message_types_by_name['SeedExceedsLimitAndPathChangedMsg']
+_SEEDEXCEEDSLIMITCHECKSUMCHANGED = DESCRIPTOR.message_types_by_name['SeedExceedsLimitChecksumChanged']
+_SEEDEXCEEDSLIMITCHECKSUMCHANGEDMSG = DESCRIPTOR.message_types_by_name['SeedExceedsLimitChecksumChangedMsg']
+_UNUSEDTABLES = DESCRIPTOR.message_types_by_name['UnusedTables']
+_UNUSEDTABLESMSG = DESCRIPTOR.message_types_by_name['UnusedTablesMsg']
+_WRONGRESOURCESCHEMAFILE = DESCRIPTOR.message_types_by_name['WrongResourceSchemaFile']
+_WRONGRESOURCESCHEMAFILEMSG = DESCRIPTOR.message_types_by_name['WrongResourceSchemaFileMsg']
+_NONODEFORYAMLKEY = DESCRIPTOR.message_types_by_name['NoNodeForYamlKey']
+_NONODEFORYAMLKEYMSG = DESCRIPTOR.message_types_by_name['NoNodeForYamlKeyMsg']
+_MACRONOTFOUNDFORPATCH = DESCRIPTOR.message_types_by_name['MacroNotFoundForPatch']
+_MACRONOTFOUNDFORPATCHMSG = DESCRIPTOR.message_types_by_name['MacroNotFoundForPatchMsg']
+_NODENOTFOUNDORDISABLED = DESCRIPTOR.message_types_by_name['NodeNotFoundOrDisabled']
+_NODENOTFOUNDORDISABLEDMSG = DESCRIPTOR.message_types_by_name['NodeNotFoundOrDisabledMsg']
+_JINJALOGWARNING = DESCRIPTOR.message_types_by_name['JinjaLogWarning']
+_JINJALOGWARNINGMSG = DESCRIPTOR.message_types_by_name['JinjaLogWarningMsg']
+_JINJALOGINFO = DESCRIPTOR.message_types_by_name['JinjaLogInfo']
+_JINJALOGINFOMSG = DESCRIPTOR.message_types_by_name['JinjaLogInfoMsg']
+_JINJALOGDEBUG = DESCRIPTOR.message_types_by_name['JinjaLogDebug']
+_JINJALOGDEBUGMSG = DESCRIPTOR.message_types_by_name['JinjaLogDebugMsg']
+_UNPINNEDREFNEWVERSIONAVAILABLE = DESCRIPTOR.message_types_by_name['UnpinnedRefNewVersionAvailable']
+_UNPINNEDREFNEWVERSIONAVAILABLEMSG = DESCRIPTOR.message_types_by_name['UnpinnedRefNewVersionAvailableMsg']
+_DEPRECATEDMODEL = DESCRIPTOR.message_types_by_name['DeprecatedModel']
+_DEPRECATEDMODELMSG = DESCRIPTOR.message_types_by_name['DeprecatedModelMsg']
+_UPCOMINGREFERENCEDEPRECATION = DESCRIPTOR.message_types_by_name['UpcomingReferenceDeprecation']
+_UPCOMINGREFERENCEDEPRECATIONMSG = DESCRIPTOR.message_types_by_name['UpcomingReferenceDeprecationMsg']
+_DEPRECATEDREFERENCE = DESCRIPTOR.message_types_by_name['DeprecatedReference']
+_DEPRECATEDREFERENCEMSG = DESCRIPTOR.message_types_by_name['DeprecatedReferenceMsg']
+_UNSUPPORTEDCONSTRAINTMATERIALIZATION = DESCRIPTOR.message_types_by_name['UnsupportedConstraintMaterialization']
+_UNSUPPORTEDCONSTRAINTMATERIALIZATIONMSG = DESCRIPTOR.message_types_by_name['UnsupportedConstraintMaterializationMsg']
+_PARSEINLINENODEERROR = DESCRIPTOR.message_types_by_name['ParseInlineNodeError']
+_PARSEINLINENODEERRORMSG = DESCRIPTOR.message_types_by_name['ParseInlineNodeErrorMsg']
+_GITSPARSECHECKOUTSUBDIRECTORY = DESCRIPTOR.message_types_by_name['GitSparseCheckoutSubdirectory']
+_GITSPARSECHECKOUTSUBDIRECTORYMSG = DESCRIPTOR.message_types_by_name['GitSparseCheckoutSubdirectoryMsg']
+_GITPROGRESSCHECKOUTREVISION = DESCRIPTOR.message_types_by_name['GitProgressCheckoutRevision']
+_GITPROGRESSCHECKOUTREVISIONMSG = DESCRIPTOR.message_types_by_name['GitProgressCheckoutRevisionMsg']
+_GITPROGRESSUPDATINGEXISTINGDEPENDENCY = DESCRIPTOR.message_types_by_name['GitProgressUpdatingExistingDependency']
+_GITPROGRESSUPDATINGEXISTINGDEPENDENCYMSG = DESCRIPTOR.message_types_by_name['GitProgressUpdatingExistingDependencyMsg']
+_GITPROGRESSPULLINGNEWDEPENDENCY = DESCRIPTOR.message_types_by_name['GitProgressPullingNewDependency']
+_GITPROGRESSPULLINGNEWDEPENDENCYMSG = DESCRIPTOR.message_types_by_name['GitProgressPullingNewDependencyMsg']
+_GITNOTHINGTODO = DESCRIPTOR.message_types_by_name['GitNothingToDo']
+_GITNOTHINGTODOMSG = DESCRIPTOR.message_types_by_name['GitNothingToDoMsg']
+_GITPROGRESSUPDATEDCHECKOUTRANGE = DESCRIPTOR.message_types_by_name['GitProgressUpdatedCheckoutRange']
+_GITPROGRESSUPDATEDCHECKOUTRANGEMSG = DESCRIPTOR.message_types_by_name['GitProgressUpdatedCheckoutRangeMsg']
+_GITPROGRESSCHECKEDOUTAT = DESCRIPTOR.message_types_by_name['GitProgressCheckedOutAt']
+_GITPROGRESSCHECKEDOUTATMSG = DESCRIPTOR.message_types_by_name['GitProgressCheckedOutAtMsg']
+_REGISTRYPROGRESSGETREQUEST = DESCRIPTOR.message_types_by_name['RegistryProgressGETRequest']
+_REGISTRYPROGRESSGETREQUESTMSG = DESCRIPTOR.message_types_by_name['RegistryProgressGETRequestMsg']
+_REGISTRYPROGRESSGETRESPONSE = DESCRIPTOR.message_types_by_name['RegistryProgressGETResponse']
+_REGISTRYPROGRESSGETRESPONSEMSG = DESCRIPTOR.message_types_by_name['RegistryProgressGETResponseMsg']
+_SELECTORREPORTINVALIDSELECTOR = DESCRIPTOR.message_types_by_name['SelectorReportInvalidSelector']
+_SELECTORREPORTINVALIDSELECTORMSG = DESCRIPTOR.message_types_by_name['SelectorReportInvalidSelectorMsg']
+_DEPSNOPACKAGESFOUND = DESCRIPTOR.message_types_by_name['DepsNoPackagesFound']
+_DEPSNOPACKAGESFOUNDMSG = DESCRIPTOR.message_types_by_name['DepsNoPackagesFoundMsg']
+_DEPSSTARTPACKAGEINSTALL = DESCRIPTOR.message_types_by_name['DepsStartPackageInstall']
+_DEPSSTARTPACKAGEINSTALLMSG = DESCRIPTOR.message_types_by_name['DepsStartPackageInstallMsg']
+_DEPSINSTALLINFO = DESCRIPTOR.message_types_by_name['DepsInstallInfo']
+_DEPSINSTALLINFOMSG = DESCRIPTOR.message_types_by_name['DepsInstallInfoMsg']
+_DEPSUPDATEAVAILABLE = DESCRIPTOR.message_types_by_name['DepsUpdateAvailable']
+_DEPSUPDATEAVAILABLEMSG = DESCRIPTOR.message_types_by_name['DepsUpdateAvailableMsg']
+_DEPSUPTODATE = DESCRIPTOR.message_types_by_name['DepsUpToDate']
+_DEPSUPTODATEMSG = DESCRIPTOR.message_types_by_name['DepsUpToDateMsg']
+_DEPSLISTSUBDIRECTORY = DESCRIPTOR.message_types_by_name['DepsListSubdirectory']
+_DEPSLISTSUBDIRECTORYMSG = DESCRIPTOR.message_types_by_name['DepsListSubdirectoryMsg']
+_DEPSNOTIFYUPDATESAVAILABLE = DESCRIPTOR.message_types_by_name['DepsNotifyUpdatesAvailable']
+_DEPSNOTIFYUPDATESAVAILABLEMSG = DESCRIPTOR.message_types_by_name['DepsNotifyUpdatesAvailableMsg']
+_RETRYEXTERNALCALL = DESCRIPTOR.message_types_by_name['RetryExternalCall']
+_RETRYEXTERNALCALLMSG = DESCRIPTOR.message_types_by_name['RetryExternalCallMsg']
+_RECORDRETRYEXCEPTION = DESCRIPTOR.message_types_by_name['RecordRetryException']
+_RECORDRETRYEXCEPTIONMSG = DESCRIPTOR.message_types_by_name['RecordRetryExceptionMsg']
+_REGISTRYINDEXPROGRESSGETREQUEST = DESCRIPTOR.message_types_by_name['RegistryIndexProgressGETRequest']
+_REGISTRYINDEXPROGRESSGETREQUESTMSG = DESCRIPTOR.message_types_by_name['RegistryIndexProgressGETRequestMsg']
+_REGISTRYINDEXPROGRESSGETRESPONSE = DESCRIPTOR.message_types_by_name['RegistryIndexProgressGETResponse']
+_REGISTRYINDEXPROGRESSGETRESPONSEMSG = DESCRIPTOR.message_types_by_name['RegistryIndexProgressGETResponseMsg']
+_REGISTRYRESPONSEUNEXPECTEDTYPE = DESCRIPTOR.message_types_by_name['RegistryResponseUnexpectedType']
+_REGISTRYRESPONSEUNEXPECTEDTYPEMSG = DESCRIPTOR.message_types_by_name['RegistryResponseUnexpectedTypeMsg']
+_REGISTRYRESPONSEMISSINGTOPKEYS = DESCRIPTOR.message_types_by_name['RegistryResponseMissingTopKeys']
+_REGISTRYRESPONSEMISSINGTOPKEYSMSG = DESCRIPTOR.message_types_by_name['RegistryResponseMissingTopKeysMsg']
+_REGISTRYRESPONSEMISSINGNESTEDKEYS = DESCRIPTOR.message_types_by_name['RegistryResponseMissingNestedKeys']
+_REGISTRYRESPONSEMISSINGNESTEDKEYSMSG = DESCRIPTOR.message_types_by_name['RegistryResponseMissingNestedKeysMsg']
+_REGISTRYRESPONSEEXTRANESTEDKEYS = DESCRIPTOR.message_types_by_name['RegistryResponseExtraNestedKeys']
+_REGISTRYRESPONSEEXTRANESTEDKEYSMSG = DESCRIPTOR.message_types_by_name['RegistryResponseExtraNestedKeysMsg']
+_DEPSSETDOWNLOADDIRECTORY = DESCRIPTOR.message_types_by_name['DepsSetDownloadDirectory']
+_DEPSSETDOWNLOADDIRECTORYMSG = DESCRIPTOR.message_types_by_name['DepsSetDownloadDirectoryMsg']
+_DEPSUNPINNED = DESCRIPTOR.message_types_by_name['DepsUnpinned']
+_DEPSUNPINNEDMSG = DESCRIPTOR.message_types_by_name['DepsUnpinnedMsg']
+_NONODESFORSELECTIONCRITERIA = DESCRIPTOR.message_types_by_name['NoNodesForSelectionCriteria']
+_NONODESFORSELECTIONCRITERIAMSG = DESCRIPTOR.message_types_by_name['NoNodesForSelectionCriteriaMsg']
+_RUNNINGOPERATIONCAUGHTERROR = DESCRIPTOR.message_types_by_name['RunningOperationCaughtError']
+_RUNNINGOPERATIONCAUGHTERRORMSG = DESCRIPTOR.message_types_by_name['RunningOperationCaughtErrorMsg']
+_COMPILECOMPLETE = DESCRIPTOR.message_types_by_name['CompileComplete']
+_COMPILECOMPLETEMSG = DESCRIPTOR.message_types_by_name['CompileCompleteMsg']
+_FRESHNESSCHECKCOMPLETE = DESCRIPTOR.message_types_by_name['FreshnessCheckComplete']
+_FRESHNESSCHECKCOMPLETEMSG = DESCRIPTOR.message_types_by_name['FreshnessCheckCompleteMsg']
+_SEEDHEADER = DESCRIPTOR.message_types_by_name['SeedHeader']
+_SEEDHEADERMSG = DESCRIPTOR.message_types_by_name['SeedHeaderMsg']
+_SQLRUNNEREXCEPTION = DESCRIPTOR.message_types_by_name['SQLRunnerException']
+_SQLRUNNEREXCEPTIONMSG = DESCRIPTOR.message_types_by_name['SQLRunnerExceptionMsg']
+_LOGTESTRESULT = DESCRIPTOR.message_types_by_name['LogTestResult']
+_LOGTESTRESULTMSG = DESCRIPTOR.message_types_by_name['LogTestResultMsg']
+_LOGSTARTLINE = DESCRIPTOR.message_types_by_name['LogStartLine']
+_LOGSTARTLINEMSG = DESCRIPTOR.message_types_by_name['LogStartLineMsg']
+_LOGMODELRESULT = DESCRIPTOR.message_types_by_name['LogModelResult']
+_LOGMODELRESULTMSG = DESCRIPTOR.message_types_by_name['LogModelResultMsg']
+_LOGSNAPSHOTRESULT = DESCRIPTOR.message_types_by_name['LogSnapshotResult']
+_LOGSNAPSHOTRESULT_CFGENTRY = _LOGSNAPSHOTRESULT.nested_types_by_name['CfgEntry']
+_LOGSNAPSHOTRESULTMSG = DESCRIPTOR.message_types_by_name['LogSnapshotResultMsg']
+_LOGSEEDRESULT = DESCRIPTOR.message_types_by_name['LogSeedResult']
+_LOGSEEDRESULTMSG = DESCRIPTOR.message_types_by_name['LogSeedResultMsg']
+_LOGFRESHNESSRESULT = DESCRIPTOR.message_types_by_name['LogFreshnessResult']
+_LOGFRESHNESSRESULTMSG = DESCRIPTOR.message_types_by_name['LogFreshnessResultMsg']
+_LOGCANCELLINE = DESCRIPTOR.message_types_by_name['LogCancelLine']
+_LOGCANCELLINEMSG = DESCRIPTOR.message_types_by_name['LogCancelLineMsg']
+_DEFAULTSELECTOR = DESCRIPTOR.message_types_by_name['DefaultSelector']
+_DEFAULTSELECTORMSG = DESCRIPTOR.message_types_by_name['DefaultSelectorMsg']
+_NODESTART = DESCRIPTOR.message_types_by_name['NodeStart']
+_NODESTARTMSG = DESCRIPTOR.message_types_by_name['NodeStartMsg']
+_NODEFINISHED = DESCRIPTOR.message_types_by_name['NodeFinished']
+_NODEFINISHEDMSG = DESCRIPTOR.message_types_by_name['NodeFinishedMsg']
+_QUERYCANCELATIONUNSUPPORTED = DESCRIPTOR.message_types_by_name['QueryCancelationUnsupported']
+_QUERYCANCELATIONUNSUPPORTEDMSG = DESCRIPTOR.message_types_by_name['QueryCancelationUnsupportedMsg']
+_CONCURRENCYLINE = DESCRIPTOR.message_types_by_name['ConcurrencyLine']
+_CONCURRENCYLINEMSG = DESCRIPTOR.message_types_by_name['ConcurrencyLineMsg']
+_WRITINGINJECTEDSQLFORNODE = DESCRIPTOR.message_types_by_name['WritingInjectedSQLForNode']
+_WRITINGINJECTEDSQLFORNODEMSG = DESCRIPTOR.message_types_by_name['WritingInjectedSQLForNodeMsg']
+_NODECOMPILING = DESCRIPTOR.message_types_by_name['NodeCompiling']
+_NODECOMPILINGMSG = DESCRIPTOR.message_types_by_name['NodeCompilingMsg']
+_NODEEXECUTING = DESCRIPTOR.message_types_by_name['NodeExecuting']
+_NODEEXECUTINGMSG = DESCRIPTOR.message_types_by_name['NodeExecutingMsg']
+_LOGHOOKSTARTLINE = DESCRIPTOR.message_types_by_name['LogHookStartLine']
+_LOGHOOKSTARTLINEMSG = DESCRIPTOR.message_types_by_name['LogHookStartLineMsg']
+_LOGHOOKENDLINE = DESCRIPTOR.message_types_by_name['LogHookEndLine']
+_LOGHOOKENDLINEMSG = DESCRIPTOR.message_types_by_name['LogHookEndLineMsg']
+_SKIPPINGDETAILS = DESCRIPTOR.message_types_by_name['SkippingDetails']
+_SKIPPINGDETAILSMSG = DESCRIPTOR.message_types_by_name['SkippingDetailsMsg']
+_NOTHINGTODO = DESCRIPTOR.message_types_by_name['NothingToDo']
+_NOTHINGTODOMSG = DESCRIPTOR.message_types_by_name['NothingToDoMsg']
+_RUNNINGOPERATIONUNCAUGHTERROR = DESCRIPTOR.message_types_by_name['RunningOperationUncaughtError']
+_RUNNINGOPERATIONUNCAUGHTERRORMSG = DESCRIPTOR.message_types_by_name['RunningOperationUncaughtErrorMsg']
+_ENDRUNRESULT = DESCRIPTOR.message_types_by_name['EndRunResult']
+_ENDRUNRESULTMSG = DESCRIPTOR.message_types_by_name['EndRunResultMsg']
+_NONODESSELECTED = DESCRIPTOR.message_types_by_name['NoNodesSelected']
+_NONODESSELECTEDMSG = DESCRIPTOR.message_types_by_name['NoNodesSelectedMsg']
+_COMMANDCOMPLETED = DESCRIPTOR.message_types_by_name['CommandCompleted']
+_COMMANDCOMPLETEDMSG = DESCRIPTOR.message_types_by_name['CommandCompletedMsg']
+_SHOWNODE = DESCRIPTOR.message_types_by_name['ShowNode']
+_SHOWNODEMSG = DESCRIPTOR.message_types_by_name['ShowNodeMsg']
+_COMPILEDNODE = DESCRIPTOR.message_types_by_name['CompiledNode']
+_COMPILEDNODEMSG = DESCRIPTOR.message_types_by_name['CompiledNodeMsg']
+_CATCHABLEEXCEPTIONONRUN = DESCRIPTOR.message_types_by_name['CatchableExceptionOnRun']
+_CATCHABLEEXCEPTIONONRUNMSG = DESCRIPTOR.message_types_by_name['CatchableExceptionOnRunMsg']
+_INTERNALERRORONRUN = DESCRIPTOR.message_types_by_name['InternalErrorOnRun']
+_INTERNALERRORONRUNMSG = DESCRIPTOR.message_types_by_name['InternalErrorOnRunMsg']
+_GENERICEXCEPTIONONRUN = DESCRIPTOR.message_types_by_name['GenericExceptionOnRun']
+_GENERICEXCEPTIONONRUNMSG = DESCRIPTOR.message_types_by_name['GenericExceptionOnRunMsg']
+_NODECONNECTIONRELEASEERROR = DESCRIPTOR.message_types_by_name['NodeConnectionReleaseError']
+_NODECONNECTIONRELEASEERRORMSG = DESCRIPTOR.message_types_by_name['NodeConnectionReleaseErrorMsg']
+_FOUNDSTATS = DESCRIPTOR.message_types_by_name['FoundStats']
+_FOUNDSTATSMSG = DESCRIPTOR.message_types_by_name['FoundStatsMsg']
+_MAINKEYBOARDINTERRUPT = DESCRIPTOR.message_types_by_name['MainKeyboardInterrupt']
+_MAINKEYBOARDINTERRUPTMSG = DESCRIPTOR.message_types_by_name['MainKeyboardInterruptMsg']
+_MAINENCOUNTEREDERROR = DESCRIPTOR.message_types_by_name['MainEncounteredError']
+_MAINENCOUNTEREDERRORMSG = DESCRIPTOR.message_types_by_name['MainEncounteredErrorMsg']
+_MAINSTACKTRACE = DESCRIPTOR.message_types_by_name['MainStackTrace']
+_MAINSTACKTRACEMSG = DESCRIPTOR.message_types_by_name['MainStackTraceMsg']
+_SYSTEMCOULDNOTWRITE = DESCRIPTOR.message_types_by_name['SystemCouldNotWrite']
+_SYSTEMCOULDNOTWRITEMSG = DESCRIPTOR.message_types_by_name['SystemCouldNotWriteMsg']
+_SYSTEMEXECUTINGCMD = DESCRIPTOR.message_types_by_name['SystemExecutingCmd']
+_SYSTEMEXECUTINGCMDMSG = DESCRIPTOR.message_types_by_name['SystemExecutingCmdMsg']
+_SYSTEMSTDOUT = DESCRIPTOR.message_types_by_name['SystemStdOut']
+_SYSTEMSTDOUTMSG = DESCRIPTOR.message_types_by_name['SystemStdOutMsg']
+_SYSTEMSTDERR = DESCRIPTOR.message_types_by_name['SystemStdErr']
+_SYSTEMSTDERRMSG = DESCRIPTOR.message_types_by_name['SystemStdErrMsg']
+_SYSTEMREPORTRETURNCODE = DESCRIPTOR.message_types_by_name['SystemReportReturnCode']
+_SYSTEMREPORTRETURNCODEMSG = DESCRIPTOR.message_types_by_name['SystemReportReturnCodeMsg']
+_TIMINGINFOCOLLECTED = DESCRIPTOR.message_types_by_name['TimingInfoCollected']
+_TIMINGINFOCOLLECTEDMSG = DESCRIPTOR.message_types_by_name['TimingInfoCollectedMsg']
+_LOGDEBUGSTACKTRACE = DESCRIPTOR.message_types_by_name['LogDebugStackTrace']
+_LOGDEBUGSTACKTRACEMSG = DESCRIPTOR.message_types_by_name['LogDebugStackTraceMsg']
+_CHECKCLEANPATH = DESCRIPTOR.message_types_by_name['CheckCleanPath']
+_CHECKCLEANPATHMSG = DESCRIPTOR.message_types_by_name['CheckCleanPathMsg']
+_CONFIRMCLEANPATH = DESCRIPTOR.message_types_by_name['ConfirmCleanPath']
+_CONFIRMCLEANPATHMSG = DESCRIPTOR.message_types_by_name['ConfirmCleanPathMsg']
+_PROTECTEDCLEANPATH = DESCRIPTOR.message_types_by_name['ProtectedCleanPath']
+_PROTECTEDCLEANPATHMSG = DESCRIPTOR.message_types_by_name['ProtectedCleanPathMsg']
+_FINISHEDCLEANPATHS = DESCRIPTOR.message_types_by_name['FinishedCleanPaths']
+_FINISHEDCLEANPATHSMSG = DESCRIPTOR.message_types_by_name['FinishedCleanPathsMsg']
+_OPENCOMMAND = DESCRIPTOR.message_types_by_name['OpenCommand']
+_OPENCOMMANDMSG = DESCRIPTOR.message_types_by_name['OpenCommandMsg']
+_FORMATTING = DESCRIPTOR.message_types_by_name['Formatting']
+_FORMATTINGMSG = DESCRIPTOR.message_types_by_name['FormattingMsg']
+_SERVINGDOCSPORT = DESCRIPTOR.message_types_by_name['ServingDocsPort']
+_SERVINGDOCSPORTMSG = DESCRIPTOR.message_types_by_name['ServingDocsPortMsg']
+_SERVINGDOCSACCESSINFO = DESCRIPTOR.message_types_by_name['ServingDocsAccessInfo']
+_SERVINGDOCSACCESSINFOMSG = DESCRIPTOR.message_types_by_name['ServingDocsAccessInfoMsg']
+_SERVINGDOCSEXITINFO = DESCRIPTOR.message_types_by_name['ServingDocsExitInfo']
+_SERVINGDOCSEXITINFOMSG = DESCRIPTOR.message_types_by_name['ServingDocsExitInfoMsg']
+_RUNRESULTWARNING = DESCRIPTOR.message_types_by_name['RunResultWarning']
+_RUNRESULTWARNINGMSG = DESCRIPTOR.message_types_by_name['RunResultWarningMsg']
+_RUNRESULTFAILURE = DESCRIPTOR.message_types_by_name['RunResultFailure']
+_RUNRESULTFAILUREMSG = DESCRIPTOR.message_types_by_name['RunResultFailureMsg']
+_STATSLINE = DESCRIPTOR.message_types_by_name['StatsLine']
+_STATSLINE_STATSENTRY = _STATSLINE.nested_types_by_name['StatsEntry']
+_STATSLINEMSG = DESCRIPTOR.message_types_by_name['StatsLineMsg']
+_RUNRESULTERROR = DESCRIPTOR.message_types_by_name['RunResultError']
+_RUNRESULTERRORMSG = DESCRIPTOR.message_types_by_name['RunResultErrorMsg']
+_RUNRESULTERRORNOMESSAGE = DESCRIPTOR.message_types_by_name['RunResultErrorNoMessage']
+_RUNRESULTERRORNOMESSAGEMSG = DESCRIPTOR.message_types_by_name['RunResultErrorNoMessageMsg']
+_SQLCOMPILEDPATH = DESCRIPTOR.message_types_by_name['SQLCompiledPath']
+_SQLCOMPILEDPATHMSG = DESCRIPTOR.message_types_by_name['SQLCompiledPathMsg']
+_CHECKNODETESTFAILURE = DESCRIPTOR.message_types_by_name['CheckNodeTestFailure']
+_CHECKNODETESTFAILUREMSG = DESCRIPTOR.message_types_by_name['CheckNodeTestFailureMsg']
+_FIRSTRUNRESULTERROR = DESCRIPTOR.message_types_by_name['FirstRunResultError']
+_FIRSTRUNRESULTERRORMSG = DESCRIPTOR.message_types_by_name['FirstRunResultErrorMsg']
+_AFTERFIRSTRUNRESULTERROR = DESCRIPTOR.message_types_by_name['AfterFirstRunResultError']
+_AFTERFIRSTRUNRESULTERRORMSG = DESCRIPTOR.message_types_by_name['AfterFirstRunResultErrorMsg']
+_ENDOFRUNSUMMARY = DESCRIPTOR.message_types_by_name['EndOfRunSummary']
+_ENDOFRUNSUMMARYMSG = DESCRIPTOR.message_types_by_name['EndOfRunSummaryMsg']
+_LOGSKIPBECAUSEERROR = DESCRIPTOR.message_types_by_name['LogSkipBecauseError']
+_LOGSKIPBECAUSEERRORMSG = DESCRIPTOR.message_types_by_name['LogSkipBecauseErrorMsg']
+_ENSUREGITINSTALLED = DESCRIPTOR.message_types_by_name['EnsureGitInstalled']
+_ENSUREGITINSTALLEDMSG = DESCRIPTOR.message_types_by_name['EnsureGitInstalledMsg']
+_DEPSCREATINGLOCALSYMLINK = DESCRIPTOR.message_types_by_name['DepsCreatingLocalSymlink']
+_DEPSCREATINGLOCALSYMLINKMSG = DESCRIPTOR.message_types_by_name['DepsCreatingLocalSymlinkMsg']
+_DEPSSYMLINKNOTAVAILABLE = DESCRIPTOR.message_types_by_name['DepsSymlinkNotAvailable']
+_DEPSSYMLINKNOTAVAILABLEMSG = DESCRIPTOR.message_types_by_name['DepsSymlinkNotAvailableMsg']
+_DISABLETRACKING = DESCRIPTOR.message_types_by_name['DisableTracking']
+_DISABLETRACKINGMSG = DESCRIPTOR.message_types_by_name['DisableTrackingMsg']
+_SENDINGEVENT = DESCRIPTOR.message_types_by_name['SendingEvent']
+_SENDINGEVENTMSG = DESCRIPTOR.message_types_by_name['SendingEventMsg']
+_SENDEVENTFAILURE = DESCRIPTOR.message_types_by_name['SendEventFailure']
+_SENDEVENTFAILUREMSG = DESCRIPTOR.message_types_by_name['SendEventFailureMsg']
+_FLUSHEVENTS = DESCRIPTOR.message_types_by_name['FlushEvents']
+_FLUSHEVENTSMSG = DESCRIPTOR.message_types_by_name['FlushEventsMsg']
+_FLUSHEVENTSFAILURE = DESCRIPTOR.message_types_by_name['FlushEventsFailure']
+_FLUSHEVENTSFAILUREMSG = DESCRIPTOR.message_types_by_name['FlushEventsFailureMsg']
+_TRACKINGINITIALIZEFAILURE = DESCRIPTOR.message_types_by_name['TrackingInitializeFailure']
+_TRACKINGINITIALIZEFAILUREMSG = DESCRIPTOR.message_types_by_name['TrackingInitializeFailureMsg']
+_RUNRESULTWARNINGMESSAGE = DESCRIPTOR.message_types_by_name['RunResultWarningMessage']
+_RUNRESULTWARNINGMESSAGEMSG = DESCRIPTOR.message_types_by_name['RunResultWarningMessageMsg']
+_DEBUGCMDOUT = DESCRIPTOR.message_types_by_name['DebugCmdOut']
+_DEBUGCMDOUTMSG = DESCRIPTOR.message_types_by_name['DebugCmdOutMsg']
+_DEBUGCMDRESULT = DESCRIPTOR.message_types_by_name['DebugCmdResult']
+_DEBUGCMDRESULTMSG = DESCRIPTOR.message_types_by_name['DebugCmdResultMsg']
+_LISTCMDOUT = DESCRIPTOR.message_types_by_name['ListCmdOut']
+_LISTCMDOUTMSG = DESCRIPTOR.message_types_by_name['ListCmdOutMsg']
+_NOTE = DESCRIPTOR.message_types_by_name['Note']
+_NOTEMSG = DESCRIPTOR.message_types_by_name['NoteMsg']
+EventInfo = _reflection.GeneratedProtocolMessageType('EventInfo', (_message.Message,), {
+
+  'ExtraEntry' : _reflection.GeneratedProtocolMessageType('ExtraEntry', (_message.Message,), {
+    'DESCRIPTOR' : _EVENTINFO_EXTRAENTRY,
+    '__module__' : 'types_pb2'
+    # @@protoc_insertion_point(class_scope:proto_types.EventInfo.ExtraEntry)
+    })
+  ,
+  'DESCRIPTOR' : _EVENTINFO,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.EventInfo)
+  })
+_sym_db.RegisterMessage(EventInfo)
+_sym_db.RegisterMessage(EventInfo.ExtraEntry)
+
+TimingInfoMsg = _reflection.GeneratedProtocolMessageType('TimingInfoMsg', (_message.Message,), {
+  'DESCRIPTOR' : _TIMINGINFOMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.TimingInfoMsg)
+  })
+_sym_db.RegisterMessage(TimingInfoMsg)
+
+NodeRelation = _reflection.GeneratedProtocolMessageType('NodeRelation', (_message.Message,), {
+  'DESCRIPTOR' : _NODERELATION,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.NodeRelation)
+  })
+_sym_db.RegisterMessage(NodeRelation)
+
+NodeInfo = _reflection.GeneratedProtocolMessageType('NodeInfo', (_message.Message,), {
+  'DESCRIPTOR' : _NODEINFO,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.NodeInfo)
+  })
+_sym_db.RegisterMessage(NodeInfo)
+
+RunResultMsg = _reflection.GeneratedProtocolMessageType('RunResultMsg', (_message.Message,), {
+  'DESCRIPTOR' : _RUNRESULTMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.RunResultMsg)
+  })
+_sym_db.RegisterMessage(RunResultMsg)
+
+ReferenceKeyMsg = _reflection.GeneratedProtocolMessageType('ReferenceKeyMsg', (_message.Message,), {
+  'DESCRIPTOR' : _REFERENCEKEYMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ReferenceKeyMsg)
+  })
+_sym_db.RegisterMessage(ReferenceKeyMsg)
+
+GenericMessage = _reflection.GeneratedProtocolMessageType('GenericMessage', (_message.Message,), {
+  'DESCRIPTOR' : _GENERICMESSAGE,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.GenericMessage)
+  })
+_sym_db.RegisterMessage(GenericMessage)
+
+MainReportVersion = _reflection.GeneratedProtocolMessageType('MainReportVersion', (_message.Message,), {
+  'DESCRIPTOR' : _MAINREPORTVERSION,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.MainReportVersion)
+  })
+_sym_db.RegisterMessage(MainReportVersion)
+
+MainReportVersionMsg = _reflection.GeneratedProtocolMessageType('MainReportVersionMsg', (_message.Message,), {
+  'DESCRIPTOR' : _MAINREPORTVERSIONMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.MainReportVersionMsg)
+  })
+_sym_db.RegisterMessage(MainReportVersionMsg)
+
+MainReportArgs = _reflection.GeneratedProtocolMessageType('MainReportArgs', (_message.Message,), {
+
+  'ArgsEntry' : _reflection.GeneratedProtocolMessageType('ArgsEntry', (_message.Message,), {
+    'DESCRIPTOR' : _MAINREPORTARGS_ARGSENTRY,
+    '__module__' : 'types_pb2'
+    # @@protoc_insertion_point(class_scope:proto_types.MainReportArgs.ArgsEntry)
+    })
+  ,
+  'DESCRIPTOR' : _MAINREPORTARGS,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.MainReportArgs)
+  })
+_sym_db.RegisterMessage(MainReportArgs)
+_sym_db.RegisterMessage(MainReportArgs.ArgsEntry)
+
+MainReportArgsMsg = _reflection.GeneratedProtocolMessageType('MainReportArgsMsg', (_message.Message,), {
+  'DESCRIPTOR' : _MAINREPORTARGSMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.MainReportArgsMsg)
+  })
+_sym_db.RegisterMessage(MainReportArgsMsg)
+
+MainTrackingUserState = _reflection.GeneratedProtocolMessageType('MainTrackingUserState', (_message.Message,), {
+  'DESCRIPTOR' : _MAINTRACKINGUSERSTATE,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.MainTrackingUserState)
+  })
+_sym_db.RegisterMessage(MainTrackingUserState)
+
+MainTrackingUserStateMsg = _reflection.GeneratedProtocolMessageType('MainTrackingUserStateMsg', (_message.Message,), {
+  'DESCRIPTOR' : _MAINTRACKINGUSERSTATEMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.MainTrackingUserStateMsg)
+  })
+_sym_db.RegisterMessage(MainTrackingUserStateMsg)
+
+MergedFromState = _reflection.GeneratedProtocolMessageType('MergedFromState', (_message.Message,), {
+  'DESCRIPTOR' : _MERGEDFROMSTATE,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.MergedFromState)
+  })
+_sym_db.RegisterMessage(MergedFromState)
+
+MergedFromStateMsg = _reflection.GeneratedProtocolMessageType('MergedFromStateMsg', (_message.Message,), {
+  'DESCRIPTOR' : _MERGEDFROMSTATEMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.MergedFromStateMsg)
+  })
+_sym_db.RegisterMessage(MergedFromStateMsg)
+
+MissingProfileTarget = _reflection.GeneratedProtocolMessageType('MissingProfileTarget', (_message.Message,), {
+  'DESCRIPTOR' : _MISSINGPROFILETARGET,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.MissingProfileTarget)
+  })
+_sym_db.RegisterMessage(MissingProfileTarget)
+
+MissingProfileTargetMsg = _reflection.GeneratedProtocolMessageType('MissingProfileTargetMsg', (_message.Message,), {
+  'DESCRIPTOR' : _MISSINGPROFILETARGETMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.MissingProfileTargetMsg)
+  })
+_sym_db.RegisterMessage(MissingProfileTargetMsg)
+
+InvalidOptionYAML = _reflection.GeneratedProtocolMessageType('InvalidOptionYAML', (_message.Message,), {
+  'DESCRIPTOR' : _INVALIDOPTIONYAML,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.InvalidOptionYAML)
+  })
+_sym_db.RegisterMessage(InvalidOptionYAML)
+
+InvalidOptionYAMLMsg = _reflection.GeneratedProtocolMessageType('InvalidOptionYAMLMsg', (_message.Message,), {
+  'DESCRIPTOR' : _INVALIDOPTIONYAMLMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.InvalidOptionYAMLMsg)
+  })
+_sym_db.RegisterMessage(InvalidOptionYAMLMsg)
+
+LogDbtProjectError = _reflection.GeneratedProtocolMessageType('LogDbtProjectError', (_message.Message,), {
+  'DESCRIPTOR' : _LOGDBTPROJECTERROR,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.LogDbtProjectError)
+  })
+_sym_db.RegisterMessage(LogDbtProjectError)
+
+LogDbtProjectErrorMsg = _reflection.GeneratedProtocolMessageType('LogDbtProjectErrorMsg', (_message.Message,), {
+  'DESCRIPTOR' : _LOGDBTPROJECTERRORMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.LogDbtProjectErrorMsg)
+  })
+_sym_db.RegisterMessage(LogDbtProjectErrorMsg)
+
+LogDbtProfileError = _reflection.GeneratedProtocolMessageType('LogDbtProfileError', (_message.Message,), {
+  'DESCRIPTOR' : _LOGDBTPROFILEERROR,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.LogDbtProfileError)
+  })
+_sym_db.RegisterMessage(LogDbtProfileError)
+
+LogDbtProfileErrorMsg = _reflection.GeneratedProtocolMessageType('LogDbtProfileErrorMsg', (_message.Message,), {
+  'DESCRIPTOR' : _LOGDBTPROFILEERRORMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.LogDbtProfileErrorMsg)
+  })
+_sym_db.RegisterMessage(LogDbtProfileErrorMsg)
+
+StarterProjectPath = _reflection.GeneratedProtocolMessageType('StarterProjectPath', (_message.Message,), {
+  'DESCRIPTOR' : _STARTERPROJECTPATH,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.StarterProjectPath)
+  })
+_sym_db.RegisterMessage(StarterProjectPath)
+
+StarterProjectPathMsg = _reflection.GeneratedProtocolMessageType('StarterProjectPathMsg', (_message.Message,), {
+  'DESCRIPTOR' : _STARTERPROJECTPATHMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.StarterProjectPathMsg)
+  })
+_sym_db.RegisterMessage(StarterProjectPathMsg)
+
+ConfigFolderDirectory = _reflection.GeneratedProtocolMessageType('ConfigFolderDirectory', (_message.Message,), {
+  'DESCRIPTOR' : _CONFIGFOLDERDIRECTORY,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ConfigFolderDirectory)
+  })
+_sym_db.RegisterMessage(ConfigFolderDirectory)
+
+ConfigFolderDirectoryMsg = _reflection.GeneratedProtocolMessageType('ConfigFolderDirectoryMsg', (_message.Message,), {
+  'DESCRIPTOR' : _CONFIGFOLDERDIRECTORYMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ConfigFolderDirectoryMsg)
+  })
+_sym_db.RegisterMessage(ConfigFolderDirectoryMsg)
+
+NoSampleProfileFound = _reflection.GeneratedProtocolMessageType('NoSampleProfileFound', (_message.Message,), {
+  'DESCRIPTOR' : _NOSAMPLEPROFILEFOUND,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.NoSampleProfileFound)
+  })
+_sym_db.RegisterMessage(NoSampleProfileFound)
+
+NoSampleProfileFoundMsg = _reflection.GeneratedProtocolMessageType('NoSampleProfileFoundMsg', (_message.Message,), {
+  'DESCRIPTOR' : _NOSAMPLEPROFILEFOUNDMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.NoSampleProfileFoundMsg)
+  })
+_sym_db.RegisterMessage(NoSampleProfileFoundMsg)
+
+ProfileWrittenWithSample = _reflection.GeneratedProtocolMessageType('ProfileWrittenWithSample', (_message.Message,), {
+  'DESCRIPTOR' : _PROFILEWRITTENWITHSAMPLE,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ProfileWrittenWithSample)
+  })
+_sym_db.RegisterMessage(ProfileWrittenWithSample)
+
+ProfileWrittenWithSampleMsg = _reflection.GeneratedProtocolMessageType('ProfileWrittenWithSampleMsg', (_message.Message,), {
+  'DESCRIPTOR' : _PROFILEWRITTENWITHSAMPLEMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ProfileWrittenWithSampleMsg)
+  })
+_sym_db.RegisterMessage(ProfileWrittenWithSampleMsg)
+
+ProfileWrittenWithTargetTemplateYAML = _reflection.GeneratedProtocolMessageType('ProfileWrittenWithTargetTemplateYAML', (_message.Message,), {
+  'DESCRIPTOR' : _PROFILEWRITTENWITHTARGETTEMPLATEYAML,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ProfileWrittenWithTargetTemplateYAML)
+  })
+_sym_db.RegisterMessage(ProfileWrittenWithTargetTemplateYAML)
+
+ProfileWrittenWithTargetTemplateYAMLMsg = _reflection.GeneratedProtocolMessageType('ProfileWrittenWithTargetTemplateYAMLMsg', (_message.Message,), {
+  'DESCRIPTOR' : _PROFILEWRITTENWITHTARGETTEMPLATEYAMLMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ProfileWrittenWithTargetTemplateYAMLMsg)
+  })
+_sym_db.RegisterMessage(ProfileWrittenWithTargetTemplateYAMLMsg)
+
+ProfileWrittenWithProjectTemplateYAML = _reflection.GeneratedProtocolMessageType('ProfileWrittenWithProjectTemplateYAML', (_message.Message,), {
+  'DESCRIPTOR' : _PROFILEWRITTENWITHPROJECTTEMPLATEYAML,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ProfileWrittenWithProjectTemplateYAML)
+  })
+_sym_db.RegisterMessage(ProfileWrittenWithProjectTemplateYAML)
+
+ProfileWrittenWithProjectTemplateYAMLMsg = _reflection.GeneratedProtocolMessageType('ProfileWrittenWithProjectTemplateYAMLMsg', (_message.Message,), {
+  'DESCRIPTOR' : _PROFILEWRITTENWITHPROJECTTEMPLATEYAMLMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ProfileWrittenWithProjectTemplateYAMLMsg)
+  })
+_sym_db.RegisterMessage(ProfileWrittenWithProjectTemplateYAMLMsg)
+
+SettingUpProfile = _reflection.GeneratedProtocolMessageType('SettingUpProfile', (_message.Message,), {
+  'DESCRIPTOR' : _SETTINGUPPROFILE,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.SettingUpProfile)
+  })
+_sym_db.RegisterMessage(SettingUpProfile)
+
+SettingUpProfileMsg = _reflection.GeneratedProtocolMessageType('SettingUpProfileMsg', (_message.Message,), {
+  'DESCRIPTOR' : _SETTINGUPPROFILEMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.SettingUpProfileMsg)
+  })
+_sym_db.RegisterMessage(SettingUpProfileMsg)
+
+InvalidProfileTemplateYAML = _reflection.GeneratedProtocolMessageType('InvalidProfileTemplateYAML', (_message.Message,), {
+  'DESCRIPTOR' : _INVALIDPROFILETEMPLATEYAML,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.InvalidProfileTemplateYAML)
+  })
+_sym_db.RegisterMessage(InvalidProfileTemplateYAML)
+
+InvalidProfileTemplateYAMLMsg = _reflection.GeneratedProtocolMessageType('InvalidProfileTemplateYAMLMsg', (_message.Message,), {
+  'DESCRIPTOR' : _INVALIDPROFILETEMPLATEYAMLMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.InvalidProfileTemplateYAMLMsg)
+  })
+_sym_db.RegisterMessage(InvalidProfileTemplateYAMLMsg)
+
+ProjectNameAlreadyExists = _reflection.GeneratedProtocolMessageType('ProjectNameAlreadyExists', (_message.Message,), {
+  'DESCRIPTOR' : _PROJECTNAMEALREADYEXISTS,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ProjectNameAlreadyExists)
+  })
+_sym_db.RegisterMessage(ProjectNameAlreadyExists)
+
+ProjectNameAlreadyExistsMsg = _reflection.GeneratedProtocolMessageType('ProjectNameAlreadyExistsMsg', (_message.Message,), {
+  'DESCRIPTOR' : _PROJECTNAMEALREADYEXISTSMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ProjectNameAlreadyExistsMsg)
+  })
+_sym_db.RegisterMessage(ProjectNameAlreadyExistsMsg)
+
+ProjectCreated = _reflection.GeneratedProtocolMessageType('ProjectCreated', (_message.Message,), {
+  'DESCRIPTOR' : _PROJECTCREATED,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ProjectCreated)
+  })
+_sym_db.RegisterMessage(ProjectCreated)
+
+ProjectCreatedMsg = _reflection.GeneratedProtocolMessageType('ProjectCreatedMsg', (_message.Message,), {
+  'DESCRIPTOR' : _PROJECTCREATEDMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ProjectCreatedMsg)
+  })
+_sym_db.RegisterMessage(ProjectCreatedMsg)
+
+PackageRedirectDeprecation = _reflection.GeneratedProtocolMessageType('PackageRedirectDeprecation', (_message.Message,), {
+  'DESCRIPTOR' : _PACKAGEREDIRECTDEPRECATION,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.PackageRedirectDeprecation)
+  })
+_sym_db.RegisterMessage(PackageRedirectDeprecation)
+
+PackageRedirectDeprecationMsg = _reflection.GeneratedProtocolMessageType('PackageRedirectDeprecationMsg', (_message.Message,), {
+  'DESCRIPTOR' : _PACKAGEREDIRECTDEPRECATIONMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.PackageRedirectDeprecationMsg)
+  })
+_sym_db.RegisterMessage(PackageRedirectDeprecationMsg)
+
+PackageInstallPathDeprecation = _reflection.GeneratedProtocolMessageType('PackageInstallPathDeprecation', (_message.Message,), {
+  'DESCRIPTOR' : _PACKAGEINSTALLPATHDEPRECATION,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.PackageInstallPathDeprecation)
+  })
+_sym_db.RegisterMessage(PackageInstallPathDeprecation)
+
+PackageInstallPathDeprecationMsg = _reflection.GeneratedProtocolMessageType('PackageInstallPathDeprecationMsg', (_message.Message,), {
+  'DESCRIPTOR' : _PACKAGEINSTALLPATHDEPRECATIONMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.PackageInstallPathDeprecationMsg)
+  })
+_sym_db.RegisterMessage(PackageInstallPathDeprecationMsg)
+
+ConfigSourcePathDeprecation = _reflection.GeneratedProtocolMessageType('ConfigSourcePathDeprecation', (_message.Message,), {
+  'DESCRIPTOR' : _CONFIGSOURCEPATHDEPRECATION,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ConfigSourcePathDeprecation)
+  })
+_sym_db.RegisterMessage(ConfigSourcePathDeprecation)
+
+ConfigSourcePathDeprecationMsg = _reflection.GeneratedProtocolMessageType('ConfigSourcePathDeprecationMsg', (_message.Message,), {
+  'DESCRIPTOR' : _CONFIGSOURCEPATHDEPRECATIONMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ConfigSourcePathDeprecationMsg)
+  })
+_sym_db.RegisterMessage(ConfigSourcePathDeprecationMsg)
+
+ConfigDataPathDeprecation = _reflection.GeneratedProtocolMessageType('ConfigDataPathDeprecation', (_message.Message,), {
+  'DESCRIPTOR' : _CONFIGDATAPATHDEPRECATION,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ConfigDataPathDeprecation)
+  })
+_sym_db.RegisterMessage(ConfigDataPathDeprecation)
+
+ConfigDataPathDeprecationMsg = _reflection.GeneratedProtocolMessageType('ConfigDataPathDeprecationMsg', (_message.Message,), {
+  'DESCRIPTOR' : _CONFIGDATAPATHDEPRECATIONMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ConfigDataPathDeprecationMsg)
+  })
+_sym_db.RegisterMessage(ConfigDataPathDeprecationMsg)
+
+AdapterDeprecationWarning = _reflection.GeneratedProtocolMessageType('AdapterDeprecationWarning', (_message.Message,), {
+  'DESCRIPTOR' : _ADAPTERDEPRECATIONWARNING,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.AdapterDeprecationWarning)
+  })
+_sym_db.RegisterMessage(AdapterDeprecationWarning)
+
+AdapterDeprecationWarningMsg = _reflection.GeneratedProtocolMessageType('AdapterDeprecationWarningMsg', (_message.Message,), {
+  'DESCRIPTOR' : _ADAPTERDEPRECATIONWARNINGMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.AdapterDeprecationWarningMsg)
+  })
+_sym_db.RegisterMessage(AdapterDeprecationWarningMsg)
+
+MetricAttributesRenamed = _reflection.GeneratedProtocolMessageType('MetricAttributesRenamed', (_message.Message,), {
+  'DESCRIPTOR' : _METRICATTRIBUTESRENAMED,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.MetricAttributesRenamed)
+  })
+_sym_db.RegisterMessage(MetricAttributesRenamed)
+
+MetricAttributesRenamedMsg = _reflection.GeneratedProtocolMessageType('MetricAttributesRenamedMsg', (_message.Message,), {
+  'DESCRIPTOR' : _METRICATTRIBUTESRENAMEDMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.MetricAttributesRenamedMsg)
+  })
+_sym_db.RegisterMessage(MetricAttributesRenamedMsg)
+
+ExposureNameDeprecation = _reflection.GeneratedProtocolMessageType('ExposureNameDeprecation', (_message.Message,), {
+  'DESCRIPTOR' : _EXPOSURENAMEDEPRECATION,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ExposureNameDeprecation)
+  })
+_sym_db.RegisterMessage(ExposureNameDeprecation)
+
+ExposureNameDeprecationMsg = _reflection.GeneratedProtocolMessageType('ExposureNameDeprecationMsg', (_message.Message,), {
+  'DESCRIPTOR' : _EXPOSURENAMEDEPRECATIONMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ExposureNameDeprecationMsg)
+  })
+_sym_db.RegisterMessage(ExposureNameDeprecationMsg)
+
+InternalDeprecation = _reflection.GeneratedProtocolMessageType('InternalDeprecation', (_message.Message,), {
+  'DESCRIPTOR' : _INTERNALDEPRECATION,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.InternalDeprecation)
+  })
+_sym_db.RegisterMessage(InternalDeprecation)
+
+InternalDeprecationMsg = _reflection.GeneratedProtocolMessageType('InternalDeprecationMsg', (_message.Message,), {
+  'DESCRIPTOR' : _INTERNALDEPRECATIONMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.InternalDeprecationMsg)
+  })
+_sym_db.RegisterMessage(InternalDeprecationMsg)
+
+EnvironmentVariableRenamed = _reflection.GeneratedProtocolMessageType('EnvironmentVariableRenamed', (_message.Message,), {
+  'DESCRIPTOR' : _ENVIRONMENTVARIABLERENAMED,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.EnvironmentVariableRenamed)
+  })
+_sym_db.RegisterMessage(EnvironmentVariableRenamed)
+
+EnvironmentVariableRenamedMsg = _reflection.GeneratedProtocolMessageType('EnvironmentVariableRenamedMsg', (_message.Message,), {
+  'DESCRIPTOR' : _ENVIRONMENTVARIABLERENAMEDMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.EnvironmentVariableRenamedMsg)
+  })
+_sym_db.RegisterMessage(EnvironmentVariableRenamedMsg)
+
+ConfigLogPathDeprecation = _reflection.GeneratedProtocolMessageType('ConfigLogPathDeprecation', (_message.Message,), {
+  'DESCRIPTOR' : _CONFIGLOGPATHDEPRECATION,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ConfigLogPathDeprecation)
+  })
+_sym_db.RegisterMessage(ConfigLogPathDeprecation)
+
+ConfigLogPathDeprecationMsg = _reflection.GeneratedProtocolMessageType('ConfigLogPathDeprecationMsg', (_message.Message,), {
+  'DESCRIPTOR' : _CONFIGLOGPATHDEPRECATIONMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ConfigLogPathDeprecationMsg)
+  })
+_sym_db.RegisterMessage(ConfigLogPathDeprecationMsg)
+
+ConfigTargetPathDeprecation = _reflection.GeneratedProtocolMessageType('ConfigTargetPathDeprecation', (_message.Message,), {
+  'DESCRIPTOR' : _CONFIGTARGETPATHDEPRECATION,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ConfigTargetPathDeprecation)
+  })
+_sym_db.RegisterMessage(ConfigTargetPathDeprecation)
+
+ConfigTargetPathDeprecationMsg = _reflection.GeneratedProtocolMessageType('ConfigTargetPathDeprecationMsg', (_message.Message,), {
+  'DESCRIPTOR' : _CONFIGTARGETPATHDEPRECATIONMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ConfigTargetPathDeprecationMsg)
+  })
+_sym_db.RegisterMessage(ConfigTargetPathDeprecationMsg)
+
+CollectFreshnessReturnSignature = _reflection.GeneratedProtocolMessageType('CollectFreshnessReturnSignature', (_message.Message,), {
+  'DESCRIPTOR' : _COLLECTFRESHNESSRETURNSIGNATURE,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.CollectFreshnessReturnSignature)
+  })
+_sym_db.RegisterMessage(CollectFreshnessReturnSignature)
+
+CollectFreshnessReturnSignatureMsg = _reflection.GeneratedProtocolMessageType('CollectFreshnessReturnSignatureMsg', (_message.Message,), {
+  'DESCRIPTOR' : _COLLECTFRESHNESSRETURNSIGNATUREMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.CollectFreshnessReturnSignatureMsg)
+  })
+_sym_db.RegisterMessage(CollectFreshnessReturnSignatureMsg)
+
+AdapterEventDebug = _reflection.GeneratedProtocolMessageType('AdapterEventDebug', (_message.Message,), {
+  'DESCRIPTOR' : _ADAPTEREVENTDEBUG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.AdapterEventDebug)
+  })
+_sym_db.RegisterMessage(AdapterEventDebug)
+
+AdapterEventDebugMsg = _reflection.GeneratedProtocolMessageType('AdapterEventDebugMsg', (_message.Message,), {
+  'DESCRIPTOR' : _ADAPTEREVENTDEBUGMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.AdapterEventDebugMsg)
+  })
+_sym_db.RegisterMessage(AdapterEventDebugMsg)
+
+AdapterEventInfo = _reflection.GeneratedProtocolMessageType('AdapterEventInfo', (_message.Message,), {
+  'DESCRIPTOR' : _ADAPTEREVENTINFO,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.AdapterEventInfo)
+  })
+_sym_db.RegisterMessage(AdapterEventInfo)
+
+AdapterEventInfoMsg = _reflection.GeneratedProtocolMessageType('AdapterEventInfoMsg', (_message.Message,), {
+  'DESCRIPTOR' : _ADAPTEREVENTINFOMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.AdapterEventInfoMsg)
+  })
+_sym_db.RegisterMessage(AdapterEventInfoMsg)
+
+AdapterEventWarning = _reflection.GeneratedProtocolMessageType('AdapterEventWarning', (_message.Message,), {
+  'DESCRIPTOR' : _ADAPTEREVENTWARNING,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.AdapterEventWarning)
+  })
+_sym_db.RegisterMessage(AdapterEventWarning)
+
+AdapterEventWarningMsg = _reflection.GeneratedProtocolMessageType('AdapterEventWarningMsg', (_message.Message,), {
+  'DESCRIPTOR' : _ADAPTEREVENTWARNINGMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.AdapterEventWarningMsg)
+  })
+_sym_db.RegisterMessage(AdapterEventWarningMsg)
+
+AdapterEventError = _reflection.GeneratedProtocolMessageType('AdapterEventError', (_message.Message,), {
+  'DESCRIPTOR' : _ADAPTEREVENTERROR,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.AdapterEventError)
+  })
+_sym_db.RegisterMessage(AdapterEventError)
+
+AdapterEventErrorMsg = _reflection.GeneratedProtocolMessageType('AdapterEventErrorMsg', (_message.Message,), {
+  'DESCRIPTOR' : _ADAPTEREVENTERRORMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.AdapterEventErrorMsg)
+  })
+_sym_db.RegisterMessage(AdapterEventErrorMsg)
+
+NewConnection = _reflection.GeneratedProtocolMessageType('NewConnection', (_message.Message,), {
+  'DESCRIPTOR' : _NEWCONNECTION,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.NewConnection)
+  })
+_sym_db.RegisterMessage(NewConnection)
+
+NewConnectionMsg = _reflection.GeneratedProtocolMessageType('NewConnectionMsg', (_message.Message,), {
+  'DESCRIPTOR' : _NEWCONNECTIONMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.NewConnectionMsg)
+  })
+_sym_db.RegisterMessage(NewConnectionMsg)
+
+ConnectionReused = _reflection.GeneratedProtocolMessageType('ConnectionReused', (_message.Message,), {
+  'DESCRIPTOR' : _CONNECTIONREUSED,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ConnectionReused)
+  })
+_sym_db.RegisterMessage(ConnectionReused)
+
+ConnectionReusedMsg = _reflection.GeneratedProtocolMessageType('ConnectionReusedMsg', (_message.Message,), {
+  'DESCRIPTOR' : _CONNECTIONREUSEDMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ConnectionReusedMsg)
+  })
+_sym_db.RegisterMessage(ConnectionReusedMsg)
+
+ConnectionLeftOpenInCleanup = _reflection.GeneratedProtocolMessageType('ConnectionLeftOpenInCleanup', (_message.Message,), {
+  'DESCRIPTOR' : _CONNECTIONLEFTOPENINCLEANUP,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ConnectionLeftOpenInCleanup)
+  })
+_sym_db.RegisterMessage(ConnectionLeftOpenInCleanup)
+
+ConnectionLeftOpenInCleanupMsg = _reflection.GeneratedProtocolMessageType('ConnectionLeftOpenInCleanupMsg', (_message.Message,), {
+  'DESCRIPTOR' : _CONNECTIONLEFTOPENINCLEANUPMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ConnectionLeftOpenInCleanupMsg)
+  })
+_sym_db.RegisterMessage(ConnectionLeftOpenInCleanupMsg)
+
+ConnectionClosedInCleanup = _reflection.GeneratedProtocolMessageType('ConnectionClosedInCleanup', (_message.Message,), {
+  'DESCRIPTOR' : _CONNECTIONCLOSEDINCLEANUP,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ConnectionClosedInCleanup)
+  })
+_sym_db.RegisterMessage(ConnectionClosedInCleanup)
+
+ConnectionClosedInCleanupMsg = _reflection.GeneratedProtocolMessageType('ConnectionClosedInCleanupMsg', (_message.Message,), {
+  'DESCRIPTOR' : _CONNECTIONCLOSEDINCLEANUPMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ConnectionClosedInCleanupMsg)
+  })
+_sym_db.RegisterMessage(ConnectionClosedInCleanupMsg)
+
+RollbackFailed = _reflection.GeneratedProtocolMessageType('RollbackFailed', (_message.Message,), {
+  'DESCRIPTOR' : _ROLLBACKFAILED,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.RollbackFailed)
+  })
+_sym_db.RegisterMessage(RollbackFailed)
+
+RollbackFailedMsg = _reflection.GeneratedProtocolMessageType('RollbackFailedMsg', (_message.Message,), {
+  'DESCRIPTOR' : _ROLLBACKFAILEDMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.RollbackFailedMsg)
+  })
+_sym_db.RegisterMessage(RollbackFailedMsg)
+
+ConnectionClosed = _reflection.GeneratedProtocolMessageType('ConnectionClosed', (_message.Message,), {
+  'DESCRIPTOR' : _CONNECTIONCLOSED,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ConnectionClosed)
+  })
+_sym_db.RegisterMessage(ConnectionClosed)
+
+ConnectionClosedMsg = _reflection.GeneratedProtocolMessageType('ConnectionClosedMsg', (_message.Message,), {
+  'DESCRIPTOR' : _CONNECTIONCLOSEDMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ConnectionClosedMsg)
+  })
+_sym_db.RegisterMessage(ConnectionClosedMsg)
+
+ConnectionLeftOpen = _reflection.GeneratedProtocolMessageType('ConnectionLeftOpen', (_message.Message,), {
+  'DESCRIPTOR' : _CONNECTIONLEFTOPEN,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ConnectionLeftOpen)
+  })
+_sym_db.RegisterMessage(ConnectionLeftOpen)
+
+ConnectionLeftOpenMsg = _reflection.GeneratedProtocolMessageType('ConnectionLeftOpenMsg', (_message.Message,), {
+  'DESCRIPTOR' : _CONNECTIONLEFTOPENMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ConnectionLeftOpenMsg)
+  })
+_sym_db.RegisterMessage(ConnectionLeftOpenMsg)
+
+Rollback = _reflection.GeneratedProtocolMessageType('Rollback', (_message.Message,), {
+  'DESCRIPTOR' : _ROLLBACK,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.Rollback)
+  })
+_sym_db.RegisterMessage(Rollback)
+
+RollbackMsg = _reflection.GeneratedProtocolMessageType('RollbackMsg', (_message.Message,), {
+  'DESCRIPTOR' : _ROLLBACKMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.RollbackMsg)
+  })
+_sym_db.RegisterMessage(RollbackMsg)
+
+CacheMiss = _reflection.GeneratedProtocolMessageType('CacheMiss', (_message.Message,), {
+  'DESCRIPTOR' : _CACHEMISS,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.CacheMiss)
+  })
+_sym_db.RegisterMessage(CacheMiss)
+
+CacheMissMsg = _reflection.GeneratedProtocolMessageType('CacheMissMsg', (_message.Message,), {
+  'DESCRIPTOR' : _CACHEMISSMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.CacheMissMsg)
+  })
+_sym_db.RegisterMessage(CacheMissMsg)
+
+ListRelations = _reflection.GeneratedProtocolMessageType('ListRelations', (_message.Message,), {
+  'DESCRIPTOR' : _LISTRELATIONS,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ListRelations)
+  })
+_sym_db.RegisterMessage(ListRelations)
+
+ListRelationsMsg = _reflection.GeneratedProtocolMessageType('ListRelationsMsg', (_message.Message,), {
+  'DESCRIPTOR' : _LISTRELATIONSMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ListRelationsMsg)
+  })
+_sym_db.RegisterMessage(ListRelationsMsg)
+
+ConnectionUsed = _reflection.GeneratedProtocolMessageType('ConnectionUsed', (_message.Message,), {
+  'DESCRIPTOR' : _CONNECTIONUSED,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ConnectionUsed)
+  })
+_sym_db.RegisterMessage(ConnectionUsed)
+
+ConnectionUsedMsg = _reflection.GeneratedProtocolMessageType('ConnectionUsedMsg', (_message.Message,), {
+  'DESCRIPTOR' : _CONNECTIONUSEDMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ConnectionUsedMsg)
+  })
+_sym_db.RegisterMessage(ConnectionUsedMsg)
+
+SQLQuery = _reflection.GeneratedProtocolMessageType('SQLQuery', (_message.Message,), {
+  'DESCRIPTOR' : _SQLQUERY,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.SQLQuery)
+  })
+_sym_db.RegisterMessage(SQLQuery)
+
+SQLQueryMsg = _reflection.GeneratedProtocolMessageType('SQLQueryMsg', (_message.Message,), {
+  'DESCRIPTOR' : _SQLQUERYMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.SQLQueryMsg)
+  })
+_sym_db.RegisterMessage(SQLQueryMsg)
+
+SQLQueryStatus = _reflection.GeneratedProtocolMessageType('SQLQueryStatus', (_message.Message,), {
+  'DESCRIPTOR' : _SQLQUERYSTATUS,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.SQLQueryStatus)
+  })
+_sym_db.RegisterMessage(SQLQueryStatus)
+
+SQLQueryStatusMsg = _reflection.GeneratedProtocolMessageType('SQLQueryStatusMsg', (_message.Message,), {
+  'DESCRIPTOR' : _SQLQUERYSTATUSMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.SQLQueryStatusMsg)
+  })
+_sym_db.RegisterMessage(SQLQueryStatusMsg)
+
+SQLCommit = _reflection.GeneratedProtocolMessageType('SQLCommit', (_message.Message,), {
+  'DESCRIPTOR' : _SQLCOMMIT,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.SQLCommit)
+  })
+_sym_db.RegisterMessage(SQLCommit)
+
+SQLCommitMsg = _reflection.GeneratedProtocolMessageType('SQLCommitMsg', (_message.Message,), {
+  'DESCRIPTOR' : _SQLCOMMITMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.SQLCommitMsg)
+  })
+_sym_db.RegisterMessage(SQLCommitMsg)
+
+ColTypeChange = _reflection.GeneratedProtocolMessageType('ColTypeChange', (_message.Message,), {
+  'DESCRIPTOR' : _COLTYPECHANGE,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ColTypeChange)
+  })
+_sym_db.RegisterMessage(ColTypeChange)
+
+ColTypeChangeMsg = _reflection.GeneratedProtocolMessageType('ColTypeChangeMsg', (_message.Message,), {
+  'DESCRIPTOR' : _COLTYPECHANGEMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ColTypeChangeMsg)
+  })
+_sym_db.RegisterMessage(ColTypeChangeMsg)
+
+SchemaCreation = _reflection.GeneratedProtocolMessageType('SchemaCreation', (_message.Message,), {
+  'DESCRIPTOR' : _SCHEMACREATION,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.SchemaCreation)
+  })
+_sym_db.RegisterMessage(SchemaCreation)
+
+SchemaCreationMsg = _reflection.GeneratedProtocolMessageType('SchemaCreationMsg', (_message.Message,), {
+  'DESCRIPTOR' : _SCHEMACREATIONMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.SchemaCreationMsg)
+  })
+_sym_db.RegisterMessage(SchemaCreationMsg)
+
+SchemaDrop = _reflection.GeneratedProtocolMessageType('SchemaDrop', (_message.Message,), {
+  'DESCRIPTOR' : _SCHEMADROP,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.SchemaDrop)
+  })
+_sym_db.RegisterMessage(SchemaDrop)
+
+SchemaDropMsg = _reflection.GeneratedProtocolMessageType('SchemaDropMsg', (_message.Message,), {
+  'DESCRIPTOR' : _SCHEMADROPMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.SchemaDropMsg)
+  })
+_sym_db.RegisterMessage(SchemaDropMsg)
+
+CacheAction = _reflection.GeneratedProtocolMessageType('CacheAction', (_message.Message,), {
+  'DESCRIPTOR' : _CACHEACTION,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.CacheAction)
+  })
+_sym_db.RegisterMessage(CacheAction)
+
+CacheActionMsg = _reflection.GeneratedProtocolMessageType('CacheActionMsg', (_message.Message,), {
+  'DESCRIPTOR' : _CACHEACTIONMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.CacheActionMsg)
+  })
+_sym_db.RegisterMessage(CacheActionMsg)
+
+CacheDumpGraph = _reflection.GeneratedProtocolMessageType('CacheDumpGraph', (_message.Message,), {
+
+  'DumpEntry' : _reflection.GeneratedProtocolMessageType('DumpEntry', (_message.Message,), {
+    'DESCRIPTOR' : _CACHEDUMPGRAPH_DUMPENTRY,
+    '__module__' : 'types_pb2'
+    # @@protoc_insertion_point(class_scope:proto_types.CacheDumpGraph.DumpEntry)
+    })
+  ,
+  'DESCRIPTOR' : _CACHEDUMPGRAPH,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.CacheDumpGraph)
+  })
+_sym_db.RegisterMessage(CacheDumpGraph)
+_sym_db.RegisterMessage(CacheDumpGraph.DumpEntry)
+
+CacheDumpGraphMsg = _reflection.GeneratedProtocolMessageType('CacheDumpGraphMsg', (_message.Message,), {
+  'DESCRIPTOR' : _CACHEDUMPGRAPHMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.CacheDumpGraphMsg)
+  })
+_sym_db.RegisterMessage(CacheDumpGraphMsg)
+
+AdapterRegistered = _reflection.GeneratedProtocolMessageType('AdapterRegistered', (_message.Message,), {
+  'DESCRIPTOR' : _ADAPTERREGISTERED,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.AdapterRegistered)
+  })
+_sym_db.RegisterMessage(AdapterRegistered)
+
+AdapterRegisteredMsg = _reflection.GeneratedProtocolMessageType('AdapterRegisteredMsg', (_message.Message,), {
+  'DESCRIPTOR' : _ADAPTERREGISTEREDMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.AdapterRegisteredMsg)
+  })
+_sym_db.RegisterMessage(AdapterRegisteredMsg)
+
+AdapterImportError = _reflection.GeneratedProtocolMessageType('AdapterImportError', (_message.Message,), {
+  'DESCRIPTOR' : _ADAPTERIMPORTERROR,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.AdapterImportError)
+  })
+_sym_db.RegisterMessage(AdapterImportError)
+
+AdapterImportErrorMsg = _reflection.GeneratedProtocolMessageType('AdapterImportErrorMsg', (_message.Message,), {
+  'DESCRIPTOR' : _ADAPTERIMPORTERRORMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.AdapterImportErrorMsg)
+  })
+_sym_db.RegisterMessage(AdapterImportErrorMsg)
+
+PluginLoadError = _reflection.GeneratedProtocolMessageType('PluginLoadError', (_message.Message,), {
+  'DESCRIPTOR' : _PLUGINLOADERROR,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.PluginLoadError)
+  })
+_sym_db.RegisterMessage(PluginLoadError)
+
+PluginLoadErrorMsg = _reflection.GeneratedProtocolMessageType('PluginLoadErrorMsg', (_message.Message,), {
+  'DESCRIPTOR' : _PLUGINLOADERRORMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.PluginLoadErrorMsg)
+  })
+_sym_db.RegisterMessage(PluginLoadErrorMsg)
+
+NewConnectionOpening = _reflection.GeneratedProtocolMessageType('NewConnectionOpening', (_message.Message,), {
+  'DESCRIPTOR' : _NEWCONNECTIONOPENING,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.NewConnectionOpening)
+  })
+_sym_db.RegisterMessage(NewConnectionOpening)
+
+NewConnectionOpeningMsg = _reflection.GeneratedProtocolMessageType('NewConnectionOpeningMsg', (_message.Message,), {
+  'DESCRIPTOR' : _NEWCONNECTIONOPENINGMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.NewConnectionOpeningMsg)
+  })
+_sym_db.RegisterMessage(NewConnectionOpeningMsg)
+
+CodeExecution = _reflection.GeneratedProtocolMessageType('CodeExecution', (_message.Message,), {
+  'DESCRIPTOR' : _CODEEXECUTION,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.CodeExecution)
+  })
+_sym_db.RegisterMessage(CodeExecution)
+
+CodeExecutionMsg = _reflection.GeneratedProtocolMessageType('CodeExecutionMsg', (_message.Message,), {
+  'DESCRIPTOR' : _CODEEXECUTIONMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.CodeExecutionMsg)
+  })
+_sym_db.RegisterMessage(CodeExecutionMsg)
+
+CodeExecutionStatus = _reflection.GeneratedProtocolMessageType('CodeExecutionStatus', (_message.Message,), {
+  'DESCRIPTOR' : _CODEEXECUTIONSTATUS,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.CodeExecutionStatus)
+  })
+_sym_db.RegisterMessage(CodeExecutionStatus)
+
+CodeExecutionStatusMsg = _reflection.GeneratedProtocolMessageType('CodeExecutionStatusMsg', (_message.Message,), {
+  'DESCRIPTOR' : _CODEEXECUTIONSTATUSMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.CodeExecutionStatusMsg)
+  })
+_sym_db.RegisterMessage(CodeExecutionStatusMsg)
+
+CatalogGenerationError = _reflection.GeneratedProtocolMessageType('CatalogGenerationError', (_message.Message,), {
+  'DESCRIPTOR' : _CATALOGGENERATIONERROR,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.CatalogGenerationError)
+  })
+_sym_db.RegisterMessage(CatalogGenerationError)
+
+CatalogGenerationErrorMsg = _reflection.GeneratedProtocolMessageType('CatalogGenerationErrorMsg', (_message.Message,), {
+  'DESCRIPTOR' : _CATALOGGENERATIONERRORMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.CatalogGenerationErrorMsg)
+  })
+_sym_db.RegisterMessage(CatalogGenerationErrorMsg)
+
+WriteCatalogFailure = _reflection.GeneratedProtocolMessageType('WriteCatalogFailure', (_message.Message,), {
+  'DESCRIPTOR' : _WRITECATALOGFAILURE,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.WriteCatalogFailure)
+  })
+_sym_db.RegisterMessage(WriteCatalogFailure)
+
+WriteCatalogFailureMsg = _reflection.GeneratedProtocolMessageType('WriteCatalogFailureMsg', (_message.Message,), {
+  'DESCRIPTOR' : _WRITECATALOGFAILUREMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.WriteCatalogFailureMsg)
+  })
+_sym_db.RegisterMessage(WriteCatalogFailureMsg)
+
+CatalogWritten = _reflection.GeneratedProtocolMessageType('CatalogWritten', (_message.Message,), {
+  'DESCRIPTOR' : _CATALOGWRITTEN,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.CatalogWritten)
+  })
+_sym_db.RegisterMessage(CatalogWritten)
+
+CatalogWrittenMsg = _reflection.GeneratedProtocolMessageType('CatalogWrittenMsg', (_message.Message,), {
+  'DESCRIPTOR' : _CATALOGWRITTENMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.CatalogWrittenMsg)
+  })
+_sym_db.RegisterMessage(CatalogWrittenMsg)
+
+CannotGenerateDocs = _reflection.GeneratedProtocolMessageType('CannotGenerateDocs', (_message.Message,), {
+  'DESCRIPTOR' : _CANNOTGENERATEDOCS,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.CannotGenerateDocs)
+  })
+_sym_db.RegisterMessage(CannotGenerateDocs)
+
+CannotGenerateDocsMsg = _reflection.GeneratedProtocolMessageType('CannotGenerateDocsMsg', (_message.Message,), {
+  'DESCRIPTOR' : _CANNOTGENERATEDOCSMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.CannotGenerateDocsMsg)
+  })
+_sym_db.RegisterMessage(CannotGenerateDocsMsg)
+
+BuildingCatalog = _reflection.GeneratedProtocolMessageType('BuildingCatalog', (_message.Message,), {
+  'DESCRIPTOR' : _BUILDINGCATALOG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.BuildingCatalog)
+  })
+_sym_db.RegisterMessage(BuildingCatalog)
+
+BuildingCatalogMsg = _reflection.GeneratedProtocolMessageType('BuildingCatalogMsg', (_message.Message,), {
+  'DESCRIPTOR' : _BUILDINGCATALOGMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.BuildingCatalogMsg)
+  })
+_sym_db.RegisterMessage(BuildingCatalogMsg)
+
+DatabaseErrorRunningHook = _reflection.GeneratedProtocolMessageType('DatabaseErrorRunningHook', (_message.Message,), {
+  'DESCRIPTOR' : _DATABASEERRORRUNNINGHOOK,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.DatabaseErrorRunningHook)
+  })
+_sym_db.RegisterMessage(DatabaseErrorRunningHook)
+
+DatabaseErrorRunningHookMsg = _reflection.GeneratedProtocolMessageType('DatabaseErrorRunningHookMsg', (_message.Message,), {
+  'DESCRIPTOR' : _DATABASEERRORRUNNINGHOOKMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.DatabaseErrorRunningHookMsg)
+  })
+_sym_db.RegisterMessage(DatabaseErrorRunningHookMsg)
+
+HooksRunning = _reflection.GeneratedProtocolMessageType('HooksRunning', (_message.Message,), {
+  'DESCRIPTOR' : _HOOKSRUNNING,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.HooksRunning)
+  })
+_sym_db.RegisterMessage(HooksRunning)
+
+HooksRunningMsg = _reflection.GeneratedProtocolMessageType('HooksRunningMsg', (_message.Message,), {
+  'DESCRIPTOR' : _HOOKSRUNNINGMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.HooksRunningMsg)
+  })
+_sym_db.RegisterMessage(HooksRunningMsg)
+
+FinishedRunningStats = _reflection.GeneratedProtocolMessageType('FinishedRunningStats', (_message.Message,), {
+  'DESCRIPTOR' : _FINISHEDRUNNINGSTATS,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.FinishedRunningStats)
+  })
+_sym_db.RegisterMessage(FinishedRunningStats)
+
+FinishedRunningStatsMsg = _reflection.GeneratedProtocolMessageType('FinishedRunningStatsMsg', (_message.Message,), {
+  'DESCRIPTOR' : _FINISHEDRUNNINGSTATSMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.FinishedRunningStatsMsg)
+  })
+_sym_db.RegisterMessage(FinishedRunningStatsMsg)
+
+ConstraintNotEnforced = _reflection.GeneratedProtocolMessageType('ConstraintNotEnforced', (_message.Message,), {
+  'DESCRIPTOR' : _CONSTRAINTNOTENFORCED,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ConstraintNotEnforced)
+  })
+_sym_db.RegisterMessage(ConstraintNotEnforced)
+
+ConstraintNotEnforcedMsg = _reflection.GeneratedProtocolMessageType('ConstraintNotEnforcedMsg', (_message.Message,), {
+  'DESCRIPTOR' : _CONSTRAINTNOTENFORCEDMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ConstraintNotEnforcedMsg)
+  })
+_sym_db.RegisterMessage(ConstraintNotEnforcedMsg)
+
+ConstraintNotSupported = _reflection.GeneratedProtocolMessageType('ConstraintNotSupported', (_message.Message,), {
+  'DESCRIPTOR' : _CONSTRAINTNOTSUPPORTED,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ConstraintNotSupported)
+  })
+_sym_db.RegisterMessage(ConstraintNotSupported)
+
+ConstraintNotSupportedMsg = _reflection.GeneratedProtocolMessageType('ConstraintNotSupportedMsg', (_message.Message,), {
+  'DESCRIPTOR' : _CONSTRAINTNOTSUPPORTEDMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ConstraintNotSupportedMsg)
+  })
+_sym_db.RegisterMessage(ConstraintNotSupportedMsg)
+
+InputFileDiffError = _reflection.GeneratedProtocolMessageType('InputFileDiffError', (_message.Message,), {
+  'DESCRIPTOR' : _INPUTFILEDIFFERROR,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.InputFileDiffError)
+  })
+_sym_db.RegisterMessage(InputFileDiffError)
+
+InputFileDiffErrorMsg = _reflection.GeneratedProtocolMessageType('InputFileDiffErrorMsg', (_message.Message,), {
+  'DESCRIPTOR' : _INPUTFILEDIFFERRORMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.InputFileDiffErrorMsg)
+  })
+_sym_db.RegisterMessage(InputFileDiffErrorMsg)
+
+InvalidValueForField = _reflection.GeneratedProtocolMessageType('InvalidValueForField', (_message.Message,), {
+  'DESCRIPTOR' : _INVALIDVALUEFORFIELD,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.InvalidValueForField)
+  })
+_sym_db.RegisterMessage(InvalidValueForField)
+
+InvalidValueForFieldMsg = _reflection.GeneratedProtocolMessageType('InvalidValueForFieldMsg', (_message.Message,), {
+  'DESCRIPTOR' : _INVALIDVALUEFORFIELDMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.InvalidValueForFieldMsg)
+  })
+_sym_db.RegisterMessage(InvalidValueForFieldMsg)
+
+ValidationWarning = _reflection.GeneratedProtocolMessageType('ValidationWarning', (_message.Message,), {
+  'DESCRIPTOR' : _VALIDATIONWARNING,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ValidationWarning)
+  })
+_sym_db.RegisterMessage(ValidationWarning)
+
+ValidationWarningMsg = _reflection.GeneratedProtocolMessageType('ValidationWarningMsg', (_message.Message,), {
+  'DESCRIPTOR' : _VALIDATIONWARNINGMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ValidationWarningMsg)
+  })
+_sym_db.RegisterMessage(ValidationWarningMsg)
+
+ParsePerfInfoPath = _reflection.GeneratedProtocolMessageType('ParsePerfInfoPath', (_message.Message,), {
+  'DESCRIPTOR' : _PARSEPERFINFOPATH,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ParsePerfInfoPath)
+  })
+_sym_db.RegisterMessage(ParsePerfInfoPath)
+
+ParsePerfInfoPathMsg = _reflection.GeneratedProtocolMessageType('ParsePerfInfoPathMsg', (_message.Message,), {
+  'DESCRIPTOR' : _PARSEPERFINFOPATHMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ParsePerfInfoPathMsg)
+  })
+_sym_db.RegisterMessage(ParsePerfInfoPathMsg)
+
+PartialParsingErrorProcessingFile = _reflection.GeneratedProtocolMessageType('PartialParsingErrorProcessingFile', (_message.Message,), {
+  'DESCRIPTOR' : _PARTIALPARSINGERRORPROCESSINGFILE,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.PartialParsingErrorProcessingFile)
+  })
+_sym_db.RegisterMessage(PartialParsingErrorProcessingFile)
+
+PartialParsingErrorProcessingFileMsg = _reflection.GeneratedProtocolMessageType('PartialParsingErrorProcessingFileMsg', (_message.Message,), {
+  'DESCRIPTOR' : _PARTIALPARSINGERRORPROCESSINGFILEMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.PartialParsingErrorProcessingFileMsg)
+  })
+_sym_db.RegisterMessage(PartialParsingErrorProcessingFileMsg)
+
+PartialParsingError = _reflection.GeneratedProtocolMessageType('PartialParsingError', (_message.Message,), {
+
+  'ExcInfoEntry' : _reflection.GeneratedProtocolMessageType('ExcInfoEntry', (_message.Message,), {
+    'DESCRIPTOR' : _PARTIALPARSINGERROR_EXCINFOENTRY,
+    '__module__' : 'types_pb2'
+    # @@protoc_insertion_point(class_scope:proto_types.PartialParsingError.ExcInfoEntry)
+    })
+  ,
+  'DESCRIPTOR' : _PARTIALPARSINGERROR,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.PartialParsingError)
+  })
+_sym_db.RegisterMessage(PartialParsingError)
+_sym_db.RegisterMessage(PartialParsingError.ExcInfoEntry)
+
+PartialParsingErrorMsg = _reflection.GeneratedProtocolMessageType('PartialParsingErrorMsg', (_message.Message,), {
+  'DESCRIPTOR' : _PARTIALPARSINGERRORMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.PartialParsingErrorMsg)
+  })
+_sym_db.RegisterMessage(PartialParsingErrorMsg)
+
+PartialParsingSkipParsing = _reflection.GeneratedProtocolMessageType('PartialParsingSkipParsing', (_message.Message,), {
+  'DESCRIPTOR' : _PARTIALPARSINGSKIPPARSING,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.PartialParsingSkipParsing)
+  })
+_sym_db.RegisterMessage(PartialParsingSkipParsing)
+
+PartialParsingSkipParsingMsg = _reflection.GeneratedProtocolMessageType('PartialParsingSkipParsingMsg', (_message.Message,), {
+  'DESCRIPTOR' : _PARTIALPARSINGSKIPPARSINGMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.PartialParsingSkipParsingMsg)
+  })
+_sym_db.RegisterMessage(PartialParsingSkipParsingMsg)
+
+UnableToPartialParse = _reflection.GeneratedProtocolMessageType('UnableToPartialParse', (_message.Message,), {
+  'DESCRIPTOR' : _UNABLETOPARTIALPARSE,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.UnableToPartialParse)
+  })
+_sym_db.RegisterMessage(UnableToPartialParse)
+
+UnableToPartialParseMsg = _reflection.GeneratedProtocolMessageType('UnableToPartialParseMsg', (_message.Message,), {
+  'DESCRIPTOR' : _UNABLETOPARTIALPARSEMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.UnableToPartialParseMsg)
+  })
+_sym_db.RegisterMessage(UnableToPartialParseMsg)
+
+StateCheckVarsHash = _reflection.GeneratedProtocolMessageType('StateCheckVarsHash', (_message.Message,), {
+  'DESCRIPTOR' : _STATECHECKVARSHASH,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.StateCheckVarsHash)
+  })
+_sym_db.RegisterMessage(StateCheckVarsHash)
+
+StateCheckVarsHashMsg = _reflection.GeneratedProtocolMessageType('StateCheckVarsHashMsg', (_message.Message,), {
+  'DESCRIPTOR' : _STATECHECKVARSHASHMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.StateCheckVarsHashMsg)
+  })
+_sym_db.RegisterMessage(StateCheckVarsHashMsg)
+
+PartialParsingNotEnabled = _reflection.GeneratedProtocolMessageType('PartialParsingNotEnabled', (_message.Message,), {
+  'DESCRIPTOR' : _PARTIALPARSINGNOTENABLED,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.PartialParsingNotEnabled)
+  })
+_sym_db.RegisterMessage(PartialParsingNotEnabled)
+
+PartialParsingNotEnabledMsg = _reflection.GeneratedProtocolMessageType('PartialParsingNotEnabledMsg', (_message.Message,), {
+  'DESCRIPTOR' : _PARTIALPARSINGNOTENABLEDMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.PartialParsingNotEnabledMsg)
+  })
+_sym_db.RegisterMessage(PartialParsingNotEnabledMsg)
+
+ParsedFileLoadFailed = _reflection.GeneratedProtocolMessageType('ParsedFileLoadFailed', (_message.Message,), {
+  'DESCRIPTOR' : _PARSEDFILELOADFAILED,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ParsedFileLoadFailed)
+  })
+_sym_db.RegisterMessage(ParsedFileLoadFailed)
+
+ParsedFileLoadFailedMsg = _reflection.GeneratedProtocolMessageType('ParsedFileLoadFailedMsg', (_message.Message,), {
+  'DESCRIPTOR' : _PARSEDFILELOADFAILEDMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ParsedFileLoadFailedMsg)
+  })
+_sym_db.RegisterMessage(ParsedFileLoadFailedMsg)
+
+PartialParsingEnabled = _reflection.GeneratedProtocolMessageType('PartialParsingEnabled', (_message.Message,), {
+  'DESCRIPTOR' : _PARTIALPARSINGENABLED,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.PartialParsingEnabled)
+  })
+_sym_db.RegisterMessage(PartialParsingEnabled)
+
+PartialParsingEnabledMsg = _reflection.GeneratedProtocolMessageType('PartialParsingEnabledMsg', (_message.Message,), {
+  'DESCRIPTOR' : _PARTIALPARSINGENABLEDMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.PartialParsingEnabledMsg)
+  })
+_sym_db.RegisterMessage(PartialParsingEnabledMsg)
+
+PartialParsingFile = _reflection.GeneratedProtocolMessageType('PartialParsingFile', (_message.Message,), {
+  'DESCRIPTOR' : _PARTIALPARSINGFILE,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.PartialParsingFile)
+  })
+_sym_db.RegisterMessage(PartialParsingFile)
+
+PartialParsingFileMsg = _reflection.GeneratedProtocolMessageType('PartialParsingFileMsg', (_message.Message,), {
+  'DESCRIPTOR' : _PARTIALPARSINGFILEMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.PartialParsingFileMsg)
+  })
+_sym_db.RegisterMessage(PartialParsingFileMsg)
+
+InvalidDisabledTargetInTestNode = _reflection.GeneratedProtocolMessageType('InvalidDisabledTargetInTestNode', (_message.Message,), {
+  'DESCRIPTOR' : _INVALIDDISABLEDTARGETINTESTNODE,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.InvalidDisabledTargetInTestNode)
+  })
+_sym_db.RegisterMessage(InvalidDisabledTargetInTestNode)
+
+InvalidDisabledTargetInTestNodeMsg = _reflection.GeneratedProtocolMessageType('InvalidDisabledTargetInTestNodeMsg', (_message.Message,), {
+  'DESCRIPTOR' : _INVALIDDISABLEDTARGETINTESTNODEMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.InvalidDisabledTargetInTestNodeMsg)
+  })
+_sym_db.RegisterMessage(InvalidDisabledTargetInTestNodeMsg)
+
+UnusedResourceConfigPath = _reflection.GeneratedProtocolMessageType('UnusedResourceConfigPath', (_message.Message,), {
+  'DESCRIPTOR' : _UNUSEDRESOURCECONFIGPATH,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.UnusedResourceConfigPath)
+  })
+_sym_db.RegisterMessage(UnusedResourceConfigPath)
+
+UnusedResourceConfigPathMsg = _reflection.GeneratedProtocolMessageType('UnusedResourceConfigPathMsg', (_message.Message,), {
+  'DESCRIPTOR' : _UNUSEDRESOURCECONFIGPATHMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.UnusedResourceConfigPathMsg)
+  })
+_sym_db.RegisterMessage(UnusedResourceConfigPathMsg)
+
+SeedIncreased = _reflection.GeneratedProtocolMessageType('SeedIncreased', (_message.Message,), {
+  'DESCRIPTOR' : _SEEDINCREASED,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.SeedIncreased)
+  })
+_sym_db.RegisterMessage(SeedIncreased)
+
+SeedIncreasedMsg = _reflection.GeneratedProtocolMessageType('SeedIncreasedMsg', (_message.Message,), {
+  'DESCRIPTOR' : _SEEDINCREASEDMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.SeedIncreasedMsg)
+  })
+_sym_db.RegisterMessage(SeedIncreasedMsg)
+
+SeedExceedsLimitSamePath = _reflection.GeneratedProtocolMessageType('SeedExceedsLimitSamePath', (_message.Message,), {
+  'DESCRIPTOR' : _SEEDEXCEEDSLIMITSAMEPATH,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.SeedExceedsLimitSamePath)
+  })
+_sym_db.RegisterMessage(SeedExceedsLimitSamePath)
+
+SeedExceedsLimitSamePathMsg = _reflection.GeneratedProtocolMessageType('SeedExceedsLimitSamePathMsg', (_message.Message,), {
+  'DESCRIPTOR' : _SEEDEXCEEDSLIMITSAMEPATHMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.SeedExceedsLimitSamePathMsg)
+  })
+_sym_db.RegisterMessage(SeedExceedsLimitSamePathMsg)
+
+SeedExceedsLimitAndPathChanged = _reflection.GeneratedProtocolMessageType('SeedExceedsLimitAndPathChanged', (_message.Message,), {
+  'DESCRIPTOR' : _SEEDEXCEEDSLIMITANDPATHCHANGED,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.SeedExceedsLimitAndPathChanged)
+  })
+_sym_db.RegisterMessage(SeedExceedsLimitAndPathChanged)
+
+SeedExceedsLimitAndPathChangedMsg = _reflection.GeneratedProtocolMessageType('SeedExceedsLimitAndPathChangedMsg', (_message.Message,), {
+  'DESCRIPTOR' : _SEEDEXCEEDSLIMITANDPATHCHANGEDMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.SeedExceedsLimitAndPathChangedMsg)
+  })
+_sym_db.RegisterMessage(SeedExceedsLimitAndPathChangedMsg)
+
+SeedExceedsLimitChecksumChanged = _reflection.GeneratedProtocolMessageType('SeedExceedsLimitChecksumChanged', (_message.Message,), {
+  'DESCRIPTOR' : _SEEDEXCEEDSLIMITCHECKSUMCHANGED,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.SeedExceedsLimitChecksumChanged)
+  })
+_sym_db.RegisterMessage(SeedExceedsLimitChecksumChanged)
+
+SeedExceedsLimitChecksumChangedMsg = _reflection.GeneratedProtocolMessageType('SeedExceedsLimitChecksumChangedMsg', (_message.Message,), {
+  'DESCRIPTOR' : _SEEDEXCEEDSLIMITCHECKSUMCHANGEDMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.SeedExceedsLimitChecksumChangedMsg)
+  })
+_sym_db.RegisterMessage(SeedExceedsLimitChecksumChangedMsg)
+
+UnusedTables = _reflection.GeneratedProtocolMessageType('UnusedTables', (_message.Message,), {
+  'DESCRIPTOR' : _UNUSEDTABLES,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.UnusedTables)
+  })
+_sym_db.RegisterMessage(UnusedTables)
+
+UnusedTablesMsg = _reflection.GeneratedProtocolMessageType('UnusedTablesMsg', (_message.Message,), {
+  'DESCRIPTOR' : _UNUSEDTABLESMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.UnusedTablesMsg)
+  })
+_sym_db.RegisterMessage(UnusedTablesMsg)
+
+WrongResourceSchemaFile = _reflection.GeneratedProtocolMessageType('WrongResourceSchemaFile', (_message.Message,), {
+  'DESCRIPTOR' : _WRONGRESOURCESCHEMAFILE,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.WrongResourceSchemaFile)
+  })
+_sym_db.RegisterMessage(WrongResourceSchemaFile)
+
+WrongResourceSchemaFileMsg = _reflection.GeneratedProtocolMessageType('WrongResourceSchemaFileMsg', (_message.Message,), {
+  'DESCRIPTOR' : _WRONGRESOURCESCHEMAFILEMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.WrongResourceSchemaFileMsg)
+  })
+_sym_db.RegisterMessage(WrongResourceSchemaFileMsg)
+
+NoNodeForYamlKey = _reflection.GeneratedProtocolMessageType('NoNodeForYamlKey', (_message.Message,), {
+  'DESCRIPTOR' : _NONODEFORYAMLKEY,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.NoNodeForYamlKey)
+  })
+_sym_db.RegisterMessage(NoNodeForYamlKey)
+
+NoNodeForYamlKeyMsg = _reflection.GeneratedProtocolMessageType('NoNodeForYamlKeyMsg', (_message.Message,), {
+  'DESCRIPTOR' : _NONODEFORYAMLKEYMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.NoNodeForYamlKeyMsg)
+  })
+_sym_db.RegisterMessage(NoNodeForYamlKeyMsg)
+
+MacroNotFoundForPatch = _reflection.GeneratedProtocolMessageType('MacroNotFoundForPatch', (_message.Message,), {
+  'DESCRIPTOR' : _MACRONOTFOUNDFORPATCH,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.MacroNotFoundForPatch)
+  })
+_sym_db.RegisterMessage(MacroNotFoundForPatch)
+
+MacroNotFoundForPatchMsg = _reflection.GeneratedProtocolMessageType('MacroNotFoundForPatchMsg', (_message.Message,), {
+  'DESCRIPTOR' : _MACRONOTFOUNDFORPATCHMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.MacroNotFoundForPatchMsg)
+  })
+_sym_db.RegisterMessage(MacroNotFoundForPatchMsg)
+
+NodeNotFoundOrDisabled = _reflection.GeneratedProtocolMessageType('NodeNotFoundOrDisabled', (_message.Message,), {
+  'DESCRIPTOR' : _NODENOTFOUNDORDISABLED,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.NodeNotFoundOrDisabled)
+  })
+_sym_db.RegisterMessage(NodeNotFoundOrDisabled)
+
+NodeNotFoundOrDisabledMsg = _reflection.GeneratedProtocolMessageType('NodeNotFoundOrDisabledMsg', (_message.Message,), {
+  'DESCRIPTOR' : _NODENOTFOUNDORDISABLEDMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.NodeNotFoundOrDisabledMsg)
+  })
+_sym_db.RegisterMessage(NodeNotFoundOrDisabledMsg)
+
+JinjaLogWarning = _reflection.GeneratedProtocolMessageType('JinjaLogWarning', (_message.Message,), {
+  'DESCRIPTOR' : _JINJALOGWARNING,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.JinjaLogWarning)
+  })
+_sym_db.RegisterMessage(JinjaLogWarning)
+
+JinjaLogWarningMsg = _reflection.GeneratedProtocolMessageType('JinjaLogWarningMsg', (_message.Message,), {
+  'DESCRIPTOR' : _JINJALOGWARNINGMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.JinjaLogWarningMsg)
+  })
+_sym_db.RegisterMessage(JinjaLogWarningMsg)
+
+JinjaLogInfo = _reflection.GeneratedProtocolMessageType('JinjaLogInfo', (_message.Message,), {
+  'DESCRIPTOR' : _JINJALOGINFO,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.JinjaLogInfo)
+  })
+_sym_db.RegisterMessage(JinjaLogInfo)
+
+JinjaLogInfoMsg = _reflection.GeneratedProtocolMessageType('JinjaLogInfoMsg', (_message.Message,), {
+  'DESCRIPTOR' : _JINJALOGINFOMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.JinjaLogInfoMsg)
+  })
+_sym_db.RegisterMessage(JinjaLogInfoMsg)
+
+JinjaLogDebug = _reflection.GeneratedProtocolMessageType('JinjaLogDebug', (_message.Message,), {
+  'DESCRIPTOR' : _JINJALOGDEBUG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.JinjaLogDebug)
+  })
+_sym_db.RegisterMessage(JinjaLogDebug)
+
+JinjaLogDebugMsg = _reflection.GeneratedProtocolMessageType('JinjaLogDebugMsg', (_message.Message,), {
+  'DESCRIPTOR' : _JINJALOGDEBUGMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.JinjaLogDebugMsg)
+  })
+_sym_db.RegisterMessage(JinjaLogDebugMsg)
+
+UnpinnedRefNewVersionAvailable = _reflection.GeneratedProtocolMessageType('UnpinnedRefNewVersionAvailable', (_message.Message,), {
+  'DESCRIPTOR' : _UNPINNEDREFNEWVERSIONAVAILABLE,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.UnpinnedRefNewVersionAvailable)
+  })
+_sym_db.RegisterMessage(UnpinnedRefNewVersionAvailable)
+
+UnpinnedRefNewVersionAvailableMsg = _reflection.GeneratedProtocolMessageType('UnpinnedRefNewVersionAvailableMsg', (_message.Message,), {
+  'DESCRIPTOR' : _UNPINNEDREFNEWVERSIONAVAILABLEMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.UnpinnedRefNewVersionAvailableMsg)
+  })
+_sym_db.RegisterMessage(UnpinnedRefNewVersionAvailableMsg)
+
+DeprecatedModel = _reflection.GeneratedProtocolMessageType('DeprecatedModel', (_message.Message,), {
+  'DESCRIPTOR' : _DEPRECATEDMODEL,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.DeprecatedModel)
+  })
+_sym_db.RegisterMessage(DeprecatedModel)
+
+DeprecatedModelMsg = _reflection.GeneratedProtocolMessageType('DeprecatedModelMsg', (_message.Message,), {
+  'DESCRIPTOR' : _DEPRECATEDMODELMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.DeprecatedModelMsg)
+  })
+_sym_db.RegisterMessage(DeprecatedModelMsg)
+
+UpcomingReferenceDeprecation = _reflection.GeneratedProtocolMessageType('UpcomingReferenceDeprecation', (_message.Message,), {
+  'DESCRIPTOR' : _UPCOMINGREFERENCEDEPRECATION,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.UpcomingReferenceDeprecation)
+  })
+_sym_db.RegisterMessage(UpcomingReferenceDeprecation)
+
+UpcomingReferenceDeprecationMsg = _reflection.GeneratedProtocolMessageType('UpcomingReferenceDeprecationMsg', (_message.Message,), {
+  'DESCRIPTOR' : _UPCOMINGREFERENCEDEPRECATIONMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.UpcomingReferenceDeprecationMsg)
+  })
+_sym_db.RegisterMessage(UpcomingReferenceDeprecationMsg)
+
+DeprecatedReference = _reflection.GeneratedProtocolMessageType('DeprecatedReference', (_message.Message,), {
+  'DESCRIPTOR' : _DEPRECATEDREFERENCE,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.DeprecatedReference)
+  })
+_sym_db.RegisterMessage(DeprecatedReference)
+
+DeprecatedReferenceMsg = _reflection.GeneratedProtocolMessageType('DeprecatedReferenceMsg', (_message.Message,), {
+  'DESCRIPTOR' : _DEPRECATEDREFERENCEMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.DeprecatedReferenceMsg)
+  })
+_sym_db.RegisterMessage(DeprecatedReferenceMsg)
+
+UnsupportedConstraintMaterialization = _reflection.GeneratedProtocolMessageType('UnsupportedConstraintMaterialization', (_message.Message,), {
+  'DESCRIPTOR' : _UNSUPPORTEDCONSTRAINTMATERIALIZATION,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.UnsupportedConstraintMaterialization)
+  })
+_sym_db.RegisterMessage(UnsupportedConstraintMaterialization)
+
+UnsupportedConstraintMaterializationMsg = _reflection.GeneratedProtocolMessageType('UnsupportedConstraintMaterializationMsg', (_message.Message,), {
+  'DESCRIPTOR' : _UNSUPPORTEDCONSTRAINTMATERIALIZATIONMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.UnsupportedConstraintMaterializationMsg)
+  })
+_sym_db.RegisterMessage(UnsupportedConstraintMaterializationMsg)
+
+ParseInlineNodeError = _reflection.GeneratedProtocolMessageType('ParseInlineNodeError', (_message.Message,), {
+  'DESCRIPTOR' : _PARSEINLINENODEERROR,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ParseInlineNodeError)
+  })
+_sym_db.RegisterMessage(ParseInlineNodeError)
+
+ParseInlineNodeErrorMsg = _reflection.GeneratedProtocolMessageType('ParseInlineNodeErrorMsg', (_message.Message,), {
+  'DESCRIPTOR' : _PARSEINLINENODEERRORMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ParseInlineNodeErrorMsg)
+  })
+_sym_db.RegisterMessage(ParseInlineNodeErrorMsg)
+
+GitSparseCheckoutSubdirectory = _reflection.GeneratedProtocolMessageType('GitSparseCheckoutSubdirectory', (_message.Message,), {
+  'DESCRIPTOR' : _GITSPARSECHECKOUTSUBDIRECTORY,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.GitSparseCheckoutSubdirectory)
+  })
+_sym_db.RegisterMessage(GitSparseCheckoutSubdirectory)
+
+GitSparseCheckoutSubdirectoryMsg = _reflection.GeneratedProtocolMessageType('GitSparseCheckoutSubdirectoryMsg', (_message.Message,), {
+  'DESCRIPTOR' : _GITSPARSECHECKOUTSUBDIRECTORYMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.GitSparseCheckoutSubdirectoryMsg)
+  })
+_sym_db.RegisterMessage(GitSparseCheckoutSubdirectoryMsg)
+
+GitProgressCheckoutRevision = _reflection.GeneratedProtocolMessageType('GitProgressCheckoutRevision', (_message.Message,), {
+  'DESCRIPTOR' : _GITPROGRESSCHECKOUTREVISION,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.GitProgressCheckoutRevision)
+  })
+_sym_db.RegisterMessage(GitProgressCheckoutRevision)
+
+GitProgressCheckoutRevisionMsg = _reflection.GeneratedProtocolMessageType('GitProgressCheckoutRevisionMsg', (_message.Message,), {
+  'DESCRIPTOR' : _GITPROGRESSCHECKOUTREVISIONMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.GitProgressCheckoutRevisionMsg)
+  })
+_sym_db.RegisterMessage(GitProgressCheckoutRevisionMsg)
+
+GitProgressUpdatingExistingDependency = _reflection.GeneratedProtocolMessageType('GitProgressUpdatingExistingDependency', (_message.Message,), {
+  'DESCRIPTOR' : _GITPROGRESSUPDATINGEXISTINGDEPENDENCY,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.GitProgressUpdatingExistingDependency)
+  })
+_sym_db.RegisterMessage(GitProgressUpdatingExistingDependency)
+
+GitProgressUpdatingExistingDependencyMsg = _reflection.GeneratedProtocolMessageType('GitProgressUpdatingExistingDependencyMsg', (_message.Message,), {
+  'DESCRIPTOR' : _GITPROGRESSUPDATINGEXISTINGDEPENDENCYMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.GitProgressUpdatingExistingDependencyMsg)
+  })
+_sym_db.RegisterMessage(GitProgressUpdatingExistingDependencyMsg)
+
+GitProgressPullingNewDependency = _reflection.GeneratedProtocolMessageType('GitProgressPullingNewDependency', (_message.Message,), {
+  'DESCRIPTOR' : _GITPROGRESSPULLINGNEWDEPENDENCY,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.GitProgressPullingNewDependency)
+  })
+_sym_db.RegisterMessage(GitProgressPullingNewDependency)
+
+GitProgressPullingNewDependencyMsg = _reflection.GeneratedProtocolMessageType('GitProgressPullingNewDependencyMsg', (_message.Message,), {
+  'DESCRIPTOR' : _GITPROGRESSPULLINGNEWDEPENDENCYMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.GitProgressPullingNewDependencyMsg)
+  })
+_sym_db.RegisterMessage(GitProgressPullingNewDependencyMsg)
+
+GitNothingToDo = _reflection.GeneratedProtocolMessageType('GitNothingToDo', (_message.Message,), {
+  'DESCRIPTOR' : _GITNOTHINGTODO,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.GitNothingToDo)
+  })
+_sym_db.RegisterMessage(GitNothingToDo)
+
+GitNothingToDoMsg = _reflection.GeneratedProtocolMessageType('GitNothingToDoMsg', (_message.Message,), {
+  'DESCRIPTOR' : _GITNOTHINGTODOMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.GitNothingToDoMsg)
+  })
+_sym_db.RegisterMessage(GitNothingToDoMsg)
+
+GitProgressUpdatedCheckoutRange = _reflection.GeneratedProtocolMessageType('GitProgressUpdatedCheckoutRange', (_message.Message,), {
+  'DESCRIPTOR' : _GITPROGRESSUPDATEDCHECKOUTRANGE,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.GitProgressUpdatedCheckoutRange)
+  })
+_sym_db.RegisterMessage(GitProgressUpdatedCheckoutRange)
+
+GitProgressUpdatedCheckoutRangeMsg = _reflection.GeneratedProtocolMessageType('GitProgressUpdatedCheckoutRangeMsg', (_message.Message,), {
+  'DESCRIPTOR' : _GITPROGRESSUPDATEDCHECKOUTRANGEMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.GitProgressUpdatedCheckoutRangeMsg)
+  })
+_sym_db.RegisterMessage(GitProgressUpdatedCheckoutRangeMsg)
+
+GitProgressCheckedOutAt = _reflection.GeneratedProtocolMessageType('GitProgressCheckedOutAt', (_message.Message,), {
+  'DESCRIPTOR' : _GITPROGRESSCHECKEDOUTAT,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.GitProgressCheckedOutAt)
+  })
+_sym_db.RegisterMessage(GitProgressCheckedOutAt)
+
+GitProgressCheckedOutAtMsg = _reflection.GeneratedProtocolMessageType('GitProgressCheckedOutAtMsg', (_message.Message,), {
+  'DESCRIPTOR' : _GITPROGRESSCHECKEDOUTATMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.GitProgressCheckedOutAtMsg)
+  })
+_sym_db.RegisterMessage(GitProgressCheckedOutAtMsg)
+
+RegistryProgressGETRequest = _reflection.GeneratedProtocolMessageType('RegistryProgressGETRequest', (_message.Message,), {
+  'DESCRIPTOR' : _REGISTRYPROGRESSGETREQUEST,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.RegistryProgressGETRequest)
+  })
+_sym_db.RegisterMessage(RegistryProgressGETRequest)
+
+RegistryProgressGETRequestMsg = _reflection.GeneratedProtocolMessageType('RegistryProgressGETRequestMsg', (_message.Message,), {
+  'DESCRIPTOR' : _REGISTRYPROGRESSGETREQUESTMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.RegistryProgressGETRequestMsg)
+  })
+_sym_db.RegisterMessage(RegistryProgressGETRequestMsg)
+
+RegistryProgressGETResponse = _reflection.GeneratedProtocolMessageType('RegistryProgressGETResponse', (_message.Message,), {
+  'DESCRIPTOR' : _REGISTRYPROGRESSGETRESPONSE,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.RegistryProgressGETResponse)
+  })
+_sym_db.RegisterMessage(RegistryProgressGETResponse)
+
+RegistryProgressGETResponseMsg = _reflection.GeneratedProtocolMessageType('RegistryProgressGETResponseMsg', (_message.Message,), {
+  'DESCRIPTOR' : _REGISTRYPROGRESSGETRESPONSEMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.RegistryProgressGETResponseMsg)
+  })
+_sym_db.RegisterMessage(RegistryProgressGETResponseMsg)
+
+SelectorReportInvalidSelector = _reflection.GeneratedProtocolMessageType('SelectorReportInvalidSelector', (_message.Message,), {
+  'DESCRIPTOR' : _SELECTORREPORTINVALIDSELECTOR,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.SelectorReportInvalidSelector)
+  })
+_sym_db.RegisterMessage(SelectorReportInvalidSelector)
+
+SelectorReportInvalidSelectorMsg = _reflection.GeneratedProtocolMessageType('SelectorReportInvalidSelectorMsg', (_message.Message,), {
+  'DESCRIPTOR' : _SELECTORREPORTINVALIDSELECTORMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.SelectorReportInvalidSelectorMsg)
+  })
+_sym_db.RegisterMessage(SelectorReportInvalidSelectorMsg)
+
+DepsNoPackagesFound = _reflection.GeneratedProtocolMessageType('DepsNoPackagesFound', (_message.Message,), {
+  'DESCRIPTOR' : _DEPSNOPACKAGESFOUND,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.DepsNoPackagesFound)
+  })
+_sym_db.RegisterMessage(DepsNoPackagesFound)
+
+DepsNoPackagesFoundMsg = _reflection.GeneratedProtocolMessageType('DepsNoPackagesFoundMsg', (_message.Message,), {
+  'DESCRIPTOR' : _DEPSNOPACKAGESFOUNDMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.DepsNoPackagesFoundMsg)
+  })
+_sym_db.RegisterMessage(DepsNoPackagesFoundMsg)
+
+DepsStartPackageInstall = _reflection.GeneratedProtocolMessageType('DepsStartPackageInstall', (_message.Message,), {
+  'DESCRIPTOR' : _DEPSSTARTPACKAGEINSTALL,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.DepsStartPackageInstall)
+  })
+_sym_db.RegisterMessage(DepsStartPackageInstall)
+
+DepsStartPackageInstallMsg = _reflection.GeneratedProtocolMessageType('DepsStartPackageInstallMsg', (_message.Message,), {
+  'DESCRIPTOR' : _DEPSSTARTPACKAGEINSTALLMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.DepsStartPackageInstallMsg)
+  })
+_sym_db.RegisterMessage(DepsStartPackageInstallMsg)
+
+DepsInstallInfo = _reflection.GeneratedProtocolMessageType('DepsInstallInfo', (_message.Message,), {
+  'DESCRIPTOR' : _DEPSINSTALLINFO,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.DepsInstallInfo)
+  })
+_sym_db.RegisterMessage(DepsInstallInfo)
+
+DepsInstallInfoMsg = _reflection.GeneratedProtocolMessageType('DepsInstallInfoMsg', (_message.Message,), {
+  'DESCRIPTOR' : _DEPSINSTALLINFOMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.DepsInstallInfoMsg)
+  })
+_sym_db.RegisterMessage(DepsInstallInfoMsg)
+
+DepsUpdateAvailable = _reflection.GeneratedProtocolMessageType('DepsUpdateAvailable', (_message.Message,), {
+  'DESCRIPTOR' : _DEPSUPDATEAVAILABLE,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.DepsUpdateAvailable)
+  })
+_sym_db.RegisterMessage(DepsUpdateAvailable)
+
+DepsUpdateAvailableMsg = _reflection.GeneratedProtocolMessageType('DepsUpdateAvailableMsg', (_message.Message,), {
+  'DESCRIPTOR' : _DEPSUPDATEAVAILABLEMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.DepsUpdateAvailableMsg)
+  })
+_sym_db.RegisterMessage(DepsUpdateAvailableMsg)
+
+DepsUpToDate = _reflection.GeneratedProtocolMessageType('DepsUpToDate', (_message.Message,), {
+  'DESCRIPTOR' : _DEPSUPTODATE,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.DepsUpToDate)
+  })
+_sym_db.RegisterMessage(DepsUpToDate)
+
+DepsUpToDateMsg = _reflection.GeneratedProtocolMessageType('DepsUpToDateMsg', (_message.Message,), {
+  'DESCRIPTOR' : _DEPSUPTODATEMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.DepsUpToDateMsg)
+  })
+_sym_db.RegisterMessage(DepsUpToDateMsg)
+
+DepsListSubdirectory = _reflection.GeneratedProtocolMessageType('DepsListSubdirectory', (_message.Message,), {
+  'DESCRIPTOR' : _DEPSLISTSUBDIRECTORY,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.DepsListSubdirectory)
+  })
+_sym_db.RegisterMessage(DepsListSubdirectory)
+
+DepsListSubdirectoryMsg = _reflection.GeneratedProtocolMessageType('DepsListSubdirectoryMsg', (_message.Message,), {
+  'DESCRIPTOR' : _DEPSLISTSUBDIRECTORYMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.DepsListSubdirectoryMsg)
+  })
+_sym_db.RegisterMessage(DepsListSubdirectoryMsg)
+
+DepsNotifyUpdatesAvailable = _reflection.GeneratedProtocolMessageType('DepsNotifyUpdatesAvailable', (_message.Message,), {
+  'DESCRIPTOR' : _DEPSNOTIFYUPDATESAVAILABLE,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.DepsNotifyUpdatesAvailable)
+  })
+_sym_db.RegisterMessage(DepsNotifyUpdatesAvailable)
+
+DepsNotifyUpdatesAvailableMsg = _reflection.GeneratedProtocolMessageType('DepsNotifyUpdatesAvailableMsg', (_message.Message,), {
+  'DESCRIPTOR' : _DEPSNOTIFYUPDATESAVAILABLEMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.DepsNotifyUpdatesAvailableMsg)
+  })
+_sym_db.RegisterMessage(DepsNotifyUpdatesAvailableMsg)
+
+RetryExternalCall = _reflection.GeneratedProtocolMessageType('RetryExternalCall', (_message.Message,), {
+  'DESCRIPTOR' : _RETRYEXTERNALCALL,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.RetryExternalCall)
+  })
+_sym_db.RegisterMessage(RetryExternalCall)
+
+RetryExternalCallMsg = _reflection.GeneratedProtocolMessageType('RetryExternalCallMsg', (_message.Message,), {
+  'DESCRIPTOR' : _RETRYEXTERNALCALLMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.RetryExternalCallMsg)
+  })
+_sym_db.RegisterMessage(RetryExternalCallMsg)
+
+RecordRetryException = _reflection.GeneratedProtocolMessageType('RecordRetryException', (_message.Message,), {
+  'DESCRIPTOR' : _RECORDRETRYEXCEPTION,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.RecordRetryException)
+  })
+_sym_db.RegisterMessage(RecordRetryException)
+
+RecordRetryExceptionMsg = _reflection.GeneratedProtocolMessageType('RecordRetryExceptionMsg', (_message.Message,), {
+  'DESCRIPTOR' : _RECORDRETRYEXCEPTIONMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.RecordRetryExceptionMsg)
+  })
+_sym_db.RegisterMessage(RecordRetryExceptionMsg)
+
+RegistryIndexProgressGETRequest = _reflection.GeneratedProtocolMessageType('RegistryIndexProgressGETRequest', (_message.Message,), {
+  'DESCRIPTOR' : _REGISTRYINDEXPROGRESSGETREQUEST,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.RegistryIndexProgressGETRequest)
+  })
+_sym_db.RegisterMessage(RegistryIndexProgressGETRequest)
+
+RegistryIndexProgressGETRequestMsg = _reflection.GeneratedProtocolMessageType('RegistryIndexProgressGETRequestMsg', (_message.Message,), {
+  'DESCRIPTOR' : _REGISTRYINDEXPROGRESSGETREQUESTMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.RegistryIndexProgressGETRequestMsg)
+  })
+_sym_db.RegisterMessage(RegistryIndexProgressGETRequestMsg)
+
+RegistryIndexProgressGETResponse = _reflection.GeneratedProtocolMessageType('RegistryIndexProgressGETResponse', (_message.Message,), {
+  'DESCRIPTOR' : _REGISTRYINDEXPROGRESSGETRESPONSE,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.RegistryIndexProgressGETResponse)
+  })
+_sym_db.RegisterMessage(RegistryIndexProgressGETResponse)
+
+RegistryIndexProgressGETResponseMsg = _reflection.GeneratedProtocolMessageType('RegistryIndexProgressGETResponseMsg', (_message.Message,), {
+  'DESCRIPTOR' : _REGISTRYINDEXPROGRESSGETRESPONSEMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.RegistryIndexProgressGETResponseMsg)
+  })
+_sym_db.RegisterMessage(RegistryIndexProgressGETResponseMsg)
+
+RegistryResponseUnexpectedType = _reflection.GeneratedProtocolMessageType('RegistryResponseUnexpectedType', (_message.Message,), {
+  'DESCRIPTOR' : _REGISTRYRESPONSEUNEXPECTEDTYPE,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.RegistryResponseUnexpectedType)
+  })
+_sym_db.RegisterMessage(RegistryResponseUnexpectedType)
+
+RegistryResponseUnexpectedTypeMsg = _reflection.GeneratedProtocolMessageType('RegistryResponseUnexpectedTypeMsg', (_message.Message,), {
+  'DESCRIPTOR' : _REGISTRYRESPONSEUNEXPECTEDTYPEMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.RegistryResponseUnexpectedTypeMsg)
+  })
+_sym_db.RegisterMessage(RegistryResponseUnexpectedTypeMsg)
+
+RegistryResponseMissingTopKeys = _reflection.GeneratedProtocolMessageType('RegistryResponseMissingTopKeys', (_message.Message,), {
+  'DESCRIPTOR' : _REGISTRYRESPONSEMISSINGTOPKEYS,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.RegistryResponseMissingTopKeys)
+  })
+_sym_db.RegisterMessage(RegistryResponseMissingTopKeys)
+
+RegistryResponseMissingTopKeysMsg = _reflection.GeneratedProtocolMessageType('RegistryResponseMissingTopKeysMsg', (_message.Message,), {
+  'DESCRIPTOR' : _REGISTRYRESPONSEMISSINGTOPKEYSMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.RegistryResponseMissingTopKeysMsg)
+  })
+_sym_db.RegisterMessage(RegistryResponseMissingTopKeysMsg)
+
+RegistryResponseMissingNestedKeys = _reflection.GeneratedProtocolMessageType('RegistryResponseMissingNestedKeys', (_message.Message,), {
+  'DESCRIPTOR' : _REGISTRYRESPONSEMISSINGNESTEDKEYS,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.RegistryResponseMissingNestedKeys)
+  })
+_sym_db.RegisterMessage(RegistryResponseMissingNestedKeys)
+
+RegistryResponseMissingNestedKeysMsg = _reflection.GeneratedProtocolMessageType('RegistryResponseMissingNestedKeysMsg', (_message.Message,), {
+  'DESCRIPTOR' : _REGISTRYRESPONSEMISSINGNESTEDKEYSMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.RegistryResponseMissingNestedKeysMsg)
+  })
+_sym_db.RegisterMessage(RegistryResponseMissingNestedKeysMsg)
+
+RegistryResponseExtraNestedKeys = _reflection.GeneratedProtocolMessageType('RegistryResponseExtraNestedKeys', (_message.Message,), {
+  'DESCRIPTOR' : _REGISTRYRESPONSEEXTRANESTEDKEYS,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.RegistryResponseExtraNestedKeys)
+  })
+_sym_db.RegisterMessage(RegistryResponseExtraNestedKeys)
+
+RegistryResponseExtraNestedKeysMsg = _reflection.GeneratedProtocolMessageType('RegistryResponseExtraNestedKeysMsg', (_message.Message,), {
+  'DESCRIPTOR' : _REGISTRYRESPONSEEXTRANESTEDKEYSMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.RegistryResponseExtraNestedKeysMsg)
+  })
+_sym_db.RegisterMessage(RegistryResponseExtraNestedKeysMsg)
+
+DepsSetDownloadDirectory = _reflection.GeneratedProtocolMessageType('DepsSetDownloadDirectory', (_message.Message,), {
+  'DESCRIPTOR' : _DEPSSETDOWNLOADDIRECTORY,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.DepsSetDownloadDirectory)
+  })
+_sym_db.RegisterMessage(DepsSetDownloadDirectory)
+
+DepsSetDownloadDirectoryMsg = _reflection.GeneratedProtocolMessageType('DepsSetDownloadDirectoryMsg', (_message.Message,), {
+  'DESCRIPTOR' : _DEPSSETDOWNLOADDIRECTORYMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.DepsSetDownloadDirectoryMsg)
+  })
+_sym_db.RegisterMessage(DepsSetDownloadDirectoryMsg)
+
+DepsUnpinned = _reflection.GeneratedProtocolMessageType('DepsUnpinned', (_message.Message,), {
+  'DESCRIPTOR' : _DEPSUNPINNED,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.DepsUnpinned)
+  })
+_sym_db.RegisterMessage(DepsUnpinned)
+
+DepsUnpinnedMsg = _reflection.GeneratedProtocolMessageType('DepsUnpinnedMsg', (_message.Message,), {
+  'DESCRIPTOR' : _DEPSUNPINNEDMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.DepsUnpinnedMsg)
+  })
+_sym_db.RegisterMessage(DepsUnpinnedMsg)
+
+NoNodesForSelectionCriteria = _reflection.GeneratedProtocolMessageType('NoNodesForSelectionCriteria', (_message.Message,), {
+  'DESCRIPTOR' : _NONODESFORSELECTIONCRITERIA,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.NoNodesForSelectionCriteria)
+  })
+_sym_db.RegisterMessage(NoNodesForSelectionCriteria)
+
+NoNodesForSelectionCriteriaMsg = _reflection.GeneratedProtocolMessageType('NoNodesForSelectionCriteriaMsg', (_message.Message,), {
+  'DESCRIPTOR' : _NONODESFORSELECTIONCRITERIAMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.NoNodesForSelectionCriteriaMsg)
+  })
+_sym_db.RegisterMessage(NoNodesForSelectionCriteriaMsg)
+
+RunningOperationCaughtError = _reflection.GeneratedProtocolMessageType('RunningOperationCaughtError', (_message.Message,), {
+  'DESCRIPTOR' : _RUNNINGOPERATIONCAUGHTERROR,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.RunningOperationCaughtError)
+  })
+_sym_db.RegisterMessage(RunningOperationCaughtError)
+
+RunningOperationCaughtErrorMsg = _reflection.GeneratedProtocolMessageType('RunningOperationCaughtErrorMsg', (_message.Message,), {
+  'DESCRIPTOR' : _RUNNINGOPERATIONCAUGHTERRORMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.RunningOperationCaughtErrorMsg)
+  })
+_sym_db.RegisterMessage(RunningOperationCaughtErrorMsg)
+
+CompileComplete = _reflection.GeneratedProtocolMessageType('CompileComplete', (_message.Message,), {
+  'DESCRIPTOR' : _COMPILECOMPLETE,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.CompileComplete)
+  })
+_sym_db.RegisterMessage(CompileComplete)
+
+CompileCompleteMsg = _reflection.GeneratedProtocolMessageType('CompileCompleteMsg', (_message.Message,), {
+  'DESCRIPTOR' : _COMPILECOMPLETEMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.CompileCompleteMsg)
+  })
+_sym_db.RegisterMessage(CompileCompleteMsg)
+
+FreshnessCheckComplete = _reflection.GeneratedProtocolMessageType('FreshnessCheckComplete', (_message.Message,), {
+  'DESCRIPTOR' : _FRESHNESSCHECKCOMPLETE,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.FreshnessCheckComplete)
+  })
+_sym_db.RegisterMessage(FreshnessCheckComplete)
+
+FreshnessCheckCompleteMsg = _reflection.GeneratedProtocolMessageType('FreshnessCheckCompleteMsg', (_message.Message,), {
+  'DESCRIPTOR' : _FRESHNESSCHECKCOMPLETEMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.FreshnessCheckCompleteMsg)
+  })
+_sym_db.RegisterMessage(FreshnessCheckCompleteMsg)
+
+SeedHeader = _reflection.GeneratedProtocolMessageType('SeedHeader', (_message.Message,), {
+  'DESCRIPTOR' : _SEEDHEADER,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.SeedHeader)
+  })
+_sym_db.RegisterMessage(SeedHeader)
+
+SeedHeaderMsg = _reflection.GeneratedProtocolMessageType('SeedHeaderMsg', (_message.Message,), {
+  'DESCRIPTOR' : _SEEDHEADERMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.SeedHeaderMsg)
+  })
+_sym_db.RegisterMessage(SeedHeaderMsg)
+
+SQLRunnerException = _reflection.GeneratedProtocolMessageType('SQLRunnerException', (_message.Message,), {
+  'DESCRIPTOR' : _SQLRUNNEREXCEPTION,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.SQLRunnerException)
+  })
+_sym_db.RegisterMessage(SQLRunnerException)
+
+SQLRunnerExceptionMsg = _reflection.GeneratedProtocolMessageType('SQLRunnerExceptionMsg', (_message.Message,), {
+  'DESCRIPTOR' : _SQLRUNNEREXCEPTIONMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.SQLRunnerExceptionMsg)
+  })
+_sym_db.RegisterMessage(SQLRunnerExceptionMsg)
+
+LogTestResult = _reflection.GeneratedProtocolMessageType('LogTestResult', (_message.Message,), {
+  'DESCRIPTOR' : _LOGTESTRESULT,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.LogTestResult)
+  })
+_sym_db.RegisterMessage(LogTestResult)
+
+LogTestResultMsg = _reflection.GeneratedProtocolMessageType('LogTestResultMsg', (_message.Message,), {
+  'DESCRIPTOR' : _LOGTESTRESULTMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.LogTestResultMsg)
+  })
+_sym_db.RegisterMessage(LogTestResultMsg)
+
+LogStartLine = _reflection.GeneratedProtocolMessageType('LogStartLine', (_message.Message,), {
+  'DESCRIPTOR' : _LOGSTARTLINE,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.LogStartLine)
+  })
+_sym_db.RegisterMessage(LogStartLine)
+
+LogStartLineMsg = _reflection.GeneratedProtocolMessageType('LogStartLineMsg', (_message.Message,), {
+  'DESCRIPTOR' : _LOGSTARTLINEMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.LogStartLineMsg)
+  })
+_sym_db.RegisterMessage(LogStartLineMsg)
+
+LogModelResult = _reflection.GeneratedProtocolMessageType('LogModelResult', (_message.Message,), {
+  'DESCRIPTOR' : _LOGMODELRESULT,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.LogModelResult)
+  })
+_sym_db.RegisterMessage(LogModelResult)
+
+LogModelResultMsg = _reflection.GeneratedProtocolMessageType('LogModelResultMsg', (_message.Message,), {
+  'DESCRIPTOR' : _LOGMODELRESULTMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.LogModelResultMsg)
+  })
+_sym_db.RegisterMessage(LogModelResultMsg)
+
+LogSnapshotResult = _reflection.GeneratedProtocolMessageType('LogSnapshotResult', (_message.Message,), {
+
+  'CfgEntry' : _reflection.GeneratedProtocolMessageType('CfgEntry', (_message.Message,), {
+    'DESCRIPTOR' : _LOGSNAPSHOTRESULT_CFGENTRY,
+    '__module__' : 'types_pb2'
+    # @@protoc_insertion_point(class_scope:proto_types.LogSnapshotResult.CfgEntry)
+    })
+  ,
+  'DESCRIPTOR' : _LOGSNAPSHOTRESULT,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.LogSnapshotResult)
+  })
+_sym_db.RegisterMessage(LogSnapshotResult)
+_sym_db.RegisterMessage(LogSnapshotResult.CfgEntry)
+
+LogSnapshotResultMsg = _reflection.GeneratedProtocolMessageType('LogSnapshotResultMsg', (_message.Message,), {
+  'DESCRIPTOR' : _LOGSNAPSHOTRESULTMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.LogSnapshotResultMsg)
+  })
+_sym_db.RegisterMessage(LogSnapshotResultMsg)
+
+LogSeedResult = _reflection.GeneratedProtocolMessageType('LogSeedResult', (_message.Message,), {
+  'DESCRIPTOR' : _LOGSEEDRESULT,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.LogSeedResult)
+  })
+_sym_db.RegisterMessage(LogSeedResult)
+
+LogSeedResultMsg = _reflection.GeneratedProtocolMessageType('LogSeedResultMsg', (_message.Message,), {
+  'DESCRIPTOR' : _LOGSEEDRESULTMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.LogSeedResultMsg)
+  })
+_sym_db.RegisterMessage(LogSeedResultMsg)
+
+LogFreshnessResult = _reflection.GeneratedProtocolMessageType('LogFreshnessResult', (_message.Message,), {
+  'DESCRIPTOR' : _LOGFRESHNESSRESULT,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.LogFreshnessResult)
+  })
+_sym_db.RegisterMessage(LogFreshnessResult)
+
+LogFreshnessResultMsg = _reflection.GeneratedProtocolMessageType('LogFreshnessResultMsg', (_message.Message,), {
+  'DESCRIPTOR' : _LOGFRESHNESSRESULTMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.LogFreshnessResultMsg)
+  })
+_sym_db.RegisterMessage(LogFreshnessResultMsg)
+
+LogCancelLine = _reflection.GeneratedProtocolMessageType('LogCancelLine', (_message.Message,), {
+  'DESCRIPTOR' : _LOGCANCELLINE,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.LogCancelLine)
+  })
+_sym_db.RegisterMessage(LogCancelLine)
+
+LogCancelLineMsg = _reflection.GeneratedProtocolMessageType('LogCancelLineMsg', (_message.Message,), {
+  'DESCRIPTOR' : _LOGCANCELLINEMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.LogCancelLineMsg)
+  })
+_sym_db.RegisterMessage(LogCancelLineMsg)
+
+DefaultSelector = _reflection.GeneratedProtocolMessageType('DefaultSelector', (_message.Message,), {
+  'DESCRIPTOR' : _DEFAULTSELECTOR,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.DefaultSelector)
+  })
+_sym_db.RegisterMessage(DefaultSelector)
+
+DefaultSelectorMsg = _reflection.GeneratedProtocolMessageType('DefaultSelectorMsg', (_message.Message,), {
+  'DESCRIPTOR' : _DEFAULTSELECTORMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.DefaultSelectorMsg)
+  })
+_sym_db.RegisterMessage(DefaultSelectorMsg)
+
+NodeStart = _reflection.GeneratedProtocolMessageType('NodeStart', (_message.Message,), {
+  'DESCRIPTOR' : _NODESTART,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.NodeStart)
+  })
+_sym_db.RegisterMessage(NodeStart)
+
+NodeStartMsg = _reflection.GeneratedProtocolMessageType('NodeStartMsg', (_message.Message,), {
+  'DESCRIPTOR' : _NODESTARTMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.NodeStartMsg)
+  })
+_sym_db.RegisterMessage(NodeStartMsg)
+
+NodeFinished = _reflection.GeneratedProtocolMessageType('NodeFinished', (_message.Message,), {
+  'DESCRIPTOR' : _NODEFINISHED,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.NodeFinished)
+  })
+_sym_db.RegisterMessage(NodeFinished)
+
+NodeFinishedMsg = _reflection.GeneratedProtocolMessageType('NodeFinishedMsg', (_message.Message,), {
+  'DESCRIPTOR' : _NODEFINISHEDMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.NodeFinishedMsg)
+  })
+_sym_db.RegisterMessage(NodeFinishedMsg)
+
+QueryCancelationUnsupported = _reflection.GeneratedProtocolMessageType('QueryCancelationUnsupported', (_message.Message,), {
+  'DESCRIPTOR' : _QUERYCANCELATIONUNSUPPORTED,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.QueryCancelationUnsupported)
+  })
+_sym_db.RegisterMessage(QueryCancelationUnsupported)
+
+QueryCancelationUnsupportedMsg = _reflection.GeneratedProtocolMessageType('QueryCancelationUnsupportedMsg', (_message.Message,), {
+  'DESCRIPTOR' : _QUERYCANCELATIONUNSUPPORTEDMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.QueryCancelationUnsupportedMsg)
+  })
+_sym_db.RegisterMessage(QueryCancelationUnsupportedMsg)
+
+ConcurrencyLine = _reflection.GeneratedProtocolMessageType('ConcurrencyLine', (_message.Message,), {
+  'DESCRIPTOR' : _CONCURRENCYLINE,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ConcurrencyLine)
+  })
+_sym_db.RegisterMessage(ConcurrencyLine)
+
+ConcurrencyLineMsg = _reflection.GeneratedProtocolMessageType('ConcurrencyLineMsg', (_message.Message,), {
+  'DESCRIPTOR' : _CONCURRENCYLINEMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ConcurrencyLineMsg)
+  })
+_sym_db.RegisterMessage(ConcurrencyLineMsg)
+
+WritingInjectedSQLForNode = _reflection.GeneratedProtocolMessageType('WritingInjectedSQLForNode', (_message.Message,), {
+  'DESCRIPTOR' : _WRITINGINJECTEDSQLFORNODE,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.WritingInjectedSQLForNode)
+  })
+_sym_db.RegisterMessage(WritingInjectedSQLForNode)
+
+WritingInjectedSQLForNodeMsg = _reflection.GeneratedProtocolMessageType('WritingInjectedSQLForNodeMsg', (_message.Message,), {
+  'DESCRIPTOR' : _WRITINGINJECTEDSQLFORNODEMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.WritingInjectedSQLForNodeMsg)
+  })
+_sym_db.RegisterMessage(WritingInjectedSQLForNodeMsg)
+
+NodeCompiling = _reflection.GeneratedProtocolMessageType('NodeCompiling', (_message.Message,), {
+  'DESCRIPTOR' : _NODECOMPILING,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.NodeCompiling)
+  })
+_sym_db.RegisterMessage(NodeCompiling)
+
+NodeCompilingMsg = _reflection.GeneratedProtocolMessageType('NodeCompilingMsg', (_message.Message,), {
+  'DESCRIPTOR' : _NODECOMPILINGMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.NodeCompilingMsg)
+  })
+_sym_db.RegisterMessage(NodeCompilingMsg)
+
+NodeExecuting = _reflection.GeneratedProtocolMessageType('NodeExecuting', (_message.Message,), {
+  'DESCRIPTOR' : _NODEEXECUTING,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.NodeExecuting)
+  })
+_sym_db.RegisterMessage(NodeExecuting)
+
+NodeExecutingMsg = _reflection.GeneratedProtocolMessageType('NodeExecutingMsg', (_message.Message,), {
+  'DESCRIPTOR' : _NODEEXECUTINGMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.NodeExecutingMsg)
+  })
+_sym_db.RegisterMessage(NodeExecutingMsg)
+
+LogHookStartLine = _reflection.GeneratedProtocolMessageType('LogHookStartLine', (_message.Message,), {
+  'DESCRIPTOR' : _LOGHOOKSTARTLINE,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.LogHookStartLine)
+  })
+_sym_db.RegisterMessage(LogHookStartLine)
+
+LogHookStartLineMsg = _reflection.GeneratedProtocolMessageType('LogHookStartLineMsg', (_message.Message,), {
+  'DESCRIPTOR' : _LOGHOOKSTARTLINEMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.LogHookStartLineMsg)
+  })
+_sym_db.RegisterMessage(LogHookStartLineMsg)
+
+LogHookEndLine = _reflection.GeneratedProtocolMessageType('LogHookEndLine', (_message.Message,), {
+  'DESCRIPTOR' : _LOGHOOKENDLINE,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.LogHookEndLine)
+  })
+_sym_db.RegisterMessage(LogHookEndLine)
+
+LogHookEndLineMsg = _reflection.GeneratedProtocolMessageType('LogHookEndLineMsg', (_message.Message,), {
+  'DESCRIPTOR' : _LOGHOOKENDLINEMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.LogHookEndLineMsg)
+  })
+_sym_db.RegisterMessage(LogHookEndLineMsg)
+
+SkippingDetails = _reflection.GeneratedProtocolMessageType('SkippingDetails', (_message.Message,), {
+  'DESCRIPTOR' : _SKIPPINGDETAILS,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.SkippingDetails)
+  })
+_sym_db.RegisterMessage(SkippingDetails)
+
+SkippingDetailsMsg = _reflection.GeneratedProtocolMessageType('SkippingDetailsMsg', (_message.Message,), {
+  'DESCRIPTOR' : _SKIPPINGDETAILSMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.SkippingDetailsMsg)
+  })
+_sym_db.RegisterMessage(SkippingDetailsMsg)
+
+NothingToDo = _reflection.GeneratedProtocolMessageType('NothingToDo', (_message.Message,), {
+  'DESCRIPTOR' : _NOTHINGTODO,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.NothingToDo)
+  })
+_sym_db.RegisterMessage(NothingToDo)
+
+NothingToDoMsg = _reflection.GeneratedProtocolMessageType('NothingToDoMsg', (_message.Message,), {
+  'DESCRIPTOR' : _NOTHINGTODOMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.NothingToDoMsg)
+  })
+_sym_db.RegisterMessage(NothingToDoMsg)
+
+RunningOperationUncaughtError = _reflection.GeneratedProtocolMessageType('RunningOperationUncaughtError', (_message.Message,), {
+  'DESCRIPTOR' : _RUNNINGOPERATIONUNCAUGHTERROR,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.RunningOperationUncaughtError)
+  })
+_sym_db.RegisterMessage(RunningOperationUncaughtError)
+
+RunningOperationUncaughtErrorMsg = _reflection.GeneratedProtocolMessageType('RunningOperationUncaughtErrorMsg', (_message.Message,), {
+  'DESCRIPTOR' : _RUNNINGOPERATIONUNCAUGHTERRORMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.RunningOperationUncaughtErrorMsg)
+  })
+_sym_db.RegisterMessage(RunningOperationUncaughtErrorMsg)
+
+EndRunResult = _reflection.GeneratedProtocolMessageType('EndRunResult', (_message.Message,), {
+  'DESCRIPTOR' : _ENDRUNRESULT,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.EndRunResult)
+  })
+_sym_db.RegisterMessage(EndRunResult)
+
+EndRunResultMsg = _reflection.GeneratedProtocolMessageType('EndRunResultMsg', (_message.Message,), {
+  'DESCRIPTOR' : _ENDRUNRESULTMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.EndRunResultMsg)
+  })
+_sym_db.RegisterMessage(EndRunResultMsg)
+
+NoNodesSelected = _reflection.GeneratedProtocolMessageType('NoNodesSelected', (_message.Message,), {
+  'DESCRIPTOR' : _NONODESSELECTED,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.NoNodesSelected)
+  })
+_sym_db.RegisterMessage(NoNodesSelected)
+
+NoNodesSelectedMsg = _reflection.GeneratedProtocolMessageType('NoNodesSelectedMsg', (_message.Message,), {
+  'DESCRIPTOR' : _NONODESSELECTEDMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.NoNodesSelectedMsg)
+  })
+_sym_db.RegisterMessage(NoNodesSelectedMsg)
+
+CommandCompleted = _reflection.GeneratedProtocolMessageType('CommandCompleted', (_message.Message,), {
+  'DESCRIPTOR' : _COMMANDCOMPLETED,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.CommandCompleted)
+  })
+_sym_db.RegisterMessage(CommandCompleted)
+
+CommandCompletedMsg = _reflection.GeneratedProtocolMessageType('CommandCompletedMsg', (_message.Message,), {
+  'DESCRIPTOR' : _COMMANDCOMPLETEDMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.CommandCompletedMsg)
+  })
+_sym_db.RegisterMessage(CommandCompletedMsg)
+
+ShowNode = _reflection.GeneratedProtocolMessageType('ShowNode', (_message.Message,), {
+  'DESCRIPTOR' : _SHOWNODE,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ShowNode)
+  })
+_sym_db.RegisterMessage(ShowNode)
+
+ShowNodeMsg = _reflection.GeneratedProtocolMessageType('ShowNodeMsg', (_message.Message,), {
+  'DESCRIPTOR' : _SHOWNODEMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ShowNodeMsg)
+  })
+_sym_db.RegisterMessage(ShowNodeMsg)
+
+CompiledNode = _reflection.GeneratedProtocolMessageType('CompiledNode', (_message.Message,), {
+  'DESCRIPTOR' : _COMPILEDNODE,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.CompiledNode)
+  })
+_sym_db.RegisterMessage(CompiledNode)
+
+CompiledNodeMsg = _reflection.GeneratedProtocolMessageType('CompiledNodeMsg', (_message.Message,), {
+  'DESCRIPTOR' : _COMPILEDNODEMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.CompiledNodeMsg)
+  })
+_sym_db.RegisterMessage(CompiledNodeMsg)
+
+CatchableExceptionOnRun = _reflection.GeneratedProtocolMessageType('CatchableExceptionOnRun', (_message.Message,), {
+  'DESCRIPTOR' : _CATCHABLEEXCEPTIONONRUN,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.CatchableExceptionOnRun)
+  })
+_sym_db.RegisterMessage(CatchableExceptionOnRun)
+
+CatchableExceptionOnRunMsg = _reflection.GeneratedProtocolMessageType('CatchableExceptionOnRunMsg', (_message.Message,), {
+  'DESCRIPTOR' : _CATCHABLEEXCEPTIONONRUNMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.CatchableExceptionOnRunMsg)
+  })
+_sym_db.RegisterMessage(CatchableExceptionOnRunMsg)
+
+InternalErrorOnRun = _reflection.GeneratedProtocolMessageType('InternalErrorOnRun', (_message.Message,), {
+  'DESCRIPTOR' : _INTERNALERRORONRUN,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.InternalErrorOnRun)
+  })
+_sym_db.RegisterMessage(InternalErrorOnRun)
+
+InternalErrorOnRunMsg = _reflection.GeneratedProtocolMessageType('InternalErrorOnRunMsg', (_message.Message,), {
+  'DESCRIPTOR' : _INTERNALERRORONRUNMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.InternalErrorOnRunMsg)
+  })
+_sym_db.RegisterMessage(InternalErrorOnRunMsg)
+
+GenericExceptionOnRun = _reflection.GeneratedProtocolMessageType('GenericExceptionOnRun', (_message.Message,), {
+  'DESCRIPTOR' : _GENERICEXCEPTIONONRUN,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.GenericExceptionOnRun)
+  })
+_sym_db.RegisterMessage(GenericExceptionOnRun)
+
+GenericExceptionOnRunMsg = _reflection.GeneratedProtocolMessageType('GenericExceptionOnRunMsg', (_message.Message,), {
+  'DESCRIPTOR' : _GENERICEXCEPTIONONRUNMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.GenericExceptionOnRunMsg)
+  })
+_sym_db.RegisterMessage(GenericExceptionOnRunMsg)
+
+NodeConnectionReleaseError = _reflection.GeneratedProtocolMessageType('NodeConnectionReleaseError', (_message.Message,), {
+  'DESCRIPTOR' : _NODECONNECTIONRELEASEERROR,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.NodeConnectionReleaseError)
+  })
+_sym_db.RegisterMessage(NodeConnectionReleaseError)
+
+NodeConnectionReleaseErrorMsg = _reflection.GeneratedProtocolMessageType('NodeConnectionReleaseErrorMsg', (_message.Message,), {
+  'DESCRIPTOR' : _NODECONNECTIONRELEASEERRORMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.NodeConnectionReleaseErrorMsg)
+  })
+_sym_db.RegisterMessage(NodeConnectionReleaseErrorMsg)
+
+FoundStats = _reflection.GeneratedProtocolMessageType('FoundStats', (_message.Message,), {
+  'DESCRIPTOR' : _FOUNDSTATS,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.FoundStats)
+  })
+_sym_db.RegisterMessage(FoundStats)
+
+FoundStatsMsg = _reflection.GeneratedProtocolMessageType('FoundStatsMsg', (_message.Message,), {
+  'DESCRIPTOR' : _FOUNDSTATSMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.FoundStatsMsg)
+  })
+_sym_db.RegisterMessage(FoundStatsMsg)
+
+MainKeyboardInterrupt = _reflection.GeneratedProtocolMessageType('MainKeyboardInterrupt', (_message.Message,), {
+  'DESCRIPTOR' : _MAINKEYBOARDINTERRUPT,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.MainKeyboardInterrupt)
+  })
+_sym_db.RegisterMessage(MainKeyboardInterrupt)
+
+MainKeyboardInterruptMsg = _reflection.GeneratedProtocolMessageType('MainKeyboardInterruptMsg', (_message.Message,), {
+  'DESCRIPTOR' : _MAINKEYBOARDINTERRUPTMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.MainKeyboardInterruptMsg)
+  })
+_sym_db.RegisterMessage(MainKeyboardInterruptMsg)
+
+MainEncounteredError = _reflection.GeneratedProtocolMessageType('MainEncounteredError', (_message.Message,), {
+  'DESCRIPTOR' : _MAINENCOUNTEREDERROR,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.MainEncounteredError)
+  })
+_sym_db.RegisterMessage(MainEncounteredError)
+
+MainEncounteredErrorMsg = _reflection.GeneratedProtocolMessageType('MainEncounteredErrorMsg', (_message.Message,), {
+  'DESCRIPTOR' : _MAINENCOUNTEREDERRORMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.MainEncounteredErrorMsg)
+  })
+_sym_db.RegisterMessage(MainEncounteredErrorMsg)
+
+MainStackTrace = _reflection.GeneratedProtocolMessageType('MainStackTrace', (_message.Message,), {
+  'DESCRIPTOR' : _MAINSTACKTRACE,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.MainStackTrace)
+  })
+_sym_db.RegisterMessage(MainStackTrace)
+
+MainStackTraceMsg = _reflection.GeneratedProtocolMessageType('MainStackTraceMsg', (_message.Message,), {
+  'DESCRIPTOR' : _MAINSTACKTRACEMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.MainStackTraceMsg)
+  })
+_sym_db.RegisterMessage(MainStackTraceMsg)
+
+SystemCouldNotWrite = _reflection.GeneratedProtocolMessageType('SystemCouldNotWrite', (_message.Message,), {
+  'DESCRIPTOR' : _SYSTEMCOULDNOTWRITE,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.SystemCouldNotWrite)
+  })
+_sym_db.RegisterMessage(SystemCouldNotWrite)
+
+SystemCouldNotWriteMsg = _reflection.GeneratedProtocolMessageType('SystemCouldNotWriteMsg', (_message.Message,), {
+  'DESCRIPTOR' : _SYSTEMCOULDNOTWRITEMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.SystemCouldNotWriteMsg)
+  })
+_sym_db.RegisterMessage(SystemCouldNotWriteMsg)
+
+SystemExecutingCmd = _reflection.GeneratedProtocolMessageType('SystemExecutingCmd', (_message.Message,), {
+  'DESCRIPTOR' : _SYSTEMEXECUTINGCMD,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.SystemExecutingCmd)
+  })
+_sym_db.RegisterMessage(SystemExecutingCmd)
+
+SystemExecutingCmdMsg = _reflection.GeneratedProtocolMessageType('SystemExecutingCmdMsg', (_message.Message,), {
+  'DESCRIPTOR' : _SYSTEMEXECUTINGCMDMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.SystemExecutingCmdMsg)
+  })
+_sym_db.RegisterMessage(SystemExecutingCmdMsg)
+
+SystemStdOut = _reflection.GeneratedProtocolMessageType('SystemStdOut', (_message.Message,), {
+  'DESCRIPTOR' : _SYSTEMSTDOUT,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.SystemStdOut)
+  })
+_sym_db.RegisterMessage(SystemStdOut)
+
+SystemStdOutMsg = _reflection.GeneratedProtocolMessageType('SystemStdOutMsg', (_message.Message,), {
+  'DESCRIPTOR' : _SYSTEMSTDOUTMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.SystemStdOutMsg)
+  })
+_sym_db.RegisterMessage(SystemStdOutMsg)
+
+SystemStdErr = _reflection.GeneratedProtocolMessageType('SystemStdErr', (_message.Message,), {
+  'DESCRIPTOR' : _SYSTEMSTDERR,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.SystemStdErr)
+  })
+_sym_db.RegisterMessage(SystemStdErr)
+
+SystemStdErrMsg = _reflection.GeneratedProtocolMessageType('SystemStdErrMsg', (_message.Message,), {
+  'DESCRIPTOR' : _SYSTEMSTDERRMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.SystemStdErrMsg)
+  })
+_sym_db.RegisterMessage(SystemStdErrMsg)
+
+SystemReportReturnCode = _reflection.GeneratedProtocolMessageType('SystemReportReturnCode', (_message.Message,), {
+  'DESCRIPTOR' : _SYSTEMREPORTRETURNCODE,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.SystemReportReturnCode)
+  })
+_sym_db.RegisterMessage(SystemReportReturnCode)
+
+SystemReportReturnCodeMsg = _reflection.GeneratedProtocolMessageType('SystemReportReturnCodeMsg', (_message.Message,), {
+  'DESCRIPTOR' : _SYSTEMREPORTRETURNCODEMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.SystemReportReturnCodeMsg)
+  })
+_sym_db.RegisterMessage(SystemReportReturnCodeMsg)
+
+TimingInfoCollected = _reflection.GeneratedProtocolMessageType('TimingInfoCollected', (_message.Message,), {
+  'DESCRIPTOR' : _TIMINGINFOCOLLECTED,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.TimingInfoCollected)
+  })
+_sym_db.RegisterMessage(TimingInfoCollected)
+
+TimingInfoCollectedMsg = _reflection.GeneratedProtocolMessageType('TimingInfoCollectedMsg', (_message.Message,), {
+  'DESCRIPTOR' : _TIMINGINFOCOLLECTEDMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.TimingInfoCollectedMsg)
+  })
+_sym_db.RegisterMessage(TimingInfoCollectedMsg)
+
+LogDebugStackTrace = _reflection.GeneratedProtocolMessageType('LogDebugStackTrace', (_message.Message,), {
+  'DESCRIPTOR' : _LOGDEBUGSTACKTRACE,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.LogDebugStackTrace)
+  })
+_sym_db.RegisterMessage(LogDebugStackTrace)
+
+LogDebugStackTraceMsg = _reflection.GeneratedProtocolMessageType('LogDebugStackTraceMsg', (_message.Message,), {
+  'DESCRIPTOR' : _LOGDEBUGSTACKTRACEMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.LogDebugStackTraceMsg)
+  })
+_sym_db.RegisterMessage(LogDebugStackTraceMsg)
+
+CheckCleanPath = _reflection.GeneratedProtocolMessageType('CheckCleanPath', (_message.Message,), {
+  'DESCRIPTOR' : _CHECKCLEANPATH,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.CheckCleanPath)
+  })
+_sym_db.RegisterMessage(CheckCleanPath)
+
+CheckCleanPathMsg = _reflection.GeneratedProtocolMessageType('CheckCleanPathMsg', (_message.Message,), {
+  'DESCRIPTOR' : _CHECKCLEANPATHMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.CheckCleanPathMsg)
+  })
+_sym_db.RegisterMessage(CheckCleanPathMsg)
+
+ConfirmCleanPath = _reflection.GeneratedProtocolMessageType('ConfirmCleanPath', (_message.Message,), {
+  'DESCRIPTOR' : _CONFIRMCLEANPATH,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ConfirmCleanPath)
+  })
+_sym_db.RegisterMessage(ConfirmCleanPath)
+
+ConfirmCleanPathMsg = _reflection.GeneratedProtocolMessageType('ConfirmCleanPathMsg', (_message.Message,), {
+  'DESCRIPTOR' : _CONFIRMCLEANPATHMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ConfirmCleanPathMsg)
+  })
+_sym_db.RegisterMessage(ConfirmCleanPathMsg)
+
+ProtectedCleanPath = _reflection.GeneratedProtocolMessageType('ProtectedCleanPath', (_message.Message,), {
+  'DESCRIPTOR' : _PROTECTEDCLEANPATH,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ProtectedCleanPath)
+  })
+_sym_db.RegisterMessage(ProtectedCleanPath)
+
+ProtectedCleanPathMsg = _reflection.GeneratedProtocolMessageType('ProtectedCleanPathMsg', (_message.Message,), {
+  'DESCRIPTOR' : _PROTECTEDCLEANPATHMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ProtectedCleanPathMsg)
+  })
+_sym_db.RegisterMessage(ProtectedCleanPathMsg)
+
+FinishedCleanPaths = _reflection.GeneratedProtocolMessageType('FinishedCleanPaths', (_message.Message,), {
+  'DESCRIPTOR' : _FINISHEDCLEANPATHS,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.FinishedCleanPaths)
+  })
+_sym_db.RegisterMessage(FinishedCleanPaths)
+
+FinishedCleanPathsMsg = _reflection.GeneratedProtocolMessageType('FinishedCleanPathsMsg', (_message.Message,), {
+  'DESCRIPTOR' : _FINISHEDCLEANPATHSMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.FinishedCleanPathsMsg)
+  })
+_sym_db.RegisterMessage(FinishedCleanPathsMsg)
+
+OpenCommand = _reflection.GeneratedProtocolMessageType('OpenCommand', (_message.Message,), {
+  'DESCRIPTOR' : _OPENCOMMAND,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.OpenCommand)
+  })
+_sym_db.RegisterMessage(OpenCommand)
+
+OpenCommandMsg = _reflection.GeneratedProtocolMessageType('OpenCommandMsg', (_message.Message,), {
+  'DESCRIPTOR' : _OPENCOMMANDMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.OpenCommandMsg)
+  })
+_sym_db.RegisterMessage(OpenCommandMsg)
+
+Formatting = _reflection.GeneratedProtocolMessageType('Formatting', (_message.Message,), {
+  'DESCRIPTOR' : _FORMATTING,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.Formatting)
+  })
+_sym_db.RegisterMessage(Formatting)
+
+FormattingMsg = _reflection.GeneratedProtocolMessageType('FormattingMsg', (_message.Message,), {
+  'DESCRIPTOR' : _FORMATTINGMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.FormattingMsg)
+  })
+_sym_db.RegisterMessage(FormattingMsg)
+
+ServingDocsPort = _reflection.GeneratedProtocolMessageType('ServingDocsPort', (_message.Message,), {
+  'DESCRIPTOR' : _SERVINGDOCSPORT,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ServingDocsPort)
+  })
+_sym_db.RegisterMessage(ServingDocsPort)
+
+ServingDocsPortMsg = _reflection.GeneratedProtocolMessageType('ServingDocsPortMsg', (_message.Message,), {
+  'DESCRIPTOR' : _SERVINGDOCSPORTMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ServingDocsPortMsg)
+  })
+_sym_db.RegisterMessage(ServingDocsPortMsg)
+
+ServingDocsAccessInfo = _reflection.GeneratedProtocolMessageType('ServingDocsAccessInfo', (_message.Message,), {
+  'DESCRIPTOR' : _SERVINGDOCSACCESSINFO,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ServingDocsAccessInfo)
+  })
+_sym_db.RegisterMessage(ServingDocsAccessInfo)
+
+ServingDocsAccessInfoMsg = _reflection.GeneratedProtocolMessageType('ServingDocsAccessInfoMsg', (_message.Message,), {
+  'DESCRIPTOR' : _SERVINGDOCSACCESSINFOMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ServingDocsAccessInfoMsg)
+  })
+_sym_db.RegisterMessage(ServingDocsAccessInfoMsg)
+
+ServingDocsExitInfo = _reflection.GeneratedProtocolMessageType('ServingDocsExitInfo', (_message.Message,), {
+  'DESCRIPTOR' : _SERVINGDOCSEXITINFO,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ServingDocsExitInfo)
+  })
+_sym_db.RegisterMessage(ServingDocsExitInfo)
+
+ServingDocsExitInfoMsg = _reflection.GeneratedProtocolMessageType('ServingDocsExitInfoMsg', (_message.Message,), {
+  'DESCRIPTOR' : _SERVINGDOCSEXITINFOMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ServingDocsExitInfoMsg)
+  })
+_sym_db.RegisterMessage(ServingDocsExitInfoMsg)
+
+RunResultWarning = _reflection.GeneratedProtocolMessageType('RunResultWarning', (_message.Message,), {
+  'DESCRIPTOR' : _RUNRESULTWARNING,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.RunResultWarning)
+  })
+_sym_db.RegisterMessage(RunResultWarning)
+
+RunResultWarningMsg = _reflection.GeneratedProtocolMessageType('RunResultWarningMsg', (_message.Message,), {
+  'DESCRIPTOR' : _RUNRESULTWARNINGMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.RunResultWarningMsg)
+  })
+_sym_db.RegisterMessage(RunResultWarningMsg)
+
+RunResultFailure = _reflection.GeneratedProtocolMessageType('RunResultFailure', (_message.Message,), {
+  'DESCRIPTOR' : _RUNRESULTFAILURE,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.RunResultFailure)
+  })
+_sym_db.RegisterMessage(RunResultFailure)
+
+RunResultFailureMsg = _reflection.GeneratedProtocolMessageType('RunResultFailureMsg', (_message.Message,), {
+  'DESCRIPTOR' : _RUNRESULTFAILUREMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.RunResultFailureMsg)
+  })
+_sym_db.RegisterMessage(RunResultFailureMsg)
+
+StatsLine = _reflection.GeneratedProtocolMessageType('StatsLine', (_message.Message,), {
+
+  'StatsEntry' : _reflection.GeneratedProtocolMessageType('StatsEntry', (_message.Message,), {
+    'DESCRIPTOR' : _STATSLINE_STATSENTRY,
+    '__module__' : 'types_pb2'
+    # @@protoc_insertion_point(class_scope:proto_types.StatsLine.StatsEntry)
+    })
+  ,
+  'DESCRIPTOR' : _STATSLINE,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.StatsLine)
+  })
+_sym_db.RegisterMessage(StatsLine)
+_sym_db.RegisterMessage(StatsLine.StatsEntry)
+
+StatsLineMsg = _reflection.GeneratedProtocolMessageType('StatsLineMsg', (_message.Message,), {
+  'DESCRIPTOR' : _STATSLINEMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.StatsLineMsg)
+  })
+_sym_db.RegisterMessage(StatsLineMsg)
+
+RunResultError = _reflection.GeneratedProtocolMessageType('RunResultError', (_message.Message,), {
+  'DESCRIPTOR' : _RUNRESULTERROR,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.RunResultError)
+  })
+_sym_db.RegisterMessage(RunResultError)
+
+RunResultErrorMsg = _reflection.GeneratedProtocolMessageType('RunResultErrorMsg', (_message.Message,), {
+  'DESCRIPTOR' : _RUNRESULTERRORMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.RunResultErrorMsg)
+  })
+_sym_db.RegisterMessage(RunResultErrorMsg)
+
+RunResultErrorNoMessage = _reflection.GeneratedProtocolMessageType('RunResultErrorNoMessage', (_message.Message,), {
+  'DESCRIPTOR' : _RUNRESULTERRORNOMESSAGE,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.RunResultErrorNoMessage)
+  })
+_sym_db.RegisterMessage(RunResultErrorNoMessage)
+
+RunResultErrorNoMessageMsg = _reflection.GeneratedProtocolMessageType('RunResultErrorNoMessageMsg', (_message.Message,), {
+  'DESCRIPTOR' : _RUNRESULTERRORNOMESSAGEMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.RunResultErrorNoMessageMsg)
+  })
+_sym_db.RegisterMessage(RunResultErrorNoMessageMsg)
+
+SQLCompiledPath = _reflection.GeneratedProtocolMessageType('SQLCompiledPath', (_message.Message,), {
+  'DESCRIPTOR' : _SQLCOMPILEDPATH,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.SQLCompiledPath)
+  })
+_sym_db.RegisterMessage(SQLCompiledPath)
+
+SQLCompiledPathMsg = _reflection.GeneratedProtocolMessageType('SQLCompiledPathMsg', (_message.Message,), {
+  'DESCRIPTOR' : _SQLCOMPILEDPATHMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.SQLCompiledPathMsg)
+  })
+_sym_db.RegisterMessage(SQLCompiledPathMsg)
+
+CheckNodeTestFailure = _reflection.GeneratedProtocolMessageType('CheckNodeTestFailure', (_message.Message,), {
+  'DESCRIPTOR' : _CHECKNODETESTFAILURE,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.CheckNodeTestFailure)
+  })
+_sym_db.RegisterMessage(CheckNodeTestFailure)
+
+CheckNodeTestFailureMsg = _reflection.GeneratedProtocolMessageType('CheckNodeTestFailureMsg', (_message.Message,), {
+  'DESCRIPTOR' : _CHECKNODETESTFAILUREMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.CheckNodeTestFailureMsg)
+  })
+_sym_db.RegisterMessage(CheckNodeTestFailureMsg)
+
+FirstRunResultError = _reflection.GeneratedProtocolMessageType('FirstRunResultError', (_message.Message,), {
+  'DESCRIPTOR' : _FIRSTRUNRESULTERROR,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.FirstRunResultError)
+  })
+_sym_db.RegisterMessage(FirstRunResultError)
+
+FirstRunResultErrorMsg = _reflection.GeneratedProtocolMessageType('FirstRunResultErrorMsg', (_message.Message,), {
+  'DESCRIPTOR' : _FIRSTRUNRESULTERRORMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.FirstRunResultErrorMsg)
+  })
+_sym_db.RegisterMessage(FirstRunResultErrorMsg)
+
+AfterFirstRunResultError = _reflection.GeneratedProtocolMessageType('AfterFirstRunResultError', (_message.Message,), {
+  'DESCRIPTOR' : _AFTERFIRSTRUNRESULTERROR,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.AfterFirstRunResultError)
+  })
+_sym_db.RegisterMessage(AfterFirstRunResultError)
+
+AfterFirstRunResultErrorMsg = _reflection.GeneratedProtocolMessageType('AfterFirstRunResultErrorMsg', (_message.Message,), {
+  'DESCRIPTOR' : _AFTERFIRSTRUNRESULTERRORMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.AfterFirstRunResultErrorMsg)
+  })
+_sym_db.RegisterMessage(AfterFirstRunResultErrorMsg)
+
+EndOfRunSummary = _reflection.GeneratedProtocolMessageType('EndOfRunSummary', (_message.Message,), {
+  'DESCRIPTOR' : _ENDOFRUNSUMMARY,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.EndOfRunSummary)
+  })
+_sym_db.RegisterMessage(EndOfRunSummary)
+
+EndOfRunSummaryMsg = _reflection.GeneratedProtocolMessageType('EndOfRunSummaryMsg', (_message.Message,), {
+  'DESCRIPTOR' : _ENDOFRUNSUMMARYMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.EndOfRunSummaryMsg)
+  })
+_sym_db.RegisterMessage(EndOfRunSummaryMsg)
+
+LogSkipBecauseError = _reflection.GeneratedProtocolMessageType('LogSkipBecauseError', (_message.Message,), {
+  'DESCRIPTOR' : _LOGSKIPBECAUSEERROR,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.LogSkipBecauseError)
+  })
+_sym_db.RegisterMessage(LogSkipBecauseError)
+
+LogSkipBecauseErrorMsg = _reflection.GeneratedProtocolMessageType('LogSkipBecauseErrorMsg', (_message.Message,), {
+  'DESCRIPTOR' : _LOGSKIPBECAUSEERRORMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.LogSkipBecauseErrorMsg)
+  })
+_sym_db.RegisterMessage(LogSkipBecauseErrorMsg)
+
+EnsureGitInstalled = _reflection.GeneratedProtocolMessageType('EnsureGitInstalled', (_message.Message,), {
+  'DESCRIPTOR' : _ENSUREGITINSTALLED,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.EnsureGitInstalled)
+  })
+_sym_db.RegisterMessage(EnsureGitInstalled)
+
+EnsureGitInstalledMsg = _reflection.GeneratedProtocolMessageType('EnsureGitInstalledMsg', (_message.Message,), {
+  'DESCRIPTOR' : _ENSUREGITINSTALLEDMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.EnsureGitInstalledMsg)
+  })
+_sym_db.RegisterMessage(EnsureGitInstalledMsg)
+
+DepsCreatingLocalSymlink = _reflection.GeneratedProtocolMessageType('DepsCreatingLocalSymlink', (_message.Message,), {
+  'DESCRIPTOR' : _DEPSCREATINGLOCALSYMLINK,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.DepsCreatingLocalSymlink)
+  })
+_sym_db.RegisterMessage(DepsCreatingLocalSymlink)
+
+DepsCreatingLocalSymlinkMsg = _reflection.GeneratedProtocolMessageType('DepsCreatingLocalSymlinkMsg', (_message.Message,), {
+  'DESCRIPTOR' : _DEPSCREATINGLOCALSYMLINKMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.DepsCreatingLocalSymlinkMsg)
+  })
+_sym_db.RegisterMessage(DepsCreatingLocalSymlinkMsg)
+
+DepsSymlinkNotAvailable = _reflection.GeneratedProtocolMessageType('DepsSymlinkNotAvailable', (_message.Message,), {
+  'DESCRIPTOR' : _DEPSSYMLINKNOTAVAILABLE,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.DepsSymlinkNotAvailable)
+  })
+_sym_db.RegisterMessage(DepsSymlinkNotAvailable)
+
+DepsSymlinkNotAvailableMsg = _reflection.GeneratedProtocolMessageType('DepsSymlinkNotAvailableMsg', (_message.Message,), {
+  'DESCRIPTOR' : _DEPSSYMLINKNOTAVAILABLEMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.DepsSymlinkNotAvailableMsg)
+  })
+_sym_db.RegisterMessage(DepsSymlinkNotAvailableMsg)
+
+DisableTracking = _reflection.GeneratedProtocolMessageType('DisableTracking', (_message.Message,), {
+  'DESCRIPTOR' : _DISABLETRACKING,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.DisableTracking)
+  })
+_sym_db.RegisterMessage(DisableTracking)
+
+DisableTrackingMsg = _reflection.GeneratedProtocolMessageType('DisableTrackingMsg', (_message.Message,), {
+  'DESCRIPTOR' : _DISABLETRACKINGMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.DisableTrackingMsg)
+  })
+_sym_db.RegisterMessage(DisableTrackingMsg)
+
+SendingEvent = _reflection.GeneratedProtocolMessageType('SendingEvent', (_message.Message,), {
+  'DESCRIPTOR' : _SENDINGEVENT,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.SendingEvent)
+  })
+_sym_db.RegisterMessage(SendingEvent)
+
+SendingEventMsg = _reflection.GeneratedProtocolMessageType('SendingEventMsg', (_message.Message,), {
+  'DESCRIPTOR' : _SENDINGEVENTMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.SendingEventMsg)
+  })
+_sym_db.RegisterMessage(SendingEventMsg)
+
+SendEventFailure = _reflection.GeneratedProtocolMessageType('SendEventFailure', (_message.Message,), {
+  'DESCRIPTOR' : _SENDEVENTFAILURE,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.SendEventFailure)
+  })
+_sym_db.RegisterMessage(SendEventFailure)
+
+SendEventFailureMsg = _reflection.GeneratedProtocolMessageType('SendEventFailureMsg', (_message.Message,), {
+  'DESCRIPTOR' : _SENDEVENTFAILUREMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.SendEventFailureMsg)
+  })
+_sym_db.RegisterMessage(SendEventFailureMsg)
+
+FlushEvents = _reflection.GeneratedProtocolMessageType('FlushEvents', (_message.Message,), {
+  'DESCRIPTOR' : _FLUSHEVENTS,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.FlushEvents)
+  })
+_sym_db.RegisterMessage(FlushEvents)
+
+FlushEventsMsg = _reflection.GeneratedProtocolMessageType('FlushEventsMsg', (_message.Message,), {
+  'DESCRIPTOR' : _FLUSHEVENTSMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.FlushEventsMsg)
+  })
+_sym_db.RegisterMessage(FlushEventsMsg)
+
+FlushEventsFailure = _reflection.GeneratedProtocolMessageType('FlushEventsFailure', (_message.Message,), {
+  'DESCRIPTOR' : _FLUSHEVENTSFAILURE,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.FlushEventsFailure)
+  })
+_sym_db.RegisterMessage(FlushEventsFailure)
+
+FlushEventsFailureMsg = _reflection.GeneratedProtocolMessageType('FlushEventsFailureMsg', (_message.Message,), {
+  'DESCRIPTOR' : _FLUSHEVENTSFAILUREMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.FlushEventsFailureMsg)
+  })
+_sym_db.RegisterMessage(FlushEventsFailureMsg)
+
+TrackingInitializeFailure = _reflection.GeneratedProtocolMessageType('TrackingInitializeFailure', (_message.Message,), {
+  'DESCRIPTOR' : _TRACKINGINITIALIZEFAILURE,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.TrackingInitializeFailure)
+  })
+_sym_db.RegisterMessage(TrackingInitializeFailure)
+
+TrackingInitializeFailureMsg = _reflection.GeneratedProtocolMessageType('TrackingInitializeFailureMsg', (_message.Message,), {
+  'DESCRIPTOR' : _TRACKINGINITIALIZEFAILUREMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.TrackingInitializeFailureMsg)
+  })
+_sym_db.RegisterMessage(TrackingInitializeFailureMsg)
+
+RunResultWarningMessage = _reflection.GeneratedProtocolMessageType('RunResultWarningMessage', (_message.Message,), {
+  'DESCRIPTOR' : _RUNRESULTWARNINGMESSAGE,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.RunResultWarningMessage)
+  })
+_sym_db.RegisterMessage(RunResultWarningMessage)
+
+RunResultWarningMessageMsg = _reflection.GeneratedProtocolMessageType('RunResultWarningMessageMsg', (_message.Message,), {
+  'DESCRIPTOR' : _RUNRESULTWARNINGMESSAGEMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.RunResultWarningMessageMsg)
+  })
+_sym_db.RegisterMessage(RunResultWarningMessageMsg)
+
+DebugCmdOut = _reflection.GeneratedProtocolMessageType('DebugCmdOut', (_message.Message,), {
+  'DESCRIPTOR' : _DEBUGCMDOUT,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.DebugCmdOut)
+  })
+_sym_db.RegisterMessage(DebugCmdOut)
+
+DebugCmdOutMsg = _reflection.GeneratedProtocolMessageType('DebugCmdOutMsg', (_message.Message,), {
+  'DESCRIPTOR' : _DEBUGCMDOUTMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.DebugCmdOutMsg)
+  })
+_sym_db.RegisterMessage(DebugCmdOutMsg)
+
+DebugCmdResult = _reflection.GeneratedProtocolMessageType('DebugCmdResult', (_message.Message,), {
+  'DESCRIPTOR' : _DEBUGCMDRESULT,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.DebugCmdResult)
+  })
+_sym_db.RegisterMessage(DebugCmdResult)
+
+DebugCmdResultMsg = _reflection.GeneratedProtocolMessageType('DebugCmdResultMsg', (_message.Message,), {
+  'DESCRIPTOR' : _DEBUGCMDRESULTMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.DebugCmdResultMsg)
+  })
+_sym_db.RegisterMessage(DebugCmdResultMsg)
+
+ListCmdOut = _reflection.GeneratedProtocolMessageType('ListCmdOut', (_message.Message,), {
+  'DESCRIPTOR' : _LISTCMDOUT,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ListCmdOut)
+  })
+_sym_db.RegisterMessage(ListCmdOut)
+
+ListCmdOutMsg = _reflection.GeneratedProtocolMessageType('ListCmdOutMsg', (_message.Message,), {
+  'DESCRIPTOR' : _LISTCMDOUTMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.ListCmdOutMsg)
+  })
+_sym_db.RegisterMessage(ListCmdOutMsg)
+
+Note = _reflection.GeneratedProtocolMessageType('Note', (_message.Message,), {
+  'DESCRIPTOR' : _NOTE,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.Note)
+  })
+_sym_db.RegisterMessage(Note)
+
+NoteMsg = _reflection.GeneratedProtocolMessageType('NoteMsg', (_message.Message,), {
+  'DESCRIPTOR' : _NOTEMSG,
+  '__module__' : 'types_pb2'
+  # @@protoc_insertion_point(class_scope:proto_types.NoteMsg)
+  })
+_sym_db.RegisterMessage(NoteMsg)
+
 if _descriptor._USE_C_DESCRIPTORS == False:
 
   DESCRIPTOR._options = None
@@ -35,862 +3489,866 @@ if _descriptor._USE_C_DESCRIPTORS == False:
   _LOGSNAPSHOTRESULT_CFGENTRY._serialized_options = b'8\001'
   _STATSLINE_STATSENTRY._options = None
   _STATSLINE_STATSENTRY._serialized_options = b'8\001'
-  _globals['_EVENTINFO']._serialized_start=92
-  _globals['_EVENTINFO']._serialized_end=365
-  _globals['_EVENTINFO_EXTRAENTRY']._serialized_start=321
-  _globals['_EVENTINFO_EXTRAENTRY']._serialized_end=365
-  _globals['_TIMINGINFOMSG']._serialized_start=367
-  _globals['_TIMINGINFOMSG']._serialized_end=494
-  _globals['_NODERELATION']._serialized_start=496
-  _globals['_NODERELATION']._serialized_end=582
-  _globals['_NODEINFO']._serialized_start=585
-  _globals['_NODEINFO']._serialized_end=858
-  _globals['_RUNRESULTMSG']._serialized_start=861
-  _globals['_RUNRESULTMSG']._serialized_end=1070
-  _globals['_REFERENCEKEYMSG']._serialized_start=1072
-  _globals['_REFERENCEKEYMSG']._serialized_end=1143
-  _globals['_GENERICMESSAGE']._serialized_start=1145
-  _globals['_GENERICMESSAGE']._serialized_end=1199
-  _globals['_MAINREPORTVERSION']._serialized_start=1201
-  _globals['_MAINREPORTVERSION']._serialized_end=1258
-  _globals['_MAINREPORTVERSIONMSG']._serialized_start=1260
-  _globals['_MAINREPORTVERSIONMSG']._serialized_end=1366
-  _globals['_MAINREPORTARGS']._serialized_start=1368
-  _globals['_MAINREPORTARGS']._serialized_end=1482
-  _globals['_MAINREPORTARGS_ARGSENTRY']._serialized_start=1439
-  _globals['_MAINREPORTARGS_ARGSENTRY']._serialized_end=1482
-  _globals['_MAINREPORTARGSMSG']._serialized_start=1484
-  _globals['_MAINREPORTARGSMSG']._serialized_end=1584
-  _globals['_MAINTRACKINGUSERSTATE']._serialized_start=1586
-  _globals['_MAINTRACKINGUSERSTATE']._serialized_end=1629
-  _globals['_MAINTRACKINGUSERSTATEMSG']._serialized_start=1631
-  _globals['_MAINTRACKINGUSERSTATEMSG']._serialized_end=1745
-  _globals['_MERGEDFROMSTATE']._serialized_start=1747
-  _globals['_MERGEDFROMSTATE']._serialized_end=1800
-  _globals['_MERGEDFROMSTATEMSG']._serialized_start=1802
-  _globals['_MERGEDFROMSTATEMSG']._serialized_end=1904
-  _globals['_MISSINGPROFILETARGET']._serialized_start=1906
-  _globals['_MISSINGPROFILETARGET']._serialized_end=1971
-  _globals['_MISSINGPROFILETARGETMSG']._serialized_start=1973
-  _globals['_MISSINGPROFILETARGETMSG']._serialized_end=2085
-  _globals['_INVALIDOPTIONYAML']._serialized_start=2087
-  _globals['_INVALIDOPTIONYAML']._serialized_end=2127
-  _globals['_INVALIDOPTIONYAMLMSG']._serialized_start=2129
-  _globals['_INVALIDOPTIONYAMLMSG']._serialized_end=2235
-  _globals['_LOGDBTPROJECTERROR']._serialized_start=2237
-  _globals['_LOGDBTPROJECTERROR']._serialized_end=2270
-  _globals['_LOGDBTPROJECTERRORMSG']._serialized_start=2272
-  _globals['_LOGDBTPROJECTERRORMSG']._serialized_end=2380
-  _globals['_LOGDBTPROFILEERROR']._serialized_start=2382
-  _globals['_LOGDBTPROFILEERROR']._serialized_end=2433
-  _globals['_LOGDBTPROFILEERRORMSG']._serialized_start=2435
-  _globals['_LOGDBTPROFILEERRORMSG']._serialized_end=2543
-  _globals['_STARTERPROJECTPATH']._serialized_start=2545
-  _globals['_STARTERPROJECTPATH']._serialized_end=2578
-  _globals['_STARTERPROJECTPATHMSG']._serialized_start=2580
-  _globals['_STARTERPROJECTPATHMSG']._serialized_end=2688
-  _globals['_CONFIGFOLDERDIRECTORY']._serialized_start=2690
-  _globals['_CONFIGFOLDERDIRECTORY']._serialized_end=2726
-  _globals['_CONFIGFOLDERDIRECTORYMSG']._serialized_start=2728
-  _globals['_CONFIGFOLDERDIRECTORYMSG']._serialized_end=2842
-  _globals['_NOSAMPLEPROFILEFOUND']._serialized_start=2844
-  _globals['_NOSAMPLEPROFILEFOUND']._serialized_end=2883
-  _globals['_NOSAMPLEPROFILEFOUNDMSG']._serialized_start=2885
-  _globals['_NOSAMPLEPROFILEFOUNDMSG']._serialized_end=2997
-  _globals['_PROFILEWRITTENWITHSAMPLE']._serialized_start=2999
-  _globals['_PROFILEWRITTENWITHSAMPLE']._serialized_end=3053
-  _globals['_PROFILEWRITTENWITHSAMPLEMSG']._serialized_start=3055
-  _globals['_PROFILEWRITTENWITHSAMPLEMSG']._serialized_end=3175
-  _globals['_PROFILEWRITTENWITHTARGETTEMPLATEYAML']._serialized_start=3177
-  _globals['_PROFILEWRITTENWITHTARGETTEMPLATEYAML']._serialized_end=3243
-  _globals['_PROFILEWRITTENWITHTARGETTEMPLATEYAMLMSG']._serialized_start=3246
-  _globals['_PROFILEWRITTENWITHTARGETTEMPLATEYAMLMSG']._serialized_end=3390
-  _globals['_PROFILEWRITTENWITHPROJECTTEMPLATEYAML']._serialized_start=3392
-  _globals['_PROFILEWRITTENWITHPROJECTTEMPLATEYAML']._serialized_end=3459
-  _globals['_PROFILEWRITTENWITHPROJECTTEMPLATEYAMLMSG']._serialized_start=3462
-  _globals['_PROFILEWRITTENWITHPROJECTTEMPLATEYAMLMSG']._serialized_end=3608
-  _globals['_SETTINGUPPROFILE']._serialized_start=3610
-  _globals['_SETTINGUPPROFILE']._serialized_end=3628
-  _globals['_SETTINGUPPROFILEMSG']._serialized_start=3630
-  _globals['_SETTINGUPPROFILEMSG']._serialized_end=3734
-  _globals['_INVALIDPROFILETEMPLATEYAML']._serialized_start=3736
-  _globals['_INVALIDPROFILETEMPLATEYAML']._serialized_end=3764
-  _globals['_INVALIDPROFILETEMPLATEYAMLMSG']._serialized_start=3766
-  _globals['_INVALIDPROFILETEMPLATEYAMLMSG']._serialized_end=3890
-  _globals['_PROJECTNAMEALREADYEXISTS']._serialized_start=3892
-  _globals['_PROJECTNAMEALREADYEXISTS']._serialized_end=3932
-  _globals['_PROJECTNAMEALREADYEXISTSMSG']._serialized_start=3934
-  _globals['_PROJECTNAMEALREADYEXISTSMSG']._serialized_end=4054
-  _globals['_PROJECTCREATED']._serialized_start=4056
-  _globals['_PROJECTCREATED']._serialized_end=4131
-  _globals['_PROJECTCREATEDMSG']._serialized_start=4133
-  _globals['_PROJECTCREATEDMSG']._serialized_end=4233
-  _globals['_PACKAGEREDIRECTDEPRECATION']._serialized_start=4235
-  _globals['_PACKAGEREDIRECTDEPRECATION']._serialized_end=4299
-  _globals['_PACKAGEREDIRECTDEPRECATIONMSG']._serialized_start=4301
-  _globals['_PACKAGEREDIRECTDEPRECATIONMSG']._serialized_end=4425
-  _globals['_PACKAGEINSTALLPATHDEPRECATION']._serialized_start=4427
-  _globals['_PACKAGEINSTALLPATHDEPRECATION']._serialized_end=4458
-  _globals['_PACKAGEINSTALLPATHDEPRECATIONMSG']._serialized_start=4461
-  _globals['_PACKAGEINSTALLPATHDEPRECATIONMSG']._serialized_end=4591
-  _globals['_CONFIGSOURCEPATHDEPRECATION']._serialized_start=4593
-  _globals['_CONFIGSOURCEPATHDEPRECATION']._serialized_end=4665
-  _globals['_CONFIGSOURCEPATHDEPRECATIONMSG']._serialized_start=4667
-  _globals['_CONFIGSOURCEPATHDEPRECATIONMSG']._serialized_end=4793
-  _globals['_CONFIGDATAPATHDEPRECATION']._serialized_start=4795
-  _globals['_CONFIGDATAPATHDEPRECATION']._serialized_end=4865
-  _globals['_CONFIGDATAPATHDEPRECATIONMSG']._serialized_start=4867
-  _globals['_CONFIGDATAPATHDEPRECATIONMSG']._serialized_end=4989
-  _globals['_ADAPTERDEPRECATIONWARNING']._serialized_start=4991
-  _globals['_ADAPTERDEPRECATIONWARNING']._serialized_end=5054
-  _globals['_ADAPTERDEPRECATIONWARNINGMSG']._serialized_start=5056
-  _globals['_ADAPTERDEPRECATIONWARNINGMSG']._serialized_end=5178
-  _globals['_METRICATTRIBUTESRENAMED']._serialized_start=5180
-  _globals['_METRICATTRIBUTESRENAMED']._serialized_end=5226
-  _globals['_METRICATTRIBUTESRENAMEDMSG']._serialized_start=5228
-  _globals['_METRICATTRIBUTESRENAMEDMSG']._serialized_end=5346
-  _globals['_EXPOSURENAMEDEPRECATION']._serialized_start=5348
-  _globals['_EXPOSURENAMEDEPRECATION']._serialized_end=5391
-  _globals['_EXPOSURENAMEDEPRECATIONMSG']._serialized_start=5393
-  _globals['_EXPOSURENAMEDEPRECATIONMSG']._serialized_end=5511
-  _globals['_INTERNALDEPRECATION']._serialized_start=5513
-  _globals['_INTERNALDEPRECATION']._serialized_end=5607
-  _globals['_INTERNALDEPRECATIONMSG']._serialized_start=5609
-  _globals['_INTERNALDEPRECATIONMSG']._serialized_end=5719
-  _globals['_ENVIRONMENTVARIABLERENAMED']._serialized_start=5721
-  _globals['_ENVIRONMENTVARIABLERENAMED']._serialized_end=5785
-  _globals['_ENVIRONMENTVARIABLERENAMEDMSG']._serialized_start=5787
-  _globals['_ENVIRONMENTVARIABLERENAMEDMSG']._serialized_end=5911
-  _globals['_CONFIGLOGPATHDEPRECATION']._serialized_start=5913
-  _globals['_CONFIGLOGPATHDEPRECATION']._serialized_end=5964
-  _globals['_CONFIGLOGPATHDEPRECATIONMSG']._serialized_start=5966
-  _globals['_CONFIGLOGPATHDEPRECATIONMSG']._serialized_end=6086
-  _globals['_CONFIGTARGETPATHDEPRECATION']._serialized_start=6088
-  _globals['_CONFIGTARGETPATHDEPRECATION']._serialized_end=6142
-  _globals['_CONFIGTARGETPATHDEPRECATIONMSG']._serialized_start=6144
-  _globals['_CONFIGTARGETPATHDEPRECATIONMSG']._serialized_end=6270
-  _globals['_COLLECTFRESHNESSRETURNSIGNATURE']._serialized_start=6272
-  _globals['_COLLECTFRESHNESSRETURNSIGNATURE']._serialized_end=6305
-  _globals['_COLLECTFRESHNESSRETURNSIGNATUREMSG']._serialized_start=6308
-  _globals['_COLLECTFRESHNESSRETURNSIGNATUREMSG']._serialized_end=6442
-  _globals['_ADAPTEREVENTDEBUG']._serialized_start=6445
-  _globals['_ADAPTEREVENTDEBUG']._serialized_end=6580
-  _globals['_ADAPTEREVENTDEBUGMSG']._serialized_start=6582
-  _globals['_ADAPTEREVENTDEBUGMSG']._serialized_end=6688
-  _globals['_ADAPTEREVENTINFO']._serialized_start=6691
-  _globals['_ADAPTEREVENTINFO']._serialized_end=6825
-  _globals['_ADAPTEREVENTINFOMSG']._serialized_start=6827
-  _globals['_ADAPTEREVENTINFOMSG']._serialized_end=6931
-  _globals['_ADAPTEREVENTWARNING']._serialized_start=6934
-  _globals['_ADAPTEREVENTWARNING']._serialized_end=7071
-  _globals['_ADAPTEREVENTWARNINGMSG']._serialized_start=7073
-  _globals['_ADAPTEREVENTWARNINGMSG']._serialized_end=7183
-  _globals['_ADAPTEREVENTERROR']._serialized_start=7186
-  _globals['_ADAPTEREVENTERROR']._serialized_end=7339
-  _globals['_ADAPTEREVENTERRORMSG']._serialized_start=7341
-  _globals['_ADAPTEREVENTERRORMSG']._serialized_end=7447
-  _globals['_NEWCONNECTION']._serialized_start=7449
-  _globals['_NEWCONNECTION']._serialized_end=7544
-  _globals['_NEWCONNECTIONMSG']._serialized_start=7546
-  _globals['_NEWCONNECTIONMSG']._serialized_end=7644
-  _globals['_CONNECTIONREUSED']._serialized_start=7646
-  _globals['_CONNECTIONREUSED']._serialized_end=7707
-  _globals['_CONNECTIONREUSEDMSG']._serialized_start=7709
-  _globals['_CONNECTIONREUSEDMSG']._serialized_end=7813
-  _globals['_CONNECTIONLEFTOPENINCLEANUP']._serialized_start=7815
-  _globals['_CONNECTIONLEFTOPENINCLEANUP']._serialized_end=7863
-  _globals['_CONNECTIONLEFTOPENINCLEANUPMSG']._serialized_start=7865
-  _globals['_CONNECTIONLEFTOPENINCLEANUPMSG']._serialized_end=7991
-  _globals['_CONNECTIONCLOSEDINCLEANUP']._serialized_start=7993
-  _globals['_CONNECTIONCLOSEDINCLEANUP']._serialized_end=8039
-  _globals['_CONNECTIONCLOSEDINCLEANUPMSG']._serialized_start=8041
-  _globals['_CONNECTIONCLOSEDINCLEANUPMSG']._serialized_end=8163
-  _globals['_ROLLBACKFAILED']._serialized_start=8165
-  _globals['_ROLLBACKFAILED']._serialized_end=8260
-  _globals['_ROLLBACKFAILEDMSG']._serialized_start=8262
-  _globals['_ROLLBACKFAILEDMSG']._serialized_end=8362
-  _globals['_CONNECTIONCLOSED']._serialized_start=8364
-  _globals['_CONNECTIONCLOSED']._serialized_end=8443
-  _globals['_CONNECTIONCLOSEDMSG']._serialized_start=8445
-  _globals['_CONNECTIONCLOSEDMSG']._serialized_end=8549
-  _globals['_CONNECTIONLEFTOPEN']._serialized_start=8551
-  _globals['_CONNECTIONLEFTOPEN']._serialized_end=8632
-  _globals['_CONNECTIONLEFTOPENMSG']._serialized_start=8634
-  _globals['_CONNECTIONLEFTOPENMSG']._serialized_end=8742
-  _globals['_ROLLBACK']._serialized_start=8744
-  _globals['_ROLLBACK']._serialized_end=8815
-  _globals['_ROLLBACKMSG']._serialized_start=8817
-  _globals['_ROLLBACKMSG']._serialized_end=8905
-  _globals['_CACHEMISS']._serialized_start=8907
-  _globals['_CACHEMISS']._serialized_end=8971
-  _globals['_CACHEMISSMSG']._serialized_start=8973
-  _globals['_CACHEMISSMSG']._serialized_end=9063
-  _globals['_LISTRELATIONS']._serialized_start=9065
-  _globals['_LISTRELATIONS']._serialized_end=9163
-  _globals['_LISTRELATIONSMSG']._serialized_start=9165
-  _globals['_LISTRELATIONSMSG']._serialized_end=9263
-  _globals['_CONNECTIONUSED']._serialized_start=9265
-  _globals['_CONNECTIONUSED']._serialized_end=9361
-  _globals['_CONNECTIONUSEDMSG']._serialized_start=9363
-  _globals['_CONNECTIONUSEDMSG']._serialized_end=9463
-  _globals['_SQLQUERY']._serialized_start=9465
-  _globals['_SQLQUERY']._serialized_end=9549
-  _globals['_SQLQUERYMSG']._serialized_start=9551
-  _globals['_SQLQUERYMSG']._serialized_end=9639
-  _globals['_SQLQUERYSTATUS']._serialized_start=9641
-  _globals['_SQLQUERYSTATUS']._serialized_end=9732
-  _globals['_SQLQUERYSTATUSMSG']._serialized_start=9734
-  _globals['_SQLQUERYSTATUSMSG']._serialized_end=9834
-  _globals['_SQLCOMMIT']._serialized_start=9836
-  _globals['_SQLCOMMIT']._serialized_end=9908
-  _globals['_SQLCOMMITMSG']._serialized_start=9910
-  _globals['_SQLCOMMITMSG']._serialized_end=10000
-  _globals['_COLTYPECHANGE']._serialized_start=10002
-  _globals['_COLTYPECHANGE']._serialized_end=10099
-  _globals['_COLTYPECHANGEMSG']._serialized_start=10101
-  _globals['_COLTYPECHANGEMSG']._serialized_end=10199
-  _globals['_SCHEMACREATION']._serialized_start=10201
-  _globals['_SCHEMACREATION']._serialized_end=10265
-  _globals['_SCHEMACREATIONMSG']._serialized_start=10267
-  _globals['_SCHEMACREATIONMSG']._serialized_end=10367
-  _globals['_SCHEMADROP']._serialized_start=10369
-  _globals['_SCHEMADROP']._serialized_end=10429
-  _globals['_SCHEMADROPMSG']._serialized_start=10431
-  _globals['_SCHEMADROPMSG']._serialized_end=10523
-  _globals['_CACHEACTION']._serialized_start=10526
-  _globals['_CACHEACTION']._serialized_end=10748
-  _globals['_CACHEACTIONMSG']._serialized_start=10750
-  _globals['_CACHEACTIONMSG']._serialized_end=10844
-  _globals['_CACHEDUMPGRAPH']._serialized_start=10847
-  _globals['_CACHEDUMPGRAPH']._serialized_end=10999
-  _globals['_CACHEDUMPGRAPH_DUMPENTRY']._serialized_start=10956
-  _globals['_CACHEDUMPGRAPH_DUMPENTRY']._serialized_end=10999
-  _globals['_CACHEDUMPGRAPHMSG']._serialized_start=11001
-  _globals['_CACHEDUMPGRAPHMSG']._serialized_end=11101
-  _globals['_ADAPTERREGISTERED']._serialized_start=11103
-  _globals['_ADAPTERREGISTERED']._serialized_end=11169
-  _globals['_ADAPTERREGISTEREDMSG']._serialized_start=11171
-  _globals['_ADAPTERREGISTEREDMSG']._serialized_end=11277
-  _globals['_ADAPTERIMPORTERROR']._serialized_start=11279
-  _globals['_ADAPTERIMPORTERROR']._serialized_end=11312
-  _globals['_ADAPTERIMPORTERRORMSG']._serialized_start=11314
-  _globals['_ADAPTERIMPORTERRORMSG']._serialized_end=11422
-  _globals['_PLUGINLOADERROR']._serialized_start=11424
-  _globals['_PLUGINLOADERROR']._serialized_end=11459
-  _globals['_PLUGINLOADERRORMSG']._serialized_start=11461
-  _globals['_PLUGINLOADERRORMSG']._serialized_end=11563
-  _globals['_NEWCONNECTIONOPENING']._serialized_start=11565
-  _globals['_NEWCONNECTIONOPENING']._serialized_end=11655
-  _globals['_NEWCONNECTIONOPENINGMSG']._serialized_start=11657
-  _globals['_NEWCONNECTIONOPENINGMSG']._serialized_end=11769
-  _globals['_CODEEXECUTION']._serialized_start=11771
-  _globals['_CODEEXECUTION']._serialized_end=11827
-  _globals['_CODEEXECUTIONMSG']._serialized_start=11829
-  _globals['_CODEEXECUTIONMSG']._serialized_end=11927
-  _globals['_CODEEXECUTIONSTATUS']._serialized_start=11929
-  _globals['_CODEEXECUTIONSTATUS']._serialized_end=11983
-  _globals['_CODEEXECUTIONSTATUSMSG']._serialized_start=11985
-  _globals['_CODEEXECUTIONSTATUSMSG']._serialized_end=12095
-  _globals['_CATALOGGENERATIONERROR']._serialized_start=12097
-  _globals['_CATALOGGENERATIONERROR']._serialized_end=12134
-  _globals['_CATALOGGENERATIONERRORMSG']._serialized_start=12136
-  _globals['_CATALOGGENERATIONERRORMSG']._serialized_end=12252
-  _globals['_WRITECATALOGFAILURE']._serialized_start=12254
-  _globals['_WRITECATALOGFAILURE']._serialized_end=12299
-  _globals['_WRITECATALOGFAILUREMSG']._serialized_start=12301
-  _globals['_WRITECATALOGFAILUREMSG']._serialized_end=12411
-  _globals['_CATALOGWRITTEN']._serialized_start=12413
-  _globals['_CATALOGWRITTEN']._serialized_end=12443
-  _globals['_CATALOGWRITTENMSG']._serialized_start=12445
-  _globals['_CATALOGWRITTENMSG']._serialized_end=12545
-  _globals['_CANNOTGENERATEDOCS']._serialized_start=12547
-  _globals['_CANNOTGENERATEDOCS']._serialized_end=12567
-  _globals['_CANNOTGENERATEDOCSMSG']._serialized_start=12569
-  _globals['_CANNOTGENERATEDOCSMSG']._serialized_end=12677
-  _globals['_BUILDINGCATALOG']._serialized_start=12679
-  _globals['_BUILDINGCATALOG']._serialized_end=12696
-  _globals['_BUILDINGCATALOGMSG']._serialized_start=12698
-  _globals['_BUILDINGCATALOGMSG']._serialized_end=12800
-  _globals['_DATABASEERRORRUNNINGHOOK']._serialized_start=12802
-  _globals['_DATABASEERRORRUNNINGHOOK']._serialized_end=12847
-  _globals['_DATABASEERRORRUNNINGHOOKMSG']._serialized_start=12849
-  _globals['_DATABASEERRORRUNNINGHOOKMSG']._serialized_end=12969
-  _globals['_HOOKSRUNNING']._serialized_start=12971
-  _globals['_HOOKSRUNNING']._serialized_end=13023
-  _globals['_HOOKSRUNNINGMSG']._serialized_start=13025
-  _globals['_HOOKSRUNNINGMSG']._serialized_end=13121
-  _globals['_FINISHEDRUNNINGSTATS']._serialized_start=13123
-  _globals['_FINISHEDRUNNINGSTATS']._serialized_end=13207
-  _globals['_FINISHEDRUNNINGSTATSMSG']._serialized_start=13209
-  _globals['_FINISHEDRUNNINGSTATSMSG']._serialized_end=13321
-  _globals['_CONSTRAINTNOTENFORCED']._serialized_start=13323
-  _globals['_CONSTRAINTNOTENFORCED']._serialized_end=13383
-  _globals['_CONSTRAINTNOTENFORCEDMSG']._serialized_start=13385
-  _globals['_CONSTRAINTNOTENFORCEDMSG']._serialized_end=13499
-  _globals['_CONSTRAINTNOTSUPPORTED']._serialized_start=13501
-  _globals['_CONSTRAINTNOTSUPPORTED']._serialized_end=13562
-  _globals['_CONSTRAINTNOTSUPPORTEDMSG']._serialized_start=13564
-  _globals['_CONSTRAINTNOTSUPPORTEDMSG']._serialized_end=13680
-  _globals['_INPUTFILEDIFFERROR']._serialized_start=13682
-  _globals['_INPUTFILEDIFFERROR']._serialized_end=13737
-  _globals['_INPUTFILEDIFFERRORMSG']._serialized_start=13739
-  _globals['_INPUTFILEDIFFERRORMSG']._serialized_end=13847
-  _globals['_INVALIDVALUEFORFIELD']._serialized_start=13849
-  _globals['_INVALIDVALUEFORFIELD']._serialized_end=13912
-  _globals['_INVALIDVALUEFORFIELDMSG']._serialized_start=13914
-  _globals['_INVALIDVALUEFORFIELDMSG']._serialized_end=14026
-  _globals['_VALIDATIONWARNING']._serialized_start=14028
-  _globals['_VALIDATIONWARNING']._serialized_end=14109
-  _globals['_VALIDATIONWARNINGMSG']._serialized_start=14111
-  _globals['_VALIDATIONWARNINGMSG']._serialized_end=14217
-  _globals['_PARSEPERFINFOPATH']._serialized_start=14219
-  _globals['_PARSEPERFINFOPATH']._serialized_end=14252
-  _globals['_PARSEPERFINFOPATHMSG']._serialized_start=14254
-  _globals['_PARSEPERFINFOPATHMSG']._serialized_end=14360
-  _globals['_PARTIALPARSINGERRORPROCESSINGFILE']._serialized_start=14362
-  _globals['_PARTIALPARSINGERRORPROCESSINGFILE']._serialized_end=14411
-  _globals['_PARTIALPARSINGERRORPROCESSINGFILEMSG']._serialized_start=14414
-  _globals['_PARTIALPARSINGERRORPROCESSINGFILEMSG']._serialized_end=14552
-  _globals['_PARTIALPARSINGERROR']._serialized_start=14555
-  _globals['_PARTIALPARSINGERROR']._serialized_end=14689
-  _globals['_PARTIALPARSINGERROR_EXCINFOENTRY']._serialized_start=14643
-  _globals['_PARTIALPARSINGERROR_EXCINFOENTRY']._serialized_end=14689
-  _globals['_PARTIALPARSINGERRORMSG']._serialized_start=14691
-  _globals['_PARTIALPARSINGERRORMSG']._serialized_end=14801
-  _globals['_PARTIALPARSINGSKIPPARSING']._serialized_start=14803
-  _globals['_PARTIALPARSINGSKIPPARSING']._serialized_end=14830
-  _globals['_PARTIALPARSINGSKIPPARSINGMSG']._serialized_start=14832
-  _globals['_PARTIALPARSINGSKIPPARSINGMSG']._serialized_end=14954
-  _globals['_UNABLETOPARTIALPARSE']._serialized_start=14956
-  _globals['_UNABLETOPARTIALPARSE']._serialized_end=14994
-  _globals['_UNABLETOPARTIALPARSEMSG']._serialized_start=14996
-  _globals['_UNABLETOPARTIALPARSEMSG']._serialized_end=15108
-  _globals['_STATECHECKVARSHASH']._serialized_start=15110
-  _globals['_STATECHECKVARSHASH']._serialized_end=15212
-  _globals['_STATECHECKVARSHASHMSG']._serialized_start=15214
-  _globals['_STATECHECKVARSHASHMSG']._serialized_end=15322
-  _globals['_PARTIALPARSINGNOTENABLED']._serialized_start=15324
-  _globals['_PARTIALPARSINGNOTENABLED']._serialized_end=15350
-  _globals['_PARTIALPARSINGNOTENABLEDMSG']._serialized_start=15352
-  _globals['_PARTIALPARSINGNOTENABLEDMSG']._serialized_end=15472
-  _globals['_PARSEDFILELOADFAILED']._serialized_start=15474
-  _globals['_PARSEDFILELOADFAILED']._serialized_end=15541
-  _globals['_PARSEDFILELOADFAILEDMSG']._serialized_start=15543
-  _globals['_PARSEDFILELOADFAILEDMSG']._serialized_end=15655
-  _globals['_PARTIALPARSINGENABLED']._serialized_start=15657
-  _globals['_PARTIALPARSINGENABLED']._serialized_end=15729
-  _globals['_PARTIALPARSINGENABLEDMSG']._serialized_start=15731
-  _globals['_PARTIALPARSINGENABLEDMSG']._serialized_end=15845
-  _globals['_PARTIALPARSINGFILE']._serialized_start=15847
-  _globals['_PARTIALPARSINGFILE']._serialized_end=15903
-  _globals['_PARTIALPARSINGFILEMSG']._serialized_start=15905
-  _globals['_PARTIALPARSINGFILEMSG']._serialized_end=16013
-  _globals['_INVALIDDISABLEDTARGETINTESTNODE']._serialized_start=16016
-  _globals['_INVALIDDISABLEDTARGETINTESTNODE']._serialized_end=16191
-  _globals['_INVALIDDISABLEDTARGETINTESTNODEMSG']._serialized_start=16194
-  _globals['_INVALIDDISABLEDTARGETINTESTNODEMSG']._serialized_end=16328
-  _globals['_UNUSEDRESOURCECONFIGPATH']._serialized_start=16330
-  _globals['_UNUSEDRESOURCECONFIGPATH']._serialized_end=16385
-  _globals['_UNUSEDRESOURCECONFIGPATHMSG']._serialized_start=16387
-  _globals['_UNUSEDRESOURCECONFIGPATHMSG']._serialized_end=16507
-  _globals['_SEEDINCREASED']._serialized_start=16509
-  _globals['_SEEDINCREASED']._serialized_end=16560
-  _globals['_SEEDINCREASEDMSG']._serialized_start=16562
-  _globals['_SEEDINCREASEDMSG']._serialized_end=16660
-  _globals['_SEEDEXCEEDSLIMITSAMEPATH']._serialized_start=16662
-  _globals['_SEEDEXCEEDSLIMITSAMEPATH']._serialized_end=16724
-  _globals['_SEEDEXCEEDSLIMITSAMEPATHMSG']._serialized_start=16726
-  _globals['_SEEDEXCEEDSLIMITSAMEPATHMSG']._serialized_end=16846
-  _globals['_SEEDEXCEEDSLIMITANDPATHCHANGED']._serialized_start=16848
-  _globals['_SEEDEXCEEDSLIMITANDPATHCHANGED']._serialized_end=16916
-  _globals['_SEEDEXCEEDSLIMITANDPATHCHANGEDMSG']._serialized_start=16919
-  _globals['_SEEDEXCEEDSLIMITANDPATHCHANGEDMSG']._serialized_end=17051
-  _globals['_SEEDEXCEEDSLIMITCHECKSUMCHANGED']._serialized_start=17053
-  _globals['_SEEDEXCEEDSLIMITCHECKSUMCHANGED']._serialized_end=17145
-  _globals['_SEEDEXCEEDSLIMITCHECKSUMCHANGEDMSG']._serialized_start=17148
-  _globals['_SEEDEXCEEDSLIMITCHECKSUMCHANGEDMSG']._serialized_end=17282
-  _globals['_UNUSEDTABLES']._serialized_start=17284
-  _globals['_UNUSEDTABLES']._serialized_end=17321
-  _globals['_UNUSEDTABLESMSG']._serialized_start=17323
-  _globals['_UNUSEDTABLESMSG']._serialized_end=17419
-  _globals['_WRONGRESOURCESCHEMAFILE']._serialized_start=17422
-  _globals['_WRONGRESOURCESCHEMAFILE']._serialized_end=17557
-  _globals['_WRONGRESOURCESCHEMAFILEMSG']._serialized_start=17559
-  _globals['_WRONGRESOURCESCHEMAFILEMSG']._serialized_end=17677
-  _globals['_NONODEFORYAMLKEY']._serialized_start=17679
-  _globals['_NONODEFORYAMLKEY']._serialized_end=17754
-  _globals['_NONODEFORYAMLKEYMSG']._serialized_start=17756
-  _globals['_NONODEFORYAMLKEYMSG']._serialized_end=17860
-  _globals['_MACRONOTFOUNDFORPATCH']._serialized_start=17862
-  _globals['_MACRONOTFOUNDFORPATCH']._serialized_end=17905
-  _globals['_MACRONOTFOUNDFORPATCHMSG']._serialized_start=17907
-  _globals['_MACRONOTFOUNDFORPATCHMSG']._serialized_end=18021
-  _globals['_NODENOTFOUNDORDISABLED']._serialized_start=18024
-  _globals['_NODENOTFOUNDORDISABLED']._serialized_end=18208
-  _globals['_NODENOTFOUNDORDISABLEDMSG']._serialized_start=18210
-  _globals['_NODENOTFOUNDORDISABLEDMSG']._serialized_end=18326
-  _globals['_JINJALOGWARNING']._serialized_start=18328
-  _globals['_JINJALOGWARNING']._serialized_end=18400
-  _globals['_JINJALOGWARNINGMSG']._serialized_start=18402
-  _globals['_JINJALOGWARNINGMSG']._serialized_end=18504
-  _globals['_JINJALOGINFO']._serialized_start=18506
-  _globals['_JINJALOGINFO']._serialized_end=18575
-  _globals['_JINJALOGINFOMSG']._serialized_start=18577
-  _globals['_JINJALOGINFOMSG']._serialized_end=18673
-  _globals['_JINJALOGDEBUG']._serialized_start=18675
-  _globals['_JINJALOGDEBUG']._serialized_end=18745
-  _globals['_JINJALOGDEBUGMSG']._serialized_start=18747
-  _globals['_JINJALOGDEBUGMSG']._serialized_end=18845
-  _globals['_UNPINNEDREFNEWVERSIONAVAILABLE']._serialized_start=18848
-  _globals['_UNPINNEDREFNEWVERSIONAVAILABLE']._serialized_end=19022
-  _globals['_UNPINNEDREFNEWVERSIONAVAILABLEMSG']._serialized_start=19025
-  _globals['_UNPINNEDREFNEWVERSIONAVAILABLEMSG']._serialized_end=19157
-  _globals['_DEPRECATEDMODEL']._serialized_start=19159
-  _globals['_DEPRECATEDMODEL']._serialized_end=19245
-  _globals['_DEPRECATEDMODELMSG']._serialized_start=19247
-  _globals['_DEPRECATEDMODELMSG']._serialized_end=19349
-  _globals['_UPCOMINGREFERENCEDEPRECATION']._serialized_start=19352
-  _globals['_UPCOMINGREFERENCEDEPRECATION']._serialized_end=19550
-  _globals['_UPCOMINGREFERENCEDEPRECATIONMSG']._serialized_start=19553
-  _globals['_UPCOMINGREFERENCEDEPRECATIONMSG']._serialized_end=19681
-  _globals['_DEPRECATEDREFERENCE']._serialized_start=19684
-  _globals['_DEPRECATEDREFERENCE']._serialized_end=19873
-  _globals['_DEPRECATEDREFERENCEMSG']._serialized_start=19875
-  _globals['_DEPRECATEDREFERENCEMSG']._serialized_end=19985
-  _globals['_UNSUPPORTEDCONSTRAINTMATERIALIZATION']._serialized_start=19987
-  _globals['_UNSUPPORTEDCONSTRAINTMATERIALIZATION']._serialized_end=20047
-  _globals['_UNSUPPORTEDCONSTRAINTMATERIALIZATIONMSG']._serialized_start=20050
-  _globals['_UNSUPPORTEDCONSTRAINTMATERIALIZATIONMSG']._serialized_end=20194
-  _globals['_GITSPARSECHECKOUTSUBDIRECTORY']._serialized_start=20196
-  _globals['_GITSPARSECHECKOUTSUBDIRECTORY']._serialized_end=20243
-  _globals['_GITSPARSECHECKOUTSUBDIRECTORYMSG']._serialized_start=20246
-  _globals['_GITSPARSECHECKOUTSUBDIRECTORYMSG']._serialized_end=20376
-  _globals['_GITPROGRESSCHECKOUTREVISION']._serialized_start=20378
-  _globals['_GITPROGRESSCHECKOUTREVISION']._serialized_end=20425
-  _globals['_GITPROGRESSCHECKOUTREVISIONMSG']._serialized_start=20427
-  _globals['_GITPROGRESSCHECKOUTREVISIONMSG']._serialized_end=20553
-  _globals['_GITPROGRESSUPDATINGEXISTINGDEPENDENCY']._serialized_start=20555
-  _globals['_GITPROGRESSUPDATINGEXISTINGDEPENDENCY']._serialized_end=20607
-  _globals['_GITPROGRESSUPDATINGEXISTINGDEPENDENCYMSG']._serialized_start=20610
-  _globals['_GITPROGRESSUPDATINGEXISTINGDEPENDENCYMSG']._serialized_end=20756
-  _globals['_GITPROGRESSPULLINGNEWDEPENDENCY']._serialized_start=20758
-  _globals['_GITPROGRESSPULLINGNEWDEPENDENCY']._serialized_end=20804
-  _globals['_GITPROGRESSPULLINGNEWDEPENDENCYMSG']._serialized_start=20807
-  _globals['_GITPROGRESSPULLINGNEWDEPENDENCYMSG']._serialized_end=20941
-  _globals['_GITNOTHINGTODO']._serialized_start=20943
-  _globals['_GITNOTHINGTODO']._serialized_end=20972
-  _globals['_GITNOTHINGTODOMSG']._serialized_start=20974
-  _globals['_GITNOTHINGTODOMSG']._serialized_end=21074
-  _globals['_GITPROGRESSUPDATEDCHECKOUTRANGE']._serialized_start=21076
-  _globals['_GITPROGRESSUPDATEDCHECKOUTRANGE']._serialized_end=21145
-  _globals['_GITPROGRESSUPDATEDCHECKOUTRANGEMSG']._serialized_start=21148
-  _globals['_GITPROGRESSUPDATEDCHECKOUTRANGEMSG']._serialized_end=21282
-  _globals['_GITPROGRESSCHECKEDOUTAT']._serialized_start=21284
-  _globals['_GITPROGRESSCHECKEDOUTAT']._serialized_end=21326
-  _globals['_GITPROGRESSCHECKEDOUTATMSG']._serialized_start=21328
-  _globals['_GITPROGRESSCHECKEDOUTATMSG']._serialized_end=21446
-  _globals['_REGISTRYPROGRESSGETREQUEST']._serialized_start=21448
-  _globals['_REGISTRYPROGRESSGETREQUEST']._serialized_end=21489
-  _globals['_REGISTRYPROGRESSGETREQUESTMSG']._serialized_start=21491
-  _globals['_REGISTRYPROGRESSGETREQUESTMSG']._serialized_end=21615
-  _globals['_REGISTRYPROGRESSGETRESPONSE']._serialized_start=21617
-  _globals['_REGISTRYPROGRESSGETRESPONSE']._serialized_end=21678
-  _globals['_REGISTRYPROGRESSGETRESPONSEMSG']._serialized_start=21680
-  _globals['_REGISTRYPROGRESSGETRESPONSEMSG']._serialized_end=21806
-  _globals['_SELECTORREPORTINVALIDSELECTOR']._serialized_start=21808
-  _globals['_SELECTORREPORTINVALIDSELECTOR']._serialized_end=21903
-  _globals['_SELECTORREPORTINVALIDSELECTORMSG']._serialized_start=21906
-  _globals['_SELECTORREPORTINVALIDSELECTORMSG']._serialized_end=22036
-  _globals['_DEPSNOPACKAGESFOUND']._serialized_start=22038
-  _globals['_DEPSNOPACKAGESFOUND']._serialized_end=22059
-  _globals['_DEPSNOPACKAGESFOUNDMSG']._serialized_start=22061
-  _globals['_DEPSNOPACKAGESFOUNDMSG']._serialized_end=22171
-  _globals['_DEPSSTARTPACKAGEINSTALL']._serialized_start=22173
-  _globals['_DEPSSTARTPACKAGEINSTALL']._serialized_end=22220
-  _globals['_DEPSSTARTPACKAGEINSTALLMSG']._serialized_start=22222
-  _globals['_DEPSSTARTPACKAGEINSTALLMSG']._serialized_end=22340
-  _globals['_DEPSINSTALLINFO']._serialized_start=22342
-  _globals['_DEPSINSTALLINFO']._serialized_end=22381
-  _globals['_DEPSINSTALLINFOMSG']._serialized_start=22383
-  _globals['_DEPSINSTALLINFOMSG']._serialized_end=22485
-  _globals['_DEPSUPDATEAVAILABLE']._serialized_start=22487
-  _globals['_DEPSUPDATEAVAILABLE']._serialized_end=22532
-  _globals['_DEPSUPDATEAVAILABLEMSG']._serialized_start=22534
-  _globals['_DEPSUPDATEAVAILABLEMSG']._serialized_end=22644
-  _globals['_DEPSUPTODATE']._serialized_start=22646
-  _globals['_DEPSUPTODATE']._serialized_end=22660
-  _globals['_DEPSUPTODATEMSG']._serialized_start=22662
-  _globals['_DEPSUPTODATEMSG']._serialized_end=22758
-  _globals['_DEPSLISTSUBDIRECTORY']._serialized_start=22760
-  _globals['_DEPSLISTSUBDIRECTORY']._serialized_end=22804
-  _globals['_DEPSLISTSUBDIRECTORYMSG']._serialized_start=22806
-  _globals['_DEPSLISTSUBDIRECTORYMSG']._serialized_end=22918
-  _globals['_DEPSNOTIFYUPDATESAVAILABLE']._serialized_start=22920
-  _globals['_DEPSNOTIFYUPDATESAVAILABLE']._serialized_end=22966
-  _globals['_DEPSNOTIFYUPDATESAVAILABLEMSG']._serialized_start=22968
-  _globals['_DEPSNOTIFYUPDATESAVAILABLEMSG']._serialized_end=23092
-  _globals['_RETRYEXTERNALCALL']._serialized_start=23094
-  _globals['_RETRYEXTERNALCALL']._serialized_end=23143
-  _globals['_RETRYEXTERNALCALLMSG']._serialized_start=23145
-  _globals['_RETRYEXTERNALCALLMSG']._serialized_end=23251
-  _globals['_RECORDRETRYEXCEPTION']._serialized_start=23253
-  _globals['_RECORDRETRYEXCEPTION']._serialized_end=23288
-  _globals['_RECORDRETRYEXCEPTIONMSG']._serialized_start=23290
-  _globals['_RECORDRETRYEXCEPTIONMSG']._serialized_end=23402
-  _globals['_REGISTRYINDEXPROGRESSGETREQUEST']._serialized_start=23404
-  _globals['_REGISTRYINDEXPROGRESSGETREQUEST']._serialized_end=23450
-  _globals['_REGISTRYINDEXPROGRESSGETREQUESTMSG']._serialized_start=23453
-  _globals['_REGISTRYINDEXPROGRESSGETREQUESTMSG']._serialized_end=23587
-  _globals['_REGISTRYINDEXPROGRESSGETRESPONSE']._serialized_start=23589
-  _globals['_REGISTRYINDEXPROGRESSGETRESPONSE']._serialized_end=23655
-  _globals['_REGISTRYINDEXPROGRESSGETRESPONSEMSG']._serialized_start=23658
-  _globals['_REGISTRYINDEXPROGRESSGETRESPONSEMSG']._serialized_end=23794
-  _globals['_REGISTRYRESPONSEUNEXPECTEDTYPE']._serialized_start=23796
-  _globals['_REGISTRYRESPONSEUNEXPECTEDTYPE']._serialized_end=23846
-  _globals['_REGISTRYRESPONSEUNEXPECTEDTYPEMSG']._serialized_start=23849
-  _globals['_REGISTRYRESPONSEUNEXPECTEDTYPEMSG']._serialized_end=23981
-  _globals['_REGISTRYRESPONSEMISSINGTOPKEYS']._serialized_start=23983
-  _globals['_REGISTRYRESPONSEMISSINGTOPKEYS']._serialized_end=24033
-  _globals['_REGISTRYRESPONSEMISSINGTOPKEYSMSG']._serialized_start=24036
-  _globals['_REGISTRYRESPONSEMISSINGTOPKEYSMSG']._serialized_end=24168
-  _globals['_REGISTRYRESPONSEMISSINGNESTEDKEYS']._serialized_start=24170
-  _globals['_REGISTRYRESPONSEMISSINGNESTEDKEYS']._serialized_end=24223
-  _globals['_REGISTRYRESPONSEMISSINGNESTEDKEYSMSG']._serialized_start=24226
-  _globals['_REGISTRYRESPONSEMISSINGNESTEDKEYSMSG']._serialized_end=24364
-  _globals['_REGISTRYRESPONSEEXTRANESTEDKEYS']._serialized_start=24366
-  _globals['_REGISTRYRESPONSEEXTRANESTEDKEYS']._serialized_end=24417
-  _globals['_REGISTRYRESPONSEEXTRANESTEDKEYSMSG']._serialized_start=24420
-  _globals['_REGISTRYRESPONSEEXTRANESTEDKEYSMSG']._serialized_end=24554
-  _globals['_DEPSSETDOWNLOADDIRECTORY']._serialized_start=24556
-  _globals['_DEPSSETDOWNLOADDIRECTORY']._serialized_end=24596
-  _globals['_DEPSSETDOWNLOADDIRECTORYMSG']._serialized_start=24598
-  _globals['_DEPSSETDOWNLOADDIRECTORYMSG']._serialized_end=24718
-  _globals['_DEPSUNPINNED']._serialized_start=24720
-  _globals['_DEPSUNPINNED']._serialized_end=24765
-  _globals['_DEPSUNPINNEDMSG']._serialized_start=24767
-  _globals['_DEPSUNPINNEDMSG']._serialized_end=24863
-  _globals['_NONODESFORSELECTIONCRITERIA']._serialized_start=24865
-  _globals['_NONODESFORSELECTIONCRITERIA']._serialized_end=24912
-  _globals['_NONODESFORSELECTIONCRITERIAMSG']._serialized_start=24914
-  _globals['_NONODESFORSELECTIONCRITERIAMSG']._serialized_end=25040
-  _globals['_RUNNINGOPERATIONCAUGHTERROR']._serialized_start=25042
-  _globals['_RUNNINGOPERATIONCAUGHTERROR']._serialized_end=25084
-  _globals['_RUNNINGOPERATIONCAUGHTERRORMSG']._serialized_start=25086
-  _globals['_RUNNINGOPERATIONCAUGHTERRORMSG']._serialized_end=25212
-  _globals['_COMPILECOMPLETE']._serialized_start=25214
-  _globals['_COMPILECOMPLETE']._serialized_end=25231
-  _globals['_COMPILECOMPLETEMSG']._serialized_start=25233
-  _globals['_COMPILECOMPLETEMSG']._serialized_end=25335
-  _globals['_FRESHNESSCHECKCOMPLETE']._serialized_start=25337
-  _globals['_FRESHNESSCHECKCOMPLETE']._serialized_end=25361
-  _globals['_FRESHNESSCHECKCOMPLETEMSG']._serialized_start=25363
-  _globals['_FRESHNESSCHECKCOMPLETEMSG']._serialized_end=25479
-  _globals['_SEEDHEADER']._serialized_start=25481
-  _globals['_SEEDHEADER']._serialized_end=25509
-  _globals['_SEEDHEADERMSG']._serialized_start=25511
-  _globals['_SEEDHEADERMSG']._serialized_end=25603
-  _globals['_SQLRUNNEREXCEPTION']._serialized_start=25605
-  _globals['_SQLRUNNEREXCEPTION']._serialized_end=25656
-  _globals['_SQLRUNNEREXCEPTIONMSG']._serialized_start=25658
-  _globals['_SQLRUNNEREXCEPTIONMSG']._serialized_end=25766
-  _globals['_LOGTESTRESULT']._serialized_start=25769
-  _globals['_LOGTESTRESULT']._serialized_end=25937
-  _globals['_LOGTESTRESULTMSG']._serialized_start=25939
-  _globals['_LOGTESTRESULTMSG']._serialized_end=26037
-  _globals['_LOGSTARTLINE']._serialized_start=26039
-  _globals['_LOGSTARTLINE']._serialized_end=26146
-  _globals['_LOGSTARTLINEMSG']._serialized_start=26148
-  _globals['_LOGSTARTLINEMSG']._serialized_end=26244
-  _globals['_LOGMODELRESULT']._serialized_start=26247
-  _globals['_LOGMODELRESULT']._serialized_end=26396
-  _globals['_LOGMODELRESULTMSG']._serialized_start=26398
-  _globals['_LOGMODELRESULTMSG']._serialized_end=26498
-  _globals['_LOGSNAPSHOTRESULT']._serialized_start=26501
-  _globals['_LOGSNAPSHOTRESULT']._serialized_end=26751
-  _globals['_LOGSNAPSHOTRESULT_CFGENTRY']._serialized_start=26709
-  _globals['_LOGSNAPSHOTRESULT_CFGENTRY']._serialized_end=26751
-  _globals['_LOGSNAPSHOTRESULTMSG']._serialized_start=26753
-  _globals['_LOGSNAPSHOTRESULTMSG']._serialized_end=26859
-  _globals['_LOGSEEDRESULT']._serialized_start=26862
-  _globals['_LOGSEEDRESULT']._serialized_end=27047
-  _globals['_LOGSEEDRESULTMSG']._serialized_start=27049
-  _globals['_LOGSEEDRESULTMSG']._serialized_end=27147
-  _globals['_LOGFRESHNESSRESULT']._serialized_start=27150
-  _globals['_LOGFRESHNESSRESULT']._serialized_end=27323
-  _globals['_LOGFRESHNESSRESULTMSG']._serialized_start=27325
-  _globals['_LOGFRESHNESSRESULTMSG']._serialized_end=27433
-  _globals['_LOGCANCELLINE']._serialized_start=27435
-  _globals['_LOGCANCELLINE']._serialized_end=27469
-  _globals['_LOGCANCELLINEMSG']._serialized_start=27471
-  _globals['_LOGCANCELLINEMSG']._serialized_end=27569
-  _globals['_DEFAULTSELECTOR']._serialized_start=27571
-  _globals['_DEFAULTSELECTOR']._serialized_end=27602
-  _globals['_DEFAULTSELECTORMSG']._serialized_start=27604
-  _globals['_DEFAULTSELECTORMSG']._serialized_end=27706
-  _globals['_NODESTART']._serialized_start=27708
-  _globals['_NODESTART']._serialized_end=27761
-  _globals['_NODESTARTMSG']._serialized_start=27763
-  _globals['_NODESTARTMSG']._serialized_end=27853
-  _globals['_NODEFINISHED']._serialized_start=27855
-  _globals['_NODEFINISHED']._serialized_end=27958
-  _globals['_NODEFINISHEDMSG']._serialized_start=27960
-  _globals['_NODEFINISHEDMSG']._serialized_end=28056
-  _globals['_QUERYCANCELATIONUNSUPPORTED']._serialized_start=28058
-  _globals['_QUERYCANCELATIONUNSUPPORTED']._serialized_end=28101
-  _globals['_QUERYCANCELATIONUNSUPPORTEDMSG']._serialized_start=28103
-  _globals['_QUERYCANCELATIONUNSUPPORTEDMSG']._serialized_end=28229
-  _globals['_CONCURRENCYLINE']._serialized_start=28231
-  _globals['_CONCURRENCYLINE']._serialized_end=28310
-  _globals['_CONCURRENCYLINEMSG']._serialized_start=28312
-  _globals['_CONCURRENCYLINEMSG']._serialized_end=28414
-  _globals['_WRITINGINJECTEDSQLFORNODE']._serialized_start=28416
-  _globals['_WRITINGINJECTEDSQLFORNODE']._serialized_end=28485
-  _globals['_WRITINGINJECTEDSQLFORNODEMSG']._serialized_start=28487
-  _globals['_WRITINGINJECTEDSQLFORNODEMSG']._serialized_end=28609
-  _globals['_NODECOMPILING']._serialized_start=28611
-  _globals['_NODECOMPILING']._serialized_end=28668
-  _globals['_NODECOMPILINGMSG']._serialized_start=28670
-  _globals['_NODECOMPILINGMSG']._serialized_end=28768
-  _globals['_NODEEXECUTING']._serialized_start=28770
-  _globals['_NODEEXECUTING']._serialized_end=28827
-  _globals['_NODEEXECUTINGMSG']._serialized_start=28829
-  _globals['_NODEEXECUTINGMSG']._serialized_end=28927
-  _globals['_LOGHOOKSTARTLINE']._serialized_start=28929
-  _globals['_LOGHOOKSTARTLINE']._serialized_end=29038
-  _globals['_LOGHOOKSTARTLINEMSG']._serialized_start=29040
-  _globals['_LOGHOOKSTARTLINEMSG']._serialized_end=29144
-  _globals['_LOGHOOKENDLINE']._serialized_start=29147
-  _globals['_LOGHOOKENDLINE']._serialized_end=29294
-  _globals['_LOGHOOKENDLINEMSG']._serialized_start=29296
-  _globals['_LOGHOOKENDLINEMSG']._serialized_end=29396
-  _globals['_SKIPPINGDETAILS']._serialized_start=29399
-  _globals['_SKIPPINGDETAILS']._serialized_end=29546
-  _globals['_SKIPPINGDETAILSMSG']._serialized_start=29548
-  _globals['_SKIPPINGDETAILSMSG']._serialized_end=29650
-  _globals['_NOTHINGTODO']._serialized_start=29652
-  _globals['_NOTHINGTODO']._serialized_end=29665
-  _globals['_NOTHINGTODOMSG']._serialized_start=29667
-  _globals['_NOTHINGTODOMSG']._serialized_end=29761
-  _globals['_RUNNINGOPERATIONUNCAUGHTERROR']._serialized_start=29763
-  _globals['_RUNNINGOPERATIONUNCAUGHTERROR']._serialized_end=29807
-  _globals['_RUNNINGOPERATIONUNCAUGHTERRORMSG']._serialized_start=29810
-  _globals['_RUNNINGOPERATIONUNCAUGHTERRORMSG']._serialized_end=29940
-  _globals['_ENDRUNRESULT']._serialized_start=29943
-  _globals['_ENDRUNRESULT']._serialized_end=30090
-  _globals['_ENDRUNRESULTMSG']._serialized_start=30092
-  _globals['_ENDRUNRESULTMSG']._serialized_end=30188
-  _globals['_NONODESSELECTED']._serialized_start=30190
-  _globals['_NONODESSELECTED']._serialized_end=30207
-  _globals['_NONODESSELECTEDMSG']._serialized_start=30209
-  _globals['_NONODESSELECTEDMSG']._serialized_end=30311
-  _globals['_COMMANDCOMPLETED']._serialized_start=30313
-  _globals['_COMMANDCOMPLETED']._serialized_end=30432
-  _globals['_COMMANDCOMPLETEDMSG']._serialized_start=30434
-  _globals['_COMMANDCOMPLETEDMSG']._serialized_end=30538
-  _globals['_SHOWNODE']._serialized_start=30540
-  _globals['_SHOWNODE']._serialized_end=30647
-  _globals['_SHOWNODEMSG']._serialized_start=30649
-  _globals['_SHOWNODEMSG']._serialized_end=30737
-  _globals['_COMPILEDNODE']._serialized_start=30739
-  _globals['_COMPILEDNODE']._serialized_end=30851
-  _globals['_COMPILEDNODEMSG']._serialized_start=30853
-  _globals['_COMPILEDNODEMSG']._serialized_end=30949
-  _globals['_CATCHABLEEXCEPTIONONRUN']._serialized_start=30951
-  _globals['_CATCHABLEEXCEPTIONONRUN']._serialized_end=31049
-  _globals['_CATCHABLEEXCEPTIONONRUNMSG']._serialized_start=31051
-  _globals['_CATCHABLEEXCEPTIONONRUNMSG']._serialized_end=31169
-  _globals['_INTERNALERRORONRUN']._serialized_start=31171
-  _globals['_INTERNALERRORONRUN']._serialized_end=31224
-  _globals['_INTERNALERRORONRUNMSG']._serialized_start=31226
-  _globals['_INTERNALERRORONRUNMSG']._serialized_end=31334
-  _globals['_GENERICEXCEPTIONONRUN']._serialized_start=31336
-  _globals['_GENERICEXCEPTIONONRUN']._serialized_end=31411
-  _globals['_GENERICEXCEPTIONONRUNMSG']._serialized_start=31413
-  _globals['_GENERICEXCEPTIONONRUNMSG']._serialized_end=31527
-  _globals['_NODECONNECTIONRELEASEERROR']._serialized_start=31529
-  _globals['_NODECONNECTIONRELEASEERROR']._serialized_end=31607
-  _globals['_NODECONNECTIONRELEASEERRORMSG']._serialized_start=31609
-  _globals['_NODECONNECTIONRELEASEERRORMSG']._serialized_end=31733
-  _globals['_FOUNDSTATS']._serialized_start=31735
-  _globals['_FOUNDSTATS']._serialized_end=31766
-  _globals['_FOUNDSTATSMSG']._serialized_start=31768
-  _globals['_FOUNDSTATSMSG']._serialized_end=31860
-  _globals['_MAINKEYBOARDINTERRUPT']._serialized_start=31862
-  _globals['_MAINKEYBOARDINTERRUPT']._serialized_end=31885
-  _globals['_MAINKEYBOARDINTERRUPTMSG']._serialized_start=31887
-  _globals['_MAINKEYBOARDINTERRUPTMSG']._serialized_end=32001
-  _globals['_MAINENCOUNTEREDERROR']._serialized_start=32003
-  _globals['_MAINENCOUNTEREDERROR']._serialized_end=32038
-  _globals['_MAINENCOUNTEREDERRORMSG']._serialized_start=32040
-  _globals['_MAINENCOUNTEREDERRORMSG']._serialized_end=32152
-  _globals['_MAINSTACKTRACE']._serialized_start=32154
-  _globals['_MAINSTACKTRACE']._serialized_end=32191
-  _globals['_MAINSTACKTRACEMSG']._serialized_start=32193
-  _globals['_MAINSTACKTRACEMSG']._serialized_end=32293
-  _globals['_SYSTEMCOULDNOTWRITE']._serialized_start=32295
-  _globals['_SYSTEMCOULDNOTWRITE']._serialized_end=32359
-  _globals['_SYSTEMCOULDNOTWRITEMSG']._serialized_start=32361
-  _globals['_SYSTEMCOULDNOTWRITEMSG']._serialized_end=32471
-  _globals['_SYSTEMEXECUTINGCMD']._serialized_start=32473
-  _globals['_SYSTEMEXECUTINGCMD']._serialized_end=32506
-  _globals['_SYSTEMEXECUTINGCMDMSG']._serialized_start=32508
-  _globals['_SYSTEMEXECUTINGCMDMSG']._serialized_end=32616
-  _globals['_SYSTEMSTDOUT']._serialized_start=32618
-  _globals['_SYSTEMSTDOUT']._serialized_end=32646
-  _globals['_SYSTEMSTDOUTMSG']._serialized_start=32648
-  _globals['_SYSTEMSTDOUTMSG']._serialized_end=32744
-  _globals['_SYSTEMSTDERR']._serialized_start=32746
-  _globals['_SYSTEMSTDERR']._serialized_end=32774
-  _globals['_SYSTEMSTDERRMSG']._serialized_start=32776
-  _globals['_SYSTEMSTDERRMSG']._serialized_end=32872
-  _globals['_SYSTEMREPORTRETURNCODE']._serialized_start=32874
-  _globals['_SYSTEMREPORTRETURNCODE']._serialized_end=32918
-  _globals['_SYSTEMREPORTRETURNCODEMSG']._serialized_start=32920
-  _globals['_SYSTEMREPORTRETURNCODEMSG']._serialized_end=33036
-  _globals['_TIMINGINFOCOLLECTED']._serialized_start=33038
-  _globals['_TIMINGINFOCOLLECTED']._serialized_end=33150
-  _globals['_TIMINGINFOCOLLECTEDMSG']._serialized_start=33152
-  _globals['_TIMINGINFOCOLLECTEDMSG']._serialized_end=33262
-  _globals['_LOGDEBUGSTACKTRACE']._serialized_start=33264
-  _globals['_LOGDEBUGSTACKTRACE']._serialized_end=33302
-  _globals['_LOGDEBUGSTACKTRACEMSG']._serialized_start=33304
-  _globals['_LOGDEBUGSTACKTRACEMSG']._serialized_end=33412
-  _globals['_CHECKCLEANPATH']._serialized_start=33414
-  _globals['_CHECKCLEANPATH']._serialized_end=33444
-  _globals['_CHECKCLEANPATHMSG']._serialized_start=33446
-  _globals['_CHECKCLEANPATHMSG']._serialized_end=33546
-  _globals['_CONFIRMCLEANPATH']._serialized_start=33548
-  _globals['_CONFIRMCLEANPATH']._serialized_end=33580
-  _globals['_CONFIRMCLEANPATHMSG']._serialized_start=33582
-  _globals['_CONFIRMCLEANPATHMSG']._serialized_end=33686
-  _globals['_PROTECTEDCLEANPATH']._serialized_start=33688
-  _globals['_PROTECTEDCLEANPATH']._serialized_end=33722
-  _globals['_PROTECTEDCLEANPATHMSG']._serialized_start=33724
-  _globals['_PROTECTEDCLEANPATHMSG']._serialized_end=33832
-  _globals['_FINISHEDCLEANPATHS']._serialized_start=33834
-  _globals['_FINISHEDCLEANPATHS']._serialized_end=33854
-  _globals['_FINISHEDCLEANPATHSMSG']._serialized_start=33856
-  _globals['_FINISHEDCLEANPATHSMSG']._serialized_end=33964
-  _globals['_OPENCOMMAND']._serialized_start=33966
-  _globals['_OPENCOMMAND']._serialized_end=34019
-  _globals['_OPENCOMMANDMSG']._serialized_start=34021
-  _globals['_OPENCOMMANDMSG']._serialized_end=34115
-  _globals['_FORMATTING']._serialized_start=34117
-  _globals['_FORMATTING']._serialized_end=34142
-  _globals['_FORMATTINGMSG']._serialized_start=34144
-  _globals['_FORMATTINGMSG']._serialized_end=34236
-  _globals['_SERVINGDOCSPORT']._serialized_start=34238
-  _globals['_SERVINGDOCSPORT']._serialized_end=34286
-  _globals['_SERVINGDOCSPORTMSG']._serialized_start=34288
-  _globals['_SERVINGDOCSPORTMSG']._serialized_end=34390
-  _globals['_SERVINGDOCSACCESSINFO']._serialized_start=34392
-  _globals['_SERVINGDOCSACCESSINFO']._serialized_end=34429
-  _globals['_SERVINGDOCSACCESSINFOMSG']._serialized_start=34431
-  _globals['_SERVINGDOCSACCESSINFOMSG']._serialized_end=34545
-  _globals['_SERVINGDOCSEXITINFO']._serialized_start=34547
-  _globals['_SERVINGDOCSEXITINFO']._serialized_end=34568
-  _globals['_SERVINGDOCSEXITINFOMSG']._serialized_start=34570
-  _globals['_SERVINGDOCSEXITINFOMSG']._serialized_end=34680
-  _globals['_RUNRESULTWARNING']._serialized_start=34682
-  _globals['_RUNRESULTWARNING']._serialized_end=34756
-  _globals['_RUNRESULTWARNINGMSG']._serialized_start=34758
-  _globals['_RUNRESULTWARNINGMSG']._serialized_end=34862
-  _globals['_RUNRESULTFAILURE']._serialized_start=34864
-  _globals['_RUNRESULTFAILURE']._serialized_end=34938
-  _globals['_RUNRESULTFAILUREMSG']._serialized_start=34940
-  _globals['_RUNRESULTFAILUREMSG']._serialized_end=35044
-  _globals['_STATSLINE']._serialized_start=35046
-  _globals['_STATSLINE']._serialized_end=35153
-  _globals['_STATSLINE_STATSENTRY']._serialized_start=35109
-  _globals['_STATSLINE_STATSENTRY']._serialized_end=35153
-  _globals['_STATSLINEMSG']._serialized_start=35155
-  _globals['_STATSLINEMSG']._serialized_end=35245
-  _globals['_RUNRESULTERROR']._serialized_start=35247
-  _globals['_RUNRESULTERROR']._serialized_end=35276
-  _globals['_RUNRESULTERRORMSG']._serialized_start=35278
-  _globals['_RUNRESULTERRORMSG']._serialized_end=35378
-  _globals['_RUNRESULTERRORNOMESSAGE']._serialized_start=35380
-  _globals['_RUNRESULTERRORNOMESSAGE']._serialized_end=35421
-  _globals['_RUNRESULTERRORNOMESSAGEMSG']._serialized_start=35423
-  _globals['_RUNRESULTERRORNOMESSAGEMSG']._serialized_end=35541
-  _globals['_SQLCOMPILEDPATH']._serialized_start=35543
-  _globals['_SQLCOMPILEDPATH']._serialized_end=35574
-  _globals['_SQLCOMPILEDPATHMSG']._serialized_start=35576
-  _globals['_SQLCOMPILEDPATHMSG']._serialized_end=35678
-  _globals['_CHECKNODETESTFAILURE']._serialized_start=35680
-  _globals['_CHECKNODETESTFAILURE']._serialized_end=35725
-  _globals['_CHECKNODETESTFAILUREMSG']._serialized_start=35727
-  _globals['_CHECKNODETESTFAILUREMSG']._serialized_end=35839
-  _globals['_FIRSTRUNRESULTERROR']._serialized_start=35841
-  _globals['_FIRSTRUNRESULTERROR']._serialized_end=35875
-  _globals['_FIRSTRUNRESULTERRORMSG']._serialized_start=35877
-  _globals['_FIRSTRUNRESULTERRORMSG']._serialized_end=35987
-  _globals['_AFTERFIRSTRUNRESULTERROR']._serialized_start=35989
-  _globals['_AFTERFIRSTRUNRESULTERROR']._serialized_end=36028
-  _globals['_AFTERFIRSTRUNRESULTERRORMSG']._serialized_start=36030
-  _globals['_AFTERFIRSTRUNRESULTERRORMSG']._serialized_end=36150
-  _globals['_ENDOFRUNSUMMARY']._serialized_start=36152
-  _globals['_ENDOFRUNSUMMARY']._serialized_end=36239
-  _globals['_ENDOFRUNSUMMARYMSG']._serialized_start=36241
-  _globals['_ENDOFRUNSUMMARYMSG']._serialized_end=36343
-  _globals['_LOGSKIPBECAUSEERROR']._serialized_start=36345
-  _globals['_LOGSKIPBECAUSEERROR']._serialized_end=36430
-  _globals['_LOGSKIPBECAUSEERRORMSG']._serialized_start=36432
-  _globals['_LOGSKIPBECAUSEERRORMSG']._serialized_end=36542
-  _globals['_ENSUREGITINSTALLED']._serialized_start=36544
-  _globals['_ENSUREGITINSTALLED']._serialized_end=36564
-  _globals['_ENSUREGITINSTALLEDMSG']._serialized_start=36566
-  _globals['_ENSUREGITINSTALLEDMSG']._serialized_end=36674
-  _globals['_DEPSCREATINGLOCALSYMLINK']._serialized_start=36676
-  _globals['_DEPSCREATINGLOCALSYMLINK']._serialized_end=36702
-  _globals['_DEPSCREATINGLOCALSYMLINKMSG']._serialized_start=36704
-  _globals['_DEPSCREATINGLOCALSYMLINKMSG']._serialized_end=36824
-  _globals['_DEPSSYMLINKNOTAVAILABLE']._serialized_start=36826
-  _globals['_DEPSSYMLINKNOTAVAILABLE']._serialized_end=36851
-  _globals['_DEPSSYMLINKNOTAVAILABLEMSG']._serialized_start=36853
-  _globals['_DEPSSYMLINKNOTAVAILABLEMSG']._serialized_end=36971
-  _globals['_DISABLETRACKING']._serialized_start=36973
-  _globals['_DISABLETRACKING']._serialized_end=36990
-  _globals['_DISABLETRACKINGMSG']._serialized_start=36992
-  _globals['_DISABLETRACKINGMSG']._serialized_end=37094
-  _globals['_SENDINGEVENT']._serialized_start=37096
-  _globals['_SENDINGEVENT']._serialized_end=37126
-  _globals['_SENDINGEVENTMSG']._serialized_start=37128
-  _globals['_SENDINGEVENTMSG']._serialized_end=37224
-  _globals['_SENDEVENTFAILURE']._serialized_start=37226
-  _globals['_SENDEVENTFAILURE']._serialized_end=37244
-  _globals['_SENDEVENTFAILUREMSG']._serialized_start=37246
-  _globals['_SENDEVENTFAILUREMSG']._serialized_end=37350
-  _globals['_FLUSHEVENTS']._serialized_start=37352
-  _globals['_FLUSHEVENTS']._serialized_end=37365
-  _globals['_FLUSHEVENTSMSG']._serialized_start=37367
-  _globals['_FLUSHEVENTSMSG']._serialized_end=37461
-  _globals['_FLUSHEVENTSFAILURE']._serialized_start=37463
-  _globals['_FLUSHEVENTSFAILURE']._serialized_end=37483
-  _globals['_FLUSHEVENTSFAILUREMSG']._serialized_start=37485
-  _globals['_FLUSHEVENTSFAILUREMSG']._serialized_end=37593
-  _globals['_TRACKINGINITIALIZEFAILURE']._serialized_start=37595
-  _globals['_TRACKINGINITIALIZEFAILURE']._serialized_end=37640
-  _globals['_TRACKINGINITIALIZEFAILUREMSG']._serialized_start=37642
-  _globals['_TRACKINGINITIALIZEFAILUREMSG']._serialized_end=37764
-  _globals['_RUNRESULTWARNINGMESSAGE']._serialized_start=37766
-  _globals['_RUNRESULTWARNINGMESSAGE']._serialized_end=37804
-  _globals['_RUNRESULTWARNINGMESSAGEMSG']._serialized_start=37806
-  _globals['_RUNRESULTWARNINGMESSAGEMSG']._serialized_end=37924
-  _globals['_DEBUGCMDOUT']._serialized_start=37926
-  _globals['_DEBUGCMDOUT']._serialized_end=37952
-  _globals['_DEBUGCMDOUTMSG']._serialized_start=37954
-  _globals['_DEBUGCMDOUTMSG']._serialized_end=38048
-  _globals['_DEBUGCMDRESULT']._serialized_start=38050
-  _globals['_DEBUGCMDRESULT']._serialized_end=38079
-  _globals['_DEBUGCMDRESULTMSG']._serialized_start=38081
-  _globals['_DEBUGCMDRESULTMSG']._serialized_end=38181
-  _globals['_LISTCMDOUT']._serialized_start=38183
-  _globals['_LISTCMDOUT']._serialized_end=38208
-  _globals['_LISTCMDOUTMSG']._serialized_start=38210
-  _globals['_LISTCMDOUTMSG']._serialized_end=38302
-  _globals['_NOTE']._serialized_start=38304
-  _globals['_NOTE']._serialized_end=38323
-  _globals['_NOTEMSG']._serialized_start=38325
-  _globals['_NOTEMSG']._serialized_end=38405
+  _EVENTINFO._serialized_start=92
+  _EVENTINFO._serialized_end=365
+  _EVENTINFO_EXTRAENTRY._serialized_start=321
+  _EVENTINFO_EXTRAENTRY._serialized_end=365
+  _TIMINGINFOMSG._serialized_start=367
+  _TIMINGINFOMSG._serialized_end=494
+  _NODERELATION._serialized_start=496
+  _NODERELATION._serialized_end=582
+  _NODEINFO._serialized_start=585
+  _NODEINFO._serialized_end=858
+  _RUNRESULTMSG._serialized_start=861
+  _RUNRESULTMSG._serialized_end=1070
+  _REFERENCEKEYMSG._serialized_start=1072
+  _REFERENCEKEYMSG._serialized_end=1143
+  _GENERICMESSAGE._serialized_start=1145
+  _GENERICMESSAGE._serialized_end=1199
+  _MAINREPORTVERSION._serialized_start=1201
+  _MAINREPORTVERSION._serialized_end=1258
+  _MAINREPORTVERSIONMSG._serialized_start=1260
+  _MAINREPORTVERSIONMSG._serialized_end=1366
+  _MAINREPORTARGS._serialized_start=1368
+  _MAINREPORTARGS._serialized_end=1482
+  _MAINREPORTARGS_ARGSENTRY._serialized_start=1439
+  _MAINREPORTARGS_ARGSENTRY._serialized_end=1482
+  _MAINREPORTARGSMSG._serialized_start=1484
+  _MAINREPORTARGSMSG._serialized_end=1584
+  _MAINTRACKINGUSERSTATE._serialized_start=1586
+  _MAINTRACKINGUSERSTATE._serialized_end=1629
+  _MAINTRACKINGUSERSTATEMSG._serialized_start=1631
+  _MAINTRACKINGUSERSTATEMSG._serialized_end=1745
+  _MERGEDFROMSTATE._serialized_start=1747
+  _MERGEDFROMSTATE._serialized_end=1800
+  _MERGEDFROMSTATEMSG._serialized_start=1802
+  _MERGEDFROMSTATEMSG._serialized_end=1904
+  _MISSINGPROFILETARGET._serialized_start=1906
+  _MISSINGPROFILETARGET._serialized_end=1971
+  _MISSINGPROFILETARGETMSG._serialized_start=1973
+  _MISSINGPROFILETARGETMSG._serialized_end=2085
+  _INVALIDOPTIONYAML._serialized_start=2087
+  _INVALIDOPTIONYAML._serialized_end=2127
+  _INVALIDOPTIONYAMLMSG._serialized_start=2129
+  _INVALIDOPTIONYAMLMSG._serialized_end=2235
+  _LOGDBTPROJECTERROR._serialized_start=2237
+  _LOGDBTPROJECTERROR._serialized_end=2270
+  _LOGDBTPROJECTERRORMSG._serialized_start=2272
+  _LOGDBTPROJECTERRORMSG._serialized_end=2380
+  _LOGDBTPROFILEERROR._serialized_start=2382
+  _LOGDBTPROFILEERROR._serialized_end=2433
+  _LOGDBTPROFILEERRORMSG._serialized_start=2435
+  _LOGDBTPROFILEERRORMSG._serialized_end=2543
+  _STARTERPROJECTPATH._serialized_start=2545
+  _STARTERPROJECTPATH._serialized_end=2578
+  _STARTERPROJECTPATHMSG._serialized_start=2580
+  _STARTERPROJECTPATHMSG._serialized_end=2688
+  _CONFIGFOLDERDIRECTORY._serialized_start=2690
+  _CONFIGFOLDERDIRECTORY._serialized_end=2726
+  _CONFIGFOLDERDIRECTORYMSG._serialized_start=2728
+  _CONFIGFOLDERDIRECTORYMSG._serialized_end=2842
+  _NOSAMPLEPROFILEFOUND._serialized_start=2844
+  _NOSAMPLEPROFILEFOUND._serialized_end=2883
+  _NOSAMPLEPROFILEFOUNDMSG._serialized_start=2885
+  _NOSAMPLEPROFILEFOUNDMSG._serialized_end=2997
+  _PROFILEWRITTENWITHSAMPLE._serialized_start=2999
+  _PROFILEWRITTENWITHSAMPLE._serialized_end=3053
+  _PROFILEWRITTENWITHSAMPLEMSG._serialized_start=3055
+  _PROFILEWRITTENWITHSAMPLEMSG._serialized_end=3175
+  _PROFILEWRITTENWITHTARGETTEMPLATEYAML._serialized_start=3177
+  _PROFILEWRITTENWITHTARGETTEMPLATEYAML._serialized_end=3243
+  _PROFILEWRITTENWITHTARGETTEMPLATEYAMLMSG._serialized_start=3246
+  _PROFILEWRITTENWITHTARGETTEMPLATEYAMLMSG._serialized_end=3390
+  _PROFILEWRITTENWITHPROJECTTEMPLATEYAML._serialized_start=3392
+  _PROFILEWRITTENWITHPROJECTTEMPLATEYAML._serialized_end=3459
+  _PROFILEWRITTENWITHPROJECTTEMPLATEYAMLMSG._serialized_start=3462
+  _PROFILEWRITTENWITHPROJECTTEMPLATEYAMLMSG._serialized_end=3608
+  _SETTINGUPPROFILE._serialized_start=3610
+  _SETTINGUPPROFILE._serialized_end=3628
+  _SETTINGUPPROFILEMSG._serialized_start=3630
+  _SETTINGUPPROFILEMSG._serialized_end=3734
+  _INVALIDPROFILETEMPLATEYAML._serialized_start=3736
+  _INVALIDPROFILETEMPLATEYAML._serialized_end=3764
+  _INVALIDPROFILETEMPLATEYAMLMSG._serialized_start=3766
+  _INVALIDPROFILETEMPLATEYAMLMSG._serialized_end=3890
+  _PROJECTNAMEALREADYEXISTS._serialized_start=3892
+  _PROJECTNAMEALREADYEXISTS._serialized_end=3932
+  _PROJECTNAMEALREADYEXISTSMSG._serialized_start=3934
+  _PROJECTNAMEALREADYEXISTSMSG._serialized_end=4054
+  _PROJECTCREATED._serialized_start=4056
+  _PROJECTCREATED._serialized_end=4131
+  _PROJECTCREATEDMSG._serialized_start=4133
+  _PROJECTCREATEDMSG._serialized_end=4233
+  _PACKAGEREDIRECTDEPRECATION._serialized_start=4235
+  _PACKAGEREDIRECTDEPRECATION._serialized_end=4299
+  _PACKAGEREDIRECTDEPRECATIONMSG._serialized_start=4301
+  _PACKAGEREDIRECTDEPRECATIONMSG._serialized_end=4425
+  _PACKAGEINSTALLPATHDEPRECATION._serialized_start=4427
+  _PACKAGEINSTALLPATHDEPRECATION._serialized_end=4458
+  _PACKAGEINSTALLPATHDEPRECATIONMSG._serialized_start=4461
+  _PACKAGEINSTALLPATHDEPRECATIONMSG._serialized_end=4591
+  _CONFIGSOURCEPATHDEPRECATION._serialized_start=4593
+  _CONFIGSOURCEPATHDEPRECATION._serialized_end=4665
+  _CONFIGSOURCEPATHDEPRECATIONMSG._serialized_start=4667
+  _CONFIGSOURCEPATHDEPRECATIONMSG._serialized_end=4793
+  _CONFIGDATAPATHDEPRECATION._serialized_start=4795
+  _CONFIGDATAPATHDEPRECATION._serialized_end=4865
+  _CONFIGDATAPATHDEPRECATIONMSG._serialized_start=4867
+  _CONFIGDATAPATHDEPRECATIONMSG._serialized_end=4989
+  _ADAPTERDEPRECATIONWARNING._serialized_start=4991
+  _ADAPTERDEPRECATIONWARNING._serialized_end=5054
+  _ADAPTERDEPRECATIONWARNINGMSG._serialized_start=5056
+  _ADAPTERDEPRECATIONWARNINGMSG._serialized_end=5178
+  _METRICATTRIBUTESRENAMED._serialized_start=5180
+  _METRICATTRIBUTESRENAMED._serialized_end=5226
+  _METRICATTRIBUTESRENAMEDMSG._serialized_start=5228
+  _METRICATTRIBUTESRENAMEDMSG._serialized_end=5346
+  _EXPOSURENAMEDEPRECATION._serialized_start=5348
+  _EXPOSURENAMEDEPRECATION._serialized_end=5391
+  _EXPOSURENAMEDEPRECATIONMSG._serialized_start=5393
+  _EXPOSURENAMEDEPRECATIONMSG._serialized_end=5511
+  _INTERNALDEPRECATION._serialized_start=5513
+  _INTERNALDEPRECATION._serialized_end=5607
+  _INTERNALDEPRECATIONMSG._serialized_start=5609
+  _INTERNALDEPRECATIONMSG._serialized_end=5719
+  _ENVIRONMENTVARIABLERENAMED._serialized_start=5721
+  _ENVIRONMENTVARIABLERENAMED._serialized_end=5785
+  _ENVIRONMENTVARIABLERENAMEDMSG._serialized_start=5787
+  _ENVIRONMENTVARIABLERENAMEDMSG._serialized_end=5911
+  _CONFIGLOGPATHDEPRECATION._serialized_start=5913
+  _CONFIGLOGPATHDEPRECATION._serialized_end=5964
+  _CONFIGLOGPATHDEPRECATIONMSG._serialized_start=5966
+  _CONFIGLOGPATHDEPRECATIONMSG._serialized_end=6086
+  _CONFIGTARGETPATHDEPRECATION._serialized_start=6088
+  _CONFIGTARGETPATHDEPRECATION._serialized_end=6142
+  _CONFIGTARGETPATHDEPRECATIONMSG._serialized_start=6144
+  _CONFIGTARGETPATHDEPRECATIONMSG._serialized_end=6270
+  _COLLECTFRESHNESSRETURNSIGNATURE._serialized_start=6272
+  _COLLECTFRESHNESSRETURNSIGNATURE._serialized_end=6305
+  _COLLECTFRESHNESSRETURNSIGNATUREMSG._serialized_start=6308
+  _COLLECTFRESHNESSRETURNSIGNATUREMSG._serialized_end=6442
+  _ADAPTEREVENTDEBUG._serialized_start=6445
+  _ADAPTEREVENTDEBUG._serialized_end=6580
+  _ADAPTEREVENTDEBUGMSG._serialized_start=6582
+  _ADAPTEREVENTDEBUGMSG._serialized_end=6688
+  _ADAPTEREVENTINFO._serialized_start=6691
+  _ADAPTEREVENTINFO._serialized_end=6825
+  _ADAPTEREVENTINFOMSG._serialized_start=6827
+  _ADAPTEREVENTINFOMSG._serialized_end=6931
+  _ADAPTEREVENTWARNING._serialized_start=6934
+  _ADAPTEREVENTWARNING._serialized_end=7071
+  _ADAPTEREVENTWARNINGMSG._serialized_start=7073
+  _ADAPTEREVENTWARNINGMSG._serialized_end=7183
+  _ADAPTEREVENTERROR._serialized_start=7186
+  _ADAPTEREVENTERROR._serialized_end=7339
+  _ADAPTEREVENTERRORMSG._serialized_start=7341
+  _ADAPTEREVENTERRORMSG._serialized_end=7447
+  _NEWCONNECTION._serialized_start=7449
+  _NEWCONNECTION._serialized_end=7544
+  _NEWCONNECTIONMSG._serialized_start=7546
+  _NEWCONNECTIONMSG._serialized_end=7644
+  _CONNECTIONREUSED._serialized_start=7646
+  _CONNECTIONREUSED._serialized_end=7707
+  _CONNECTIONREUSEDMSG._serialized_start=7709
+  _CONNECTIONREUSEDMSG._serialized_end=7813
+  _CONNECTIONLEFTOPENINCLEANUP._serialized_start=7815
+  _CONNECTIONLEFTOPENINCLEANUP._serialized_end=7863
+  _CONNECTIONLEFTOPENINCLEANUPMSG._serialized_start=7865
+  _CONNECTIONLEFTOPENINCLEANUPMSG._serialized_end=7991
+  _CONNECTIONCLOSEDINCLEANUP._serialized_start=7993
+  _CONNECTIONCLOSEDINCLEANUP._serialized_end=8039
+  _CONNECTIONCLOSEDINCLEANUPMSG._serialized_start=8041
+  _CONNECTIONCLOSEDINCLEANUPMSG._serialized_end=8163
+  _ROLLBACKFAILED._serialized_start=8165
+  _ROLLBACKFAILED._serialized_end=8260
+  _ROLLBACKFAILEDMSG._serialized_start=8262
+  _ROLLBACKFAILEDMSG._serialized_end=8362
+  _CONNECTIONCLOSED._serialized_start=8364
+  _CONNECTIONCLOSED._serialized_end=8443
+  _CONNECTIONCLOSEDMSG._serialized_start=8445
+  _CONNECTIONCLOSEDMSG._serialized_end=8549
+  _CONNECTIONLEFTOPEN._serialized_start=8551
+  _CONNECTIONLEFTOPEN._serialized_end=8632
+  _CONNECTIONLEFTOPENMSG._serialized_start=8634
+  _CONNECTIONLEFTOPENMSG._serialized_end=8742
+  _ROLLBACK._serialized_start=8744
+  _ROLLBACK._serialized_end=8815
+  _ROLLBACKMSG._serialized_start=8817
+  _ROLLBACKMSG._serialized_end=8905
+  _CACHEMISS._serialized_start=8907
+  _CACHEMISS._serialized_end=8971
+  _CACHEMISSMSG._serialized_start=8973
+  _CACHEMISSMSG._serialized_end=9063
+  _LISTRELATIONS._serialized_start=9065
+  _LISTRELATIONS._serialized_end=9163
+  _LISTRELATIONSMSG._serialized_start=9165
+  _LISTRELATIONSMSG._serialized_end=9263
+  _CONNECTIONUSED._serialized_start=9265
+  _CONNECTIONUSED._serialized_end=9361
+  _CONNECTIONUSEDMSG._serialized_start=9363
+  _CONNECTIONUSEDMSG._serialized_end=9463
+  _SQLQUERY._serialized_start=9465
+  _SQLQUERY._serialized_end=9549
+  _SQLQUERYMSG._serialized_start=9551
+  _SQLQUERYMSG._serialized_end=9639
+  _SQLQUERYSTATUS._serialized_start=9641
+  _SQLQUERYSTATUS._serialized_end=9732
+  _SQLQUERYSTATUSMSG._serialized_start=9734
+  _SQLQUERYSTATUSMSG._serialized_end=9834
+  _SQLCOMMIT._serialized_start=9836
+  _SQLCOMMIT._serialized_end=9908
+  _SQLCOMMITMSG._serialized_start=9910
+  _SQLCOMMITMSG._serialized_end=10000
+  _COLTYPECHANGE._serialized_start=10002
+  _COLTYPECHANGE._serialized_end=10099
+  _COLTYPECHANGEMSG._serialized_start=10101
+  _COLTYPECHANGEMSG._serialized_end=10199
+  _SCHEMACREATION._serialized_start=10201
+  _SCHEMACREATION._serialized_end=10265
+  _SCHEMACREATIONMSG._serialized_start=10267
+  _SCHEMACREATIONMSG._serialized_end=10367
+  _SCHEMADROP._serialized_start=10369
+  _SCHEMADROP._serialized_end=10429
+  _SCHEMADROPMSG._serialized_start=10431
+  _SCHEMADROPMSG._serialized_end=10523
+  _CACHEACTION._serialized_start=10526
+  _CACHEACTION._serialized_end=10748
+  _CACHEACTIONMSG._serialized_start=10750
+  _CACHEACTIONMSG._serialized_end=10844
+  _CACHEDUMPGRAPH._serialized_start=10847
+  _CACHEDUMPGRAPH._serialized_end=10999
+  _CACHEDUMPGRAPH_DUMPENTRY._serialized_start=10956
+  _CACHEDUMPGRAPH_DUMPENTRY._serialized_end=10999
+  _CACHEDUMPGRAPHMSG._serialized_start=11001
+  _CACHEDUMPGRAPHMSG._serialized_end=11101
+  _ADAPTERREGISTERED._serialized_start=11103
+  _ADAPTERREGISTERED._serialized_end=11169
+  _ADAPTERREGISTEREDMSG._serialized_start=11171
+  _ADAPTERREGISTEREDMSG._serialized_end=11277
+  _ADAPTERIMPORTERROR._serialized_start=11279
+  _ADAPTERIMPORTERROR._serialized_end=11312
+  _ADAPTERIMPORTERRORMSG._serialized_start=11314
+  _ADAPTERIMPORTERRORMSG._serialized_end=11422
+  _PLUGINLOADERROR._serialized_start=11424
+  _PLUGINLOADERROR._serialized_end=11459
+  _PLUGINLOADERRORMSG._serialized_start=11461
+  _PLUGINLOADERRORMSG._serialized_end=11563
+  _NEWCONNECTIONOPENING._serialized_start=11565
+  _NEWCONNECTIONOPENING._serialized_end=11655
+  _NEWCONNECTIONOPENINGMSG._serialized_start=11657
+  _NEWCONNECTIONOPENINGMSG._serialized_end=11769
+  _CODEEXECUTION._serialized_start=11771
+  _CODEEXECUTION._serialized_end=11827
+  _CODEEXECUTIONMSG._serialized_start=11829
+  _CODEEXECUTIONMSG._serialized_end=11927
+  _CODEEXECUTIONSTATUS._serialized_start=11929
+  _CODEEXECUTIONSTATUS._serialized_end=11983
+  _CODEEXECUTIONSTATUSMSG._serialized_start=11985
+  _CODEEXECUTIONSTATUSMSG._serialized_end=12095
+  _CATALOGGENERATIONERROR._serialized_start=12097
+  _CATALOGGENERATIONERROR._serialized_end=12134
+  _CATALOGGENERATIONERRORMSG._serialized_start=12136
+  _CATALOGGENERATIONERRORMSG._serialized_end=12252
+  _WRITECATALOGFAILURE._serialized_start=12254
+  _WRITECATALOGFAILURE._serialized_end=12299
+  _WRITECATALOGFAILUREMSG._serialized_start=12301
+  _WRITECATALOGFAILUREMSG._serialized_end=12411
+  _CATALOGWRITTEN._serialized_start=12413
+  _CATALOGWRITTEN._serialized_end=12443
+  _CATALOGWRITTENMSG._serialized_start=12445
+  _CATALOGWRITTENMSG._serialized_end=12545
+  _CANNOTGENERATEDOCS._serialized_start=12547
+  _CANNOTGENERATEDOCS._serialized_end=12567
+  _CANNOTGENERATEDOCSMSG._serialized_start=12569
+  _CANNOTGENERATEDOCSMSG._serialized_end=12677
+  _BUILDINGCATALOG._serialized_start=12679
+  _BUILDINGCATALOG._serialized_end=12696
+  _BUILDINGCATALOGMSG._serialized_start=12698
+  _BUILDINGCATALOGMSG._serialized_end=12800
+  _DATABASEERRORRUNNINGHOOK._serialized_start=12802
+  _DATABASEERRORRUNNINGHOOK._serialized_end=12847
+  _DATABASEERRORRUNNINGHOOKMSG._serialized_start=12849
+  _DATABASEERRORRUNNINGHOOKMSG._serialized_end=12969
+  _HOOKSRUNNING._serialized_start=12971
+  _HOOKSRUNNING._serialized_end=13023
+  _HOOKSRUNNINGMSG._serialized_start=13025
+  _HOOKSRUNNINGMSG._serialized_end=13121
+  _FINISHEDRUNNINGSTATS._serialized_start=13123
+  _FINISHEDRUNNINGSTATS._serialized_end=13207
+  _FINISHEDRUNNINGSTATSMSG._serialized_start=13209
+  _FINISHEDRUNNINGSTATSMSG._serialized_end=13321
+  _CONSTRAINTNOTENFORCED._serialized_start=13323
+  _CONSTRAINTNOTENFORCED._serialized_end=13383
+  _CONSTRAINTNOTENFORCEDMSG._serialized_start=13385
+  _CONSTRAINTNOTENFORCEDMSG._serialized_end=13499
+  _CONSTRAINTNOTSUPPORTED._serialized_start=13501
+  _CONSTRAINTNOTSUPPORTED._serialized_end=13562
+  _CONSTRAINTNOTSUPPORTEDMSG._serialized_start=13564
+  _CONSTRAINTNOTSUPPORTEDMSG._serialized_end=13680
+  _INPUTFILEDIFFERROR._serialized_start=13682
+  _INPUTFILEDIFFERROR._serialized_end=13737
+  _INPUTFILEDIFFERRORMSG._serialized_start=13739
+  _INPUTFILEDIFFERRORMSG._serialized_end=13847
+  _INVALIDVALUEFORFIELD._serialized_start=13849
+  _INVALIDVALUEFORFIELD._serialized_end=13912
+  _INVALIDVALUEFORFIELDMSG._serialized_start=13914
+  _INVALIDVALUEFORFIELDMSG._serialized_end=14026
+  _VALIDATIONWARNING._serialized_start=14028
+  _VALIDATIONWARNING._serialized_end=14109
+  _VALIDATIONWARNINGMSG._serialized_start=14111
+  _VALIDATIONWARNINGMSG._serialized_end=14217
+  _PARSEPERFINFOPATH._serialized_start=14219
+  _PARSEPERFINFOPATH._serialized_end=14252
+  _PARSEPERFINFOPATHMSG._serialized_start=14254
+  _PARSEPERFINFOPATHMSG._serialized_end=14360
+  _PARTIALPARSINGERRORPROCESSINGFILE._serialized_start=14362
+  _PARTIALPARSINGERRORPROCESSINGFILE._serialized_end=14411
+  _PARTIALPARSINGERRORPROCESSINGFILEMSG._serialized_start=14414
+  _PARTIALPARSINGERRORPROCESSINGFILEMSG._serialized_end=14552
+  _PARTIALPARSINGERROR._serialized_start=14555
+  _PARTIALPARSINGERROR._serialized_end=14689
+  _PARTIALPARSINGERROR_EXCINFOENTRY._serialized_start=14643
+  _PARTIALPARSINGERROR_EXCINFOENTRY._serialized_end=14689
+  _PARTIALPARSINGERRORMSG._serialized_start=14691
+  _PARTIALPARSINGERRORMSG._serialized_end=14801
+  _PARTIALPARSINGSKIPPARSING._serialized_start=14803
+  _PARTIALPARSINGSKIPPARSING._serialized_end=14830
+  _PARTIALPARSINGSKIPPARSINGMSG._serialized_start=14832
+  _PARTIALPARSINGSKIPPARSINGMSG._serialized_end=14954
+  _UNABLETOPARTIALPARSE._serialized_start=14956
+  _UNABLETOPARTIALPARSE._serialized_end=14994
+  _UNABLETOPARTIALPARSEMSG._serialized_start=14996
+  _UNABLETOPARTIALPARSEMSG._serialized_end=15108
+  _STATECHECKVARSHASH._serialized_start=15110
+  _STATECHECKVARSHASH._serialized_end=15212
+  _STATECHECKVARSHASHMSG._serialized_start=15214
+  _STATECHECKVARSHASHMSG._serialized_end=15322
+  _PARTIALPARSINGNOTENABLED._serialized_start=15324
+  _PARTIALPARSINGNOTENABLED._serialized_end=15350
+  _PARTIALPARSINGNOTENABLEDMSG._serialized_start=15352
+  _PARTIALPARSINGNOTENABLEDMSG._serialized_end=15472
+  _PARSEDFILELOADFAILED._serialized_start=15474
+  _PARSEDFILELOADFAILED._serialized_end=15541
+  _PARSEDFILELOADFAILEDMSG._serialized_start=15543
+  _PARSEDFILELOADFAILEDMSG._serialized_end=15655
+  _PARTIALPARSINGENABLED._serialized_start=15657
+  _PARTIALPARSINGENABLED._serialized_end=15729
+  _PARTIALPARSINGENABLEDMSG._serialized_start=15731
+  _PARTIALPARSINGENABLEDMSG._serialized_end=15845
+  _PARTIALPARSINGFILE._serialized_start=15847
+  _PARTIALPARSINGFILE._serialized_end=15903
+  _PARTIALPARSINGFILEMSG._serialized_start=15905
+  _PARTIALPARSINGFILEMSG._serialized_end=16013
+  _INVALIDDISABLEDTARGETINTESTNODE._serialized_start=16016
+  _INVALIDDISABLEDTARGETINTESTNODE._serialized_end=16191
+  _INVALIDDISABLEDTARGETINTESTNODEMSG._serialized_start=16194
+  _INVALIDDISABLEDTARGETINTESTNODEMSG._serialized_end=16328
+  _UNUSEDRESOURCECONFIGPATH._serialized_start=16330
+  _UNUSEDRESOURCECONFIGPATH._serialized_end=16385
+  _UNUSEDRESOURCECONFIGPATHMSG._serialized_start=16387
+  _UNUSEDRESOURCECONFIGPATHMSG._serialized_end=16507
+  _SEEDINCREASED._serialized_start=16509
+  _SEEDINCREASED._serialized_end=16560
+  _SEEDINCREASEDMSG._serialized_start=16562
+  _SEEDINCREASEDMSG._serialized_end=16660
+  _SEEDEXCEEDSLIMITSAMEPATH._serialized_start=16662
+  _SEEDEXCEEDSLIMITSAMEPATH._serialized_end=16724
+  _SEEDEXCEEDSLIMITSAMEPATHMSG._serialized_start=16726
+  _SEEDEXCEEDSLIMITSAMEPATHMSG._serialized_end=16846
+  _SEEDEXCEEDSLIMITANDPATHCHANGED._serialized_start=16848
+  _SEEDEXCEEDSLIMITANDPATHCHANGED._serialized_end=16916
+  _SEEDEXCEEDSLIMITANDPATHCHANGEDMSG._serialized_start=16919
+  _SEEDEXCEEDSLIMITANDPATHCHANGEDMSG._serialized_end=17051
+  _SEEDEXCEEDSLIMITCHECKSUMCHANGED._serialized_start=17053
+  _SEEDEXCEEDSLIMITCHECKSUMCHANGED._serialized_end=17145
+  _SEEDEXCEEDSLIMITCHECKSUMCHANGEDMSG._serialized_start=17148
+  _SEEDEXCEEDSLIMITCHECKSUMCHANGEDMSG._serialized_end=17282
+  _UNUSEDTABLES._serialized_start=17284
+  _UNUSEDTABLES._serialized_end=17321
+  _UNUSEDTABLESMSG._serialized_start=17323
+  _UNUSEDTABLESMSG._serialized_end=17419
+  _WRONGRESOURCESCHEMAFILE._serialized_start=17422
+  _WRONGRESOURCESCHEMAFILE._serialized_end=17557
+  _WRONGRESOURCESCHEMAFILEMSG._serialized_start=17559
+  _WRONGRESOURCESCHEMAFILEMSG._serialized_end=17677
+  _NONODEFORYAMLKEY._serialized_start=17679
+  _NONODEFORYAMLKEY._serialized_end=17754
+  _NONODEFORYAMLKEYMSG._serialized_start=17756
+  _NONODEFORYAMLKEYMSG._serialized_end=17860
+  _MACRONOTFOUNDFORPATCH._serialized_start=17862
+  _MACRONOTFOUNDFORPATCH._serialized_end=17905
+  _MACRONOTFOUNDFORPATCHMSG._serialized_start=17907
+  _MACRONOTFOUNDFORPATCHMSG._serialized_end=18021
+  _NODENOTFOUNDORDISABLED._serialized_start=18024
+  _NODENOTFOUNDORDISABLED._serialized_end=18208
+  _NODENOTFOUNDORDISABLEDMSG._serialized_start=18210
+  _NODENOTFOUNDORDISABLEDMSG._serialized_end=18326
+  _JINJALOGWARNING._serialized_start=18328
+  _JINJALOGWARNING._serialized_end=18400
+  _JINJALOGWARNINGMSG._serialized_start=18402
+  _JINJALOGWARNINGMSG._serialized_end=18504
+  _JINJALOGINFO._serialized_start=18506
+  _JINJALOGINFO._serialized_end=18575
+  _JINJALOGINFOMSG._serialized_start=18577
+  _JINJALOGINFOMSG._serialized_end=18673
+  _JINJALOGDEBUG._serialized_start=18675
+  _JINJALOGDEBUG._serialized_end=18745
+  _JINJALOGDEBUGMSG._serialized_start=18747
+  _JINJALOGDEBUGMSG._serialized_end=18845
+  _UNPINNEDREFNEWVERSIONAVAILABLE._serialized_start=18848
+  _UNPINNEDREFNEWVERSIONAVAILABLE._serialized_end=19022
+  _UNPINNEDREFNEWVERSIONAVAILABLEMSG._serialized_start=19025
+  _UNPINNEDREFNEWVERSIONAVAILABLEMSG._serialized_end=19157
+  _DEPRECATEDMODEL._serialized_start=19159
+  _DEPRECATEDMODEL._serialized_end=19245
+  _DEPRECATEDMODELMSG._serialized_start=19247
+  _DEPRECATEDMODELMSG._serialized_end=19349
+  _UPCOMINGREFERENCEDEPRECATION._serialized_start=19352
+  _UPCOMINGREFERENCEDEPRECATION._serialized_end=19550
+  _UPCOMINGREFERENCEDEPRECATIONMSG._serialized_start=19553
+  _UPCOMINGREFERENCEDEPRECATIONMSG._serialized_end=19681
+  _DEPRECATEDREFERENCE._serialized_start=19684
+  _DEPRECATEDREFERENCE._serialized_end=19873
+  _DEPRECATEDREFERENCEMSG._serialized_start=19875
+  _DEPRECATEDREFERENCEMSG._serialized_end=19985
+  _UNSUPPORTEDCONSTRAINTMATERIALIZATION._serialized_start=19987
+  _UNSUPPORTEDCONSTRAINTMATERIALIZATION._serialized_end=20047
+  _UNSUPPORTEDCONSTRAINTMATERIALIZATIONMSG._serialized_start=20050
+  _UNSUPPORTEDCONSTRAINTMATERIALIZATIONMSG._serialized_end=20194
+  _PARSEINLINENODEERROR._serialized_start=20196
+  _PARSEINLINENODEERROR._serialized_end=20273
+  _PARSEINLINENODEERRORMSG._serialized_start=20275
+  _PARSEINLINENODEERRORMSG._serialized_end=20387
+  _GITSPARSECHECKOUTSUBDIRECTORY._serialized_start=20389
+  _GITSPARSECHECKOUTSUBDIRECTORY._serialized_end=20436
+  _GITSPARSECHECKOUTSUBDIRECTORYMSG._serialized_start=20439
+  _GITSPARSECHECKOUTSUBDIRECTORYMSG._serialized_end=20569
+  _GITPROGRESSCHECKOUTREVISION._serialized_start=20571
+  _GITPROGRESSCHECKOUTREVISION._serialized_end=20618
+  _GITPROGRESSCHECKOUTREVISIONMSG._serialized_start=20620
+  _GITPROGRESSCHECKOUTREVISIONMSG._serialized_end=20746
+  _GITPROGRESSUPDATINGEXISTINGDEPENDENCY._serialized_start=20748
+  _GITPROGRESSUPDATINGEXISTINGDEPENDENCY._serialized_end=20800
+  _GITPROGRESSUPDATINGEXISTINGDEPENDENCYMSG._serialized_start=20803
+  _GITPROGRESSUPDATINGEXISTINGDEPENDENCYMSG._serialized_end=20949
+  _GITPROGRESSPULLINGNEWDEPENDENCY._serialized_start=20951
+  _GITPROGRESSPULLINGNEWDEPENDENCY._serialized_end=20997
+  _GITPROGRESSPULLINGNEWDEPENDENCYMSG._serialized_start=21000
+  _GITPROGRESSPULLINGNEWDEPENDENCYMSG._serialized_end=21134
+  _GITNOTHINGTODO._serialized_start=21136
+  _GITNOTHINGTODO._serialized_end=21165
+  _GITNOTHINGTODOMSG._serialized_start=21167
+  _GITNOTHINGTODOMSG._serialized_end=21267
+  _GITPROGRESSUPDATEDCHECKOUTRANGE._serialized_start=21269
+  _GITPROGRESSUPDATEDCHECKOUTRANGE._serialized_end=21338
+  _GITPROGRESSUPDATEDCHECKOUTRANGEMSG._serialized_start=21341
+  _GITPROGRESSUPDATEDCHECKOUTRANGEMSG._serialized_end=21475
+  _GITPROGRESSCHECKEDOUTAT._serialized_start=21477
+  _GITPROGRESSCHECKEDOUTAT._serialized_end=21519
+  _GITPROGRESSCHECKEDOUTATMSG._serialized_start=21521
+  _GITPROGRESSCHECKEDOUTATMSG._serialized_end=21639
+  _REGISTRYPROGRESSGETREQUEST._serialized_start=21641
+  _REGISTRYPROGRESSGETREQUEST._serialized_end=21682
+  _REGISTRYPROGRESSGETREQUESTMSG._serialized_start=21684
+  _REGISTRYPROGRESSGETREQUESTMSG._serialized_end=21808
+  _REGISTRYPROGRESSGETRESPONSE._serialized_start=21810
+  _REGISTRYPROGRESSGETRESPONSE._serialized_end=21871
+  _REGISTRYPROGRESSGETRESPONSEMSG._serialized_start=21873
+  _REGISTRYPROGRESSGETRESPONSEMSG._serialized_end=21999
+  _SELECTORREPORTINVALIDSELECTOR._serialized_start=22001
+  _SELECTORREPORTINVALIDSELECTOR._serialized_end=22096
+  _SELECTORREPORTINVALIDSELECTORMSG._serialized_start=22099
+  _SELECTORREPORTINVALIDSELECTORMSG._serialized_end=22229
+  _DEPSNOPACKAGESFOUND._serialized_start=22231
+  _DEPSNOPACKAGESFOUND._serialized_end=22252
+  _DEPSNOPACKAGESFOUNDMSG._serialized_start=22254
+  _DEPSNOPACKAGESFOUNDMSG._serialized_end=22364
+  _DEPSSTARTPACKAGEINSTALL._serialized_start=22366
+  _DEPSSTARTPACKAGEINSTALL._serialized_end=22413
+  _DEPSSTARTPACKAGEINSTALLMSG._serialized_start=22415
+  _DEPSSTARTPACKAGEINSTALLMSG._serialized_end=22533
+  _DEPSINSTALLINFO._serialized_start=22535
+  _DEPSINSTALLINFO._serialized_end=22574
+  _DEPSINSTALLINFOMSG._serialized_start=22576
+  _DEPSINSTALLINFOMSG._serialized_end=22678
+  _DEPSUPDATEAVAILABLE._serialized_start=22680
+  _DEPSUPDATEAVAILABLE._serialized_end=22725
+  _DEPSUPDATEAVAILABLEMSG._serialized_start=22727
+  _DEPSUPDATEAVAILABLEMSG._serialized_end=22837
+  _DEPSUPTODATE._serialized_start=22839
+  _DEPSUPTODATE._serialized_end=22853
+  _DEPSUPTODATEMSG._serialized_start=22855
+  _DEPSUPTODATEMSG._serialized_end=22951
+  _DEPSLISTSUBDIRECTORY._serialized_start=22953
+  _DEPSLISTSUBDIRECTORY._serialized_end=22997
+  _DEPSLISTSUBDIRECTORYMSG._serialized_start=22999
+  _DEPSLISTSUBDIRECTORYMSG._serialized_end=23111
+  _DEPSNOTIFYUPDATESAVAILABLE._serialized_start=23113
+  _DEPSNOTIFYUPDATESAVAILABLE._serialized_end=23159
+  _DEPSNOTIFYUPDATESAVAILABLEMSG._serialized_start=23161
+  _DEPSNOTIFYUPDATESAVAILABLEMSG._serialized_end=23285
+  _RETRYEXTERNALCALL._serialized_start=23287
+  _RETRYEXTERNALCALL._serialized_end=23336
+  _RETRYEXTERNALCALLMSG._serialized_start=23338
+  _RETRYEXTERNALCALLMSG._serialized_end=23444
+  _RECORDRETRYEXCEPTION._serialized_start=23446
+  _RECORDRETRYEXCEPTION._serialized_end=23481
+  _RECORDRETRYEXCEPTIONMSG._serialized_start=23483
+  _RECORDRETRYEXCEPTIONMSG._serialized_end=23595
+  _REGISTRYINDEXPROGRESSGETREQUEST._serialized_start=23597
+  _REGISTRYINDEXPROGRESSGETREQUEST._serialized_end=23643
+  _REGISTRYINDEXPROGRESSGETREQUESTMSG._serialized_start=23646
+  _REGISTRYINDEXPROGRESSGETREQUESTMSG._serialized_end=23780
+  _REGISTRYINDEXPROGRESSGETRESPONSE._serialized_start=23782
+  _REGISTRYINDEXPROGRESSGETRESPONSE._serialized_end=23848
+  _REGISTRYINDEXPROGRESSGETRESPONSEMSG._serialized_start=23851
+  _REGISTRYINDEXPROGRESSGETRESPONSEMSG._serialized_end=23987
+  _REGISTRYRESPONSEUNEXPECTEDTYPE._serialized_start=23989
+  _REGISTRYRESPONSEUNEXPECTEDTYPE._serialized_end=24039
+  _REGISTRYRESPONSEUNEXPECTEDTYPEMSG._serialized_start=24042
+  _REGISTRYRESPONSEUNEXPECTEDTYPEMSG._serialized_end=24174
+  _REGISTRYRESPONSEMISSINGTOPKEYS._serialized_start=24176
+  _REGISTRYRESPONSEMISSINGTOPKEYS._serialized_end=24226
+  _REGISTRYRESPONSEMISSINGTOPKEYSMSG._serialized_start=24229
+  _REGISTRYRESPONSEMISSINGTOPKEYSMSG._serialized_end=24361
+  _REGISTRYRESPONSEMISSINGNESTEDKEYS._serialized_start=24363
+  _REGISTRYRESPONSEMISSINGNESTEDKEYS._serialized_end=24416
+  _REGISTRYRESPONSEMISSINGNESTEDKEYSMSG._serialized_start=24419
+  _REGISTRYRESPONSEMISSINGNESTEDKEYSMSG._serialized_end=24557
+  _REGISTRYRESPONSEEXTRANESTEDKEYS._serialized_start=24559
+  _REGISTRYRESPONSEEXTRANESTEDKEYS._serialized_end=24610
+  _REGISTRYRESPONSEEXTRANESTEDKEYSMSG._serialized_start=24613
+  _REGISTRYRESPONSEEXTRANESTEDKEYSMSG._serialized_end=24747
+  _DEPSSETDOWNLOADDIRECTORY._serialized_start=24749
+  _DEPSSETDOWNLOADDIRECTORY._serialized_end=24789
+  _DEPSSETDOWNLOADDIRECTORYMSG._serialized_start=24791
+  _DEPSSETDOWNLOADDIRECTORYMSG._serialized_end=24911
+  _DEPSUNPINNED._serialized_start=24913
+  _DEPSUNPINNED._serialized_end=24958
+  _DEPSUNPINNEDMSG._serialized_start=24960
+  _DEPSUNPINNEDMSG._serialized_end=25056
+  _NONODESFORSELECTIONCRITERIA._serialized_start=25058
+  _NONODESFORSELECTIONCRITERIA._serialized_end=25105
+  _NONODESFORSELECTIONCRITERIAMSG._serialized_start=25107
+  _NONODESFORSELECTIONCRITERIAMSG._serialized_end=25233
+  _RUNNINGOPERATIONCAUGHTERROR._serialized_start=25235
+  _RUNNINGOPERATIONCAUGHTERROR._serialized_end=25277
+  _RUNNINGOPERATIONCAUGHTERRORMSG._serialized_start=25279
+  _RUNNINGOPERATIONCAUGHTERRORMSG._serialized_end=25405
+  _COMPILECOMPLETE._serialized_start=25407
+  _COMPILECOMPLETE._serialized_end=25424
+  _COMPILECOMPLETEMSG._serialized_start=25426
+  _COMPILECOMPLETEMSG._serialized_end=25528
+  _FRESHNESSCHECKCOMPLETE._serialized_start=25530
+  _FRESHNESSCHECKCOMPLETE._serialized_end=25554
+  _FRESHNESSCHECKCOMPLETEMSG._serialized_start=25556
+  _FRESHNESSCHECKCOMPLETEMSG._serialized_end=25672
+  _SEEDHEADER._serialized_start=25674
+  _SEEDHEADER._serialized_end=25702
+  _SEEDHEADERMSG._serialized_start=25704
+  _SEEDHEADERMSG._serialized_end=25796
+  _SQLRUNNEREXCEPTION._serialized_start=25798
+  _SQLRUNNEREXCEPTION._serialized_end=25849
+  _SQLRUNNEREXCEPTIONMSG._serialized_start=25851
+  _SQLRUNNEREXCEPTIONMSG._serialized_end=25959
+  _LOGTESTRESULT._serialized_start=25962
+  _LOGTESTRESULT._serialized_end=26130
+  _LOGTESTRESULTMSG._serialized_start=26132
+  _LOGTESTRESULTMSG._serialized_end=26230
+  _LOGSTARTLINE._serialized_start=26232
+  _LOGSTARTLINE._serialized_end=26339
+  _LOGSTARTLINEMSG._serialized_start=26341
+  _LOGSTARTLINEMSG._serialized_end=26437
+  _LOGMODELRESULT._serialized_start=26440
+  _LOGMODELRESULT._serialized_end=26589
+  _LOGMODELRESULTMSG._serialized_start=26591
+  _LOGMODELRESULTMSG._serialized_end=26691
+  _LOGSNAPSHOTRESULT._serialized_start=26694
+  _LOGSNAPSHOTRESULT._serialized_end=26944
+  _LOGSNAPSHOTRESULT_CFGENTRY._serialized_start=26902
+  _LOGSNAPSHOTRESULT_CFGENTRY._serialized_end=26944
+  _LOGSNAPSHOTRESULTMSG._serialized_start=26946
+  _LOGSNAPSHOTRESULTMSG._serialized_end=27052
+  _LOGSEEDRESULT._serialized_start=27055
+  _LOGSEEDRESULT._serialized_end=27240
+  _LOGSEEDRESULTMSG._serialized_start=27242
+  _LOGSEEDRESULTMSG._serialized_end=27340
+  _LOGFRESHNESSRESULT._serialized_start=27343
+  _LOGFRESHNESSRESULT._serialized_end=27516
+  _LOGFRESHNESSRESULTMSG._serialized_start=27518
+  _LOGFRESHNESSRESULTMSG._serialized_end=27626
+  _LOGCANCELLINE._serialized_start=27628
+  _LOGCANCELLINE._serialized_end=27662
+  _LOGCANCELLINEMSG._serialized_start=27664
+  _LOGCANCELLINEMSG._serialized_end=27762
+  _DEFAULTSELECTOR._serialized_start=27764
+  _DEFAULTSELECTOR._serialized_end=27795
+  _DEFAULTSELECTORMSG._serialized_start=27797
+  _DEFAULTSELECTORMSG._serialized_end=27899
+  _NODESTART._serialized_start=27901
+  _NODESTART._serialized_end=27954
+  _NODESTARTMSG._serialized_start=27956
+  _NODESTARTMSG._serialized_end=28046
+  _NODEFINISHED._serialized_start=28048
+  _NODEFINISHED._serialized_end=28151
+  _NODEFINISHEDMSG._serialized_start=28153
+  _NODEFINISHEDMSG._serialized_end=28249
+  _QUERYCANCELATIONUNSUPPORTED._serialized_start=28251
+  _QUERYCANCELATIONUNSUPPORTED._serialized_end=28294
+  _QUERYCANCELATIONUNSUPPORTEDMSG._serialized_start=28296
+  _QUERYCANCELATIONUNSUPPORTEDMSG._serialized_end=28422
+  _CONCURRENCYLINE._serialized_start=28424
+  _CONCURRENCYLINE._serialized_end=28503
+  _CONCURRENCYLINEMSG._serialized_start=28505
+  _CONCURRENCYLINEMSG._serialized_end=28607
+  _WRITINGINJECTEDSQLFORNODE._serialized_start=28609
+  _WRITINGINJECTEDSQLFORNODE._serialized_end=28678
+  _WRITINGINJECTEDSQLFORNODEMSG._serialized_start=28680
+  _WRITINGINJECTEDSQLFORNODEMSG._serialized_end=28802
+  _NODECOMPILING._serialized_start=28804
+  _NODECOMPILING._serialized_end=28861
+  _NODECOMPILINGMSG._serialized_start=28863
+  _NODECOMPILINGMSG._serialized_end=28961
+  _NODEEXECUTING._serialized_start=28963
+  _NODEEXECUTING._serialized_end=29020
+  _NODEEXECUTINGMSG._serialized_start=29022
+  _NODEEXECUTINGMSG._serialized_end=29120
+  _LOGHOOKSTARTLINE._serialized_start=29122
+  _LOGHOOKSTARTLINE._serialized_end=29231
+  _LOGHOOKSTARTLINEMSG._serialized_start=29233
+  _LOGHOOKSTARTLINEMSG._serialized_end=29337
+  _LOGHOOKENDLINE._serialized_start=29340
+  _LOGHOOKENDLINE._serialized_end=29487
+  _LOGHOOKENDLINEMSG._serialized_start=29489
+  _LOGHOOKENDLINEMSG._serialized_end=29589
+  _SKIPPINGDETAILS._serialized_start=29592
+  _SKIPPINGDETAILS._serialized_end=29739
+  _SKIPPINGDETAILSMSG._serialized_start=29741
+  _SKIPPINGDETAILSMSG._serialized_end=29843
+  _NOTHINGTODO._serialized_start=29845
+  _NOTHINGTODO._serialized_end=29858
+  _NOTHINGTODOMSG._serialized_start=29860
+  _NOTHINGTODOMSG._serialized_end=29954
+  _RUNNINGOPERATIONUNCAUGHTERROR._serialized_start=29956
+  _RUNNINGOPERATIONUNCAUGHTERROR._serialized_end=30000
+  _RUNNINGOPERATIONUNCAUGHTERRORMSG._serialized_start=30003
+  _RUNNINGOPERATIONUNCAUGHTERRORMSG._serialized_end=30133
+  _ENDRUNRESULT._serialized_start=30136
+  _ENDRUNRESULT._serialized_end=30283
+  _ENDRUNRESULTMSG._serialized_start=30285
+  _ENDRUNRESULTMSG._serialized_end=30381
+  _NONODESSELECTED._serialized_start=30383
+  _NONODESSELECTED._serialized_end=30400
+  _NONODESSELECTEDMSG._serialized_start=30402
+  _NONODESSELECTEDMSG._serialized_end=30504
+  _COMMANDCOMPLETED._serialized_start=30506
+  _COMMANDCOMPLETED._serialized_end=30625
+  _COMMANDCOMPLETEDMSG._serialized_start=30627
+  _COMMANDCOMPLETEDMSG._serialized_end=30731
+  _SHOWNODE._serialized_start=30733
+  _SHOWNODE._serialized_end=30840
+  _SHOWNODEMSG._serialized_start=30842
+  _SHOWNODEMSG._serialized_end=30930
+  _COMPILEDNODE._serialized_start=30932
+  _COMPILEDNODE._serialized_end=31044
+  _COMPILEDNODEMSG._serialized_start=31046
+  _COMPILEDNODEMSG._serialized_end=31142
+  _CATCHABLEEXCEPTIONONRUN._serialized_start=31144
+  _CATCHABLEEXCEPTIONONRUN._serialized_end=31242
+  _CATCHABLEEXCEPTIONONRUNMSG._serialized_start=31244
+  _CATCHABLEEXCEPTIONONRUNMSG._serialized_end=31362
+  _INTERNALERRORONRUN._serialized_start=31364
+  _INTERNALERRORONRUN._serialized_end=31417
+  _INTERNALERRORONRUNMSG._serialized_start=31419
+  _INTERNALERRORONRUNMSG._serialized_end=31527
+  _GENERICEXCEPTIONONRUN._serialized_start=31529
+  _GENERICEXCEPTIONONRUN._serialized_end=31604
+  _GENERICEXCEPTIONONRUNMSG._serialized_start=31606
+  _GENERICEXCEPTIONONRUNMSG._serialized_end=31720
+  _NODECONNECTIONRELEASEERROR._serialized_start=31722
+  _NODECONNECTIONRELEASEERROR._serialized_end=31800
+  _NODECONNECTIONRELEASEERRORMSG._serialized_start=31802
+  _NODECONNECTIONRELEASEERRORMSG._serialized_end=31926
+  _FOUNDSTATS._serialized_start=31928
+  _FOUNDSTATS._serialized_end=31959
+  _FOUNDSTATSMSG._serialized_start=31961
+  _FOUNDSTATSMSG._serialized_end=32053
+  _MAINKEYBOARDINTERRUPT._serialized_start=32055
+  _MAINKEYBOARDINTERRUPT._serialized_end=32078
+  _MAINKEYBOARDINTERRUPTMSG._serialized_start=32080
+  _MAINKEYBOARDINTERRUPTMSG._serialized_end=32194
+  _MAINENCOUNTEREDERROR._serialized_start=32196
+  _MAINENCOUNTEREDERROR._serialized_end=32231
+  _MAINENCOUNTEREDERRORMSG._serialized_start=32233
+  _MAINENCOUNTEREDERRORMSG._serialized_end=32345
+  _MAINSTACKTRACE._serialized_start=32347
+  _MAINSTACKTRACE._serialized_end=32384
+  _MAINSTACKTRACEMSG._serialized_start=32386
+  _MAINSTACKTRACEMSG._serialized_end=32486
+  _SYSTEMCOULDNOTWRITE._serialized_start=32488
+  _SYSTEMCOULDNOTWRITE._serialized_end=32552
+  _SYSTEMCOULDNOTWRITEMSG._serialized_start=32554
+  _SYSTEMCOULDNOTWRITEMSG._serialized_end=32664
+  _SYSTEMEXECUTINGCMD._serialized_start=32666
+  _SYSTEMEXECUTINGCMD._serialized_end=32699
+  _SYSTEMEXECUTINGCMDMSG._serialized_start=32701
+  _SYSTEMEXECUTINGCMDMSG._serialized_end=32809
+  _SYSTEMSTDOUT._serialized_start=32811
+  _SYSTEMSTDOUT._serialized_end=32839
+  _SYSTEMSTDOUTMSG._serialized_start=32841
+  _SYSTEMSTDOUTMSG._serialized_end=32937
+  _SYSTEMSTDERR._serialized_start=32939
+  _SYSTEMSTDERR._serialized_end=32967
+  _SYSTEMSTDERRMSG._serialized_start=32969
+  _SYSTEMSTDERRMSG._serialized_end=33065
+  _SYSTEMREPORTRETURNCODE._serialized_start=33067
+  _SYSTEMREPORTRETURNCODE._serialized_end=33111
+  _SYSTEMREPORTRETURNCODEMSG._serialized_start=33113
+  _SYSTEMREPORTRETURNCODEMSG._serialized_end=33229
+  _TIMINGINFOCOLLECTED._serialized_start=33231
+  _TIMINGINFOCOLLECTED._serialized_end=33343
+  _TIMINGINFOCOLLECTEDMSG._serialized_start=33345
+  _TIMINGINFOCOLLECTEDMSG._serialized_end=33455
+  _LOGDEBUGSTACKTRACE._serialized_start=33457
+  _LOGDEBUGSTACKTRACE._serialized_end=33495
+  _LOGDEBUGSTACKTRACEMSG._serialized_start=33497
+  _LOGDEBUGSTACKTRACEMSG._serialized_end=33605
+  _CHECKCLEANPATH._serialized_start=33607
+  _CHECKCLEANPATH._serialized_end=33637
+  _CHECKCLEANPATHMSG._serialized_start=33639
+  _CHECKCLEANPATHMSG._serialized_end=33739
+  _CONFIRMCLEANPATH._serialized_start=33741
+  _CONFIRMCLEANPATH._serialized_end=33773
+  _CONFIRMCLEANPATHMSG._serialized_start=33775
+  _CONFIRMCLEANPATHMSG._serialized_end=33879
+  _PROTECTEDCLEANPATH._serialized_start=33881
+  _PROTECTEDCLEANPATH._serialized_end=33915
+  _PROTECTEDCLEANPATHMSG._serialized_start=33917
+  _PROTECTEDCLEANPATHMSG._serialized_end=34025
+  _FINISHEDCLEANPATHS._serialized_start=34027
+  _FINISHEDCLEANPATHS._serialized_end=34047
+  _FINISHEDCLEANPATHSMSG._serialized_start=34049
+  _FINISHEDCLEANPATHSMSG._serialized_end=34157
+  _OPENCOMMAND._serialized_start=34159
+  _OPENCOMMAND._serialized_end=34212
+  _OPENCOMMANDMSG._serialized_start=34214
+  _OPENCOMMANDMSG._serialized_end=34308
+  _FORMATTING._serialized_start=34310
+  _FORMATTING._serialized_end=34335
+  _FORMATTINGMSG._serialized_start=34337
+  _FORMATTINGMSG._serialized_end=34429
+  _SERVINGDOCSPORT._serialized_start=34431
+  _SERVINGDOCSPORT._serialized_end=34479
+  _SERVINGDOCSPORTMSG._serialized_start=34481
+  _SERVINGDOCSPORTMSG._serialized_end=34583
+  _SERVINGDOCSACCESSINFO._serialized_start=34585
+  _SERVINGDOCSACCESSINFO._serialized_end=34622
+  _SERVINGDOCSACCESSINFOMSG._serialized_start=34624
+  _SERVINGDOCSACCESSINFOMSG._serialized_end=34738
+  _SERVINGDOCSEXITINFO._serialized_start=34740
+  _SERVINGDOCSEXITINFO._serialized_end=34761
+  _SERVINGDOCSEXITINFOMSG._serialized_start=34763
+  _SERVINGDOCSEXITINFOMSG._serialized_end=34873
+  _RUNRESULTWARNING._serialized_start=34875
+  _RUNRESULTWARNING._serialized_end=34949
+  _RUNRESULTWARNINGMSG._serialized_start=34951
+  _RUNRESULTWARNINGMSG._serialized_end=35055
+  _RUNRESULTFAILURE._serialized_start=35057
+  _RUNRESULTFAILURE._serialized_end=35131
+  _RUNRESULTFAILUREMSG._serialized_start=35133
+  _RUNRESULTFAILUREMSG._serialized_end=35237
+  _STATSLINE._serialized_start=35239
+  _STATSLINE._serialized_end=35346
+  _STATSLINE_STATSENTRY._serialized_start=35302
+  _STATSLINE_STATSENTRY._serialized_end=35346
+  _STATSLINEMSG._serialized_start=35348
+  _STATSLINEMSG._serialized_end=35438
+  _RUNRESULTERROR._serialized_start=35440
+  _RUNRESULTERROR._serialized_end=35469
+  _RUNRESULTERRORMSG._serialized_start=35471
+  _RUNRESULTERRORMSG._serialized_end=35571
+  _RUNRESULTERRORNOMESSAGE._serialized_start=35573
+  _RUNRESULTERRORNOMESSAGE._serialized_end=35614
+  _RUNRESULTERRORNOMESSAGEMSG._serialized_start=35616
+  _RUNRESULTERRORNOMESSAGEMSG._serialized_end=35734
+  _SQLCOMPILEDPATH._serialized_start=35736
+  _SQLCOMPILEDPATH._serialized_end=35767
+  _SQLCOMPILEDPATHMSG._serialized_start=35769
+  _SQLCOMPILEDPATHMSG._serialized_end=35871
+  _CHECKNODETESTFAILURE._serialized_start=35873
+  _CHECKNODETESTFAILURE._serialized_end=35918
+  _CHECKNODETESTFAILUREMSG._serialized_start=35920
+  _CHECKNODETESTFAILUREMSG._serialized_end=36032
+  _FIRSTRUNRESULTERROR._serialized_start=36034
+  _FIRSTRUNRESULTERROR._serialized_end=36068
+  _FIRSTRUNRESULTERRORMSG._serialized_start=36070
+  _FIRSTRUNRESULTERRORMSG._serialized_end=36180
+  _AFTERFIRSTRUNRESULTERROR._serialized_start=36182
+  _AFTERFIRSTRUNRESULTERROR._serialized_end=36221
+  _AFTERFIRSTRUNRESULTERRORMSG._serialized_start=36223
+  _AFTERFIRSTRUNRESULTERRORMSG._serialized_end=36343
+  _ENDOFRUNSUMMARY._serialized_start=36345
+  _ENDOFRUNSUMMARY._serialized_end=36432
+  _ENDOFRUNSUMMARYMSG._serialized_start=36434
+  _ENDOFRUNSUMMARYMSG._serialized_end=36536
+  _LOGSKIPBECAUSEERROR._serialized_start=36538
+  _LOGSKIPBECAUSEERROR._serialized_end=36623
+  _LOGSKIPBECAUSEERRORMSG._serialized_start=36625
+  _LOGSKIPBECAUSEERRORMSG._serialized_end=36735
+  _ENSUREGITINSTALLED._serialized_start=36737
+  _ENSUREGITINSTALLED._serialized_end=36757
+  _ENSUREGITINSTALLEDMSG._serialized_start=36759
+  _ENSUREGITINSTALLEDMSG._serialized_end=36867
+  _DEPSCREATINGLOCALSYMLINK._serialized_start=36869
+  _DEPSCREATINGLOCALSYMLINK._serialized_end=36895
+  _DEPSCREATINGLOCALSYMLINKMSG._serialized_start=36897
+  _DEPSCREATINGLOCALSYMLINKMSG._serialized_end=37017
+  _DEPSSYMLINKNOTAVAILABLE._serialized_start=37019
+  _DEPSSYMLINKNOTAVAILABLE._serialized_end=37044
+  _DEPSSYMLINKNOTAVAILABLEMSG._serialized_start=37046
+  _DEPSSYMLINKNOTAVAILABLEMSG._serialized_end=37164
+  _DISABLETRACKING._serialized_start=37166
+  _DISABLETRACKING._serialized_end=37183
+  _DISABLETRACKINGMSG._serialized_start=37185
+  _DISABLETRACKINGMSG._serialized_end=37287
+  _SENDINGEVENT._serialized_start=37289
+  _SENDINGEVENT._serialized_end=37319
+  _SENDINGEVENTMSG._serialized_start=37321
+  _SENDINGEVENTMSG._serialized_end=37417
+  _SENDEVENTFAILURE._serialized_start=37419
+  _SENDEVENTFAILURE._serialized_end=37437
+  _SENDEVENTFAILUREMSG._serialized_start=37439
+  _SENDEVENTFAILUREMSG._serialized_end=37543
+  _FLUSHEVENTS._serialized_start=37545
+  _FLUSHEVENTS._serialized_end=37558
+  _FLUSHEVENTSMSG._serialized_start=37560
+  _FLUSHEVENTSMSG._serialized_end=37654
+  _FLUSHEVENTSFAILURE._serialized_start=37656
+  _FLUSHEVENTSFAILURE._serialized_end=37676
+  _FLUSHEVENTSFAILUREMSG._serialized_start=37678
+  _FLUSHEVENTSFAILUREMSG._serialized_end=37786
+  _TRACKINGINITIALIZEFAILURE._serialized_start=37788
+  _TRACKINGINITIALIZEFAILURE._serialized_end=37833
+  _TRACKINGINITIALIZEFAILUREMSG._serialized_start=37835
+  _TRACKINGINITIALIZEFAILUREMSG._serialized_end=37957
+  _RUNRESULTWARNINGMESSAGE._serialized_start=37959
+  _RUNRESULTWARNINGMESSAGE._serialized_end=37997
+  _RUNRESULTWARNINGMESSAGEMSG._serialized_start=37999
+  _RUNRESULTWARNINGMESSAGEMSG._serialized_end=38117
+  _DEBUGCMDOUT._serialized_start=38119
+  _DEBUGCMDOUT._serialized_end=38145
+  _DEBUGCMDOUTMSG._serialized_start=38147
+  _DEBUGCMDOUTMSG._serialized_end=38241
+  _DEBUGCMDRESULT._serialized_start=38243
+  _DEBUGCMDRESULT._serialized_end=38272
+  _DEBUGCMDRESULTMSG._serialized_start=38274
+  _DEBUGCMDRESULTMSG._serialized_end=38374
+  _LISTCMDOUT._serialized_start=38376
+  _LISTCMDOUT._serialized_end=38401
+  _LISTCMDOUTMSG._serialized_start=38403
+  _LISTCMDOUTMSG._serialized_end=38495
+  _NOTE._serialized_start=38497
+  _NOTE._serialized_end=38516
+  _NOTEMSG._serialized_start=38518
+  _NOTEMSG._serialized_end=38598
 # @@protoc_insertion_point(module_scope)

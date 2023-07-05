@@ -25,7 +25,7 @@ with open(os.path.join(this_directory, "README.md")) as f:
 
 
 package_name = "dbt-core"
-package_version = "1.6.0b7"
+package_version = "1.6.0b8"
 description = """With dbt, data analysts and engineers can build analytics \
 the way engineers build applications."""
 
@@ -68,9 +68,8 @@ setup(
         "pathspec>=0.9,<0.12",
         "isodate>=0.6,<0.7",
         # ----
-        # There is a difficult-to-reproduce bug in sqlparse==0.4.4 for ephemeral model compilation
-        # For context: dbt-core#7396 + dbt-core#7515
-        "sqlparse>=0.2.3,<0.4.4",
+        # There was a pin to below 0.4.4 for a while due to a bug in Ubuntu/sqlparse 0.4.4
+        "sqlparse>=0.2.3",
         # ----
         # These are major-version-0 packages also maintained by dbt-labs. Accept patches.
         "dbt-extractor~=0.4.1",
@@ -78,7 +77,7 @@ setup(
         "minimal-snowplow-tracker~=0.0.2",
         # DSI is under active development, so we're pinning to specific dev versions for now.
         # TODO: Before RC/final release, update to use ~= pinning.
-        "dbt-semantic-interfaces==0.1.0.dev7",
+        "dbt-semantic-interfaces==0.1.0.dev8",
         # ----
         # Expect compatibility with all new versions of these packages, so lower bounds only.
         "packaging>20.9",

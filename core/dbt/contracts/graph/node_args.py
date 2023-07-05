@@ -23,9 +23,9 @@ class ModelNodeArgs:
     enabled: bool = True
 
     @property
-    def unique_id(self):
+    def unique_id(self) -> str:
         unique_id = f"{NodeType.Model}.{self.package_name}.{self.name}"
         if self.version:
-            unique_id = f"{unique_id}.{self.verison}"
+            unique_id = f"{unique_id}.{self.version}"
 
         return unique_id
