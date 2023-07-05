@@ -625,6 +625,11 @@ class ModelNode(CompiledNode):
         # We don't need to construct the checksum if the model does not
         # have contract enforced, because it won't be used.
         # This needs to be executed after contract config is set
+
+        # Should we make this a no-op, if the checksum already exists?
+        if self.contract.checksum is not None:
+            pass
+
         if self.contract.enforced is True:
             contract_state = ""
             # We need to sort the columns so that order doesn't matter
