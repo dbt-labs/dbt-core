@@ -61,11 +61,14 @@ class BaseDryRunMethod:
             with adapter.connection_named("test_invalid_dry_run"):
                 adapter.dry_run(invalid_sql)
 
-        # InvalidConnectionError is a subclass of DbtRuntimeError, but it typically
-        # indicates a problem with test configuration rather than the expected error
-        # from an invalid dry_run invocation.
+        # InvalidConnectionError is a subclass of DbtRuntimeError, so we have to handle
+        # it separately.
         if excinfo.type == InvalidConnectionError:
-            raise ValueError("Unexpected InvalidConnectionError.") from excinfo.value
+            raise ValueError(
+                "Unexpected InvalidConnectionError. This typically indicates a problem "
+                "with the test setup, rather than the expected error for an invalid "
+                "dry run query."
+            ) from excinfo.value
 
 
 class TestDryRunMethod(BaseDryRunMethod):
