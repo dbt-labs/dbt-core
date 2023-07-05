@@ -36,7 +36,6 @@
 - [@trouze](https://github.com/trouze) ([#7564](https://github.com/dbt-labs/dbt-core/issues/7564))
 - [@willbryant](https://github.com/willbryant) ([#7350](https://github.com/dbt-labs/dbt-core/issues/7350))
 
-
 ## dbt-core 1.6.0-b7 - June 28, 2023
 
 ### Features
@@ -282,3 +281,4 @@ For information on prior major and minor releases, see their changelogs:
 * [0.13](https://github.com/dbt-labs/dbt-core/blob/0.13.latest/CHANGELOG.md)
 * [0.12](https://github.com/dbt-labs/dbt-core/blob/0.12.latest/CHANGELOG.md)
 * [0.11 and earlier](https://github.com/dbt-labs/dbt-core/blob/0.11.latest/CHANGELOG.md)
+
