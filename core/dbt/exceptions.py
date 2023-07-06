@@ -2250,6 +2250,11 @@ class ContractError(CompilationError):
         return table_from_data_flat(mismatches_sorted, column_names)
 
     def get_message(self) -> str:
+        if not self.yaml_columns:
+            return (
+                "This model has an enforced contract, and its 'columns' specification is missing"
+            )
+
         table: agate.Table = self.get_mismatches()
         # Hack to get Agate table output as string
         output = io.StringIO()
