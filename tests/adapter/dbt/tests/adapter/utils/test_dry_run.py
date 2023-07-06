@@ -47,8 +47,8 @@ class BaseDryRunMethod:
 
     def test_valid_dry_run(self, adapter: BaseAdapter, valid_sql: str) -> None:
         """Executes a dry run query on valid SQL. No news is good news."""
-        with adapter.connection_named("test_valid_dry_run"):
-            adapter.dry_run(valid_sql)
+        with adapter.connection_named("test_valid_sql_validation"):
+            adapter.validate_sql(valid_sql)
 
     def test_invalid_dry_run(
         self,
@@ -58,8 +58,8 @@ class BaseDryRunMethod:
     ) -> None:
         """Executes a dry run query on invalid SQL, expecting the exception."""
         with pytest.raises(expected_exception=expected_exception) as excinfo:
-            with adapter.connection_named("test_invalid_dry_run"):
-                adapter.dry_run(invalid_sql)
+            with adapter.connection_named("test_invalid_sql_validation"):
+                adapter.validate_sql(invalid_sql)
 
         # InvalidConnectionError is a subclass of DbtRuntimeError, so we have to handle
         # it separately.
@@ -67,7 +67,7 @@ class BaseDryRunMethod:
             raise ValueError(
                 "Unexpected InvalidConnectionError. This typically indicates a problem "
                 "with the test setup, rather than the expected error for an invalid "
-                "dry run query."
+                "validate_sql query."
             ) from excinfo.value
 
 

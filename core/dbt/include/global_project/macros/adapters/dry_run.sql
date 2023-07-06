@@ -1,10 +1,10 @@
-{% macro dry_run_query(test_sql) -%}
-  {{ return(adapter.dispatch('dry_run_query', 'dbt')(test_sql)) }}
+{% macro validate_sql(sql) -%}
+  {{ return(adapter.dispatch('validate_sql', 'dbt')(sql)) }}
 {% endmacro %}
 
-{% macro default__dry_run_query(test_sql) -%}
-  {% call statement('dry_run_query') -%}
-    explain {{ test_sql }}
+{% macro default__validate_sql(sql) -%}
+  {% call statement('validate_sql') -%}
+    explain {{ sql }}
   {% endcall %}
-  {{ return(load_result('dry_run_query')) }}
+  {{ return(load_result('validate_sql')) }}
 {% endmacro %}
