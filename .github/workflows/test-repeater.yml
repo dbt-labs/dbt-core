@@ -42,7 +42,7 @@ on:
         description: 'Max number of times to run the test'
         type: number
         required: true
-        default: '25'
+        default: '100'
 
 jobs:
   pytest:
@@ -71,6 +71,9 @@ jobs:
         with:
           python-version: "${{ inputs.python_version }}"
 
+      - name: "Setup Dev Environment"
+        run: make dev
+
       - name: "Set up postgres (linux)"
         if: inputs.os == 'ubuntu-latest'
         uses: ./.github/actions/setup-postgres-linux
@@ -87,7 +90,7 @@ jobs:
         id: pytest
         run: |
           echo "Running test ${{ inputs.test_path }} ${{ inputs.num_runs }} times with Python ${{inputs.python_version }} on ${{ inputs.os }} for branch/commit ${{ inputs.branch }}"
-          python -m pytest ${{ inputs.test_path }} --force-flaky --max-runs=${{ inputs.num_runs }}
+          python -m pytest ${{ inputs.test_path }} --force-flaky --min-passes=${{ inputs.num_runs }}  --max-runs=${{ inputs.num_runs }}
 
       - uses: actions/upload-artifact@v3
         if: always()
