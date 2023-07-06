@@ -19,10 +19,10 @@ on:
         required: true
         default: 'main'
       test_path:
-        description: 'Path to single test to run'
+        description: 'Path to single test to run (ex: tests/functional/retry/test_retry.py::TestRetry::test_fail_fast)'
         type: string
         required: true
-        default: 'tests/functional/retry/test_retry.py::TestRetry::test_fail_fast'
+        default: 'tests/functional/...'
       python_version:
         description: 'Version of Python to Test Against'
         type: choice
