@@ -1,12 +1,12 @@
 # **what?**
-# This workflow will test a single tests a given number of times to determine if it's flaky or not.
+# This workflow will test a single test a given number of times to determine if it's flaky or not.  You can test with any supported OS/Python combination.
 
 
 # **why?**
-# Testing if a test is flaky and if a previously flaky test has been fixed.  This allows easy testing on multiple python versions and OS
+# Testing if a test is flaky and if a previously flaky test has been fixed.  This allows easy testing on supported python versions and OS combinations.
 
 # **when?**
-# This is triggered manually.
+# This is triggered manually from dbt-core.
 
 name: test-repeater
 
