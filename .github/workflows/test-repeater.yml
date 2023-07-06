@@ -8,7 +8,7 @@
 # **when?**
 # This is triggered manually from dbt-core.
 
-name: test-repeater
+name: Flaky Tester
 
 on:
   workflow_dispatch:
