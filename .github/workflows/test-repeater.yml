@@ -119,17 +119,12 @@ jobs:
             echo
           done
 
-          echo "success=$success" >> $GITHUB_OUTPUT
+          echo "Successful runs: $success"
+          echo "Failed runs: $failure"
           echo "failure=$failure" >> $GITHUB_OUTPUT
 
-      - name: "Test Results"
-        run: |
-          echo "Test Results for ${{ inputs.os }}/Python ${{ inputs.python_version }}:"
-          echo "Successful runs: ${{ steps.pytest.outputs.success }}"
-          echo "Failed runs: ${{ steps.pytest.outputs.failure }}"
-
-      - name: "Check Failures"
+      - name: "Check Failures for ${{ inputs.os }}/Python ${{ inputs.python_version }}"
         if: ${{ steps.pytest.outputs.failure }}
         run: |
-            echo "${{ steps.pytest.outputs.failure }} tests did not pass"
+            echo "${{ steps.pytest.outputs.failure }} of ${{ inputs.num_runs }} tests did not pass"
             exit 1
