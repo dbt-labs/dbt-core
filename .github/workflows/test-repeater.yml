@@ -44,6 +44,8 @@ on:
         required: true
         default: '100'
 
+permissions: read-all
+
 jobs:
   pytest:
     runs-on: ${{ inputs.os }}
