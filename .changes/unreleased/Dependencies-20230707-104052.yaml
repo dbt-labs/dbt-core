@@ -1,0 +1,6 @@
+kind: Dependencies
+body: Pin click>=7.0,<8.1.4
+time: 2023-07-07T10:40:52.565603-05:00
+custom:
+  Author: emmyoop
+  PR: "8050"
