@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix producing non json log when log format is json
+time: 2023-06-27T22:43:55.071123-07:00
+custom:
+  Author: ChenyuLInx
+  Issue: "7972"
