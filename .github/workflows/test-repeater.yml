@@ -101,8 +101,6 @@ jobs:
       - name: "Run test ${{ inputs.num_runs }} times"
         id: pytest
         run: |
-          success=0
-          failure=0
           for ((i=1; i<=${{ inputs.num_runs }}; i++))
           do
             echo "Running pytest iteration $i..."
@@ -131,7 +129,7 @@ jobs:
           echo "Failed runs: ${{ steps.pytest.outputs.failure }}"
 
       - name: "Check Failures"
-        if: ${{ steps.pytest.outputs.failure }} != 0
+        if: ${{ steps.pytest.outputs.failure }}
         run: |
             echo "${{ steps.pytest.outputs.failure }} tests did not pass"
             exit 1
