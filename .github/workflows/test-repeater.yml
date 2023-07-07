@@ -80,20 +80,38 @@ jobs:
       - name: "Setup Postgres"
         run: make setup-db
 
-      - name: Run test
+      - name: "Run test ${{ inputs.num_runs }} times"
         id: pytest
         run: |
-          echo "Running test ${{ inputs.test_path }} ${{ inputs.num_runs }} times with Python ${{inputs.python_version }} on ${{ inputs.os }} for branch/commit ${{ inputs.branch }}"
-          python -m pytest ${{ inputs.test_path }} --force-flaky --min-passes=${{ inputs.num_runs }}  --max-runs=${{ inputs.num_runs }}
+          for ((i=1; i<=${{ inputs.num_runs }}; i++))
+          do
+            echo "Running pytest iteration $i..."
+            pytest_output=$(${{ inputs.test_path }})
+            return_code=$?
 
-      - uses: actions/upload-artifact@v3
-        if: always()
-        with:
-          name: logs_${{ inputs.python_version }}_${{ inputs.os }}_${{ github.run_id }}
-          path: ./logs
+            if [[ $return_code -eq 0 ]]; then
+              successe=$((success + 1))
+              echo "Iteration $i: Success"
+            else
+              failure=$((failure + 1))
+              echo "Iteration $i: Failure"
+            fi
 
-      - uses: actions/upload-artifact@v3
-        if: always()
-        with:
-          name: integration_results_${{ inputs.python_version }}_${{ inputs.os }}_${{ github.run_id }}.csv
-          path: integration_results.csv
+            echo "$pytest_output"
+            echo
+          done
+
+          echo "success=$success" >> $GITHUB_OUTPUT
+          echo "failure=$failure" >> $GITHUB_OUTPUT
+
+      - name: "Report Results"
+        run: |
+          echo "Test Results:"
+          echo "Successful runs: ${{ steps.pytest.outputs.success }}"
+          echo "Failed runs: ${{ steps.pytest.outputs.failure }}"
+
+      - name: "Check Failures"
+        if: ${{ steps.pytest.outputs.failure }} > 0
+        run: |
+            echo "All tests did not pass"
+            exit 1
