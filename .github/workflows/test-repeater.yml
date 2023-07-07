@@ -80,17 +80,23 @@ jobs:
       - name: "Setup Postgres"
         run: make setup-db
 
+      - name: "Test Command"
+        id: command
+        run: |
+          test_command = "python -m pytest ${{ inputs.test_path }} --force-flaky --min-passes=${{ inputs.num_runs }}  --max-runs=${{ inputs.num_runs }}"
+          echo "test_command=$test_command" >> $GITHUB_OUTPUT
+
       - name: "Run test ${{ inputs.num_runs }} times"
         id: pytest
         run: |
           for ((i=1; i<=${{ inputs.num_runs }}; i++))
           do
             echo "Running pytest iteration $i..."
-            pytest_output=$(${{ inputs.test_path }})
+            pytest_output=$(${{ steps.command.outputs.test_command }})
             return_code=$?
 
             if [[ $return_code -eq 0 ]]; then
-              successe=$((success + 1))
+              success=$((success + 1))
               echo "Iteration $i: Success"
             else
               failure=$((failure + 1))
