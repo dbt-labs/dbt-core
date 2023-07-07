@@ -117,10 +117,11 @@ jobs:
 
             echo "$pytest_output"
             echo
+            echo "Successful runs: $success"
+            echo "Failed runs: $failure"
+            echo
           done
 
-          echo "Successful runs: $success"
-          echo "Failed runs: $failure"
           echo "failure=$failure" >> $GITHUB_OUTPUT
 
       - name: "Check Failures for ${{ inputs.os }}/Python ${{ inputs.python_version }}"
