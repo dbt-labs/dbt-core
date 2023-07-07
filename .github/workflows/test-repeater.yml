@@ -50,6 +50,7 @@ jobs:
   pytest:
     runs-on: ${{ inputs.os }}
     env:
+      PYTEST_ADDOPTS: "-v --color=yes -n4 --csv integration_results.csv"
       DBT_TEST_USER_1: dbt_test_user_1
       DBT_TEST_USER_2: dbt_test_user_2
       DBT_TEST_USER_3: dbt_test_user_3
@@ -76,17 +77,8 @@ jobs:
       - name: "Setup Dev Environment"
         run: make dev
 
-      - name: "Set up postgres (linux)"
-        if: inputs.os == 'ubuntu-latest'
-        uses: ./.github/actions/setup-postgres-linux
-
-      - name: Set up "postgres (macos)"
-        if: inputs.os == 'macos-latest'
-        uses: ./.github/actions/setup-postgres-macos
-
-      - name: "Set up postgres (windows)"
-        if: inputs.os == 'windows-latest'
-        uses: ./.github/actions/setup-postgres-windows
+      - name: "Setup Postgres"
+        run: make setup-db
 
       - name: Run test
         id: pytest
