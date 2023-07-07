@@ -518,6 +518,10 @@ class ManifestLoader:
             self.check_valid_group_config()
             self.check_valid_access_property()
 
+            semantic_manifest = SemanticManifest(self.manifest)
+            if not semantic_manifest.validate():
+                raise dbt.exceptions.ParsingError("Semantic Manifest validation failed.")
+
             # update tracking data
             self._perf_info.process_manifest_elapsed = time.perf_counter() - start_process
             self._perf_info.static_analysis_parsed_path_count = (

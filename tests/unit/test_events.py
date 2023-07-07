@@ -275,6 +275,7 @@ sample_values = [
     types.RegistryResponseMissingNestedKeys(response=""),
     types.RegistryResponseExtraNestedKeys(response=""),
     types.DepsSetDownloadDirectory(path=""),
+    types.SemanticValidationFailure(msg=""),
     # Q - Node execution ======================
     types.RunningOperationCaughtError(exc=""),
     types.CompileComplete(),
