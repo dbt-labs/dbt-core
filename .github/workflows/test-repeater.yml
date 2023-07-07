@@ -104,10 +104,10 @@ jobs:
           for ((i=1; i<=${{ inputs.num_runs }}; i++))
           do
             echo "Running pytest iteration $i..."
-            pytest_output=$(${{ steps.command.outputs.test_command }})
-            return_code=$?
+            python -m pytest ${{ inputs.test_path }}
+            exit_code=$?
 
-            if [[ $return_code -eq 0 ]]; then
+            if [[ $exit_code -eq 0 ]]; then
               success=$((success + 1))
               echo "Iteration $i: Success"
             else
@@ -115,7 +115,6 @@ jobs:
               echo "Iteration $i: Failure"
             fi
 
-            echo "$pytest_output"
             echo
             echo "Successful runs: $success"
             echo "Failed runs: $failure"
