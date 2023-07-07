@@ -82,7 +82,7 @@ jobs:
       - name: "Test Command"
         id: command
         run: |
-          test_command="python -m pytest ${{ inputs.test_path }} --force-flaky --min-passes=${{ inputs.num_runs }}  --max-runs=${{ inputs.num_runs }}"
+          test_command="python -m pytest ${{ inputs.test_path }}"
           echo "test_command=$test_command" >> $GITHUB_OUTPUT
 
       - name: "Run test ${{ inputs.num_runs }} times"
