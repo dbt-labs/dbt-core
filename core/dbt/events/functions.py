@@ -307,7 +307,7 @@ def fire_event(e: Event) -> None:
                     STDOUT_LOG,
                     level_tag=e.level_tag(),
                     log_line=log_line,
-                    exc_info=e.exc_info,
+                    exc_info=False if flags.LOG_FORMAT == "json" else e.exc_info,
                     stack_info=e.stack_info,
                     extra=e.extra,
                 )
