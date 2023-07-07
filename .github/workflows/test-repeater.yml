@@ -76,8 +76,17 @@ jobs:
       - name: "Setup Dev Environment"
         run: make dev
 
-      - name: "Setup Postgres"
+      - name: "Set up postgres (linux)"
+        if: inputs.os == 'ubuntu-latest'
         run: make setup-db
+
+      - name: "Set up postgres (macos)"
+        if: inputs.os == 'macos-latest'
+        uses: ./.github/actions/setup-postgres-macos
+
+      - name: "Set up postgres (windows)"
+        if: inputs.os == 'windows-latest'
+        uses: ./.github/actions/setup-postgres-windows
 
       - name: "Test Command"
         id: command
