@@ -88,6 +88,8 @@ jobs:
       - name: "Run test ${{ inputs.num_runs }} times"
         id: pytest
         run: |
+          success=0
+          failure=0
           for ((i=1; i<=${{ inputs.num_runs }}; i++))
           do
             echo "Running pytest iteration $i..."
