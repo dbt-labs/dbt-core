@@ -117,8 +117,10 @@ jobs:
             fi
 
             echo
+            echo "==========================="
             echo "Successful runs: $success"
             echo "Failed runs: $failure"
+            echo "==========================="
             echo
           done
 
