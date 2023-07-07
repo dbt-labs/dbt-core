@@ -26,6 +26,6 @@ class ModelNodeArgs:
     def unique_id(self) -> str:
         unique_id = f"{NodeType.Model}.{self.package_name}.{self.name}"
         if self.version:
-            unique_id = f"{unique_id}.{self.version}"
+            unique_id = f"{unique_id}.v{self.version}"
 
         return unique_id
