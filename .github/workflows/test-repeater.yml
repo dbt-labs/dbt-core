@@ -1,7 +1,6 @@
 # **what?**
 # This workflow will test a single test a given number of times to determine if it's flaky or not.  You can test with any supported OS/Python combination.
 
-
 # **why?**
 # Testing if a test is flaky and if a previously flaky test has been fixed.  This allows easy testing on supported python versions and OS combinations.
 
@@ -83,7 +82,7 @@ jobs:
       - name: "Test Command"
         id: command
         run: |
-          test_command = "python -m pytest ${{ inputs.test_path }} --force-flaky --min-passes=${{ inputs.num_runs }}  --max-runs=${{ inputs.num_runs }}"
+          test_command="python -m pytest ${{ inputs.test_path }} --force-flaky --min-passes=${{ inputs.num_runs }}  --max-runs=${{ inputs.num_runs }}"
           echo "test_command=$test_command" >> $GITHUB_OUTPUT
 
       - name: "Run test ${{ inputs.num_runs }} times"
