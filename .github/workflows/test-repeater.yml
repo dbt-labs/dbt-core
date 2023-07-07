@@ -124,14 +124,14 @@ jobs:
           echo "success=$success" >> $GITHUB_OUTPUT
           echo "failure=$failure" >> $GITHUB_OUTPUT
 
-      - name: "Report Results"
+      - name: "Test Results"
         run: |
-          echo "Test Results:"
+          echo "Test Results for ${{ inputs.os }}/Python ${{ inputs.python_version }}:"
           echo "Successful runs: ${{ steps.pytest.outputs.success }}"
           echo "Failed runs: ${{ steps.pytest.outputs.failure }}"
 
       - name: "Check Failures"
-        if: ${{ steps.pytest.outputs.failure }} > 0
+        if: ${{ steps.pytest.outputs.failure }} != 0
         run: |
-            echo "All tests did not pass"
+            echo "${{ steps.pytest.outputs.failure }} tests did not pass"
             exit 1
