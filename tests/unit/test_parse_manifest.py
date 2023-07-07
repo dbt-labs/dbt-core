@@ -108,14 +108,16 @@ class TestLoader(unittest.TestCase):
 class TestPartialParse(unittest.TestCase):
     @patch("dbt.parser.manifest.ManifestLoader.build_manifest_state_check")
     @patch("dbt.parser.manifest.os.path.exists")
-    def test_partial_parse_file_path(self, patched_os_exist, patched_state_check):
+    @patch("dbt.parser.manifest.open")
+    def test_partial_parse_file_path(self, patched_open, patched_os_exist, patched_state_check):
         mock_project = MagicMock(RuntimeConfig)
         mock_project.project_target_path = "mock_target_path"
+        patched_os_exist.return_value = True
         set_from_args(Namespace(), {})
         ManifestLoader(mock_project, {})
         # by default we use the project_target_path
-        patched_os_exist.assert_called_with("mock_target_path/partial_parse.msgpack")
+        patched_open.assert_called_with("mock_target_path/partial_parse.msgpack", "rb")
         set_from_args(Namespace(partial_parse_file_path="specified_partial_parse_path"), {})
         ManifestLoader(mock_project, {})
         # if specified in flags, we use the specified path
-        patched_os_exist.assert_called_with("specified_partial_parse_path")
+        patched_open.assert_called_with("specified_partial_parse_path", "rb")
