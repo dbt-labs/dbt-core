@@ -125,9 +125,6 @@ class TestSemanticModelParsing:
         )
         assert len(semantic_model.measures) == 5
 
-    def test_semantic_model_warnings(self, project):
-        pass
-
     def test_semantic_model_error(self, project):
         # Next, modify the default schema.yml to remove the semantic model.
         error_schema_yml = schema_yml.replace("sum_of_things", "has_revenue")
