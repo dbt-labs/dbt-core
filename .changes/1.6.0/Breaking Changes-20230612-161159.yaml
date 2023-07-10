@@ -1,0 +1,6 @@
+kind: Fixes
+body: Updating this error message to point to the correct URL
+time: 2023-06-12T16:11:59.181953+01:00
+custom:
+  Author: mirnawong1
+  Issue: "7789"

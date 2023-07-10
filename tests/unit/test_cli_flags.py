@@ -3,17 +3,23 @@ import pytest
 import click
 from multiprocessing import get_context
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
-from dbt.cli.main import cli
-from dbt.contracts.project import UserConfig
+from dbt.cli.exceptions import DbtUsageException
 from dbt.cli.flags import Flags
+from dbt.cli.main import cli
+from dbt.cli.types import Command
+from dbt.contracts.project import UserConfig
+from dbt.exceptions import DbtInternalError
 from dbt.helper_types import WarnErrorOptions
+from dbt.tests.util import rm_file, write_file
 
 
 class TestFlags:
-    def make_dbt_context(self, context_name: str, args: List[str]) -> click.Context:
-        ctx = cli.make_context(context_name, args)
+    def make_dbt_context(
+        self, context_name: str, args: List[str], parent: Optional[click.Context] = None
+    ) -> click.Context:
+        ctx = cli.make_context(context_name, args, parent)
         return ctx
 
     @pytest.fixture(scope="class")
@@ -148,7 +154,7 @@ class TestFlags:
             "run", ["--warn-error", "--warn-error-options", '{"include": "all"}', "run"]
         )
 
-        with pytest.raises(click.BadOptionUsage):
+        with pytest.raises(DbtUsageException):
             Flags(context)
 
     @pytest.mark.parametrize("warn_error", [True, False])
@@ -158,7 +164,7 @@ class TestFlags:
             "run", ["--warn-error-options", '{"include": "all"}', "run"]
         )
 
-        with pytest.raises(click.BadOptionUsage):
+        with pytest.raises(DbtUsageException):
             Flags(context, user_config)
 
     @pytest.mark.parametrize("warn_error", ["True", "False"])
@@ -167,7 +173,7 @@ class TestFlags:
         monkeypatch.setenv("DBT_WARN_ERROR_OPTIONS", '{"include":"all"}')
         context = self.make_dbt_context("run", ["run"])
 
-        with pytest.raises(click.BadOptionUsage):
+        with pytest.raises(DbtUsageException):
             Flags(context)
 
     @pytest.mark.parametrize("warn_error", [True, False])
@@ -177,7 +183,7 @@ class TestFlags:
             "run", ["--warn-error-options", '{"include": "all"}', "run"]
         )
 
-        with pytest.raises(click.BadOptionUsage):
+        with pytest.raises(DbtUsageException):
             Flags(context, user_config)
 
     @pytest.mark.parametrize("warn_error", ["True", "False"])
@@ -187,7 +193,7 @@ class TestFlags:
             "run", ["--warn-error-options", '{"include": "all"}', "run"]
         )
 
-        with pytest.raises(click.BadOptionUsage):
+        with pytest.raises(DbtUsageException):
             Flags(context)
 
     @pytest.mark.parametrize("warn_error", ["True", "False"])
@@ -198,7 +204,7 @@ class TestFlags:
         monkeypatch.setenv("DBT_WARN_ERROR_OPTIONS", '{"include": "all"}')
         context = self.make_dbt_context("run", ["run"])
 
-        with pytest.raises(click.BadOptionUsage):
+        with pytest.raises(DbtUsageException):
             Flags(context, user_config)
 
     @pytest.mark.parametrize(
@@ -337,3 +343,46 @@ class TestFlags:
         assert flags.LOG_LEVEL_FILE == "warn"
         assert flags.USE_COLORS is True
         assert flags.USE_COLORS_FILE is False
+
+    def test_duplicate_flags_raises_error(self):
+        parent_context = self.make_dbt_context("parent", ["--version-check"])
+        context = self.make_dbt_context("child", ["--version-check"], parent_context)
+
+        with pytest.raises(DbtUsageException):
+            Flags(context)
+
+    def _create_flags_from_dict(self, cmd, d):
+        write_file("", "profiles.yml")
+        result = Flags.from_dict(cmd, d)
+        assert result.which is cmd.value
+        rm_file("profiles.yml")
+        return result
+
+    def test_from_dict__run(self):
+        args_dict = {
+            "print": False,
+            "select": ["model_one", "model_two"],
+        }
+        result = self._create_flags_from_dict(Command.RUN, args_dict)
+        assert "model_one" in result.select[0]
+        assert "model_two" in result.select[0]
+
+    def test_from_dict__build(self):
+        args_dict = {
+            "print": True,
+            "state": "some/path",
+        }
+        result = self._create_flags_from_dict(Command.BUILD, args_dict)
+        assert result.print is True
+        assert "some/path" in str(result.state)
+
+    def test_from_dict__seed(self):
+        args_dict = {"use_colors": False, "exclude": ["model_three"]}
+        result = self._create_flags_from_dict(Command.SEED, args_dict)
+        assert result.use_colors is False
+        assert "model_three" in result.exclude[0]
+
+    def test_from_dict__which_fails(self):
+        args_dict = {"which": "some bad command"}
+        with pytest.raises(DbtInternalError, match=r"does not match value of which"):
+            self._create_flags_from_dict(Command.RUN, args_dict)

@@ -90,12 +90,13 @@ class TestList:
                     "alias": None,
                     "check_cols": None,
                     "on_schema_change": "ignore",
+                    "on_configuration_change": "apply",
                     "meta": {},
                     "grants": {},
                     "packages": [],
                     "incremental_strategy": None,
                     "docs": {"node_color": None, "show": True},
-                    "contract": False,
+                    "contract": {"enforced": False},
                 },
                 "unique_id": "snapshot.test.my_snapshot",
                 "original_file_path": normalize("snapshots/snapshot.sql"),
@@ -127,6 +128,7 @@ class TestList:
                     "persist_docs": {},
                     "full_refresh": None,
                     "on_schema_change": "ignore",
+                    "on_configuration_change": "apply",
                     "database": None,
                     "schema": None,
                     "alias": None,
@@ -136,7 +138,7 @@ class TestList:
                     "packages": [],
                     "incremental_strategy": None,
                     "docs": {"node_color": None, "show": True},
-                    "contract": False,
+                    "contract": {"enforced": False},
                 },
                 "unique_id": "analysis.test.a",
                 "original_file_path": normalize("analyses/a.sql"),
@@ -170,6 +172,7 @@ class TestList:
                         "full_refresh": None,
                         "unique_key": None,
                         "on_schema_change": "ignore",
+                        "on_configuration_change": "apply",
                         "database": None,
                         "schema": None,
                         "alias": None,
@@ -178,7 +181,7 @@ class TestList:
                         "packages": [],
                         "incremental_strategy": None,
                         "docs": {"node_color": None, "show": True},
-                        "contract": False,
+                        "contract": {"enforced": False},
                     },
                     "original_file_path": normalize("models/ephemeral.sql"),
                     "unique_id": "model.test.ephemeral",
@@ -206,6 +209,7 @@ class TestList:
                         "full_refresh": None,
                         "unique_key": None,
                         "on_schema_change": "ignore",
+                        "on_configuration_change": "apply",
                         "database": None,
                         "schema": None,
                         "alias": None,
@@ -214,7 +218,7 @@ class TestList:
                         "packages": [],
                         "incremental_strategy": "delete+insert",
                         "docs": {"node_color": None, "show": True},
-                        "contract": False,
+                        "contract": {"enforced": False},
                     },
                     "original_file_path": normalize("models/incremental.sql"),
                     "unique_id": "model.test.incremental",
@@ -224,7 +228,10 @@ class TestList:
                 {
                     "name": "inner",
                     "package_name": "test",
-                    "depends_on": {"nodes": ["model.test.outer"], "macros": []},
+                    "depends_on": {
+                        "nodes": ["model.test.outer"],
+                        "macros": [],
+                    },
                     "tags": [],
                     "config": {
                         "enabled": True,
@@ -239,6 +246,7 @@ class TestList:
                         "full_refresh": None,
                         "unique_key": None,
                         "on_schema_change": "ignore",
+                        "on_configuration_change": "apply",
                         "database": None,
                         "schema": None,
                         "alias": None,
@@ -247,7 +255,7 @@ class TestList:
                         "packages": [],
                         "incremental_strategy": None,
                         "docs": {"node_color": None, "show": True},
-                        "contract": False,
+                        "contract": {"enforced": False},
                     },
                     "original_file_path": normalize("models/sub/inner.sql"),
                     "unique_id": "model.test.inner",
@@ -257,7 +265,10 @@ class TestList:
                 {
                     "name": "outer",
                     "package_name": "test",
-                    "depends_on": {"nodes": ["model.test.ephemeral"], "macros": []},
+                    "depends_on": {
+                        "nodes": ["model.test.ephemeral"],
+                        "macros": [],
+                    },
                     "tags": [],
                     "config": {
                         "enabled": True,
@@ -272,6 +283,7 @@ class TestList:
                         "full_refresh": None,
                         "unique_key": None,
                         "on_schema_change": "ignore",
+                        "on_configuration_change": "apply",
                         "database": None,
                         "schema": None,
                         "alias": None,
@@ -280,7 +292,7 @@ class TestList:
                         "packages": [],
                         "incremental_strategy": None,
                         "docs": {"node_color": None, "show": True},
-                        "contract": False,
+                        "contract": {"enforced": False},
                     },
                     "original_file_path": normalize("models/outer.sql"),
                     "unique_id": "model.test.outer",
@@ -319,6 +331,7 @@ class TestList:
                         "persist_docs": {},
                         "full_refresh": None,
                         "on_schema_change": "ignore",
+                        "on_configuration_change": "apply",
                         "database": None,
                         "schema": None,
                         "alias": None,
@@ -384,6 +397,7 @@ class TestList:
                     "full_refresh": None,
                     "unique_key": None,
                     "on_schema_change": "ignore",
+                    "on_configuration_change": "apply",
                     "database": None,
                     "schema": None,
                     "alias": None,
@@ -392,7 +406,7 @@ class TestList:
                     "packages": [],
                     "incremental_strategy": None,
                     "docs": {"node_color": None, "show": True},
-                    "contract": False,
+                    "contract": {"enforced": False},
                 },
                 "depends_on": {"macros": []},
                 "unique_id": "seed.test.seed",
@@ -557,6 +571,51 @@ class TestList:
             ["--select", "config.incremental_strategy:insert_overwrite"], expect_pass=True
         )
 
+    def expect_resource_type_multiple(self):
+        """Expect selected resources when --resource-type given multiple times"""
+        results = self.run_dbt_ls(["--resource-type", "test", "--resource-type", "model"])
+        assert set(results) == {
+            "test.ephemeral",
+            "test.incremental",
+            "test.not_null_outer_id",
+            "test.outer",
+            "test.sub.inner",
+            "test.t",
+            "test.unique_outer_id",
+        }
+
+        results = self.run_dbt_ls(
+            ["--resource-type", "test", "--resource-type", "model", "--exclude", "unique_outer_id"]
+        )
+        assert set(results) == {
+            "test.ephemeral",
+            "test.incremental",
+            "test.not_null_outer_id",
+            "test.outer",
+            "test.sub.inner",
+            "test.t",
+        }
+
+        results = self.run_dbt_ls(
+            [
+                "--resource-type",
+                "test",
+                "--resource-type",
+                "model",
+                "--select",
+                "+inner",
+                "outer+",
+                "--exclude",
+                "inner",
+            ]
+        )
+        assert set(results) == {
+            "test.ephemeral",
+            "test.not_null_outer_id",
+            "test.unique_outer_id",
+            "test.outer",
+        }
+
     def expect_selected_keys(self, project):
         """Expect selected fields of the the selected model"""
         expectations = [
@@ -572,6 +631,26 @@ class TestList:
                 "database",
                 "schema",
                 "alias",
+            ]
+        )
+        assert len(results) == len(expectations)
+
+        for got, expected in zip(results, expectations):
+            self.assert_json_equal(got, expected)
+
+        """Expect selected fields when --output-keys given multiple times
+        """
+        expectations = [{"database": project.database, "schema": project.test_schema}]
+        results = self.run_dbt_ls(
+            [
+                "--model",
+                "inner",
+                "--output",
+                "json",
+                "--output-keys",
+                "database",
+                "--output-keys",
+                "schema",
             ]
         )
         assert len(results) == len(expectations)
@@ -631,6 +710,7 @@ class TestList:
         self.expect_seed_output()
         self.expect_test_output()
         self.expect_select()
+        self.expect_resource_type_multiple()
         self.expect_all_output()
         self.expect_selected_keys(project)
 

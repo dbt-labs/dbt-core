@@ -77,6 +77,7 @@ class TestPrePostRunHooks(object):
             "target_pass",
             "run_started_at",
             "invocation_id",
+            "thread_id",
         ]
         field_list = ", ".join(['"{}"'.format(f) for f in fields])
         query = f"select {field_list} from {project.test_schema}.on_run_hook where test_state = '{state}'"
@@ -119,6 +120,7 @@ class TestPrePostRunHooks(object):
         assert (
             ctx["invocation_id"] is not None and len(ctx["invocation_id"]) > 0
         ), "invocation_id was not set"
+        assert ctx["thread_id"].startswith("Thread-") or ctx["thread_id"] == "MainThread"
 
     def test_pre_and_post_run_hooks(self, setUp, project, dbt_profile_target):
         run_dbt(["run"])

@@ -1,0 +1,105 @@
+# **what?**
+# This workflow will test a single test a given number of times to determine if it's flaky or not.  You can test with any supported OS/Python combination.
+
+
+# **why?**
+# Testing if a test is flaky and if a previously flaky test has been fixed.  This allows easy testing on supported python versions and OS combinations.
+
+# **when?**
+# This is triggered manually from dbt-core.
+
+name: Flaky Tester
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to check out'
+        type: string
+        required: true
+        default: 'main'
+      test_path:
+        description: 'Path to single test to run (ex: tests/functional/retry/test_retry.py::TestRetry::test_fail_fast)'
+        type: string
+        required: true
+        default: 'tests/functional/...'
+      python_version:
+        description: 'Version of Python to Test Against'
+        type: choice
+        options:
+          - '3.8'
+          - '3.9'
+          - '3.10'
+          - '3.11'
+      os:
+        description: 'OS to run test in'
+        type: choice
+        options:
+          - 'ubuntu-latest'
+          - 'macos-latest'
+          - 'windows-latest'
+      num_runs:
+        description: 'Max number of times to run the test'
+        type: number
+        required: true
+        default: '100'
+
+jobs:
+  pytest:
+    runs-on: ${{ inputs.os }}
+    env:
+      DBT_TEST_USER_1: dbt_test_user_1
+      DBT_TEST_USER_2: dbt_test_user_2
+      DBT_TEST_USER_3: dbt_test_user_3
+
+    steps:
+      - name: "[DEBUG] Output Inputs"
+        run: |
+          echo "Branch: ${{ inputs.branch }}"
+          echo "test_path: ${{ inputs.test_path }}"
+          echo "python_version: ${{ inputs.python_version }}"
+          echo "os: ${{ inputs.os }}"
+          echo "num_runs: ${{ inputs.num_runs }}"
+
+      - name: "Checkout code"
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ inputs.branch }}
+
+      - name: "Setup Python"
+        uses: actions/setup-python@v4
+        with:
+          python-version: "${{ inputs.python_version }}"
+
+      - name: "Setup Dev Environment"
+        run: make dev
+
+      - name: "Set up postgres (linux)"
+        if: inputs.os == 'ubuntu-latest'
+        uses: ./.github/actions/setup-postgres-linux
+
+      - name: Set up "postgres (macos)"
+        if: inputs.os == 'macos-latest'
+        uses: ./.github/actions/setup-postgres-macos
+
+      - name: "Set up postgres (windows)"
+        if: inputs.os == 'windows-latest'
+        uses: ./.github/actions/setup-postgres-windows
+
+      - name: Run test
+        id: pytest
+        run: |
+          echo "Running test ${{ inputs.test_path }} ${{ inputs.num_runs }} times with Python ${{inputs.python_version }} on ${{ inputs.os }} for branch/commit ${{ inputs.branch }}"
+          python -m pytest ${{ inputs.test_path }} --force-flaky --min-passes=${{ inputs.num_runs }}  --max-runs=${{ inputs.num_runs }}
+
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: logs_${{ inputs.python_version }}_${{ inputs.os }}_${{ github.run_id }}
+          path: ./logs
+
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: integration_results_${{ inputs.python_version }}_${{ inputs.os }}_${{ github.run_id }}.csv
+          path: integration_results.csv

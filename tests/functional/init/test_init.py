@@ -387,6 +387,12 @@ test:
             )
 
 
+class TestInitInsideOfProjectBase:
+    @pytest.fixture(scope="class")
+    def project_name(self, unique_schema):
+        return f"my_project_{unique_schema}"
+
+
 class TestInitOutsideOfProjectBase:
     @pytest.fixture(scope="class")
     def project_name(self, unique_schema):
@@ -547,7 +553,6 @@ seed-paths: ["seeds"]
 macro-paths: ["macros"]
 snapshot-paths: ["snapshots"]
 
-target-path: "target"  # directory which will store compiled SQL files
 clean-targets:         # directories to be removed by `dbt clean`
   - "target"
   - "dbt_packages"
@@ -584,7 +589,7 @@ class TestInitInvalidProjectNameCLI(TestInitOutsideOfProjectBase):
         manager.prompt.side_effect = [valid_name]
         mock_get_adapter.return_value = [project.adapter.type()]
 
-        run_dbt(["init", invalid_name, "-s"])
+        run_dbt(["init", invalid_name, "--skip-profile-setup"])
         manager.assert_has_calls(
             [
                 call.prompt("Enter a name for your project (letters, digits, underscore)"),
@@ -608,7 +613,7 @@ class TestInitInvalidProjectNamePrompt(TestInitOutsideOfProjectBase):
         manager.prompt.side_effect = [invalid_name, valid_name]
         mock_get_adapter.return_value = [project.adapter.type()]
 
-        run_dbt(["init", "-s"])
+        run_dbt(["init", "--skip-profile-setup"])
         manager.assert_has_calls(
             [
                 call.prompt("Enter a name for your project (letters, digits, underscore)"),
@@ -640,8 +645,8 @@ class TestInitProvidedProjectNameAndSkipProfileSetup(TestInitOutsideOfProjectBas
         mock_get.return_value = [project.adapter.type()]
 
         # provide project name through the init command
-        run_dbt(["init", project_name, "-s"])
-        manager.assert_not_called()
+        run_dbt(["init", project_name, "--skip-profile-setup"])
+        assert len(manager.mock_calls) == 0
 
         with open(os.path.join(project.project_root, project_name, "dbt_project.yml"), "r") as f:
             assert (
@@ -667,7 +672,6 @@ seed-paths: ["seeds"]
 macro-paths: ["macros"]
 snapshot-paths: ["snapshots"]
 
-target-path: "target"  # directory which will store compiled SQL files
 clean-targets:         # directories to be removed by `dbt clean`
   - "target"
   - "dbt_packages"
@@ -686,3 +690,21 @@ models:
       +materialized: view
 """
             )
+
+
+class TestInitInsideProjectAndSkipProfileSetup(TestInitInsideOfProjectBase):
+    @mock.patch("dbt.task.init._get_adapter_plugin_names")
+    @mock.patch("click.confirm")
+    @mock.patch("click.prompt")
+    def test_init_inside_project_and_skip_profile_setup(
+        self, mock_prompt, mock_confirm, mock_get, project, project_name
+    ):
+        manager = mock.Mock()
+        manager.attach_mock(mock_prompt, "prompt")
+        manager.attach_mock(mock_confirm, "confirm")
+
+        assert Path("dbt_project.yml").exists()
+
+        # skip interactive profile setup
+        run_dbt(["init", "--skip-profile-setup"])
+        assert len(manager.mock_calls) == 0

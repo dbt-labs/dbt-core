@@ -1,9 +1,10 @@
 from typing import Dict, Any, Tuple, Optional, Union, Callable
 import re
 import os
+from datetime import date
 
 from dbt.clients.jinja import get_rendered, catch_jinja
-from dbt.constants import SECRET_ENV_PREFIX
+from dbt.constants import SECRET_ENV_PREFIX, DEPENDENCIES_FILE_NAME
 from dbt.context.target import TargetContext
 from dbt.context.secret import SecretContext, SECRET_PLACEHOLDER
 from dbt.context.base import BaseContext
@@ -33,10 +34,10 @@ class BaseRenderer:
         return self.render_value(value, keypath)
 
     def render_value(self, value: Any, keypath: Optional[Keypath] = None) -> Any:
-        # keypath is ignored.
-        # if it wasn't read as a string, ignore it
+        # keypath is ignored (and someone who knows should explain why here)
         if not isinstance(value, str):
-            return value
+            return value if not isinstance(value, date) else value.isoformat()
+
         try:
             with catch_jinja():
                 return get_rendered(value, self.context, native=True)
@@ -131,10 +132,15 @@ class DbtProjectYamlRenderer(BaseRenderer):
         rendered_project["project-root"] = project_root
         return rendered_project
 
-    def render_packages(self, packages: Dict[str, Any]):
+    def render_packages(self, packages: Dict[str, Any], packages_specified_path: str):
         """Render the given packages dict"""
+        packages = packages or {}  # Sometimes this is none in tests
         package_renderer = self.get_package_renderer()
-        return package_renderer.render_data(packages)
+        if packages_specified_path == DEPENDENCIES_FILE_NAME:
+            # We don't want to render the "packages" dictionary that came from dependencies.yml
+            return packages
+        else:
+            return package_renderer.render_data(packages)
 
     def render_selectors(self, selectors: Dict[str, Any]):
         return self.render_data(selectors)
@@ -182,7 +188,17 @@ class SecretRenderer(BaseRenderer):
         # First, standard Jinja rendering, with special handling for 'secret' environment variables
         # "{{ env_var('DBT_SECRET_ENV_VAR') }}" -> "$$$DBT_SECRET_START$$$DBT_SECRET_ENV_{VARIABLE_NAME}$$$DBT_SECRET_END$$$"
         # This prevents Jinja manipulation of secrets via macros/filters that might leak partial/modified values in logs
-        rendered = super().render_value(value, keypath)
+
+        try:
+            rendered = super().render_value(value, keypath)
+        except Exception as ex:
+            if keypath and "password" in keypath:
+                # Passwords sometimes contain jinja-esque characters, but we
+                # don't want to render them if they aren't valid jinja.
+                rendered = value
+            else:
+                raise ex
+
         # Now, detect instances of the placeholder value ($$$DBT_SECRET_START...DBT_SECRET_END$$$)
         # and replace them with the actual secret value
         if SECRET_ENV_PREFIX in str(rendered):

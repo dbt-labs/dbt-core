@@ -194,6 +194,7 @@ class ListTask(GraphRunnableTask):
                 manifest=self.manifest,
                 previous_state=self.previous_state,
                 resource_types=self.resource_types,
+                include_empty_nodes=True,
             )
 
     def interpret_results(self, results):

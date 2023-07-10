@@ -1,6 +1,7 @@
 import json
 import os
 from typing import Any, Dict, NoReturn, Optional, Mapping, Iterable, Set, List
+import threading
 
 from dbt.flags import get_flags
 import dbt.flags as flags_module
@@ -597,6 +598,11 @@ class BaseContext(metaclass=ContextMeta):
         return get_invocation_id()
 
     @contextproperty
+    def thread_id(self) -> str:
+        """thread_id outputs an ID for the current thread (useful for auditing)"""
+        return threading.current_thread().name
+
+    @contextproperty
     def modules(self) -> Dict[str, Any]:
         """The `modules` variable in the Jinja context contains useful Python
         modules for operating on data.
@@ -652,7 +658,7 @@ class BaseContext(metaclass=ContextMeta):
             {% endmacro %}"
         """
 
-        if not get_flags().PRINT:
+        if get_flags().PRINT:
             print(msg)
         return ""
 

@@ -16,8 +16,8 @@ from dbt.clients.jinja import get_rendered
 from dbt.config import Project, RuntimeConfig
 from dbt.context.context_config import ContextConfig
 from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.graph.nodes import ManifestNode, BaseNode
-from dbt.contracts.graph.unparsed import UnparsedNode, Docs
+from dbt.contracts.graph.nodes import Contract, BaseNode, ManifestNode
+from dbt.contracts.graph.unparsed import Docs, UnparsedNode
 from dbt.exceptions import DbtInternalError, ConfigUpdateError, DictParseError
 from dbt import hooks
 from dbt.node_types import NodeType, ModelLanguage
@@ -71,20 +71,44 @@ class Parser(BaseParser[FinalValue], Generic[FinalValue]):
 
 class RelationUpdate:
     def __init__(self, config: RuntimeConfig, manifest: Manifest, component: str) -> None:
-        macro = manifest.find_generate_macro_by_name(
+        default_macro = manifest.find_generate_macro_by_name(
             component=component,
             root_project_name=config.project_name,
         )
-        if macro is None:
+        if default_macro is None:
             raise DbtInternalError(f"No macro with name generate_{component}_name found")
 
-        root_context = generate_generate_name_macro_context(macro, config, manifest)
-        self.updater = MacroGenerator(macro, root_context)
+        default_macro_context = generate_generate_name_macro_context(
+            default_macro, config, manifest
+        )
+        self.default_updater = MacroGenerator(default_macro, default_macro_context)
+
+        package_names = config.dependencies.keys() if config.dependencies else {}
+        package_updaters = {}
+        for package_name in package_names:
+            package_macro = manifest.find_generate_macro_by_name(
+                component=component,
+                root_project_name=config.project_name,
+                imported_package=package_name,
+            )
+            if package_macro:
+                imported_macro_context = generate_generate_name_macro_context(
+                    package_macro, config, manifest
+                )
+                package_updaters[package_macro.package_name] = MacroGenerator(
+                    package_macro, imported_macro_context
+                )
+
+        self.package_updaters = package_updaters
         self.component = component
 
     def __call__(self, parsed_node: Any, config_dict: Dict[str, Any]) -> None:
         override = config_dict.get(self.component)
-        new_value = self.updater(override, parsed_node)
+        if parsed_node.package_name in self.package_updaters:
+            new_value = self.package_updaters[parsed_node.package_name](override, parsed_node)
+        else:
+            new_value = self.default_updater(override, parsed_node)
+
         if isinstance(new_value, str):
             new_value = new_value.strip()
         setattr(parsed_node, self.component, new_value)
@@ -297,7 +321,7 @@ class ConfiguredParser(
         # If we have docs in the config, merge with the node level, for backwards
         # compatibility with earlier node-only config.
         if "docs" in config_dict and config_dict["docs"]:
-            # we set show at the value of the config if it is set, otherwize, inherit the value
+            # we set show at the value of the config if it is set, otherwise, inherit the value
             docs_show = (
                 config_dict["docs"]["show"]
                 if "show" in config_dict["docs"]
@@ -310,10 +334,9 @@ class ConfiguredParser(
             else:
                 parsed_node.docs = Docs(show=docs_show)
 
-        # If we have "contract" in the config, copy to node level, for backwards
-        # compatibility with earlier node-only config.
-        if config_dict.get("contract", False):
-            parsed_node.contract = True
+        # If we have contract in the config, copy to node level
+        if "contract" in config_dict and config_dict["contract"]:
+            parsed_node.contract = Contract(enforced=config_dict["contract"]["enforced"])
 
         # unrendered_config is used to compare the original database/schema/alias
         # values and to handle 'same_config' and 'same_contents' calls

@@ -12,5 +12,6 @@ create table {schema}.on_model_hook (
     target_pass      TEXT,
     target_threads   INTEGER,
     run_started_at   TEXT,
-    invocation_id    TEXT
+    invocation_id    TEXT,
+    thread_id        TEXT
 );

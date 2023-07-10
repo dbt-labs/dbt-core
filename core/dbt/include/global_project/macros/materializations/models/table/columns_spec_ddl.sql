@@ -1,22 +1,23 @@
-{%- macro get_columns_spec_ddl() -%}
-  {{ adapter.dispatch('get_columns_spec_ddl', 'dbt')() }}
+{%- macro get_table_columns_and_constraints() -%}
+  {{ adapter.dispatch('get_table_columns_and_constraints', 'dbt')() }}
 {%- endmacro -%}
 
-{% macro default__get_columns_spec_ddl() -%}
-  {{ return(columns_spec_ddl()) }}
+{% macro default__get_table_columns_and_constraints() -%}
+  {{ return(table_columns_and_constraints()) }}
 {%- endmacro %}
 
-{% macro columns_spec_ddl() %}
+{% macro table_columns_and_constraints() %}
   {# loop through user_provided_columns to create DDL with data types and constraints #}
-    {%- set user_provided_columns = model['columns'] -%}
+    {%- set raw_column_constraints = adapter.render_raw_columns_constraints(raw_columns=model['columns']) -%}
+    {%- set raw_model_constraints = adapter.render_raw_model_constraints(raw_constraints=model['constraints']) -%}
     (
-    {% for i in user_provided_columns %}
-      {% set col = user_provided_columns[i] %}
-      {% set constraints = col['constraints'] %}
-      {% set constraints_check = col['constraints_check'] %}
-      {{ col['name'] }} {{ col['data_type'] }} {% for x in constraints %} {{ x or "" }} {% endfor %} {% if constraints_check -%} check {{ constraints_check or "" }} {%- endif %} {{ "," if not loop.last }}
+    {% for c in raw_column_constraints -%}
+      {{ c }}{{ "," if not loop.last or raw_model_constraints }}
     {% endfor %}
-  )
+    {% for c in raw_model_constraints -%}
+        {{ c }}{{ "," if not loop.last }}
+    {% endfor -%}
+    )
 {% endmacro %}
 
 {%- macro get_assert_columns_equivalent(sql) -%}
@@ -32,19 +33,24 @@
   If any differences in name, data_type or number of columns exist between the two schemas, raises a compiler error
 #}
 {% macro assert_columns_equivalent(sql) %}
+
+  {#-- First ensure the user has defined 'columns' in yaml specification --#}
+  {%- set user_defined_columns = model['columns'] -%}
+  {%- if not user_defined_columns -%}
+      {{ exceptions.raise_contract_error([], []) }}
+  {%- endif -%}
+
   {#-- Obtain the column schema provided by sql file. #}
-  {%- set sql_file_provided_columns = get_column_schema_from_query(sql) -%}
+  {%- set sql_file_provided_columns = get_column_schema_from_query(sql, config.get('sql_header', none)) -%}
   {#--Obtain the column schema provided by the schema file by generating an 'empty schema' query from the model's columns. #}
-  {%- set schema_file_provided_columns = get_column_schema_from_query(get_empty_schema_sql(model['columns'])) -%}
+  {%- set schema_file_provided_columns = get_column_schema_from_query(get_empty_schema_sql(user_defined_columns)) -%}
 
   {#-- create dictionaries with name and formatted data type and strings for exception #}
   {%- set sql_columns = format_columns(sql_file_provided_columns) -%}
-  {%- set string_sql_columns = stringify_formatted_columns(sql_columns) -%}
   {%- set yaml_columns = format_columns(schema_file_provided_columns)  -%}
-  {%- set string_yaml_columns = stringify_formatted_columns(yaml_columns) -%}
 
   {%- if sql_columns|length != yaml_columns|length -%}
-    {%- do exceptions.raise_contract_error(string_yaml_columns, string_sql_columns) -%}
+    {%- do exceptions.raise_contract_error(yaml_columns, sql_columns) -%}
   {%- endif -%}
 
   {%- for sql_col in sql_columns -%}
@@ -57,11 +63,11 @@
     {%- endfor -%}
     {%- if not yaml_col -%}
       {#-- Column with name not found in yaml #}
-      {%- do exceptions.raise_contract_error(string_yaml_columns, string_sql_columns) -%}
+      {%- do exceptions.raise_contract_error(yaml_columns, sql_columns) -%}
     {%- endif -%}
     {%- if sql_col['formatted'] != yaml_col[0]['formatted'] -%}
       {#-- Column data types don't match #}
-      {%- do exceptions.raise_contract_error(string_yaml_columns, string_sql_columns) -%}
+      {%- do exceptions.raise_contract_error(yaml_columns, sql_columns) -%}
     {%- endif -%}
   {%- endfor -%}
 
@@ -71,19 +77,13 @@
   {% set formatted_columns = [] %}
   {% for column in columns %}
     {%- set formatted_column = adapter.dispatch('format_column', 'dbt')(column) -%}
-    {%- do formatted_columns.append({'name': column.name, 'formatted': formatted_column}) -%}
+    {%- do formatted_columns.append(formatted_column) -%}
   {% endfor %}
   {{ return(formatted_columns) }}
 {% endmacro %}
 
-{% macro stringify_formatted_columns(formatted_columns) %}
-  {% set column_strings = [] %}
-  {% for column in formatted_columns %}
-     {% do column_strings.append(column['formatted']) %}
-  {% endfor %}
-  {{ return(column_strings|join(', ')) }}
-{% endmacro %}
-
 {% macro default__format_column(column) -%}
-  {{ return(column.column.lower() ~ " " ~ column.dtype) }}
+  {% set data_type = column.dtype %}
+  {% set formatted = column.column.lower() ~ " " ~ data_type %}
+  {{ return({'name': column.name, 'data_type': data_type, 'formatted': formatted}) }}
 {%- endmacro -%}

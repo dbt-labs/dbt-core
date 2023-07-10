@@ -1,0 +1,7 @@
+kind: Features
+body: This change adds new selector methods to the state selector. Namely, state:unmodified
+  and state:old.
+time: 2023-06-03T14:16:25.249884-05:00
+custom:
+  Author: trouze
+  Issue: "7564"

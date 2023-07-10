@@ -1,15 +1,14 @@
-betterproto[compiler]==1.2.5
-black==22.12.0
+black==23.3.0
 bumpversion
 docutils
 flake8
 flaky
 freezegun==0.3.12
 ipdb
-mypy==0.981
+mypy==1.3.0
 pip-tools
 pre-commit
-protobuf
+protobuf>=4.0.0
 pytest
 pytest-cov
 pytest-csv
@@ -32,3 +31,4 @@ types-pytz
 types-requests
 types-setuptools
 wheel
+mocker

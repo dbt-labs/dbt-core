@@ -347,111 +347,12 @@ class DebugWarnings(logbook.compat.redirected_warnings):
 DebugWarnings().__enter__()
 
 
-class DelayedFileHandler(logbook.RotatingFileHandler, FormatterMixin):
-    def __init__(
-        self,
-        log_dir: Optional[str] = None,
-        level=logbook.DEBUG,
-        filter=None,
-        bubble=True,
-        max_size=10 * 1024 * 1024,  # 10 mb
-        backup_count=5,
-    ) -> None:
-        self.disabled = False
-        self._msg_buffer: Optional[List[logbook.LogRecord]] = []
-        # if we get 1k messages without a logfile being set, something is wrong
-        self._bufmax = 1000
-        self._log_path: Optional[str] = None
-        # we need the base handler class' __init__ to run so handling works
-        logbook.Handler.__init__(self, level, filter, bubble)
-        if log_dir is not None:
-            self.set_path(log_dir)
-        self._text_format_string = None
-        self._max_size = max_size
-        self._backup_count = backup_count
-
-    def reset(self):
-        if self.initialized:
-            self.close()
-        self._log_path = None
-        self._msg_buffer = []
-        self.disabled = False
-
-    @property
-    def initialized(self):
-        return self._log_path is not None
-
-    def set_path(self, log_dir):
-        """log_dir can be the path to a log directory, or `None` to avoid
-        writing to a file (for `dbt debug`).
-        """
-        if self.disabled:
-            return
-
-        assert not self.initialized, "set_path called after being set"
-
-        if log_dir is None:
-            self.disabled = True
-            return
-
-        make_log_dir_if_missing(log_dir)
-        log_path = os.path.join(log_dir, "dbt.log.legacy")  # TODO hack for now
-        self._super_init(log_path)
-        self._replay_buffered()
-        self._log_path = log_path
-
-    def _super_init(self, log_path):
-        logbook.RotatingFileHandler.__init__(
-            self,
-            filename=log_path,
-            level=self.level,
-            filter=self.filter,
-            delay=True,
-            max_size=self._max_size,
-            backup_count=self._backup_count,
-            bubble=self.bubble,
-            format_string=DEBUG_LOG_FORMAT,
-        )
-        FormatterMixin.__init__(self, DEBUG_LOG_FORMAT)
-
-    def _replay_buffered(self):
-        assert self._msg_buffer is not None, "_msg_buffer should never be None in _replay_buffered"
-        for record in self._msg_buffer:
-            super().emit(record)
-        self._msg_buffer = None
-
-    def format(self, record: logbook.LogRecord) -> str:
-        msg = super().format(record)
-        subbed = str(msg)
-        for escape_sequence in dbt.ui.COLORS.values():
-            subbed = subbed.replace(escape_sequence, "")
-        return subbed
-
-    def emit(self, record: logbook.LogRecord):
-        """emit is not thread-safe with set_path, but it is thread-safe with
-        itself
-        """
-        if self.disabled:
-            return
-        elif self.initialized:
-            super().emit(record)
-        else:
-            assert (
-                self._msg_buffer is not None
-            ), "_msg_buffer should never be None if _log_path is set"
-            self._msg_buffer.append(record)
-            assert (
-                len(self._msg_buffer) < self._bufmax
-            ), "too many messages received before initilization!"
-
-
 class LogManager(logbook.NestedSetup):
     def __init__(self, stdout=sys.stdout, stderr=sys.stderr):
         self.stdout = stdout
         self.stderr = stderr
         self._null_handler = logbook.NullHandler()
         self._output_handler = OutputHandler(self.stdout)
-        self._file_handler = DelayedFileHandler()
         self._relevel_processor = Relevel(allowed=["dbt", "werkzeug"])
         self._state_processor = DbtProcessState("internal")
         self._scrub_processor = ScrubSecrets()
@@ -463,7 +364,6 @@ class LogManager(logbook.NestedSetup):
             [
                 self._null_handler,
                 self._output_handler,
-                self._file_handler,
                 self._relevel_processor,
                 self._state_processor,
                 self._scrub_processor,
@@ -487,6 +387,15 @@ class LogManager(logbook.NestedSetup):
         """add an handler to the log manager that runs before the file handler."""
         self.objects.append(handler)
 
+    def set_path(self, _):
+        """No-op that allows dbt-rpc to not break. See GH #7661"""
+        pass
+
+    @property
+    def initialized(self):
+        """Dummy return value for dbt-rpc. See GH#7661"""
+        return True
+
     # this is used by `dbt ls` to allow piping stdout to jq, etc
     def stderr_console(self):
         """Output to stderr at WARNING level instead of stdout"""
@@ -501,12 +410,6 @@ class LogManager(logbook.NestedSetup):
     def set_debug(self):
         self._output_handler.set_text_format(DEBUG_LOG_FORMAT)
         self._output_handler.level = logbook.DEBUG
-
-    def set_path(self, path):
-        self._file_handler.set_path(path)
-
-    def initialized(self):
-        return self._file_handler.initialized
 
     def format_json(self):
         for handler in self.objects:
@@ -566,7 +469,7 @@ class ListLogHandler(LogMessageHandler):
     def __init__(
         self,
         level: int = logbook.NOTSET,
-        filter: Callable = None,
+        filter: Optional[Callable] = None,
         bubble: bool = False,
         lst: Optional[List[LogMessage]] = None,
     ) -> None:

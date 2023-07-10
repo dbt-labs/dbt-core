@@ -1,4 +1,6 @@
 import argparse
+import json
+
 import networkx as nx  # type: ignore
 import os
 import pickle
@@ -27,8 +29,8 @@ from dbt.exceptions import (
     DbtRuntimeError,
 )
 from dbt.graph import Graph
-from dbt.events.functions import fire_event
-from dbt.events.types import FoundStats, WritingInjectedSQLForNode
+from dbt.events.functions import fire_event, get_invocation_id
+from dbt.events.types import FoundStats, Note, WritingInjectedSQLForNode
 from dbt.events.contextvars import get_node_info
 from dbt.node_types import NodeType, ModelLanguage
 from dbt.events.format import pluralize
@@ -161,13 +163,118 @@ class Linker:
         with open(outfile, "wb") as outfh:
             pickle.dump(out_graph, outfh, protocol=pickle.HIGHEST_PROTOCOL)
 
+    def link_node(self, node: GraphMemberNode, manifest: Manifest):
+        self.add_node(node.unique_id)
+
+        for dependency in node.depends_on_nodes:
+            if dependency in manifest.nodes:
+                self.dependency(node.unique_id, (manifest.nodes[dependency].unique_id))
+            elif dependency in manifest.sources:
+                self.dependency(node.unique_id, (manifest.sources[dependency].unique_id))
+            elif dependency in manifest.metrics:
+                self.dependency(node.unique_id, (manifest.metrics[dependency].unique_id))
+            else:
+                raise GraphDependencyNotFoundError(node, dependency)
+
+    def link_graph(self, manifest: Manifest):
+        for source in manifest.sources.values():
+            self.add_node(source.unique_id)
+        for semantic_model in manifest.semantic_models.values():
+            self.add_node(semantic_model.unique_id)
+        for node in manifest.nodes.values():
+            self.link_node(node, manifest)
+        for exposure in manifest.exposures.values():
+            self.link_node(exposure, manifest)
+        for metric in manifest.metrics.values():
+            self.link_node(metric, manifest)
+
+        cycle = self.find_cycles()
+
+        if cycle:
+            raise RuntimeError("Found a cycle: {}".format(cycle))
+
+    def add_test_edges(self, manifest: Manifest) -> None:
+        """This method adds additional edges to the DAG. For a given non-test
+        executable node, add an edge from an upstream test to the given node if
+        the set of nodes the test depends on is a subset of the upstream nodes
+        for the given node."""
+
+        # Given a graph:
+        # model1 --> model2 --> model3
+        #   |             |
+        #   |            \/
+        #  \/          test 2
+        # test1
+        #
+        # Produce the following graph:
+        # model1 --> model2 --> model3
+        #   |       /\    |      /\ /\
+        #   |       |    \/      |  |
+        #  \/       |  test2 ----|  |
+        # test1 ----|---------------|
+
+        for node_id in self.graph:
+            # If node is executable (in manifest.nodes) and does _not_
+            # represent a test, continue.
+            if (
+                node_id in manifest.nodes
+                and manifest.nodes[node_id].resource_type != NodeType.Test
+            ):
+                # Get *everything* upstream of the node
+                all_upstream_nodes = nx.traversal.bfs_tree(self.graph, node_id, reverse=True)
+                # Get the set of upstream nodes not including the current node.
+                upstream_nodes = set([n for n in all_upstream_nodes if n != node_id])
+
+                # Get all tests that depend on any upstream nodes.
+                upstream_tests = []
+                for upstream_node in upstream_nodes:
+                    upstream_tests += _get_tests_for_node(manifest, upstream_node)
+
+                for upstream_test in upstream_tests:
+                    # Get the set of all nodes that the test depends on
+                    # including the upstream_node itself. This is necessary
+                    # because tests can depend on multiple nodes (ex:
+                    # relationship tests). Test nodes do not distinguish
+                    # between what node the test is "testing" and what
+                    # node(s) it depends on.
+                    test_depends_on = set(manifest.nodes[upstream_test].depends_on_nodes)
+
+                    # If the set of nodes that an upstream test depends on
+                    # is a subset of all upstream nodes of the current node,
+                    # add an edge from the upstream test to the current node.
+                    if test_depends_on.issubset(upstream_nodes):
+                        self.graph.add_edge(upstream_test, node_id, edge_type="parent_test")
+
+    def get_graph(self, manifest: Manifest) -> Graph:
+        self.link_graph(manifest)
+        return Graph(self.graph)
+
+    def get_graph_summary(self, manifest: Manifest) -> Dict[int, Dict[str, Any]]:
+        """Create a smaller summary of the graph, suitable for basic diagnostics
+        and performance tuning. The summary includes only the edge structure,
+        node types, and node names. Each of the n nodes is assigned an integer
+        index 0, 1, 2,..., n-1 for compactness"""
+        graph_nodes = dict()
+        index_dict = dict()
+        for node_index, node_name in enumerate(self.graph):
+            index_dict[node_name] = node_index
+            data = manifest.expect(node_name).to_dict(omit_none=True)
+            graph_nodes[node_index] = {"name": node_name, "type": data["resource_type"]}
+
+        for node_index, node in graph_nodes.items():
+            successors = [index_dict[n] for n in self.graph.successors(node["name"])]
+            if successors:
+                node["succ"] = [index_dict[n] for n in self.graph.successors(node["name"])]
+
+        return graph_nodes
+
 
 class Compiler:
     def __init__(self, config):
         self.config = config
 
     def initialize(self):
-        make_directory(self.config.target_path)
+        make_directory(self.config.project_target_path)
         make_directory(self.config.packages_install_path)
 
     # creates a ModelContext which is converted to
@@ -192,62 +299,6 @@ class Compiler:
         adapter = get_adapter(self.config)
         relation_cls = adapter.Relation
         return relation_cls.add_ephemeral_prefix(name)
-
-    def _inject_ctes_into_sql(self, sql: str, ctes: List[InjectedCTE]) -> str:
-        """
-        `ctes` is a list of InjectedCTEs like:
-
-            [
-                InjectedCTE(
-                    id="cte_id_1",
-                    sql="__dbt__cte__ephemeral as (select * from table)",
-                ),
-                InjectedCTE(
-                    id="cte_id_2",
-                    sql="__dbt__cte__events as (select id, type from events)",
-                ),
-            ]
-
-        Given `sql` like:
-
-          "with internal_cte as (select * from sessions)
-           select * from internal_cte"
-
-        This will spit out:
-
-          "with __dbt__cte__ephemeral as (select * from table),
-                __dbt__cte__events as (select id, type from events),
-                with internal_cte as (select * from sessions)
-           select * from internal_cte"
-
-        (Whitespace enhanced for readability.)
-        """
-        if len(ctes) == 0:
-            return sql
-
-        parsed_stmts = sqlparse.parse(sql)
-        parsed = parsed_stmts[0]
-
-        with_stmt = None
-        for token in parsed.tokens:
-            if token.is_keyword and token.normalized == "WITH":
-                with_stmt = token
-                break
-
-        if with_stmt is None:
-            # no with stmt, add one, and inject CTEs right at the beginning
-            first_token = parsed.token_first()
-            with_stmt = sqlparse.sql.Token(sqlparse.tokens.Keyword, "with")
-            parsed.insert_before(first_token, with_stmt)
-        else:
-            # stmt exists, add a comma (which will come after injected CTEs)
-            trailing_comma = sqlparse.sql.Token(sqlparse.tokens.Punctuation, ",")
-            parsed.insert_after(with_stmt, trailing_comma)
-
-        token = sqlparse.sql.Token(sqlparse.tokens.Keyword, ", ".join(c.sql for c in ctes))
-        parsed.insert_after(with_stmt, token)
-
-        return str(parsed)
 
     def _recursively_prepend_ctes(
         self,
@@ -323,7 +374,7 @@ class Compiler:
 
             _add_prepended_cte(prepended_ctes, InjectedCTE(id=cte.id, sql=sql))
 
-        injected_sql = self._inject_ctes_into_sql(
+        injected_sql = inject_ctes_into_sql(
             model.compiled_code,
             prepended_ctes,
         )
@@ -385,102 +436,39 @@ class Compiler:
 
         return node
 
-    def write_graph_file(self, linker: Linker, manifest: Manifest):
-        filename = graph_file_name
-        graph_path = os.path.join(self.config.target_path, filename)
-        flags = get_flags()
-        if flags.WRITE_JSON:
-            linker.write_graph(graph_path, manifest)
-
-    def link_node(self, linker: Linker, node: GraphMemberNode, manifest: Manifest):
-        linker.add_node(node.unique_id)
-
-        for dependency in node.depends_on_nodes:
-            if dependency in manifest.nodes:
-                linker.dependency(node.unique_id, (manifest.nodes[dependency].unique_id))
-            elif dependency in manifest.sources:
-                linker.dependency(node.unique_id, (manifest.sources[dependency].unique_id))
-            elif dependency in manifest.metrics:
-                linker.dependency(node.unique_id, (manifest.metrics[dependency].unique_id))
-            else:
-                raise GraphDependencyNotFoundError(node, dependency)
-
-    def link_graph(self, linker: Linker, manifest: Manifest, add_test_edges: bool = False):
-        for source in manifest.sources.values():
-            linker.add_node(source.unique_id)
-        for node in manifest.nodes.values():
-            self.link_node(linker, node, manifest)
-        for exposure in manifest.exposures.values():
-            self.link_node(linker, exposure, manifest)
-        for metric in manifest.metrics.values():
-            self.link_node(linker, metric, manifest)
-
-        cycle = linker.find_cycles()
-
-        if cycle:
-            raise RuntimeError("Found a cycle: {}".format(cycle))
-
-        if add_test_edges:
-            manifest.build_parent_and_child_maps()
-            self.add_test_edges(linker, manifest)
-
-    def add_test_edges(self, linker: Linker, manifest: Manifest) -> None:
-        """This method adds additional edges to the DAG. For a given non-test
-        executable node, add an edge from an upstream test to the given node if
-        the set of nodes the test depends on is a subset of the upstream nodes
-        for the given node."""
-
-        # Given a graph:
-        # model1 --> model2 --> model3
-        #   |             |
-        #   |            \/
-        #  \/          test 2
-        # test1
-        #
-        # Produce the following graph:
-        # model1 --> model2 --> model3
-        #   |       /\    |      /\ /\
-        #   |       |    \/      |  |
-        #  \/       |  test2 ----|  |
-        # test1 ----|---------------|
-
-        for node_id in linker.graph:
-            # If node is executable (in manifest.nodes) and does _not_
-            # represent a test, continue.
-            if (
-                node_id in manifest.nodes
-                and manifest.nodes[node_id].resource_type != NodeType.Test
-            ):
-                # Get *everything* upstream of the node
-                all_upstream_nodes = nx.traversal.bfs_tree(linker.graph, node_id, reverse=True)
-                # Get the set of upstream nodes not including the current node.
-                upstream_nodes = set([n for n in all_upstream_nodes if n != node_id])
-
-                # Get all tests that depend on any upstream nodes.
-                upstream_tests = []
-                for upstream_node in upstream_nodes:
-                    upstream_tests += _get_tests_for_node(manifest, upstream_node)
-
-                for upstream_test in upstream_tests:
-                    # Get the set of all nodes that the test depends on
-                    # including the upstream_node itself. This is necessary
-                    # because tests can depend on multiple nodes (ex:
-                    # relationship tests). Test nodes do not distinguish
-                    # between what node the test is "testing" and what
-                    # node(s) it depends on.
-                    test_depends_on = set(manifest.nodes[upstream_test].depends_on_nodes)
-
-                    # If the set of nodes that an upstream test depends on
-                    # is a subset of all upstream nodes of the current node,
-                    # add an edge from the upstream test to the current node.
-                    if test_depends_on.issubset(upstream_nodes):
-                        linker.graph.add_edge(upstream_test, node_id)
-
+    # This method doesn't actually "compile" any of the nodes. That is done by the
+    # "compile_node" method. This creates a Linker and builds the networkx graph,
+    # writes out the graph.gpickle file, and prints the stats, returning a Graph object.
     def compile(self, manifest: Manifest, write=True, add_test_edges=False) -> Graph:
         self.initialize()
         linker = Linker()
+        linker.link_graph(manifest)
 
-        self.link_graph(linker, manifest, add_test_edges)
+        # Create a file containing basic information about graph structure,
+        # supporting diagnostics and performance analysis.
+        summaries: Dict = dict()
+        summaries["_invocation_id"] = get_invocation_id()
+        summaries["linked"] = linker.get_graph_summary(manifest)
+
+        if add_test_edges:
+            manifest.build_parent_and_child_maps()
+            linker.add_test_edges(manifest)
+
+            # Create another diagnostic summary, just as above, but this time
+            # including the test edges.
+            summaries["with_test_edges"] = linker.get_graph_summary(manifest)
+
+        with open(
+            os.path.join(self.config.project_target_path, "graph_summary.json"), "w"
+        ) as out_stream:
+            try:
+                out_stream.write(json.dumps(summaries))
+            except Exception as e:  # This is non-essential information, so merely note failures.
+                fire_event(
+                    Note(
+                        msg=f"An error was encountered writing the graph summary information: {e}"
+                    )
+                )
 
         stats = _generate_stats(manifest)
 
@@ -492,9 +480,17 @@ class Compiler:
             self.config.args.__class__ == argparse.Namespace
             and self.config.args.cls == list_task.ListTask
         ):
+            stats = _generate_stats(manifest)
             print_compile_stats(stats)
 
         return Graph(linker.graph)
+
+    def write_graph_file(self, linker: Linker, manifest: Manifest):
+        filename = graph_file_name
+        graph_path = os.path.join(self.config.project_target_path, filename)
+        flags = get_flags()
+        if flags.WRITE_JSON:
+            linker.write_graph(graph_path, manifest)
 
     # writes the "compiled_code" into the target/compiled directory
     def _write_node(self, node: ManifestSQLNode) -> ManifestSQLNode:
@@ -506,9 +502,8 @@ class Compiler:
         fire_event(WritingInjectedSQLForNode(node_info=get_node_info()))
 
         if node.compiled_code:
-            node.compiled_path = node.write_node(
-                self.config.target_path, "compiled", node.compiled_code
-            )
+            node.compiled_path = node.get_target_write_path(self.config.target_path, "compiled")
+            node.write_node(self.config.project_root, node.compiled_path, node.compiled_code)
         return node
 
     def compile_node(
@@ -530,3 +525,74 @@ class Compiler:
         if write:
             self._write_node(node)
         return node
+
+
+def inject_ctes_into_sql(sql: str, ctes: List[InjectedCTE]) -> str:
+    """
+    `ctes` is a list of InjectedCTEs like:
+
+        [
+            InjectedCTE(
+                id="cte_id_1",
+                sql="__dbt__cte__ephemeral as (select * from table)",
+            ),
+            InjectedCTE(
+                id="cte_id_2",
+                sql="__dbt__cte__events as (select id, type from events)",
+            ),
+        ]
+
+    Given `sql` like:
+
+      "with internal_cte as (select * from sessions)
+       select * from internal_cte"
+
+    This will spit out:
+
+      "with __dbt__cte__ephemeral as (select * from table),
+            __dbt__cte__events as (select id, type from events),
+            internal_cte as (select * from sessions)
+       select * from internal_cte"
+
+    (Whitespace enhanced for readability.)
+    """
+    if len(ctes) == 0:
+        return sql
+
+    parsed_stmts = sqlparse.parse(sql)
+    parsed = parsed_stmts[0]
+
+    with_stmt = None
+    for token in parsed.tokens:
+        if token.is_keyword and token.normalized == "WITH":
+            with_stmt = token
+        elif token.is_keyword and token.normalized == "RECURSIVE" and with_stmt is not None:
+            with_stmt = token
+            break
+        elif not token.is_whitespace and with_stmt is not None:
+            break
+
+    if with_stmt is None:
+        # no with stmt, add one, and inject CTEs right at the beginning
+        # [original_sql]
+        first_token = parsed.token_first()
+        with_token = sqlparse.sql.Token(sqlparse.tokens.Keyword, "with")
+        parsed.insert_before(first_token, with_token)
+        # [with][original_sql]
+        injected_ctes = ", ".join(c.sql for c in ctes) + " "
+        injected_ctes_token = sqlparse.sql.Token(sqlparse.tokens.Keyword, injected_ctes)
+        parsed.insert_after(with_token, injected_ctes_token)
+        # [with][joined_ctes][original_sql]
+    else:
+        # with stmt exists so we don't need to add one, but we do need to add a comma
+        # between the injected ctes and the original sql
+        # [with][original_sql]
+        injected_ctes = ", ".join(c.sql for c in ctes)
+        injected_ctes_token = sqlparse.sql.Token(sqlparse.tokens.Keyword, injected_ctes)
+        parsed.insert_after(with_stmt, injected_ctes_token)
+        # [with][joined_ctes][original_sql]
+        comma_token = sqlparse.sql.Token(sqlparse.tokens.Punctuation, ", ")
+        parsed.insert_after(injected_ctes_token, comma_token)
+        # [with][joined_ctes][, ][original_sql]
+
+    return str(parsed)

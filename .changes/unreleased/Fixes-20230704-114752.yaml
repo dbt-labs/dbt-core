@@ -1,0 +1,6 @@
+kind: Fixes
+body: Nicer error message if model with enforced contract is missing 'columns' specification
+time: 2023-07-04T11:47:52.976527+02:00
+custom:
+  Author: jtcohen6
+  Issue: "7943"

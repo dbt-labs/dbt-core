@@ -1,0 +1,6 @@
+kind: Features
+body: Support '_'-delimited fqn matching for versioned models and matching on Path.stem for path selection
+time: 2023-06-29T13:57:58.38283-04:00
+custom:
+  Author: michelleark
+  Issue: "7639"

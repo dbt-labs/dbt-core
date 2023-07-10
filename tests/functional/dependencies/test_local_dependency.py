@@ -8,15 +8,13 @@ import yaml
 
 from pathlib import Path
 from unittest import mock
+from contextlib import contextmanager
 
 import dbt.semver
 import dbt.config
 import dbt.exceptions
 
-from dbt.tests.util import (
-    check_relations_equal,
-    run_dbt,
-)
+from dbt.tests.util import check_relations_equal, run_dbt, run_dbt_and_capture
 
 models__dep_source = """
 {# If our dependency source didn't exist, this would be an errror #}
@@ -66,7 +64,7 @@ sources:
     schema: "{{ var('schema_override', target.schema) }}"
     tables:
       - name: my_table
-        identifier: seed
+        identifier: seed_subpackage_generate_alias_name
 """
 
 macros__macro_sql = """
@@ -83,6 +81,16 @@ macros__macro_override_schema_sql = """
 
 {%- endmacro %}
 """
+
+
+@contextmanager
+def up_one():
+    current_path = Path.cwd()
+    os.chdir("../")
+    try:
+        yield
+    finally:
+        os.chdir(current_path)
 
 
 class BaseDependencyTest(object):
@@ -148,11 +156,17 @@ class TestSimpleDependency(BaseDependencyTest):
 
         check_relations_equal(
             project.adapter,
-            [f"{project.test_schema}.source_override_model", f"{project.test_schema}.seed"],
+            [
+                f"{project.test_schema}.source_override_model",
+                f"{project.test_schema}.seed_subpackage_generate_alias_name",
+            ],
         )
         check_relations_equal(
             project.adapter,
-            [f"{project.test_schema}.dep_source_model", f"{project.test_schema}.seed"],
+            [
+                f"{project.test_schema}.dep_source_model",
+                f"{project.test_schema}.seed_subpackage_generate_alias_name",
+            ],
         )
 
     def test_no_dependency_paths(self, project):
@@ -172,6 +186,16 @@ class TestSimpleDependency(BaseDependencyTest):
             ["run", "--models", f"+{local_path}"],
         )
         assert len(results) == 2
+
+
+class TestSimpleDependencyRelativePath(BaseDependencyTest):
+    def test_local_dependency_relative_path(self, project):
+        last_dir = Path(project.project_root).name
+        with up_one():
+            _, stdout = run_dbt_and_capture(["deps", "--project-dir", last_dir])
+            assert (
+                "Installed from <local @ local_dependency>" in stdout
+            ), "Test output didn't contain expected string"
 
 
 class TestMissingDependency(object):

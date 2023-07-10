@@ -1,0 +1,6 @@
+kind: Features
+body: Add thread_id context var
+time: 2023-06-23T17:33:57.412102-07:00
+custom:
+  Author: NiallRees
+  Issue: "7941"

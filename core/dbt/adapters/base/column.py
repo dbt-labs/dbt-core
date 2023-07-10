@@ -60,6 +60,7 @@ class Column:
             "float",
             "double precision",
             "float8",
+            "double",
         ]
 
     def is_integer(self) -> bool:

@@ -1,6 +1,7 @@
 from dbt import ui
 from dbt.node_types import NodeType
 from typing import Optional, Union
+from datetime import datetime
 
 
 def format_fancy_output_line(
@@ -48,3 +49,8 @@ def pluralize(count, string: Union[str, NodeType]):
     if count != 1:
         pluralized = _pluralize(string)
     return f"{count} {pluralized}"
+
+
+def timestamp_to_datetime_string(ts):
+    timestamp_dt = datetime.fromtimestamp(ts.seconds + ts.nanos / 1e9)
+    return timestamp_dt.strftime("%H:%M:%S.%f")

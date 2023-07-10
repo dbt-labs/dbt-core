@@ -1,19 +1,34 @@
+import dbt.tracking
 from dbt.version import installed as installed_version
 from dbt.adapters.factory import adapter_management, register_adapter
 from dbt.flags import set_flags, get_flag_dict
+from dbt.cli.exceptions import (
+    ExceptionExit,
+    ResultExit,
+)
 from dbt.cli.flags import Flags
 from dbt.config import RuntimeConfig
 from dbt.config.runtime import load_project, load_profile, UnsetProfile
-from dbt.events.functions import setup_event_logger, fire_event, LOG_VERSION
-from dbt.events.types import MainReportVersion, MainReportArgs, MainTrackingUserState
-from dbt.exceptions import DbtProjectError
+from dbt.events.functions import fire_event, LOG_VERSION, set_invocation_id, setup_event_logger
+from dbt.events.types import (
+    CommandCompleted,
+    MainReportVersion,
+    MainReportArgs,
+    MainTrackingUserState,
+)
+from dbt.events.helpers import get_json_string_utcnow
+from dbt.events.types import MainEncounteredError, MainStackTrace
+from dbt.exceptions import Exception as DbtException, DbtProjectError, FailFastError
 from dbt.parser.manifest import ManifestLoader, write_manifest
 from dbt.profiler import profiler
 from dbt.tracking import active_user, initialize_from_flags, track_run
 from dbt.utils import cast_dict_to_dict_of_strings
+from dbt.plugins import set_up_plugin_manager, get_plugin_manager
 
 from click import Context
 from functools import update_wrapper
+import time
+import traceback
 
 
 def preflight(func):
@@ -27,13 +42,14 @@ def preflight(func):
         ctx.obj["flags"] = flags
         set_flags(flags)
 
+        # Logging
+        callbacks = ctx.obj.get("callbacks", [])
+        set_invocation_id()
+        setup_event_logger(flags=flags, callbacks=callbacks)
+
         # Tracking
         initialize_from_flags(flags.SEND_ANONYMOUS_USAGE_STATS, flags.PROFILES_DIR)
         ctx.with_resource(track_run(run_command=flags.WHICH))
-
-        # Logging
-        # N.B. Legacy logger is not supported
-        setup_event_logger(flags)
 
         # Now that we have our logger, fire away!
         fire_event(MainReportVersion(version=str(installed_version), log_version=LOG_VERSION))
@@ -58,6 +74,45 @@ def preflight(func):
     return update_wrapper(wrapper, func)
 
 
+def postflight(func):
+    """The decorator that handles all exception handling for the click commands.
+    This decorator must be used before any other decorators that may throw an exception."""
+
+    def wrapper(*args, **kwargs):
+        ctx = args[0]
+        start_func = time.perf_counter()
+        success = False
+
+        try:
+            result, success = func(*args, **kwargs)
+        except FailFastError as e:
+            fire_event(MainEncounteredError(exc=str(e)))
+            raise ResultExit(e.result)
+        except DbtException as e:
+            fire_event(MainEncounteredError(exc=str(e)))
+            raise ExceptionExit(e)
+        except BaseException as e:
+            fire_event(MainEncounteredError(exc=str(e)))
+            fire_event(MainStackTrace(stack_trace=traceback.format_exc()))
+            raise ExceptionExit(e)
+        finally:
+            fire_event(
+                CommandCompleted(
+                    command=ctx.command_path,
+                    success=success,
+                    completed_at=get_json_string_utcnow(),
+                    elapsed=time.perf_counter() - start_func,
+                )
+            )
+
+        if not success:
+            raise ResultExit(result)
+
+        return (result, success)
+
+    return update_wrapper(wrapper, func)
+
+
 # TODO: UnsetProfile is necessary for deps and clean to load a project.
 # This decorator and its usage can be removed once https://github.com/dbt-labs/dbt-core/issues/6257 is closed.
 def unset_profile(func):
@@ -65,9 +120,8 @@ def unset_profile(func):
         ctx = args[0]
         assert isinstance(ctx, Context)
 
-        if ctx.obj.get("profile") is None:
-            profile = UnsetProfile()
-            ctx.obj["profile"] = profile
+        profile = UnsetProfile()
+        ctx.obj["profile"] = profile
 
         return func(*args, **kwargs)
 
@@ -79,15 +133,12 @@ def profile(func):
         ctx = args[0]
         assert isinstance(ctx, Context)
 
-        if ctx.obj.get("profile") is None:
-            flags = ctx.obj["flags"]
-            # TODO: Generalize safe access to flags.THREADS:
-            # https://github.com/dbt-labs/dbt-core/issues/6259
-            threads = getattr(flags, "THREADS", None)
-            profile = load_profile(
-                flags.PROJECT_DIR, flags.VARS, flags.PROFILE, flags.TARGET, threads
-            )
-            ctx.obj["profile"] = profile
+        flags = ctx.obj["flags"]
+        # TODO: Generalize safe access to flags.THREADS:
+        # https://github.com/dbt-labs/dbt-core/issues/6259
+        threads = getattr(flags, "THREADS", None)
+        profile = load_profile(flags.PROJECT_DIR, flags.VARS, flags.PROFILE, flags.TARGET, threads)
+        ctx.obj["profile"] = profile
 
         return func(*args, **kwargs)
 
@@ -99,17 +150,24 @@ def project(func):
         ctx = args[0]
         assert isinstance(ctx, Context)
 
-        if ctx.obj.get("project") is None:
-            # TODO: Decouple target from profile, and remove the need for profile here:
-            # https://github.com/dbt-labs/dbt-core/issues/6257
-            if not ctx.obj.get("profile"):
-                raise DbtProjectError("profile required for project")
+        # TODO: Decouple target from profile, and remove the need for profile here:
+        # https://github.com/dbt-labs/dbt-core/issues/6257
+        if not ctx.obj.get("profile"):
+            raise DbtProjectError("profile required for project")
 
-            flags = ctx.obj["flags"]
-            project = load_project(
-                flags.PROJECT_DIR, flags.VERSION_CHECK, ctx.obj["profile"], flags.VARS
-            )
-            ctx.obj["project"] = project
+        flags = ctx.obj["flags"]
+        project = load_project(
+            flags.PROJECT_DIR, flags.VERSION_CHECK, ctx.obj["profile"], flags.VARS
+        )
+        ctx.obj["project"] = project
+
+        # Plugins
+        set_up_plugin_manager(project_name=project.project_name)
+
+        if dbt.tracking.active_user is not None:
+            project_id = None if project is None else project.hashed_name()
+
+            dbt.tracking.track_project_id({"project_id": project_id})
 
         return func(*args, **kwargs)
 
@@ -131,11 +189,32 @@ def runtime_config(func):
         if None in reqs:
             raise DbtProjectError("profile and project required for runtime_config")
 
-        ctx.obj["runtime_config"] = RuntimeConfig.from_parts(
+        config = RuntimeConfig.from_parts(
             ctx.obj["project"],
             ctx.obj["profile"],
             ctx.obj["flags"],
         )
+
+        ctx.obj["runtime_config"] = config
+
+        if dbt.tracking.active_user is not None:
+            adapter_type = (
+                getattr(config.credentials, "type", None)
+                if hasattr(config, "credentials")
+                else None
+            )
+            adapter_unique_id = (
+                config.credentials.hashed_unique_field()
+                if hasattr(config, "credentials")
+                else None
+            )
+
+            dbt.tracking.track_adapter_info(
+                {
+                    "adapter_type": adapter_type,
+                    "adapter_unique_id": adapter_unique_id,
+                }
+            )
 
         return func(*args, **kwargs)
 
@@ -144,8 +223,8 @@ def runtime_config(func):
 
 def manifest(*args0, write=True, write_perf_info=False):
     """A decorator used by click command functions for generating a manifest
-    given a profile, project, and runtime config. This also registers the adaper
-    from the runtime config and conditionally writes the manifest to disc.
+    given a profile, project, and runtime config. This also registers the adapter
+    from the runtime config and conditionally writes the manifest to disk.
     """
 
     def outer_wrapper(func):
@@ -165,12 +244,17 @@ def manifest(*args0, write=True, write_perf_info=False):
             # a manifest has already been set on the context, so don't overwrite it
             if ctx.obj.get("manifest") is None:
                 manifest = ManifestLoader.get_full_manifest(
-                    runtime_config, write_perf_info=write_perf_info
+                    runtime_config,
+                    write_perf_info=write_perf_info,
                 )
 
                 ctx.obj["manifest"] = manifest
                 if write and ctx.obj["flags"].write_json:
-                    write_manifest(manifest, ctx.obj["runtime_config"].target_path)
+                    write_manifest(manifest, runtime_config.project_target_path)
+                    pm = get_plugin_manager(runtime_config.project_name)
+                    plugin_artifacts = pm.get_manifest_artifacts(manifest)
+                    for path, plugin_artifact in plugin_artifacts.items():
+                        plugin_artifact.write(path)
 
             return func(*args, **kwargs)
 
