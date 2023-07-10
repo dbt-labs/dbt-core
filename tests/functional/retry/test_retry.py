@@ -145,22 +145,6 @@ class TestRetry:
         results = run_dbt(["retry"], expect_pass=False)
         assert {n.unique_id: n.status for n in results.results} == expected_statuses
 
-    def test_fail_fast(self, project):
-        result = run_dbt(["--warn-error", "build", "--fail-fast"], expect_pass=False)
-
-        assert result.status == RunStatus.Error
-        assert result.node.name == "sample_model"
-
-        results = run_dbt(["retry"], expect_pass=False)
-
-        assert len(results.results) == 1
-        assert results.results[0].status == RunStatus.Error
-        assert results.results[0].node.name == "sample_model"
-
-        result = run_dbt(["retry", "--fail-fast"], expect_pass=False)
-        assert result.status == RunStatus.Error
-        assert result.node.name == "sample_model"
-
     def test_removed_file(self, project):
         run_dbt(["build"], expect_pass=False)
 
@@ -180,3 +164,57 @@ class TestRetry:
         rm_file("models", "third_model.sql")
         with pytest.raises(ValueError, match="Couldn't find model 'model.test.third_model'"):
             run_dbt(["retry"], expect_pass=False)
+
+
+class TestFailFast:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "sample_model.sql": models__sample_model,
+            "second_model.sql": models__second_model,
+            "union_model.sql": models__union_model,
+            "final_model.sql": "select * from {{ ref('union_model') }};",
+        }
+
+    def test_fail_fast(self, project):
+        results = run_dbt(["--fail-fast", "build"], expect_pass=False)
+        assert {r.node.unique_id: r.status for r in results.results} == {
+            "model.test.sample_model": RunStatus.Error,
+            "model.test.second_model": RunStatus.Success,
+            "model.test.union_model": RunStatus.Skipped,
+            "model.test.final_model": RunStatus.Skipped,
+        }
+
+        # Check that retry inherits fail-fast from upstream command (build)
+        results = run_dbt(["retry"], expect_pass=False)
+        assert {r.node.unique_id: r.status for r in results.results} == {
+            "model.test.sample_model": RunStatus.Error,
+            "model.test.union_model": RunStatus.Skipped,
+            "model.test.final_model": RunStatus.Skipped,
+        }
+
+        fixed_sql = "select 1 as id, 1 as foo"
+        write_file(fixed_sql, "models", "sample_model.sql")
+
+        results = run_dbt(["retry"], expect_pass=False)
+        assert {r.node.unique_id: r.status for r in results.results} == {
+            "model.test.sample_model": RunStatus.Success,
+            "model.test.union_model": RunStatus.Success,
+            "model.test.final_model": RunStatus.Error,
+        }
+
+        results = run_dbt(["retry"], expect_pass=False)
+        assert {r.node.unique_id: r.status for r in results.results} == {
+            "model.test.final_model": RunStatus.Error,
+        }
+
+        fixed_sql = "select * from {{ ref('union_model') }}"
+        write_file(fixed_sql, "models", "final_model.sql")
+
+        results = run_dbt(["retry"])
+        assert {r.node.unique_id: r.status for r in results.results} == {
+            "model.test.final_model": RunStatus.Success,
+        }
+
+        results = run_dbt(["retry"])
+        assert {r.node.unique_id: r.status for r in results.results} == {}

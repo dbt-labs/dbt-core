@@ -192,6 +192,20 @@ class ExecutionContext:
         self.node = node
 
 
+def skip_result(node, message):
+    thread_id = threading.current_thread().name
+    return RunResult(
+        status=RunStatus.Skipped,
+        thread_id=thread_id,
+        execution_time=0,
+        timing=[],
+        message=message,
+        node=node,
+        adapter_response={},
+        failures=None,
+    )
+
+
 class BaseRunner(metaclass=ABCMeta):
     def __init__(self, config, adapter, node, node_index, num_nodes):
         self.config = config
@@ -294,19 +308,6 @@ class BaseRunner(metaclass=ABCMeta):
             agate_table=result.agate_table,
             adapter_response=result.adapter_response,
             failures=result.failures,
-        )
-
-    def skip_result(self, node, message):
-        thread_id = threading.current_thread().name
-        return RunResult(
-            status=RunStatus.Skipped,
-            thread_id=thread_id,
-            execution_time=0,
-            timing=[],
-            message=message,
-            node=node,
-            adapter_response={},
-            failures=None,
         )
 
     def compile_and_execute(self, manifest, ctx):
@@ -483,7 +484,7 @@ class BaseRunner(metaclass=ABCMeta):
                     )
                 )
 
-        node_result = self.skip_result(self.node, error_message)
+        node_result = skip_result(self.node, error_message)
         return node_result
 
     def do_skip(self, cause=None):
