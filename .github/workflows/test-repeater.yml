@@ -37,8 +37,8 @@ on:
           - 'ubuntu-latest'
           - 'macos-latest'
           - 'windows-latest'
-      num_runs:
-        description: 'Max number of times to run the test'
+      num_runs_per_batch:
+        description: 'Max number of times to run the test per batch.  We always run 5 batches.'
         type: number
         required: true
         default: '100'
@@ -52,6 +52,12 @@ defaults:
 jobs:
   pytest:
     runs-on: ${{ inputs.os }}
+    strategy:
+      # run all batches, even if one fails
+      fail-fast: false
+      # using a matrix to speed up the jobs since the matrix will run in parallel when runners are available
+      matrix:
+        batch: [1, 2, 3, 4, 5]
     env:
       PYTEST_ADDOPTS: "-v --color=yes -n4 --csv integration_results.csv"
       DBT_TEST_USER_1: dbt_test_user_1
@@ -65,7 +71,7 @@ jobs:
           echo "test_path: ${{ inputs.test_path }}"
           echo "python_version: ${{ inputs.python_version }}"
           echo "os: ${{ inputs.os }}"
-          echo "num_runs: ${{ inputs.num_runs }}"
+          echo "num_runs_per_batch: ${{ inputs.num_runs_per_batch }}"
 
       - name: "Checkout code"
         uses: actions/checkout@v3
@@ -98,11 +104,11 @@ jobs:
           test_command="python -m pytest ${{ inputs.test_path }}"
           echo "test_command=$test_command" >> $GITHUB_OUTPUT
 
-      - name: "Run test ${{ inputs.num_runs }} times"
+      - name: "Run test ${{ inputs.num_runs_per_batch }} times"
         id: pytest
         run: |
           set +e
-          for ((i=1; i<=${{ inputs.num_runs }}; i++))
+          for ((i=1; i<=${{ inputs.num_runs_per_batch }}; i++))
           do
             echo "Running pytest iteration $i..."
             python -m pytest ${{ inputs.test_path }}
@@ -124,16 +130,16 @@ jobs:
             echo
           done
 
-          echo "success=$success" >> $GITHUB_OUTPUT
           echo "failure=$failure" >> $GITHUB_OUTPUT
 
       - name: "Success and Failure Summary"
         run: |
+          echo "Batch: ${{ matrix.batch }}"
           echo "Successful runs: ${{ steps.pytest.outputs.success }}"
           echo "Failed runs: ${{ steps.pytest.outputs.failure }}"
 
-      - name: "Check Failures for ${{ inputs.os }}/Python ${{ inputs.python_version }}"
+      - name: "Check for Failures for ${{ inputs.os }}/Python ${{ inputs.python_version }}"
         if: ${{ steps.pytest.outputs.failure }}
         run: |
-            echo "${{ steps.pytest.outputs.failure }} of ${{ inputs.num_runs }} tests did not pass"
+            echo "Batch ${{ matrix.batch }} failed ${{ steps.pytest.outputs.failure }} of ${{ inputs.num_runs_per_batch }} tests"
             exit 1
