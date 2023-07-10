@@ -93,6 +93,7 @@ jobs:
         if: inputs.os == 'ubuntu-latest'
         run: make setup-db
 
+        # mac and windows don't use mac due to limitations with docker with those runners in GitHub
       - name: "Set up postgres (macos)"
         if: inputs.os == 'macos-latest'
         uses: ./.github/actions/setup-postgres-macos
