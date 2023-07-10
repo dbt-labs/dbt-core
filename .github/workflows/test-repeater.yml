@@ -50,6 +50,17 @@ defaults:
     shell: bash
 
 jobs:
+  debug:
+    runs-on: ubuntu-latest
+    steps:
+      - name: "[DEBUG] Output Inputs"
+        run: |
+          echo "Branch: ${{ inputs.branch }}"
+          echo "test_path: ${{ inputs.test_path }}"
+          echo "python_version: ${{ inputs.python_version }}"
+          echo "os: ${{ inputs.os }}"
+          echo "num_runs_per_batch: ${{ inputs.num_runs_per_batch }}"
+
   pytest:
     runs-on: ${{ inputs.os }}
     strategy:
@@ -65,14 +76,6 @@ jobs:
       DBT_TEST_USER_3: dbt_test_user_3
 
     steps:
-      - name: "[DEBUG] Output Inputs"
-        run: |
-          echo "Branch: ${{ inputs.branch }}"
-          echo "test_path: ${{ inputs.test_path }}"
-          echo "python_version: ${{ inputs.python_version }}"
-          echo "os: ${{ inputs.os }}"
-          echo "num_runs_per_batch: ${{ inputs.num_runs_per_batch }}"
-
       - name: "Checkout code"
         uses: actions/checkout@v3
         with:
