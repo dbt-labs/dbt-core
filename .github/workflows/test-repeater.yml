@@ -1,5 +1,6 @@
 # **what?**
-# This workflow will test a single test a given number of times to determine if it's flaky or not.  You can test with any supported OS/Python combination.
+# This workflow will test all test(s) at the input path given number of times to determine if it's flaky or not.  You can test with any supported OS/Python combination.
+# This is batched in 10 to allow more test iterations faster.
 
 # **why?**
 # Testing if a test is flaky and if a previously flaky test has been fixed.  This allows easy testing on supported python versions and OS combinations.
@@ -64,7 +65,7 @@ jobs:
   pytest:
     runs-on: ${{ inputs.os }}
     strategy:
-      # run all batches, even if one fails
+      # run all batches, even if one fails.  This informs how flaky the test may be.
       fail-fast: false
       # using a matrix to speed up the jobs since the matrix will run in parallel when runners are available
       matrix:
@@ -93,7 +94,7 @@ jobs:
         if: inputs.os == 'ubuntu-latest'
         run: make setup-db
 
-        # mac and windows don't use mac due to limitations with docker with those runners in GitHub
+        # mac and windows don't use make due to limitations with docker with those runners in GitHub
       - name: "Set up postgres (macos)"
         if: inputs.os == 'macos-latest'
         uses: ./.github/actions/setup-postgres-macos
@@ -136,13 +137,13 @@ jobs:
 
           echo "failure=$failure" >> $GITHUB_OUTPUT
 
-      - name: "Success and Failure Summary"
+      - name: "Success and Failure Summary: ${{ inputs.os }}/Python ${{ inputs.python_version }}"
         run: |
           echo "Batch: ${{ matrix.batch }}"
           echo "Successful runs: ${{ steps.pytest.outputs.success }}"
           echo "Failed runs: ${{ steps.pytest.outputs.failure }}"
 
-      - name: "Check for Failures for ${{ inputs.os }}/Python ${{ inputs.python_version }}"
+      - name: "Error for Failures"
         if: ${{ steps.pytest.outputs.failure }}
         run: |
             echo "Batch ${{ matrix.batch }} failed ${{ steps.pytest.outputs.failure }} of ${{ inputs.num_runs_per_batch }} tests"
