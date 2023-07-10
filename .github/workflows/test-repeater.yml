@@ -38,10 +38,10 @@ on:
           - 'macos-latest'
           - 'windows-latest'
       num_runs_per_batch:
-        description: 'Max number of times to run the test per batch.  We always run 5 batches.'
+        description: 'Max number of times to run the test per batch.  We always run 10 batches.'
         type: number
         required: true
-        default: '100'
+        default: '50'
 
 permissions: read-all
 
@@ -57,7 +57,7 @@ jobs:
       fail-fast: false
       # using a matrix to speed up the jobs since the matrix will run in parallel when runners are available
       matrix:
-        batch: [1, 2, 3, 4, 5]
+        batch: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
     env:
       PYTEST_ADDOPTS: "-v --color=yes -n4 --csv integration_results.csv"
       DBT_TEST_USER_1: dbt_test_user_1
