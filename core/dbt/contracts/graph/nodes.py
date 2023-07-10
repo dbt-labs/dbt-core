@@ -65,6 +65,7 @@ from .model_config import (
     ExposureConfig,
     EmptySnapshotConfig,
     SnapshotConfig,
+    SemanticModelConfig,
 )
 
 
@@ -1482,6 +1483,7 @@ class SemanticModel(GraphNode):
     depends_on: DependsOn = field(default_factory=DependsOn)
     refs: List[RefArgs] = field(default_factory=list)
     created_at: float = field(default_factory=lambda: time.time())
+    config: SemanticModelConfig = field(default_factory=SemanticModelConfig)
 
     @property
     def entity_references(self) -> List[LinkableElementReference]:

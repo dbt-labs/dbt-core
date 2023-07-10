@@ -387,6 +387,11 @@ class BaseConfig(AdditionalPropertiesAllowed, Replaceable):
 
 
 @dataclass
+class SemanticModelConfig(BaseConfig):
+    enabled: bool = True
+
+
+@dataclass
 class MetricConfig(BaseConfig):
     enabled: bool = True
     group: Optional[str] = None
