@@ -25,14 +25,15 @@ class SemanticManifest:
 
     def validate(self) -> bool:
 
-        if self.manifest.metrics and not self.manifest.semantic_models:
-            fire_event(
-                SemanticValidationFailure(
-                    msg="Metrics require semantic models, but none were found."
-                ),
-                EventLevel.ERROR,
-            )
-            return False
+        # TODO: Enforce this check.
+        # if self.manifest.metrics and not self.manifest.semantic_models:
+        #    fire_event(
+        #        SemanticValidationFailure(
+        #            msg="Metrics require semantic models, but none were found."
+        #        ),
+        #        EventLevel.ERROR,
+        #    )
+        #    return False
 
         if not self.manifest.metrics or not self.manifest.semantic_models:
             return True
