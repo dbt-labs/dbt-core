@@ -8,14 +8,47 @@ from dbt_semantic_interfaces.implementations.time_spine_table_configuration impo
     PydanticTimeSpineTableConfiguration,
 )
 from dbt_semantic_interfaces.type_enums import TimeGranularity
+from dbt_semantic_interfaces.validations.semantic_manifest_validator import (
+    SemanticManifestValidator,
+)
 
 from dbt.clients.system import write_file
+from dbt.events.base_types import EventLevel
+from dbt.events.functions import fire_event
+from dbt.events.types import SemanticValidationFailure
 from dbt.exceptions import ParsingError
 
 
 class SemanticManifest:
     def __init__(self, manifest):
         self.manifest = manifest
+
+    def validate(self) -> bool:
+
+        # TODO: Enforce this check.
+        # if self.manifest.metrics and not self.manifest.semantic_models:
+        #    fire_event(
+        #        SemanticValidationFailure(
+        #            msg="Metrics require semantic models, but none were found."
+        #        ),
+        #        EventLevel.ERROR,
+        #    )
+        #    return False
+
+        if not self.manifest.metrics or not self.manifest.semantic_models:
+            return True
+
+        semantic_manifest = self._get_pydantic_semantic_manifest()
+        validator = SemanticManifestValidator[PydanticSemanticManifest]()
+        validation_results = validator.validate_semantic_manifest(semantic_manifest)
+
+        for warning in validation_results.warnings:
+            fire_event(SemanticValidationFailure(msg=warning.message))
+
+        for error in validation_results.errors:
+            fire_event(SemanticValidationFailure(msg=error.message), EventLevel.ERROR)
+
+        return not validation_results.errors
 
     def write_json_to_file(self, file_path: str):
         semantic_manifest = self._get_pydantic_semantic_manifest()

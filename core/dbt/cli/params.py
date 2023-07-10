@@ -239,6 +239,15 @@ partial_parse = click.option(
     default=True,
 )
 
+partial_parse_file_path = click.option(
+    "--partial-parse-file-path",
+    envvar="DBT_PARTIAL_PARSE_FILE_PATH",
+    help="Internal flag for path to partial_parse.manifest file.",
+    default=None,
+    hidden=True,
+    type=click.Path(exists=True, dir_okay=False, resolve_path=True),
+)
+
 populate_cache = click.option(
     "--populate-cache/--no-populate-cache",
     envvar="DBT_POPULATE_CACHE",

@@ -1224,6 +1224,14 @@ class ParseInlineNodeError(ErrorLevel):
         return "Error while parsing node: " + self.node_info.node_name + "\n" + self.exc
 
 
+class SemanticValidationFailure(WarnLevel):
+    def code(self):
+        return "I070"
+
+    def message(self) -> str:
+        return self.msg
+
+
 # =======================================================
 # M - Deps generation
 # =======================================================
