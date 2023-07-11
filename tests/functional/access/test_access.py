@@ -112,7 +112,7 @@ models:
     group: analytics
   - name: people_model
     description: "some people"
-    access: private
+    access: public
     group: analytics
 """
 
@@ -127,7 +127,7 @@ select 1 as id, 'Callum' as first_name, 'McCann' as last_name, 'emerald' as favo
 people_semantic_model_yml = """
 semantic_models:
   - name: semantic_people
-    model: ref('people')
+    model: ref('people_model')
     dimensions:
       - name: favorite_color
         type: categorical
@@ -228,6 +228,10 @@ models:
   group: package
 """
 
+metricflow_time_spine_sql = """
+SELECT to_date('02/20/2023', 'mm/dd/yyyy') as date_day
+"""
+
 
 class TestAccess:
     @pytest.fixture(scope="class")
@@ -305,9 +309,10 @@ class TestAccess:
         write_file(people_model_sql, "models", "people_model.sql")
         write_file(people_semantic_model_yml, "models", "people_semantic_model.yml")
         write_file(people_metric_yml, "models", "people_metric.yml")
+        write_file(metricflow_time_spine_sql, "models", "metricflow_time_spine.sql")
         # Should succeed
         manifest = run_dbt(["parse"])
-        assert len(manifest.nodes) == 4
+        assert len(manifest.nodes) == 5
         manifest = get_manifest(project.project_root)
         metric_id = "metric.test.number_of_people"
         assert manifest.metrics[metric_id].group == "analytics"
