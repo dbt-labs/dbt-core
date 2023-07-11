@@ -110,6 +110,7 @@ class _Logger:
         log.setLevel(_log_level_map[self.level])
         handler.setFormatter(logging.Formatter(fmt="%(message)s"))
         log.handlers.clear()
+        log.propagate = False
         log.addHandler(handler)
         return log
 
