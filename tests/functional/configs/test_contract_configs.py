@@ -388,7 +388,7 @@ class TestModelLevelContractErrorMessages:
             run_dbt(["run"], expect_pass=False)
 
         exc_str = " ".join(str(err_info.value).split())
-        expected_materialization_error = "Invalid value for on_schema_change: ignore. Models materialized as incremental with contracts enabled must set on_schema_change to 'append_new_columns'"
+        expected_materialization_error = "Invalid value for on_schema_change: ignore. Models materialized as incremental with contracts enabled must set on_schema_change to 'append_new_columns' or 'fail'"
         assert expected_materialization_error in str(exc_str)
 
 
