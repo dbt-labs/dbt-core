@@ -397,6 +397,10 @@ select 1 as fun
 
 """
 
+metricflow_time_spine_sql = """
+SELECT to_date('02/20/2023, 'mm/dd/yyyy') as date_day
+"""
+
 env_var_schema3_yml = """
 
 models:
@@ -419,6 +423,33 @@ exposures:
       - ref("model_color")
       - source("seed_sources", "raw_customers")
 
+"""
+
+people_semantic_models_yml = """
+version: 2
+
+semantic_models:
+  - name: semantic_people
+    model: ref('people')
+    dimensions:
+      - name: favorite_color
+        type: categorical
+      - name: created_at
+        type: TIME
+        type_params:
+          time_granularity: day
+    measures:
+      - name: years_tenure
+        agg: SUM
+        expr: tenure
+      - name: people
+        agg: count
+        expr: id
+    entities:
+      - name: id
+        type: primary
+    defaults:
+      agg_time_dimension: created_at
 """
 
 env_var_metrics_yml = """

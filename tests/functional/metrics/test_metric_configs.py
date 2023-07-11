@@ -8,10 +8,12 @@ from dbt.tests.util import run_dbt, update_config_file, get_manifest
 from tests.functional.metrics.fixtures import (
     models_people_sql,
     models_people_metrics_yml,
+    metricflow_time_spine_sql,
     disabled_metric_level_schema_yml,
     enabled_metric_level_schema_yml,
     models_people_metrics_sql,
     invalid_config_metric_yml,
+    semantic_model_people_yml,
 )
 
 
@@ -29,6 +31,7 @@ class TestMetricEnabledConfigProjectLevel(MetricConfigTests):
     def models(self):
         return {
             "people.sql": models_people_sql,
+            "semantic_model_people.yml": semantic_model_people_yml,
             "schema.yml": models_people_metrics_yml,
         }
 
@@ -69,6 +72,7 @@ class TestConfigYamlMetricLevel(MetricConfigTests):
     def models(self):
         return {
             "people.sql": models_people_sql,
+            "semantic_model_people.yml": semantic_model_people_yml,
             "schema.yml": disabled_metric_level_schema_yml,
         }
 
@@ -85,6 +89,7 @@ class TestMetricConfigsInheritence(MetricConfigTests):
     def models(self):
         return {
             "people.sql": models_people_sql,
+            "semantic_model_people.yml": semantic_model_people_yml,
             "schema.yml": enabled_metric_level_schema_yml,
         }
 
@@ -112,6 +117,7 @@ class TestDisabledMetricRef(MetricConfigTests):
     def models(self):
         return {
             "people.sql": models_people_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
             "people_metrics.sql": models_people_metrics_sql,
             "schema.yml": models_people_metrics_yml,
         }

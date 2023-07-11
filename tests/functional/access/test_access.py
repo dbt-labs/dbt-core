@@ -124,6 +124,31 @@ union all
 select 1 as id, 'Callum' as first_name, 'McCann' as last_name, 'emerald' as favorite_color, true as loves_dbt, 0 as tenure, current_timestamp as created_at
 """
 
+people_semantic_model_yml = """
+semantic_models:
+  - name: semantic_people
+    model: ref('people')
+    dimensions:
+      - name: favorite_color
+        type: categorical
+      - name: created_at
+        type: TIME
+        type_params:
+          time_granularity: day
+    measures:
+      - name: years_tenure
+        agg: SUM
+        expr: tenure
+      - name: people
+        agg: count
+        expr: id
+    entities:
+      - name: id
+        type: primary
+    defaults:
+      agg_time_dimension: created_at
+"""
+
 people_metric_yml = """
 metrics:
 
@@ -278,6 +303,7 @@ class TestAccess:
         write_file(v5_schema_yml, project.project_root, "models", "schema.yml")
         rm_file(project.project_root, "models", "simple_exposure.yml")
         write_file(people_model_sql, "models", "people_model.sql")
+        write_file(people_semantic_model_yml, "models", "people_semantic_model.yml")
         write_file(people_metric_yml, "models", "people_metric.yml")
         # Should succeed
         manifest = run_dbt(["parse"])

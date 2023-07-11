@@ -3,6 +3,7 @@ import pytest
 from dbt.tests.util import run_dbt, write_file, get_manifest
 from tests.functional.partial_parsing.fixtures import (
     people_sql,
+    people_semantic_models_yml,
     people_metrics_yml,
     people_metrics2_yml,
     metric_model_a_sql,
@@ -26,7 +27,13 @@ class TestMetrics:
         manifest = get_manifest(project.project_root)
         assert len(manifest.nodes) == 1
 
-        # Add metrics yaml file
+        # Add metrics yaml file (and necessary semantic models yaml)
+        write_file(
+            people_semantic_models_yml,
+            project.project_root,
+            "models",
+            "people_semantic_models.yml",
+        )
         write_file(people_metrics_yml, project.project_root, "models", "people_metrics.yml")
         results = run_dbt(["run"])
         assert len(results) == 1

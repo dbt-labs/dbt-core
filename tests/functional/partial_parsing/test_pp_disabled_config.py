@@ -11,6 +11,24 @@ version: 2
 models:
     - name: model_one
 
+semantic_models:
+  - name: semantic_people
+    model: ref('people')
+    dimensions:
+      - name: created_at
+        type: TIME
+        type_params:
+          time_granularity: day
+    measures:
+      - name: people
+        agg: count
+        expr: fun
+    entities:
+      - name: fun
+        type: primary
+    defaults:
+      agg_time_dimension: created_at
+
 metrics:
 
   - name: number_of_people
@@ -38,6 +56,24 @@ version: 2
 
 models:
     - name: model_one
+
+semantic_models:
+  - name: semantic_people
+    model: ref('people')
+    dimensions:
+      - name: created_at
+        type: TIME
+        type_params:
+          time_granularity: day
+    measures:
+      - name: people
+        agg: count
+        expr: fun
+    entities:
+      - name: fun
+        type: primary
+    defaults:
+      agg_time_dimension: created_at
 
 metrics:
 
@@ -70,6 +106,24 @@ version: 2
 
 models:
     - name: model_one
+
+semantic_models:
+  - name: semantic_people
+    model: ref('people')
+    dimensions:
+      - name: created_at
+        type: TIME
+        type_params:
+          time_granularity: day
+    measures:
+      - name: people
+        agg: count
+        expr: fun
+    entities:
+      - name: fun
+        type: primary
+    defaults:
+      agg_time_dimension: created_at
 
 metrics:
 
