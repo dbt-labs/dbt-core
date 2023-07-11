@@ -113,6 +113,10 @@ analyses__disabled_a_sql = """
 select 9 as id
 """
 
+metricflow_time_spine_sql = """
+SELECT to_date('02/20/2023', 'mm/dd/yyyy') as date_day
+"""
+
 # Use old attribute names (v1.0-1.2) to test forward/backward compatibility with the rename in v1.3
 models__schema_yml = """
 version: 2
@@ -129,7 +133,7 @@ models:
 
 semantic_models:
   - name: semantic_people
-    model: ref('people')
+    model: ref('my_model')
     dimensions:
       - name: favorite_color
         type: categorical
@@ -142,6 +146,9 @@ semantic_models:
         agg: SUM
         expr: tenure
       - name: people
+        agg: count
+        expr: id
+      - name: customers
         agg: count
         expr: id
     entities:
@@ -231,6 +238,7 @@ class TestPreviousVersionState:
             "schema.yml": models__schema_yml,
             "somedoc.md": docs__somedoc_md,
             "disabled_model.sql": models__disabled_model_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
         }
 
     @pytest.fixture(scope="class")
@@ -273,10 +281,10 @@ class TestPreviousVersionState:
         # This is mainly used to test changes to the test project in isolation from
         # the other noise.
         results = run_dbt(["run"])
-        assert len(results) == 1
+        assert len(results) == 2
         manifest = get_manifest(project.project_root)
         # model, snapshot, seed, singular test, generic test, analysis
-        assert len(manifest.nodes) == 7
+        assert len(manifest.nodes) == 8
         assert len(manifest.sources) == 1
         assert len(manifest.exposures) == 1
         assert len(manifest.metrics) == 1
@@ -320,7 +328,7 @@ class TestPreviousVersionState:
         ]
         if expect_pass:
             results = run_dbt(cli_args, expect_pass=expect_pass)
-            assert len(results) == 0
+            assert len(results) == 1
         else:
             with pytest.raises(IncompatibleSchemaError):
                 run_dbt(cli_args, expect_pass=expect_pass)
