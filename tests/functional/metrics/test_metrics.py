@@ -22,6 +22,8 @@ from tests.functional.metrics.fixtures import (
     derived_metric_yml,
     invalid_metric_without_timestamp_with_time_grains_yml,
     invalid_metric_without_timestamp_with_window_yml,
+    metricflow_time_spine_sql,
+    semantic_model_people_yml,
 )
 
 
@@ -30,6 +32,8 @@ class TestSimpleMetrics:
     def models(self):
         return {
             "people_metrics.yml": models_people_metrics_yml,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+            "semantic_model_people.yml": semantic_model_people_yml,
             "people.sql": models_people_sql,
         }
 
