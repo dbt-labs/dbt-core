@@ -3,6 +3,7 @@ import pytest
 from dbt.tests.util import run_dbt, write_file, get_manifest
 from tests.functional.partial_parsing.fixtures import (
     people_sql,
+    metricflow_time_spine_sql,
     people_semantic_models_yml,
     people_metrics_yml,
     people_metrics2_yml,
@@ -18,14 +19,15 @@ class TestMetrics:
     def models(self):
         return {
             "people.sql": people_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
         }
 
     def test_metrics(self, project):
         # initial run
         results = run_dbt(["run"])
-        assert len(results) == 1
+        assert len(results) == 2
         manifest = get_manifest(project.project_root)
-        assert len(manifest.nodes) == 1
+        assert len(manifest.nodes) == 2
 
         # Add metrics yaml file (and necessary semantic models yaml)
         write_file(
@@ -36,7 +38,7 @@ class TestMetrics:
         )
         write_file(people_metrics_yml, project.project_root, "models", "people_metrics.yml")
         results = run_dbt(["run"])
-        assert len(results) == 1
+        assert len(results) == 2
         manifest = get_manifest(project.project_root)
         assert len(manifest.metrics) == 2
         metric_people_id = "metric.test.number_of_people"
@@ -55,7 +57,7 @@ class TestMetrics:
         # Change metrics yaml files
         write_file(people_metrics2_yml, project.project_root, "models", "people_metrics.yml")
         results = run_dbt(["run"])
-        assert len(results) == 1
+        assert len(results) == 2
         manifest = get_manifest(project.project_root)
         metric_people = manifest.metrics[metric_people_id]
         expected_meta = {"my_meta": "replaced"}
