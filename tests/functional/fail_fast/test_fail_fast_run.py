@@ -28,7 +28,11 @@ class TestFastFailingDuringRun(FailFastBase):
         models,  # noqa: F811
     ):
         res = run_dbt(["run", "--fail-fast", "--threads", "1"], expect_pass=False)
-        assert len(res.results) == 1
+        assert {r.node.unique_id: r.status for r in res.results} == {
+            "model.test.one": "success",
+            "model.test.two": "error",
+        }
+
         run_results_file = Path(project.project_root) / "target/run_results.json"
         assert run_results_file.is_file()
         with run_results_file.open() as run_results_str:
@@ -54,4 +58,7 @@ class TestFailFastFromConfig(FailFastBase):
         models,  # noqa: F811
     ):
         res = run_dbt(["run", "--threads", "1"], expect_pass=False)
-        assert len(res.results) == 1
+        assert {r.node.unique_id: r.status for r in res.results} == {
+            "model.test.one": "success",
+            "model.test.two": "error",
+        }
