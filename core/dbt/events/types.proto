@@ -1232,10 +1232,22 @@ message ParseInlineNodeError{
     NodeInfo node_info = 1;
     string exc = 2;
 }
+
 message ParseInlineNodeErrorMsg {
     EventInfo info = 1;
     ParseInlineNodeError data = 2;
 }
+
+// I070
+message SemanticValidationFailure {
+    string msg = 2;
+}
+
+message SemanticValidationFailureMsg {
+    EventInfo info = 1;
+    SemanticValidationFailure data = 2;
+}
+
 
 // M - Deps generation
 

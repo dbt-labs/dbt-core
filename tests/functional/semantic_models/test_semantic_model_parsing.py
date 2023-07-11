@@ -1,9 +1,12 @@
+from typing import List
+
 import pytest
 
 from dbt_semantic_interfaces.type_enums.time_granularity import TimeGranularity
 
 from dbt.cli.main import dbtRunner
 from dbt.contracts.graph.manifest import Manifest
+from dbt.events.base_types import BaseEvent
 from dbt.tests.util import write_file
 
 
@@ -23,15 +26,19 @@ semantic_models:
       - name: txn_revenue
         expr: revenue
         agg: sum
+        agg_time_dimension: ds
       - name: sum_of_things
         expr: 2
         agg: sum
+        agg_time_dimension: ds
       - name: has_revenue
         expr: true
         agg: sum_boolean
+        agg_time_dimension: ds
       - name: discrete_order_value_p99
         expr: order_total
         agg: percentile
+        agg_time_dimension: ds
         agg_params:
           percentile: 0.99
           use_discrete_percentile: True
@@ -39,6 +46,7 @@ semantic_models:
       - name: test_agg_params_optional_are_empty
         expr: order_total
         agg: percentile
+        agg_time_dimension: ds
         agg_params:
           percentile: 0.99
 
@@ -53,6 +61,14 @@ semantic_models:
       - name: user
         type: foreign
         expr: user_id
+
+metrics:
+  - name: records_with_revenue
+    label: "Number of records with revenue"
+    description: Total number of records with revenue
+    type: simple
+    type_params:
+      measure: has_revenue
 """
 
 schema_without_semantic_model_yml = """models:
@@ -108,6 +124,28 @@ class TestSemanticModelParsing:
             == f'"dbt"."{project.test_schema}"."fct_revenue"'
         )
         assert len(semantic_model.measures) == 5
+
+    def test_semantic_model_error(self, project):
+        # Next, modify the default schema.yml to remove the semantic model.
+        error_schema_yml = schema_yml.replace("sum_of_things", "has_revenue")
+        write_file(error_schema_yml, project.project_root, "models", "schema.yml")
+        events: List[BaseEvent] = []
+        runner = dbtRunner(callbacks=[events.append])
+        result = runner.invoke(["parse"])
+        assert not result.success
+
+        validation_errors = [e for e in events if e.info.name == "SemanticValidationFailure"]
+        assert validation_errors
+
+
+class TestSemanticModelPartialParsing:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": schema_yml,
+            "fct_revenue.sql": fct_revenue_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+        }
 
     def test_semantic_model_changed_partial_parsing(self, project):
         # First, use the default schema.yml to define our semantic model, and
