@@ -5,6 +5,10 @@ model_one_sql = """
 select 1 as fun
 """
 
+metricflow_time_spine_sql = """
+SELECT to_date('02/20/2023', 'mm/dd/yyyy') as date_day
+"""
+
 schema1_yml = """
 version: 2
 
@@ -13,7 +17,7 @@ models:
 
 semantic_models:
   - name: semantic_people
-    model: ref('people')
+    model: ref('model_one')
     dimensions:
       - name: created_at
         type: TIME
@@ -59,7 +63,7 @@ models:
 
 semantic_models:
   - name: semantic_people
-    model: ref('people')
+    model: ref('model_one')
     dimensions:
       - name: created_at
         type: TIME
@@ -109,7 +113,7 @@ models:
 
 semantic_models:
   - name: semantic_people
-    model: ref('people')
+    model: ref('model_one')
     dimensions:
       - name: created_at
         type: TIME
@@ -162,6 +166,7 @@ class TestDisabled:
     def models(self):
         return {
             "model_one.sql": model_one_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
             "schema.yml": schema1_yml,
         }
 
@@ -170,10 +175,8 @@ class TestDisabled:
         expected_metric = "metric.test.number_of_people"
 
         run_dbt(["seed"])
-        results = run_dbt(["run"])
-        assert len(results) == 1
+        manifest = run_dbt(["parse"])
 
-        manifest = get_manifest(project.project_root)
         assert expected_exposure in manifest.exposures
         assert expected_metric in manifest.metrics
         assert expected_exposure not in manifest.disabled
@@ -182,7 +185,7 @@ class TestDisabled:
         # Update schema file with disabled metric and exposure
         write_file(schema2_yml, project.project_root, "models", "schema.yml")
         results = run_dbt(["--partial-parse", "run"])
-        assert len(results) == 1
+        assert len(results) == 2
         manifest = get_manifest(project.project_root)
         assert expected_exposure not in manifest.exposures
         assert expected_metric not in manifest.metrics
@@ -192,7 +195,7 @@ class TestDisabled:
         # Update schema file with enabled metric and exposure
         write_file(schema1_yml, project.project_root, "models", "schema.yml")
         results = run_dbt(["--partial-parse", "run"])
-        assert len(results) == 1
+        assert len(results) == 2
         manifest = get_manifest(project.project_root)
         assert expected_exposure in manifest.exposures
         assert expected_metric in manifest.metrics
@@ -202,7 +205,7 @@ class TestDisabled:
         # Update schema file - remove exposure, enable metric
         write_file(schema3_yml, project.project_root, "models", "schema.yml")
         results = run_dbt(["--partial-parse", "run"])
-        assert len(results) == 1
+        assert len(results) == 2
         manifest = get_manifest(project.project_root)
         assert expected_exposure not in manifest.exposures
         assert expected_metric in manifest.metrics
@@ -212,7 +215,7 @@ class TestDisabled:
         # Update schema file - add back exposure, remove metric
         write_file(schema4_yml, project.project_root, "models", "schema.yml")
         results = run_dbt(["--partial-parse", "run"])
-        assert len(results) == 1
+        assert len(results) == 2
         manifest = get_manifest(project.project_root)
         assert expected_exposure not in manifest.exposures
         assert expected_metric not in manifest.metrics

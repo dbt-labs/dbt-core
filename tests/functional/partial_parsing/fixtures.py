@@ -398,7 +398,7 @@ select 1 as fun
 """
 
 metricflow_time_spine_sql = """
-SELECT to_date('02/20/2023, 'mm/dd/yyyy') as date_day
+SELECT to_date('02/20/2023', 'mm/dd/yyyy') as date_day
 """
 
 env_var_schema3_yml = """

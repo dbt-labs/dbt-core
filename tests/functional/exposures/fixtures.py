@@ -8,7 +8,7 @@ select 1 as id
 
 
 metricflow_time_spine_sql = """
-SELECT to_date('02/20/2023, 'mm/dd/yyyy') as date_day
+SELECT to_date('02/20/2023', 'mm/dd/yyyy') as date_day
 """
 
 
