@@ -47,7 +47,7 @@ from dbt.logger import (
     NodeCount,
 )
 from dbt.parser.manifest import write_manifest
-from dbt.task.base import ConfiguredTask, skip_result
+from dbt.task.base import ConfiguredTask, mark_node_as_skipped
 from .printer import (
     print_run_result_error,
     print_run_end_messages,
@@ -360,11 +360,11 @@ class GraphRunnableTask(ConfiguredTask):
         except FailFastError as failure:
             self._cancel_connections(pool)
 
-            node_results_ids = [r.node.unique_id for r in self.node_results]
+            executed_node_ids = [r.node.unique_id for r in self.node_results]
 
             for r in self._flattened_nodes:
-                if r.unique_id not in node_results_ids:
-                    self.node_results.append(skip_result(r, "Skipping due to fail_fast"))
+                if r.unique_id not in executed_node_ids:
+                    self.node_results.append(mark_node_as_skipped(r, "Skipping due to fail_fast"))
 
             print_run_result_error(failure.result)
             raise

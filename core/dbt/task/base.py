@@ -192,7 +192,7 @@ class ExecutionContext:
         self.node = node
 
 
-def skip_result(node, message):
+def mark_node_as_skipped(node, message):
     thread_id = threading.current_thread().name
     return RunResult(
         status=RunStatus.Skipped,
@@ -484,7 +484,7 @@ class BaseRunner(metaclass=ABCMeta):
                     )
                 )
 
-        node_result = skip_result(self.node, error_message)
+        node_result = mark_node_as_skipped(self.node, error_message)
         return node_result
 
     def do_skip(self, cause=None):
