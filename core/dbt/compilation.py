@@ -173,6 +173,8 @@ class Linker:
                 self.dependency(node.unique_id, (manifest.sources[dependency].unique_id))
             elif dependency in manifest.metrics:
                 self.dependency(node.unique_id, (manifest.metrics[dependency].unique_id))
+            elif dependency in manifest.semantic_models:
+                self.dependency(node.unique_id, (manifest.semantic_models[dependency].unique_id))
             else:
                 raise GraphDependencyNotFoundError(node, dependency)
 
