@@ -192,20 +192,6 @@ class ExecutionContext:
         self.node = node
 
 
-def mark_node_as_skipped(node, message):
-    thread_id = threading.current_thread().name
-    return RunResult(
-        status=RunStatus.Skipped,
-        thread_id=thread_id,
-        execution_time=0,
-        timing=[],
-        message=message,
-        node=node,
-        adapter_response={},
-        failures=None,
-    )
-
-
 class BaseRunner(metaclass=ABCMeta):
     def __init__(self, config, adapter, node, node_index, num_nodes):
         self.config = config
@@ -484,7 +470,7 @@ class BaseRunner(metaclass=ABCMeta):
                     )
                 )
 
-        node_result = mark_node_as_skipped(self.node, error_message)
+        node_result = RunResult.from_node(self.node, RunStatus.Skipped, error_message)
         return node_result
 
     def do_skip(self, cause=None):

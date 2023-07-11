@@ -1,3 +1,5 @@
+import threading
+
 from dbt.contracts.graph.unparsed import FreshnessThreshold
 from dbt.contracts.graph.nodes import SourceDefinition, ResultNode
 from dbt.contracts.util import (
@@ -160,6 +162,20 @@ class RunResult(NodeResult):
     @property
     def skipped(self):
         return self.status == RunStatus.Skipped
+
+    @classmethod
+    def from_node(cls, node: ResultNode, status: RunStatus, message: Optional[str]):
+        thread_id = threading.current_thread().name
+        return RunResult(
+            status=status,
+            thread_id=thread_id,
+            execution_time=0,
+            timing=[],
+            message=message,
+            node=node,
+            adapter_response={},
+            failures=None,
+        )
 
 
 @dataclass

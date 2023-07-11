@@ -14,7 +14,13 @@ from dbt.adapters.base import BaseRelation
 from dbt.adapters.factory import get_adapter
 from dbt.contracts.graph.manifest import WritableManifest
 from dbt.contracts.graph.nodes import ResultNode
-from dbt.contracts.results import NodeStatus, RunExecutionResult, RunningStatus
+from dbt.contracts.results import (
+    NodeStatus,
+    RunExecutionResult,
+    RunningStatus,
+    RunResult,
+    RunStatus,
+)
 from dbt.contracts.state import PreviousState
 from dbt.events.contextvars import log_contextvars, task_contextvars
 from dbt.events.functions import fire_event, warn_or_error
@@ -47,7 +53,7 @@ from dbt.logger import (
     NodeCount,
 )
 from dbt.parser.manifest import write_manifest
-from dbt.task.base import ConfiguredTask, mark_node_as_skipped
+from dbt.task.base import ConfiguredTask
 from .printer import (
     print_run_result_error,
     print_run_end_messages,
@@ -364,7 +370,9 @@ class GraphRunnableTask(ConfiguredTask):
 
             for r in self._flattened_nodes:
                 if r.unique_id not in executed_node_ids:
-                    self.node_results.append(mark_node_as_skipped(r, "Skipping due to fail_fast"))
+                    self.node_results.append(
+                        RunResult.from_node(r, RunStatus.Skipped, "Skipping due to fail_fast")
+                    )
 
             print_run_result_error(failure.result)
             raise
