@@ -18,9 +18,14 @@ from tests.functional.defer_state.fixtures import (
     exposures_yml,
     macros_sql,
     infinite_macros_sql,
+    no_contract_schema_yml,
     contract_schema_yml,
     modified_contract_schema_yml,
     disabled_contract_schema_yml,
+    versioned_no_contract_schema_yml,
+    versioned_contract_schema_yml,
+    versioned_disabled_contract_schema_yml,
+    versioned_modified_contract_schema_yml,
 )
 
 
@@ -267,11 +272,17 @@ class TestChangedExposure(BaseModifiedState):
 
 
 class TestChangedContract(BaseModifiedState):
+    MODEL_UNIQUE_ID = "model.test.table_model"
+    CONTRACT_SCHEMA_YML = contract_schema_yml
+    MODIFIED_SCHEMA_YML = modified_contract_schema_yml
+    DISABLED_SCHEMA_YML = disabled_contract_schema_yml
+    NO_CONTRACT_SCHEMA_YML = no_contract_schema_yml
+
     def test_changed_contract(self, project):
         self.run_and_save_state()
 
         # update contract for table_model
-        write_file(contract_schema_yml, "models", "schema.yml")
+        write_file(self.CONTRACT_SCHEMA_YML, "models", "schema.yml")
 
         # This will find the table_model node modified both through a config change
         # and by a non-breaking change to contract: true
@@ -279,7 +290,7 @@ class TestChangedContract(BaseModifiedState):
         assert len(results) == 1
         assert results[0].node.name == "table_model"
         manifest = get_manifest(project.project_root)
-        model_unique_id = "model.test.table_model"
+        model_unique_id = self.MODEL_UNIQUE_ID
         model = manifest.nodes[model_unique_id]
         expected_unrendered_config = {"contract": {"enforced": True}, "materialized": "table"}
         assert model.unrendered_config == expected_unrendered_config
@@ -295,7 +306,7 @@ class TestChangedContract(BaseModifiedState):
         self.copy_state()
 
         # This should raise because a column name has changed
-        write_file(modified_contract_schema_yml, "models", "schema.yml")
+        write_file(self.MODIFIED_SCHEMA_YML, "models", "schema.yml")
         results = run_dbt(["run"], expect_pass=False)
         assert len(results) == 2
         manifest = get_manifest(project.project_root)
@@ -307,14 +318,22 @@ class TestChangedContract(BaseModifiedState):
             results = run_dbt(["run", "--models", "state:modified.contract", "--state", "./state"])
 
         # Go back to schema file without contract. Should raise an error.
-        write_file(schema_yml, "models", "schema.yml")
+        write_file(self.NO_CONTRACT_SCHEMA_YML, "models", "schema.yml")
         with pytest.raises(ContractBreakingChangeError):
             results = run_dbt(["run", "--models", "state:modified.contract", "--state", "./state"])
 
         # Now disable the contract. Should raise an error.
-        write_file(disabled_contract_schema_yml, "models", "schema.yml")
+        write_file(self.DISABLED_SCHEMA_YML, "models", "schema.yml")
         with pytest.raises(ContractBreakingChangeError):
             results = run_dbt(["run", "--models", "state:modified.contract", "--state", "./state"])
+
+
+class TestChangedContractVersioned(TestChangedContract):
+    MODEL_UNIQUE_ID = "model.test.table_model.v1"
+    CONTRACT_SCHEMA_YML = versioned_contract_schema_yml
+    MODIFIED_SCHEMA_YML = versioned_modified_contract_schema_yml
+    DISABLED_SCHEMA_YML = versioned_disabled_contract_schema_yml
+    NO_CONTRACT_SCHEMA_YML = versioned_no_contract_schema_yml
 
 
 my_model_sql = """

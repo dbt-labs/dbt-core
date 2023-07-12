@@ -50,17 +50,25 @@ models:
       - name: name
 """
 
-contract_schema_yml = """
+no_contract_schema_yml = """
 version: 2
 models:
-  - name: view_model
+  - name: table_model
+    config: {}
     columns:
       - name: id
+        data_type: integer
         tests:
           - unique:
               severity: error
           - not_null
       - name: name
+        data_type: text
+"""
+
+contract_schema_yml = """
+version: 2
+models:
   - name: table_model
     config:
       contract:
@@ -79,14 +87,6 @@ models:
 modified_contract_schema_yml = """
 version: 2
 models:
-  - name: view_model
-    columns:
-      - name: id
-        tests:
-          - unique:
-              severity: error
-          - not_null
-      - name: name
   - name: table_model
     config:
       contract:
@@ -105,15 +105,88 @@ models:
 disabled_contract_schema_yml = """
 version: 2
 models:
-  - name: view_model
+  - name: table_model
+    config:
+      contract:
+        enforced: False
     columns:
       - name: id
+        data_type: integer
         tests:
           - unique:
               severity: error
           - not_null
       - name: name
+        data_type: text
+"""
+
+versioned_no_contract_schema_yml = """
+version: 2
+models:
   - name: table_model
+    config: {}
+    versions:
+      - v: 1
+    columns:
+      - name: id
+        data_type: integer
+        tests:
+          - unique:
+              severity: error
+          - not_null
+      - name: name
+        data_type: text
+"""
+
+versioned_contract_schema_yml = """
+version: 2
+models:
+  - name: table_model
+    config:
+      contract:
+        enforced: True
+    versions:
+      - v: 1
+    columns:
+      - name: id
+        data_type: integer
+        tests:
+          - unique:
+              severity: error
+          - not_null
+      - name: name
+        data_type: text
+"""
+
+versioned_modified_contract_schema_yml = """
+version: 2
+models:
+  - name: table_model
+    config:
+      contract:
+        enforced: True
+    versions:
+      - v: 1
+    columns:
+      - name: id
+        data_type: integer
+        tests:
+          - unique:
+              severity: error
+          - not_null
+      - name: user_name
+        data_type: text
+"""
+
+versioned_disabled_contract_schema_yml = """
+version: 2
+models:
+  - name: table_model
+    config:
+      contract:
+        enforced: False
+    versions:
+      - v: 1
     columns:
       - name: id
         data_type: integer
