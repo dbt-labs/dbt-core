@@ -84,8 +84,7 @@ def _generate_stats(manifest: Manifest):
         if _node_enabled(node):
             stats[node.resource_type] += 1
 
-    # REVIEW: Why are these counted if disabled, when nodes in the general node
-    # collection are not?
+    # Disabled nodes don't appear in the following collections, so we don't check.
     stats[NodeType.Source] += len(manifest.sources)
     stats[NodeType.Exposure] += len(manifest.exposures)
     stats[NodeType.Metric] += len(manifest.metrics)
