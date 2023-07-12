@@ -206,8 +206,9 @@ versioned_disabled_contract_schema_yml = """
 version: 2
 models:
   - name: table_model
-    contract:
-      enforced: False
+    config:
+      contract:
+        enforced: False
     versions:
       - v: 1
     columns:
