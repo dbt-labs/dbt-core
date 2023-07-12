@@ -626,9 +626,9 @@ class ModelNode(CompiledNode):
         # have contract enforced, because it won't be used.
         # This needs to be executed after contract config is set
 
-        # Should we make this a no-op, if the checksum already exists?
+        # Avoid rebuilding the checksum if it has already been set.
         if self.contract.checksum is not None:
-            pass
+            return
 
         if self.contract.enforced is True:
             contract_state = ""
