@@ -1,0 +1,6 @@
+kind: Fixes
+body: Detect breaking contract changes to versioned models
+time: 2023-07-11T17:19:01.120379-07:00
+custom:
+  Author: michelleark
+  Issue: "8030"
