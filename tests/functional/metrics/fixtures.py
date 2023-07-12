@@ -327,8 +327,7 @@ downstream_model_sql = """
         label: {{ m.label }}
         type: {{ m.type }}
         type_params: {{ m.type_params }}
-        filters {{ m.filter }}
-        window: {{ m.window }}
+        filter: {{ m.filter }}
     {% endfor %}
 
 {% endif %}
@@ -374,6 +373,35 @@ metrics:
 
       dimensions:
         - payment_type
+"""
+
+purchasing_model_sql = """
+select purchased_at, payment_type, payment_total from {{ ref('mock_purchase_data') }}
+"""
+
+semantic_model_purchasing_yml = """
+version: 2
+
+semantic_models:
+  - name: semantic_purchasing
+    model: ref('purchasing')
+    measures:
+      - name: num_orders
+        agg: COUNT
+        expr: purchased_at
+      - name: order_revenue
+        agg: SUM
+        expr: payment_total
+    dimensions:
+      - name: purchased_at
+        type: TIME
+    entities:
+      - name: purchase
+        type: primary
+        expr: '1'
+    defaults:
+      agg_time_dimension: purchased_at
+
 """
 
 derived_metric_yml = """
