@@ -174,9 +174,7 @@ Finally, you can also run a specific test or group of tests using [`pytest`](htt
 python3 -m pytest tests/unit/test_graph.py
 # run a specific unit test
 python3 -m pytest tests/unit/test_graph.py::GraphTest::test__dependency_list
-# run specific Postgres integration tests (old way)
-python3 -m pytest -m profile_postgres test/integration/074_postgres_unlogged_table_tests
-# run specific Postgres integration tests (new way)
+# run specific Postgres functional tests
 python3 -m pytest tests/functional/sources
 ```
 
@@ -186,8 +184,7 @@ python3 -m pytest tests/functional/sources
 
 Here are some general rules for adding tests:
 * unit tests (`tests/unit`) don’t need to access a database; "pure Python" tests should be written as unit tests
-* functional tests (`test/integration` & `tests/functional`) cover anything that interacts with a database, namely adapter
-* *everything in* `test/*` *is being steadily migrated to* `tests/*`
+* functional tests (`tests/functional`) cover anything that interacts with a database, namely adapter
 
 ## Debugging
 
