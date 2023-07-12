@@ -201,6 +201,33 @@ class TestInvalidDerivedMetrics:
             run_dbt(["run"])
 
 
+class TestMetricDependsOn:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "people.sql": models_people_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+            "semantic_models.yml": semantic_model_people_yml,
+            "people_metrics.yml": models_people_metrics_yml,
+        }
+
+    def test_metric_depends_on(self, project):
+        manifest = run_dbt(["parse"])
+        assert isinstance(manifest, Manifest)
+
+        expected_depends_on_for_number_of_people = ["semantic_model.test.semantic_people"]
+        expected_depends_on_for_average_tenure = [
+            "metric.test.collective_tenure",
+            "metric.test.number_of_people",
+        ]
+
+        number_of_people_metric = manifest.metrics["metric.test.number_of_people"]
+        assert number_of_people_metric.depends_on.nodes == expected_depends_on_for_number_of_people
+
+        average_tenure_metric = manifest.metrics["metric.test.average_tenure"]
+        assert average_tenure_metric.depends_on.nodes == expected_depends_on_for_average_tenure
+
+
 class TestDerivedMetric:
     @pytest.fixture(scope="class")
     def models(self):
