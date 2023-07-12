@@ -143,12 +143,5 @@ class Measure(dbtClassMixin):
     agg_time_dimension: Optional[str] = None
 
     @property
-    def checked_agg_time_dimension(self) -> TimeDimensionReference:
-        if self.agg_time_dimension is not None:
-            return TimeDimensionReference(element_name=self.agg_time_dimension)
-        else:
-            raise Exception("Measure is missing agg_time_dimension!")
-
-    @property
     def reference(self) -> MeasureReference:
         return MeasureReference(element_name=self.name)

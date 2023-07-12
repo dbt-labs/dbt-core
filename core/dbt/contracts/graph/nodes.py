@@ -52,6 +52,7 @@ from dbt_semantic_interfaces.references import (
     MeasureReference,
     LinkableElementReference,
     SemanticModelReference,
+    TimeDimensionReference,
 )
 from dbt_semantic_interfaces.references import MetricReference as DSIMetricReference
 from dbt_semantic_interfaces.type_enums import MetricType, TimeGranularity
@@ -1541,6 +1542,29 @@ class SemanticModel(GraphNode):
     @property
     def depends_on_macros(self):
         return self.depends_on.macros
+
+    def checked_agg_time_dimension_for_measure(
+        self, measure_reference: MeasureReference
+    ) -> TimeDimensionReference:
+        measure: Optional[Measure] = None
+        for measure in self.measures:
+            if measure.reference == measure_reference:
+                measure = measure
+
+        assert (
+            measure is not None
+        ), f"No measure with name ({measure_reference.element_name}) in semantic_model with name ({self.name})"
+
+        if self.defaults is not None:
+            default_agg_time_dimesion = self.defaults.agg_time_dimension
+
+        agg_time_dimension_name = measure.agg_time_dimension or default_agg_time_dimesion
+        assert agg_time_dimension_name is not None, (
+            f"Aggregation time dimension for measure {measure.name} is not set! This should either be set directly on "
+            f"the measure specification in the model, or else defaulted to the primary time dimension in the data "
+            f"source containing the measure."
+        )
+        return TimeDimensionReference(element_name=agg_time_dimension_name)
 
 
 # ====================================
