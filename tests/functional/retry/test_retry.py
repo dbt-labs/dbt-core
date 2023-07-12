@@ -12,6 +12,41 @@ from tests.functional.retry.fixtures import (
 )
 
 
+class TestCustomTargetRetry:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "sample_model.sql": models__sample_model,
+            "second_model.sql": models__second_model,
+            "schema.yml": schema_yml,
+        }
+
+    def test_custom_target(self, project):
+        run_dbt(["build", "--select", "second_model"])
+        run_dbt(
+            ["build", "--select", "sample_model", "--target-path", "target2"], expect_pass=False
+        )
+
+        # Regular retry - this is a no op because it's actually running `dbt build --select second_model`
+        # agian because it's looking at the default target since the custom_target wasn't passed in
+        results = run_dbt(["retry"])
+        assert len(results) == 0
+
+        # Retry with custom target after fixing the error
+        fixed_sql = "select 1 as id, 1 as foo"
+        write_file(fixed_sql, "models", "sample_model.sql")
+
+        results = run_dbt(["retry", "--state", "target2"])
+        expected_statuses = {
+            "sample_model": RunStatus.Success,
+            "accepted_values_sample_model_foo__False__3": TestStatus.Warn,
+        }
+
+        assert {n.node.name: n.status for n in results.results} == expected_statuses
+
+        write_file(models__sample_model, "models", "sample_model.sql")
+
+
 class TestRetry:
     @pytest.fixture(scope="class")
     def models(self):
@@ -102,31 +137,6 @@ class TestRetry:
 
         # Retry with --warn-error, should fail
         run_dbt(["--warn-error", "retry"], expect_pass=False)
-
-    def test_custom_target(self, project):
-        run_dbt(["build", "--select", "second_model"])
-        run_dbt(
-            ["build", "--select", "sample_model", "--target-path", "target2"], expect_pass=False
-        )
-
-        # Regular retry
-        results = run_dbt(["retry"])
-        expected_statuses = {"accepted_values_second_model_bar__False__3": TestStatus.Warn}
-        assert {n.node.name: n.status for n in results.results} == expected_statuses
-
-        # Retry with custom target
-        fixed_sql = "select 1 as id, 1 as foo"
-        write_file(fixed_sql, "models", "sample_model.sql")
-
-        results = run_dbt(["retry", "--state", "target2"])
-        expected_statuses = {
-            "sample_model": RunStatus.Success,
-            "accepted_values_sample_model_foo__False__3": TestStatus.Warn,
-        }
-
-        assert {n.node.name: n.status for n in results.results} == expected_statuses
-
-        write_file(models__sample_model, "models", "sample_model.sql")
 
     def test_run_operation(self, project):
         results = run_dbt(
