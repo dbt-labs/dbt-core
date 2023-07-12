@@ -1,0 +1,6 @@
+kind: Dependencies
+body: Bump `dbt-semantic-interfaces` to `~=0.1.0rc1`
+time: 2023-07-12T16:52:19.748953-07:00
+custom:
+  Author: QMalcolm
+  PR: "8082"
