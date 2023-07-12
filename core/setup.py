@@ -78,7 +78,7 @@ setup(
         "minimal-snowplow-tracker~=0.0.2",
         # DSI is under active development, so we're pinning to specific dev versions for now.
         # TODO: Before RC/final release, update to use ~= pinning.
-        "dbt-semantic-interfaces==0.1.0.dev8",
+        "dbt-semantic-interfaces~=0.1.0.dev10",
         # ----
         # Expect compatibility with all new versions of these packages, so lower bounds only.
         "packaging>20.9",
