@@ -18,6 +18,7 @@ from dbt_semantic_interfaces.protocols import (
     MetricInputMeasure as DSIMetricInputMeasure,
     MetricTypeParams as DSIMetricTypeParams,
     SemanticModel as DSISemanticModel,
+    WhereFilter as DSIWhereFilter,
 )
 from dbt_semantic_interfaces.type_enums import (
     DimensionType,
@@ -65,6 +66,11 @@ class RuntimeCheckableMetricInputMeasure(DSIMetricInputMeasure, Protocol):
 
 @runtime_checkable
 class RuntimeCheckableMetricTypeParams(DSIMetricTypeParams, Protocol):
+    pass
+
+
+@runtime_checkable
+class RuntimeCheckableWhereFilter(DSIWhereFilter, Protocol):
     pass
 
 
@@ -144,6 +150,13 @@ def test_metric_node_satisfies_protocol():
         ),
     )
     assert isinstance(metric, RuntimeCheckableMetric)
+
+
+def test_where_filter_satisfies_protocol():
+    where_filter = WhereFilter(
+        where_sql_template="{{ dimension('dimension_name') }} AND {{ time_dimension('time_dimension_name', 'month') }} AND {{ entity('entity_name') }}"
+    )
+    assert isinstance(where_filter, RuntimeCheckableWhereFilter)
 
 
 def test_metric_input():
