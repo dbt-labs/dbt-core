@@ -26,6 +26,9 @@ semantic_models_schema_yml = """version: 2
 semantic_models:
   - name: semantic_model
     model: ref('model')
+    dimensions:
+      - name: created_at
+        type: time
     measures:
       - name: distinct_metrics
         agg: count_distinct
