@@ -48,9 +48,10 @@ def print_compile_stats(stats):
         NodeType.Analysis: "analysis",
         NodeType.Macro: "macro",
         NodeType.Operation: "operation",
-        NodeType.Seed: "seed file",
+        NodeType.Seed: "seed",
         NodeType.Source: "source",
         NodeType.Exposure: "exposure",
+        NodeType.SemanticModel: "semantic model",
         NodeType.Metric: "metric",
         NodeType.Group: "group",
     }
@@ -63,7 +64,8 @@ def print_compile_stats(stats):
         resource_counts = {k.pluralize(): v for k, v in results.items()}
         dbt.tracking.track_resource_counts(resource_counts)
 
-    stat_line = ", ".join([pluralize(ct, names.get(t)) for t, ct in results.items() if t in names])
+    # do not include resource types that are not actually defined in the project
+    stat_line = ", ".join([pluralize(ct, names.get(t)) for t, ct in stats.items() if t in names])
 
     fire_event(FoundStats(stat_line=stat_line))
 
@@ -92,6 +94,16 @@ def _generate_stats(manifest: Manifest):
         stats[macro.resource_type] += 1
     for group in manifest.groups.values():
         stats[group.resource_type] += 1
+
+    # TODO: should we be counting dimensions + entities?
+    # dimensions = set()
+    # entities = set()
+    for semantic_model in manifest.semantic_models.values():
+        stats[semantic_model.resource_type] += 1
+        # for dimension in semantic_model.dimensions:
+        #    dimensions.add(dimension.name)
+        # for entity in semantic_model.entities:
+        #    entities.add(entity.name)
     return stats
 
 
