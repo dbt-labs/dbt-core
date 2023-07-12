@@ -84,26 +84,17 @@ def _generate_stats(manifest: Manifest):
         if _node_enabled(node):
             stats[node.resource_type] += 1
 
-    for source in manifest.sources.values():
-        stats[source.resource_type] += 1
-    for exposure in manifest.exposures.values():
-        stats[exposure.resource_type] += 1
-    for metric in manifest.metrics.values():
-        stats[metric.resource_type] += 1
-    for macro in manifest.macros.values():
-        stats[macro.resource_type] += 1
-    for group in manifest.groups.values():
-        stats[group.resource_type] += 1
+    # REVIEW: Why are these counted if disabled, when nodes in the general node
+    # collection are not?
+    stats[NodeType.Source] += len(manifest.sources)
+    stats[NodeType.Exposure] += len(manifest.exposures)
+    stats[NodeType.Metric] += len(manifest.metrics)
+    stats[NodeType.Macro] += len(manifest.macros)
+    stats[NodeType.Group] += len(manifest.groups)
+    stats[NodeType.SemanticModel] += len(manifest.semantic_models)
 
     # TODO: should we be counting dimensions + entities?
-    # dimensions = set()
-    # entities = set()
-    for semantic_model in manifest.semantic_models.values():
-        stats[semantic_model.resource_type] += 1
-        # for dimension in semantic_model.dimensions:
-        #    dimensions.add(dimension.name)
-        # for entity in semantic_model.entities:
-        #    entities.add(entity.name)
+
     return stats
 
 
