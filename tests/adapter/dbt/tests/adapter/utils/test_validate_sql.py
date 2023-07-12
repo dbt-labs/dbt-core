@@ -6,20 +6,20 @@ from dbt.adapters.base.impl import BaseAdapter
 from dbt.exceptions import DbtRuntimeError, InvalidConnectionError
 
 
-class BaseDryRunMethod:
-    """Tests the behavior of the dry run method for the relevant adapters.
+class BaseValidateSqlMethod:
+    """Tests the behavior of the validate_sql method for the relevant adapters.
 
     The valid and invalid SQL should work with most engines by default, but
     both inputs can be overridden as needed for a given engine to get the correct
     behavior.
 
-    The base method is meant to throw the appropriate custom exception when dry_run
+    The base method is meant to throw the appropriate custom exception when validate_sql
     fails.
     """
 
     @pytest.fixture(scope="class")
     def valid_sql(self) -> str:
-        """Returns a valid statement for issuing as a dry run query.
+        """Returns a valid statement for issuing as a validate_sql query.
 
         Ideally this would be checkable for non-execution. For example, we could use a
         CREATE TABLE statement with an assertion that no table was created. However,
@@ -33,7 +33,7 @@ class BaseDryRunMethod:
 
     @pytest.fixture(scope="class")
     def invalid_sql(self) -> str:
-        """Returns an invalid statement for issuing a bad dry run query."""
+        """Returns an invalid statement for issuing a bad validate_sql query."""
 
         return "Let's run some invalid SQL and see if we get an error!"
 
@@ -45,18 +45,18 @@ class BaseDryRunMethod:
         base exception for adapters to throw."""
         return DbtRuntimeError
 
-    def test_valid_dry_run(self, adapter: BaseAdapter, valid_sql: str) -> None:
-        """Executes a dry run query on valid SQL. No news is good news."""
+    def test_validate_sql_success(self, adapter: BaseAdapter, valid_sql: str) -> None:
+        """Executes validate_sql on valid SQL. No news is good news."""
         with adapter.connection_named("test_valid_sql_validation"):
             adapter.validate_sql(valid_sql)
 
-    def test_invalid_dry_run(
+    def test_validate_sql_failure(
         self,
         adapter: BaseAdapter,
         invalid_sql: str,
         expected_exception: Type[Exception],
     ) -> None:
-        """Executes a dry run query on invalid SQL, expecting the exception."""
+        """Executes validate_sql on invalid SQL, expecting the exception."""
         with pytest.raises(expected_exception=expected_exception) as excinfo:
             with adapter.connection_named("test_invalid_sql_validation"):
                 adapter.validate_sql(invalid_sql)
@@ -71,5 +71,5 @@ class BaseDryRunMethod:
             ) from excinfo.value
 
 
-class TestDryRunMethod(BaseDryRunMethod):
+class TestValidateSqlMethod(BaseValidateSqlMethod):
     pass
