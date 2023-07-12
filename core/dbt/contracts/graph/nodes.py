@@ -48,6 +48,7 @@ from dbt.events.types import (
 from dbt.events.contextvars import set_log_contextvars
 from dbt.flags import get_flags
 from dbt.node_types import ModelLanguage, NodeType, AccessType
+from dbt_semantic_interfaces.call_parameter_sets import FilterCallParameterSets
 from dbt_semantic_interfaces.references import (
     MeasureReference,
     LinkableElementReference,
@@ -56,6 +57,7 @@ from dbt_semantic_interfaces.references import (
 )
 from dbt_semantic_interfaces.references import MetricReference as DSIMetricReference
 from dbt_semantic_interfaces.type_enums import MetricType, TimeGranularity
+from dbt_semantic_interfaces.parsing.where_filter_parser import WhereFilterParser
 
 from .model_config import (
     NodeConfig,
@@ -1314,6 +1316,10 @@ class Exposure(GraphNode):
 @dataclass
 class WhereFilter(dbtClassMixin):
     where_sql_template: str
+
+    @property
+    def call_parameter_sets(self) -> FilterCallParameterSets:
+        return WhereFilterParser.parse_call_parameter_sets(self.where_sql_template)
 
 
 @dataclass
