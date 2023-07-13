@@ -689,7 +689,7 @@ class UnparsedEntity(dbtClassMixin):
 class UnparsedNonAdditiveDimension(dbtClassMixin):
     name: str
     window_choice: str  # AggregationType enum
-    window_grouples: List[str]
+    window_groupings: List[str]
 
 
 @dataclass

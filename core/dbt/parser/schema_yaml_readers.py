@@ -486,7 +486,7 @@ class SemanticModelParser(YamlReader):
             return NonAdditiveDimension(
                 name=unparsed.name,
                 window_choice=AggregationType(unparsed.window_choice),
-                window_grouples=unparsed.window_grouples,
+                window_groupings=unparsed.window_groupings,
             )
         else:
             return None

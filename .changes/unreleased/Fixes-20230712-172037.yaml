@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix typo in `NonAdditiveDimension` implementation
+time: 2023-07-12T17:20:37.089887-07:00
+custom:
+  Author: QMalcolm
+  Issue: "8088"
