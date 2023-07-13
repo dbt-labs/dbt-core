@@ -7,7 +7,13 @@ from dbt.contracts.graph.nodes import (
     SemanticModel,
     WhereFilter,
 )
-from dbt.contracts.graph.semantic_models import Dimension, DimensionTypeParams, Entity, Measure
+from dbt.contracts.graph.semantic_models import (
+    Dimension,
+    DimensionTypeParams,
+    Entity,
+    Measure,
+    NonAdditiveDimension,
+)
 from dbt.node_types import NodeType
 from dbt_semantic_interfaces.protocols import (
     Dimension as DSIDimension,
@@ -20,7 +26,11 @@ from dbt_semantic_interfaces.protocols import (
     SemanticModel as DSISemanticModel,
     WhereFilter as DSIWhereFilter,
 )
+from dbt_semantic_interfaces.protocols.measure import (
+    NonAdditiveDimensionParameters as DSINonAdditiveDimensionParameters,
+)
 from dbt_semantic_interfaces.type_enums import (
+    AggregationType,
     DimensionType,
     EntityType,
     MetricType,
@@ -71,6 +81,11 @@ class RuntimeCheckableMetricTypeParams(DSIMetricTypeParams, Protocol):
 
 @runtime_checkable
 class RuntimeCheckableWhereFilter(DSIWhereFilter, Protocol):
+    pass
+
+
+@runtime_checkable
+class RuntimeCheckableNonAdditiveDimension(DSINonAdditiveDimensionParameters, Protocol):
     pass
 
 
@@ -172,3 +187,12 @@ def test_metric_input_measure():
 def test_metric_type_params_satisfies_protocol():
     type_params = MetricTypeParams()
     assert isinstance(type_params, RuntimeCheckableMetricTypeParams)
+
+
+def test_non_additive_dimension_satisfies_protocol():
+    non_additive_dimension = NonAdditiveDimension(
+        name="dimension_name",
+        window_choice=AggregationType.MIN,
+        window_grouples=["entity_name"],
+    )
+    assert isinstance(non_additive_dimension, RuntimeCheckableNonAdditiveDimension)
