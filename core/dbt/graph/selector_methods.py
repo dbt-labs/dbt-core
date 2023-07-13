@@ -437,6 +437,8 @@ class ResourceTypeSelectorMethod(SelectorMethod):
 
 
 class TestNameSelectorMethod(SelectorMethod):
+    __test__ = False
+
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
         for node, real_node in self.parsed_nodes(included_nodes):
             if real_node.resource_type == NodeType.Test and hasattr(real_node, "test_metadata"):
@@ -445,6 +447,8 @@ class TestNameSelectorMethod(SelectorMethod):
 
 
 class TestTypeSelectorMethod(SelectorMethod):
+    __test__ = False
+
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
         search_type: Type
         # continue supporting 'schema' + 'data' for backwards compatibility

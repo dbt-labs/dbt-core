@@ -930,6 +930,8 @@ class SingularTestNode(TestShouldStoreFailures, CompiledNode):
 
 @dataclass
 class TestMetadata(dbtClassMixin, Replaceable):
+    __test__ = False
+
     name: str
     # kwargs are the args that are left in the test builder after
     # removing configs. They are set from the test builder when

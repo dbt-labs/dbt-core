@@ -651,6 +651,8 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
 
 # TestablePatchParser = seeds, snapshots
 class TestablePatchParser(NodePatchParser[UnparsedNodeUpdate]):
+    __test__ = False
+
     def get_block(self, node: UnparsedNodeUpdate) -> TestBlock:
         return TestBlock.from_yaml_block(self.yaml, node)
 
