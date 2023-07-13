@@ -193,6 +193,6 @@ def test_non_additive_dimension_satisfies_protocol():
     non_additive_dimension = NonAdditiveDimension(
         name="dimension_name",
         window_choice=AggregationType.MIN,
-        window_grouples=["entity_name"],
+        window_groupings=["entity_name"],
     )
     assert isinstance(non_additive_dimension, RuntimeCheckableNonAdditiveDimension)

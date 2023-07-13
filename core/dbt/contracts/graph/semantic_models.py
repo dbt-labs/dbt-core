@@ -128,7 +128,7 @@ class MeasureAggregationParameters(dbtClassMixin):
 class NonAdditiveDimension(dbtClassMixin):
     name: str
     window_choice: AggregationType
-    window_grouples: List[str]
+    window_groupings: List[str]
 
 
 @dataclass
