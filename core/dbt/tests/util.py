@@ -20,7 +20,7 @@ from dbt.events.functions import (
 )
 from dbt.events.base_types import EventLevel
 from dbt.events.types import Note
-
+from dbt.adapters.base.relation import BaseRelation
 
 # =============================================================================
 # Test utilities
@@ -588,3 +588,32 @@ class AnyStringWith:
 
     def __repr__(self):
         return "AnyStringWith<{!r}>".format(self.contains)
+
+
+def assert_message_in_logs(message: str, logs: str, expected_pass: bool = True):
+    # if the logs are json strings, then 'jsonify' the message because of things like escape quotes
+    if os.environ.get("DBT_LOG_FORMAT", "") == "json":
+        message = message.replace(r'"', r"\"")
+
+    if expected_pass:
+        assert message in logs
+    else:
+        assert message not in logs
+
+
+def get_project_config(project):
+    file_yaml = read_file(project.project_root, "dbt_project.yml")
+    return yaml.safe_load(file_yaml)
+
+
+def set_project_config(project, config):
+    config_yaml = yaml.safe_dump(config)
+    write_file(config_yaml, project.project_root, "dbt_project.yml")
+
+
+def get_model_file(project, relation: BaseRelation) -> str:
+    return read_file(project.project_root, "models", f"{relation.name}.sql")
+
+
+def set_model_file(project, relation: BaseRelation, model_sql: str):
+    write_file(model_sql, project.project_root, "models", f"{relation.name}.sql")
