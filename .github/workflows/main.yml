@@ -33,6 +33,13 @@ defaults:
   run:
     shell: bash
 
+env:
+  DD_CIVISIBILITY_AGENTLESS_ENABLED: true
+  DD_API_KEY: ${{ secrets.DATADOG_API_KEY }}
+  DD_SITE: datadoghq.com
+  DD_ENV: ci
+  DD_SERVICE: dbt-core
+
 jobs:
   code-quality:
     name: code-quality
