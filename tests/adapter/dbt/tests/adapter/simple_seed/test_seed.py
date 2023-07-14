@@ -169,10 +169,7 @@ class SeedUniqueDelimiterTestBase(SeedConfigBase):
     @pytest.fixture(scope="class")
     def project_config_update(self):
         return {
-            "seeds": {
-                "quote_columns": False,
-                "delimiter": "|"
-            },
+            "seeds": {"quote_columns": False, "delimiter": "|"},
         }
 
     @pytest.fixture(scope="class", autouse=True)
@@ -208,7 +205,9 @@ class SeedUniqueDelimiterTestBase(SeedConfigBase):
         if exists:
             check_table_does_exist(project.adapter, "models__downstream_from_seed_pipe_separated")
         else:
-            check_table_does_not_exist(project.adapter, "models__downstream_from_seed_pipe_separated")
+            check_table_does_not_exist(
+                project.adapter, "models__downstream_from_seed_pipe_separated"
+            )
 
 
 class TestSeedWithUniqueDelimiter(SeedUniqueDelimiterTestBase):
@@ -222,10 +221,7 @@ class TestSeedWithWrongDelimiter(SeedUniqueDelimiterTestBase):
     @pytest.fixture(scope="class")
     def project_config_update(self):
         return {
-            "seeds": {
-                "quote_columns": False,
-                "delimiter": ";"
-            },
+            "seeds": {"quote_columns": False, "delimiter": ";"},
         }
 
     def test_seed_with_wrong_delimiter(self, project):
@@ -238,10 +234,7 @@ class TestSeedWithEmptyDelimiter(SeedUniqueDelimiterTestBase):
     @pytest.fixture(scope="class")
     def project_config_update(self):
         return {
-            "seeds": {
-                "quote_columns": False,
-                "delimiter": ""
-            },
+            "seeds": {"quote_columns": False, "delimiter": ""},
         }
 
     def test_seed_with_empty_delimiter(self, project):
