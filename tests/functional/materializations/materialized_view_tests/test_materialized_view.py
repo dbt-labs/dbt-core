@@ -19,7 +19,7 @@ from tests.functional.materializations.materialized_view_tests.utils import (
 )
 
 
-class TestMaterializedViewsBasic(MaterializedViewBasic):
+class TestPostgresMaterializedViewsBasic(MaterializedViewBasic):
     @staticmethod
     def insert_record(project, table: BaseRelation, record: Tuple[int, int]):
         my_id, value = record
@@ -38,38 +38,6 @@ class TestMaterializedViewsBasic(MaterializedViewBasic):
     @staticmethod
     def query_relation_type(project, relation: BaseRelation) -> Optional[str]:
         return query_relation_type(project, relation)
-
-    @staticmethod
-    def swap_table_to_materialized_view(project, table):
-        initial_model = get_model_file(project, table)
-        new_model = initial_model.replace(
-            "materialized='table'", "materialized='materialized_view'"
-        )
-        set_model_file(project, table, new_model)
-
-    @staticmethod
-    def swap_view_to_materialized_view(project, view):
-        initial_model = get_model_file(project, view)
-        new_model = initial_model.replace(
-            "materialized='view'", "materialized='materialized_view'"
-        )
-        set_model_file(project, view, new_model)
-
-    @staticmethod
-    def swap_materialized_view_to_table(project, materialized_view):
-        initial_model = get_model_file(project, materialized_view)
-        new_model = initial_model.replace(
-            "materialized='materialized_view'", "materialized='table'"
-        )
-        set_model_file(project, materialized_view, new_model)
-
-    @staticmethod
-    def swap_materialized_view_to_view(project, materialized_view):
-        initial_model = get_model_file(project, materialized_view)
-        new_model = initial_model.replace(
-            "materialized='materialized_view'", "materialized='view'"
-        )
-        set_model_file(project, materialized_view, new_model)
 
     @pytest.mark.skip(
         "The current implementation does not support overwriting materialized views with tables."
