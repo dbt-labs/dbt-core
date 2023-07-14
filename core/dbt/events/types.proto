@@ -1227,6 +1227,27 @@ message UnsupportedConstraintMaterializationMsg {
     UnsupportedConstraintMaterialization data = 2;
 }
 
+// I069
+message ParseInlineNodeError{
+    NodeInfo node_info = 1;
+    string exc = 2;
+}
+
+message ParseInlineNodeErrorMsg {
+    EventInfo info = 1;
+    ParseInlineNodeError data = 2;
+}
+
+// I070
+message SemanticValidationFailure {
+    string msg = 2;
+}
+
+message SemanticValidationFailureMsg {
+    EventInfo info = 1;
+    SemanticValidationFailure data = 2;
+}
+
 
 // M - Deps generation
 
@@ -1515,18 +1536,6 @@ message NoNodesForSelectionCriteria {
 message NoNodesForSelectionCriteriaMsg {
     EventInfo info = 1;
     NoNodesForSelectionCriteria data = 2;
-}
-
-// P - Artifacts
-
-// P001
-message PublicationArtifactAvailable {
-    google.protobuf.Struct pub_artifact = 1;
-}
-
-message PublicationArtifactAvailableMsg {
-    EventInfo info = 1;
-    PublicationArtifactAvailable data = 2;
 }
 
 // Q - Node execution

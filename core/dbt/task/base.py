@@ -45,7 +45,6 @@ from dbt.flags import get_flags
 from dbt.graph import Graph
 from dbt.logger import log_manager
 from .printer import print_run_result_error
-from dbt.task.contextvars import cv_project_root
 
 
 class NoneConfig:
@@ -76,8 +75,6 @@ class BaseTask(metaclass=ABCMeta):
         self.args = args
         self.config = config
         self.project = config if isinstance(config, Project) else project
-        if self.config:
-            cv_project_root.set(self.config.project_root)
 
     @classmethod
     def pre_init_hook(cls, args):
@@ -299,19 +296,6 @@ class BaseRunner(metaclass=ABCMeta):
             failures=result.failures,
         )
 
-    def skip_result(self, node, message):
-        thread_id = threading.current_thread().name
-        return RunResult(
-            status=RunStatus.Skipped,
-            thread_id=thread_id,
-            execution_time=0,
-            timing=[],
-            message=message,
-            node=node,
-            adapter_response={},
-            failures=None,
-        )
-
     def compile_and_execute(self, manifest, ctx):
         result = None
         with self.adapter.connection_for(self.node) if get_flags().INTROSPECT else nullcontext():
@@ -486,7 +470,7 @@ class BaseRunner(metaclass=ABCMeta):
                     )
                 )
 
-        node_result = self.skip_result(self.node, error_message)
+        node_result = RunResult.from_node(self.node, RunStatus.Skipped, error_message)
         return node_result
 
     def do_skip(self, cause=None):

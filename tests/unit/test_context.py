@@ -182,6 +182,7 @@ REQUIRED_BASE_KEYS = frozenset(
         "log",
         "run_started_at",
         "invocation_id",
+        "thread_id",
         "modules",
         "flags",
         "print",
@@ -231,7 +232,7 @@ REQUIRED_MACRO_KEYS = REQUIRED_QUERY_HEADER_KEYS | {
     "dbt_metadata_envs",
 }
 REQUIRED_MODEL_KEYS = REQUIRED_MACRO_KEYS | {"this", "compiled_code"}
-MAYBE_KEYS = frozenset({"debug"})
+MAYBE_KEYS = frozenset({"debug", "defer_relation"})
 
 
 POSTGRES_PROFILE_DATA = {

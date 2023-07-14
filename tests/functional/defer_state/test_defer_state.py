@@ -7,10 +7,8 @@ import pytest
 
 from dbt.cli.exceptions import DbtUsageException
 from dbt.contracts.results import RunStatus
-from dbt.tests.util import run_dbt, write_file, rm_file
-
 from dbt.exceptions import DbtRuntimeError
-
+from dbt.tests.util import run_dbt, write_file, rm_file
 from tests.functional.defer_state.fixtures import (
     seed_csv,
     table_model_sql,
@@ -87,7 +85,7 @@ class BaseDeferState:
             f"{project_root}/target/manifest.json", f"{project_root}/state/manifest.json"
         )
 
-    def run_and_save_state(self, project_root):
+    def run_and_save_state(self, project_root, with_snapshot=False):
         results = run_dbt(["seed"])
         assert len(results) == 1
         assert not any(r.node.deferred for r in results)
@@ -96,6 +94,11 @@ class BaseDeferState:
         assert not any(r.node.deferred for r in results)
         results = run_dbt(["test"])
         assert len(results) == 2
+
+        if with_snapshot:
+            results = run_dbt(["snapshot"])
+            assert len(results) == 1
+            assert not any(r.node.deferred for r in results)
 
         # copy files
         self.copy_state(project_root)

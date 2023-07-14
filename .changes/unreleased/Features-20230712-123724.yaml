@@ -1,0 +1,6 @@
+kind: Features
+body: Begin populating `depends_on` of metric nodes
+time: 2023-07-12T12:37:24.01449-07:00
+custom:
+  Author: QMalcolm gshank
+  Issue: "7854"

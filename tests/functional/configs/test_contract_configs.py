@@ -388,7 +388,7 @@ class TestModelLevelContractErrorMessages:
             run_dbt(["run"], expect_pass=False)
 
         exc_str = " ".join(str(err_info.value).split())
-        expected_materialization_error = "Invalid value for on_schema_change: ignore. Models materialized as incremental with contracts enabled must set on_schema_change to 'append_new_columns'"
+        expected_materialization_error = "Invalid value for on_schema_change: ignore. Models materialized as incremental with contracts enabled must set on_schema_change to 'append_new_columns' or 'fail'"
         assert expected_materialization_error in str(exc_str)
 
 
@@ -471,3 +471,18 @@ class TestPythonModelLevelContractErrorMessages:
         exc_str = " ".join(str(err_info.value).split())
         expected_python_error = "Language Error: Expected 'sql' but found 'python'"
         assert expected_python_error in exc_str
+
+
+class TestModelContractMissingYAMLColumns:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_model.sql": my_model_contract_sql,
+        }
+
+    def test__missing_column_contract_error(self, project):
+        results = run_dbt(["run"], expect_pass=False)
+        expected_error = (
+            "This model has an enforced contract, and its 'columns' specification is missing"
+        )
+        assert expected_error in results[0].message

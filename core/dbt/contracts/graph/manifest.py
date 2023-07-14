@@ -1,9 +1,11 @@
 import enum
+from collections import defaultdict
 from dataclasses import dataclass, field
 from itertools import chain, islice
 from mashumaro.mixins.msgpack import DataClassMessagePackMixin
 from multiprocessing.synchronize import Lock
 from typing import (
+    DefaultDict,
     Dict,
     List,
     Optional,
@@ -22,8 +24,6 @@ from typing import (
 from typing_extensions import Protocol
 from uuid import UUID
 
-from dbt.contracts.publication import PublicationConfig
-
 from dbt.contracts.graph.nodes import (
     BaseNode,
     Documentation,
@@ -35,7 +35,7 @@ from dbt.contracts.graph.nodes import (
     ManifestNode,
     Metric,
     ModelNode,
-    RelationalNode,
+    DeferRelation,
     ResultNode,
     SemanticModel,
     SourceDefinition,
@@ -57,13 +57,11 @@ from dbt.helper_types import PathSet
 from dbt.events.functions import fire_event
 from dbt.events.types import MergedFromState, UnpinnedRefNewVersionAvailable
 from dbt.events.contextvars import get_node_info
-from dbt.node_types import NodeType
+from dbt.node_types import NodeType, AccessType
 from dbt.flags import get_flags, MP_CONTEXT
 from dbt import tracking
 import dbt.utils
-from dbt_semantic_interfaces.implementations.metric import PydanticMetric
-from dbt_semantic_interfaces.implementations.semantic_manifest import PydanticSemanticManifest
-from dbt_semantic_interfaces.implementations.semantic_model import PydanticSemanticModel
+
 
 NodeEdgeMap = Dict[str, List[str]]
 PackageName = str
@@ -299,6 +297,49 @@ class MetricLookup(dbtClassMixin):
                 f"Metric {unique_id} found in cache but not found in manifest"
             )
         return manifest.metrics[unique_id]
+
+
+class SemanticModelByMeasureLookup(dbtClassMixin):
+    """Lookup utility for finding SemanticModel by measure
+
+    This is possible because measure names are supposed to be unique across
+    the semantic models in a manifest.
+    """
+
+    def __init__(self, manifest: "Manifest"):
+        self.storage: DefaultDict[str, Dict[PackageName, UniqueID]] = defaultdict(dict)
+        self.populate(manifest)
+
+    def get_unique_id(self, search_name: str, package: Optional[PackageName]):
+        return find_unique_id_for_package(self.storage, search_name, package)
+
+    def find(
+        self, search_name: str, package: Optional[PackageName], manifest: "Manifest"
+    ) -> Optional[SemanticModel]:
+        """Tries to find a SemanticModel based on a measure name"""
+        unique_id = self.get_unique_id(search_name, package)
+        if unique_id is not None:
+            return self.perform_lookup(unique_id, manifest)
+        return None
+
+    def add(self, semantic_model: SemanticModel):
+        """Sets all measures for a SemanticModel as paths to the SemanticModel's `unique_id`"""
+        for measure in semantic_model.measures:
+            self.storage[measure.name][semantic_model.package_name] = semantic_model.unique_id
+
+    def populate(self, manifest: "Manifest"):
+        """Populate storage with all the measure + package paths to the Manifest's SemanticModels"""
+        for semantic_model in manifest.semantic_models.values():
+            self.add(semantic_model=semantic_model)
+
+    def perform_lookup(self, unique_id: UniqueID, manifest: "Manifest") -> SemanticModel:
+        """Tries to get a SemanticModel from the Manifest"""
+        semantic_model = manifest.semantic_models.get(unique_id)
+        if semantic_model is None:
+            raise dbt.exceptions.DbtInternalError(
+                f"Semantic model `{unique_id}` found in cache but not found in manifest"
+            )
+        return semantic_model
 
 
 # This handles both models/seeds/snapshots and sources/metrics/exposures
@@ -700,7 +741,6 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     source_patches: MutableMapping[SourceKey, SourcePatch] = field(default_factory=dict)
     disabled: MutableMapping[str, List[GraphMemberNode]] = field(default_factory=dict)
     env_vars: MutableMapping[str, str] = field(default_factory=dict)
-    publications: MutableMapping[str, PublicationConfig] = field(default_factory=dict)
     semantic_models: MutableMapping[str, SemanticModel] = field(default_factory=dict)
 
     _doc_lookup: Optional[DocLookup] = field(
@@ -713,6 +753,9 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         default=None, metadata={"serialize": lambda x: None, "deserialize": lambda x: None}
     )
     _metric_lookup: Optional[MetricLookup] = field(
+        default=None, metadata={"serialize": lambda x: None, "deserialize": lambda x: None}
+    )
+    _semantic_model_by_measure_lookup: Optional[SemanticModelByMeasureLookup] = field(
         default=None, metadata={"serialize": lambda x: None, "deserialize": lambda x: None}
     )
     _disabled_lookup: Optional[DisabledLookup] = field(
@@ -851,7 +894,6 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             disabled={k: _deepcopy(v) for k, v in self.disabled.items()},
             files={k: _deepcopy(v) for k, v in self.files.items()},
             state_check=_deepcopy(self.state_check),
-            publications={k: _deepcopy(v) for k, v in self.publications.items()},
             semantic_models={k: _deepcopy(v) for k, v in self.semantic_models.items()},
         )
         copy.build_flat_graph()
@@ -966,6 +1008,13 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             self._metric_lookup = MetricLookup(self)
         return self._metric_lookup
 
+    @property
+    def semantic_model_by_measure_lookup(self) -> SemanticModelByMeasureLookup:
+        """Gets (and creates if necessary) the lookup utility for getting SemanticModels by measures"""
+        if self._semantic_model_by_measure_lookup is None:
+            self._semantic_model_by_measure_lookup = SemanticModelByMeasureLookup(self)
+        return self._semantic_model_by_measure_lookup
+
     def rebuild_ref_lookup(self):
         self._ref_lookup = RefableLookup(self)
 
@@ -983,20 +1032,6 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         if self._analysis_lookup is None:
             self._analysis_lookup = AnalysisLookup(self)
         return self._analysis_lookup
-
-    @property
-    def pydantic_semantic_manifest(self) -> PydanticSemanticManifest:
-        pydantic_semantic_manifest = PydanticSemanticManifest(metrics=[], semantic_models=[])
-
-        for semantic_model in self.semantic_models.values():
-            pydantic_semantic_manifest.semantic_models.append(
-                PydanticSemanticModel.parse_obj(semantic_model.to_dict())
-            )
-
-        for metric in self.metrics.values():
-            pydantic_semantic_manifest.metrics.append(PydanticMetric.parse_obj(metric.to_dict()))
-
-        return pydantic_semantic_manifest
 
     @property
     def external_node_unique_ids(self):
@@ -1107,6 +1142,25 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             return Disabled(disabled[0])
         return None
 
+    def resolve_semantic_model_for_measure(
+        self,
+        target_measure_name: str,
+        current_project: str,
+        node_package: str,
+        target_package: Optional[str] = None,
+    ) -> Optional[SemanticModel]:
+        """Tries to find the SemanticModel that a measure belongs to"""
+        candidates = _packages_to_search(current_project, node_package, target_package)
+
+        for pkg in candidates:
+            semantic_model = self.semantic_model_by_measure_lookup.find(
+                target_measure_name, pkg, self
+            )
+            if semantic_model is not None:
+                return semantic_model
+
+        return None
+
     # Called by DocsRuntimeContext.doc
     def resolve_doc(
         self,
@@ -1126,6 +1180,50 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             if result is not None:
                 return result
         return None
+
+    def is_invalid_private_ref(
+        self, node: GraphMemberNode, target_model: MaybeNonSource, dependencies: Optional[Mapping]
+    ) -> bool:
+        dependencies = dependencies or {}
+        if not isinstance(target_model, ModelNode):
+            return False
+
+        is_private_ref = (
+            target_model.access == AccessType.Private
+            # don't raise this reference error for ad hoc 'preview' queries
+            and node.resource_type != NodeType.SqlOperation
+            and node.resource_type != NodeType.RPCCall  # TODO: rm
+        )
+        target_dependency = dependencies.get(target_model.package_name)
+        restrict_package_access = target_dependency.restrict_access if target_dependency else False
+
+        # TODO: SemanticModel and SourceDefinition do not have group, and so should not be able to make _any_ private ref.
+        return is_private_ref and (
+            not hasattr(node, "group")
+            or not node.group
+            or node.group != target_model.group
+            or restrict_package_access
+        )
+
+    def is_invalid_protected_ref(
+        self, node: GraphMemberNode, target_model: MaybeNonSource, dependencies: Optional[Mapping]
+    ) -> bool:
+        dependencies = dependencies or {}
+        if not isinstance(target_model, ModelNode):
+            return False
+
+        is_protected_ref = (
+            target_model.access == AccessType.Protected
+            # don't raise this reference error for ad hoc 'preview' queries
+            and node.resource_type != NodeType.SqlOperation
+            and node.resource_type != NodeType.RPCCall  # TODO: rm
+        )
+        target_dependency = dependencies.get(target_model.package_name)
+        restrict_package_access = target_dependency.restrict_access if target_dependency else False
+
+        return is_protected_ref and (
+            node.package_name != target_model.package_name and restrict_package_access
+        )
 
     # Called by RunTask.defer_to_manifest
     def merge_from_artifact(
@@ -1178,8 +1276,10 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         for unique_id, node in other.nodes.items():
             current = self.nodes.get(unique_id)
             if current and (node.resource_type in refables and not node.is_ephemeral):
-                state_relation = RelationalNode(node.database, node.schema, node.alias)
-                self.nodes[unique_id] = current.replace(state_relation=state_relation)
+                defer_relation = DeferRelation(
+                    node.database, node.schema, node.alias, node.relation_name
+                )
+                self.nodes[unique_id] = current.replace(defer_relation=defer_relation)
 
     # Methods that were formerly in ParseResult
 
@@ -1297,12 +1397,12 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             self.source_patches,
             self.disabled,
             self.env_vars,
-            self.publications,
             self.semantic_models,
             self._doc_lookup,
             self._source_lookup,
             self._ref_lookup,
             self._metric_lookup,
+            self._semantic_model_by_measure_lookup,
             self._disabled_lookup,
             self._analysis_lookup,
         )
@@ -1401,8 +1501,8 @@ class WritableManifest(ArtifactMixin):
         for unique_id, node in dct["nodes"].items():
             if "config_call_dict" in node:
                 del node["config_call_dict"]
-            if "state_relation" in node:
-                del node["state_relation"]
+            if "defer_relation" in node:
+                del node["defer_relation"]
         return dct
 
 

@@ -1,0 +1,7 @@
+kind: Fixes
+body: Remove `create_metric` as a `SemanticModel.Measure` property because it currently
+  doesn't do anything
+time: 2023-07-11T08:32:13.158779-07:00
+custom:
+  Author: QMalcolm
+  Issue: "8064"

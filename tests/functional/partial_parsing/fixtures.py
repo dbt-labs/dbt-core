@@ -397,6 +397,10 @@ select 1 as fun
 
 """
 
+metricflow_time_spine_sql = """
+SELECT to_date('02/20/2023', 'mm/dd/yyyy') as date_day
+"""
+
 env_var_schema3_yml = """
 
 models:
@@ -419,6 +423,33 @@ exposures:
       - ref("model_color")
       - source("seed_sources", "raw_customers")
 
+"""
+
+people_semantic_models_yml = """
+version: 2
+
+semantic_models:
+  - name: semantic_people
+    model: ref('people')
+    dimensions:
+      - name: favorite_color
+        type: categorical
+      - name: created_at
+        type: TIME
+        type_params:
+          time_granularity: day
+    measures:
+      - name: years_tenure
+        agg: SUM
+        expr: tenure
+      - name: people
+        agg: count
+        expr: id
+    entities:
+      - name: id
+        type: primary
+    defaults:
+      agg_time_dimension: created_at
 """
 
 env_var_metrics_yml = """
@@ -1194,68 +1225,4 @@ sources_tests1_sql = """
 {% endtest %}
 
 
-"""
-
-dependencies_yml = """
-projects:
-  - name: marketing
-"""
-
-empty_dependencies_yml = """
-projects: []
-"""
-
-marketing_pub_json = """
-{
-  "project_name": "marketing",
-  "metadata": {
-    "dbt_schema_version": "https://schemas.getdbt.com/dbt/publication/v1.json",
-    "dbt_version": "1.5.0",
-    "generated_at": "2023-04-13T17:17:58.128706Z",
-    "invocation_id": "56e3126f-78c7-470c-8eb0-c94af7c3eaac",
-    "env": {},
-    "adapter_type": "postgres",
-    "quoting": {
-      "database": true,
-      "schema": true,
-      "identifier": true
-    }
-  },
-  "public_models": {
-    "model.marketing.fct_one": {
-      "name": "fct_one",
-      "package_name": "marketing",
-      "unique_id": "model.marketing.fct_one",
-      "relation_name": "\\"dbt\\".\\"test_schema\\".\\"fct_one\\"",
-      "database": "dbt",
-      "schema": "test_schema",
-      "identifier": "fct_one",
-      "version": null,
-      "latest_version": null,
-      "public_node_dependencies": [],
-      "generated_at": "2023-04-13T17:17:58.128706Z"
-    },
-    "model.marketing.fct_two": {
-      "name": "fct_two",
-      "package_name": "marketing",
-      "unique_id": "model.marketing.fct_two",
-      "relation_name": "\\"dbt\\".\\"test_schema\\".\\"fct_two\\"",
-      "database": "dbt",
-      "schema": "test_schema",
-      "identifier": "fct_two",
-      "version": null,
-      "latest_version": null,
-      "public_node_dependencies": ["model.test.fct_one"],
-      "generated_at": "2023-04-13T17:17:58.128706Z"
-    }
-  },
-  "dependencies": []
-}
-"""
-
-public_models_schema_yml = """
-models:
-  - name: orders
-    access: public
-    description: "Some order data"
 """

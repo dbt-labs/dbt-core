@@ -17,8 +17,10 @@ from tests.functional.partial_parsing.fixtures import (
     env_var_schema3_yml,
     env_var_schema_yml,
     env_var_sources_yml,
+    metricflow_time_spine_sql,
     model_color_sql,
     model_one_sql,
+    people_semantic_models_yml,
     people_sql,
     raw_customers_csv,
     test_color_sql,
@@ -228,6 +230,12 @@ class TestEnvVars:
         # Add a metrics file with env_vars
         os.environ["ENV_VAR_METRICS"] = "TeStInG"
         write_file(people_sql, project.project_root, "models", "people.sql")
+        write_file(
+            metricflow_time_spine_sql, project.project_root, "models", "metricflow_time_spine.sql"
+        )
+        write_file(
+            people_semantic_models_yml, project.project_root, "models", "semantic_models.yml"
+        )
         write_file(env_var_metrics_yml, project.project_root, "models", "metrics.yml")
         results = run_dbt(["run"])
         manifest = get_manifest(project.project_root)

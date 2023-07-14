@@ -1,0 +1,6 @@
+kind: Fixes
+body: Remove `VOLUME` declaration within Dockerfile
+time: 2023-07-11T14:14:32.117718-06:00
+custom:
+  Author: alexrosenfeld10
+  Issue: "4784"

@@ -31,3 +31,4 @@ types-pytz
 types-requests
 types-setuptools
 wheel
+mocker

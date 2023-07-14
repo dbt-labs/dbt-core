@@ -1,9 +1,9 @@
 # split_part
 
-seeds__data_split_part_csv = """parts,split_on,result_1,result_2,result_3
-a|b|c,|,a,b,c
-1|2|3,|,1,2,3
-,|,,,
+seeds__data_split_part_csv = """parts,split_on,result_1,result_2,result_3,result_4
+a|b|c,|,a,b,c,c
+1|2|3,|,1,2,3,3
+,|,,,,
 """
 
 
@@ -33,6 +33,14 @@ union all
 select
     {{ split_part('parts', 'split_on', 3) }} as actual,
     result_3 as expected
+
+from data
+
+union all
+
+select
+    {{ split_part('parts', 'split_on', -1) }} as actual,
+    result_4 as expected
 
 from data
 """

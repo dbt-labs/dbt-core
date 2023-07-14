@@ -3,6 +3,7 @@ from typing import Tuple, Iterable
 class Token:
     def __init__(self, ttype, value): ...
     is_keyword: bool
+    is_whitespace: bool
     normalized: str
 
 class TokenList(Token):

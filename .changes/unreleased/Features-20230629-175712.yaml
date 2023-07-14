@@ -1,0 +1,6 @@
+kind: Features
+body: Add validate_sql method to BaseAdapter with implementation for SQLAdapter
+time: 2023-06-29T17:57:12.599313-07:00
+custom:
+  Author: tlento
+  Issue: "7839"

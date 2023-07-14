@@ -1,0 +1,6 @@
+kind: Fixes
+body: Unified to UTC
+time: 2023-05-25T09:19:55.865281+09:00
+custom:
+  Author: d-kaneshiro
+  Issue: "7664"

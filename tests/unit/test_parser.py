@@ -311,6 +311,18 @@ models:
             - name: extra
 """
 
+MULTIPLE_TABLE_VERSIONED_MODEL_CONTRACT_ENFORCED = """
+models:
+    - name: my_model
+      config:
+        contract:
+            enforced: true
+      versions:
+        - v: 0
+          defined_in: arbitrary_file_name
+        - v: 2
+"""
+
 MULTIPLE_TABLE_VERSIONED_MODEL_V0 = """
 models:
     - name: my_model
@@ -726,6 +738,18 @@ class SchemaParserVersionedModels(SchemaParserTest):
         dct = yaml_from_file(block.file)
         self.parser.parse_file(block, dct)
         self.assert_has_manifest_lengths(self.parser.manifest, nodes=2)
+
+    def test__parsed_versioned_models_contract_enforced(self):
+        block = self.file_block_for(
+            MULTIPLE_TABLE_VERSIONED_MODEL_CONTRACT_ENFORCED, "test_one.yml"
+        )
+        self.parser.manifest.files[block.file.file_id] = block.file
+        dct = yaml_from_file(block.file)
+        self.parser.parse_file(block, dct)
+        self.assert_has_manifest_lengths(self.parser.manifest, nodes=2)
+        for node in self.parser.manifest.nodes.values():
+            assert node.contract.enforced
+            node.build_contract_checksum.assert_called()
 
     def test__parsed_versioned_models_v0(self):
         block = self.file_block_for(MULTIPLE_TABLE_VERSIONED_MODEL_V0, "test_one.yml")

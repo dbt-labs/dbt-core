@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix typo in ModelNodeArgs
+time: 2023-06-29T12:03:21.179283-04:00
+custom:
+  Author: michelleark
+  Issue: "7991"

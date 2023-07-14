@@ -206,6 +206,9 @@ class Flags:
             profiles_dir = getattr(self, "PROFILES_DIR", None)
             user_config = read_user_config(profiles_dir) if profiles_dir else None
 
+        # Add entire invocation command to flags
+        object.__setattr__(self, "INVOCATION_COMMAND", "dbt " + " ".join(sys.argv[1:]))
+
         # Overwrite default assignments with user config if available.
         if user_config:
             param_assigned_from_default_copy = params_assigned_from_default.copy()
@@ -373,6 +376,7 @@ def command_args(command: CliCommand) -> ArgsList:
     CMD_DICT: Dict[CliCommand, ClickCommand] = {
         CliCommand.BUILD: cli.build,
         CliCommand.CLEAN: cli.clean,
+        CliCommand.CLONE: cli.clone,
         CliCommand.COMPILE: cli.compile,
         CliCommand.DOCS_GENERATE: cli.docs_generate,
         CliCommand.DOCS_SERVE: cli.docs_serve,

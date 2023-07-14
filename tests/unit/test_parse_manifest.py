@@ -1,12 +1,16 @@
 import unittest
 from unittest import mock
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
+from argparse import Namespace
 
 from .utils import config_from_parts_or_dicts, normalize
 
 from dbt.contracts.files import SourceFile, FileHash, FilePath
 from dbt.contracts.graph.manifest import Manifest, ManifestStateCheck
 from dbt.parser import manifest
+from dbt.parser.manifest import ManifestLoader
+from dbt.config import RuntimeConfig
+from dbt.flags import set_from_args
 
 
 class MatchingHash(FileHash):
@@ -99,3 +103,21 @@ class TestLoader(unittest.TestCase):
             project_root=normalize(self.root_project_config.project_root),
         )
         return SourceFile(path=path, checksum=checksum)
+
+
+class TestPartialParse(unittest.TestCase):
+    @patch("dbt.parser.manifest.ManifestLoader.build_manifest_state_check")
+    @patch("dbt.parser.manifest.os.path.exists")
+    @patch("dbt.parser.manifest.open")
+    def test_partial_parse_file_path(self, patched_open, patched_os_exist, patched_state_check):
+        mock_project = MagicMock(RuntimeConfig)
+        mock_project.project_target_path = "mock_target_path"
+        patched_os_exist.return_value = True
+        set_from_args(Namespace(), {})
+        ManifestLoader(mock_project, {})
+        # by default we use the project_target_path
+        patched_open.assert_called_with("mock_target_path/partial_parse.msgpack", "rb")
+        set_from_args(Namespace(partial_parse_file_path="specified_partial_parse_path"), {})
+        ManifestLoader(mock_project, {})
+        # if specified in flags, we use the specified path
+        patched_open.assert_called_with("specified_partial_parse_path", "rb")

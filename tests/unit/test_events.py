@@ -247,6 +247,7 @@ sample_values = [
         ref_model_latest_version="",
     ),
     types.UnsupportedConstraintMaterialization(materialized=""),
+    types.ParseInlineNodeError(exc=""),
     # M - Deps generation ======================
     types.GitSparseCheckoutSubdirectory(subdir=""),
     types.GitProgressCheckoutRevision(revision=""),
@@ -274,8 +275,7 @@ sample_values = [
     types.RegistryResponseMissingNestedKeys(response=""),
     types.RegistryResponseExtraNestedKeys(response=""),
     types.DepsSetDownloadDirectory(path=""),
-    # P - Artifacts ===================
-    types.PublicationArtifactAvailable(),
+    types.SemanticValidationFailure(msg=""),
     # Q - Node execution ======================
     types.RunningOperationCaughtError(exc=""),
     types.CompileComplete(),

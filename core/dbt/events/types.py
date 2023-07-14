@@ -1216,6 +1216,22 @@ class UnsupportedConstraintMaterialization(WarnLevel):
         return line_wrap_message(warning_tag(msg))
 
 
+class ParseInlineNodeError(ErrorLevel):
+    def code(self):
+        return "I069"
+
+    def message(self) -> str:
+        return "Error while parsing node: " + self.node_info.node_name + "\n" + self.exc
+
+
+class SemanticValidationFailure(WarnLevel):
+    def code(self):
+        return "I070"
+
+    def message(self) -> str:
+        return self.msg
+
+
 # =======================================================
 # M - Deps generation
 # =======================================================
@@ -1461,19 +1477,6 @@ class NoNodesForSelectionCriteria(WarnLevel):
 
     def message(self) -> str:
         return f"The selection criterion '{self.spec_raw}' does not match any nodes"
-
-
-# =======================================================
-# Q - Node execution
-# =======================================================
-
-
-class PublicationArtifactAvailable(DebugLevel):
-    def code(self):
-        return "P001"
-
-    def message(self) -> str:
-        return "Publication artifact available"
 
 
 # =======================================================

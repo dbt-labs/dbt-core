@@ -1,0 +1,6 @@
+kind: Fixes
+body: Remove limitation on use of sqlparse 0.4.4
+time: 2023-06-21T18:54:52.246578-04:00
+custom:
+  Author: gshank
+  Issue: "7515"

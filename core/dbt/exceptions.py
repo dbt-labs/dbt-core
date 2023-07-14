@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
 
 from dbt.dataclass_schema import ValidationError
 from dbt.events.helpers import env_secrets, scrub_secrets
-from dbt.node_types import NodeType
+from dbt.node_types import NodeType, AccessType
 from dbt.ui import line_wrap_message
 
 import dbt.dataclass_schema
@@ -297,6 +297,11 @@ class ParsingError(DbtRuntimeError):
         return "Parsing"
 
 
+class dbtPluginError(DbtRuntimeError):
+    CODE = 10020
+    MESSAGE = "Plugin Error"
+
+
 # TODO: this isn't raised in the core codebase.  Is it raised elsewhere?
 class JSONValidationError(DbtValidationError):
     def __init__(self, typename, errors):
@@ -403,19 +408,6 @@ class DbtSelectorsError(DbtConfigError):
 
 class DbtProfileError(DbtConfigError):
     pass
-
-
-class PublicationConfigNotFound(DbtConfigError):
-    def __init__(self, project=None, file_name=None):
-        self.project = project
-        msg = self.message()
-        super().__init__(msg, project=project)
-
-    def message(self):
-        return (
-            f"A dependency on project {self.project} was specified, "
-            f"but a publication for {self.project} was not found."
-        )
 
 
 class SemverError(Exception):
@@ -910,19 +902,6 @@ class SecretEnvVarLocationError(ParsingError):
         return msg
 
 
-class ProjectDependencyCycleError(ParsingError):
-    def __init__(self, pub_project_name, project_name):
-        self.pub_project_name = pub_project_name
-        self.project_name = project_name
-        super().__init__(msg=self.get_message())
-
-    def get_message(self) -> str:
-        return (
-            f"A project dependency cycle has been detected. The current project {self.project_name} "
-            f"depends on {self.pub_project_name} which also depends on the current project."
-        )
-
-
 class MacroArgTypeError(CompilationError):
     def __init__(self, method_name: str, arg_name: str, got_value: Any, expected_type):
         self.method_name = method_name
@@ -1240,16 +1219,18 @@ class SnapshopConfigError(ParsingError):
 
 
 class DbtReferenceError(ParsingError):
-    def __init__(self, unique_id: str, ref_unique_id: str, group: str):
+    def __init__(self, unique_id: str, ref_unique_id: str, access: AccessType, scope: str):
         self.unique_id = unique_id
         self.ref_unique_id = ref_unique_id
-        self.group = group
+        self.access = access
+        self.scope = scope
+        self.scope_type = "group" if self.access == AccessType.Private else "package"
         super().__init__(msg=self.get_message())
 
     def get_message(self) -> str:
         return (
             f"Node {self.unique_id} attempted to reference node {self.ref_unique_id}, "
-            f"which is not allowed because the referenced node is private to the {self.group} group."
+            f"which is not allowed because the referenced node is {self.access} to the '{self.scope}' {self.scope_type}."
         )
 
 
@@ -2349,6 +2330,11 @@ class ContractError(CompilationError):
         return table_from_data_flat(mismatches_sorted, column_names)
 
     def get_message(self) -> str:
+        if not self.yaml_columns:
+            return (
+                "This model has an enforced contract, and its 'columns' specification is missing"
+            )
+
         table: agate.Table = self.get_mismatches()
         # Hack to get Agate table output as string
         output = io.StringIO()

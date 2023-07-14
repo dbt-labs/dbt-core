@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: 'Refactor: entry point for cross-project ref'
+time: 2023-06-27T22:23:28.73069-04:00
+custom:
+  Author: michelleark
+  Issue: "7954"

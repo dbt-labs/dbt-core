@@ -1,4 +1,7 @@
 import pytest
+
+from dbt.tests.fixtures.project import write_project_files
+from tests.fixtures.dbt_integration_project import dbt_integration_project  # noqa: F401
 from dbt.tests.util import run_dbt, get_manifest, write_file, rm_file
 from dbt.node_types import AccessType
 from dbt.exceptions import InvalidAccessTypeError, DbtReferenceError
@@ -109,7 +112,7 @@ models:
     group: analytics
   - name: people_model
     description: "some people"
-    access: private
+    access: public
     group: analytics
 """
 
@@ -119,6 +122,31 @@ union all
 select 1 as id, 'Jeremy' as first_name, 'Cohen' as last_name, 'indigo' as favorite_color, true as loves_dbt, 4 as tenure, current_timestamp as created_at
 union all
 select 1 as id, 'Callum' as first_name, 'McCann' as last_name, 'emerald' as favorite_color, true as loves_dbt, 0 as tenure, current_timestamp as created_at
+"""
+
+people_semantic_model_yml = """
+semantic_models:
+  - name: semantic_people
+    model: ref('people_model')
+    dimensions:
+      - name: favorite_color
+        type: categorical
+      - name: created_at
+        type: TIME
+        type_params:
+          time_granularity: day
+    measures:
+      - name: years_tenure
+        agg: SUM
+        expr: tenure
+      - name: people
+        agg: count
+        expr: id
+    entities:
+      - name: id
+        type: primary
+    defaults:
+      agg_time_dimension: created_at
 """
 
 people_metric_yml = """
@@ -149,6 +177,59 @@ metrics:
         my_meta: 'testing'
     config:
       group: marts
+"""
+
+
+dbt_integration_project__dbt_project_yml_restrited_access = """
+name: dbt_integration_project
+version: '1.0'
+config-version: 2
+
+model-paths: ["models"]    # paths to models
+analysis-paths: ["analyses"] # path with analysis files which are compiled, but not run
+target-path: "target"      # path for compiled code
+clean-targets: ["target"]  # directories removed by the clean task
+test-paths: ["tests"]       # where to store test results
+seed-paths: ["seeds"]       # load CSVs from this directory with `dbt seed`
+macro-paths: ["macros"]    # where to find macros
+
+profile: user
+
+models:
+    dbt_integration_project:
+
+restrict-access: True
+"""
+
+
+dbt_integration_project__schema_yml_protected_model = """
+version: 2
+models:
+- name: table_model
+  access: protected
+"""
+
+dbt_integration_project__schema_yml_private_model = """
+version: 2
+models:
+- name: table_model
+  access: private
+  group: package
+"""
+
+ref_package_model_sql = """
+   select * from {{ ref('dbt_integration_project', 'table_model') }}
+"""
+
+schema_yml_ref_package_model = """
+version: 2
+models:
+- name: ref_package_model
+  group: package
+"""
+
+metricflow_time_spine_sql = """
+SELECT to_date('02/20/2023', 'mm/dd/yyyy') as date_day
 """
 
 
@@ -226,10 +307,94 @@ class TestAccess:
         write_file(v5_schema_yml, project.project_root, "models", "schema.yml")
         rm_file(project.project_root, "models", "simple_exposure.yml")
         write_file(people_model_sql, "models", "people_model.sql")
+        write_file(people_semantic_model_yml, "models", "people_semantic_model.yml")
         write_file(people_metric_yml, "models", "people_metric.yml")
+        write_file(metricflow_time_spine_sql, "models", "metricflow_time_spine.sql")
         # Should succeed
         manifest = run_dbt(["parse"])
-        assert len(manifest.nodes) == 4
+        assert len(manifest.nodes) == 5
         manifest = get_manifest(project.project_root)
         metric_id = "metric.test.number_of_people"
         assert manifest.metrics[metric_id].group == "analytics"
+
+
+class TestUnrestrictedPackageAccess:
+    @pytest.fixture(scope="class", autouse=True)
+    def setUp(self, project_root, dbt_integration_project):  # noqa: F811
+        write_project_files(project_root, "dbt_integration_project", dbt_integration_project)
+
+    @pytest.fixture(scope="class")
+    def packages(self):
+        return {"packages": [{"local": "dbt_integration_project"}]}
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"ref_protected_package_model.sql": ref_package_model_sql}
+
+    def test_unrestricted_protected_ref(self, project):
+        write_file(
+            dbt_integration_project__schema_yml_protected_model,
+            project.project_root,
+            "dbt_integration_project",
+            "models",
+            "schema.yml",
+        )
+        run_dbt(["deps"])
+
+        # Runs without issue because restrict-access defaults to False
+        manifest = run_dbt(["parse"])
+        assert len(manifest.nodes) == 4
+        root_project_model = manifest.nodes["model.test.ref_protected_package_model"]
+        assert root_project_model.depends_on_nodes == ["model.dbt_integration_project.table_model"]
+
+
+class TestRestrictedPackageAccess:
+    @pytest.fixture(scope="class", autouse=True)
+    def setUp(self, project_root, dbt_integration_project):  # noqa: F811
+        write_project_files(project_root, "dbt_integration_project", dbt_integration_project)
+        # Set table_model.access to protected
+        write_file(
+            dbt_integration_project__schema_yml_protected_model,
+            project_root,
+            "dbt_integration_project",
+            "models",
+            "schema.yml",
+        )
+        # Set dbt_integration_project.restrict-access to True
+        write_file(
+            dbt_integration_project__dbt_project_yml_restrited_access,
+            project_root,
+            "dbt_integration_project",
+            "dbt_project.yml",
+        )
+
+    @pytest.fixture(scope="class")
+    def packages(self):
+        return {"packages": [{"local": "dbt_integration_project"}]}
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "ref_package_model.sql": ref_package_model_sql,
+            "schema.yml": schema_yml_ref_package_model,
+        }
+
+    def test_restricted_protected_ref(self, project):
+        run_dbt(["deps"])
+        with pytest.raises(DbtReferenceError):
+            run_dbt(["parse"])
+
+    def test_restricted_private_ref(self, project):
+        run_dbt(["deps"])
+
+        # Set table_model.access to private
+        write_file(
+            dbt_integration_project__schema_yml_private_model,
+            project.project_root,
+            "dbt_integration_project",
+            "models",
+            "schema.yml",
+        )
+
+        with pytest.raises(DbtReferenceError):
+            run_dbt(["parse"])
