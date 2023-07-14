@@ -1,6 +1,0 @@
-kind: Features
-body: Added support to configure a delimiter for a seed file, defaults to comma
-time: 2023-03-17T14:49:57.564210866+01:00
-custom:
-  Author: ramonvermeulen
-  Issue: "3990"
