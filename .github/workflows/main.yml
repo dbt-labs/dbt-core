@@ -168,7 +168,7 @@ jobs:
           tox --version
 
       - name: Run tests
-        run: tox
+        run: tox --ddtrace
 
       - name: Get current date
         if: always()
