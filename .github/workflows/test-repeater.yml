@@ -121,7 +121,7 @@ jobs:
           for ((i=1; i<=${{ inputs.num_runs_per_batch }}; i++))
           do
             echo "Running pytest iteration $i..."
-            python -m pytest ${{ inputs.test_path }} --ddtrace
+            python -m pytest --ddtrace ${{ inputs.test_path }}
             exit_code=$?
 
             if [[ $exit_code -eq 0 ]]; then
