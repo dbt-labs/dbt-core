@@ -1,20 +1,12 @@
 from typing import Dict, List, Optional
 
-from dbt.tests.util import get_model_file, set_model_file
+from dbt.adapters.base.relation import BaseRelation
 
 from dbt.adapters.postgres.relation import PostgresRelation
 
 
-def swap_indexes(project, my_materialized_view):
-    initial_model = get_model_file(project, my_materialized_view)
-    new_model = initial_model.replace(
-        "indexes=[{'columns': ['id']}]",
-        "indexes=[{'columns': ['value']}]",
-    )
-    set_model_file(project, my_materialized_view, new_model)
-
-
-def query_relation_type(project, relation: PostgresRelation) -> Optional[str]:
+def query_relation_type(project, relation: BaseRelation) -> Optional[str]:
+    assert isinstance(relation, PostgresRelation)
     sql = f"""
     select
         'table' as relation_type
@@ -43,12 +35,8 @@ def query_relation_type(project, relation: PostgresRelation) -> Optional[str]:
         return results[0][0]
 
 
-def query_row_count(project, relation: PostgresRelation) -> int:
-    sql = f"select count(*) from {relation}"
-    return project.run_sql(sql, fetch="one")[0]
-
-
-def query_indexes(project, relation: PostgresRelation) -> List[Dict[str, str]]:
+def query_indexes(project, relation: BaseRelation) -> List[Dict[str, str]]:
+    assert isinstance(relation, PostgresRelation)
     # pulled directly from `postgres__describe_indexes_template` and manually verified
     sql = f"""
         select
