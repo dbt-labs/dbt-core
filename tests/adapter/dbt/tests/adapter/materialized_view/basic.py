@@ -12,7 +12,7 @@ from dbt.tests.util import (
     set_model_file,
 )
 
-from tests.adapter.dbt.tests.adapter.materialized_view.files import (
+from dbt.tests.adapter.materialized_view.files import (
     MY_MATERIALIZED_VIEW,
     MY_SEED,
     MY_TABLE,
