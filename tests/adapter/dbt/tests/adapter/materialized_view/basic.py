@@ -181,7 +181,7 @@ class MaterializedViewBasic:
         assert_message_in_logs(f"Applying REPLACE to: {my_materialized_view}", logs)
 
     def test_materialized_view_replaces_table(self, project, my_table):
-        assert self.query_relation_type(project, my_table) == "view"
+        assert self.query_relation_type(project, my_table) == "table"
 
         self.swap_table_to_materialized_view(project, my_table)
 
