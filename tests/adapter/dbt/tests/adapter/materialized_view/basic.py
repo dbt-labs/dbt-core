@@ -181,6 +181,7 @@ class MaterializedViewBasic:
         assert_message_in_logs(f"Applying REPLACE to: {my_materialized_view}", logs)
 
     def test_materialized_view_replaces_table(self, project, my_table):
+        run_dbt(["run", "--models", my_table.identifier])
         assert self.query_relation_type(project, my_table) == "table"
 
         self.swap_table_to_materialized_view(project, my_table)
@@ -189,6 +190,7 @@ class MaterializedViewBasic:
         assert self.query_relation_type(project, my_table) == "materialized_view"
 
     def test_materialized_view_replaces_view(self, project, my_view):
+        run_dbt(["run", "--models", my_view.identifier])
         assert self.query_relation_type(project, my_view) == "view"
 
         self.swap_view_to_materialized_view(project, my_view)
@@ -197,6 +199,7 @@ class MaterializedViewBasic:
         assert self.query_relation_type(project, my_view) == "materialized_view"
 
     def test_table_replaces_materialized_view(self, project, my_materialized_view):
+        run_dbt(["run", "--models", my_materialized_view.identifier])
         assert self.query_relation_type(project, my_materialized_view) == "materialized_view"
 
         self.swap_materialized_view_to_table(project, my_materialized_view)
@@ -205,6 +208,7 @@ class MaterializedViewBasic:
         assert self.query_relation_type(project, my_materialized_view) == "table"
 
     def test_view_replaces_materialized_view(self, project, my_materialized_view):
+        run_dbt(["run", "--models", my_materialized_view.identifier])
         assert self.query_relation_type(project, my_materialized_view) == "materialized_view"
 
         self.swap_materialized_view_to_view(project, my_materialized_view)
