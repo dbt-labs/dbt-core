@@ -12,14 +12,31 @@ from tests.adapter.dbt.tests.adapter.materialized_view.changes import (
     MaterializedViewChangesContinueMixin,
     MaterializedViewChangesFailMixin,
 )
-
+from tests.adapter.dbt.tests.adapter.materialized_view.files import MY_TABLE, MY_VIEW
 from tests.functional.materializations.materialized_view_tests.utils import (
     query_indexes,
     query_relation_type,
 )
 
 
+MY_MATERIALIZED_VIEW = """
+{{ config(
+    materialized='materialized_view',
+    indexes=[{'columns': ['id']}],
+) }}
+select * from {{ ref('my_seed') }}
+"""
+
+
 class TestPostgresMaterializedViewsBasic(MaterializedViewBasic):
+    @pytest.fixture(scope="class", autouse=True)
+    def models(self):
+        yield {
+            "my_table.sql": MY_TABLE,
+            "my_view.sql": MY_VIEW,
+            "my_materialized_view.sql": MY_MATERIALIZED_VIEW,
+        }
+
     @staticmethod
     def insert_record(project, table: BaseRelation, record: Tuple[int, int]):
         my_id, value = record
@@ -65,6 +82,14 @@ class TestPostgresMaterializedViewsBasic(MaterializedViewBasic):
 
 
 class PostgresMaterializedViewChanges(MaterializedViewChanges):
+    @pytest.fixture(scope="class", autouse=True)
+    def models(self):
+        yield {
+            "my_table.sql": MY_TABLE,
+            "my_view.sql": MY_VIEW,
+            "my_materialized_view.sql": MY_MATERIALIZED_VIEW,
+        }
+
     @staticmethod
     def query_relation_type(project, relation: BaseRelation) -> Optional[str]:
         return query_relation_type(project, relation)
