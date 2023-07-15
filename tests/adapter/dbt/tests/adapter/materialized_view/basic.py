@@ -99,7 +99,7 @@ class MaterializedViewBasic:
         )
 
     @pytest.fixture(scope="class")
-    def my_table(self, project, my_relation) -> BaseRelation:
+    def my_table(self, project) -> BaseRelation:
         return project.adapter.Relation.create(
             identifier="my_table",
             schema=project.test_schema,
