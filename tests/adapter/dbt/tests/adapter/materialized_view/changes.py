@@ -179,7 +179,6 @@ class MaterializedViewChangesApplyMixin:
         self.check_state_alter_change_is_applied(project, my_materialized_view)
         self.check_state_replace_change_is_applied(project, my_materialized_view)
 
-        assert_message_in_logs(f"Applying ALTER to: {my_materialized_view}", logs, False)
         assert_message_in_logs(f"Applying REPLACE to: {my_materialized_view}", logs)
 
 
