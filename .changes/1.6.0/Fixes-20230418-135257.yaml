@@ -1,6 +1,0 @@
-kind: Fixes
-body: safe version attribute access in _check_resource_uniqueness
-time: 2023-04-18T13:52:57.367108-04:00
-custom:
-  Author: MichelleArk
-  Issue: "7375"

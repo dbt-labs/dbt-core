@@ -1,6 +1,0 @@
-kind: Features
-body: Store time_spline table configuration in semantic manifest
-time: 2023-06-29T17:25:24.265366-04:00
-custom:
-  Author: gshank
-  Issue: "7938"

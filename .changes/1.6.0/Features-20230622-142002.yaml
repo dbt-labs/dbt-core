@@ -1,6 +1,0 @@
-kind: Features
-body: Handle external model nodes in state:modified
-time: 2023-06-22T14:20:02.104809-04:00
-custom:
-  Author: michelleark
-  Issue: "7563"

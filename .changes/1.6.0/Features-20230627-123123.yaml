@@ -1,6 +1,0 @@
-kind: Features
-body: Add partial parsing support for semantic models
-time: 2023-06-27T12:31:23.953018-04:00
-custom:
-  Author: peterallenwebb
-  Issue: "7897"

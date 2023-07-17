@@ -1,6 +1,0 @@
-kind: Features
-body: Optimize template rendering for common parse scenarios
-time: 2023-04-24T16:36:11.24088-04:00
-custom:
-  Author: peterallenwebb
-  Issue: "7449"

@@ -1,7 +1,0 @@
-kind: Features
-body: nodes in packages respect custom generate_alias_name, generate_schema_name,
-  generate_database_name macro overrides defined in packages
-time: 2023-05-09T21:29:35.557761-04:00
-custom:
-  Author: michelleark
-  Issue: "7444"

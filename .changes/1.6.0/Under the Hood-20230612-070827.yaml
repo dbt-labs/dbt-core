@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: Replace space with underscore in NodeType strings
-time: 2023-06-12T07:08:27.276551-04:00
-custom:
-  Author: jtcohen6
-  Issue: "7841"

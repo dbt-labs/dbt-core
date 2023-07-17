@@ -1,7 +1,0 @@
-kind: Features
-body: Update drop_relation macro to allow for configuration of drop statement separately
-  from object name
-time: 2023-05-15T12:23:04.177141-04:00
-custom:
-  Author: mikealfare
-  Issue: "7625"
