@@ -1153,10 +1153,11 @@ class DeprecatedModel(WarnLevel):
 
     def message(self) -> str:
         version = ".v" + self.model_version if self.model_version else ""
-        return (
+        msg = (
             f"Model {self.model_name}{version} has passed its deprecation date of {self.deprecation_date}. "
             "This model should be disabled or removed."
         )
+        return warning_tag(msg)
 
 
 class UpcomingReferenceDeprecation(WarnLevel):
@@ -1178,7 +1179,7 @@ class UpcomingReferenceDeprecation(WarnLevel):
             )
             msg = msg + coda
 
-        return msg
+        return warning_tag(msg)
 
 
 class DeprecatedReference(WarnLevel):
@@ -1200,7 +1201,7 @@ class DeprecatedReference(WarnLevel):
             )
             msg = msg + coda
 
-        return msg
+        return warning_tag(msg)
 
 
 class UnsupportedConstraintMaterialization(WarnLevel):

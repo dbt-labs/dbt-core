@@ -562,7 +562,7 @@ class ManifestLoader:
                     node.deprecation_date
                     and node.deprecation_date < datetime.datetime.now().astimezone()
                 ):
-                    fire_event(
+                    warn_or_error(
                         DeprecatedModel(
                             model_name=node.name,
                             model_version=version_to_str(node.version),
@@ -581,7 +581,7 @@ class ManifestLoader:
                         else:
                             event_cls = UpcomingReferenceDeprecation
 
-                        fire_event(
+                        warn_or_error(
                             event_cls(
                                 model_name=node.name,
                                 ref_model_package=resolved_ref.package_name,
