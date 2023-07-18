@@ -101,7 +101,7 @@ jobs:
           echo "date=$CURRENT_DATE" >> $GITHUB_OUTPUT
 
       - name: Upload Unit Test Coverage to Codecov
-        if: matrix.os == 'ubuntu-20.04' && matrix.python-version == '3.8'
+        if: ${{ matrix.python-version == '3.8' }}
         uses: codecov/codecov-action@v3
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
