@@ -1,6 +1,0 @@
-kind: Fixes
-body: Fix CTE insertion position when the model uses WITH RECURSIVE
-time: 2023-04-20T12:32:21.432848+12:00
-custom:
-  Author: willbryant
-  Issue: "7350"

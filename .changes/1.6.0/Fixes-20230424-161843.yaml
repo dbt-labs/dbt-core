@@ -1,6 +1,0 @@
-kind: Fixes
-body: fix groupable node partial parsing, raise DbtReferenceError at runtime for safety
-time: 2023-04-24T16:18:43.130637-04:00
-custom:
-  Author: MichelleArk
-  Issue: "7437"
