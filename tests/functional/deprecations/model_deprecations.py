@@ -1,6 +1,9 @@
 import pytest
 
+from dbt.exceptions import EventCompilationError
 from dbt.cli.main import dbtRunner
+from dbt.tests.util import run_dbt
+
 
 deprecated_model__yml = """
 version: 2
@@ -41,6 +44,14 @@ class TestModelDeprecationWarning:
         assert len(matches) == 1
         assert matches[0].data.model_name == "my_model"
 
+    def test_deprecation_warning_error(self, project):
+        with pytest.raises(EventCompilationError):
+            run_dbt(["--warn-error", "parse"])
+
+    def test_deprecation_warning_error_options(self, project):
+        with pytest.raises(EventCompilationError):
+            run_dbt(["--warn-error-options", '{"include": ["DeprecatedModel"]}', "parse"])
+
 
 class TestReferenceDeprecatingWarning:
     @pytest.fixture(scope="class")
@@ -59,6 +70,16 @@ class TestReferenceDeprecatingWarning:
         assert matches[0].data.model_name == "my_dependant_model"
         assert matches[0].data.ref_model_name == "my_model"
 
+    def test_deprecation_warning_error(self, project):
+        with pytest.raises(EventCompilationError):
+            run_dbt(["--warn-error", "parse"])
+
+    def test_deprecation_warning_error_options(self, project):
+        with pytest.raises(EventCompilationError):
+            run_dbt(
+                ["--warn-error-options", '{"include": ["UpcomingReferenceDeprecation"]}', "parse"]
+            )
+
 
 class TestReferenceDeprecatedWarning:
     @pytest.fixture(scope="class")
@@ -76,3 +97,11 @@ class TestReferenceDeprecatedWarning:
         assert len(matches) == 1
         assert matches[0].data.model_name == "my_dependant_model"
         assert matches[0].data.ref_model_name == "my_model"
+
+    def test_deprecation_warning_error(self, project):
+        with pytest.raises(EventCompilationError):
+            run_dbt(["--warn-error", "parse"])
+
+    def test_deprecation_warning_error_options(self, project):
+        with pytest.raises(EventCompilationError):
+            run_dbt(["--warn-error-options", '{"include": ["DeprecatedReference"]}', "parse"])
