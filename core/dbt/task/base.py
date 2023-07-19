@@ -9,7 +9,7 @@ from typing import Type, Union, Dict, Any, Optional
 
 import dbt.exceptions
 from dbt import tracking
-from dbt.adapters.factory import get_adapter
+from dbt.adapters.factory import get_adapter, register_adapter
 from dbt.config import RuntimeConfig, Project
 from dbt.config.profile import read_profile
 from dbt.contracts.graph.manifest import Manifest
@@ -160,6 +160,7 @@ class ConfiguredTask(BaseTask):
         super().__init__(args, config)
         self.graph: Optional[Graph] = None
         self.manifest = manifest
+        register_adapter(self.config)
 
     def compile_manifest(self):
         if self.manifest is None:
