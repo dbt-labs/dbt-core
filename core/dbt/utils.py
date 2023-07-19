@@ -16,8 +16,6 @@ import time
 from pathlib import PosixPath, WindowsPath
 
 from contextlib import contextmanager
-from dbt.exceptions import ConnectionError, DuplicateAliasError
-from dbt.events.functions import fire_event
 from dbt.events.types import RetryExternalCall, RecordRetryException
 from dbt import flags
 from enum import Enum
@@ -40,6 +38,7 @@ from typing import (
     Sequence,
 )
 
+import dbt.events.functions
 import dbt.exceptions
 
 DECIMALS: Tuple[Type[Any], ...]
@@ -370,7 +369,7 @@ class Translator:
         for key, value in kwargs.items():
             canonical_key = self.aliases.get(key, key)
             if canonical_key in result:
-                raise DuplicateAliasError(kwargs, self.aliases, canonical_key)
+                raise dbt.exceptions.DuplicateAliasError(kwargs, self.aliases, canonical_key)
             result[canonical_key] = self.translate_value(value)
         return result
 
@@ -390,9 +389,7 @@ class Translator:
             return self.translate_mapping(value)
         except RuntimeError as exc:
             if "maximum recursion depth exceeded" in str(exc):
-                raise dbt.exceptions.RecursionError(
-                    "Cycle detected in a value passed to translate!"
-                )
+                raise RecursionError("Cycle detected in a value passed to translate!")
             raise
 
 
@@ -604,12 +601,14 @@ def _connection_exception_retry(fn, max_attempts: int, attempt: int = 0):
         ReadError,
     ) as exc:
         if attempt <= max_attempts - 1:
-            fire_event(RecordRetryException(exc=str(exc)))
-            fire_event(RetryExternalCall(attempt=attempt, max=max_attempts))
+            dbt.events.functions.fire_event(RecordRetryException(exc=str(exc)))
+            dbt.events.functions.fire_event(RetryExternalCall(attempt=attempt, max=max_attempts))
             time.sleep(1)
             return _connection_exception_retry(fn, max_attempts, attempt + 1)
         else:
-            raise ConnectionError("External connection exception occurred: " + str(exc))
+            raise dbt.exceptions.ConnectionError(
+                "External connection exception occurred: " + str(exc)
+            )
 
 
 # This is used to serialize the args in the run_results and in the logs.
