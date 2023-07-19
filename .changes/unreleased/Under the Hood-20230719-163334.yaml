@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: format exception from dbtPlugin.initialize
+time: 2023-07-19T16:33:34.586377-04:00
+custom:
+  Author: michelleark
+  Issue: "8152"
