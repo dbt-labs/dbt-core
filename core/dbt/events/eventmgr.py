@@ -13,7 +13,7 @@ from uuid import uuid4
 from dbt.events.format import timestamp_to_datetime_string
 
 from dbt.events.base_types import BaseEvent, EventLevel, msg_from_base_event, EventMsg
-
+import dbt.utils
 
 # A Filter is a function which takes a BaseEvent and returns True if the event
 # should be logged, False otherwise.
@@ -174,7 +174,7 @@ class _JsonLogger(_Logger):
         from dbt.events.functions import msg_to_dict
 
         msg_dict = msg_to_dict(msg)
-        raw_log_line = json.dumps(msg_dict, sort_keys=True)
+        raw_log_line = json.dumps(msg_dict, sort_keys=True, cls=dbt.utils.ForgivingJSONEncoder)
         line = self.scrubber(raw_log_line)  # type: ignore
         return line
 
