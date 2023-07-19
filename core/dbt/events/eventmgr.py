@@ -175,7 +175,7 @@ class _JsonLogger(_Logger):
         from dbt.events.functions import msg_to_dict
 
         msg_dict = msg_to_dict(msg)
-        raw_log_line = json.dumps(msg_dict, sort_keys=True, cls=dbt.utils.JSONEncoder)
+        raw_log_line = json.dumps(msg_dict, sort_keys=True, cls=dbt.utils.ForgivingJSONEncoder)
         line = self.scrubber(raw_log_line)  # type: ignore
         return line
 
