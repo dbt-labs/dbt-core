@@ -337,15 +337,16 @@ class JSONEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, DECIMALS):
             return float(obj)
-        if isinstance(obj, (datetime.datetime, datetime.date, datetime.time)):
+        elif isinstance(obj, (datetime.datetime, datetime.date, datetime.time)):
             return obj.isoformat()
-        if isinstance(obj, jinja2.Undefined):
+        elif isinstance(obj, jinja2.Undefined):
             return ""
-        if hasattr(obj, "to_dict"):
+        elif hasattr(obj, "to_dict"):
             # if we have a to_dict we should try to serialize the result of
             # that!
             return obj.to_dict(omit_none=True)
-        return super().default(obj)
+        else:
+            return super().default(obj)
 
 
 class ForgivingJSONEncoder(JSONEncoder):
