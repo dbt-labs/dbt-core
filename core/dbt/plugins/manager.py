@@ -29,8 +29,11 @@ class dbtPlugin:
         self.project_name = project_name
         try:
             self.initialize()
+        except DbtRuntimeError as e:
+            # Remove the first line of DbtRuntimeError to avoid redundant "Runtime Error" line
+            raise DbtRuntimeError("\n".join(str(e).split("\n")[1:]))
         except Exception as e:
-            raise DbtRuntimeError(f"initialize: {e}")
+            raise DbtRuntimeError(str(e))
 
     @property
     def name(self) -> str:
