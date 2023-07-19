@@ -340,6 +340,8 @@ class JSONEncoder(json.JSONEncoder):
             return obj.isoformat()
         elif isinstance(obj, jinja2.Undefined):
             return ""
+        elif isinstance(obj, Exception):
+            return repr(obj)
         elif hasattr(obj, "to_dict"):
             # if we have a to_dict we should try to serialize the result of
             # that!
