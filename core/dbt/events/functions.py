@@ -13,6 +13,7 @@ import sys
 from typing import Callable, Dict, Optional, TextIO
 import uuid
 
+import dbt.utils
 
 LOG_VERSION = 3
 metadata_vars: Optional[Dict[str, str]] = None
@@ -146,7 +147,7 @@ def stop_capture_stdout_logs():
 # the message may contain secrets which must be scrubbed at the usage site.
 def msg_to_json(msg: EventMsg) -> str:
     msg_dict = msg_to_dict(msg)
-    raw_log_line = json.dumps(msg_dict, sort_keys=True)
+    raw_log_line = json.dumps(msg_dict, sort_keys=True, cls=dbt.utils.ForgivingJSONEncoder)
     return raw_log_line
 
 
