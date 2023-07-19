@@ -4,11 +4,17 @@ from dbt.exceptions import DbtRuntimeError
 from dbt.plugins import PluginManager, dbtPlugin, dbt_hook
 from dbt.plugins.manifest import PluginNodes, ModelNodeArgs
 from dbt.plugins.contracts import PluginArtifacts, PluginArtifact
+from dbt.plugins.exceptions import dbtPluginError
 
 
-class BrokenInitializePlugin(dbtPlugin):
+class ExceptionInitializePlugin(dbtPlugin):
     def initialize(self) -> None:
         raise Exception("plugin error message")
+
+
+class dbtRuntimeErrorInitializePlugin(dbtPlugin):
+    def initialize(self) -> None:
+        raise dbtPluginError("plugin error message")
 
 
 class GetNodesPlugin(dbtPlugin):
@@ -51,7 +57,11 @@ class TestPluginManager:
 
     def test_plugin_manager_init_exception(self):
         with pytest.raises(DbtRuntimeError, match="plugin error message"):
-            PluginManager(plugins=[BrokenInitializePlugin(project_name="test")])
+            PluginManager(plugins=[ExceptionInitializePlugin(project_name="test")])
+
+    def test_plugin_manager_init_plugin_exception(self):
+        with pytest.raises(DbtRuntimeError, match="^Runtime Error\n    plugin error message"):
+            PluginManager(plugins=[dbtRuntimeErrorInitializePlugin(project_name="test")])
 
     def test_plugin_manager_init_single_hook(self, get_nodes_plugin):
         pm = PluginManager(plugins=[get_nodes_plugin])
