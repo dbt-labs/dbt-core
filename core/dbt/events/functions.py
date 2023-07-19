@@ -1,4 +1,6 @@
 from colorama import Style
+
+import dbt
 import dbt.events.functions as this  # don't worry I hate it too.
 from dbt.events.base_types import NoStdOut, Event, NoFile, ShowException, Cache
 from dbt.events.types import T_Event, MainReportVersion, EmptyLine, EventBufferFull
@@ -194,7 +196,7 @@ def create_json_log_line(e: T_Event) -> Optional[str]:
         return None  # will not be sent to logger
     # using preformatted ts string instead of formatting it here to be extra careful about timezone
     values = event_to_serializable_dict(e)
-    raw_log_line = json.dumps(values, sort_keys=True)
+    raw_log_line = json.dumps(values, sort_keys=True, cls=dbt.utils.JSONEncoder)
     return scrub_secrets(raw_log_line, env_secrets())
 
 
