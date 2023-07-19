@@ -1,0 +1,6 @@
+kind: Docs
+body: Remove static SQL codeblock for metrics
+time: 2023-07-18T19:24:22.155323+02:00
+custom:
+  Author: marcodamore
+  Issue: "436"

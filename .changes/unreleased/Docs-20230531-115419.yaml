@@ -1,0 +1,6 @@
+kind: Docs
+body: Fix for column tests not rendering on quoted columns
+time: 2023-05-31T11:54:19.687363-04:00
+custom:
+  Author: drewbanin
+  Issue: "201"
