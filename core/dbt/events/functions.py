@@ -3,6 +3,7 @@ import dbt.events.functions as this  # don't worry I hate it too.
 from dbt.events.base_types import NoStdOut, Event, NoFile, ShowException, Cache
 from dbt.events.types import EventBufferFull, T_Event, MainReportVersion, EmptyLine
 import dbt.flags as flags
+import dbt.utils
 
 # TODO this will need to move eventually
 from dbt.logger import SECRET_ENV_PREFIX, make_log_dir_if_missing, GLOBAL_LOGGER
@@ -89,7 +90,10 @@ def setup_event_logger(log_path, level_override=None):
     file_passthrough_formatter = logging.Formatter(fmt=FORMAT)
 
     file_handler = RotatingFileHandler(
-        filename=log_dest, encoding="utf8", maxBytes=10 * 1024 * 1024, backupCount=5  # 10 mb
+        filename=log_dest,
+        encoding="utf8",
+        maxBytes=10 * 1024 * 1024,
+        backupCount=5,  # 10 mb
     )
     file_handler.setFormatter(file_passthrough_formatter)
     file_handler.setLevel(logging.DEBUG)  # always debug regardless of user input
@@ -133,7 +137,6 @@ def scrub_secrets(msg: str, secrets: List[str]) -> str:
 def event_to_serializable_dict(
     e: T_Event,
 ) -> Dict[str, Any]:
-
     log_line = dict()
     code: str
     try:
@@ -204,7 +207,9 @@ def create_json_log_line(e: T_Event) -> Optional[str]:
         return None  # will not be sent to logger
     # using preformatted ts string instead of formatting it here to be extra careful about timezone
     values = event_to_serializable_dict(e)
-    raw_log_line = json.dumps(values, sort_keys=True)
+    raw_log_line = json.dumps(
+        values, sort_keys=True, cls=dbt.utils.ForgivingJSONEncoder
+    )
     return scrub_secrets(raw_log_line, env_secrets())
 
 
@@ -241,7 +246,12 @@ def send_to_logger(l: Union[Logger, logbook.Logger], level_tag: str, log_line: s
 
 
 def send_exc_to_logger(
-    l: Logger, level_tag: str, log_line: str, exc_info=True, stack_info=False, extra=False
+    l: Logger,
+    level_tag: str,
+    log_line: str,
+    exc_info=True,
+    stack_info=False,
+    extra=False,
 ):
     if level_tag == "test":
         # TODO after implmenting #3977 send to new test level
