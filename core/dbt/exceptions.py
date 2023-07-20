@@ -53,9 +53,7 @@ class RuntimeException(RuntimeError, Exception):
     def __init__(self, msg, node=None):
         self.stack = []
         self.node = node
-        self.msg = dbt.events.functions.scrub_secrets(
-            msg, dbt.events.functions.env_secrets()
-        )
+        self.msg = dbt.events.functions.scrub_secrets(msg, dbt.events.functions.env_secrets())
 
     def add_node(self, node=None):
         if node is not None and node is not self.node:
@@ -79,9 +77,7 @@ class RuntimeException(RuntimeError, Exception):
             # out the path we know at least. This indicates an error during
             # block parsing.
             return "{}".format(node.path.original_file_path)
-        return "{} {} ({})".format(
-            node.resource_type, node.name, node.original_file_path
-        )
+        return "{} {} ({})".format(node.resource_type, node.name, node.original_file_path)
 
     def process_stack(self):
         lines = []
@@ -176,10 +172,7 @@ class RPCKilledException(RuntimeException):
 
 class RPCCompiling(RuntimeException):
     CODE = 10010
-    MESSAGE = (
-        'RPC server is compiling the project, call the "status" method for'
-        " compile status"
-    )
+    MESSAGE = 'RPC server is compiling the project, call the "status" method for' " compile status"
 
     def __init__(self, msg=None, node=None):
         if msg is None:
@@ -190,8 +183,7 @@ class RPCCompiling(RuntimeException):
 class RPCLoadException(RuntimeException):
     CODE = 10011
     MESSAGE = (
-        'RPC server failed to compile project, call the "status" method for'
-        " compile status"
+        'RPC server failed to compile project, call the "status" method for' " compile status"
     )
 
     def __init__(self, cause):
@@ -392,9 +384,7 @@ class FailedToConnectException(DatabaseException):
 class CommandError(RuntimeException):
     def __init__(self, cwd, cmd, message="Error running command"):
         cmd_scrubbed = list(
-            dbt.events.functions.scrub_secrets(
-                cmd_txt, dbt.events.functions.env_secrets()
-            )
+            dbt.events.functions.scrub_secrets(cmd_txt, dbt.events.functions.env_secrets())
             for cmd_txt in cmd
         )
         super().__init__(message)
@@ -422,9 +412,7 @@ class WorkingDirectoryError(CommandError):
 
 
 class CommandResultError(CommandError):
-    def __init__(
-        self, cwd, cmd, returncode, stdout, stderr, message="Got a non-zero returncode"
-    ):
+    def __init__(self, cwd, cmd, returncode, stdout, stderr, message="Got a non-zero returncode"):
         super().__init__(cwd, cmd, message)
         self.returncode = returncode
         self.stdout = dbt.events.functions.scrub_secrets(
@@ -540,9 +528,7 @@ def invalid_bool_error(got_value, macro_name) -> NoReturn:
 
 
 def ref_invalid_args(model, args) -> NoReturn:
-    raise_compiler_error(
-        "ref() takes at most two arguments ({} given)".format(len(args)), model
-    )
+    raise_compiler_error("ref() takes at most two arguments ({} given)".format(len(args)), model)
 
 
 def metric_invalid_args(model, args) -> NoReturn:
@@ -578,9 +564,7 @@ To fix this, add the following hint to the top of the model "{model_name}":
 
 
 def doc_invalid_args(model, args) -> NoReturn:
-    raise_compiler_error(
-        "doc() takes at most two arguments ({} given)".format(len(args)), model
-    )
+    raise_compiler_error("doc() takes at most two arguments ({} given)".format(len(args)), model)
 
 
 def doc_target_not_found(
@@ -679,9 +663,7 @@ def get_source_not_found_or_disabled_msg(
 def source_target_not_found(
     model, target_name: str, target_table_name: str, disabled: Optional[bool] = None
 ) -> NoReturn:
-    msg = get_source_not_found_or_disabled_msg(
-        model, target_name, target_table_name, disabled
-    )
+    msg = get_source_not_found_or_disabled_msg(model, target_name, target_table_name, disabled)
     raise_compiler_error(msg, model)
 
 
@@ -701,9 +683,7 @@ def get_metric_not_found_msg(
     )
 
 
-def metric_target_not_found(
-    metric, target_name: str, target_package: Optional[str]
-) -> NoReturn:
+def metric_target_not_found(metric, target_name: str, target_package: Optional[str]) -> NoReturn:
     msg = get_metric_not_found_msg(metric, target_name, target_package)
 
     raise_compiler_error(msg, metric)
@@ -745,9 +725,7 @@ def materialization_not_available(model, adapter_type):
     materialization = model.get_materialization()
 
     raise_compiler_error(
-        "Materialization '{}' is not available for {}!".format(
-            materialization, adapter_type
-        ),
+        "Materialization '{}' is not available for {}!".format(materialization, adapter_type),
         model,
     )
 
@@ -769,9 +747,7 @@ def missing_materialization(model, adapter_type):
 
 
 def bad_package_spec(repo, spec, error_message):
-    msg = "Error checking out spec='{}' for repo {}\n{}".format(
-        spec, repo, error_message
-    )
+    msg = "Error checking out spec='{}' for repo {}\n{}".format(spec, repo, error_message)
     raise InternalException(
         dbt.events.functions.scrub_secrets(msg, dbt.events.functions.env_secrets())
     )
@@ -809,17 +785,13 @@ def relation_wrong_type(relation, expected_type, model=None):
             "but it currently exists as a {current_type}. Either "
             "drop {relation} manually, or run dbt with "
             "`--full-refresh` and dbt will drop it for you."
-        ).format(
-            relation=relation, current_type=relation.type, expected_type=expected_type
-        ),
+        ).format(relation=relation, current_type=relation.type, expected_type=expected_type),
         model,
     )
 
 
 def package_not_found(package_name):
-    raise_dependency_error(
-        "Package {} was not found in the package index".format(package_name)
-    )
+    raise_dependency_error("Package {} was not found in the package index".format(package_name))
 
 
 def package_version_not_found(package_name, version_range, available_versions):
@@ -828,9 +800,7 @@ def package_version_not_found(package_name, version_range, available_versions):
         "  Requested range: {}\n"
         "  Available versions: {}"
     )
-    raise_dependency_error(
-        base_msg.format(package_name, version_range, available_versions)
-    )
+    raise_dependency_error(base_msg.format(package_name, version_range, available_versions))
 
 
 def invalid_materialization_argument(name, argument):
@@ -882,9 +852,7 @@ def approximate_relation_match(target, relation):
         "When searching for a relation, dbt found an approximate match. "
         "Instead of guessing \nwhich relation to use, dbt will move on. "
         "Please delete {relation}, or rename it to be less ambiguous."
-        "\nSearched for: {target}\nFound: {relation}".format(
-            target=target, relation=relation
-        )
+        "\nSearched for: {target}\nFound: {relation}".format(target=target, relation=relation)
     )
 
 
@@ -1010,8 +978,7 @@ def raise_patch_targets_not_found(patches):
 def _fix_dupe_msg(path_1: str, path_2: str, name: str, type_name: str) -> str:
     if path_1 == path_2:
         return (
-            f"remove one of the {type_name} entries for {name} in this file:\n"
-            f" - {path_1!s}\n"
+            f"remove one of the {type_name} entries for {name} in this file:\n" f" - {path_1!s}\n"
         )
     else:
         return (
@@ -1098,13 +1065,9 @@ def raise_duplicate_alias(
     kwargs: Mapping[str, Any], aliases: Mapping[str, str], canonical_key: str
 ) -> NoReturn:
     # dupe found: go through the dict so we can have a nice-ish error
-    key_names = ", ".join(
-        "{}".format(k) for k in kwargs if aliases.get(k) == canonical_key
-    )
+    key_names = ", ".join("{}".format(k) for k in kwargs if aliases.get(k) == canonical_key)
 
-    raise AliasException(
-        f'Got duplicate keys: ({key_names}) all map to "{canonical_key}"'
-    )
+    raise AliasException(f'Got duplicate keys: ({key_names}) all map to "{canonical_key}"')
 
 
 def warn_or_error(msg, node=None, log_fmt=None):
@@ -1121,9 +1084,7 @@ def warn_or_raise(exc, log_fmt=None):
     if flags.WARN_ERROR:
         raise exc
     else:
-        dbt.events.functions.fire_event(
-            GeneralWarningException(exc=exc, log_fmt=log_fmt)
-        )
+        dbt.events.functions.fire_event(GeneralWarningException(exc=exc, log_fmt=log_fmt))
 
 
 def warn(msg, node=None):
