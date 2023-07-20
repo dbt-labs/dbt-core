@@ -1,8 +1,4 @@
-{% macro get_relations() -%}
-  {{ return(adapter.dispatch('get_relations')()) }}
-{%- endmacro %}
-
-{% macro default__get_relations() -%}
+{% macro postgres__get_relations() -%}
 
   {#
       -- in pg_depend, objid is the dependent, refobjid is the referenced object
@@ -80,9 +76,5 @@
 {% endmacro %}
 
 {% macro postgres_get_relations() %}
-  {{ return(get_relations()) }}
-{% endmacro %}
-
-{% macro postgres__get_relations() %}
-  {{ return(default__get_relations()) }}
+  {{ return(postgres__get_relations()) }}
 {% endmacro %}
