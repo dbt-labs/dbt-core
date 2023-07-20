@@ -15,7 +15,6 @@ import time
 from pathlib import PosixPath, WindowsPath
 
 from contextlib import contextmanager
-from dbt.events.functions import fire_event
 from dbt.events.types import RetryExternalCall, RecordRetryException
 from dbt import flags
 from enum import Enum
@@ -38,6 +37,7 @@ from typing import (
     Sequence,
 )
 
+import dbt.events.functions
 import dbt.exceptions
 
 DECIMALS: Tuple[Type[Any], ...]
@@ -621,8 +621,8 @@ def _connection_exception_retry(fn, max_attempts: int, attempt: int = 0):
         ReadError,
     ) as exc:
         if attempt <= max_attempts - 1:
-            fire_event(RecordRetryException(exc=str(exc)))
-            fire_event(RetryExternalCall(attempt=attempt, max=max_attempts))
+            dbt.events.functions.fire_event(RecordRetryException(exc=str(exc)))
+            dbt.events.functions.fire_event(RetryExternalCall(attempt=attempt, max=max_attempts))
             time.sleep(1)
             return _connection_exception_retry(fn, max_attempts, attempt + 1)
         else:
