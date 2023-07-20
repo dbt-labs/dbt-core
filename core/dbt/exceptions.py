@@ -2,13 +2,13 @@ import builtins
 import functools
 from typing import NoReturn, Optional, Mapping, Any
 
-from dbt.events.functions import fire_event, scrub_secrets, env_secrets
 from dbt.events.types import GeneralWarningMsg, GeneralWarningException
 from dbt.node_types import NodeType
 from dbt import flags
 from dbt.ui import line_wrap_message, warning_tag
 
 import dbt.dataclass_schema
+import dbt.events.functions
 
 
 def validator_error_message(exc):
@@ -53,7 +53,7 @@ class RuntimeException(RuntimeError, Exception):
     def __init__(self, msg, node=None):
         self.stack = []
         self.node = node
-        self.msg = scrub_secrets(msg, env_secrets())
+        self.msg = dbt.events.functions.scrub_secrets(msg, dbt.events.functions.env_secrets())
 
     def add_node(self, node=None):
         if node is not None and node is not self.node:
@@ -383,7 +383,10 @@ class FailedToConnectException(DatabaseException):
 
 class CommandError(RuntimeException):
     def __init__(self, cwd, cmd, message="Error running command"):
-        cmd_scrubbed = list(scrub_secrets(cmd_txt, env_secrets()) for cmd_txt in cmd)
+        cmd_scrubbed = list(
+            dbt.events.functions.scrub_secrets(cmd_txt, dbt.events.functions.env_secrets())
+            for cmd_txt in cmd
+        )
         super().__init__(message)
         self.cwd = cwd
         self.cmd = cmd_scrubbed
@@ -412,8 +415,12 @@ class CommandResultError(CommandError):
     def __init__(self, cwd, cmd, returncode, stdout, stderr, message="Got a non-zero returncode"):
         super().__init__(cwd, cmd, message)
         self.returncode = returncode
-        self.stdout = scrub_secrets(stdout.decode("utf-8"), env_secrets())
-        self.stderr = scrub_secrets(stderr.decode("utf-8"), env_secrets())
+        self.stdout = dbt.events.functions.scrub_secrets(
+            stdout.decode("utf-8"), dbt.events.functions.env_secrets()
+        )
+        self.stderr = dbt.events.functions.scrub_secrets(
+            stderr.decode("utf-8"), dbt.events.functions.env_secrets()
+        )
         self.args = (cwd, self.cmd, returncode, self.stdout, self.stderr, message)
 
     def __str__(self):
@@ -450,16 +457,20 @@ def raise_database_error(msg, node=None) -> NoReturn:
 
 
 def raise_dependency_error(msg) -> NoReturn:
-    raise DependencyException(scrub_secrets(msg, env_secrets()))
+    raise DependencyException(
+        dbt.events.functions.scrub_secrets(msg, dbt.events.functions.env_secrets())
+    )
 
 
 def raise_git_cloning_error(error: CommandResultError) -> NoReturn:
-    error.cmd = scrub_secrets(str(error.cmd), env_secrets())
+    error.cmd = dbt.events.functions.scrub_secrets(
+        str(error.cmd), dbt.events.functions.env_secrets()
+    )
     raise error
 
 
 def raise_git_cloning_problem(repo) -> NoReturn:
-    repo = scrub_secrets(repo, env_secrets())
+    repo = dbt.events.functions.scrub_secrets(repo, dbt.events.functions.env_secrets())
     msg = """\
     Something went wrong while cloning {}
     Check the debug logs for more information
@@ -705,7 +716,9 @@ def missing_materialization(model, adapter_type):
 
 def bad_package_spec(repo, spec, error_message):
     msg = "Error checking out spec='{}' for repo {}\n{}".format(spec, repo, error_message)
-    raise InternalException(scrub_secrets(msg, env_secrets()))
+    raise InternalException(
+        dbt.events.functions.scrub_secrets(msg, dbt.events.functions.env_secrets())
+    )
 
 
 def raise_cache_inconsistent(message):
@@ -1026,16 +1039,18 @@ def raise_duplicate_alias(
 
 def warn_or_error(msg, node=None, log_fmt=None):
     if flags.WARN_ERROR:
-        raise_compiler_error(scrub_secrets(msg, env_secrets()), node)
+        raise_compiler_error(
+            dbt.events.functions.scrub_secrets(msg, dbt.events.functions.env_secrets()), node
+        )
     else:
-        fire_event(GeneralWarningMsg(msg=msg, log_fmt=log_fmt))
+        dbt.events.functions.fire_event(GeneralWarningMsg(msg=msg, log_fmt=log_fmt))
 
 
 def warn_or_raise(exc, log_fmt=None):
     if flags.WARN_ERROR:
         raise exc
     else:
-        fire_event(GeneralWarningException(exc=exc, log_fmt=log_fmt))
+        dbt.events.functions.fire_event(GeneralWarningException(exc=exc, log_fmt=log_fmt))
 
 
 def warn(msg, node=None):
