@@ -17,6 +17,7 @@ from pathlib import PosixPath, WindowsPath
 
 from contextlib import contextmanager
 from dbt.events.types import RetryExternalCall, RecordRetryException
+from dbt.helper_types import WarnErrorOptions
 from dbt import flags
 from enum import Enum
 from typing_extensions import Protocol
@@ -654,6 +655,9 @@ def args_to_dict(args):
         # this was required for a test case
         if isinstance(var_args[key], PosixPath) or isinstance(var_args[key], WindowsPath):
             var_args[key] = str(var_args[key])
+        if isinstance(var_args[key], WarnErrorOptions):
+            var_args[key] = var_args[key].to_dict()
+
         dict_args[key] = var_args[key]
     return dict_args
 
