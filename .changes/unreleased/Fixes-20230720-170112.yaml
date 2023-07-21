@@ -1,0 +1,6 @@
+kind: Fixes
+body: Stop detecting materialization macros based on macro name
+time: 2023-07-20T17:01:12.496238-07:00
+custom:
+  Author: QMalcolm
+  Issue: "6231"
