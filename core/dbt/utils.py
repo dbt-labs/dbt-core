@@ -601,6 +601,7 @@ def _connection_exception_retry(fn, max_attempts: int, attempt: int = 0):
     except (
         requests.exceptions.RequestException,
         ReadError,
+        EOFError,
     ) as exc:
         if attempt <= max_attempts - 1:
             dbt.events.functions.fire_event(RecordRetryException(exc=str(exc)))
