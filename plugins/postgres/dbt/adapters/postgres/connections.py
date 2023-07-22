@@ -3,18 +3,27 @@ from contextlib import contextmanager
 import psycopg2
 from psycopg2.extensions import string_types
 
+import boto3
+
 import dbt.exceptions
 from dbt.adapters.base import Credentials
 from dbt.adapters.sql import SQLConnectionManager
 from dbt.contracts.connection import AdapterResponse
+from dbt.dataclass_schema import StrEnum
+from hologram.helpers import StrLiteral
 from dbt.events import AdapterLogger
 
 from dbt.helper_types import Port
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 
 
 logger = AdapterLogger("Postgres")
+
+
+class PostgresConnectionMethod(StrEnum):
+    DATABASE = "database"
+    IAM = "iam"
 
 
 @dataclass
@@ -22,8 +31,11 @@ class PostgresCredentials(Credentials):
     host: str
     user: str
     port: Port
-    password: str  # on postgres the password is mandatory
+    password: Optional[str] = None
     connect_timeout: int = 10
+    method: Optional[PostgresConnectionMethod] = PostgresConnectionMethod.DATABASE
+    iam_profile: Optional[str] = None
+    region: Optional[str] = None
     role: Optional[str] = None
     search_path: Optional[str] = None
     keepalives_idle: int = 0  # 0 means to use the default value
@@ -44,6 +56,17 @@ class PostgresCredentials(Credentials):
     def unique_field(self):
         return self.host
 
+    @classmethod
+    def validate(cls, data: Any):
+        super(Credentials, cls).validate(data)
+
+        method_credentials = {
+            PostgresConnectionMethod.DATABASE: PostgresCredentialsDatabase,
+            PostgresConnectionMethod.IAM: PostgresCredentialsIAM,
+        }
+
+        method_credentials[data.get("method", PostgresConnectionMethod.DATABASE)].validate(data)
+
     def _connection_keys(self):
         return (
             "host",
@@ -52,6 +75,9 @@ class PostgresCredentials(Credentials):
             "database",
             "schema",
             "connect_timeout",
+            "method",
+            "iam_profile",
+            "region",
             "role",
             "search_path",
             "keepalives_idle",
@@ -62,6 +88,125 @@ class PostgresCredentials(Credentials):
             "application_name",
             "retries",
         )
+
+
+@dataclass
+class PostgresCredentialsDatabase(PostgresCredentials):
+    password: str
+    method: Optional[
+        StrLiteral(PostgresConnectionMethod.DATABASE)
+    ] = PostgresConnectionMethod.DATABASE
+
+    @classmethod
+    def validate(cls, data: Any):
+        super(Credentials, cls).validate(data)
+
+
+@dataclass
+class PostgresCredentialsIAM(PostgresCredentials):
+    password: None
+    method: StrLiteral(PostgresConnectionMethod.IAM)
+    iam_profile: Optional[str] = None
+    region: Optional[str] = None
+
+    @classmethod
+    def validate(cls, data: Any):
+        super(Credentials, cls).validate(data)
+
+
+class PostgresConnectMethodFactory:
+    credentials: PostgresCredentials
+
+    def __init__(self, credentials):
+        self.credentials = credentials
+
+    def get_connect_method(self):
+        method = self.credentials.method
+        kwargs = {
+            "host": self.credentials.host,
+            "dbname": self.credentials.database,
+            "port": int(self.credentials.port) if self.credentials.port else int(5432),
+            "user": self.credentials.user,
+            "connect_timeout": self.credentials.connect_timeout,
+        }
+
+        # we don't want to pass 0 along to connect() as postgres will try to
+        # call an invalid setsockopt() call (contrary to the docs).
+        if self.credentials.keepalives_idle:
+            kwargs["keepalives_idle"] = self.credentials.keepalives_idle
+
+        # psycopg2 doesn't support search_path officially,
+        # see https://github.com/psycopg/psycopg2/issues/465
+        search_path = self.credentials.search_path
+        if search_path is not None and search_path != "":
+            # see https://postgresql.org/docs/9.5/libpq-connect.html
+            kwargs["options"] = "-c search_path={}".format(search_path.replace(" ", "\\ "))
+
+        if self.credentials.sslmode:
+            kwargs["sslmode"] = self.credentials.sslmode
+
+        if self.credentials.sslcert is not None:
+            kwargs["sslcert"] = self.credentials.sslcert
+
+        if self.credentials.sslkey is not None:
+            kwargs["sslkey"] = self.credentials.sslkey
+
+        if self.credentials.sslrootcert is not None:
+            kwargs["sslrootcert"] = self.credentials.sslrootcert
+
+        if self.credentials.application_name:
+            kwargs["application_name"] = self.credentials.application_name
+
+        # Support missing 'method' for backwards compatibility
+        if method == PostgresConnectionMethod.DATABASE or method is None:
+
+            def connect():
+                logger.debug("Connecting to postgres with username/password based auth...")
+                c = psycopg2.connect(
+                    password=self.credentials.password,
+                    **kwargs,
+                )
+                if self.credentials.role:
+                    c.cursor().execute("set role {}".format(self.credentials.role))
+                return c
+
+        elif method == PostgresConnectionMethod.IAM:
+
+            def connect():
+                logger.debug("Connecting to postgres with IAM based auth...")
+
+                session_kwargs = {}
+                if self.credentials.iam_profile:
+                    session_kwargs["profile_name"] = self.credentials.iam_profile
+                if self.credentials.region:
+                    session_kwargs["region_name"] = self.credentials.region
+                session = boto3.Session(**session_kwargs)
+
+                client = session.client("rds")
+                generate_db_auth_token_kwargs = {
+                    "DBHostname": self.credentials.host,
+                    "Port": self.credentials.port,
+                    "DBUsername": self.credentials.user,
+                }
+                if self.credentials.region:
+                    generate_db_auth_token_kwargs["Region"] = self.credentials.region
+                token = client.generate_db_auth_token(**generate_db_auth_token_kwargs)
+
+                kwargs["password"] = token
+
+                c = psycopg2.connect(
+                    **kwargs,
+                )
+                if self.credentials.role:
+                    c.cursor().execute("set role {}".format(self.credentials.role))
+                return c
+
+        else:
+            raise dbt.exceptions.FailedToConnectError(
+                "Invalid 'method' in profile: '{}'".format(method)
+            )
+
+        return connect
 
 
 class PostgresConnectionManager(SQLConnectionManager):
@@ -102,47 +247,7 @@ class PostgresConnectionManager(SQLConnectionManager):
             return connection
 
         credentials = cls.get_credentials(connection.credentials)
-        kwargs = {}
-        # we don't want to pass 0 along to connect() as postgres will try to
-        # call an invalid setsockopt() call (contrary to the docs).
-        if credentials.keepalives_idle:
-            kwargs["keepalives_idle"] = credentials.keepalives_idle
-
-        # psycopg2 doesn't support search_path officially,
-        # see https://github.com/psycopg/psycopg2/issues/465
-        search_path = credentials.search_path
-        if search_path is not None and search_path != "":
-            # see https://postgresql.org/docs/9.5/libpq-connect.html
-            kwargs["options"] = "-c search_path={}".format(search_path.replace(" ", "\\ "))
-
-        if credentials.sslmode:
-            kwargs["sslmode"] = credentials.sslmode
-
-        if credentials.sslcert is not None:
-            kwargs["sslcert"] = credentials.sslcert
-
-        if credentials.sslkey is not None:
-            kwargs["sslkey"] = credentials.sslkey
-
-        if credentials.sslrootcert is not None:
-            kwargs["sslrootcert"] = credentials.sslrootcert
-
-        if credentials.application_name:
-            kwargs["application_name"] = credentials.application_name
-
-        def connect():
-            handle = psycopg2.connect(
-                dbname=credentials.database,
-                user=credentials.user,
-                host=credentials.host,
-                password=credentials.password,
-                port=credentials.port,
-                connect_timeout=credentials.connect_timeout,
-                **kwargs,
-            )
-            if credentials.role:
-                handle.cursor().execute("set role {}".format(credentials.role))
-            return handle
+        connect_method_factory = PostgresConnectMethodFactory(credentials)
 
         retryable_exceptions = [
             # OperationalError is subclassed by all psycopg2 Connection Exceptions and it's raised
@@ -158,7 +263,7 @@ class PostgresConnectionManager(SQLConnectionManager):
 
         return cls.retry_connection(
             connection,
-            connect=connect,
+            connect=connect_method_factory.get_connect_method(),
             logger=logger,
             retry_limit=credentials.retries,
             retry_timeout=exponential_backoff,
