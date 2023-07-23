@@ -4,6 +4,8 @@ import sys
 
 import dbt.exceptions
 
+import boto3
+
 import psycopg2
 
 from dbt.contracts.connection import Connection
@@ -460,7 +462,6 @@ class PostgresConnectionManagerTest(unittest.TestCase):
             schema="test-schema",
             retries=2,
         )
-        self.connection = Connection("postgres", None, self.credentials)
 
     def test_open(self):
         """Test opening a Postgres Connection with failures in the first 3 attempts.
@@ -472,7 +473,7 @@ class PostgresConnectionManagerTest(unittest.TestCase):
           returns in the 4th attempt.
         * The resulting attempt count should be 4.
         """
-        conn = self.connection
+        conn = Connection("postgres", None, self.credentials)
         attempt = 0
 
         def connect(*args, **kwargs):
@@ -492,3 +493,33 @@ class PostgresConnectionManagerTest(unittest.TestCase):
         assert attempt == 3
         assert conn.state == "open"
         assert conn.handle is True
+
+    @mock.patch("psycopg2.connect", mock.Mock())
+    def test_method_iam(self):
+        self.credentials = self.credentials.replace(
+            method="iam", iam_profile="test", region="us-east-1"
+        )
+
+        conn = Connection("postgres", None, self.credentials)
+
+        with mock.patch("boto3.Session") as mock_session:
+            mock_client = mock.Mock()
+            mock_client.generate_db_auth_token.return_value = "secret-token"
+            mock_session.return_value.client.return_value = mock_client
+
+            PostgresConnectionManager.open(conn)
+
+            boto3.Session.assert_called_once_with(profile_name="test", region_name="us-east-1")
+            mock_session.return_value.client.assert_called_once_with("rds")
+            mock_client.generate_db_auth_token.assert_called_once_with(
+                DBHostname="localhost", Port=1111, DBUsername="test-user", Region="us-east-1"
+            )
+            psycopg2.connect.assert_called_once_with(
+                host="localhost",
+                dbname="test-db",
+                port=1111,
+                user="test-user",
+                connect_timeout=10,
+                application_name="dbt",
+                password="secret-token",
+            )
