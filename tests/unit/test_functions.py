@@ -1,7 +1,6 @@
 from argparse import Namespace
 import pytest
 
-
 import dbt.flags as flags
 from dbt.events.functions import msg_to_dict, warn_or_error, setup_event_logger
 from dbt.events.types import InfoLevel, NoNodesForSelectionCriteria

@@ -502,6 +502,7 @@ def project(
         DEBUG=False,
         LOG_CACHE_EVENTS=False,
         QUIET=False,
+        LOG_FILE_MAX_BYTES=1000000,
     )
     setup_event_logger(log_flags)
     orig_cwd = os.getcwd()
