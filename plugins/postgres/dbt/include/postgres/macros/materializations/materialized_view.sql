@@ -36,7 +36,7 @@
     {{- get_create_materialized_view_as_sql(intermediate_relation, sql) -}}
 
     {% if existing_relation is not none %}
-        alter materialized view {{ existing_relation }} rename to {{ backup_relation.include(database=False, schema=False) }};
+        alter {{ existing_relation.type|replace("_", " ") }} {{ existing_relation }} rename to {{ backup_relation.include(database=False, schema=False) }};
     {% endif %}
 
     alter materialized view {{ intermediate_relation }} rename to {{ relation.include(database=False, schema=False) }};
