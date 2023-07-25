@@ -886,7 +886,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
             "doc.test.macro_arg_info": ANY,
         },
         "disabled": {},
-        "semantic_nodes": {},
+        "semantic_models": {},
     }
 
 
@@ -1445,7 +1445,7 @@ def expected_references_manifest(project):
                 ],
             }
         },
-        "semantic_nodes": {},
+        "semantic_models": {},
     }
 
 
@@ -1924,5 +1924,5 @@ def expected_versions_manifest(project):
         },
         "disabled": {},
         "macros": {},
-        "semantic_nodes": {},
+        "semantic_models": {},
     }

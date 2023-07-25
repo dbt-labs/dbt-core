@@ -26,14 +26,14 @@ class NodeType(StrEnum):
     Seed = "seed"
     # TODO: rm?
     RPCCall = "rpc"
-    SqlOperation = "sqloperation"
+    SqlOperation = "sql_operation"
     Documentation = "doc"
     Source = "source"
     Macro = "macro"
     Exposure = "exposure"
     Metric = "metric"
     Group = "group"
-    SemanticModel = "semanticmodel"
+    SemanticModel = "semantic_model"
 
     @classmethod
     def executable(cls) -> List["NodeType"]:

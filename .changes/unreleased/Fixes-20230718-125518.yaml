@@ -1,0 +1,6 @@
+kind: Fixes
+body: Enable converting deprecation warnings to errors
+time: 2023-07-18T12:55:18.03914-04:00
+custom:
+  Author: michelleark
+  Issue: "8130"

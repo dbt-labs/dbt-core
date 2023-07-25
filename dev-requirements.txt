@@ -1,5 +1,6 @@
 black==23.3.0
 bumpversion
+ddtrace
 docutils
 flake8
 flaky
@@ -31,3 +32,4 @@ types-pytz
 types-requests
 types-setuptools
 wheel
+mocker

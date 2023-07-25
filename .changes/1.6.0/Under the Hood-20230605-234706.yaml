@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: Create `add_from_artifact` to populate `state_relation` field of nodes
-time: 2023-06-05T23:47:06.581326-07:00
-custom:
-  Author: stu-k aranke
-  Issue: "7551"

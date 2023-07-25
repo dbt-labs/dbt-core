@@ -45,16 +45,19 @@ from dbt.events.types import (
     SeedExceedsLimitAndPathChanged,
     SeedExceedsLimitChecksumChanged,
 )
-from dbt.events.contextvars import set_contextvars
+from dbt.events.contextvars import set_log_contextvars
 from dbt.flags import get_flags
 from dbt.node_types import ModelLanguage, NodeType, AccessType
+from dbt_semantic_interfaces.call_parameter_sets import FilterCallParameterSets
 from dbt_semantic_interfaces.references import (
     MeasureReference,
     LinkableElementReference,
     SemanticModelReference,
+    TimeDimensionReference,
 )
 from dbt_semantic_interfaces.references import MetricReference as DSIMetricReference
 from dbt_semantic_interfaces.type_enums import MetricType, TimeGranularity
+from dbt_semantic_interfaces.parsing.where_filter_parser import WhereFilterParser
 
 from .model_config import (
     NodeConfig,
@@ -65,6 +68,7 @@ from .model_config import (
     ExposureConfig,
     EmptySnapshotConfig,
     SnapshotConfig,
+    SemanticModelConfig,
 )
 
 
@@ -258,8 +262,9 @@ class MacroDependsOn(dbtClassMixin, Replaceable):
 
 
 @dataclass
-class RelationalNode(HasRelationMetadata):
+class DeferRelation(HasRelationMetadata):
     alias: str
+    relation_name: Optional[str]
 
     @property
     def identifier(self):
@@ -273,17 +278,6 @@ class DependsOn(MacroDependsOn):
     def add_node(self, value: str):
         if value not in self.nodes:
             self.nodes.append(value)
-
-
-@dataclass
-class StateRelation(dbtClassMixin):
-    alias: str
-    database: Optional[str]
-    schema: str
-
-    @property
-    def identifier(self):
-        return self.alias
 
 
 @dataclass
@@ -327,7 +321,7 @@ class NodeInfoMixin:
     def update_event_status(self, **kwargs):
         for k, v in kwargs.items():
             self._event_status[k] = v
-        set_contextvars(node_info=self.node_info)
+        set_log_contextvars(node_info=self.node_info)
 
     def clear_event_status(self):
         self._event_status = dict()
@@ -577,11 +571,18 @@ class ModelNode(CompiledNode):
     version: Optional[NodeVersion] = None
     latest_version: Optional[NodeVersion] = None
     deprecation_date: Optional[datetime] = None
-    state_relation: Optional[StateRelation] = None
+    defer_relation: Optional[DeferRelation] = None
 
     @classmethod
     def from_args(cls, args: ModelNodeArgs) -> "ModelNode":
-        unique_id = f"{NodeType.Model}.{args.package_name}.{args.name}"
+        unique_id = args.unique_id
+
+        # build unrendered config -- for usage in ParsedNode.same_contents
+        unrendered_config = {}
+        unrendered_config["alias"] = args.identifier
+        unrendered_config["schema"] = args.schema
+        if args.database:
+            unrendered_config["database"] = args.database
 
         return cls(
             resource_type=NodeType.Model,
@@ -597,8 +598,12 @@ class ModelNode(CompiledNode):
             alias=args.identifier,
             deprecation_date=args.deprecation_date,
             checksum=FileHash.from_contents(f"{unique_id},{args.generated_at}"),
+            access=AccessType(args.access),
             original_file_path="",
             path="",
+            unrendered_config=unrendered_config,
+            depends_on=DependsOn(nodes=args.depends_on_nodes),
+            config=NodeConfig(enabled=args.enabled),
         )
 
     @property
@@ -624,6 +629,11 @@ class ModelNode(CompiledNode):
         # We don't need to construct the checksum if the model does not
         # have contract enforced, because it won't be used.
         # This needs to be executed after contract config is set
+
+        # Avoid rebuilding the checksum if it has already been set.
+        if self.contract.checksum is not None:
+            return
+
         if self.contract.enforced is True:
             contract_state = ""
             # We need to sort the columns so that order doesn't matter
@@ -785,7 +795,7 @@ class SeedNode(ParsedNode):  # No SQLDefaults!
     # and we need the root_path to load the seed later
     root_path: Optional[str] = None
     depends_on: MacroDependsOn = field(default_factory=MacroDependsOn)
-    state_relation: Optional[StateRelation] = None
+    defer_relation: Optional[DeferRelation] = None
 
     def same_seeds(self, other: "SeedNode") -> bool:
         # for seeds, we check the hashes. If the hashes are different types,
@@ -922,6 +932,8 @@ class SingularTestNode(TestShouldStoreFailures, CompiledNode):
 
 @dataclass
 class TestMetadata(dbtClassMixin, Replaceable):
+    __test__ = False
+
     name: str
     # kwargs are the args that are left in the test builder after
     # removing configs. They are set from the test builder when
@@ -980,7 +992,7 @@ class IntermediateSnapshotNode(CompiledNode):
 class SnapshotNode(CompiledNode):
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Snapshot]})
     config: SnapshotConfig
-    state_relation: Optional[StateRelation] = None
+    defer_relation: Optional[DeferRelation] = None
 
 
 # ====================================
@@ -1293,6 +1305,10 @@ class Exposure(GraphNode):
             and True
         )
 
+    @property
+    def group(self):
+        return None
+
 
 # ====================================
 # Metric node
@@ -1302,6 +1318,10 @@ class Exposure(GraphNode):
 @dataclass
 class WhereFilter(dbtClassMixin):
     where_sql_template: str
+
+    @property
+    def call_parameter_sets(self) -> FilterCallParameterSets:
+        return WhereFilterParser.parse_call_parameter_sets(self.where_sql_template)
 
 
 @dataclass
@@ -1461,20 +1481,23 @@ class NodeRelation(dbtClassMixin):
     alias: str
     schema_name: str  # TODO: Could this be called simply "schema" so we could reuse StateRelation?
     database: Optional[str] = None
+    relation_name: Optional[str] = None
 
 
 @dataclass
 class SemanticModel(GraphNode):
     model: str
     node_relation: Optional[NodeRelation]
-    depends_on: DependsOn = field(default_factory=DependsOn)
     description: Optional[str] = None
     defaults: Optional[Defaults] = None
     entities: Sequence[Entity] = field(default_factory=list)
     measures: Sequence[Measure] = field(default_factory=list)
     dimensions: Sequence[Dimension] = field(default_factory=list)
     metadata: Optional[SourceFileMetadata] = None
-    created_at: float = field(default_factory=lambda: time.time())  # REVIEW: Needed?
+    depends_on: DependsOn = field(default_factory=DependsOn)
+    refs: List[RefArgs] = field(default_factory=list)
+    created_at: float = field(default_factory=lambda: time.time())
+    config: SemanticModelConfig = field(default_factory=SemanticModelConfig)
 
     @property
     def entity_references(self) -> List[LinkableElementReference]:
@@ -1530,12 +1553,31 @@ class SemanticModel(GraphNode):
         return self.depends_on.nodes
 
     @property
-    def depends_on_public_nodes(self):
-        return self.depends_on.public_nodes
-
-    @property
     def depends_on_macros(self):
         return self.depends_on.macros
+
+    def checked_agg_time_dimension_for_measure(
+        self, measure_reference: MeasureReference
+    ) -> TimeDimensionReference:
+        measure: Optional[Measure] = None
+        for measure in self.measures:
+            if measure.reference == measure_reference:
+                measure = measure
+
+        assert (
+            measure is not None
+        ), f"No measure with name ({measure_reference.element_name}) in semantic_model with name ({self.name})"
+
+        if self.defaults is not None:
+            default_agg_time_dimesion = self.defaults.agg_time_dimension
+
+        agg_time_dimension_name = measure.agg_time_dimension or default_agg_time_dimesion
+        assert agg_time_dimension_name is not None, (
+            f"Aggregation time dimension for measure {measure.name} is not set! This should either be set directly on "
+            f"the measure specification in the model, or else defaulted to the primary time dimension in the data "
+            f"source containing the measure."
+        )
+        return TimeDimensionReference(element_name=agg_time_dimension_name)
 
 
 # ====================================

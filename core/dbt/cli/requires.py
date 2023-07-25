@@ -23,6 +23,7 @@ from dbt.parser.manifest import ManifestLoader, write_manifest
 from dbt.profiler import profiler
 from dbt.tracking import active_user, initialize_from_flags, track_run
 from dbt.utils import cast_dict_to_dict_of_strings
+from dbt.plugins import set_up_plugin_manager, get_plugin_manager
 
 from click import Context
 from functools import update_wrapper
@@ -160,6 +161,9 @@ def project(func):
         )
         ctx.obj["project"] = project
 
+        # Plugins
+        set_up_plugin_manager(project_name=project.project_name)
+
         if dbt.tracking.active_user is not None:
             project_id = None if project is None else project.hashed_name()
 
@@ -242,12 +246,15 @@ def manifest(*args0, write=True, write_perf_info=False):
                 manifest = ManifestLoader.get_full_manifest(
                     runtime_config,
                     write_perf_info=write_perf_info,
-                    publications=ctx.obj.get("_publications"),
                 )
 
                 ctx.obj["manifest"] = manifest
                 if write and ctx.obj["flags"].write_json:
-                    write_manifest(manifest, ctx.obj["runtime_config"].project_target_path)
+                    write_manifest(manifest, runtime_config.project_target_path)
+                    pm = get_plugin_manager(runtime_config.project_name)
+                    plugin_artifacts = pm.get_manifest_artifacts(manifest)
+                    for path, plugin_artifact in plugin_artifacts.items():
+                        plugin_artifact.write(path)
 
             return func(*args, **kwargs)
 

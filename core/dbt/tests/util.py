@@ -20,8 +20,7 @@ from dbt.events.functions import (
 )
 from dbt.events.base_types import EventLevel
 from dbt.events.types import Note
-from dbt.contracts.publication import PublicationArtifact
-
+from dbt.adapters.base.relation import BaseRelation
 
 # =============================================================================
 # Test utilities
@@ -73,7 +72,6 @@ from dbt.contracts.publication import PublicationArtifact
 def run_dbt(
     args: Optional[List[str]] = None,
     expect_pass: bool = True,
-    publications: Optional[List[PublicationArtifact]] = None,
 ):
     # Ignore logbook warnings
     warnings.filterwarnings("ignore", category=DeprecationWarning, module="logbook")
@@ -99,7 +97,7 @@ def run_dbt(
         args.extend(["--profiles-dir", profiles_dir])
 
     dbt = dbtRunner()
-    res = dbt.invoke(args, publications=publications)
+    res = dbt.invoke(args)
 
     # the exception is immediately raised to be caught in tests
     # using a pattern like `with pytest.raises(SomeException):`
@@ -119,12 +117,11 @@ def run_dbt(
 def run_dbt_and_capture(
     args: Optional[List[str]] = None,
     expect_pass: bool = True,
-    publications: Optional[List[PublicationArtifact]] = None,
 ):
     try:
         stringbuf = StringIO()
         capture_stdout_logs(stringbuf)
-        res = run_dbt(args, expect_pass=expect_pass, publications=publications)
+        res = run_dbt(args, expect_pass=expect_pass)
         stdout = stringbuf.getvalue()
 
     finally:
@@ -591,3 +588,32 @@ class AnyStringWith:
 
     def __repr__(self):
         return "AnyStringWith<{!r}>".format(self.contains)
+
+
+def assert_message_in_logs(message: str, logs: str, expected_pass: bool = True):
+    # if the logs are json strings, then 'jsonify' the message because of things like escape quotes
+    if os.environ.get("DBT_LOG_FORMAT", "") == "json":
+        message = message.replace(r'"', r"\"")
+
+    if expected_pass:
+        assert message in logs
+    else:
+        assert message not in logs
+
+
+def get_project_config(project):
+    file_yaml = read_file(project.project_root, "dbt_project.yml")
+    return yaml.safe_load(file_yaml)
+
+
+def set_project_config(project, config):
+    config_yaml = yaml.safe_dump(config)
+    write_file(config_yaml, project.project_root, "dbt_project.yml")
+
+
+def get_model_file(project, relation: BaseRelation) -> str:
+    return read_file(project.project_root, "models", f"{relation.name}.sql")
+
+
+def set_model_file(project, relation: BaseRelation, model_sql: str):
+    write_file(model_sql, project.project_root, "models", f"{relation.name}.sql")

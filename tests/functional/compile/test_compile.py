@@ -1,24 +1,30 @@
 import json
 import pathlib
 import pytest
+import re
 
 from dbt.cli.main import dbtRunner
-from dbt.exceptions import DbtRuntimeError, TargetNotFoundError
-from dbt.tests.util import run_dbt, run_dbt_and_capture
+from dbt.exceptions import DbtRuntimeError, Exception as DbtException
+from dbt.tests.util import run_dbt, run_dbt_and_capture, read_file
 from tests.functional.compile.fixtures import (
     first_model_sql,
     second_model_sql,
     first_ephemeral_model_sql,
     second_ephemeral_model_sql,
     third_ephemeral_model_sql,
+    with_recursive_model_sql,
     schema_yml,
     model_multiline_jinja,
 )
 
 
-def get_lines(model_name):
-    from dbt.tests.util import read_file
+def norm_whitespace(string):
+    _RE_COMBINE_WHITESPACE = re.compile(r"\s+")
+    string = _RE_COMBINE_WHITESPACE.sub(" ", string).strip()
+    return string
 
+
+def get_lines(model_name):
     f = read_file("target", "compiled", "test", "models", model_name + ".sql")
     return [line for line in f.splitlines() if line]
 
@@ -56,6 +62,7 @@ class TestEphemeralModels:
             "first_ephemeral_model.sql": first_ephemeral_model_sql,
             "second_ephemeral_model.sql": second_ephemeral_model_sql,
             "third_ephemeral_model.sql": third_ephemeral_model_sql,
+            "with_recursive_model.sql": with_recursive_model_sql,
         }
 
     def test_first_selector(self, project):
@@ -88,20 +95,35 @@ class TestEphemeralModels:
     def test_no_selector(self, project):
         run_dbt(["compile"])
 
-        assert get_lines("first_ephemeral_model") == ["select 1 as fun"]
-        assert get_lines("second_ephemeral_model") == [
-            "with __dbt__cte__first_ephemeral_model as (",
+        sql = read_file("target", "compiled", "test", "models", "first_ephemeral_model.sql")
+        assert norm_whitespace(sql) == norm_whitespace("select 1 as fun")
+        sql = read_file("target", "compiled", "test", "models", "second_ephemeral_model.sql")
+        expected_sql = """with __dbt__cte__first_ephemeral_model as (
+            select 1 as fun
+            ) select * from __dbt__cte__first_ephemeral_model"""
+        assert norm_whitespace(sql) == norm_whitespace(expected_sql)
+        sql = read_file("target", "compiled", "test", "models", "third_ephemeral_model.sql")
+        expected_sql = """with __dbt__cte__first_ephemeral_model as (
+            select 1 as fun
+            ),  __dbt__cte__second_ephemeral_model as (
+            select * from __dbt__cte__first_ephemeral_model
+            ) select * from __dbt__cte__second_ephemeral_model
+            union all
+            select 2 as fun"""
+        assert norm_whitespace(sql) == norm_whitespace(expected_sql)
+
+    def test_with_recursive_cte(self, project):
+        run_dbt(["compile"])
+
+        assert get_lines("with_recursive_model") == [
+            "with recursive  __dbt__cte__first_ephemeral_model as (",
             "select 1 as fun",
-            ")select * from __dbt__cte__first_ephemeral_model",
-        ]
-        assert get_lines("third_ephemeral_model") == [
-            "with __dbt__cte__first_ephemeral_model as (",
-            "select 1 as fun",
-            "),  __dbt__cte__second_ephemeral_model as (",
-            "select * from __dbt__cte__first_ephemeral_model",
-            ")select * from __dbt__cte__second_ephemeral_model",
-            "union all",
-            "select 2 as fun",
+            "), t(n) as (",
+            "    select * from __dbt__cte__first_ephemeral_model",
+            "  union all",
+            "    select n+1 from t where n < 100",
+            ")",
+            "select sum(n) from t;",
         ]
 
 
@@ -139,9 +161,7 @@ class TestCompile:
         assert "Compiled node 'second_model' is:" in log_output
 
     def test_inline_fail(self, project):
-        with pytest.raises(
-            TargetNotFoundError, match="depends on a node named 'third_model' which was not found"
-        ):
+        with pytest.raises(DbtException, match="Error parsing inline query"):
             run_dbt(["compile", "--inline", "select * from {{ ref('third_model') }}"])
 
     def test_multiline_jinja(self, project):
@@ -176,6 +196,20 @@ class TestCompile:
             populate_cache=False,
         )
         assert len(manifest.nodes) == 4
+
+    def test_compile_inline_syntax_error(self, project, mocker):
+        patched_fire_event = mocker.patch("dbt.task.compile.fire_event")
+        with pytest.raises(DbtException, match="Error parsing inline query"):
+            run_dbt(["compile", "--inline", "select * from {{ ref(1) }}"])
+        # Event for parsing error fired
+        patched_fire_event.assert_called_once()
+
+    def test_compile_inline_ref_node_not_exist(self, project, mocker):
+        patched_fire_event = mocker.patch("dbt.task.compile.fire_event")
+        with pytest.raises(DbtException, match="Error parsing inline query"):
+            run_dbt(["compile", "--inline", "select * from {{ ref('third_model') }}"])
+        # Event for parsing error fired
+        patched_fire_event.assert_called_once()
 
     def test_graph_summary_output(self, project):
         """Ensure that the compile command generates a file named graph_summary.json

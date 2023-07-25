@@ -223,6 +223,7 @@ class Project(HyphenatedDbtClassMixin, Replaceable):
     )
     packages: List[PackageSpec] = field(default_factory=list)
     query_comment: Optional[Union[QueryComment, NoValue, str]] = field(default_factory=NoValue)
+    restrict_access: bool = False
 
     @classmethod
     def validate(cls, data):

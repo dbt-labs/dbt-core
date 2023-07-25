@@ -651,6 +651,8 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
 
 # TestablePatchParser = seeds, snapshots
 class TestablePatchParser(NodePatchParser[UnparsedNodeUpdate]):
+    __test__ = False
+
     def get_block(self, node: UnparsedNodeUpdate) -> TestBlock:
         return TestBlock.from_yaml_block(self.yaml, node)
 
@@ -784,6 +786,9 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
 
                 # Includes alias recomputation
                 self.patch_node_config(versioned_model_node, versioned_model_patch)
+
+                # Need to reapply this here, in the case that 'contract: {enforced: true}' was during config-setting
+                versioned_model_node.build_contract_checksum()
                 source_file.append_patch(
                     versioned_model_patch.yaml_key, versioned_model_node.unique_id
                 )

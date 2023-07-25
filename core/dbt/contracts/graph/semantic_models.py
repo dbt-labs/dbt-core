@@ -120,15 +120,15 @@ class Entity(dbtClassMixin):
 @dataclass
 class MeasureAggregationParameters(dbtClassMixin):
     percentile: Optional[float] = None
-    use_discrete_percentile: Optional[bool] = None
-    use_approximate_percentile: Optional[bool] = None
+    use_discrete_percentile: bool = False
+    use_approximate_percentile: bool = False
 
 
 @dataclass
 class NonAdditiveDimension(dbtClassMixin):
     name: str
     window_choice: AggregationType
-    window_grouples: List[str]
+    window_groupings: List[str]
 
 
 @dataclass
@@ -141,13 +141,6 @@ class Measure(dbtClassMixin):
     agg_params: Optional[MeasureAggregationParameters] = None
     non_additive_dimension: Optional[NonAdditiveDimension] = None
     agg_time_dimension: Optional[str] = None
-
-    @property
-    def checked_agg_time_dimension(self) -> TimeDimensionReference:
-        if self.agg_time_dimension is not None:
-            return TimeDimensionReference(element_name=self.agg_time_dimension)
-        else:
-            raise Exception("Measure is missing agg_time_dimension!")
 
     @property
     def reference(self) -> MeasureReference:

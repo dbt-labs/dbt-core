@@ -20,7 +20,7 @@
           length({{ string_text }})
           - length(
               replace({{ string_text }},  {{ delimiter_text }}, '')
-          ) + 2 {{ part_number }}
+          ) + 2 + {{ part_number }}
         )
 
 {% endmacro %}

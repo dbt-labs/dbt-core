@@ -387,6 +387,11 @@ class BaseConfig(AdditionalPropertiesAllowed, Replaceable):
 
 
 @dataclass
+class SemanticModelConfig(BaseConfig):
+    enabled: bool = True
+
+
+@dataclass
 class MetricConfig(BaseConfig):
     enabled: bool = True
     group: Optional[str] = None
@@ -495,12 +500,12 @@ class NodeConfig(NodeAndTestConfig):
         if (
             self.contract.enforced
             and self.materialized == "incremental"
-            and self.on_schema_change != "append_new_columns"
+            and self.on_schema_change not in ("append_new_columns", "fail")
         ):
             raise ValidationError(
                 f"Invalid value for on_schema_change: {self.on_schema_change}. Models "
                 "materialized as incremental with contracts enabled must set "
-                "on_schema_change to 'append_new_columns'"
+                "on_schema_change to 'append_new_columns' or 'fail'"
             )
 
     @classmethod
@@ -550,6 +555,8 @@ class SeedConfig(NodeConfig):
 
 @dataclass
 class TestConfig(NodeAndTestConfig):
+    __test__ = False
+
     # this is repeated because of a different default
     schema: Optional[str] = field(
         default="dbt_test__audit",

@@ -9,6 +9,7 @@ PIN_PACKAGE_URL = (
     "https://docs.getdbt.com/docs/package-management#section-specifying-package-versions"
 )
 
+PACKAGES_FILE_NAME = "packages.yml"
 DEPENDENCIES_FILE_NAME = "dependencies.yml"
 MANIFEST_FILE_NAME = "manifest.json"
 SEMANTIC_MANIFEST_FILE_NAME = "semantic_manifest.json"

@@ -1,6 +1,0 @@
-kind: Fixes
-body: push down limit filtering to adapter
-time: 2023-05-08T06:09:26.455524-07:00
-custom:
-  Author: aranke
-  Issue: "7390"

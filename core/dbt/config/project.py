@@ -16,6 +16,7 @@ import os
 
 from dbt.flags import get_flags
 from dbt import deprecations
+from dbt.constants import DEPENDENCIES_FILE_NAME, PACKAGES_FILE_NAME
 from dbt.clients.system import path_exists, resolve_path_from_base, load_file_contents
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.contracts.connection import QueryComment
@@ -38,7 +39,6 @@ from dbt.contracts.project import (
     SemverString,
 )
 from dbt.contracts.project import PackageConfig, ProjectPackageMetadata
-from dbt.contracts.publication import ProjectDependencies
 from dbt.dataclass_schema import ValidationError
 from .renderer import DbtProjectYamlRenderer, PackageRenderer
 from .selectors import (
@@ -95,8 +95,8 @@ def _load_yaml(path):
 
 
 def package_and_project_data_from_root(project_root):
-    package_filepath = resolve_path_from_base("packages.yml", project_root)
-    dependencies_filepath = resolve_path_from_base("dependencies.yml", project_root)
+    package_filepath = resolve_path_from_base(PACKAGES_FILE_NAME, project_root)
+    dependencies_filepath = resolve_path_from_base(DEPENDENCIES_FILE_NAME, project_root)
 
     packages_yml_dict = {}
     dependencies_yml_dict = {}
@@ -112,17 +112,15 @@ def package_and_project_data_from_root(project_root):
         msg = "The 'projects' key cannot be specified in packages.yml"
         raise DbtProjectError(msg)
 
+    packages_specified_path = PACKAGES_FILE_NAME
     packages_dict = {}
-    dependent_projects_dict = {}
     if "packages" in dependencies_yml_dict:
         packages_dict["packages"] = dependencies_yml_dict["packages"]
-        packages_dict["packages_from_dependencies"] = True
+        packages_specified_path = DEPENDENCIES_FILE_NAME
     else:  # don't check for "packages" here so we capture invalid keys in packages.yml
         packages_dict = packages_yml_dict
-    if "projects" in dependencies_yml_dict:
-        dependent_projects_dict["projects"] = dependencies_yml_dict["projects"]
 
-    return packages_dict, dependent_projects_dict
+    return packages_dict, packages_specified_path
 
 
 def package_config_from_data(packages_data: Dict[str, Any]) -> PackageConfig:
@@ -135,21 +133,6 @@ def package_config_from_data(packages_data: Dict[str, Any]) -> PackageConfig:
     except ValidationError as e:
         raise DbtProjectError(MALFORMED_PACKAGE_ERROR.format(error=str(e.message))) from e
     return packages
-
-
-def dependent_project_config_from_data(
-    dependent_projects_data: Dict[str, Any]
-) -> ProjectDependencies:
-    if not dependent_projects_data:
-        dependent_projects_data = {"projects": []}
-
-    try:
-        ProjectDependencies.validate(dependent_projects_data)
-        dependent_projects = ProjectDependencies.from_dict(dependent_projects_data)
-    except ValidationError as e:
-        msg = f"Malformed dependencies.yml: {e}"
-        raise DbtProjectError(msg)
-    return dependent_projects
 
 
 def _parse_versions(versions: Union[List[str], str]) -> List[VersionSpecifier]:
@@ -276,9 +259,6 @@ def _get_required_version(
 class RenderComponents:
     project_dict: Dict[str, Any] = field(metadata=dict(description="The project dictionary"))
     packages_dict: Dict[str, Any] = field(metadata=dict(description="The packages dictionary"))
-    dependent_projects_dict: Dict[str, Any] = field(
-        metadata=dict(description="The dependent projects dictionary")
-    )
     selectors_dict: Dict[str, Any] = field(metadata=dict(description="The selectors dictionary"))
 
 
@@ -301,6 +281,9 @@ class PartialProject(RenderComponents):
     verify_version: bool = field(
         metadata=dict(description=("If True, verify the dbt version matches the required version"))
     )
+    packages_specified_path: str = field(
+        metadata=dict(description="The filename where packages were specified")
+    )
 
     def render_profile_name(self, renderer) -> Optional[str]:
         if self.profile_name is None:
@@ -313,16 +296,14 @@ class PartialProject(RenderComponents):
     ) -> RenderComponents:
 
         rendered_project = renderer.render_project(self.project_dict, self.project_root)
-        rendered_packages = renderer.render_packages(self.packages_dict)
-        rendered_dependent_projects = renderer.render_dependent_projects(
-            self.dependent_projects_dict
+        rendered_packages = renderer.render_packages(
+            self.packages_dict, self.packages_specified_path
         )
         rendered_selectors = renderer.render_selectors(self.selectors_dict)
 
         return RenderComponents(
             project_dict=rendered_project,
             packages_dict=rendered_packages,
-            dependent_projects_dict=rendered_dependent_projects,
             selectors_dict=rendered_selectors,
         )
 
@@ -369,7 +350,6 @@ class PartialProject(RenderComponents):
         unrendered = RenderComponents(
             project_dict=self.project_dict,
             packages_dict=self.packages_dict,
-            dependent_projects_dict=self.dependent_projects_dict,
             selectors_dict=self.selectors_dict,
         )
         dbt_version = _get_required_version(
@@ -471,9 +451,6 @@ class PartialProject(RenderComponents):
         query_comment = _query_comment_from_cfg(cfg.query_comment)
 
         packages: PackageConfig = package_config_from_data(rendered.packages_dict)
-        dependent_projects: ProjectDependencies = dependent_project_config_from_data(
-            rendered.dependent_projects_dict
-        )
         selectors = selector_config_from_data(rendered.selectors_dict)
         manifest_selectors: Dict[str, Any] = {}
         if rendered.selectors_dict and rendered.selectors_dict["selectors"]:
@@ -499,6 +476,7 @@ class PartialProject(RenderComponents):
             clean_targets=clean_targets,
             log_path=log_path,
             packages_install_path=packages_install_path,
+            packages_specified_path=self.packages_specified_path,
             quoting=quoting,
             models=models,
             on_run_start=on_run_start,
@@ -508,7 +486,6 @@ class PartialProject(RenderComponents):
             snapshots=snapshots,
             dbt_version=dbt_version,
             packages=packages,
-            dependent_projects=dependent_projects,
             manifest_selectors=manifest_selectors,
             selectors=selectors,
             query_comment=query_comment,
@@ -520,6 +497,7 @@ class PartialProject(RenderComponents):
             config_version=cfg.config_version,
             unrendered=unrendered,
             project_env_vars=project_env_vars,
+            restrict_access=cfg.restrict_access,
         )
         # sanity check - this means an internal issue
         project.validate()
@@ -531,10 +509,10 @@ class PartialProject(RenderComponents):
         project_root: str,
         project_dict: Dict[str, Any],
         packages_dict: Dict[str, Any],
-        dependent_projects_dict: Dict[str, Any],
         selectors_dict: Dict[str, Any],
         *,
         verify_version: bool = False,
+        packages_specified_path: str = PACKAGES_FILE_NAME,
     ):
         """Construct a partial project from its constituent dicts."""
         project_name = project_dict.get("name")
@@ -547,9 +525,9 @@ class PartialProject(RenderComponents):
             project_root=project_root,
             project_dict=project_dict,
             packages_dict=packages_dict,
-            dependent_projects_dict=dependent_projects_dict,
             selectors_dict=selectors_dict,
             verify_version=verify_version,
+            packages_specified_path=packages_specified_path,
         )
 
     @classmethod
@@ -558,16 +536,18 @@ class PartialProject(RenderComponents):
     ) -> "PartialProject":
         project_root = os.path.normpath(project_root)
         project_dict = load_raw_project(project_root)
-        # Read packages.yml and dependencies.yml and pass dictionaries to "from_dicts" method
-        packages_dict, dependent_projects_dict = package_and_project_data_from_root(project_root)
+        (
+            packages_dict,
+            packages_specified_path,
+        ) = package_and_project_data_from_root(project_root)
         selectors_dict = selector_data_from_root(project_root)
         return cls.from_dicts(
             project_root=project_root,
             project_dict=project_dict,
             selectors_dict=selectors_dict,
             packages_dict=packages_dict,
-            dependent_projects_dict=dependent_projects_dict,
             verify_version=verify_version,
+            packages_specified_path=packages_specified_path,
         )
 
 
@@ -607,6 +587,7 @@ class Project:
     clean_targets: List[str]
     log_path: str
     packages_install_path: str
+    packages_specified_path: str
     quoting: Dict[str, Any]
     models: Dict[str, Any]
     on_run_start: List[str]
@@ -621,13 +602,13 @@ class Project:
     vars: VarProvider
     dbt_version: List[VersionSpecifier]
     packages: PackageConfig
-    dependent_projects: ProjectDependencies
     manifest_selectors: Dict[str, Any]
     selectors: SelectorConfig
     query_comment: QueryComment
     config_version: int
     unrendered: RenderComponents
     project_env_vars: Dict[str, Any]
+    restrict_access: bool
 
     @property
     def all_source_paths(self) -> List[str]:
@@ -696,6 +677,7 @@ class Project:
                 "vars": self.vars.to_dict(),
                 "require-dbt-version": [v.to_version_string() for v in self.dbt_version],
                 "config-version": self.config_version,
+                "restrict-access": self.restrict_access,
             }
         )
         if self.query_comment:
@@ -711,13 +693,6 @@ class Project:
             ProjectContract.validate(self.to_project_config())
         except ValidationError as e:
             raise ProjectContractBrokenError(e) from e
-
-    @classmethod
-    def partial_load(cls, project_root: str, *, verify_version: bool = False) -> PartialProject:
-        return PartialProject.from_project_root(
-            project_root,
-            verify_version=verify_version,
-        )
 
     # Called by:
     # RtConfig.load_dependencies => RtConfig.load_projects => RtConfig.new_project => Project.from_project_root

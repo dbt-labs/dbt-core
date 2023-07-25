@@ -1,6 +1,6 @@
 import pytest
 
-from dbt.exceptions import DbtRuntimeError
+from dbt.exceptions import DbtRuntimeError, Exception as DbtException
 from dbt.tests.util import run_dbt_and_capture, run_dbt
 from tests.functional.show.fixtures import (
     models__second_ephemeral_model,
@@ -73,9 +73,7 @@ class TestShow:
 
     def test_inline_fail(self, project):
         run_dbt(["build"])
-        with pytest.raises(
-            DbtRuntimeError, match="depends on a node named 'third_model' which was not found"
-        ):
+        with pytest.raises(DbtException, match="Error parsing inline query"):
             run_dbt(["show", "--inline", "select * from {{ ref('third_model') }}"])
 
     def test_ephemeral_model(self, project):

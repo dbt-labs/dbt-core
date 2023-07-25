@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Move node patch method to schema parser patch_node_properties and refactor schema
-  parsing
-time: 2023-05-16T09:42:41.793503-04:00
-custom:
-  Author: gshank
-  Issue: "7430"

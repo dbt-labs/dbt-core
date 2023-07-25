@@ -151,6 +151,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             clean_targets=project.clean_targets,
             log_path=project.log_path,
             packages_install_path=project.packages_install_path,
+            packages_specified_path=project.packages_specified_path,
             quoting=quoting,
             models=project.models,
             on_run_start=project.on_run_start,
@@ -160,7 +161,6 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             snapshots=project.snapshots,
             dbt_version=project.dbt_version,
             packages=project.packages,
-            dependent_projects=project.dependent_projects,
             manifest_selectors=project.manifest_selectors,
             selectors=project.selectors,
             query_comment=project.query_comment,
@@ -172,6 +172,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             config_version=project.config_version,
             unrendered=project.unrendered,
             project_env_vars=project.project_env_vars,
+            restrict_access=project.restrict_access,
             profile_env_vars=profile.profile_env_vars,
             profile_name=profile.profile_name,
             target_name=profile.target_name,
@@ -365,6 +366,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
                     raise UninstalledPackagesFoundError(
                         count_packages_specified,
                         count_packages_installed,
+                        self.packages_specified_path,
                         self.packages_install_path,
                     )
                 project_paths = itertools.chain(internal_packages, self._get_project_directories())

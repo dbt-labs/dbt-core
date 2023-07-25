@@ -7,6 +7,8 @@ from tests.functional.exposures.fixtures import (
     simple_exposure_yml,
     source_schema_yml,
     metrics_schema_yml,
+    semantic_models_schema_yml,
+    metricflow_time_spine_sql,
 )
 
 
@@ -16,8 +18,10 @@ class TestBasicExposures:
         return {
             "exposure.yml": simple_exposure_yml,
             "model.sql": models_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
             "second_model.sql": second_model_sql,
             "schema.yml": source_schema_yml,
+            "semantic_models.yml": semantic_models_schema_yml,
             "metrics.yml": metrics_schema_yml,
         }
 

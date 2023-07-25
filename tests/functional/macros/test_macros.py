@@ -10,18 +10,22 @@ from dbt.tests.util import (
     check_relations_equal,
 )
 
+from dbt.tests.fixtures.project import write_project_files
 from tests.functional.macros.fixtures import (
+    dbt_project__incorrect_dispatch,
     models__dep_macro,
     models__with_undefined_macro,
     models__local_macro,
     models__ref_macro,
     models__override_get_columns_macros,
     models__deprecated_adapter_macro_model,
+    models__incorrect_dispatch,
     macros__my_macros,
     macros__no_default_macros,
     macros__override_get_columns_macros,
     macros__package_override_get_columns_macros,
     macros__deprecated_adapter_macro,
+    macros__incorrect_dispatch,
 )
 
 
@@ -201,6 +205,43 @@ class TestDispatchMacroOverrideBuiltin(TestMacroOverrideBuiltin):
         run_dbt(["deps"])
         run_dbt()
         run_dbt()
+
+
+class TestMisnamedMacroNamespace:
+    @pytest.fixture(scope="class", autouse=True)
+    def setUp(self, project_root):
+        test_utils_files = {
+            "dbt_project.yml": dbt_project__incorrect_dispatch,
+            "macros": {
+                "cowsay.sql": macros__incorrect_dispatch,
+            },
+        }
+        write_project_files(project_root, "test_utils", test_utils_files)
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_model.sql": models__incorrect_dispatch,
+        }
+
+    @pytest.fixture(scope="class")
+    def packages(self):
+        return {
+            "packages": [
+                {"local": "test_utils"},
+            ]
+        }
+
+    def test_misnamed_macro_namespace(
+        self,
+        project,
+    ):
+        run_dbt(["deps"])
+
+        with pytest.raises(dbt.exceptions.CompilationError) as exc:
+            run_dbt()
+
+        assert "In dispatch: No macro named 'cowsay' found" in str(exc.value)
 
 
 class TestAdapterMacroDeprecated:

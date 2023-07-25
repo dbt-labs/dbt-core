@@ -9,6 +9,7 @@ from dbt.exceptions import DbtRuntimeError
 from dbt.graph import GraphQueue
 from dbt.task.base import ConfiguredTask
 from dbt.task.build import BuildTask
+from dbt.task.clone import CloneTask
 from dbt.task.compile import CompileTask
 from dbt.task.generate import GenerateTask
 from dbt.task.run import RunTask
@@ -22,6 +23,7 @@ RETRYABLE_STATUSES = {NodeStatus.Error, NodeStatus.Fail, NodeStatus.Skipped, Nod
 TASK_DICT = {
     "build": BuildTask,
     "compile": CompileTask,
+    "clone": CloneTask,
     "generate": GenerateTask,
     "seed": SeedTask,
     "snapshot": SnapshotTask,
@@ -33,6 +35,7 @@ TASK_DICT = {
 CMD_DICT = {
     "build": CliCommand.BUILD,
     "compile": CliCommand.COMPILE,
+    "clone": CliCommand.CLONE,
     "generate": CliCommand.DOCS_GENERATE,
     "seed": CliCommand.SEED,
     "snapshot": CliCommand.SNAPSHOT,
