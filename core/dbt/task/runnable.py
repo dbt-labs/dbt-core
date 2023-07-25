@@ -265,12 +265,11 @@ class GraphRunnableTask(ConfiguredTask):
         while not self.job_queue.empty():
             node = self.job_queue.get()
             # supports non half width alphanumeric for generic test
-            if isinstance(node, GenericTestNode):
-                if node.name[-2:] == "__":
-                    for char in node.column_name:
-                        if east_asian_width(char) != "Na":
-                            node.name = node.name[:-1] + node.column_name
-                            break
+            if isinstance(node, GenericTestNode) and node.name[-2:] == "__":
+                for char in node.column_name:
+                    if east_asian_width(char) != "Na":
+                        node.name = node.name[:-1] + node.column_name
+                        break
             self._raise_set_error()
             runner = self.get_runner(node)
             # we finally know what we're running! Make sure we haven't decided
