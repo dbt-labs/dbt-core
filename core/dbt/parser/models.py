@@ -497,12 +497,10 @@ class ModelParser(SimpleSQLParser[ModelNode]):
         # set refs and sources on the node object
         refs: List[RefArgs] = []
         for ref in statically_parsed["refs"]:
-            if len(ref) == 1:
-                package, name = None, ref[0]
-            else:
-                package, name = ref
-
-            refs.append(RefArgs(package=package, name=name))
+            name = ref.get("name")
+            package = ref.get("package")
+            version = ref.get("version")
+            refs.append(RefArgs(name, package, version))
 
         node.refs += refs
         node.sources += statically_parsed["sources"]

@@ -73,7 +73,7 @@ setup(
         "sqlparse>=0.2.3",
         # ----
         # These are major-version-0 packages also maintained by dbt-labs. Accept patches.
-        "dbt-extractor~=0.4.1",
+        "dbt-extractor~=0.5.0",
         "hologram~=0.0.16",  # includes transitive dependencies on python-dateutil and jsonschema
         "minimal-snowplow-tracker~=0.0.2",
         # DSI is under active development, so we're pinning to specific dev versions for now.
