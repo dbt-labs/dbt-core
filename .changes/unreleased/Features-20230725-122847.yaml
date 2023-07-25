@@ -1,0 +1,6 @@
+kind: Features
+body: Supports non half width alphanumeric for generic test
+time: 2023-07-25T12:28:47.88711+09:00
+custom:
+  Author: d-kaneshiro
+  Issue: "8204"
