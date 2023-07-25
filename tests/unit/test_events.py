@@ -388,8 +388,6 @@ sample_values = [
     types.RunResultErrorNoMessage(status=""),
     types.SQLCompiledPath(path=""),
     types.CheckNodeTestFailure(relation_name=""),
-    types.FirstRunResultError(msg=""),
-    types.AfterFirstRunResultError(msg=""),
     types.EndOfRunSummary(num_errors=0, num_warnings=0, keyboard_interrupt=False),
     types.LogSkipBecauseError(schema="", relation="", index=0, total=0),
     types.EnsureGitInstalled(),

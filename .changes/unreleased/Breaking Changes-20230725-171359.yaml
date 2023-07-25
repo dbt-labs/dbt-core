@@ -1,0 +1,7 @@
+kind: Breaking Changes
+body: Removed the FirstRunResultError and AfterFirstRunResultError event types, using
+  the existing RunResultError in their place.
+time: 2023-07-25T17:13:59.441682-04:00
+custom:
+  Author: peterallenwebb
+  Issue: "7963"
