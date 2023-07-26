@@ -1,0 +1,6 @@
+kind: Fixes
+body: Improve handling of CTE injection with ephemeral models
+time: 2023-07-26T10:44:48.888451-04:00
+custom:
+  Author: gshank
+  Issue: "8213"
