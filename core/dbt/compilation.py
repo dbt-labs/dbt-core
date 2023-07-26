@@ -523,6 +523,12 @@ class Compiler:
         the node's raw_code into compiled_code, and then calls the
         recursive method to "prepend" the ctes.
         """
+        # Make sure Lexer for sqlparse 0.4.4 is initialized
+        from sqlparse.lexer import Lexer  # type: ignore
+
+        if hasattr(Lexer, "get_default_instance"):
+            Lexer.get_default_instance()
+
         node = self._compile_code(node, manifest, extra_context)
 
         node, _ = self._recursively_prepend_ctes(node, manifest, extra_context)
@@ -562,12 +568,6 @@ def inject_ctes_into_sql(sql: str, ctes: List[InjectedCTE]) -> str:
     """
     if len(ctes) == 0:
         return sql
-
-    # Make sure Lexer for sqlparse 0.4.4 is initialized
-    from sqlparse.lexer import Lexer  # type: ignore
-
-    if hasattr(Lexer, "get_default_instance"):
-        Lexer.get_default_instance()
 
     parsed_stmts = sqlparse.parse(sql)
     parsed = parsed_stmts[0]
