@@ -280,16 +280,17 @@ class ConfiguredParser(
         self, parsed_node: IntermediateNode, config_dict: Dict[str, Any]
     ) -> None:
 
+        # These call the RelationUpdate callable to go through generate_name macros
+        self._update_node_database(parsed_node, config_dict.get("database"))
+        self._update_node_schema(parsed_node, config_dict.get("schema"))
+        self._update_node_alias(parsed_node, config_dict.get("alias"))
+
+        # Snapshot nodes use special "target_database" and "target_schema" fields for some reason
         if parsed_node.resource_type == NodeType.Snapshot:
             if "target_database" in config_dict and config_dict["target_database"]:
                 parsed_node.database = config_dict["target_database"]
             if "target_schema" in config_dict and config_dict["target_schema"]:
                 parsed_node.schema = config_dict["target_schema"]
-        else:
-            # These call the RelationUpdate callable to go through generate_name macros
-            self._update_node_database(parsed_node, config_dict.get("database"))
-            self._update_node_schema(parsed_node, config_dict.get("schema"))
-            self._update_node_alias(parsed_node, config_dict.get("alias"))
 
         self._update_node_relation_name(parsed_node)
 
