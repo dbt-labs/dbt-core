@@ -1574,9 +1574,9 @@ class SemanticModel(GraphNode):
 
         agg_time_dimension_name = measure.agg_time_dimension or default_agg_time_dimension
         assert agg_time_dimension_name is not None, (
-            f"Aggregation time dimension for measure {measure.name} is not set! This should either be set directly on "
-            f"the measure specification in the model, or else defaulted to the primary time dimension in the data "
-            f"source containing the measure."
+            f"Aggregation time dimension for measure {measure.name} on semantic model {self.name} is not set! "
+            "To fix this either specify a default `agg_time_dimension` for the semantic model or define an "
+            "`agg_time_dimension` on the measure directly."
         )
         return TimeDimensionReference(element_name=agg_time_dimension_name)
 
