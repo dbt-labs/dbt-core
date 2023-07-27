@@ -1,0 +1,6 @@
+kind: Fixes
+body: Copy target_schema from config into snapshot node
+time: 2023-07-17T16:06:52.957724-04:00
+custom:
+  Author: gshank
+  Issue: "6745"
