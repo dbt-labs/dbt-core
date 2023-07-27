@@ -389,9 +389,9 @@ inline = click.option(
 # Most CLI arguments should use the combined `select` option that aliases `--models` to `--select`.
 # However, if you need to split out these separators (like `dbt ls`), use the `models` and `raw_select` options instead.
 # See https://github.com/dbt-labs/dbt-core/pull/6774#issuecomment-1408476095 for more info.
-models = click.option(*model_decls, **select_attrs)
-raw_select = click.option(*select_decls, **select_attrs)
-select = click.option(*select_decls, *model_decls, **select_attrs)
+models = click.option(*model_decls, **select_attrs)  # type: ignore[arg-type]
+raw_select = click.option(*select_decls, **select_attrs)  # type: ignore[arg-type]
+select = click.option(*select_decls, *model_decls, **select_attrs)  # type: ignore[arg-type]
 
 selector = click.option(
     "--selector",
