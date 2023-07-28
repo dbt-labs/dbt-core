@@ -59,8 +59,7 @@ setup(
         # ----
         # dbt-core uses these packages in standard ways. Pin to the major version, and check compatibility
         # with major versions in each new minor version of dbt-core.
-        # temporarily pinning click for mypy failures: https://github.com/pallets/click/issues/2558
-        "click>=8.1.1,<8.1.4",
+        "click<9",
         "networkx>=2.3,<4",
         # ----
         # These packages are major-version-0. Keep upper bounds on upcoming minor versions (which could have breaking changes)
