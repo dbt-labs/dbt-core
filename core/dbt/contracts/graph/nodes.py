@@ -50,6 +50,7 @@ from dbt.flags import get_flags
 from dbt.node_types import ModelLanguage, NodeType, AccessType
 from dbt_semantic_interfaces.call_parameter_sets import FilterCallParameterSets
 from dbt_semantic_interfaces.references import (
+    EntityReference,
     MeasureReference,
     LinkableElementReference,
     SemanticModelReference,
@@ -1498,6 +1499,7 @@ class SemanticModel(GraphNode):
     refs: List[RefArgs] = field(default_factory=list)
     created_at: float = field(default_factory=lambda: time.time())
     config: SemanticModelConfig = field(default_factory=SemanticModelConfig)
+    primary_entity: Optional[str] = None
 
     @property
     def entity_references(self) -> List[LinkableElementReference]:
@@ -1579,6 +1581,14 @@ class SemanticModel(GraphNode):
             "`agg_time_dimension` on the measure directly."
         )
         return TimeDimensionReference(element_name=agg_time_dimension_name)
+
+    @property
+    def primary_entity_reference(self) -> Optional[EntityReference]:
+        return (
+            EntityReference(element_name=self.primary_entity)
+            if self.primary_entity is not None
+            else None
+        )
 
 
 # ====================================
