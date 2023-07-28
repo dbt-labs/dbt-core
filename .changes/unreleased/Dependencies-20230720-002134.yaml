@@ -1,0 +1,6 @@
+kind: "Dependencies"
+body: "Update click requirement from <8.1.4,>=8.1.1 to >=8.1.1,<8.1.7 in /core"
+time: 2023-07-20T00:21:34.00000Z
+custom:
+  Author: dependabot[bot]
+  PR: 8164
