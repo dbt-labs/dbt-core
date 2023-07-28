@@ -1,0 +1,7 @@
+kind: Fixes
+body: Ensure runtime errors are raised for graph runnable tasks (compile, show, run,
+  etc)
+time: 2023-07-28T11:56:20.863718-04:00
+custom:
+  Author: michelleark
+  Issue: "8166"
