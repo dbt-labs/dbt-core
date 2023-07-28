@@ -76,8 +76,7 @@ setup(
         "hologram~=0.0.16",  # includes transitive dependencies on python-dateutil and jsonschema
         "minimal-snowplow-tracker~=0.0.2",
         # DSI is under active development, so we're pinning to specific dev versions for now.
-        # TODO: Before RC/final release, update to use ~= pinning.
-        "dbt-semantic-interfaces~=0.1.0rc1",
+        "dbt-semantic-interfaces~=0.2.0",
         # ----
         # Expect compatibility with all new versions of these packages, so lower bounds only.
         "packaging>20.9",
