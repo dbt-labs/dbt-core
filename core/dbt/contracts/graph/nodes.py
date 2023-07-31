@@ -626,6 +626,19 @@ class ModelNode(CompiledNode):
     def materialization_enforces_constraints(self) -> bool:
         return self.config.materialized in ["table", "incremental"]
 
+    def same_contents(self, old, adapter_type) -> bool:
+        return super().same_contents(old, adapter_type) and self.same_ref_representation(old)
+
+    def same_ref_representation(self, old) -> bool:
+        return (
+            # Changing a version may break downstream refs
+            self.version == old.version
+            # Changing the latest_version may break downstream unpinned refs
+            and self.latest_version == old.latest_version
+            # Tightening access may break downstream refs
+            and self.access >= old.access
+        )
+
     def build_contract_checksum(self):
         # We don't need to construct the checksum if the model does not
         # have contract enforced, because it won't be used.

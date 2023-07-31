@@ -4,8 +4,8 @@ from dbt.dataclass_schema import StrEnum
 
 
 class AccessType(StrEnum):
-    Protected = "protected"
     Private = "private"
+    Protected = "protected"
     Public = "public"
 
     @classmethod
@@ -15,6 +15,13 @@ class AccessType(StrEnum):
         except ValueError:
             return False
         return True
+
+    def __lt__(self, other):
+        if not isinstance(other, AccessType):
+            raise NotImplementedError
+
+        members = list(AccessType)
+        return members.index(self) < members.index(other)
 
 
 class NodeType(StrEnum):
