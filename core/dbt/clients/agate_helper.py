@@ -17,7 +17,7 @@ class Number(agate.data_types.Number):
     # undo the change in https://github.com/wireservice/agate/pull/733
     # i.e. do not cast True and False to numeric 1 and 0
     def cast(self, d):
-        if type(d) == bool:
+        if type(d) == bool:  # noqa: E721
             raise agate.exceptions.CastError(
                 'Do not cast True to 1 or False to 0.'
             )

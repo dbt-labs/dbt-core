@@ -574,7 +574,7 @@ class ListRelations(DebugLevel, Cli, File):
     def asdict(cls, data: list) -> dict:
         d = dict()
         for k, v in data:
-            if type(v) == list:
+            if type(v) == list:  # noqa: E721
                 d[k] = [str(x) for x in v]
         return d
 

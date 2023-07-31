@@ -480,7 +480,7 @@ class MacroMethods:
         """
         filter: Optional[Callable[[MacroCandidate], bool]] = None
         if package is not None:
-            def filter(candidate: MacroCandidate) -> bool:
+            def filter(candidate: MacroCandidate) -> bool:  # noqa: F811
                 return package == candidate.macro.package_name
 
         candidates: CandidateList = self._find_macros_by_name(

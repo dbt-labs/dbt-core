@@ -192,7 +192,7 @@ def create_info_text_log_line(e: T_Event, msg_fn: Callable[[T_Event], str]) -> s
 def create_debug_text_log_line(e: T_Event, msg_fn: Callable[[T_Event], str]) -> str:
     log_line: str = ''
     # Create a separator if this is the beginning of an invocation
-    if type(e) == MainReportVersion:
+    if type(e) == MainReportVersion:  # noqa: E721
         separator = 30 * '='
         log_line = f'\n\n{separator} {e.get_ts()} | {get_invocation_id()} {separator}\n'
     color_tag: str = '' if this.format_color else Style.RESET_ALL
@@ -212,7 +212,7 @@ def create_debug_text_log_line(e: T_Event, msg_fn: Callable[[T_Event], str]) -> 
 # translates an Event to a completely formatted json log line
 # you have to specify which message you want. (i.e. - e.message(), e.cli_msg(), e.file_msg())
 def create_json_log_line(e: T_Event, msg_fn: Callable[[T_Event], str]) -> Optional[str]:
-    if type(e) == EmptyLine:
+    if type(e) == EmptyLine:  # noqa: E721
         return None  # will not be sent to logger
     # using preformatted string instead of formatting it here to be extra careful about timezone
     values = event_to_serializable_dict(e, lambda _: e.get_ts_rfc3339(), lambda x: msg_fn(x))

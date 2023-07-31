@@ -232,9 +232,9 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
         def get_hashable_md(
             data: Union[str, int, float, List, Dict]
         ) -> Union[str, List, Dict]:
-            if type(data) == dict:
+            if type(data) == dict:  # noqa: E721
                 return {k: get_hashable_md(data[k]) for k in sorted(data.keys())}  # type: ignore
-            elif type(data) == list:
+            elif type(data) == list:  # noqa: E721
                 return [get_hashable_md(val) for val in data]  # type: ignore
             else:
                 return str(data)
