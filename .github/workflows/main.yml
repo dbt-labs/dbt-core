@@ -19,18 +19,7 @@ on:
       - "main"
       - "*.latest"
       - "releases/*"
-  # important to note that `pull_request_target` workflows
-  # will run in the context of the target branch of a PR
-  # This means workflow changes will not run on the PR CI
-  pull_request_target:
-    branches:
-      - "main"
-      - "*.latest"
- # this allows testing of workflow changes if the target branch is not one of our protected branches
   pull_request:
-    branches-ignore:
-      - "main"
-      - "*.latest"
   workflow_dispatch:
 
 permissions: read-all
@@ -47,7 +36,7 @@ defaults:
 # top-level adjustments can be made here
 env:
   # number of parallel processes to spawn for python integration testing
-  PYTHON_INTEGRATION_TEST_WORKERS: ${{ vars.PYTHON_INTEGRATION_TEST_WORKERS }}
+  PYTHON_INTEGRATION_TEST_WORKERS: 5
 
 jobs:
   code-quality:
