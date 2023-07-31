@@ -13,7 +13,7 @@ on:
       - "main"
       - "*.latest"
       - "releases/*"
-  # all PRs, important to note that `pull_request_target` workflows
+  # important to note that `pull_request_target` workflows
   # will run in the context of the target branch of a PR
   # This means workflow changes will not run on the PR CI
   pull_request_target:
