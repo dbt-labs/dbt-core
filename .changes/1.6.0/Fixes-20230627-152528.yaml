@@ -1,6 +1,0 @@
-kind: Fixes
-body: add access to ModelNodeArgs for external node building
-time: 2023-06-27T15:25:28.488767-04:00
-custom:
-  Author: michelleark
-  Issue: "7890"

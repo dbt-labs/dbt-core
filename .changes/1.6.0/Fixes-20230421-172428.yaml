@@ -1,6 +1,0 @@
-kind: Fixes
-body: dbt build selection of tests' descendants
-time: 2023-04-21T17:24:28.335866975+02:00
-custom:
-  Author: b-luu
-  Issue: "7289"

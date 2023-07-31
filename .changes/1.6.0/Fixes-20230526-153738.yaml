@@ -1,6 +1,0 @@
-kind: Fixes
-body: fix StopIteration error when publication for project not found
-time: 2023-05-26T15:37:38.952939-04:00
-custom:
-  Author: michelleark
-  Issue: "7711"

@@ -1,6 +1,0 @@
-kind: Breaking Changes
-body: Dropped support for Python 3.7
-time: 2023-05-15T05:31:48.375649+02:00
-custom:
-  Author: sdebruyn
-  Issue: "7082"

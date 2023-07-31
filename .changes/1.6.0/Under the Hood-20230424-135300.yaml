@@ -1,8 +1,0 @@
-kind: Under the Hood
-body: 'Small UX improvements to model versions: Support defining latest_version in
-  unsuffixed file by default. Notify on unpinned ref when a prerelease version is
-  available. '
-time: 2023-04-24T13:53:00.484916+02:00
-custom:
-  Author: jtcohen6
-  Issue: "7443"

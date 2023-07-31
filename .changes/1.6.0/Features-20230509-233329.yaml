@@ -1,6 +1,0 @@
-kind: Features
-body: Added warnings for model and ref deprecations
-time: 2023-05-09T23:33:29.679333-04:00
-custom:
-  Author: peterallenwebb
-  Issue: "7433"
