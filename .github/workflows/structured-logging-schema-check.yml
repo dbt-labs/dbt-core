@@ -17,6 +17,13 @@ on:
   # will run in the context of the target branch of a PR
   # This means workflow changes will not run on the PR CI
   pull_request_target:
+    branches:
+      - "main"
+      - "*.latest"
+ # this allows testing of workflow changes if the target branch is not one of our protected branches
+  pull_request:
+    branches-ignore:
+      - "main"
   workflow_dispatch:
 
 permissions: read-all
