@@ -2,7 +2,7 @@ import pytest
 import re
 from typing import TypeVar
 
-from dbt.contracts.results import TimingInfo
+from dbt.contracts.results import TimingInfo, RunResult, RunStatus
 from dbt.events import AdapterLogger, types
 from dbt.events.base_types import (
     BaseEvent,
@@ -14,10 +14,14 @@ from dbt.events.base_types import (
     WarnLevel,
     msg_from_base_event,
 )
-from dbt.events.functions import msg_to_dict, msg_to_json
+from dbt.events.eventmgr import TestEventManager
+from dbt.events.functions import msg_to_dict, msg_to_json, ctx_set_event_manager
 from dbt.events.helpers import get_json_string_utcnow
+from dbt.events.types import RunResultError
 from dbt.flags import set_from_args
 from argparse import Namespace
+
+from dbt.task.printer import print_run_result_error
 
 set_from_args(Namespace(WARN_ERROR=False), None)
 
@@ -483,3 +487,22 @@ def test_bad_serialization():
         str(excinfo.value)
         == "[Note]: Unable to parse dict {'param_event_doesnt_have': 'This should break'}"
     )
+
+
+def test_single_run_error():
+    event_mgr = TestEventManager()
+    ctx_set_event_manager(event_mgr)
+    error_result = RunResult(
+        status=RunStatus.Error,
+        timing=[],
+        thread_id="",
+        execution_time=0.0,
+        node=None,
+        adapter_response=dict(),
+        message="oh no!",
+        failures=[],
+    )
+    print_run_result_error(error_result)
+    events = [e for e in event_mgr.event_history if isinstance(e[0], RunResultError)]
+    assert len(events) == 1
+    assert events[0][0].msg == "oh no!"

@@ -8,7 +8,7 @@ import logging
 from logging.handlers import RotatingFileHandler
 import threading
 import traceback
-from typing import Any, Callable, List, Optional, TextIO
+from typing import Any, Callable, List, Optional, TextIO, Protocol
 from uuid import uuid4
 from dbt.events.format import timestamp_to_datetime_string
 
@@ -206,7 +206,7 @@ class EventManager:
         for callback in self.callbacks:
             callback(msg)
 
-    def add_logger(self, config: LoggerConfig):
+    def add_logger(self, config: LoggerConfig) -> None:
         logger = (
             _JsonLogger(self, config)
             if config.line_format == LineFormat.Json
@@ -218,3 +218,25 @@ class EventManager:
     def flush(self):
         for logger in self.loggers:
             logger.flush()
+
+
+class IEventManager(Protocol):
+    callbacks: List[Callable[[EventMsg], None]]
+    invocation_id: str
+
+    def fire_event(self, e: BaseEvent, level: Optional[EventLevel] = None) -> None:
+        ...
+
+    def add_logger(self, config: LoggerConfig) -> None:
+        ...
+
+
+class TestEventManager(IEventManager):
+    def __init__(self):
+        self.event_history = []
+
+    def fire_event(self, e: BaseEvent, level: Optional[EventLevel] = None) -> None:
+        self.event_history.append((e, level))
+
+    def add_logger(self, config: LoggerConfig) -> None:
+        raise NotImplementedError()

@@ -1,6 +1,6 @@
 from dbt.constants import METADATA_ENV_PREFIX
 from dbt.events.base_types import BaseEvent, EventLevel, EventMsg
-from dbt.events.eventmgr import EventManager, LoggerConfig, LineFormat, NoFilter
+from dbt.events.eventmgr import EventManager, LoggerConfig, LineFormat, NoFilter, IEventManager
 from dbt.events.helpers import env_secrets, scrub_secrets
 from dbt.events.types import Formatting, Note
 from dbt.flags import get_flags, ENABLE_LEGACY_LOGGER
@@ -182,7 +182,7 @@ def cleanup_event_logger():
 # Since dbt-rpc does not do its own log setup, and since some events can
 # currently fire before logs can be configured by setup_event_logger(), we
 # create a default configuration with default settings and no file output.
-EVENT_MANAGER: EventManager = EventManager()
+EVENT_MANAGER: IEventManager = EventManager()
 EVENT_MANAGER.add_logger(
     _get_logbook_log_config(False, True, False, False)  # type: ignore
     if ENABLE_LEGACY_LOGGER
@@ -295,3 +295,8 @@ def set_invocation_id() -> None:
     # This is primarily for setting the invocation_id for separate
     # commands in the dbt servers. It shouldn't be necessary for the CLI.
     EVENT_MANAGER.invocation_id = str(uuid.uuid4())
+
+
+def ctx_set_event_manager(event_manager: IEventManager):
+    global EVENT_MANAGER
+    EVENT_MANAGER = event_manager
