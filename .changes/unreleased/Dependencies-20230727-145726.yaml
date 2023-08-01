@@ -1,0 +1,6 @@
+kind: Dependencies
+body: Add upper bound to sqlparse pin of <0.5
+time: 2023-07-27T14:57:26.40416-05:00
+custom:
+  Author: emmyoop
+  PR: "8236"

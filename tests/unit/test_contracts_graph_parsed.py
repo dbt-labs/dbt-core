@@ -520,6 +520,7 @@ def basic_parsed_seed_dict():
         "alias": "foo",
         "config": {
             "column_types": {},
+            "delimiter": ",",
             "enabled": True,
             "materialized": "seed",
             "persist_docs": {},
@@ -611,6 +612,7 @@ def complex_parsed_seed_dict():
         "alias": "foo",
         "config": {
             "column_types": {},
+            "delimiter": ",",
             "enabled": True,
             "materialized": "seed",
             "persist_docs": {"relation": True, "columns": True},
@@ -669,6 +671,7 @@ def complex_parsed_seed_object():
         alias="foo",
         config=SeedConfig(
             quote_columns=True,
+            delimiter=",",
             persist_docs={"relation": True, "columns": True},
         ),
         deferred=False,

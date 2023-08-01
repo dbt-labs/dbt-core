@@ -2,13 +2,15 @@ import os
 from datetime import datetime
 import pytz
 import pytest
-from dbt.tests.util import run_dbt, check_relations_equal, relation_from_name
+from dbt.tests.util import run_dbt, check_relations_equal, relation_from_name, write_file
 from tests.functional.simple_snapshot.fixtures import (
     models__schema_yml,
+    models__schema_with_target_schema_yml,
     models__ref_snapshot_sql,
     seeds__seed_newcol_csv,
     seeds__seed_csv,
     snapshots_pg__snapshot_sql,
+    snapshots_pg__snapshot_no_target_schema_sql,
     macros__test_no_overlaps_sql,
     macros_custom_snapshot__custom_sql,
     snapshots_pg_custom_namespaced__snapshot_sql,
@@ -121,6 +123,41 @@ class TestBasicSnapshot(Basic):
 class TestBasicRef(Basic):
     def test_basic_ref(self, project):
         ref_setup(project, num_snapshot_models=1)
+
+
+class TestBasicTargetSchemaConfig(Basic):
+    @pytest.fixture(scope="class")
+    def snapshots(self):
+        return {"snapshot.sql": snapshots_pg__snapshot_no_target_schema_sql}
+
+    @pytest.fixture(scope="class")
+    def project_config_update(self, unique_schema):
+        return {
+            "snapshots": {
+                "test": {
+                    "target_schema": unique_schema + "_alt",
+                }
+            }
+        }
+
+    def test_target_schema(self, project):
+        manifest = run_dbt(["parse"])
+        assert len(manifest.nodes) == 5
+        # ensure that the schema in the snapshot node is the same as target_schema
+        snapshot_id = "snapshot.test.snapshot_actual"
+        snapshot_node = manifest.nodes[snapshot_id]
+        assert snapshot_node.schema == f"{project.test_schema}_alt"
+        assert (
+            snapshot_node.relation_name
+            == f'"{project.database}"."{project.test_schema}_alt"."snapshot_actual"'
+        )
+        assert snapshot_node.meta == {"owner": "a_owner"}
+
+        # write out schema.yml file and check again
+        write_file(models__schema_with_target_schema_yml, "models", "schema.yml")
+        manifest = run_dbt(["parse"])
+        snapshot_node = manifest.nodes[snapshot_id]
+        assert snapshot_node.schema == "schema_from_schema_yml"
 
 
 class CustomNamespace:

@@ -169,7 +169,7 @@ def test_metric_node_satisfies_protocol():
 
 def test_where_filter_satisfies_protocol():
     where_filter = WhereFilter(
-        where_sql_template="{{ dimension('dimension_name') }} AND {{ time_dimension('time_dimension_name', 'month') }} AND {{ entity('entity_name') }}"
+        where_sql_template="{{ Dimension('enity_name__dimension_name') }} AND {{ TimeDimension('entity_name__time_dimension_name', 'month') }} AND {{ Entity('entity_name') }}"
     )
     assert isinstance(where_filter, RuntimeCheckableWhereFilter)
 

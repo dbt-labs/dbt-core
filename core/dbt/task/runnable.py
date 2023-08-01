@@ -375,15 +375,17 @@ class GraphRunnableTask(ConfiguredTask):
                     )
 
             print_run_result_error(failure.result)
-            raise
+            # ensure information about all nodes is propagated to run results when failing fast
+            return self.node_results
         except KeyboardInterrupt:
             self._cancel_connections(pool)
             print_run_end_messages(self.node_results, keyboard_interrupt=True)
             raise
-        finally:
-            pool.close()
-            pool.join()
-            return self.node_results
+
+        pool.close()
+        pool.join()
+
+        return self.node_results
 
     def _mark_dependent_errors(self, node_id, result, cause):
         if self.graph is None:
