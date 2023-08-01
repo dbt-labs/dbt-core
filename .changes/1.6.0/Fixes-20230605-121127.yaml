@@ -1,7 +1,0 @@
-kind: Fixes
-body: Log PublicationArtifactAvailable even when partially parsing unchanged public
-  models
-time: 2023-06-05T12:11:27.739183-04:00
-custom:
-  Author: michelleark
-  Issue: "7782"

@@ -1,0 +1,6 @@
+kind: Dependencies
+body: Update pin for click<9
+time: 2023-07-27T14:57:03.180458-05:00
+custom:
+  Author: emmyoop
+  PR: "8232"

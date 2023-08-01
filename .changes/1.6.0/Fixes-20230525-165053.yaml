@@ -1,6 +1,0 @@
-kind: Fixes
-body: Incorrect paths used for "target" and "state" directories
-time: 2023-05-25T16:50:53.718564-04:00
-custom:
-  Author: gshank
-  Issue: "7465"

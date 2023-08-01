@@ -75,6 +75,11 @@ jobs:
       DBT_TEST_USER_1: dbt_test_user_1
       DBT_TEST_USER_2: dbt_test_user_2
       DBT_TEST_USER_3: dbt_test_user_3
+      DD_CIVISIBILITY_AGENTLESS_ENABLED: true
+      DD_API_KEY: ${{ secrets.DATADOG_API_KEY }}
+      DD_SITE: datadoghq.com
+      DD_ENV: ci
+      DD_SERVICE: ${{ github.event.repository.name }}
 
     steps:
       - name: "Checkout code"
@@ -116,7 +121,7 @@ jobs:
           for ((i=1; i<=${{ inputs.num_runs_per_batch }}; i++))
           do
             echo "Running pytest iteration $i..."
-            python -m pytest ${{ inputs.test_path }}
+            python -m pytest --ddtrace ${{ inputs.test_path }}
             exit_code=$?
 
             if [[ $exit_code -eq 0 ]]; then

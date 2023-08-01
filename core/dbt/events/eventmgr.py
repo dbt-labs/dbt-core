@@ -13,7 +13,7 @@ from uuid import uuid4
 from dbt.events.format import timestamp_to_datetime_string
 
 from dbt.events.base_types import BaseEvent, EventLevel, msg_from_base_event, EventMsg
-
+import dbt.utils
 
 # A Filter is a function which takes a BaseEvent and returns True if the event
 # should be logged, False otherwise.
@@ -80,6 +80,7 @@ class LoggerConfig:
     use_colors: bool = False
     output_stream: Optional[TextIO] = None
     output_file_name: Optional[str] = None
+    output_file_max_bytes: Optional[int] = 10 * 1024 * 1024  # 10 mb
     logger: Optional[Any] = None
 
 
@@ -100,7 +101,7 @@ class _Logger:
             file_handler = RotatingFileHandler(
                 filename=str(config.output_file_name),
                 encoding="utf8",
-                maxBytes=10 * 1024 * 1024,  # 10 mb
+                maxBytes=config.output_file_max_bytes,  # type: ignore
                 backupCount=5,
             )
             self._python_logger = self._get_python_log_for_handler(file_handler)
@@ -175,7 +176,7 @@ class _JsonLogger(_Logger):
         from dbt.events.functions import msg_to_dict
 
         msg_dict = msg_to_dict(msg)
-        raw_log_line = json.dumps(msg_dict, sort_keys=True)
+        raw_log_line = json.dumps(msg_dict, sort_keys=True, cls=dbt.utils.ForgivingJSONEncoder)
         line = self.scrubber(raw_log_line)  # type: ignore
         return line
 

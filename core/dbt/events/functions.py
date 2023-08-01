@@ -13,6 +13,7 @@ from typing import Callable, Dict, List, Optional, TextIO
 import uuid
 from google.protobuf.json_format import MessageToDict
 
+import dbt.utils
 
 LOG_VERSION = 3
 metadata_vars: Optional[Dict[str, str]] = None
@@ -67,7 +68,11 @@ def setup_event_logger(flags, callbacks: List[Callable[[EventMsg], None]] = []) 
             log_level_file = EventLevel.DEBUG if flags.DEBUG else EventLevel(flags.LOG_LEVEL_FILE)
             EVENT_MANAGER.add_logger(
                 _get_logfile_config(
-                    log_file, flags.USE_COLORS_FILE, log_file_format, log_level_file
+                    log_file,
+                    flags.USE_COLORS_FILE,
+                    log_file_format,
+                    log_level_file,
+                    flags.LOG_FILE_MAX_BYTES,
                 )
             )
 
@@ -116,7 +121,11 @@ def _stdout_filter(
 
 
 def _get_logfile_config(
-    log_path: str, use_colors: bool, line_format: LineFormat, level: EventLevel
+    log_path: str,
+    use_colors: bool,
+    line_format: LineFormat,
+    level: EventLevel,
+    log_file_max_bytes: int,
 ) -> LoggerConfig:
     return LoggerConfig(
         name="file_log",
@@ -126,6 +135,7 @@ def _get_logfile_config(
         scrubber=env_scrubber,
         filter=partial(_logfile_filter, bool(get_flags().LOG_CACHE_EVENTS), line_format),
         output_file_name=log_path,
+        output_file_max_bytes=log_file_max_bytes,
     )
 
 
@@ -200,7 +210,7 @@ def stop_capture_stdout_logs():
 # the message may contain secrets which must be scrubbed at the usage site.
 def msg_to_json(msg: EventMsg) -> str:
     msg_dict = msg_to_dict(msg)
-    raw_log_line = json.dumps(msg_dict, sort_keys=True)
+    raw_log_line = json.dumps(msg_dict, sort_keys=True, cls=dbt.utils.ForgivingJSONEncoder)
     return raw_log_line
 
 

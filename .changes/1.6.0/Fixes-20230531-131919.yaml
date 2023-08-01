@@ -1,6 +1,0 @@
-kind: Fixes
-body: send sql header on contract enforcement
-time: 2023-05-31T13:19:19.801391-04:00
-custom:
-  Author: michelleark
-  Issue: "7714"

@@ -19,7 +19,7 @@
     {% set day_count = (end_date - start_date).days %}
     {% if day_count < 0 %}
         {% set msg -%}
-            Partiton start date is after the end date ({{ start_date }}, {{ end_date }})
+            Partition start date is after the end date ({{ start_date }}, {{ end_date }})
         {%- endset %}
 
         {{ exceptions.raise_compiler_error(msg, model) }}

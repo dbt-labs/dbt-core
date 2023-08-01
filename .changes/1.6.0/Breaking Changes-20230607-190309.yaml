@@ -1,6 +1,0 @@
-kind: Breaking Changes
-body: Switch from dbt-metrics to dbt-semantic-interfaces for MetricNode definitions
-time: 2023-06-07T19:03:09.680189-07:00
-custom:
-  Author: QMalcolm
-  Issue: 7500 7404

@@ -1,7 +1,0 @@
-kind: Fixes
-body: Update SemanticModel node to properly impelment the DSI 0.1.0dev3 SemanticModel
-  protocol spec
-time: 2023-06-12T17:58:54.289704-07:00
-custom:
-  Author: QMalcolm
-  Issue: 7833 7827

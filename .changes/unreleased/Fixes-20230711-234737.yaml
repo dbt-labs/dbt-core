@@ -1,6 +1,0 @@
-kind: Fixes
-body: Update DryRunMethod test classes ValidateSqlMethod naming
-time: 2023-07-11T23:47:37.9525-04:00
-custom:
-  Author: tlento
-  Issue: "7839"

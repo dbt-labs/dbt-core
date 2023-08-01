@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: Resolve SemanticModel ref is the same way as other refs
-time: 2023-06-16T15:57:49.245262-04:00
-custom:
-  Author: gshank
-  Issue: "7822"

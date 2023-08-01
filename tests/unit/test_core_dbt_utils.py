@@ -28,6 +28,11 @@ class TestCoreDbtUtils(unittest.TestCase):
         connection_exception_retry(lambda: Counter._add_with_untar_exception(), 5)
         self.assertEqual(2, counter)  # 2 = original attempt returned ReadError, plus 1 retry
 
+    def test_connection_exception_retry_success_failed_eofexception(self):
+        Counter._reset()
+        connection_exception_retry(lambda: Counter._add_with_eof_exception(), 5)
+        self.assertEqual(2, counter)  # 2 = original attempt returned EOFError, plus 1 retry
+
 
 counter: int = 0
 
@@ -56,6 +61,12 @@ class Counter:
         counter += 1
         if counter < 2:
             raise tarfile.ReadError
+
+    def _add_with_eof_exception():
+        global counter
+        counter += 1
+        if counter < 2:
+            raise EOFError
 
     def _reset():
         global counter

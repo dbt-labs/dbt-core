@@ -1,6 +1,0 @@
-kind: Features
-body: ' Validate public models are not materialized as ephemeral'
-time: 2023-06-05T22:20:39.382019-04:00
-custom:
-  Author: michelleark
-  Issue: "7226"

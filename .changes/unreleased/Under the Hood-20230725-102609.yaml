@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Ref expressions with version can now be processed by the latest version of the
+  high-performance dbt-extractor library.
+time: 2023-07-25T10:26:09.902878-04:00
+custom:
+  Author: peterallenwebb
+  Issue: "7688"
