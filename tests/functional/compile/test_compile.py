@@ -50,10 +50,10 @@ class TestIntrospectFlag:
         assert any("_test_compile as schema" in line for line in get_lines("second_model"))
 
     def test_no_introspect(self, project):
-        # with pytest.raises(DbtRuntimeError):
-        res = run_dbt(["compile", "--no-introspect"])
-        print(res)
-        return res
+        with pytest.raises(DbtRuntimeError, match="connection never acquired for thread"):
+            res = run_dbt(["compile", "--no-introspect"])
+            print(res)
+            return res
 
 
 class TestEphemeralModels:
