@@ -61,7 +61,6 @@ def args_to_context(args: List[str]) -> Context:
     if len(args) == 1 and "," in args[0]:
         args = args[0].split(",")
     sub_command_name, sub_command, args = cli.resolve_command(cli_ctx, args)
-
     # Handle source and docs group.
     if isinstance(sub_command, Group):
         sub_command_name, sub_command, args = sub_command.resolve_command(cli_ctx, args)
@@ -319,7 +318,6 @@ def command_params(command: CliCommand, args_dict: Dict[str, Any]) -> CommandPar
 
     for k, v in args_dict.items():
         k = k.lower()
-
         # if a "which" value exists in the args dict, it should match the command provided
         if k == WHICH_KEY:
             if v != command.value:
@@ -344,7 +342,8 @@ def command_params(command: CliCommand, args_dict: Dict[str, Any]) -> CommandPar
 
         if k == "macro" and command == CliCommand.RUN_OPERATION:
             add_fn(v)
-        elif v in (None, False):
+        # None is a Singleton, False is a Flyweight, only one instance of each.
+        elif v is None or v is False:
             add_fn(f"--no-{spinal_cased}")
         elif v is True:
             add_fn(f"--{spinal_cased}")
