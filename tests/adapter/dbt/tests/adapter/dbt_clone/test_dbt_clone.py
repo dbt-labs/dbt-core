@@ -72,6 +72,15 @@ class BaseClone:
         outputs["otherschema"]["schema"] = other_schema
         return {"test": {"outputs": outputs, "target": "default"}}
 
+    @pytest.fixture(autouse=True)
+    def clean_up(self, project):
+        yield
+        with project.adapter.connection_named("__test"):
+            relation = project.adapter.Relation.create(
+                database=project.database, schema=f"{project.test_schema}_seeds"
+            )
+            project.adapter.drop_schema(relation)
+
     def copy_state(self, project_root):
         state_path = os.path.join(project_root, "state")
         if not os.path.exists(state_path):
@@ -200,18 +209,4 @@ class BaseCloneNotPossible(BaseClone):
 
 
 class TestPostgresCloneNotPossible(BaseCloneNotPossible):
-    @pytest.fixture(autouse=True)
-    def clean_up(self, project):
-        yield
-        with project.adapter.connection_named("__test"):
-            relation = project.adapter.Relation.create(
-                database=project.database, schema=f"{project.test_schema}_seeds"
-            )
-            project.adapter.drop_schema(relation)
-
-            relation = project.adapter.Relation.create(
-                database=project.database, schema=project.test_schema
-            )
-            project.adapter.drop_schema(relation)
-
     pass
