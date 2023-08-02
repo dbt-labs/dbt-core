@@ -1,6 +1,0 @@
-kind: Fixes
-body: Skip jinja parsing of metric filters
-time: 2023-06-15T14:29:49.900201-07:00
-custom:
-  Author: QMalcolm
-  Issue: "7864"

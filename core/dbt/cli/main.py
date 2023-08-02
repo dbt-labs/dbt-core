@@ -132,6 +132,7 @@ class dbtRunner:
 @p.enable_legacy_logger
 @p.fail_fast
 @p.log_cache_events
+@p.log_file_max_bytes
 @p.log_format
 @p.log_format_file
 @p.log_level

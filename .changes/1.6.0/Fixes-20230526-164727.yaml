@@ -1,6 +1,0 @@
-kind: Fixes
-body: Using version 0 works when resolving single model
-time: 2023-05-26T16:47:27.6065-04:00
-custom:
-  Author: gshank
-  Issue: "7372"

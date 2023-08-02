@@ -1,6 +1,0 @@
-kind: Features
-body: Check for project dependency cycles
-time: 2023-05-09T09:41:47.2-04:00
-custom:
-  Author: gshank
-  Issue: "7468"

@@ -57,6 +57,11 @@ class TestFlags:
         assert hasattr(flags, "LOG_PATH")
         assert getattr(flags, "LOG_PATH") == Path("logs")
 
+    def test_log_file_max_size_default(self, run_context):
+        flags = Flags(run_context)
+        assert hasattr(flags, "LOG_FILE_MAX_BYTES")
+        assert getattr(flags, "LOG_FILE_MAX_BYTES") == 10 * 1024 * 1024
+
     @pytest.mark.parametrize(
         "set_stats_param,do_not_track,expected_anonymous_usage_stats",
         [

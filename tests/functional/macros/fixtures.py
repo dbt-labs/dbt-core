@@ -4,6 +4,12 @@ models__dep_macro = """
 }}
 """
 
+models__materialization_macro = """
+{{
+    materialization_macro()
+}}
+"""
+
 models__with_undefined_macro = """
 {{ dispatch_to_nowhere() }}
 select 1 as id
@@ -72,6 +78,12 @@ macros__my_macros = """
 
 {% macro postgres__dispatch_to_parent() %}
     {{ return('') }}
+{% endmacro %}
+"""
+
+macros__named_materialization = """
+{% macro materialization_macro() %}
+    select 1 as foo
 {% endmacro %}
 """
 

@@ -728,6 +728,7 @@ class UnparsedSemanticModel(dbtClassMixin):
     entities: List[UnparsedEntity] = field(default_factory=list)
     measures: List[UnparsedMeasure] = field(default_factory=list)
     dimensions: List[UnparsedDimension] = field(default_factory=list)
+    primary_entity: Optional[str] = None
 
 
 def normalize_date(d: Optional[datetime.date]) -> Optional[datetime.datetime]:

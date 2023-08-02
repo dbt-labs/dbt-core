@@ -1,6 +1,0 @@
-kind: Fixes
-body: Throw error for duplicated versioned and unversioned models
-time: 2023-05-09T16:50:07.530882-04:00
-custom:
-  Author: gshank
-  Issue: "7487"

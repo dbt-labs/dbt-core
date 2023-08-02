@@ -1,6 +1,0 @@
-kind: Features
-body: Enumerate supported materialized view features for dbt-postgres
-time: 2023-07-14T14:49:09.680123-04:00
-custom:
-  Author: mikealfare
-  Issue: "6911"

@@ -50,6 +50,7 @@ from dbt.flags import get_flags
 from dbt.node_types import ModelLanguage, NodeType, AccessType
 from dbt_semantic_interfaces.call_parameter_sets import FilterCallParameterSets
 from dbt_semantic_interfaces.references import (
+    EntityReference,
     MeasureReference,
     LinkableElementReference,
     SemanticModelReference,
@@ -1498,6 +1499,7 @@ class SemanticModel(GraphNode):
     refs: List[RefArgs] = field(default_factory=list)
     created_at: float = field(default_factory=lambda: time.time())
     config: SemanticModelConfig = field(default_factory=SemanticModelConfig)
+    primary_entity: Optional[str] = None
 
     @property
     def entity_references(self) -> List[LinkableElementReference]:
@@ -1568,16 +1570,25 @@ class SemanticModel(GraphNode):
             measure is not None
         ), f"No measure with name ({measure_reference.element_name}) in semantic_model with name ({self.name})"
 
-        if self.defaults is not None:
-            default_agg_time_dimesion = self.defaults.agg_time_dimension
+        default_agg_time_dimension = (
+            self.defaults.agg_time_dimension if self.defaults is not None else None
+        )
 
-        agg_time_dimension_name = measure.agg_time_dimension or default_agg_time_dimesion
+        agg_time_dimension_name = measure.agg_time_dimension or default_agg_time_dimension
         assert agg_time_dimension_name is not None, (
-            f"Aggregation time dimension for measure {measure.name} is not set! This should either be set directly on "
-            f"the measure specification in the model, or else defaulted to the primary time dimension in the data "
-            f"source containing the measure."
+            f"Aggregation time dimension for measure {measure.name} on semantic model {self.name} is not set! "
+            "To fix this either specify a default `agg_time_dimension` for the semantic model or define an "
+            "`agg_time_dimension` on the measure directly."
         )
         return TimeDimensionReference(element_name=agg_time_dimension_name)
+
+    @property
+    def primary_entity_reference(self) -> Optional[EntityReference]:
+        return (
+            EntityReference(element_name=self.primary_entity)
+            if self.primary_entity is not None
+            else None
+        )
 
 
 # ====================================

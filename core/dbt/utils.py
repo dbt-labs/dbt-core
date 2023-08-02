@@ -16,9 +16,8 @@ import time
 from pathlib import PosixPath, WindowsPath
 
 from contextlib import contextmanager
-from dbt.exceptions import ConnectionError, DuplicateAliasError
-from dbt.events.functions import fire_event
 from dbt.events.types import RetryExternalCall, RecordRetryException
+from dbt.helper_types import WarnErrorOptions
 from dbt import flags
 from enum import Enum
 from typing_extensions import Protocol
@@ -40,6 +39,7 @@ from typing import (
     Sequence,
 )
 
+import dbt.events.functions
 import dbt.exceptions
 
 DECIMALS: Tuple[Type[Any], ...]
@@ -337,15 +337,18 @@ class JSONEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, DECIMALS):
             return float(obj)
-        if isinstance(obj, (datetime.datetime, datetime.date, datetime.time)):
+        elif isinstance(obj, (datetime.datetime, datetime.date, datetime.time)):
             return obj.isoformat()
-        if isinstance(obj, jinja2.Undefined):
+        elif isinstance(obj, jinja2.Undefined):
             return ""
-        if hasattr(obj, "to_dict"):
+        elif isinstance(obj, Exception):
+            return repr(obj)
+        elif hasattr(obj, "to_dict"):
             # if we have a to_dict we should try to serialize the result of
             # that!
             return obj.to_dict(omit_none=True)
-        return super().default(obj)
+        else:
+            return super().default(obj)
 
 
 class ForgivingJSONEncoder(JSONEncoder):
@@ -369,7 +372,7 @@ class Translator:
         for key, value in kwargs.items():
             canonical_key = self.aliases.get(key, key)
             if canonical_key in result:
-                raise DuplicateAliasError(kwargs, self.aliases, canonical_key)
+                raise dbt.exceptions.DuplicateAliasError(kwargs, self.aliases, canonical_key)
             result[canonical_key] = self.translate_value(value)
         return result
 
@@ -389,9 +392,7 @@ class Translator:
             return self.translate_mapping(value)
         except RuntimeError as exc:
             if "maximum recursion depth exceeded" in str(exc):
-                raise dbt.exceptions.RecursionError(
-                    "Cycle detected in a value passed to translate!"
-                )
+                raise RecursionError("Cycle detected in a value passed to translate!")
             raise
 
 
@@ -603,12 +604,14 @@ def _connection_exception_retry(fn, max_attempts: int, attempt: int = 0):
         ReadError,
     ) as exc:
         if attempt <= max_attempts - 1:
-            fire_event(RecordRetryException(exc=str(exc)))
-            fire_event(RetryExternalCall(attempt=attempt, max=max_attempts))
+            dbt.events.functions.fire_event(RecordRetryException(exc=str(exc)))
+            dbt.events.functions.fire_event(RetryExternalCall(attempt=attempt, max=max_attempts))
             time.sleep(1)
             return _connection_exception_retry(fn, max_attempts, attempt + 1)
         else:
-            raise ConnectionError("External connection exception occurred: " + str(exc))
+            raise dbt.exceptions.ConnectionError(
+                "External connection exception occurred: " + str(exc)
+            )
 
 
 # This is used to serialize the args in the run_results and in the logs.
@@ -652,6 +655,9 @@ def args_to_dict(args):
         # this was required for a test case
         if isinstance(var_args[key], PosixPath) or isinstance(var_args[key], WindowsPath):
             var_args[key] = str(var_args[key])
+        if isinstance(var_args[key], WarnErrorOptions):
+            var_args[key] = var_args[key].to_dict()
+
         dict_args[key] = var_args[key]
     return dict_args
 

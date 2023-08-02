@@ -1,6 +1,0 @@
-kind: Fixes
-body: write run_results.json for run operation
-time: 2023-05-22T13:29:24.182612-07:00
-custom:
-  Author: aranke
-  Issue: "7502"

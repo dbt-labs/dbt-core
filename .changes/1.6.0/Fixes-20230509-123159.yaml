@@ -1,6 +1,0 @@
-kind: Fixes
-body: Pin protobuf to greater than 4.0.0
-time: 2023-05-09T12:31:59.019718-04:00
-custom:
-  Author: gshank
-  Issue: "7565"

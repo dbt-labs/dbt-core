@@ -1,6 +1,0 @@
-kind: Fixes
-body: Pin urllib3 to ~=1.0
-time: 2023-05-09T15:35:30.504674-04:00
-custom:
-  Author: mikealfare
-  Issue: "7573"

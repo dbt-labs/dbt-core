@@ -1,6 +1,0 @@
-kind: Fixes
-body: Fix path selector when using project-dir
-time: 2023-06-08T13:59:52.95775-04:00
-custom:
-  Author: gshank
-  Issue: "7819"

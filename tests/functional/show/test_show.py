@@ -72,9 +72,12 @@ class TestShow:
         assert "sample_bool" in log_output
 
     def test_inline_fail(self, project):
-        run_dbt(["build"])
         with pytest.raises(DbtException, match="Error parsing inline query"):
             run_dbt(["show", "--inline", "select * from {{ ref('third_model') }}"])
+
+    def test_inline_fail_database_error(self, project):
+        with pytest.raises(DbtRuntimeError, match="Database Error"):
+            run_dbt(["show", "--inline", "slect asdlkjfsld;j"])
 
     def test_ephemeral_model(self, project):
         run_dbt(["build"])
