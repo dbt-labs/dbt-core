@@ -227,7 +227,7 @@ jobs:
           path: integration_results.csv
 
   integration-report:
-    name: integration test suite
+    name: Integration Test Suite
     runs-on: ubuntu-latest
     needs: integration
     steps:
