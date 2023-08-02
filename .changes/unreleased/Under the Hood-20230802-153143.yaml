@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: flaky test test_no_introspect
+time: 2023-08-02T15:31:43.27438+01:00
+custom:
+  Author: aranke
+  Issue: "7179"
