@@ -51,9 +51,7 @@ class TestIntrospectFlag:
 
     def test_no_introspect(self, project):
         with pytest.raises(DbtRuntimeError, match="connection never acquired for thread"):
-            res = run_dbt(["compile", "--no-introspect"])
-            print(res)
-            return res
+            run_dbt(["compile", "--no-introspect"])
 
 
 class TestEphemeralModels:
