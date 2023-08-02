@@ -486,7 +486,7 @@ class InvalidConnectionError(DbtRuntimeError):
         self.thread_id = thread_id
         self.known = known
         super().__init__(
-            msg="connection never acquired for thread {self.thread_id}, have {self.known}"
+            msg=f"connection never acquired for thread {self.thread_id}, have {self.known}"
         )
 
 
