@@ -14,8 +14,6 @@ from dbt.events.types import (
     RunResultErrorNoMessage,
     SQLCompiledPath,
     CheckNodeTestFailure,
-    FirstRunResultError,
-    AfterFirstRunResultError,
     EndOfRunSummary,
 )
 
@@ -118,15 +116,7 @@ def print_run_result_error(result, newline: bool = True, is_warning: bool = Fals
             fire_event(CheckNodeTestFailure(relation_name=result.node.relation_name))
 
     elif result.message is not None:
-        first = True
-        for line in result.message.split("\n"):
-            # TODO: why do we format like this?  Is there a reason this needs to
-            # be split instead of sending it as a single log line?
-            if first:
-                fire_event(FirstRunResultError(msg=line))
-                first = False
-            else:
-                fire_event(AfterFirstRunResultError(msg=line))
+        fire_event(RunResultError(msg=result.message))
 
 
 def print_run_end_messages(results, keyboard_interrupt: bool = False) -> None:

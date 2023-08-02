@@ -2245,25 +2245,7 @@ message CheckNodeTestFailureMsg {
     CheckNodeTestFailure data = 2;
 }
 
-// Z028
-message FirstRunResultError {
-    string msg = 1;
-}
-
-message FirstRunResultErrorMsg {
-    EventInfo info = 1;
-    FirstRunResultError data = 2;
-}
-
-// Z029
-message AfterFirstRunResultError {
-    string msg = 1;
-}
-
-message AfterFirstRunResultErrorMsg {
-    EventInfo info = 1;
-    AfterFirstRunResultError data = 2;
-}
+// Skipped Z028, Z029
 
 // Z030
 message EndOfRunSummary {
