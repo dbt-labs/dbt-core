@@ -14,7 +14,7 @@ from dbt.events.base_types import (
     WarnLevel,
     msg_from_base_event,
 )
-from dbt.events.eventmgr import TestEventManager
+from dbt.events.eventmgr import TestEventManager, EventManager
 from dbt.events.functions import msg_to_dict, msg_to_json, ctx_set_event_manager
 from dbt.events.helpers import get_json_string_utcnow
 from dbt.events.types import RunResultError
@@ -490,19 +490,31 @@ def test_bad_serialization():
 
 
 def test_single_run_error():
-    event_mgr = TestEventManager()
-    ctx_set_event_manager(event_mgr)
-    error_result = RunResult(
-        status=RunStatus.Error,
-        timing=[],
-        thread_id="",
-        execution_time=0.0,
-        node=None,
-        adapter_response=dict(),
-        message="oh no!",
-        failures=[],
-    )
-    print_run_result_error(error_result)
-    events = [e for e in event_mgr.event_history if isinstance(e[0], RunResultError)]
-    assert len(events) == 1
-    assert events[0][0].msg == "oh no!"
+
+    try:
+        # Add a recording event manager to the context, so we can test events.
+        event_mgr = TestEventManager()
+        ctx_set_event_manager(event_mgr)
+
+        error_result = RunResult(
+            status=RunStatus.Error,
+            timing=[],
+            thread_id="",
+            execution_time=0.0,
+            node=None,
+            adapter_response=dict(),
+            message="oh no!",
+            failures=[],
+        )
+
+        print_run_result_error(error_result)
+        events = [e for e in event_mgr.event_history if isinstance(e[0], RunResultError)]
+
+        assert len(events) == 1
+        assert events[0][0].msg == "oh no!"
+
+    finally:
+        # Set an empty event manager unconditionally on exit. This is an early
+        # attempt at unit testing events, and we need to think about how it
+        # could be done in a thread safe way in the long run.
+        ctx_set_event_manager(EventManager())
