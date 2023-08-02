@@ -342,7 +342,7 @@ def command_params(command: CliCommand, args_dict: Dict[str, Any]) -> CommandPar
 
         if k == "macro" and command == CliCommand.RUN_OPERATION:
             add_fn(v)
-        # None is Signletons, False is flyweight, only one instance of each.
+        # None is a Singleton, False is a Flyweight, only one instance of each.
         elif v is None or v is False:
             add_fn(f"--no-{spinal_cased}")
         elif v is True:
