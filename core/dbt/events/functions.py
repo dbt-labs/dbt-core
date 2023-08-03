@@ -2,7 +2,7 @@ from dbt.constants import METADATA_ENV_PREFIX
 from dbt.events.base_types import BaseEvent, EventLevel, EventMsg
 from dbt.events.eventmgr import EventManager, LoggerConfig, LineFormat, NoFilter, IEventManager
 from dbt.events.helpers import env_secrets, scrub_secrets
-from dbt.events.types import Formatting, Note
+from dbt.events.types import Note
 from dbt.flags import get_flags, ENABLE_LEGACY_LOGGER
 from dbt.logger import GLOBAL_LOGGER, make_log_dir_if_missing
 from functools import partial
@@ -115,9 +115,7 @@ def _stdout_filter(
     line_format: LineFormat,
     msg: EventMsg,
 ) -> bool:
-    return (msg.info.name not in ["CacheAction", "CacheDumpGraph"] or log_cache_events) and not (
-        line_format == LineFormat.Json and type(msg.data) == Formatting
-    )
+    return msg.info.name not in ["CacheAction", "CacheDumpGraph"] or log_cache_events
 
 
 def _get_logfile_config(
@@ -140,10 +138,8 @@ def _get_logfile_config(
 
 
 def _logfile_filter(log_cache_events: bool, line_format: LineFormat, msg: EventMsg) -> bool:
-    return (
-        msg.info.code not in nofile_codes
-        and not (msg.info.name in ["CacheAction", "CacheDumpGraph"] and not log_cache_events)
-        and not (line_format == LineFormat.Json and type(msg.data) == Formatting)
+    return msg.info.code not in nofile_codes and not (
+        msg.info.name in ["CacheAction", "CacheDumpGraph"] and not log_cache_events
     )
 
 
