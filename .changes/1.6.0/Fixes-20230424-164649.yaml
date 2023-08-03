@@ -1,6 +1,0 @@
-kind: Fixes
-body: Fix partial parsing of latest_version changes for downstream references
-time: 2023-04-24T16:46:49.721231-04:00
-custom:
-  Author: MichelleArk
-  Issue: "7369"

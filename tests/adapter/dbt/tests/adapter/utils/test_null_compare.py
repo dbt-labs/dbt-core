@@ -14,8 +14,8 @@ class BaseMixedNullCompare(BaseUtils):
     @pytest.fixture(scope="class")
     def models(self):
         return {
-            "test_mixed_null_compare.yml": MODELS__TEST_MIXED_NULL_COMPARE_SQL,
-            "test_mixed_null_compare.sql": MODELS__TEST_MIXED_NULL_COMPARE_YML,
+            "test_mixed_null_compare.yml": MODELS__TEST_MIXED_NULL_COMPARE_YML,
+            "test_mixed_null_compare.sql": MODELS__TEST_MIXED_NULL_COMPARE_SQL,
         }
 
     def test_build_assert_equal(self, project):
@@ -32,7 +32,7 @@ class BaseNullCompare(BaseUtils):
         }
 
 
-class TestMixedNullCompare(BaseNullCompare):
+class TestMixedNullCompare(BaseMixedNullCompare):
     pass
 
 

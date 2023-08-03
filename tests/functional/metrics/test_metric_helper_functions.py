@@ -14,6 +14,9 @@ class TestMetricHelperFunctions:
             "people.sql": models_people_sql,
         }
 
+    @pytest.mark.skip(
+        "TODO reactivate after we begin property hydrating metric `depends_on` and `refs`"
+    )
     def test_expression_metric(
         self,
         project,

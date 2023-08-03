@@ -17,6 +17,18 @@ set session time zone 'Asia/Kolkata';
 select current_setting('timezone') as timezone
 """
 
+private_model_yml = """
+groups:
+  - name: my_cool_group
+    owner: {name: me}
+
+models:
+  - name: private_model
+    access: private
+    config:
+      group: my_cool_group
+"""
+
 
 schema_yml = """
 models:

@@ -18,19 +18,6 @@ select 1 as id
 """
 
 
-metrics_old_metric_names__yml = """
-version: 2
-metrics:
-  - name: my_metric
-    label: My metric
-    model: ref('my_model')
-
-    type: count
-    sql: "*"
-    timestamp: updated_at
-    time_grains: [day]
-"""
-
 bad_name_yaml = """
 version: 2
 
@@ -147,32 +134,6 @@ class TestPackageRedirectDeprecation:
             run_dbt(["--warn-error", "deps"])
         exc_str = " ".join(str(exc.value).split())  # flatten all whitespace
         expected_msg = "The `fishtown-analytics/dbt_utils` package is deprecated in favor of `dbt-labs/dbt_utils`"
-        assert expected_msg in exc_str
-
-
-class TestMetricAttrRenameDeprecation:
-    @pytest.fixture(scope="class")
-    def models(self):
-        return {
-            "my_model.sql": models_trivial__model_sql,
-            "metrics.yml": metrics_old_metric_names__yml,
-        }
-
-    def test_metric_handle_rename(self, project):
-        deprecations.reset_deprecations()
-        assert deprecations.active_deprecations == set()
-        run_dbt(["parse"])
-        expected = {"metric-attr-renamed"}
-        assert expected == deprecations.active_deprecations
-
-    def test_metric_handle_rename_fail(self, project):
-        deprecations.reset_deprecations()
-        assert deprecations.active_deprecations == set()
-        with pytest.raises(dbt.exceptions.CompilationError) as exc:
-            # turn off partial parsing to ensure that the metric is re-parsed
-            run_dbt(["--warn-error", "--no-partial-parse", "parse"])
-        exc_str = " ".join(str(exc.value).split())  # flatten all whitespace
-        expected_msg = "renamed attributes for metrics"
         assert expected_msg in exc_str
 
 

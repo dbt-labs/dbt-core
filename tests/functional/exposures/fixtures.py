@@ -7,6 +7,11 @@ select 1 as id
 """
 
 
+metricflow_time_spine_sql = """
+SELECT to_date('02/20/2023', 'mm/dd/yyyy') as date_day
+"""
+
+
 source_schema_yml = """version: 2
 
 sources:
@@ -15,18 +20,36 @@ sources:
       - name: test_table
 """
 
+
+semantic_models_schema_yml = """version: 2
+
+semantic_models:
+  - name: semantic_model
+    model: ref('model')
+    dimensions:
+      - name: created_at
+        type: time
+    measures:
+      - name: distinct_metrics
+        agg: count_distinct
+        expr: id
+    entities:
+      - name: model
+        type: primary
+        expr: id
+    defaults:
+      agg_time_dimension: created_at
+"""
+
+
 metrics_schema_yml = """version: 2
 
 metrics:
   - name: metric
-    model: ref('model')
     label: "label"
-
-    calculation_method: count_distinct
-    expression: id
-
-    timestamp: first_order
-    time_grains: [day]
+    type: simple
+    type_params:
+      measure: "distinct_metrics"
 """
 
 simple_exposure_yml = """

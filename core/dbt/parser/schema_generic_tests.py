@@ -61,7 +61,7 @@ class SchemaGenericTestParser(SimpleParser):
     def get_compiled_path(cls, block: FileBlock) -> str:
         return block.path.relative_path
 
-    def parse_file(self, block: FileBlock, dct: Dict = None) -> None:
+    def parse_file(self, block: FileBlock, dct: Optional[Dict] = None) -> None:
         pass
 
     def parse_from_dict(self, dct, validate=True) -> GenericTestNode:

@@ -113,7 +113,7 @@ class TestBuilder(Generic[Testable]):
         target: Testable,
         package_name: str,
         render_ctx: Dict[str, Any],
-        column_name: str = None,
+        column_name: Optional[str] = None,
         version: Optional[NodeVersion] = None,
     ) -> None:
         test_name, test_args = self.extract_test_args(test, column_name)

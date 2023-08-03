@@ -4,6 +4,12 @@ models__dep_macro = """
 }}
 """
 
+models__materialization_macro = """
+{{
+    materialization_macro()
+}}
+"""
+
 models__with_undefined_macro = """
 {{ dispatch_to_nowhere() }}
 select 1 as id
@@ -75,6 +81,12 @@ macros__my_macros = """
 {% endmacro %}
 """
 
+macros__named_materialization = """
+{% macro materialization_macro() %}
+    select 1 as foo
+{% endmacro %}
+"""
+
 macros__no_default_macros = """
 {% macro do_something2(foo2, bar2) %}
 
@@ -128,4 +140,29 @@ macros__deprecated_adapter_macro = """
 {% macro some_macro(arg1, arg2) -%}
     {{ adapter_macro('some_macro', arg1, arg2) }}
 {%- endmacro %}
+"""
+
+macros__incorrect_dispatch = """
+{% macro cowsay() %}
+  {{ return(adapter.dispatch('cowsay', 'farm_utils')()) }}
+{%- endmacro %}
+
+{% macro default__cowsay() %}
+  'moo'
+{% endmacro %}
+"""
+
+# Note the difference between `test_utils` below and `farm_utils` above
+models__incorrect_dispatch = """
+select {{ test_utils.cowsay() }} as cowsay
+"""
+
+dbt_project__incorrect_dispatch = """
+name: 'test_utils'
+version: '1.0'
+config-version: 2
+
+profile: 'default'
+
+macro-paths: ["macros"]
 """

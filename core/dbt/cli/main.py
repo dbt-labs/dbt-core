@@ -23,6 +23,7 @@ from dbt.contracts.results import (
 from dbt.events.base_types import EventMsg
 from dbt.task.build import BuildTask
 from dbt.task.clean import CleanTask
+from dbt.task.clone import CloneTask
 from dbt.task.compile import CompileTask
 from dbt.task.debug import DebugTask
 from dbt.task.deps import DepsTask
@@ -30,6 +31,7 @@ from dbt.task.freshness import FreshnessTask
 from dbt.task.generate import GenerateTask
 from dbt.task.init import InitTask
 from dbt.task.list import ListTask
+from dbt.task.retry import RetryTask
 from dbt.task.run import RunTask
 from dbt.task.run_operation import RunOperationTask
 from dbt.task.seed import SeedTask
@@ -60,8 +62,8 @@ class dbtRunnerResult:
 class dbtRunner:
     def __init__(
         self,
-        manifest: Manifest = None,
-        callbacks: List[Callable[[EventMsg], None]] = None,
+        manifest: Optional[Manifest] = None,
+        callbacks: Optional[List[Callable[[EventMsg], None]]] = None,
     ):
         self.manifest = manifest
 
@@ -75,7 +77,6 @@ class dbtRunner:
             dbt_ctx.obj = {
                 "manifest": self.manifest,
                 "callbacks": self.callbacks,
-                "_publications": kwargs.get("publications"),
             }
 
             for key, value in kwargs.items():
@@ -131,6 +132,7 @@ class dbtRunner:
 @p.enable_legacy_logger
 @p.fail_fast
 @p.log_cache_events
+@p.log_file_max_bytes
 @p.log_format
 @p.log_format_file
 @p.log_level
@@ -138,6 +140,7 @@ class dbtRunner:
 @p.log_path
 @p.macro_debugging
 @p.partial_parse
+@p.partial_parse_file_path
 @p.populate_cache
 @p.print
 @p.printer_width
@@ -401,6 +404,7 @@ def show(ctx, **kwargs):
 # dbt debug
 @cli.command("debug")
 @click.pass_context
+@p.debug_connection
 @p.config_dir
 @p.profile
 @p.profiles_dir_exists_false
@@ -411,7 +415,7 @@ def show(ctx, **kwargs):
 @requires.postflight
 @requires.preflight
 def debug(ctx, **kwargs):
-    """Test the database connection and show information for debugging purposes. Not to be confused with the --debug option which increases verbosity."""
+    """Show information on the current dbt environment and check dependencies, then test the database connection. Not to be confused with the --debug option which increases verbosity."""
 
     task = DebugTask(
         ctx.obj["flags"],
@@ -576,6 +580,73 @@ def run(ctx, **kwargs):
     return results, success
 
 
+# dbt retry
+@cli.command("retry")
+@click.pass_context
+@p.project_dir
+@p.profiles_dir
+@p.vars
+@p.profile
+@p.target
+@p.state
+@p.threads
+@p.fail_fast
+@requires.postflight
+@requires.preflight
+@requires.profile
+@requires.project
+@requires.runtime_config
+@requires.manifest
+def retry(ctx, **kwargs):
+    """Retry the nodes that failed in the previous run."""
+    task = RetryTask(
+        ctx.obj["flags"],
+        ctx.obj["runtime_config"],
+        ctx.obj["manifest"],
+    )
+
+    results = task.run()
+    success = task.interpret_results(results)
+    return results, success
+
+
+# dbt clone
+@cli.command("clone")
+@click.pass_context
+@p.defer_state
+@p.exclude
+@p.full_refresh
+@p.profile
+@p.profiles_dir
+@p.project_dir
+@p.resource_type
+@p.select
+@p.selector
+@p.state  # required
+@p.target
+@p.target_path
+@p.threads
+@p.vars
+@p.version_check
+@requires.preflight
+@requires.profile
+@requires.project
+@requires.runtime_config
+@requires.manifest
+@requires.postflight
+def clone(ctx, **kwargs):
+    """Create clones of selected nodes based on their location in the manifest provided to --state."""
+    task = CloneTask(
+        ctx.obj["flags"],
+        ctx.obj["runtime_config"],
+        ctx.obj["manifest"],
+    )
+
+    results = task.run()
+    success = task.interpret_results(results)
+    return results, success
+
+
 # dbt run operation
 @cli.command("run-operation")
 @click.pass_context
@@ -586,6 +657,7 @@ def run(ctx, **kwargs):
 @p.project_dir
 @p.target
 @p.target_path
+@p.threads
 @p.vars
 @requires.postflight
 @requires.preflight

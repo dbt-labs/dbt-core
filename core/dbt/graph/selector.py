@@ -43,9 +43,11 @@ class NodeSelector(MethodManager):
         graph: Graph,
         manifest: Manifest,
         previous_state: Optional[PreviousState] = None,
+        include_empty_nodes: bool = False,
     ):
         super().__init__(manifest, previous_state)
         self.full_graph = graph
+        self.include_empty_nodes = include_empty_nodes
 
         # build a subgraph containing only non-empty, enabled nodes and enabled
         # sources.
@@ -166,8 +168,14 @@ class NodeSelector(MethodManager):
         elif unique_id in self.manifest.metrics:
             metric = self.manifest.metrics[unique_id]
             return metric.config.enabled
+        elif unique_id in self.manifest.semantic_models:
+            return True
         node = self.manifest.nodes[unique_id]
-        return not node.empty and node.config.enabled
+
+        if self.include_empty_nodes:
+            return node.config.enabled
+        else:
+            return not node.empty and node.config.enabled
 
     def node_is_match(self, node: GraphMemberNode) -> bool:
         """Determine if a node is a match for the selector. Non-match nodes
@@ -185,6 +193,8 @@ class NodeSelector(MethodManager):
             node = self.manifest.exposures[unique_id]
         elif unique_id in self.manifest.metrics:
             node = self.manifest.metrics[unique_id]
+        elif unique_id in self.manifest.semantic_models:
+            node = self.manifest.semantic_models[unique_id]
         else:
             raise DbtInternalError(f"Node {unique_id} not found in the manifest!")
         return self.node_is_match(node)
@@ -313,11 +323,13 @@ class ResourceTypeSelector(NodeSelector):
         manifest: Manifest,
         previous_state: Optional[PreviousState],
         resource_types: List[NodeType],
+        include_empty_nodes: bool = False,
     ):
         super().__init__(
             graph=graph,
             manifest=manifest,
             previous_state=previous_state,
+            include_empty_nodes=include_empty_nodes,
         )
         self.resource_types: Set[NodeType] = set(resource_types)
 

@@ -46,10 +46,11 @@ from dbt.exceptions import (
 )
 from dbt.events.functions import warn_or_error
 from dbt.events.types import (
-    WrongResourceSchemaFile,
-    NoNodeForYamlKey,
     MacroNotFoundForPatch,
+    NoNodeForYamlKey,
     ValidationWarning,
+    UnsupportedConstraintMaterialization,
+    WrongResourceSchemaFile,
 )
 from dbt.node_types import NodeType, AccessType
 from dbt.parser.base import SimpleParser
@@ -74,6 +75,7 @@ schema_file_keys = (
     "analyses",
     "exposures",
     "metrics",
+    "semantic_models",
 )
 
 
@@ -145,7 +147,7 @@ class SchemaParser(SimpleParser[YamlBlock, ModelNode]):
     def resource_type(self) -> NodeType:
         return NodeType.Test
 
-    def parse_file(self, block: FileBlock, dct: Dict = None) -> None:
+    def parse_file(self, block: FileBlock, dct: Optional[Dict] = None) -> None:
         assert isinstance(block.file, SchemaSourceFile)
 
         # If partially parsing, dct should be from pp_dict, otherwise
@@ -216,6 +218,12 @@ class SchemaParser(SimpleParser[YamlBlock, ModelNode]):
 
                 group_parser = GroupParser(self, yaml_block)
                 group_parser.parse()
+
+            if "semantic_models" in dct:
+                from dbt.parser.schema_yaml_readers import SemanticModelParser
+
+                semantic_model_parser = SemanticModelParser(self, yaml_block)
+                semantic_model_parser.parse()
 
 
 Parsed = TypeVar("Parsed", UnpatchedSourceDefinition, ParsedNodePatch, ParsedMacroPatch)
@@ -643,6 +651,8 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
 
 # TestablePatchParser = seeds, snapshots
 class TestablePatchParser(NodePatchParser[UnparsedNodeUpdate]):
+    __test__ = False
+
     def get_block(self, node: UnparsedNodeUpdate) -> TestBlock:
         return TestBlock.from_yaml_block(self.yaml, node)
 
@@ -776,6 +786,9 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
 
                 # Includes alias recomputation
                 self.patch_node_config(versioned_model_node, versioned_model_patch)
+
+                # Need to reapply this here, in the case that 'contract: {enforced: true}' was during config-setting
+                versioned_model_node.build_contract_checksum()
                 source_file.append_patch(
                     versioned_model_patch.yaml_key, versioned_model_node.unique_id
                 )
@@ -817,15 +830,28 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
             node.constraints = [ModelLevelConstraint.from_dict(c) for c in constraints]
 
     def _validate_constraint_prerequisites(self, model_node: ModelNode):
+
+        column_warn_unsupported = [
+            constraint.warn_unsupported
+            for column in model_node.columns.values()
+            for constraint in column.constraints
+        ]
+        model_warn_unsupported = [
+            constraint.warn_unsupported for constraint in model_node.constraints
+        ]
+        warn_unsupported = column_warn_unsupported + model_warn_unsupported
+
+        # if any constraint has `warn_unsupported` as True then send the warning
+        if any(warn_unsupported) and not model_node.materialization_enforces_constraints:
+            warn_or_error(
+                UnsupportedConstraintMaterialization(materialized=model_node.config.materialized),
+                node=model_node,
+            )
+
         errors = []
         if not model_node.columns:
             errors.append(
                 "Constraints must be defined in a `yml` schema configuration file like `schema.yml`."
-            )
-
-        if model_node.config.materialized not in ["table", "view", "incremental"]:
-            errors.append(
-                f"Only table, view, and incremental materializations are supported for constraints, but found '{model_node.config.materialized}'"
             )
 
         if str(model_node.language) != "sql":
@@ -833,7 +859,7 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
 
         if errors:
             raise ParsingError(
-                f"Constraint validation failed for: ({model_node.original_file_path})\n"
+                f"Contract enforcement failed for: ({model_node.original_file_path})\n"
                 + "\n".join(errors)
             )
 

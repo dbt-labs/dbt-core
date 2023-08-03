@@ -1,6 +1,0 @@
-kind: Features
-body: Detect breaking changes to enforced constraints
-time: 2023-05-03T10:11:00.617936-05:00
-custom:
-  Author: emmyoop
-  Issue: "7065"

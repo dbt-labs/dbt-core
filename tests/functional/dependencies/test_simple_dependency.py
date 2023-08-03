@@ -105,6 +105,38 @@ class TestSimpleDependency(SimpleDependencyBase):
         check_relations_equal(project.adapter, ["seed", "incremental"])
 
 
+class TestSimpleDependencyWithDependenciesFile(SimpleDependencyBase):
+    @pytest.fixture(scope="class")
+    def packages(self):
+        return {}
+
+    @pytest.fixture(scope="class")
+    def dependencies(self):
+        return {
+            "packages": [
+                {
+                    "git": "https://github.com/dbt-labs/dbt-integration-project",
+                    "warn-unpinned": True,
+                }
+            ]
+        }
+
+    def test_dependency_with_dependencies_file(self, run_deps, project):
+        # Tests that "packages" defined in a dependencies.yml file works
+        results = run_dbt()
+        assert len(results) == 4
+
+
+class TestSimpleDependencyWithEmptyPackagesFile(SimpleDependencyBase):
+    @pytest.fixture(scope="class")
+    def packages(self):
+        return " "
+
+    def test_dependency_with_empty_packages_file(self, run_deps, project):
+        # Tests that an empty packages file doesn't fail with a Python error
+        run_dbt(["deps"])
+
+
 class TestSimpleDependencyNoProfile(SimpleDependencyBase):
     """dbt deps and clean commands should not require a profile."""
 

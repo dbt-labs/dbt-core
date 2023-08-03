@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
 
 from dbt.dataclass_schema import ValidationError
 from dbt.events.helpers import env_secrets, scrub_secrets
-from dbt.node_types import NodeType
+from dbt.node_types import NodeType, AccessType
 from dbt.ui import line_wrap_message
 
 import dbt.dataclass_schema
@@ -297,6 +297,11 @@ class ParsingError(DbtRuntimeError):
         return "Parsing"
 
 
+class dbtPluginError(DbtRuntimeError):
+    CODE = 10020
+    MESSAGE = "Plugin Error"
+
+
 # TODO: this isn't raised in the core codebase.  Is it raised elsewhere?
 class JSONValidationError(DbtValidationError):
     def __init__(self, typename, errors):
@@ -405,21 +410,8 @@ class DbtProfileError(DbtConfigError):
     pass
 
 
-class PublicationConfigNotFound(DbtConfigError):
-    def __init__(self, project=None, file_name=None):
-        self.project = project
-        msg = self.message()
-        super().__init__(msg, project=project)
-
-    def message(self):
-        return (
-            f"A dependency on project {self.project} was specified, "
-            f"but a publication for {self.project} was not found."
-        )
-
-
 class SemverError(Exception):
-    def __init__(self, msg: str = None):
+    def __init__(self, msg: Optional[str] = None):
         self.msg = msg
         if msg is not None:
             super().__init__(msg)
@@ -494,7 +486,7 @@ class InvalidConnectionError(DbtRuntimeError):
         self.thread_id = thread_id
         self.known = known
         super().__init__(
-            msg="connection never acquired for thread {self.thread_id}, have {self.known}"
+            msg=f"connection never acquired for thread {self.thread_id}, have {self.known}"
         )
 
 
@@ -703,7 +695,7 @@ class NoAdaptersAvailableError(DbtRuntimeError):
         super().__init__(msg=self.get_message())
 
     def get_message(self) -> str:
-        msg = "No adapters available. Learn how to install an adapter by going to https://docs.getdbt.com/docs/supported-data-platforms#adapter-installation"
+        msg = "No adapters available. Learn how to install an adapter by going to https://docs.getdbt.com/docs/connect-adapters#install-using-the-cli"
         return msg
 
 
@@ -908,19 +900,6 @@ class SecretEnvVarLocationError(ParsingError):
             f"Found '{self.env_var_name}' referenced elsewhere."
         )
         return msg
-
-
-class ProjectDependencyCycleError(ParsingError):
-    def __init__(self, pub_project_name, project_name):
-        self.pub_project_name = pub_project_name
-        self.project_name = project_name
-        super().__init__(msg=self.get_message())
-
-    def get_message(self) -> str:
-        return (
-            f"A project dependency cycle has been detected. The current project {self.project_name} "
-            f"depends on {self.pub_project_name} which also depends on the current project."
-        )
 
 
 class MacroArgTypeError(CompilationError):
@@ -1240,26 +1219,31 @@ class SnapshopConfigError(ParsingError):
 
 
 class DbtReferenceError(ParsingError):
-    def __init__(self, unique_id: str, ref_unique_id: str, group: str):
+    def __init__(self, unique_id: str, ref_unique_id: str, access: AccessType, scope: str):
         self.unique_id = unique_id
         self.ref_unique_id = ref_unique_id
-        self.group = group
+        self.access = access
+        self.scope = scope
+        self.scope_type = "group" if self.access == AccessType.Private else "package"
         super().__init__(msg=self.get_message())
 
     def get_message(self) -> str:
         return (
             f"Node {self.unique_id} attempted to reference node {self.ref_unique_id}, "
-            f"which is not allowed because the referenced node is private to the {self.group} group."
+            f"which is not allowed because the referenced node is {self.access} to the '{self.scope}' {self.scope_type}."
         )
 
 
 class InvalidAccessTypeError(ParsingError):
-    def __init__(self, unique_id: str, field_value: str):
+    def __init__(self, unique_id: str, field_value: str, materialization: Optional[str] = None):
         self.unique_id = unique_id
         self.field_value = field_value
-        msg = (
-            f"Node {self.unique_id} has an invalid value ({self.field_value}) for the access field"
+        self.materialization = materialization
+
+        with_materialization = (
+            f"with '{self.materialization}' materialization " if self.materialization else ""
         )
+        msg = f"Node {self.unique_id} {with_materialization}has an invalid value ({self.field_value}) for the access field"
         super().__init__(msg=msg)
 
 
@@ -1840,17 +1824,19 @@ class UninstalledPackagesFoundError(CompilationError):
         self,
         count_packages_specified: int,
         count_packages_installed: int,
+        packages_specified_path: str,
         packages_install_path: str,
     ):
         self.count_packages_specified = count_packages_specified
         self.count_packages_installed = count_packages_installed
+        self.packages_specified_path = packages_specified_path
         self.packages_install_path = packages_install_path
         super().__init__(msg=self.get_message())
 
     def get_message(self) -> str:
         msg = (
             f"dbt found {self.count_packages_specified} package(s) "
-            "specified in packages.yml, but only "
+            f"specified in {self.packages_specified_path}, but only "
             f"{self.count_packages_installed} package(s) installed "
             f'in {self.packages_install_path}. Run "dbt deps" to '
             "install package dependencies."
@@ -2344,6 +2330,11 @@ class ContractError(CompilationError):
         return table_from_data_flat(mismatches_sorted, column_names)
 
     def get_message(self) -> str:
+        if not self.yaml_columns:
+            return (
+                "This model has an enforced contract, and its 'columns' specification is missing"
+            )
+
         table: agate.Table = self.get_mismatches()
         # Hack to get Agate table output as string
         output = io.StringIO()
@@ -2416,7 +2407,7 @@ class RPCCompiling(DbtRuntimeError):
     CODE = 10010
     MESSAGE = 'RPC server is compiling the project, call the "status" method for' " compile status"
 
-    def __init__(self, msg: str = None, node=None):
+    def __init__(self, msg: Optional[str] = None, node=None):
         if msg is None:
             msg = "compile in progress"
         super().__init__(msg, node)

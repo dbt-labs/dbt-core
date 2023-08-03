@@ -296,19 +296,6 @@ class BaseRunner(metaclass=ABCMeta):
             failures=result.failures,
         )
 
-    def skip_result(self, node, message):
-        thread_id = threading.current_thread().name
-        return RunResult(
-            status=RunStatus.Skipped,
-            thread_id=thread_id,
-            execution_time=0,
-            timing=[],
-            message=message,
-            node=node,
-            adapter_response={},
-            failures=None,
-        )
-
     def compile_and_execute(self, manifest, ctx):
         result = None
         with self.adapter.connection_for(self.node) if get_flags().INTROSPECT else nullcontext():
@@ -483,7 +470,7 @@ class BaseRunner(metaclass=ABCMeta):
                     )
                 )
 
-        node_result = self.skip_result(self.node, error_message)
+        node_result = RunResult.from_node(self.node, RunStatus.Skipped, error_message)
         return node_result
 
     def do_skip(self, cause=None):

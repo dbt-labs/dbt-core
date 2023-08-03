@@ -23,9 +23,11 @@ from dbt.tests.adapter.constraints.fixtures import (
     my_model_incremental_wrong_name_sql,
     my_model_with_nulls_sql,
     my_model_incremental_with_nulls_sql,
+    my_model_with_quoted_column_name_sql,
     model_schema_yml,
     model_fk_constraint_schema_yml,
     constrained_model_schema_yml,
+    model_quoted_column_schema_yml,
     foreign_key_model_sql,
     my_model_wrong_order_depends_on_fk_sql,
     my_model_incremental_wrong_order_depends_on_fk_sql,
@@ -165,11 +167,12 @@ class BaseConstraintsColumnsEqual:
 
 
 def _normalize_whitespace(input: str) -> str:
-    return re.sub(r"\s+", " ", input).lower().strip()
+    subbed = re.sub(r"\s+", " ", input)
+    return re.sub(r"\s?([\(\),])\s?", r"\1", subbed).lower().strip()
 
 
 def _find_and_replace(sql, find, replace):
-    sql_tokens = sql.split(" ")
+    sql_tokens = sql.split()
     for idx in [n for n, x in enumerate(sql_tokens) if find in x]:
         sql_tokens[idx] = replace
     return " ".join(sql_tokens)
@@ -228,23 +231,19 @@ insert into <model_identifier> (
         )
 
         results = run_dbt(["run", "-s", "+my_model"])
-        assert len(results) == 2
+        # assert at least my_model was run - additional upstreams may or may not be provided to the test setup via models fixture
+        assert len(results) >= 1
 
         # grab the sql and replace the model identifier to make it generic for all adapters
         # the name is not what we're testing here anyways and varies based on materialization
         # TODO: consider refactoring this to introspect logs instead
         generated_sql = read_file("target", "run", "test", "models", "my_model.sql")
-        generated_sql_modified = _normalize_whitespace(generated_sql)
-        generated_sql_generic = _find_and_replace(
-            generated_sql_modified, "my_model", "<model_identifier>"
-        )
+        generated_sql_generic = _find_and_replace(generated_sql, "my_model", "<model_identifier>")
         generated_sql_generic = _find_and_replace(
             generated_sql_generic, "foreign_key_model", "<foreign_key_model_identifier>"
         )
 
-        expected_sql_check = _normalize_whitespace(expected_sql)
-
-        assert expected_sql_check == generated_sql_generic
+        assert _normalize_whitespace(expected_sql) == _normalize_whitespace(generated_sql_generic)
 
 
 class BaseConstraintsRollback:
@@ -481,17 +480,53 @@ insert into <model_identifier> (
         )
 
         results = run_dbt(["run", "-s", "+my_model"])
-        assert len(results) == 2
+        # assert at least my_model was run - additional upstreams may or may not be provided to the test setup via models fixture
+        assert len(results) >= 1
         generated_sql = read_file("target", "run", "test", "models", "my_model.sql")
-        generated_sql_modified = _normalize_whitespace(generated_sql)
-        generated_sql_generic = _find_and_replace(
-            generated_sql_modified, "my_model", "<model_identifier>"
-        )
+
+        generated_sql_generic = _find_and_replace(generated_sql, "my_model", "<model_identifier>")
         generated_sql_generic = _find_and_replace(
             generated_sql_generic, "foreign_key_model", "<foreign_key_model_identifier>"
         )
-        assert _normalize_whitespace(expected_sql) == generated_sql_generic
+
+        assert _normalize_whitespace(expected_sql) == _normalize_whitespace(generated_sql_generic)
 
 
 class TestModelConstraintsRuntimeEnforcement(BaseModelConstraintsRuntimeEnforcement):
+    pass
+
+
+class BaseConstraintQuotedColumn(BaseConstraintsRuntimeDdlEnforcement):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_model.sql": my_model_with_quoted_column_name_sql,
+            "constraints_schema.yml": model_quoted_column_schema_yml,
+        }
+
+    @pytest.fixture(scope="class")
+    def expected_sql(self):
+        return """
+create table <model_identifier> (
+    id integer not null,
+    "from" text not null,
+    date_day text,
+    check (("from" = 'blue'))
+) ;
+insert into <model_identifier> (
+    id, "from", date_day
+)
+(
+    select id, "from", date_day
+    from (
+        select
+          'blue' as "from",
+          1 as id,
+          '2019-01-01' as date_day
+    ) as model_subq
+);
+"""
+
+
+class TestConstraintQuotedColumn(BaseConstraintQuotedColumn):
     pass

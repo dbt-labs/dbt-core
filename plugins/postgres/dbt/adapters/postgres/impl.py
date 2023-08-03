@@ -1,6 +1,7 @@
 from datetime import datetime
 from dataclasses import dataclass
 from typing import Optional, Set, List, Any
+
 from dbt.adapters.base.meta import available
 from dbt.adapters.base.impl import AdapterConfig, ConstraintSupport
 from dbt.adapters.sql import SQLAdapter
@@ -19,8 +20,7 @@ from dbt.exceptions import (
 import dbt.utils
 
 
-# note that this isn't an adapter macro, so just a single underscore
-GET_RELATIONS_MACRO_NAME = "postgres_get_relations"
+GET_RELATIONS_MACRO_NAME = "postgres__get_relations"
 
 
 @dataclass
@@ -139,4 +139,7 @@ class PostgresAdapter(SQLAdapter):
         """The set of standard builtin strategies which this adapter supports out-of-the-box.
         Not used to validate custom strategies defined by end users.
         """
-        return ["append", "delete+insert"]
+        return ["append", "delete+insert", "merge"]
+
+    def debug_query(self):
+        self.execute("select 1 as id")

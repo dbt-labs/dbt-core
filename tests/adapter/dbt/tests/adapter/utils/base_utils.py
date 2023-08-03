@@ -2,9 +2,11 @@ import pytest
 from dbt.tests.util import run_dbt
 
 macros__equals_sql = """
-{% macro equals(actual, expected) %}
-{# -- actual is not distinct from expected #}
-(({{ actual }} = {{ expected }}) or ({{ actual }} is null and {{ expected }} is null))
+{% macro equals(expr1, expr2) -%}
+case when (({{ expr1 }} = {{ expr2 }}) or ({{ expr1 }} is null and {{ expr2 }} is null))
+    then 0
+    else 1
+end = 0
 {% endmacro %}
 """
 
@@ -15,6 +17,15 @@ where not {{ equals(actual, expected) }}
 {% endtest %}
 """
 
+macros__replace_empty_sql = """
+{% macro replace_empty(expr) -%}
+case
+    when {{ expr }} = 'EMPTY' then ''
+    else {{ expr }}
+end
+{% endmacro %}
+"""
+
 
 class BaseUtils:
     # setup
@@ -23,6 +34,7 @@ class BaseUtils:
         return {
             "equals.sql": macros__equals_sql,
             "test_assert_equal.sql": macros__test_assert_equal_sql,
+            "replace_empty.sql": macros__replace_empty_sql,
         }
 
     # make it possible to dynamically update the macro call with a namespace

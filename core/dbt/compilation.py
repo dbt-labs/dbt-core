@@ -4,7 +4,6 @@ import json
 import networkx as nx  # type: ignore
 import os
 import pickle
-import sqlparse
 
 from collections import defaultdict
 from typing import List, Dict, Any, Tuple, Optional
@@ -36,6 +35,7 @@ from dbt.node_types import NodeType, ModelLanguage
 from dbt.events.format import pluralize
 import dbt.tracking
 import dbt.task.list as list_task
+import sqlparse
 
 graph_file_name = "graph.gpickle"
 
@@ -48,9 +48,10 @@ def print_compile_stats(stats):
         NodeType.Analysis: "analysis",
         NodeType.Macro: "macro",
         NodeType.Operation: "operation",
-        NodeType.Seed: "seed file",
+        NodeType.Seed: "seed",
         NodeType.Source: "source",
         NodeType.Exposure: "exposure",
+        NodeType.SemanticModel: "semantic model",
         NodeType.Metric: "metric",
         NodeType.Group: "group",
     }
@@ -63,7 +64,8 @@ def print_compile_stats(stats):
         resource_counts = {k.pluralize(): v for k, v in results.items()}
         dbt.tracking.track_resource_counts(resource_counts)
 
-    stat_line = ", ".join([pluralize(ct, names.get(t)) for t, ct in results.items() if t in names])
+    # do not include resource types that are not actually defined in the project
+    stat_line = ", ".join([pluralize(ct, names.get(t)) for t, ct in stats.items() if t in names])
 
     fire_event(FoundStats(stat_line=stat_line))
 
@@ -82,16 +84,16 @@ def _generate_stats(manifest: Manifest):
         if _node_enabled(node):
             stats[node.resource_type] += 1
 
-    for source in manifest.sources.values():
-        stats[source.resource_type] += 1
-    for exposure in manifest.exposures.values():
-        stats[exposure.resource_type] += 1
-    for metric in manifest.metrics.values():
-        stats[metric.resource_type] += 1
-    for macro in manifest.macros.values():
-        stats[macro.resource_type] += 1
-    for group in manifest.groups.values():
-        stats[group.resource_type] += 1
+    # Disabled nodes don't appear in the following collections, so we don't check.
+    stats[NodeType.Source] += len(manifest.sources)
+    stats[NodeType.Exposure] += len(manifest.exposures)
+    stats[NodeType.Metric] += len(manifest.metrics)
+    stats[NodeType.Macro] += len(manifest.macros)
+    stats[NodeType.Group] += len(manifest.groups)
+    stats[NodeType.SemanticModel] += len(manifest.semantic_models)
+
+    # TODO: should we be counting dimensions + entities?
+
     return stats
 
 
@@ -173,12 +175,16 @@ class Linker:
                 self.dependency(node.unique_id, (manifest.sources[dependency].unique_id))
             elif dependency in manifest.metrics:
                 self.dependency(node.unique_id, (manifest.metrics[dependency].unique_id))
+            elif dependency in manifest.semantic_models:
+                self.dependency(node.unique_id, (manifest.semantic_models[dependency].unique_id))
             else:
                 raise GraphDependencyNotFoundError(node, dependency)
 
     def link_graph(self, manifest: Manifest):
         for source in manifest.sources.values():
             self.add_node(source.unique_id)
+        for semantic_model in manifest.semantic_models.values():
+            self.add_node(semantic_model.unique_id)
         for node in manifest.nodes.values():
             self.link_node(node, manifest)
         for exposure in manifest.exposures.values():
@@ -298,62 +304,6 @@ class Compiler:
         relation_cls = adapter.Relation
         return relation_cls.add_ephemeral_prefix(name)
 
-    def _inject_ctes_into_sql(self, sql: str, ctes: List[InjectedCTE]) -> str:
-        """
-        `ctes` is a list of InjectedCTEs like:
-
-            [
-                InjectedCTE(
-                    id="cte_id_1",
-                    sql="__dbt__cte__ephemeral as (select * from table)",
-                ),
-                InjectedCTE(
-                    id="cte_id_2",
-                    sql="__dbt__cte__events as (select id, type from events)",
-                ),
-            ]
-
-        Given `sql` like:
-
-          "with internal_cte as (select * from sessions)
-           select * from internal_cte"
-
-        This will spit out:
-
-          "with __dbt__cte__ephemeral as (select * from table),
-                __dbt__cte__events as (select id, type from events),
-                with internal_cte as (select * from sessions)
-           select * from internal_cte"
-
-        (Whitespace enhanced for readability.)
-        """
-        if len(ctes) == 0:
-            return sql
-
-        parsed_stmts = sqlparse.parse(sql)
-        parsed = parsed_stmts[0]
-
-        with_stmt = None
-        for token in parsed.tokens:
-            if token.is_keyword and token.normalized == "WITH":
-                with_stmt = token
-                break
-
-        if with_stmt is None:
-            # no with stmt, add one, and inject CTEs right at the beginning
-            first_token = parsed.token_first()
-            with_stmt = sqlparse.sql.Token(sqlparse.tokens.Keyword, "with")
-            parsed.insert_before(first_token, with_stmt)
-        else:
-            # stmt exists, add a comma (which will come after injected CTEs)
-            trailing_comma = sqlparse.sql.Token(sqlparse.tokens.Punctuation, ",")
-            parsed.insert_after(with_stmt, trailing_comma)
-
-        token = sqlparse.sql.Token(sqlparse.tokens.Keyword, ", ".join(c.sql for c in ctes))
-        parsed.insert_after(with_stmt, token)
-
-        return str(parsed)
-
     def _recursively_prepend_ctes(
         self,
         model: ManifestSQLNode,
@@ -428,16 +378,16 @@ class Compiler:
 
             _add_prepended_cte(prepended_ctes, InjectedCTE(id=cte.id, sql=sql))
 
-        injected_sql = self._inject_ctes_into_sql(
-            model.compiled_code,
-            prepended_ctes,
-        )
         # Check again before updating for multi-threading
         if not model.extra_ctes_injected:
+            injected_sql = inject_ctes_into_sql(
+                model.compiled_code,
+                prepended_ctes,
+            )
+            model.extra_ctes_injected = True
             model._pre_injected_sql = model.compiled_code
             model.compiled_code = injected_sql
             model.extra_ctes = prepended_ctes
-            model.extra_ctes_injected = True
 
         # if model.extra_ctes is not set to prepended ctes, something went wrong
         return model, model.extra_ctes
@@ -573,9 +523,86 @@ class Compiler:
         the node's raw_code into compiled_code, and then calls the
         recursive method to "prepend" the ctes.
         """
+        # Make sure Lexer for sqlparse 0.4.4 is initialized
+        from sqlparse.lexer import Lexer  # type: ignore
+
+        if hasattr(Lexer, "get_default_instance"):
+            Lexer.get_default_instance()
+
         node = self._compile_code(node, manifest, extra_context)
 
         node, _ = self._recursively_prepend_ctes(node, manifest, extra_context)
         if write:
             self._write_node(node)
         return node
+
+
+def inject_ctes_into_sql(sql: str, ctes: List[InjectedCTE]) -> str:
+    """
+    `ctes` is a list of InjectedCTEs like:
+
+        [
+            InjectedCTE(
+                id="cte_id_1",
+                sql="__dbt__cte__ephemeral as (select * from table)",
+            ),
+            InjectedCTE(
+                id="cte_id_2",
+                sql="__dbt__cte__events as (select id, type from events)",
+            ),
+        ]
+
+    Given `sql` like:
+
+      "with internal_cte as (select * from sessions)
+       select * from internal_cte"
+
+    This will spit out:
+
+      "with __dbt__cte__ephemeral as (select * from table),
+            __dbt__cte__events as (select id, type from events),
+            internal_cte as (select * from sessions)
+       select * from internal_cte"
+
+    (Whitespace enhanced for readability.)
+    """
+    if len(ctes) == 0:
+        return sql
+
+    parsed_stmts = sqlparse.parse(sql)
+    parsed = parsed_stmts[0]
+
+    with_stmt = None
+    for token in parsed.tokens:
+        if token.is_keyword and token.normalized == "WITH":
+            with_stmt = token
+        elif token.is_keyword and token.normalized == "RECURSIVE" and with_stmt is not None:
+            with_stmt = token
+            break
+        elif not token.is_whitespace and with_stmt is not None:
+            break
+
+    if with_stmt is None:
+        # no with stmt, add one, and inject CTEs right at the beginning
+        # [original_sql]
+        first_token = parsed.token_first()
+        with_token = sqlparse.sql.Token(sqlparse.tokens.Keyword, "with")
+        parsed.insert_before(first_token, with_token)
+        # [with][original_sql]
+        injected_ctes = ", ".join(c.sql for c in ctes) + " "
+        injected_ctes_token = sqlparse.sql.Token(sqlparse.tokens.Keyword, injected_ctes)
+        parsed.insert_after(with_token, injected_ctes_token)
+        # [with][joined_ctes][original_sql]
+    else:
+        # with stmt exists so we don't need to add one, but we do need to add a comma
+        # between the injected ctes and the original sql
+        # [with][original_sql]
+        injected_ctes = ", ".join(c.sql for c in ctes)
+        injected_ctes_token = sqlparse.sql.Token(sqlparse.tokens.Keyword, injected_ctes)
+        parsed.insert_after(with_stmt, injected_ctes_token)
+        # [with][joined_ctes][original_sql]
+        comma_token = sqlparse.sql.Token(sqlparse.tokens.Punctuation, ", ")
+        parsed.insert_after(injected_ctes_token, comma_token)
+        # [with][joined_ctes][, ][original_sql]
+
+    return str(parsed)

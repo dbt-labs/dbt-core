@@ -1,0 +1,6 @@
+kind: Fixes
+body: Ensure `warn_error_options` get serialized in `invocation_args_dict`
+time: 2023-07-20T16:15:13.761813-07:00
+custom:
+  Author: QMalcolm
+  Issue: "7694"

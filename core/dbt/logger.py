@@ -469,7 +469,7 @@ class ListLogHandler(LogMessageHandler):
     def __init__(
         self,
         level: int = logbook.NOTSET,
-        filter: Callable = None,
+        filter: Optional[Callable] = None,
         bubble: bool = False,
         lst: Optional[List[LogMessage]] = None,
     ) -> None:

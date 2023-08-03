@@ -64,7 +64,7 @@ sources:
     schema: "{{ var('schema_override', target.schema) }}"
     tables:
       - name: my_table
-        identifier: seed
+        identifier: seed_subpackage_generate_alias_name
 """
 
 macros__macro_sql = """
@@ -156,11 +156,17 @@ class TestSimpleDependency(BaseDependencyTest):
 
         check_relations_equal(
             project.adapter,
-            [f"{project.test_schema}.source_override_model", f"{project.test_schema}.seed"],
+            [
+                f"{project.test_schema}.source_override_model",
+                f"{project.test_schema}.seed_subpackage_generate_alias_name",
+            ],
         )
         check_relations_equal(
             project.adapter,
-            [f"{project.test_schema}.dep_source_model", f"{project.test_schema}.seed"],
+            [
+                f"{project.test_schema}.dep_source_model",
+                f"{project.test_schema}.seed_subpackage_generate_alias_name",
+            ],
         )
 
     def test_no_dependency_paths(self, project):

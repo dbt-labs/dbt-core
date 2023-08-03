@@ -71,20 +71,43 @@ class Parser(BaseParser[FinalValue], Generic[FinalValue]):
 
 class RelationUpdate:
     def __init__(self, config: RuntimeConfig, manifest: Manifest, component: str) -> None:
-        macro = manifest.find_generate_macro_by_name(
+        default_macro = manifest.find_generate_macro_by_name(
             component=component,
             root_project_name=config.project_name,
         )
-        if macro is None:
+        if default_macro is None:
             raise DbtInternalError(f"No macro with name generate_{component}_name found")
 
-        root_context = generate_generate_name_macro_context(macro, config, manifest)
-        self.updater = MacroGenerator(macro, root_context)
+        default_macro_context = generate_generate_name_macro_context(
+            default_macro, config, manifest
+        )
+        self.default_updater = MacroGenerator(default_macro, default_macro_context)
+
+        package_names = config.dependencies.keys() if config.dependencies else {}
+        package_updaters = {}
+        for package_name in package_names:
+            package_macro = manifest.find_generate_macro_by_name(
+                component=component,
+                root_project_name=config.project_name,
+                imported_package=package_name,
+            )
+            if package_macro:
+                imported_macro_context = generate_generate_name_macro_context(
+                    package_macro, config, manifest
+                )
+                package_updaters[package_macro.package_name] = MacroGenerator(
+                    package_macro, imported_macro_context
+                )
+
+        self.package_updaters = package_updaters
         self.component = component
 
-    def __call__(self, parsed_node: Any, config_dict: Dict[str, Any]) -> None:
-        override = config_dict.get(self.component)
-        new_value = self.updater(override, parsed_node)
+    def __call__(self, parsed_node: Any, override: Optional[str]) -> None:
+        if parsed_node.package_name in self.package_updaters:
+            new_value = self.package_updaters[parsed_node.package_name](override, parsed_node)
+        else:
+            new_value = self.default_updater(override, parsed_node)
+
         if isinstance(new_value, str):
             new_value = new_value.strip()
         setattr(parsed_node, self.component, new_value)
@@ -256,9 +279,19 @@ class ConfiguredParser(
     def update_parsed_node_relation_names(
         self, parsed_node: IntermediateNode, config_dict: Dict[str, Any]
     ) -> None:
-        self._update_node_database(parsed_node, config_dict)
-        self._update_node_schema(parsed_node, config_dict)
-        self._update_node_alias(parsed_node, config_dict)
+
+        # These call the RelationUpdate callable to go through generate_name macros
+        self._update_node_database(parsed_node, config_dict.get("database"))
+        self._update_node_schema(parsed_node, config_dict.get("schema"))
+        self._update_node_alias(parsed_node, config_dict.get("alias"))
+
+        # Snapshot nodes use special "target_database" and "target_schema" fields for some reason
+        if parsed_node.resource_type == NodeType.Snapshot:
+            if "target_database" in config_dict and config_dict["target_database"]:
+                parsed_node.database = config_dict["target_database"]
+            if "target_schema" in config_dict and config_dict["target_schema"]:
+                parsed_node.schema = config_dict["target_schema"]
+
         self._update_node_relation_name(parsed_node)
 
     def update_parsed_node_config(
@@ -325,7 +358,7 @@ class ConfiguredParser(
         # do this once before we parse the node database/schema/alias, so
         # parsed_node.config is what it would be if they did nothing
         self.update_parsed_node_config_dict(parsed_node, config_dict)
-        # This updates the node database/schema/alias
+        # This updates the node database/schema/alias/relation_name
         self.update_parsed_node_relation_names(parsed_node, config_dict)
 
         # tests don't have hooks

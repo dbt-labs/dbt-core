@@ -1,0 +1,6 @@
+kind: Dependencies
+body: Support dbt-semantic-interfaces 0.2.0
+time: 2023-07-28T13:52:27.207241-07:00
+custom:
+  Author: QMalcolm
+  PR: "8250"

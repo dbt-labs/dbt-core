@@ -1,6 +1,0 @@
-kind: Fixes
-body: Add --target-path to dbt snapshot command.
-time: 2023-04-20T10:42:54.17972-04:00
-custom:
-  Author: dwreeves
-  Issue: "7418"

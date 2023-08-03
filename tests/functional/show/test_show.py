@@ -1,6 +1,6 @@
 import pytest
 
-from dbt.exceptions import DbtRuntimeError
+from dbt.exceptions import DbtRuntimeError, Exception as DbtException
 from dbt.tests.util import run_dbt_and_capture, run_dbt
 from tests.functional.show.fixtures import (
     models__second_ephemeral_model,
@@ -10,6 +10,7 @@ from tests.functional.show.fixtures import (
     models__ephemeral_model,
     schema_yml,
     models__sql_header,
+    private_model_yml,
 )
 
 
@@ -71,11 +72,12 @@ class TestShow:
         assert "sample_bool" in log_output
 
     def test_inline_fail(self, project):
-        run_dbt(["build"])
-        with pytest.raises(
-            DbtRuntimeError, match="depends on a node named 'third_model' which was not found"
-        ):
+        with pytest.raises(DbtException, match="Error parsing inline query"):
             run_dbt(["show", "--inline", "select * from {{ ref('third_model') }}"])
+
+    def test_inline_fail_database_error(self, project):
+        with pytest.raises(DbtRuntimeError, match="Database Error"):
+            run_dbt(["show", "--inline", "slect asdlkjfsld;j"])
 
     def test_ephemeral_model(self, project):
         run_dbt(["build"])
@@ -137,3 +139,20 @@ class TestShowModelVersions:
         (results, log_output) = run_dbt_and_capture(["show", "--select", "sample_model.v2"])
         assert "Previewing node 'sample_model.v1'" not in log_output
         assert "Previewing node 'sample_model.v2'" in log_output
+
+
+class TestShowPrivateModel:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": private_model_yml,
+            "private_model.sql": models__sample_model,
+        }
+
+    @pytest.fixture(scope="class")
+    def seeds(self):
+        return {"sample_seed.csv": seeds__sample_seed}
+
+    def test_version_unspecified(self, project):
+        run_dbt(["build"])
+        run_dbt(["show", "--inline", "select * from {{ ref('private_model') }}"])
