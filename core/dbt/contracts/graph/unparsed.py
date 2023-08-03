@@ -701,6 +701,7 @@ class UnparsedMeasure(dbtClassMixin):
     agg_params: Optional[MeasureAggregationParameters] = None
     non_additive_dimension: Optional[UnparsedNonAdditiveDimension] = None
     agg_time_dimension: Optional[str] = None
+    create_metric: bool = False
 
 
 @dataclass
