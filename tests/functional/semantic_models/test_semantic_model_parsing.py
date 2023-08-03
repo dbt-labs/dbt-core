@@ -27,6 +27,7 @@ semantic_models:
         expr: revenue
         agg: sum
         agg_time_dimension: ds
+        create_metric: true
       - name: sum_of_things
         expr: 2
         agg: sum
@@ -63,14 +64,6 @@ semantic_models:
         expr: user_id
       - name: id
         type: primary
-
-metrics:
-  - name: records_with_revenue
-    label: "Number of records with revenue"
-    description: Total number of records with revenue
-    type: simple
-    type_params:
-      measure: has_revenue
 """
 
 schema_without_semantic_model_yml = """models:
@@ -126,6 +119,10 @@ class TestSemanticModelParsing:
             == f'"dbt"."{project.test_schema}"."fct_revenue"'
         )
         assert len(semantic_model.measures) == 5
+        # manifest should have one metric (that was created from a measure)
+        assert len(manifest.metrics) == 1
+        metric = manifest.metrics["metric.test.txn_revenue"]
+        assert metric.name == "txn_revenue"
 
     def test_semantic_model_error(self, project):
         # Next, modify the default schema.yml to remove the semantic model.
