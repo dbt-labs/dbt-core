@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Add Formatting events into json logs
+time: 2023-08-03T10:08:11.672017-05:00
+custom:
+  Author: emmyoop
+  Issue: "6998"
