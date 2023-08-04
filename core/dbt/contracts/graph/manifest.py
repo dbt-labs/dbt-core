@@ -1331,10 +1331,13 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         self.exposures[exposure.unique_id] = exposure
         source_file.exposures.append(exposure.unique_id)
 
-    def add_metric(self, source_file: SchemaSourceFile, metric: Metric):
+    def add_metric(self, source_file: SchemaSourceFile, metric: Metric, generated: bool = False):
         _check_duplicates(metric, self.metrics)
         self.metrics[metric.unique_id] = metric
-        source_file.metrics.append(metric.unique_id)
+        if not generated:
+            source_file.metrics.append(metric.unique_id)
+        else:
+            source_file.generated_metrics.append(metric.unique_id)
 
     def add_group(self, source_file: SchemaSourceFile, group: Group):
         _check_duplicates(group, self.groups)

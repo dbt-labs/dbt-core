@@ -303,7 +303,7 @@ class MetricParser(YamlReader):
             # input_measures=?,
         )
 
-    def parse_metric(self, unparsed: UnparsedMetric):
+    def parse_metric(self, unparsed: UnparsedMetric, generated: bool = False):
         package_name = self.project.project_name
         unique_id = f"{NodeType.Metric}.{package_name}.{unparsed.name}"
         path = self.yaml.path.relative_path
@@ -358,7 +358,7 @@ class MetricParser(YamlReader):
 
         # if the metric is disabled we do not want it included in the manifest, only in the disabled dict
         if parsed.config.enabled:
-            self.manifest.add_metric(self.yaml.file, parsed)
+            self.manifest.add_metric(self.yaml.file, parsed, generated)
         else:
             self.manifest.add_disabled(self.yaml.file, parsed)
 
@@ -520,7 +520,7 @@ class SemanticModelParser(YamlReader):
         )
 
         parser = MetricParser(self.schema_parser, yaml=self.yaml)
-        parser.parse_metric(unparsed=unparsed_metric)
+        parser.parse_metric(unparsed=unparsed_metric, generated=True)
 
     def parse_semantic_model(self, unparsed: UnparsedSemanticModel):
         package_name = self.project.project_name
