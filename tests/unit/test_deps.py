@@ -120,17 +120,29 @@ class TestGitPackage(unittest.TestCase):
         b_contract = GitPackage.from_dict(
             {"git": "http://example.com", "revision": "0.0.1", "warn-unpinned": False},
         )
+        d_contract = GitPackage.from_dict(
+            {"git": "http://example.com", "revision": "0.0.1", "subdirectory": "foo-bar"},
+        )
         a = GitUnpinnedPackage.from_contract(a_contract)
         b = GitUnpinnedPackage.from_contract(b_contract)
+        c = a.incorporate(b)
+        d = GitUnpinnedPackage.from_contract(d_contract)
+
         self.assertTrue(a.warn_unpinned)
         self.assertFalse(b.warn_unpinned)
-        c = a.incorporate(b)
+        self.assertTrue(d.warn_unpinned)
 
         c_pinned = c.resolved()
         self.assertEqual(c_pinned.name, "http://example.com")
         self.assertEqual(c_pinned.get_version(), "0.0.1")
         self.assertEqual(c_pinned.source_type(), "git")
         self.assertFalse(c_pinned.warn_unpinned)
+
+        d_pinned = d.resolved()
+        self.assertEqual(d_pinned.name, "http://example.com/foo-bar")
+        self.assertEqual(d_pinned.get_version(), "0.0.1")
+        self.assertEqual(d_pinned.source_type(), "git")
+        self.assertEqual(d_pinned.subdirectory, "foo-bar")
 
     def test_resolve_fail(self):
         a_contract = GitPackage.from_dict(
