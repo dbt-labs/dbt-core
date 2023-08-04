@@ -218,6 +218,9 @@ class TestSemanticModelPartialParsing:
         # Verify the metric originally created by `create_metric: true` was removed
         assert result.result.metrics.get(generated_metric) is None
 
+        # Verify that partial parsing didn't clobber the normal metric
+        assert result.result.metrics.get("metric.test.simple_metric") is not None
+
         # --- Now bring it back ---
         create_metric_schema_yml = schema_yml.replace(
             "create_metric: false", "create_metric: true"
