@@ -25,7 +25,7 @@ body:
       required: true
   - type: textarea
     attributes:
-      label: Acceptance critera
+      label: Acceptance criteria
       description: |
         What is the definition of done for this ticket? Include any relevant edge cases and/or test cases
     validations:
