@@ -635,7 +635,8 @@ class ModelNode(CompiledNode):
             self.version == old.version
             # Changing the latest_version may break downstream unpinned refs
             and self.latest_version == old.latest_version
-            # Tightening access may break downstream refs
+            # Tightening (reducing) access may break downstream refs;
+            # increasing or no change implies same ref representation
             and self.access >= old.access
         )
 
