@@ -32,6 +32,13 @@ body:
       required: true
   - type: textarea
     attributes:
+      label: Impact to Adapters
+      description: |
+        Will this require changes to adapter repos?  Include details of the kinds of changes required (new tests, code changes, related tickets)
+    validations:
+      required: true
+  - type: textarea
+    attributes:
       label: Context
       description: |
         Provide the "why", motivation, and alternative approaches considered -- linking to previous refinement issues, spikes, Notion docs as appropriate
