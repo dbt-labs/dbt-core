@@ -783,22 +783,11 @@ class TestModifiedBodyAndContract:
         assert results == ["test.my_model"]
 
 
-modified_my_model_widen_access_yml = """
+modified_table_model_access_yml = """
 version: 2
 models:
   - name: table_model
     access: public
-"""
-
-modified_my_model_tighten_access_yml = """
-version: 2
-groups:
-  - name: my_group
-    owner: {name: my_group_owner}
-models:
-  - name: table_model
-    access: private
-    group: my_group
 """
 
 
@@ -809,18 +798,38 @@ class TestModifiedAccess(BaseModifiedState):
         # No access change
         assert not run_dbt(["list", "-s", "state:modified", "--state", "./state"])
 
-        # Tighten access (protected -> public)
-        write_file(modified_my_model_widen_access_yml, "models", "schema.yml")
-        assert not run_dbt(["list", "-s", "state:modified", "--state", "./state"])
-
-        # Tighten access (protected -> private)
-        write_file(modified_my_model_tighten_access_yml, "models", "schema.yml")
+        # Modify access (protected -> public)
+        write_file(modified_table_model_access_yml, "models", "schema.yml")
+        assert run_dbt(["list", "-s", "state:modified", "--state", "./state"])
 
         results = run_dbt(["list", "-s", "state:modified", "--state", "./state"])
         assert results == ["test.table_model"]
 
 
-modified_my_model_version_yml = """
+modified_table_model_access_yml = """
+version: 2
+models:
+  - name: table_model
+    deprecation_date: 2020-01-01
+"""
+
+
+class TestModifiedDeprecationDate(BaseModifiedState):
+    def test_changed_access(self, project):
+        self.run_and_save_state()
+
+        # No access change
+        assert not run_dbt(["list", "-s", "state:modified", "--state", "./state"])
+
+        # Modify deprecation_date (None -> 2020-01-01)
+        write_file(modified_table_model_access_yml, "models", "schema.yml")
+        assert run_dbt(["list", "-s", "state:modified", "--state", "./state"])
+
+        results = run_dbt(["list", "-s", "state:modified", "--state", "./state"])
+        assert results == ["test.table_model"]
+
+
+modified_table_model_version_yml = """
 version: 2
 models:
   - name: table_model
@@ -835,7 +844,7 @@ class TestModifiedVersion(BaseModifiedState):
         self.run_and_save_state()
 
         # Change version (null -> v1)
-        write_file(modified_my_model_version_yml, "models", "schema.yml")
+        write_file(modified_table_model_version_yml, "models", "schema.yml")
 
         results = run_dbt(["list", "-s", "state:modified", "--state", "./state"])
         assert results == ["test.table_model.v1"]

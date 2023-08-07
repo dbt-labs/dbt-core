@@ -452,8 +452,8 @@ unchanged_nodes = [
     lambda u: (u, u.replace(alias="other")),
     lambda u: (u, u.replace(schema="other")),
     lambda u: (u, u.replace(database="other")),
-    # unchanged ref representations
-    lambda u: (u, u.replace(access=AccessType.Private)),
+    # unchanged ref representations - protected is default
+    lambda u: (u, u.replace(access=AccessType.Protected)),
 ]
 
 

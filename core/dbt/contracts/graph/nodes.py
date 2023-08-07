@@ -631,13 +631,11 @@ class ModelNode(CompiledNode):
 
     def same_ref_representation(self, old) -> bool:
         return (
-            # Changing a version may break downstream refs
-            self.version == old.version
             # Changing the latest_version may break downstream unpinned refs
-            and self.latest_version == old.latest_version
-            # Tightening (reducing) access may break downstream refs;
-            # increasing or no change implies same ref representation
-            and self.access >= old.access
+            self.latest_version == old.latest_version
+            # Changes to access or deprecation_date may lead to ref-related parsing errors
+            and self.access == old.access
+            and self.deprecation_date == old.deprecation_date
         )
 
     def build_contract_checksum(self):

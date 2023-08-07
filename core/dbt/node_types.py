@@ -16,13 +16,6 @@ class AccessType(StrEnum):
             return False
         return True
 
-    def __lt__(self, other):
-        if not isinstance(other, AccessType):
-            raise NotImplementedError
-
-        members = list(AccessType)
-        return members.index(self) < members.index(other)
-
 
 class NodeType(StrEnum):
     Model = "model"
