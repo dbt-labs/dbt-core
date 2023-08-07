@@ -46,6 +46,7 @@ RESOURCE_COUNTS = "iglu:com.dbt/resource_counts/jsonschema/1-0-1"
 RPC_REQUEST_SPEC = "iglu:com.dbt/rpc_request/jsonschema/1-0-1"
 RUNNABLE_TIMING = "iglu:com.dbt/runnable/jsonschema/1-0-0"
 RUN_MODEL_SPEC = "iglu:com.dbt/run_model/jsonschema/1-0-3"
+PLUGIN_GET_NODES = "iglu:com.dbt/plugin_get_nodes/jsonschema/1-0-0"
 
 
 class TimeoutEmitter(Emitter):
@@ -404,6 +405,19 @@ def track_partial_parser(options):
         active_user,
         category="dbt",
         action="partial_parser",
+        label=get_invocation_id(),
+        context=context,
+    )
+
+
+def track_plugin_get_nodes(options):
+    context = [SelfDescribingJson(PLUGIN_GET_NODES, options)]
+    assert active_user is not None, "Cannot track plugin node info when active user is None"
+
+    track(
+        active_user,
+        category="dbt",
+        action="plugin_get_nodes",
         label=get_invocation_id(),
         context=context,
     )
