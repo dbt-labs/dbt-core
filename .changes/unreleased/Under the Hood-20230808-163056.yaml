@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Add unit and integration testing flags to codecov
+time: 2023-08-08T16:30:56.489749+01:00
+custom:
+  Author: aranke
+  Issue: "8245"
