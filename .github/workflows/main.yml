@@ -108,8 +108,9 @@ jobs:
       - name: Upload Unit Test Coverage to Codecov
         if: ${{ matrix.python-version == '3.11' }}
         uses: codecov/codecov-action@v3
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          flags: unit
 
   integration-metadata:
     name: integration test metadata generation
@@ -221,8 +222,9 @@ jobs:
       - name: Upload Integration Test Coverage to Codecov
         if: ${{ matrix.python-version == '3.11' }}
         uses: codecov/codecov-action@v3
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          flags: integration
 
   integration-report:
     name: Integration Test Suite
