@@ -1,0 +1,24 @@
+name: Open issues in another repo when a PR is labeled
+
+on:
+  pull_request:
+    types: [opened, reopened, labeled, unlabeled, synchronize]
+
+defaults:
+  run:
+    shell: bash
+
+permissions:
+    issues: write # opens new issues
+    pull-requests: write # comments on PRs
+
+
+jobs:
+  open_issues:
+    if: contains( github.event.pull_request.labels.*.name, 'needs-docs')
+    uses: dbt-labs/actions/.github/workflows/open-issue-in-repo.yml@er/docs-issue
+    with:
+        issue_repository: "emmyoop/action_testing"
+        issue_title: "This is my title"
+        issue_body: "This is the issue body\n\nIt can have multiple lines\n\n### And even markdown!"
+    secrets: inherit
