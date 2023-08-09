@@ -68,7 +68,7 @@ from dbt.adapters.base.relation import BaseRelation
 # The first parameter is a list of dbt command line arguments, such as
 #   run_dbt(["run", "--vars", "seed_name: base"])
 # If the command is expected to fail, pass in "expect_pass=False"):
-#   run_dbt("test"], expect_pass=False)
+#   run_dbt(["test"], expect_pass=False)
 def run_dbt(
     args: Optional[List[str]] = None,
     expect_pass: bool = True,
