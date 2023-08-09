@@ -223,16 +223,16 @@
       "properties": {
         "dbt_schema_version": {
           "type": "string",
-          "default": "https://schemas.getdbt.com/dbt/manifest/v10.json"
+          "default": "https://schemas.getdbt.com/dbt/manifest/v11.json"
         },
         "dbt_version": {
           "type": "string",
-          "default": "1.6.0"
+          "default": "1.7.0a1"
         },
         "generated_at": {
           "type": "string",
           "format": "date-time",
-          "default": "2023-08-07T20:10:03.381822Z"
+          "default": "2023-08-07T20:39:59.293558Z"
         },
         "invocation_id": {
           "oneOf": [
@@ -243,7 +243,7 @@
               "type": "null"
             }
           ],
-          "default": "03dee192-ff77-43cc-bc3f-5eeaf6d36344"
+          "default": "58eb10b1-36ce-4873-9081-8cb0c38ba438"
         },
         "env": {
           "type": "object",
@@ -474,7 +474,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1691439003.386713
+          "default": 1691440799.299534
         },
         "config_call_dict": {
           "type": "object",
@@ -1187,7 +1187,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1691439003.389955
+          "default": 1691440799.302819
         },
         "config_call_dict": {
           "type": "object",
@@ -1575,7 +1575,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1691439003.3916101
+          "default": 1691440799.304547
         },
         "config_call_dict": {
           "type": "object",
@@ -1851,7 +1851,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1691439003.393298
+          "default": 1691440799.306247
         },
         "config_call_dict": {
           "type": "object",
@@ -2273,7 +2273,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1691439003.39583
+          "default": 1691440799.3088052
         },
         "config_call_dict": {
           "type": "object",
@@ -2539,7 +2539,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1691439003.3974268
+          "default": 1691440799.310445
         },
         "config_call_dict": {
           "type": "object",
@@ -2797,7 +2797,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1691439003.399393
+          "default": 1691440799.3122811
         },
         "config_call_dict": {
           "type": "object",
@@ -3092,7 +3092,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1691439003.4026701
+          "default": 1691440799.315573
         },
         "config_call_dict": {
           "type": "object",
@@ -3525,6 +3525,7 @@
             "contract": {
               "enforced": false
             },
+            "delimiter": ",",
             "quote_columns": null,
             "post-hook": [],
             "pre-hook": []
@@ -3599,7 +3600,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1691439003.4056058
+          "default": 1691440799.318796
         },
         "config_call_dict": {
           "type": "object",
@@ -3825,6 +3826,10 @@
             "enforced": false
           }
         },
+        "delimiter": {
+          "type": "string",
+          "default": ","
+        },
         "quote_columns": {
           "oneOf": [
             {
@@ -3837,7 +3842,7 @@
         }
       },
       "additionalProperties": true,
-      "description": "SeedConfig(_extra: Dict[str, Any] = <factory>, enabled: bool = True, alias: Union[str, NoneType] = None, schema: Union[str, NoneType] = None, database: Union[str, NoneType] = None, tags: Union[List[str], str] = <factory>, meta: Dict[str, Any] = <factory>, group: Union[str, NoneType] = None, materialized: str = 'seed', incremental_strategy: Union[str, NoneType] = None, persist_docs: Dict[str, Any] = <factory>, post_hook: List[dbt.contracts.graph.model_config.Hook] = <factory>, pre_hook: List[dbt.contracts.graph.model_config.Hook] = <factory>, quoting: Dict[str, Any] = <factory>, column_types: Dict[str, Any] = <factory>, full_refresh: Union[bool, NoneType] = None, unique_key: Union[str, List[str], NoneType] = None, on_schema_change: Union[str, NoneType] = 'ignore', on_configuration_change: dbt.contracts.graph.model_config.OnConfigurationChangeOption = <factory>, grants: Dict[str, Any] = <factory>, packages: List[str] = <factory>, docs: dbt.contracts.graph.unparsed.Docs = <factory>, contract: dbt.contracts.graph.model_config.ContractConfig = <factory>, quote_columns: Union[bool, NoneType] = None)"
+      "description": "SeedConfig(_extra: Dict[str, Any] = <factory>, enabled: bool = True, alias: Union[str, NoneType] = None, schema: Union[str, NoneType] = None, database: Union[str, NoneType] = None, tags: Union[List[str], str] = <factory>, meta: Dict[str, Any] = <factory>, group: Union[str, NoneType] = None, materialized: str = 'seed', incremental_strategy: Union[str, NoneType] = None, persist_docs: Dict[str, Any] = <factory>, post_hook: List[dbt.contracts.graph.model_config.Hook] = <factory>, pre_hook: List[dbt.contracts.graph.model_config.Hook] = <factory>, quoting: Dict[str, Any] = <factory>, column_types: Dict[str, Any] = <factory>, full_refresh: Union[bool, NoneType] = None, unique_key: Union[str, List[str], NoneType] = None, on_schema_change: Union[str, NoneType] = 'ignore', on_configuration_change: dbt.contracts.graph.model_config.OnConfigurationChangeOption = <factory>, grants: Dict[str, Any] = <factory>, packages: List[str] = <factory>, docs: dbt.contracts.graph.unparsed.Docs = <factory>, contract: dbt.contracts.graph.model_config.ContractConfig = <factory>, delimiter: str = ',', quote_columns: Union[bool, NoneType] = None)"
     },
     "MacroDependsOn": {
       "type": "object",
@@ -4020,7 +4025,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1691439003.408927
+          "default": 1691440799.32196
         }
       },
       "additionalProperties": false,
@@ -4332,7 +4337,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1691439003.409885
+          "default": 1691440799.3226922
         },
         "supported_languages": {
           "oneOf": [
@@ -4572,7 +4577,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1691439003.411563
+          "default": 1691440799.324348
         }
       },
       "additionalProperties": false,
@@ -4757,7 +4762,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1691439003.41419
+          "default": 1691440799.327093
         },
         "group": {
           "oneOf": [
@@ -5236,7 +5241,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1691439003.4182558
+          "default": 1691440799.330652
         },
         "config": {
           "$ref": "#/definitions/SemanticModelConfig",
@@ -5634,5 +5639,5 @@
     }
   },
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://schemas.getdbt.com/dbt/manifest/v10.json"
+  "$id": "https://schemas.getdbt.com/dbt/manifest/v11.json"
 }
