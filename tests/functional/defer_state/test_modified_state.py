@@ -781,3 +781,108 @@ class TestModifiedBodyAndContract:
         # The model's contract has changed, even if non-breaking, so it should be selected by 'state:modified.contract'
         results = run_dbt(["list", "-s", "state:modified.contract", "--state", "./state"])
         assert results == ["test.my_model"]
+
+
+modified_table_model_access_yml = """
+version: 2
+models:
+  - name: table_model
+    access: public
+"""
+
+
+class TestModifiedAccess(BaseModifiedState):
+    def test_changed_access(self, project):
+        self.run_and_save_state()
+
+        # No access change
+        assert not run_dbt(["list", "-s", "state:modified", "--state", "./state"])
+
+        # Modify access (protected -> public)
+        write_file(modified_table_model_access_yml, "models", "schema.yml")
+        assert run_dbt(["list", "-s", "state:modified", "--state", "./state"])
+
+        results = run_dbt(["list", "-s", "state:modified", "--state", "./state"])
+        assert results == ["test.table_model"]
+
+
+modified_table_model_access_yml = """
+version: 2
+models:
+  - name: table_model
+    deprecation_date: 2020-01-01
+"""
+
+
+class TestModifiedDeprecationDate(BaseModifiedState):
+    def test_changed_access(self, project):
+        self.run_and_save_state()
+
+        # No access change
+        assert not run_dbt(["list", "-s", "state:modified", "--state", "./state"])
+
+        # Modify deprecation_date (None -> 2020-01-01)
+        write_file(modified_table_model_access_yml, "models", "schema.yml")
+        assert run_dbt(["list", "-s", "state:modified", "--state", "./state"])
+
+        results = run_dbt(["list", "-s", "state:modified", "--state", "./state"])
+        assert results == ["test.table_model"]
+
+
+modified_table_model_version_yml = """
+version: 2
+models:
+  - name: table_model
+    versions:
+      - v: 1
+        defined_in: table_model
+"""
+
+
+class TestModifiedVersion(BaseModifiedState):
+    def test_changed_access(self, project):
+        self.run_and_save_state()
+
+        # Change version (null -> v1)
+        write_file(modified_table_model_version_yml, "models", "schema.yml")
+
+        results = run_dbt(["list", "-s", "state:modified", "--state", "./state"])
+        assert results == ["test.table_model.v1"]
+
+
+table_model_latest_version_yml = """
+version: 2
+models:
+  - name: table_model
+    latest_version: 1
+    versions:
+      - v: 1
+        defined_in: table_model
+"""
+
+
+modified_table_model_latest_version_yml = """
+version: 2
+models:
+  - name: table_model
+    latest_version: 2
+    versions:
+      - v: 1
+        defined_in: table_model
+      - v: 2
+"""
+
+
+class TestModifiedLatestVersion(BaseModifiedState):
+    def test_changed_access(self, project):
+        # Setup initial latest_version: 1
+        write_file(table_model_latest_version_yml, "models", "schema.yml")
+
+        self.run_and_save_state()
+
+        # Bump latest version
+        write_file(table_model_sql, "models", "table_model_v2.sql")
+        write_file(modified_table_model_latest_version_yml, "models", "schema.yml")
+
+        results = run_dbt(["list", "-s", "state:modified", "--state", "./state"])
+        assert results == ["test.table_model.v1", "test.table_model.v2"]

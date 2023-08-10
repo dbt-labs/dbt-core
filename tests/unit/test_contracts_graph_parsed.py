@@ -452,6 +452,8 @@ unchanged_nodes = [
     lambda u: (u, u.replace(alias="other")),
     lambda u: (u, u.replace(schema="other")),
     lambda u: (u, u.replace(database="other")),
+    # unchanged ref representations - protected is default
+    lambda u: (u, u.replace(access=AccessType.Protected)),
 ]
 
 
@@ -485,6 +487,10 @@ changed_nodes = [
     lambda u: (u, replace_config(u, alias="other")),
     lambda u: (u, replace_config(u, schema="other")),
     lambda u: (u, replace_config(u, database="other")),
+    # changed ref representations
+    lambda u: (u, replace_config(u, access=AccessType.Public)),
+    lambda u: (u, replace_config(u, latest_version=2)),
+    lambda u: (u, replace_config(u, version=2)),
 ]
 
 
