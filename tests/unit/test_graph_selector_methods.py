@@ -24,6 +24,7 @@ from dbt.contracts.graph.nodes import (
     TestConfig,
     TestMetadata,
     ColumnInfo,
+    AccessType,
 )
 from dbt.contracts.graph.manifest import Manifest, ManifestMetadata
 from dbt.contracts.graph.unparsed import ExposureType, Owner
@@ -125,7 +126,7 @@ def make_model(
         checksum=FileHash.from_contents(""),
         version=version,
         latest_version=latest_version,
-        access=access,
+        access=access or AccessType.Protected,
     )
 
 
