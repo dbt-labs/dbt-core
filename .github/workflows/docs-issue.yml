@@ -1,8 +1,17 @@
+# **what?**
+# Open an issure in docs.getdbt.com when a PR is labeled `user docs`
+
+# **why?**
+# Jira is our tool for tracking and we need to see these issues in there
+
+# **when?**
+# On issue creation or when an issue is labeled `Jira`
 name: Open issues in another repo when a PR is labeled
+run-name: "Open an issue in docs.getdbt.com when a merged PR is labeled user doc"
 
 on:
   pull_request:
-    types: [opened, reopened, labeled, unlabeled, synchronize]
+    types: [labeled, closed]
 
 defaults:
   run:
@@ -14,11 +23,27 @@ permissions:
 
 
 jobs:
+  generate_body:
+    if: contains( github.event.pull_request.labels.*.name, 'needs-docs') && github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    outputs:
+        first_line: ${{ steps.set_body.outputs.first_line }}
+        second_line: ${{ steps.set_body.outputs.second_line }}
+        third_line: ${{ steps.set_body.outputs.third_line }}
+    steps:
+      - name: Get issue title
+        id: set_body
+        run: |
+          echo "first_line=Link to the page on docs.getdbt.com requiring updates" >> $GITHUB_OUTPUT
+          echo "second_line=What part(s) of the page would you like to see updated?" >> $GITHUB_OUTPUT
+          echo "third_line=Additional information" >> $GITHUB_OUTPUT
+
   open_issues:
-    if: contains( github.event.pull_request.labels.*.name, 'needs-docs')
+    needs: [generate_body]
     uses: dbt-labs/actions/.github/workflows/open-issue-in-repo.yml@er/docs-issue
     with:
-        issue_repository: "emmyoop/action_testing"
+        issue_repository: "dbt-labs/docs.getdbt.com"
         issue_title: "This is my title"
-        issue_body: "This is the issue body\n\nIt can have multiple lines\n\n### And even markdown!"
+        issue_labels: "content,improvement"
+        issue_body: "${{needs.generate_body.outputs.first_line }}\n\n${{needs.generate_body.outputs.second_line }}\n\n${{needs.generate_body.outputs.third_line }}"
     secrets: inherit
