@@ -29,3 +29,11 @@ class ModelNodeArgs:
             unique_id = f"{unique_id}.v{self.version}"
 
         return unique_id
+
+    @property
+    def fqn(self) -> List[str]:
+        fqn = [self.package_name, self.name]
+        if self.version:
+            fqn.append(f"v{self.version}")
+
+        return fqn
