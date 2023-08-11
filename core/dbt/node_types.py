@@ -4,8 +4,8 @@ from dbt.dataclass_schema import StrEnum
 
 
 class AccessType(StrEnum):
-    Protected = "protected"
     Private = "private"
+    Protected = "protected"
     Public = "public"
 
     @classmethod
