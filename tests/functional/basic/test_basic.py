@@ -17,4 +17,4 @@ def test_basic(project):
     results = run_dbt(["run"])
     assert len(results) == 1
     manifest = get_manifest(project.project_root)
-    assert "model.test.my_model" in manifest.nodes
+    assert "you won't find me" in manifest.nodes
