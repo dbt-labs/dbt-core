@@ -24,7 +24,7 @@ permissions:
 
 jobs:
   generate_body:
-    if: contains( github.event.pull_request.labels.*.name, 'needs-docs') && github.event.pull_request.merged == true
+    if: contains( github.event.pull_request.labels.*.name, 'user docs') && github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     outputs:
         issue_body: ${{ steps.set_body.outputs.body }}
