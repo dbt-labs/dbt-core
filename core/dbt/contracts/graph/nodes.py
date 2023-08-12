@@ -590,7 +590,7 @@ class ModelNode(CompiledNode):
             name=args.name,
             package_name=args.package_name,
             unique_id=unique_id,
-            fqn=[args.package_name, args.name],
+            fqn=args.fqn,
             version=args.version,
             latest_version=args.latest_version,
             relation_name=args.relation_name,
