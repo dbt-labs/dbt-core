@@ -9,7 +9,7 @@
 
 
 name: Open issues in docs.getdbt.com repo when a PR is labeled
-run-name: "Open an issue in docs.getdbt.com when a merged PR has label user docs"
+run-name: "Open an issue in docs.getdbt.com for PR #${{ github.event.pull_request.number }}"
 
 on:
   pull_request:
