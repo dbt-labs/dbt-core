@@ -122,7 +122,7 @@ from dbt.parser.sources import SourcePatcher
 from dbt.version import __version__
 
 from dbt.dataclass_schema import StrEnum, dbtClassMixin
-from dbt.plugins import get_plugin_manager
+from dbt import plugins
 
 from dbt_semantic_interfaces.enum_extension import assert_values_exhausted
 from dbt_semantic_interfaces.type_enums import MetricType
@@ -503,6 +503,7 @@ class ManifestLoader:
             self.manifest.selectors = self.root_project.manifest_selectors
 
             # inject any available external nodes
+            self.manifest.build_parent_and_child_maps()
             external_nodes_modified = self.inject_external_nodes()
             if external_nodes_modified:
                 self.manifest.rebuild_ref_lookup()
@@ -751,7 +752,7 @@ class ManifestLoader:
             manifest_nodes_modified = True
 
         # Inject any newly-available external nodes
-        pm = get_plugin_manager(self.root_project.project_name)
+        pm = plugins.get_plugin_manager(self.root_project.project_name)
         plugin_model_nodes = pm.get_nodes().models
         for node_arg in plugin_model_nodes.values():
             node = ModelNode.from_args(node_arg)
