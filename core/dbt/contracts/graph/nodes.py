@@ -590,7 +590,7 @@ class ModelNode(CompiledNode):
             name=args.name,
             package_name=args.package_name,
             unique_id=unique_id,
-            fqn=[args.package_name, args.name],
+            fqn=args.fqn,
             version=args.version,
             latest_version=args.latest_version,
             relation_name=args.relation_name,
@@ -625,6 +625,18 @@ class ModelNode(CompiledNode):
     @property
     def materialization_enforces_constraints(self) -> bool:
         return self.config.materialized in ["table", "incremental"]
+
+    def same_contents(self, old, adapter_type) -> bool:
+        return super().same_contents(old, adapter_type) and self.same_ref_representation(old)
+
+    def same_ref_representation(self, old) -> bool:
+        return (
+            # Changing the latest_version may break downstream unpinned refs
+            self.latest_version == old.latest_version
+            # Changes to access or deprecation_date may lead to ref-related parsing errors
+            and self.access == old.access
+            and self.deprecation_date == old.deprecation_date
+        )
 
     def build_contract_checksum(self):
         # We don't need to construct the checksum if the model does not

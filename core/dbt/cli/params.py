@@ -257,6 +257,14 @@ partial_parse_file_path = click.option(
     type=click.Path(exists=True, dir_okay=False, resolve_path=True),
 )
 
+partial_parse_file_diff = click.option(
+    "--partial-parse-file-diff/--no-partial-parse-file-diff",
+    envvar="DBT_PARTIAL_PARSE_FILE_DIFF",
+    help="Internal flag for whether to compute a file diff during partial parsing.",
+    hidden=True,
+    default=True,
+)
+
 populate_cache = click.option(
     "--populate-cache/--no-populate-cache",
     envvar="DBT_POPULATE_CACHE",

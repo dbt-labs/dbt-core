@@ -391,3 +391,8 @@ class TestFlags:
         args_dict = {"which": "some bad command"}
         with pytest.raises(DbtInternalError, match=r"does not match value of which"):
             self._create_flags_from_dict(Command.RUN, args_dict)
+
+    def test_from_dict_0_value(self):
+        args_dict = {"log_file_max_bytes": 0}
+        flags = Flags.from_dict(Command.RUN, args_dict)
+        assert flags.LOG_FILE_MAX_BYTES == 0
