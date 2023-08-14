@@ -25,23 +25,12 @@ permissions:
 
 
 jobs:
-  generate_body:
-    if: contains( github.event.pull_request.labels.*.name, 'user docs') && github.event.pull_request.merged == true
-    runs-on: ubuntu-latest
-    outputs:
-        issue_body: ${{ steps.set_body.outputs.body }}
-    steps:
-      - name: Get issue title
-        id: set_body
-        run: |
-          echo "body=At a minimum, update body to include a link to the page on docs.getdbt.com requiring updates and what part(s) of the page would you like to see updated." >> $GITHUB_OUTPUT
-
   open_issues:
-    needs: [generate_body]
+    if: contains( github.event.pull_request.labels.*.name, 'user docs') && github.event.pull_request.merged == true
     uses: dbt-labs/actions/.github/workflows/open-issue-in-repo.yml@er/docs-issue
     with:
         issue_repository: "dbt-labs/docs.getdbt.com"
         issue_title: "This is my title"
         issue_labels: "content,improvement"
-        issue_body: "${{needs.generate_body.outputs.issue_body }}"
+        issue_body: "At a minimum, update body to include a link to the page on docs.getdbt.com requiring updates and what part(s) of the page would you like to see updated."
     secrets: inherit
