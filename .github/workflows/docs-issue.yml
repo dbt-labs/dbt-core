@@ -2,10 +2,10 @@
 # Open an issue in docs.getdbt.com when a PR is labeled `user docs`
 
 # **why?**
-# To redice barriers for keeping docs up to date
+# To reduce barriers for keeping docs up to date
 
 # **when?**
-# When a PR is labeled `user docs` and merged
+# When a PR is labeled `user docs` and is merged
 
 
 name: Open issues in docs.getdbt.com repo when a PR is labeled
