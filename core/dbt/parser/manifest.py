@@ -284,8 +284,17 @@ class ManifestLoader:
             adapter.clear_macro_manifest()
         macro_hook = adapter.connections.set_query_header
 
+        flags = get_flags()
+        if not flags.PARTIAL_PARSE_FILE_DIFF:
+            file_diff = FileDiff.from_dict(
+                {
+                    "deleted": [],
+                    "changed": [],
+                    "added": [],
+                }
+            )
         # Hack to test file_diffs
-        if os.environ.get("DBT_PP_FILE_DIFF_TEST"):
+        elif os.environ.get("DBT_PP_FILE_DIFF_TEST"):
             file_diff_path = "file_diff.json"
             if path_exists(file_diff_path):
                 file_diff_dct = read_json(file_diff_path)

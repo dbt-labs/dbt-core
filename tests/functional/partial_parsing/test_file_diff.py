@@ -1,6 +1,8 @@
 import os
+import pytest
 
-from dbt.tests.util import run_dbt, write_artifact
+from dbt.tests.util import run_dbt, write_artifact, write_file
+from tests.functional.partial_parsing.fixtures import model_one_sql, model_two_sql
 
 
 first_file_diff = {
@@ -17,7 +19,7 @@ second_file_diff = {
 }
 
 
-class TestFileDiffs:
+class TestFileDiffPaths:
     def test_file_diffs(self, project):
 
         os.environ["DBT_PP_FILE_DIFF_TEST"] = "true"
@@ -35,3 +37,27 @@ class TestFileDiffs:
         write_artifact(second_file_diff, "file_diff.json")
         results = run_dbt()
         assert len(results) == 2
+
+
+class TestFileDiffs:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "model_one.sql": model_one_sql,
+        }
+
+    def test_no_file_diffs(self, project):
+        # We start with a project with one model
+        manifest = run_dbt(["parse"])
+        assert len(manifest.nodes) == 1
+
+        # add a model file
+        write_file(model_two_sql, project.project_root, "models", "model_two.sql")
+
+        # parse without computing a file diff
+        manifest = run_dbt(["--partial-parse", "--no-partial-parse-file-diff", "parse"])
+        assert len(manifest.nodes) == 1
+
+        # default behaviour - parse with computing a file diff
+        manifest = run_dbt(["--partial-parse", "parse"])
+        assert len(manifest.nodes) == 2
