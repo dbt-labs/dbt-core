@@ -1,13 +1,15 @@
 # **what?**
-# Open an issure in docs.getdbt.com when a PR is labeled `user docs`
+# Open an issue in docs.getdbt.com when a PR is labeled `user docs`
 
 # **why?**
-# Jira is our tool for tracking and we need to see these issues in there
+# To redice barriers for keeping docs up to date
 
 # **when?**
-# On issue creation or when an issue is labeled `Jira`
-name: Open issues in another repo when a PR is labeled
-run-name: "Open an issue in docs.getdbt.com when a merged PR is labeled user doc"
+# When a PR is labeled `user docs` and merged
+
+
+name: Open issues in docs.getdbt.com repo when a PR is labeled
+run-name: "Open an issue in docs.getdbt.com when a merged PR has label user docs"
 
 on:
   pull_request:
