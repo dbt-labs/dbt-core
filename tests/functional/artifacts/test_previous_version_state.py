@@ -229,7 +229,7 @@ seeds:
 
 
 class TestPreviousVersionState:
-    CURRENT_EXPECTED_MANIFEST_VERSION = 10
+    CURRENT_EXPECTED_MANIFEST_VERSION = 11
 
     @pytest.fixture(scope="class")
     def models(self):
@@ -315,6 +315,7 @@ class TestPreviousVersionState:
         project,
         compare_manifest_version,
         expect_pass,
+        num_results,
     ):
         state_path = os.path.join(project.test_data_dir, f"state/v{compare_manifest_version}")
         cli_args = [
@@ -328,7 +329,7 @@ class TestPreviousVersionState:
         ]
         if expect_pass:
             results = run_dbt(cli_args, expect_pass=expect_pass)
-            assert len(results) == 1
+            assert len(results) == num_results
         else:
             with pytest.raises(IncompatibleSchemaError):
                 run_dbt(cli_args, expect_pass=expect_pass)
@@ -340,14 +341,14 @@ class TestPreviousVersionState:
         ), "Sounds like you've bumped the manifest version and need to update this test!"
         # If we need a newly generated manifest, uncomment the following line and commit the result
         # self.generate_latest_manifest(project, current_schema_version)
-        self.compare_previous_state(project, current_schema_version, True)
+        self.compare_previous_state(project, current_schema_version, True, 0)
 
     def test_backwards_compatible_versions(self, project):
         # manifest schema version 4 and greater should always be forward compatible
         for schema_version in range(4, self.CURRENT_EXPECTED_MANIFEST_VERSION):
-            self.compare_previous_state(project, schema_version, True)
+            self.compare_previous_state(project, schema_version, True, 1)
 
     def test_nonbackwards_compatible_versions(self, project):
         # schema versions 1, 2, 3 are all not forward compatible
         for schema_version in range(1, 4):
-            self.compare_previous_state(project, schema_version, False)
+            self.compare_previous_state(project, schema_version, False, 0)

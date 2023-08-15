@@ -865,8 +865,9 @@ class ProviderContext(ManifestContext):
         assert self.model.root_path
         path = os.path.join(self.model.root_path, self.model.original_file_path)
         column_types = self.model.config.column_types
+        delimiter = self.model.config.delimiter
         try:
-            table = agate_helper.from_csv(path, text_columns=column_types)
+            table = agate_helper.from_csv(path, text_columns=column_types, delimiter=delimiter)
         except ValueError as e:
             raise LoadAgateTableValueError(e, node=self.model)
         table.original_abspath = os.path.abspath(path)

@@ -18,11 +18,41 @@ on:
 
 permissions: read-all
 
+# top-level adjustments can be made here
+env:
+  # number of parallel processes to spawn for python testing
+  PYTHON_INTEGRATION_TEST_WORKERS: 5
+
 jobs:
+  integration-metadata:
+    name: integration test metadata generation
+    runs-on: ubuntu-latest
+    outputs:
+      split-groups: ${{ steps.generate-split-groups.outputs.split-groups }}
+
+    steps:
+      - name: generate split-groups
+        id: generate-split-groups
+        run: |
+          MATRIX_JSON="["
+          for B in $(seq 1 ${{ env.PYTHON_INTEGRATION_TEST_WORKERS }}); do
+              MATRIX_JSON+=$(sed 's/^/"/;s/$/"/' <<< "${B}")
+          done
+          MATRIX_JSON="${MATRIX_JSON//\"\"/\", \"}"
+          MATRIX_JSON+="]"
+          echo "split-groups=${MATRIX_JSON}" >> $GITHUB_OUTPUT
+
   # run the performance measurements on the current or default branch
   test-schema:
     name: Test Log Schema
     runs-on: ubuntu-20.04
+    timeout-minutes: 30
+    needs:
+      - integration-metadata
+    strategy:
+      fail-fast: false
+      matrix:
+        split-group: ${{ fromJson(needs.integration-metadata.outputs.split-groups) }}
     env:
       # turns warnings into errors
       RUSTFLAGS: "-D warnings"
@@ -65,3 +95,14 @@ jobs:
       # we actually care if these pass, because the normal test run doesn't usually include many json log outputs
       - name: Run integration tests
         run: tox -e integration -- -nauto
+        env:
+          PYTEST_ADDOPTS: ${{ format('--splits {0} --group {1}', env.PYTHON_INTEGRATION_TEST_WORKERS, matrix.split-group) }}
+
+  test-schema-report:
+    name: Log Schema Test Suite
+    runs-on: ubuntu-latest
+    needs: test-schema
+    steps:
+      - name: "[Notification] Log test suite passes"
+        run: |
+          echo "::notice title="Log test suite passes""

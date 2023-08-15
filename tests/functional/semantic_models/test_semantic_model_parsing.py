@@ -27,6 +27,7 @@ semantic_models:
         expr: revenue
         agg: sum
         agg_time_dimension: ds
+        create_metric: true
       - name: sum_of_things
         expr: 2
         agg: sum
@@ -61,14 +62,15 @@ semantic_models:
       - name: user
         type: foreign
         expr: user_id
+      - name: id
+        type: primary
 
 metrics:
-  - name: records_with_revenue
-    label: "Number of records with revenue"
-    description: Total number of records with revenue
+  - name: simple_metric
+    label: Simple Metric
     type: simple
     type_params:
-      measure: has_revenue
+      measure: sum_of_things
 """
 
 schema_without_semantic_model_yml = """models:
@@ -124,6 +126,10 @@ class TestSemanticModelParsing:
             == f'"dbt"."{project.test_schema}"."fct_revenue"'
         )
         assert len(semantic_model.measures) == 5
+        # manifest should have one metric (that was created from a measure)
+        assert len(manifest.metrics) == 2
+        metric = manifest.metrics["metric.test.txn_revenue"]
+        assert metric.name == "txn_revenue"
 
     def test_semantic_model_error(self, project):
         # Next, modify the default schema.yml to remove the semantic model.
@@ -185,3 +191,46 @@ class TestSemanticModelPartialParsing:
 
         # Finally, verify that the manifest reflects the deletion
         assert "semantic_model.test.revenue" not in result.result.semantic_models
+
+    def test_semantic_model_flipping_create_metric_partial_parsing(self, project):
+        generated_metric = "metric.test.txn_revenue"
+        # First, use the default schema.yml to define our semantic model, and
+        # run the dbt parse command
+        write_file(schema_yml, project.project_root, "models", "schema.yml")
+        runner = dbtRunner()
+        result = runner.invoke(["parse"])
+        assert result.success
+
+        # Verify the metric created by `create_metric: true` exists
+        metric = result.result.metrics[generated_metric]
+        assert metric.name == "txn_revenue"
+
+        # --- Next, modify the default schema.yml to have no `create_metric: true` ---
+        no_create_metric_schema_yml = schema_yml.replace(
+            "create_metric: true", "create_metric: false"
+        )
+        write_file(no_create_metric_schema_yml, project.project_root, "models", "schema.yml")
+
+        # Now, run the dbt parse command again.
+        result = runner.invoke(["parse"])
+        assert result.success
+
+        # Verify the metric originally created by `create_metric: true` was removed
+        assert result.result.metrics.get(generated_metric) is None
+
+        # Verify that partial parsing didn't clobber the normal metric
+        assert result.result.metrics.get("metric.test.simple_metric") is not None
+
+        # --- Now bring it back ---
+        create_metric_schema_yml = schema_yml.replace(
+            "create_metric: false", "create_metric: true"
+        )
+        write_file(create_metric_schema_yml, project.project_root, "models", "schema.yml")
+
+        # Now, run the dbt parse command again.
+        result = runner.invoke(["parse"])
+        assert result.success
+
+        # Verify the metric originally created by `create_metric: true` was removed
+        metric = result.result.metrics[generated_metric]
+        assert metric.name == "txn_revenue"

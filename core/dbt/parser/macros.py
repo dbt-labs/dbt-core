@@ -81,7 +81,7 @@ class MacroParser(BaseParser[Macro]):
             name: str = macro.name.replace(MACRO_PREFIX, "")
             node = self.parse_macro(block, base_node, name)
             # get supported_languages for materialization macro
-            if "materialization" in name:
+            if block.block_type_name == "materialization":
                 node.supported_languages = jinja.get_supported_languages(macro)
             yield node
 

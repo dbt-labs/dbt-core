@@ -303,7 +303,7 @@ class MetricParser(YamlReader):
             # input_measures=?,
         )
 
-    def parse_metric(self, unparsed: UnparsedMetric):
+    def parse_metric(self, unparsed: UnparsedMetric, generated: bool = False):
         package_name = self.project.project_name
         unique_id = f"{NodeType.Metric}.{package_name}.{unparsed.name}"
         path = self.yaml.path.relative_path
@@ -358,7 +358,7 @@ class MetricParser(YamlReader):
 
         # if the metric is disabled we do not want it included in the manifest, only in the disabled dict
         if parsed.config.enabled:
-            self.manifest.add_metric(self.yaml.file, parsed)
+            self.manifest.add_metric(self.yaml.file, parsed, generated)
         else:
             self.manifest.add_disabled(self.yaml.file, parsed)
 
@@ -509,6 +509,19 @@ class SemanticModelParser(YamlReader):
             )
         return measures
 
+    def _create_metric(self, measure: UnparsedMeasure, enabled: bool) -> None:
+        unparsed_metric = UnparsedMetric(
+            name=measure.name,
+            label=measure.name,
+            type="simple",
+            type_params=UnparsedMetricTypeParams(measure=measure.name, expr=measure.name),
+            description=measure.description or f"Metric created from measure {measure.name}",
+            config={"enabled": enabled},
+        )
+
+        parser = MetricParser(self.schema_parser, yaml=self.yaml)
+        parser.parse_metric(unparsed=unparsed_metric, generated=True)
+
     def parse_semantic_model(self, unparsed: UnparsedSemanticModel):
         package_name = self.project.project_name
         unique_id = f"{NodeType.SemanticModel}.{package_name}.{unparsed.name}"
@@ -532,6 +545,7 @@ class SemanticModelParser(YamlReader):
             measures=self._get_measures(unparsed.measures),
             dimensions=self._get_dimensions(unparsed.dimensions),
             defaults=unparsed.defaults,
+            primary_entity=unparsed.primary_entity,
         )
 
         ctx = generate_parse_semantic_models(
@@ -548,6 +562,11 @@ class SemanticModelParser(YamlReader):
 
         # No ability to disable a semantic model at this time
         self.manifest.add_semantic_model(self.yaml.file, parsed)
+
+        # Create a metric for each measure with `create_metric = True`
+        for measure in unparsed.measures:
+            if measure.create_metric is True:
+                self._create_metric(measure=measure, enabled=parsed.config.enabled)
 
     def parse(self):
         for data in self.get_key_dicts():

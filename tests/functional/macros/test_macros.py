@@ -20,12 +20,14 @@ from tests.functional.macros.fixtures import (
     models__override_get_columns_macros,
     models__deprecated_adapter_macro_model,
     models__incorrect_dispatch,
+    models__materialization_macro,
     macros__my_macros,
     macros__no_default_macros,
     macros__override_get_columns_macros,
     macros__package_override_get_columns_macros,
     macros__deprecated_adapter_macro,
     macros__incorrect_dispatch,
+    macros__named_materialization,
 )
 
 
@@ -76,6 +78,21 @@ class TestMacros:
 
         check_relations_equal(project.adapter, ["expected_dep_macro", "dep_macro"])
         check_relations_equal(project.adapter, ["expected_local_macro", "local_macro"])
+
+
+class TestMacrosNamedMaterialization:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "models_materialization_macro.sql": models__materialization_macro,
+        }
+
+    @pytest.fixture(scope="class")
+    def macros(self):
+        return {"macros_named_materialization.sql": macros__named_materialization}
+
+    def test_macro_with_materialization_in_name_works(self, project):
+        run_dbt(expect_pass=True)
 
 
 class TestInvalidMacros:

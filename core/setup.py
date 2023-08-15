@@ -59,8 +59,7 @@ setup(
         # ----
         # dbt-core uses these packages in standard ways. Pin to the major version, and check compatibility
         # with major versions in each new minor version of dbt-core.
-        # temporarily pinning click for mypy failures: https://github.com/pallets/click/issues/2558
-        "click>=8.1.1,<8.1.4",
+        "click<9",
         "networkx>=2.3,<4",
         # ----
         # These packages are major-version-0. Keep upper bounds on upcoming minor versions (which could have breaking changes)
@@ -69,16 +68,14 @@ setup(
         "pathspec>=0.9,<0.12",
         "isodate>=0.6,<0.7",
         # ----
-        # There was a pin to below 0.4.4 for a while due to a bug in Ubuntu/sqlparse 0.4.4
-        "sqlparse>=0.2.3",
+        "sqlparse>=0.2.3,<0.5",
         # ----
         # These are major-version-0 packages also maintained by dbt-labs. Accept patches.
-        "dbt-extractor~=0.4.1",
+        "dbt-extractor~=0.5.0",
         "hologram~=0.0.16",  # includes transitive dependencies on python-dateutil and jsonschema
         "minimal-snowplow-tracker~=0.0.2",
         # DSI is under active development, so we're pinning to specific dev versions for now.
-        # TODO: Before RC/final release, update to use ~= pinning.
-        "dbt-semantic-interfaces~=0.1.0rc1",
+        "dbt-semantic-interfaces~=0.2.0",
         # ----
         # Expect compatibility with all new versions of these packages, so lower bounds only.
         "packaging>20.9",

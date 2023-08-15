@@ -35,6 +35,10 @@ models__downstream_from_seed_actual = """
 select * from {{ ref('seed_actual') }}
 
 """
+models__downstream_from_seed_pipe_separated = """
+select * from {{ ref('seed_pipe_separated') }}
+
+"""
 models__from_basic_seed = """
 select * from {{ this.schema }}.seed_expected
 

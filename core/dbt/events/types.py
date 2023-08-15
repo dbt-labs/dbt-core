@@ -2171,25 +2171,7 @@ class CheckNodeTestFailure(InfoLevel):
         return f"  See test failures:\n  {border}\n  {msg}\n  {border}"
 
 
-# FirstRunResultError and AfterFirstRunResultError are just splitting the message from the result
-#  object into multiple log lines
-# TODO: is this reallly needed?  See printer.py
-
-
-class FirstRunResultError(ErrorLevel):
-    def code(self):
-        return "Z028"
-
-    def message(self) -> str:
-        return yellow(self.msg)
-
-
-class AfterFirstRunResultError(ErrorLevel):
-    def code(self):
-        return "Z029"
-
-    def message(self) -> str:
-        return self.msg
+# Skipped Z028, Z029
 
 
 class EndOfRunSummary(InfoLevel):

@@ -895,6 +895,14 @@ class PartialParsing:
             elif unique_id in self.saved_manifest.disabled:
                 self.delete_disabled(unique_id, schema_file.file_id)
 
+        metrics = schema_file.generated_metrics.copy()
+        for unique_id in metrics:
+            if unique_id in self.saved_manifest.metrics:
+                self.saved_manifest.metrics.pop(unique_id)
+                schema_file.generated_metrics.remove(unique_id)
+            elif unique_id in self.saved_manifest.disabled:
+                self.delete_disabled(unique_id, schema_file.file_id)
+
     def get_schema_element(self, elem_list, elem_name):
         for element in elem_list:
             if "name" in element and element["name"] == elem_name:

@@ -1,0 +1,6 @@
+kind: Fixes
+body: Detect changes to model access, version, or latest_version in state:modified
+time: 2023-08-06T22:23:19.166334-04:00
+custom:
+  Author: michelleark
+  Issue: "8189"

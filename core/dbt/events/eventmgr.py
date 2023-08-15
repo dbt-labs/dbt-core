@@ -8,7 +8,7 @@ import logging
 from logging.handlers import RotatingFileHandler
 import threading
 import traceback
-from typing import Any, Callable, List, Optional, TextIO
+from typing import Any, Callable, List, Optional, TextIO, Protocol
 from uuid import uuid4
 from dbt.events.format import timestamp_to_datetime_string
 
@@ -80,6 +80,7 @@ class LoggerConfig:
     use_colors: bool = False
     output_stream: Optional[TextIO] = None
     output_file_name: Optional[str] = None
+    output_file_max_bytes: Optional[int] = 10 * 1024 * 1024  # 10 mb
     logger: Optional[Any] = None
 
 
@@ -100,7 +101,7 @@ class _Logger:
             file_handler = RotatingFileHandler(
                 filename=str(config.output_file_name),
                 encoding="utf8",
-                maxBytes=10 * 1024 * 1024,  # 10 mb
+                maxBytes=config.output_file_max_bytes,  # type: ignore
                 backupCount=5,
             )
             self._python_logger = self._get_python_log_for_handler(file_handler)
@@ -205,7 +206,7 @@ class EventManager:
         for callback in self.callbacks:
             callback(msg)
 
-    def add_logger(self, config: LoggerConfig):
+    def add_logger(self, config: LoggerConfig) -> None:
         logger = (
             _JsonLogger(self, config)
             if config.line_format == LineFormat.Json
@@ -217,3 +218,25 @@ class EventManager:
     def flush(self):
         for logger in self.loggers:
             logger.flush()
+
+
+class IEventManager(Protocol):
+    callbacks: List[Callable[[EventMsg], None]]
+    invocation_id: str
+
+    def fire_event(self, e: BaseEvent, level: Optional[EventLevel] = None) -> None:
+        ...
+
+    def add_logger(self, config: LoggerConfig) -> None:
+        ...
+
+
+class TestEventManager(IEventManager):
+    def __init__(self):
+        self.event_history = []
+
+    def fire_event(self, e: BaseEvent, level: Optional[EventLevel] = None) -> None:
+        self.event_history.append((e, level))
+
+    def add_logger(self, config: LoggerConfig) -> None:
+        raise NotImplementedError()

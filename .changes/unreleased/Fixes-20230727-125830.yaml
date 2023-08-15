@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix unbound local variable error in `checked_agg_time_dimension_for_measure`
+time: 2023-07-27T12:58:30.673803-07:00
+custom:
+  Author: QMalcolm
+  Issue: "8230"

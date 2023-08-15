@@ -544,6 +544,7 @@ class NodeConfig(NodeAndTestConfig):
 @dataclass
 class SeedConfig(NodeConfig):
     materialized: str = "seed"
+    delimiter: str = ","
     quote_columns: Optional[bool] = None
 
     @classmethod
@@ -619,6 +620,8 @@ class SnapshotConfig(EmptySnapshotConfig):
     @classmethod
     def validate(cls, data):
         super().validate(data)
+        # Note: currently you can't just set these keys in schema.yml because this validation
+        # will fail when parsing the snapshot node.
         if not data.get("strategy") or not data.get("unique_key") or not data.get("target_schema"):
             raise ValidationError(
                 "Snapshots must be configured with a 'strategy', 'unique_key', "
@@ -649,6 +652,7 @@ class SnapshotConfig(EmptySnapshotConfig):
         if data.get("materialized") and data.get("materialized") != "snapshot":
             raise ValidationError("A snapshot must have a materialized value of 'snapshot'")
 
+    # Called by "calculate_node_config_dict" in ContextConfigGenerator
     def finalize_and_validate(self):
         data = self.to_dict(omit_none=True)
         self.validate(data)

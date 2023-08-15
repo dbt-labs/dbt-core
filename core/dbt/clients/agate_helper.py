@@ -135,12 +135,12 @@ def as_matrix(table):
     return [r.values() for r in table.rows.values()]
 
 
-def from_csv(abspath, text_columns):
+def from_csv(abspath, text_columns, delimiter=","):
     type_tester = build_type_tester(text_columns=text_columns)
     with open(abspath, encoding="utf-8") as fp:
         if fp.read(1) != BOM:
             fp.seek(0)
-        return agate.Table.from_csv(fp, column_types=type_tester)
+        return agate.Table.from_csv(fp, column_types=type_tester, delimiter=delimiter)
 
 
 class _NullMarker:

@@ -1331,10 +1331,13 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         self.exposures[exposure.unique_id] = exposure
         source_file.exposures.append(exposure.unique_id)
 
-    def add_metric(self, source_file: SchemaSourceFile, metric: Metric):
+    def add_metric(self, source_file: SchemaSourceFile, metric: Metric, generated: bool = False):
         _check_duplicates(metric, self.metrics)
         self.metrics[metric.unique_id] = metric
-        source_file.metrics.append(metric.unique_id)
+        if not generated:
+            source_file.metrics.append(metric.unique_id)
+        else:
+            source_file.generated_metrics.append(metric.unique_id)
 
     def add_group(self, source_file: SchemaSourceFile, group: Group):
         _check_duplicates(group, self.groups)
@@ -1422,7 +1425,7 @@ AnyManifest = Union[Manifest, MacroManifest]
 
 
 @dataclass
-@schema_version("manifest", 10)
+@schema_version("manifest", 11)
 class WritableManifest(ArtifactMixin):
     nodes: Mapping[UniqueID, ManifestNode] = field(
         metadata=dict(description=("The nodes defined in the dbt project and its dependencies"))
@@ -1486,6 +1489,7 @@ class WritableManifest(ArtifactMixin):
             ("manifest", 7),
             ("manifest", 8),
             ("manifest", 9),
+            ("manifest", 10),
         ]
 
     @classmethod
@@ -1493,7 +1497,7 @@ class WritableManifest(ArtifactMixin):
         """This overrides the "upgrade_schema_version" call in VersionedSchema (via
         ArtifactMixin) to modify the dictionary passed in from earlier versions of the manifest."""
         manifest_schema_version = get_manifest_schema_version(data)
-        if manifest_schema_version <= 9:
+        if manifest_schema_version <= 10:
             data = upgrade_manifest_json(data, manifest_schema_version)
         return cls.from_dict(data)
 

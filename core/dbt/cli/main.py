@@ -132,6 +132,7 @@ class dbtRunner:
 @p.enable_legacy_logger
 @p.fail_fast
 @p.log_cache_events
+@p.log_file_max_bytes
 @p.log_format
 @p.log_format_file
 @p.log_level
@@ -140,6 +141,7 @@ class dbtRunner:
 @p.macro_debugging
 @p.partial_parse
 @p.partial_parse_file_path
+@p.partial_parse_file_diff
 @p.populate_cache
 @p.print
 @p.printer_width

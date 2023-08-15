@@ -701,6 +701,7 @@ class UnparsedMeasure(dbtClassMixin):
     agg_params: Optional[MeasureAggregationParameters] = None
     non_additive_dimension: Optional[UnparsedNonAdditiveDimension] = None
     agg_time_dimension: Optional[str] = None
+    create_metric: bool = False
 
 
 @dataclass
@@ -728,6 +729,7 @@ class UnparsedSemanticModel(dbtClassMixin):
     entities: List[UnparsedEntity] = field(default_factory=list)
     measures: List[UnparsedMeasure] = field(default_factory=list)
     dimensions: List[UnparsedDimension] = field(default_factory=list)
+    primary_entity: Optional[str] = None
 
 
 def normalize_date(d: Optional[datetime.date]) -> Optional[datetime.datetime]:
