@@ -191,7 +191,7 @@ NativeSandboxEnvironment.template_class = NativeSandboxTemplate  # type: ignore
 
 
 class TemplateCache:
-    def __init__(self):
+    def __init__(self) -> None:
         self.file_cache: Dict[str, jinja2.Template] = {}
 
     def get_node_template(self, node) -> jinja2.Template:
