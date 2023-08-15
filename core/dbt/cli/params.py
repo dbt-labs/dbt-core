@@ -171,6 +171,15 @@ use_colors_file = click.option(
     default=True,
 )
 
+log_file_max_bytes = click.option(
+    "--log-file-max-bytes",
+    envvar="DBT_LOG_FILE_MAX_BYTES",
+    help="Configure the max file size in bytes for a single dbt.log file, before rolling over. 0 means no limit.",
+    default=10 * 1024 * 1024,  # 10mb
+    type=click.INT,
+    hidden=True,
+)
+
 log_path = click.option(
     "--log-path",
     envvar="DBT_LOG_PATH",

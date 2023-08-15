@@ -151,6 +151,7 @@ class CompileTask(GraphRunnableTask):
                             "node_path": "sql/inline_query",
                             "node_name": "inline_query",
                             "unique_id": "sqloperation.test.inline_query",
+                            "node_status": "failed",
                         },
                     )
                 )
