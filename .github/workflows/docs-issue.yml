@@ -27,7 +27,7 @@ permissions:
 jobs:
   open_issues:
     if: contains( github.event.pull_request.labels.*.name, 'user docs') && github.event.pull_request.merged == true
-    uses: dbt-labs/actions/.github/workflows/open-issue-in-repo.yml@er/docs-issue
+    uses: dbt-labs/actions/.github/workflows/open-issue-in-repo.yml@main
     with:
         issue_repository: "dbt-labs/docs.getdbt.com"
         issue_title: "Docs Changes Needed from ${{ github.event.repository.name }} PR #${{ github.event.pull_request.number }}"
