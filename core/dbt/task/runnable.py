@@ -369,9 +369,6 @@ class GraphRunnableTask(ConfiguredTask):
             # ensure information about all nodes is propagated to run results when failing fast
             return self.node_results
         except KeyboardInterrupt:
-            self._cancel_connections(pool)
-            print_run_end_messages(self.node_results, keyboard_interrupt=True)
-
             run_result = self.get_result(
                 results=self.node_results,
                 elapsed_time=time.time() - self.started_at,
@@ -380,6 +377,9 @@ class GraphRunnableTask(ConfiguredTask):
 
             if self.args.write_json and hasattr(run_result, "write"):
                 run_result.write(self.result_path())
+
+            self._cancel_connections(pool)
+            print_run_end_messages(self.node_results, keyboard_interrupt=True)
 
             raise
 
