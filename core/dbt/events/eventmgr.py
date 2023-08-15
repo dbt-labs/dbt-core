@@ -80,6 +80,7 @@ class LoggerConfig:
     use_colors: bool = False
     output_stream: Optional[TextIO] = None
     output_file_name: Optional[str] = None
+    output_file_max_bytes: Optional[int] = 10 * 1024 * 1024  # 10 mb
     logger: Optional[Any] = None
 
 
@@ -100,7 +101,7 @@ class _Logger:
             file_handler = RotatingFileHandler(
                 filename=str(config.output_file_name),
                 encoding="utf8",
-                maxBytes=10 * 1024 * 1024,  # 10 mb
+                maxBytes=config.output_file_max_bytes,  # type: ignore
                 backupCount=5,
             )
             self._python_logger = self._get_python_log_for_handler(file_handler)

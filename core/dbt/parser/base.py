@@ -82,8 +82,7 @@ class RelationUpdate:
         self.updater = MacroGenerator(macro, root_context)
         self.component = component
 
-    def __call__(self, parsed_node: Any, config_dict: Dict[str, Any]) -> None:
-        override = config_dict.get(self.component)
+    def __call__(self, parsed_node: Any, override: Optional[str]) -> None:
         new_value = self.updater(override, parsed_node)
         if isinstance(new_value, str):
             new_value = new_value.strip()
@@ -256,9 +255,19 @@ class ConfiguredParser(
     def update_parsed_node_relation_names(
         self, parsed_node: IntermediateNode, config_dict: Dict[str, Any]
     ) -> None:
-        self._update_node_database(parsed_node, config_dict)
-        self._update_node_schema(parsed_node, config_dict)
-        self._update_node_alias(parsed_node, config_dict)
+
+        # These call the RelationUpdate callable to go through generate_name macros
+        self._update_node_database(parsed_node, config_dict.get("database"))
+        self._update_node_schema(parsed_node, config_dict.get("schema"))
+        self._update_node_alias(parsed_node, config_dict.get("alias"))
+
+        # Snapshot nodes use special "target_database" and "target_schema" fields for some reason
+        if parsed_node.resource_type == NodeType.Snapshot:
+            if "target_database" in config_dict and config_dict["target_database"]:
+                parsed_node.database = config_dict["target_database"]
+            if "target_schema" in config_dict and config_dict["target_schema"]:
+                parsed_node.schema = config_dict["target_schema"]
+
         self._update_node_relation_name(parsed_node)
 
     def update_parsed_node_config(
@@ -325,7 +334,7 @@ class ConfiguredParser(
         # do this once before we parse the node database/schema/alias, so
         # parsed_node.config is what it would be if they did nothing
         self.update_parsed_node_config_dict(parsed_node, config_dict)
-        # This updates the node database/schema/alias
+        # This updates the node database/schema/alias/relation_name
         self.update_parsed_node_relation_names(parsed_node, config_dict)
 
         # tests don't have hooks
