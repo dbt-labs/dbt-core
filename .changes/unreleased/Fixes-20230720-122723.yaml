@@ -1,0 +1,6 @@
+kind: Fixes
+body: Add status to Parse Inline Error
+time: 2023-07-20T12:27:23.085084-07:00
+custom:
+  Author: ChenyuLInx
+  Issue: "8173"
