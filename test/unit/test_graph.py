@@ -18,6 +18,7 @@ from dbt import tracking
 from dbt.contracts.files import SourceFile, FileHash, FilePath
 from dbt.contracts.graph.manifest import MacroManifest, ManifestStateCheck
 from dbt.graph import NodeSelector, parse_difference
+from dbt.events.functions import setup_event_logger
 
 try:
     from queue import Empty
@@ -140,6 +141,7 @@ class GraphTest(unittest.TestCase):
 
         config = config_from_parts_or_dicts(project=cfg, profile=self.profile)
         dbt.flags.set_from_args(Namespace(), config)
+        setup_event_logger(dbt.flags.get_flags())
         object.__setattr__(dbt.flags.get_flags(), "PARTIAL_PARSE", False)
         return config
 

@@ -33,7 +33,11 @@
 
   -- cleanup
   {% if existing_relation is not none %}
-      {{ adapter.rename_relation(existing_relation, backup_relation) }}
+    /* Do the equivalent of rename_if_exists */
+    {% set existing_relation = load_cached_relation(existing_relation) %}
+    {% if existing_relation is not none %}
+        {{ adapter.rename_relation(existing_relation, backup_relation) }}
+    {% endif %}
   {% endif %}
 
   {{ adapter.rename_relation(intermediate_relation, target_relation) }}
