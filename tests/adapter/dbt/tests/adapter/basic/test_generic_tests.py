@@ -1,7 +1,7 @@
 import pytest
 from dbt.tests.util import run_dbt
 from dbt.tests.adapter.basic.files import (
-    seeds_base_csv,
+    seeds_jp_base_csv,
     generic_test_seed_yml,
     base_view_sql,
     base_table_sql,
@@ -19,7 +19,7 @@ class BaseGenericTests:
     @pytest.fixture(scope="class")
     def seeds(self):
         return {
-            "base.csv": seeds_base_csv,
+            "base.csv": seeds_jp_base_csv,
             "schema.yml": generic_test_seed_yml,
         }
 
@@ -39,7 +39,7 @@ class BaseGenericTests:
 
         # test command selecting base model
         results = run_dbt(["test", "-m", "base"])
-        assert len(results) == 1
+        assert len(results) == 5
 
         # run command
         results = run_dbt(["run"])
@@ -47,7 +47,7 @@ class BaseGenericTests:
 
         # test command, all tests
         results = run_dbt(["test"])
-        assert len(results) == 3
+        assert len(results) == 15
 
 
 class TestGenericTests(BaseGenericTests):
