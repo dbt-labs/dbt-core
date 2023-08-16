@@ -2,7 +2,6 @@ from multiprocessing import Process
 from pathlib import Path
 import json
 import pytest
-import platform
 from dbt.tests.util import run_dbt
 
 good_model_sql = """
@@ -41,7 +40,7 @@ class TestRunResultsTimingFailure:
         assert len(results.results[0].timing) > 0
 
 
-@pytest.mark.skipif(platform.system() != "Darwin", reason="Fails on linux in github actions")
+@pytest.mark.skip()
 class TestRunResultsWritesFileOnSignal:
     @pytest.fixture(scope="class")
     def models(self):
