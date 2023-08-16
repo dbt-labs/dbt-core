@@ -12,6 +12,7 @@ from dbt.contracts.graph.nodes import (
 from dbt.contracts.graph.semantic_models import (
     Dimension,
     DimensionTypeParams,
+    Defaults,
     Entity,
     FileSlice,
     Measure,
@@ -28,6 +29,7 @@ from dbt_semantic_interfaces.protocols import (
     MetricInputMeasure as DSIMetricInputMeasure,
     MetricTypeParams as DSIMetricTypeParams,
     SemanticModel as DSISemanticModel,
+    SemanticModelDefaults as DSISemanticModelDefaults,
     WhereFilter as DSIWhereFilter,
 )
 from dbt_semantic_interfaces.protocols.metadata import (
@@ -107,6 +109,11 @@ class RuntimeCheckableSourceFileMetadata(DSIMetadata, Protocol):
     pass
 
 
+@runtime_checkable
+class RuntimeCheckableSemanticModelDefaults(DSISemanticModelDefaults, Protocol):
+    pass
+
+
 @pytest.fixture(scope="session")
 def file_slice() -> FileSlice:
     return FileSlice(
@@ -122,12 +129,22 @@ def source_file_metadata(file_slice) -> SourceFileMetadata:
     )
 
 
+@pytest.fixture(scope="session")
+def semantic_model_defaults() -> Defaults:
+    return Defaults(agg_time_dimension="test_time_dimension")
+
+
 def test_file_slice_obj_satisfies_protocol(file_slice):
     assert isinstance(file_slice, RuntimeCheckableFileSlice)
 
 
 def test_metadata_obj_satisfies_protocol(source_file_metadata):
     assert isinstance(source_file_metadata, RuntimeCheckableSourceFileMetadata)
+
+
+def test_defaults_obj_satisfies_protocol(semantic_model_defaults):
+    assert isinstance(semantic_model_defaults, RuntimeCheckableSemanticModelDefaults)
+    assert isinstance(Defaults(), RuntimeCheckableSemanticModelDefaults)
 
 
 def test_semantic_model_node_satisfies_protocol_optionals_unspecified():
