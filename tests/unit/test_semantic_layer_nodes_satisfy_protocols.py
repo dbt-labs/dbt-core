@@ -247,7 +247,15 @@ def test_dimension_satisfies_protocol_optionals_specified(
     assert isinstance(dimension, RuntimeCheckableDimension)
 
 
-def test_entity_satisfies_protocol():
+def test_entity_satisfies_protocol_optionals_unspecified():
+    entity = Entity(
+        name="test_entity",
+        type=EntityType.PRIMARY,
+    )
+    assert isinstance(entity, RuntimeCheckableEntity)
+
+
+def test_entity_satisfies_protocol_optionals_specified():
     entity = Entity(
         name="test_entity",
         description="a test entity",
