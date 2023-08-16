@@ -89,10 +89,9 @@ class RuntimeCheckableNonAdditiveDimension(DSINonAdditiveDimensionParameters, Pr
     pass
 
 
-def test_semantic_model_node_satisfies_protocol():
+def test_semantic_model_node_satisfies_protocol_optionals_unspecified():
     test_semantic_model = SemanticModel(
         name="test_semantic_model",
-        description="a test semantic_model",
         resource_type=NodeType.SemanticModel,
         package_name="package_name",
         path="path.to.semantic_model",
@@ -100,13 +99,13 @@ def test_semantic_model_node_satisfies_protocol():
         unique_id="not_like_the_other_semantic_models",
         fqn=["fully", "qualified", "name"],
         model="ref('a_model')",
+        # Technically NodeRelation is optional on our SemanticModel implementation
+        # however, it's functionally always loaded, it's just delayed.
+        # This will type/state mismatch will likely bite us at some point
         node_relation=NodeRelation(
             alias="test_alias",
             schema_name="test_schema_name",
         ),
-        entities=[],
-        measures=[],
-        dimensions=[],
     )
     assert isinstance(test_semantic_model, RuntimeCheckableSemanticModel)
 
