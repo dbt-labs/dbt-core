@@ -1,3 +1,5 @@
+import pytest
+
 from dbt.contracts.graph.nodes import (
     Metric,
     MetricInput,
@@ -11,8 +13,10 @@ from dbt.contracts.graph.semantic_models import (
     Dimension,
     DimensionTypeParams,
     Entity,
+    FileSlice,
     Measure,
     NonAdditiveDimension,
+    SourceFileMetadata,
 )
 from dbt.node_types import NodeType
 from dbt_semantic_interfaces.protocols import (
@@ -25,6 +29,10 @@ from dbt_semantic_interfaces.protocols import (
     MetricTypeParams as DSIMetricTypeParams,
     SemanticModel as DSISemanticModel,
     WhereFilter as DSIWhereFilter,
+)
+from dbt_semantic_interfaces.protocols.metadata import (
+    FileSlice as DSIFileSlice,
+    Metadata as DSIMetadata,
 )
 from dbt_semantic_interfaces.protocols.measure import (
     NonAdditiveDimensionParameters as DSINonAdditiveDimensionParameters,
@@ -87,6 +95,39 @@ class RuntimeCheckableWhereFilter(DSIWhereFilter, Protocol):
 @runtime_checkable
 class RuntimeCheckableNonAdditiveDimension(DSINonAdditiveDimensionParameters, Protocol):
     pass
+
+
+@runtime_checkable
+class RuntimeCheckableFileSlice(DSIFileSlice, Protocol):
+    pass
+
+
+@runtime_checkable
+class RuntimeCheckableSourceFileMetadata(DSIMetadata, Protocol):
+    pass
+
+
+@pytest.fixture(scope="session")
+def file_slice() -> FileSlice:
+    return FileSlice(
+        filename="test_filename", content="test content", start_line_number=0, end_line_number=1
+    )
+
+
+@pytest.fixture(scope="session")
+def source_file_metadata(file_slice) -> SourceFileMetadata:
+    return SourceFileMetadata(
+        repo_file_path="test/file/path.yml",
+        file_slice=file_slice,
+    )
+
+
+def test_file_slice_obj_satisfies_protocol(file_slice):
+    assert isinstance(file_slice, RuntimeCheckableFileSlice)
+
+
+def test_metadata_obj_satisfies_protocol(source_file_metadata):
+    assert isinstance(source_file_metadata, RuntimeCheckableSourceFileMetadata)
 
 
 def test_semantic_model_node_satisfies_protocol_optionals_unspecified():
