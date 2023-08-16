@@ -12,6 +12,7 @@ from dbt.contracts.graph.nodes import (
 from dbt.contracts.graph.semantic_models import (
     Dimension,
     DimensionTypeParams,
+    DimensionValidityParams,
     Defaults,
     Entity,
     FileSlice,
@@ -108,6 +109,13 @@ class RuntimeCheckableSemanticModelDefaults(
     pass
 
 
+@runtime_checkable
+class RuntimeCheckableDimensionValidityParams(
+    DimensionProtocols.DimensionValidityParams, Protocol
+):
+    pass
+
+
 @pytest.fixture(scope="session")
 def file_slice() -> FileSlice:
     return FileSlice(
@@ -128,6 +136,11 @@ def semantic_model_defaults() -> Defaults:
     return Defaults(agg_time_dimension="test_time_dimension")
 
 
+@pytest.fixture(scope="session")
+def dimension_validity_params() -> DimensionValidityParams:
+    return DimensionValidityParams()
+
+
 def test_file_slice_obj_satisfies_protocol(file_slice):
     assert isinstance(file_slice, RuntimeCheckableFileSlice)
 
@@ -139,6 +152,10 @@ def test_metadata_obj_satisfies_protocol(source_file_metadata):
 def test_defaults_obj_satisfies_protocol(semantic_model_defaults):
     assert isinstance(semantic_model_defaults, RuntimeCheckableSemanticModelDefaults)
     assert isinstance(Defaults(), RuntimeCheckableSemanticModelDefaults)
+
+
+def test_dimension_validity_params_satisfies_protocl(dimension_validity_params):
+    assert isinstance(dimension_validity_params, RuntimeCheckableDimensionValidityParams)
 
 
 def test_semantic_model_node_satisfies_protocol_optionals_unspecified():
