@@ -168,6 +168,30 @@ def test_semantic_model_node_satisfies_protocol_optionals_unspecified():
     assert isinstance(test_semantic_model, RuntimeCheckableSemanticModel)
 
 
+def test_semantic_model_node_satisfies_protocol_optionals_specified(
+    semantic_model_defaults, source_file_metadata
+):
+    test_semantic_model = SemanticModel(
+        name="test_semantic_model",
+        resource_type=NodeType.SemanticModel,
+        package_name="package_name",
+        path="path.to.semantic_model",
+        original_file_path="path/to/file",
+        unique_id="not_like_the_other_semantic_models",
+        fqn=["fully", "qualified", "name"],
+        model="ref('a_model')",
+        node_relation=NodeRelation(
+            alias="test_alias",
+            schema_name="test_schema_name",
+        ),
+        description="test_description",
+        defaults=semantic_model_defaults,
+        metadata=source_file_metadata,
+        primary_entity="test_primary_entity",
+    )
+    assert isinstance(test_semantic_model, RuntimeCheckableSemanticModel)
+
+
 def test_dimension_satisfies_protocol():
     dimension = Dimension(
         name="test_dimension",
