@@ -1,4 +1,5 @@
 import pytest
+import copy
 
 from dbt.contracts.graph.nodes import (
     Metric,
@@ -116,6 +117,11 @@ class RuntimeCheckableDimensionValidityParams(
     pass
 
 
+@runtime_checkable
+class RuntimeCheckableDimensionTypeParams(DimensionProtocols.DimensionTypeParams, Protocol):
+    pass
+
+
 @pytest.fixture(scope="session")
 def file_slice() -> FileSlice:
     return FileSlice(
@@ -141,6 +147,11 @@ def dimension_validity_params() -> DimensionValidityParams:
     return DimensionValidityParams()
 
 
+@pytest.fixture(scope="session")
+def dimension_type_params() -> DimensionTypeParams:
+    return DimensionTypeParams(time_granularity=TimeGranularity.DAY)
+
+
 def test_file_slice_obj_satisfies_protocol(file_slice):
     assert isinstance(file_slice, RuntimeCheckableFileSlice)
 
@@ -154,8 +165,19 @@ def test_defaults_obj_satisfies_protocol(semantic_model_defaults):
     assert isinstance(Defaults(), RuntimeCheckableSemanticModelDefaults)
 
 
-def test_dimension_validity_params_satisfies_protocl(dimension_validity_params):
+def test_dimension_validity_params_satisfies_protocol(dimension_validity_params):
     assert isinstance(dimension_validity_params, RuntimeCheckableDimensionValidityParams)
+
+
+def test_dimension_type_params_satisfies_protocol(
+    dimension_type_params, dimension_validity_params
+):
+    assert isinstance(dimension_type_params, RuntimeCheckableDimensionTypeParams)
+
+    # check with validity params specified
+    optionals_specified_type_params = copy.deepcopy(dimension_type_params)
+    optionals_specified_type_params.validity_params = dimension_validity_params
+    assert isinstance(optionals_specified_type_params, RuntimeCheckableDimensionTypeParams)
 
 
 def test_semantic_model_node_satisfies_protocol_optionals_unspecified():
@@ -211,14 +233,14 @@ def test_dimension_satisfies_protocol_optionals_unspecified():
     assert isinstance(dimension, RuntimeCheckableDimension)
 
 
-def test_dimension_satisfies_protocol_optionals_specified(source_file_metadata):
+def test_dimension_satisfies_protocol_optionals_specified(
+    dimension_type_params, source_file_metadata
+):
     dimension = Dimension(
         name="test_dimension",
         type=DimensionType.TIME,
         description="test_description",
-        type_params=DimensionTypeParams(
-            time_granularity=TimeGranularity.DAY,
-        ),
+        type_params=dimension_type_params,
         expr="1",
         metadata=source_file_metadata,
     )
