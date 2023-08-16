@@ -235,12 +235,12 @@ jobs:
       - name: "Integration Tests Failed"
         if: ${{ contains(needs.integration.result, 'failure') || contains(needs.integration.result, 'cancelled') }}
         run: |
-          echo "::notice title="Integration test suite failed""
+          echo "::notice title='Integration test suite failed'"
           exit 1
 
-      - name: "Integration Tests Passes"
+      - name: "Integration Tests Passed"
         run: |
-          echo "::notice title="Integration test suite passes""
+          echo "::notice title='Integration test suite passed'"
 
   build:
     name: build packages
