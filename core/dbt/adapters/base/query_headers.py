@@ -25,9 +25,9 @@ class _QueryComment(local):
         - a source_name indicating what set the current thread's query comment
     """
 
-    def __init__(self, initial):
+    def __init__(self, initial) -> None:
         self.query_comment: Optional[str] = initial
-        self.append = False
+        self.append: bool = False
 
     def add(self, sql: str) -> str:
         if not self.query_comment:

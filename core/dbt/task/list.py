@@ -15,6 +15,7 @@ from dbt.events.types import (
     ListCmdOut,
 )
 from dbt.exceptions import DbtRuntimeError, DbtInternalError
+from dbt.events.contextvars import task_contextvars
 
 
 class ListTask(GraphRunnableTask):
@@ -123,20 +124,23 @@ class ListTask(GraphRunnableTask):
             yield node.original_file_path
 
     def run(self):
-        self.compile_manifest()
-        output = self.args.output
-        if output == "selector":
-            generator = self.generate_selectors
-        elif output == "name":
-            generator = self.generate_names
-        elif output == "json":
-            generator = self.generate_json
-        elif output == "path":
-            generator = self.generate_paths
-        else:
-            raise DbtInternalError("Invalid output {}".format(output))
+        # We set up a context manager here with "task_contextvars" because we
+        # we need the project_root in compile_manifest.
+        with task_contextvars(project_root=self.config.project_root):
+            self.compile_manifest()
+            output = self.args.output
+            if output == "selector":
+                generator = self.generate_selectors
+            elif output == "name":
+                generator = self.generate_names
+            elif output == "json":
+                generator = self.generate_json
+            elif output == "path":
+                generator = self.generate_paths
+            else:
+                raise DbtInternalError("Invalid output {}".format(output))
 
-        return self.output_results(generator())
+            return self.output_results(generator())
 
     def output_results(self, results):
         """Log, or output a plain, newline-delimited, and ready-to-pipe list of nodes found."""

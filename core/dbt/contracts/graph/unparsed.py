@@ -220,7 +220,7 @@ class UnparsedModelUpdate(UnparsedNodeUpdate):
     versions: Sequence[UnparsedVersion] = field(default_factory=list)
     deprecation_date: Optional[datetime.datetime] = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.latest_version:
             version_values = [version.v for version in self.versions]
             if self.latest_version not in version_values:
@@ -228,7 +228,7 @@ class UnparsedModelUpdate(UnparsedNodeUpdate):
                     f"latest_version: {self.latest_version} is not one of model '{self.name}' versions: {version_values} "
                 )
 
-        seen_versions: set[str] = set()
+        seen_versions = set()
         for version in self.versions:
             if str(version.v) in seen_versions:
                 raise ParsingError(
