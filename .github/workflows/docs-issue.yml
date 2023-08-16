@@ -5,14 +5,15 @@
 # To reduce barriers for keeping docs up to date
 
 # **when?**
-# When a PR is labeled `user docs` and is merged
+# When a PR is labeled `user docs` and is merged.  Runs on pull_request_target to run off the workflow already merged,
+# not the workflow that existed on the PR branch.  This allows old PRs to get comments.
 
 
 name: Open issues in docs.getdbt.com repo when a PR is labeled
 run-name: "Open an issue in docs.getdbt.com for PR #${{ github.event.pull_request.number }}"
 
 on:
-  pull_request:
+  pull_request_target:
     types: [labeled, closed]
 
 defaults:
