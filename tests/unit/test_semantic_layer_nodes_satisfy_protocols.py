@@ -192,14 +192,24 @@ def test_semantic_model_node_satisfies_protocol_optionals_specified(
     assert isinstance(test_semantic_model, RuntimeCheckableSemanticModel)
 
 
-def test_dimension_satisfies_protocol():
+def test_dimension_satisfies_protocol_optionals_unspecified():
     dimension = Dimension(
         name="test_dimension",
-        description="a test dimension",
         type=DimensionType.TIME,
+    )
+    assert isinstance(dimension, RuntimeCheckableDimension)
+
+
+def test_dimension_satisfies_protocol_optionals_specified(source_file_metadata):
+    dimension = Dimension(
+        name="test_dimension",
+        type=DimensionType.TIME,
+        description="test_description",
         type_params=DimensionTypeParams(
             time_granularity=TimeGranularity.DAY,
         ),
+        expr="1",
+        metadata=source_file_metadata,
     )
     assert isinstance(dimension, RuntimeCheckableDimension)
 
