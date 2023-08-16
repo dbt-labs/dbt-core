@@ -18,6 +18,7 @@ from dbt.contracts.graph.semantic_models import (
     Entity,
     FileSlice,
     Measure,
+    MeasureAggregationParameters,
     NonAdditiveDimension,
     SourceFileMetadata,
 )
@@ -122,6 +123,13 @@ class RuntimeCheckableDimensionTypeParams(DimensionProtocols.DimensionTypeParams
     pass
 
 
+@runtime_checkable
+class RuntimeCheckableMeasureAggregationParams(
+    MeasureProtocols.MeasureAggregationParameters, Protocol
+):
+    pass
+
+
 @pytest.fixture(scope="session")
 def file_slice() -> FileSlice:
     return FileSlice(
@@ -152,6 +160,20 @@ def dimension_type_params() -> DimensionTypeParams:
     return DimensionTypeParams(time_granularity=TimeGranularity.DAY)
 
 
+@pytest.fixture(scope="session")
+def measure_agg_params() -> MeasureAggregationParameters:
+    return MeasureAggregationParameters()
+
+
+@pytest.fixture(scope="session")
+def non_additive_dimension() -> NonAdditiveDimension:
+    return NonAdditiveDimension(
+        name="dimension_name",
+        window_choice=AggregationType.MIN,
+        window_groupings=["entity_name"],
+    )
+
+
 def test_file_slice_obj_satisfies_protocol(file_slice):
     assert isinstance(file_slice, RuntimeCheckableFileSlice)
 
@@ -178,6 +200,17 @@ def test_dimension_type_params_satisfies_protocol(
     optionals_specified_type_params = copy.deepcopy(dimension_type_params)
     optionals_specified_type_params.validity_params = dimension_validity_params
     assert isinstance(optionals_specified_type_params, RuntimeCheckableDimensionTypeParams)
+
+
+def test_measure_aggregation_params_satisfies_protocol(measure_agg_params):
+    assert isinstance(measure_agg_params, RuntimeCheckableMeasureAggregationParams)
+
+    # check with optionals specified
+    optionals_specified_measure_agg_params = copy.deepcopy(measure_agg_params)
+    optionals_specified_measure_agg_params.percentile = 0.5
+    assert isinstance(
+        optionals_specified_measure_agg_params, RuntimeCheckableMeasureAggregationParams
+    )
 
 
 def test_semantic_model_node_satisfies_protocol_optionals_unspecified():
@@ -266,13 +299,25 @@ def test_entity_satisfies_protocol_optionals_specified():
     assert isinstance(entity, RuntimeCheckableEntity)
 
 
-def test_measure_satisfies_protocol():
+def test_measure_satisfies_protocol_optionals_unspecified():
+    measure = Measure(
+        name="test_measure",
+        agg="sum",
+    )
+    assert isinstance(measure, RuntimeCheckableMeasure)
+
+
+def test_measure_satisfies_protocol_optionals_specified(
+    measure_agg_params, non_additive_dimension
+):
     measure = Measure(
         name="test_measure",
         description="a test measure",
         agg="sum",
         create_metric=True,
         expr="amount",
+        agg_params=measure_agg_params,
+        non_additive_dimension=non_additive_dimension,
         agg_time_dimension="a_time_dimension",
     )
     assert isinstance(measure, RuntimeCheckableMeasure)
@@ -321,10 +366,5 @@ def test_metric_type_params_satisfies_protocol():
     assert isinstance(type_params, RuntimeCheckableMetricTypeParams)
 
 
-def test_non_additive_dimension_satisfies_protocol():
-    non_additive_dimension = NonAdditiveDimension(
-        name="dimension_name",
-        window_choice=AggregationType.MIN,
-        window_groupings=["entity_name"],
-    )
+def test_non_additive_dimension_satisfies_protocol(non_additive_dimension):
     assert isinstance(non_additive_dimension, RuntimeCheckableNonAdditiveDimension)
