@@ -21,23 +21,13 @@ from dbt.contracts.graph.semantic_models import (
 )
 from dbt.node_types import NodeType
 from dbt_semantic_interfaces.protocols import (
-    Dimension as DSIDimension,
-    Entity as DSIEntitiy,
-    Measure as DSIMeasure,
-    Metric as DSIMetric,
-    MetricInput as DSIMetricInput,
-    MetricInputMeasure as DSIMetricInputMeasure,
-    MetricTypeParams as DSIMetricTypeParams,
-    SemanticModel as DSISemanticModel,
-    SemanticModelDefaults as DSISemanticModelDefaults,
-    WhereFilter as DSIWhereFilter,
-)
-from dbt_semantic_interfaces.protocols.metadata import (
-    FileSlice as DSIFileSlice,
-    Metadata as DSIMetadata,
-)
-from dbt_semantic_interfaces.protocols.measure import (
-    NonAdditiveDimensionParameters as DSINonAdditiveDimensionParameters,
+    dimension as DimensionProtocols,
+    entity as EntityProtocols,
+    measure as MeasureProtocols,
+    metadata as MetadataProtocols,
+    metric as MetricProtocols,
+    semantic_model as SemanticModelProtocols,
+    WhereFilter as WhereFilterProtocol,
 )
 from dbt_semantic_interfaces.type_enums import (
     AggregationType,
@@ -50,67 +40,71 @@ from typing import Protocol, runtime_checkable
 
 
 @runtime_checkable
-class RuntimeCheckableSemanticModel(DSISemanticModel, Protocol):
+class RuntimeCheckableSemanticModel(SemanticModelProtocols.SemanticModel, Protocol):
     pass
 
 
 @runtime_checkable
-class RuntimeCheckableDimension(DSIDimension, Protocol):
+class RuntimeCheckableDimension(DimensionProtocols.Dimension, Protocol):
     pass
 
 
 @runtime_checkable
-class RuntimeCheckableEntity(DSIEntitiy, Protocol):
+class RuntimeCheckableEntity(EntityProtocols.Entity, Protocol):
     pass
 
 
 @runtime_checkable
-class RuntimeCheckableMeasure(DSIMeasure, Protocol):
+class RuntimeCheckableMeasure(MeasureProtocols.Measure, Protocol):
     pass
 
 
 @runtime_checkable
-class RuntimeCheckableMetric(DSIMetric, Protocol):
+class RuntimeCheckableMetric(MetricProtocols.Metric, Protocol):
     pass
 
 
 @runtime_checkable
-class RuntimeCheckableMetricInput(DSIMetricInput, Protocol):
+class RuntimeCheckableMetricInput(MetricProtocols.MetricInput, Protocol):
     pass
 
 
 @runtime_checkable
-class RuntimeCheckableMetricInputMeasure(DSIMetricInputMeasure, Protocol):
+class RuntimeCheckableMetricInputMeasure(MetricProtocols.MetricInputMeasure, Protocol):
     pass
 
 
 @runtime_checkable
-class RuntimeCheckableMetricTypeParams(DSIMetricTypeParams, Protocol):
+class RuntimeCheckableMetricTypeParams(MetricProtocols.MetricTypeParams, Protocol):
     pass
 
 
 @runtime_checkable
-class RuntimeCheckableWhereFilter(DSIWhereFilter, Protocol):
+class RuntimeCheckableWhereFilter(WhereFilterProtocol, Protocol):
     pass
 
 
 @runtime_checkable
-class RuntimeCheckableNonAdditiveDimension(DSINonAdditiveDimensionParameters, Protocol):
+class RuntimeCheckableNonAdditiveDimension(
+    MeasureProtocols.NonAdditiveDimensionParameters, Protocol
+):
     pass
 
 
 @runtime_checkable
-class RuntimeCheckableFileSlice(DSIFileSlice, Protocol):
+class RuntimeCheckableFileSlice(MetadataProtocols.FileSlice, Protocol):
     pass
 
 
 @runtime_checkable
-class RuntimeCheckableSourceFileMetadata(DSIMetadata, Protocol):
+class RuntimeCheckableSourceFileMetadata(MetadataProtocols.Metadata, Protocol):
     pass
 
 
 @runtime_checkable
-class RuntimeCheckableSemanticModelDefaults(DSISemanticModelDefaults, Protocol):
+class RuntimeCheckableSemanticModelDefaults(
+    SemanticModelProtocols.SemanticModelDefaults, Protocol
+):
     pass
 
 
