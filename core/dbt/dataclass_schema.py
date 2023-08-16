@@ -12,6 +12,8 @@ from mashumaro.config import TO_DICT_ADD_OMIT_NONE_FLAG, BaseConfig as MashBaseC
 from mashumaro.types import SerializableType, SerializationStrategy
 from mashumaro.jsonschema import build_json_schema
 
+import functools
+
 
 class ValidationError(jsonschema.ValidationError):
     pass
@@ -72,6 +74,7 @@ class dbtClassMixin(DataClassDictMixin):
         return data
 
     @classmethod
+    @functools.lru_cache
     def json_schema(cls):
         json_schema_obj = build_json_schema(cls)
         json_schema = json_schema_obj.to_dict()
