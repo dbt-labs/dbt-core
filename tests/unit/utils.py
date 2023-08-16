@@ -199,6 +199,9 @@ def assert_from_dict(obj, dct, cls=None):
         obj_from_dict.created_at = 1
         obj.created_at = 1
 
+    if obj_from_dict != obj:
+        print(f"--- obj_from_dict: {obj_from_dict}")
+        print(f"--- obj: {obj}")
     assert obj_from_dict == obj
 
 

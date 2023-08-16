@@ -51,7 +51,7 @@ setup(
         # Pin to the patch or minor version, and bump in each new minor version of dbt-core.
         "agate~=1.7.0",
         "Jinja2~=3.1.2",
-        "mashumaro[msgpack]~=3.8.1",
+        "mashumaro[msgpack]~=3.9",
         # ----
         # Legacy: This package has not been updated since 2019, and it is unused in dbt's logging system (since v1.0)
         # The dependency here will be removed along with the removal of 'legacy logging', in a future release of dbt-core
@@ -72,12 +72,12 @@ setup(
         # ----
         # These are major-version-0 packages also maintained by dbt-labs. Accept patches.
         "dbt-extractor~=0.5.0",
-        "hologram~=0.0.16",  # includes transitive dependencies on python-dateutil and jsonschema
         "minimal-snowplow-tracker~=0.0.2",
         # DSI is under active development, so we're pinning to specific dev versions for now.
         "dbt-semantic-interfaces~=0.2.0",
         # ----
         # Expect compatibility with all new versions of these packages, so lower bounds only.
+        "jsonschema>=3.0",
         "packaging>20.9",
         "protobuf>=4.0.0",
         "pytz>=2015.7",

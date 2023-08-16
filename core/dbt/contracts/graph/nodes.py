@@ -6,7 +6,7 @@ from enum import Enum
 import hashlib
 
 from mashumaro.types import SerializableType
-from typing import Optional, Union, List, Dict, Any, Sequence, Tuple, Iterator
+from typing import Optional, Union, List, Dict, Any, Sequence, Tuple, Iterator, Literal
 
 from dbt.dataclass_schema import dbtClassMixin, ExtensibleDbtClassMixin
 
@@ -555,18 +555,18 @@ class CompiledNode(ParsedNode):
 
 @dataclass
 class AnalysisNode(CompiledNode):
-    resource_type: NodeType = field(metadata={"restrict": [NodeType.Analysis]})
+    resource_type: Literal[NodeType.Analysis]
 
 
 @dataclass
 class HookNode(CompiledNode):
-    resource_type: NodeType = field(metadata={"restrict": [NodeType.Operation]})
+    resource_type: Literal[NodeType.Operation]
     index: Optional[int] = None
 
 
 @dataclass
 class ModelNode(CompiledNode):
-    resource_type: NodeType = field(metadata={"restrict": [NodeType.Model]})
+    resource_type: Literal[NodeType.Model]
     access: AccessType = AccessType.Protected
     constraints: List[ModelLevelConstraint] = field(default_factory=list)
     version: Optional[NodeVersion] = None
@@ -787,12 +787,12 @@ class ModelNode(CompiledNode):
 # TODO: rm?
 @dataclass
 class RPCNode(CompiledNode):
-    resource_type: NodeType = field(metadata={"restrict": [NodeType.RPCCall]})
+    resource_type: Literal[NodeType.RPCCall]
 
 
 @dataclass
 class SqlNode(CompiledNode):
-    resource_type: NodeType = field(metadata={"restrict": [NodeType.SqlOperation]})
+    resource_type: Literal[NodeType.SqlOperation]
 
 
 # ====================================
@@ -802,7 +802,7 @@ class SqlNode(CompiledNode):
 
 @dataclass
 class SeedNode(ParsedNode):  # No SQLDefaults!
-    resource_type: NodeType = field(metadata={"restrict": [NodeType.Seed]})
+    resource_type: Literal[NodeType.Seed]
     config: SeedConfig = field(default_factory=SeedConfig)
     # seeds need the root_path because the contents are not loaded initially
     # and we need the root_path to load the seed later
@@ -928,7 +928,7 @@ class TestShouldStoreFailures:
 
 @dataclass
 class SingularTestNode(TestShouldStoreFailures, CompiledNode):
-    resource_type: NodeType = field(metadata={"restrict": [NodeType.Test]})
+    resource_type: Literal[NodeType.Test]
     # Was not able to make mypy happy and keep the code working. We need to
     # refactor the various configs.
     config: TestConfig = field(default_factory=TestConfig)  # type: ignore
@@ -964,7 +964,7 @@ class HasTestMetadata(dbtClassMixin):
 
 @dataclass
 class GenericTestNode(TestShouldStoreFailures, CompiledNode, HasTestMetadata):
-    resource_type: NodeType = field(metadata={"restrict": [NodeType.Test]})
+    resource_type: Literal[NodeType.Test]
     column_name: Optional[str] = None
     file_key_name: Optional[str] = None
     # Was not able to make mypy happy and keep the code working. We need to
@@ -997,13 +997,13 @@ class IntermediateSnapshotNode(CompiledNode):
     # uses a regular node config, which the snapshot parser will then convert
     # into a full ParsedSnapshotNode after rendering. Note: it currently does
     # not work to set snapshot config in schema files because of the validation.
-    resource_type: NodeType = field(metadata={"restrict": [NodeType.Snapshot]})
+    resource_type: Literal[NodeType.Snapshot]
     config: EmptySnapshotConfig = field(default_factory=EmptySnapshotConfig)
 
 
 @dataclass
 class SnapshotNode(CompiledNode):
-    resource_type: NodeType = field(metadata={"restrict": [NodeType.Snapshot]})
+    resource_type: Literal[NodeType.Snapshot]
     config: SnapshotConfig
     defer_relation: Optional[DeferRelation] = None
 
@@ -1016,7 +1016,7 @@ class SnapshotNode(CompiledNode):
 @dataclass
 class Macro(BaseNode):
     macro_sql: str
-    resource_type: NodeType = field(metadata={"restrict": [NodeType.Macro]})
+    resource_type: Literal[NodeType.Macro]
     depends_on: MacroDependsOn = field(default_factory=MacroDependsOn)
     description: str = ""
     meta: Dict[str, Any] = field(default_factory=dict)
@@ -1046,7 +1046,7 @@ class Macro(BaseNode):
 @dataclass
 class Documentation(BaseNode):
     block_contents: str
-    resource_type: NodeType = field(metadata={"restrict": [NodeType.Documentation]})
+    resource_type: Literal[NodeType.Documentation]
 
     @property
     def search_name(self):
@@ -1077,7 +1077,7 @@ class UnpatchedSourceDefinition(BaseNode):
     source: UnparsedSourceDefinition
     table: UnparsedSourceTableDefinition
     fqn: List[str]
-    resource_type: NodeType = field(metadata={"restrict": [NodeType.Source]})
+    resource_type: Literal[NodeType.Source]
     patch_path: Optional[str] = None
 
     def get_full_source_name(self):
@@ -1122,7 +1122,7 @@ class ParsedSourceMandatory(GraphNode, HasRelationMetadata):
     source_description: str
     loader: str
     identifier: str
-    resource_type: NodeType = field(metadata={"restrict": [NodeType.Source]})
+    resource_type: Literal[NodeType.Source]
 
 
 @dataclass
@@ -1249,7 +1249,7 @@ class SourceDefinition(NodeInfoMixin, ParsedSourceMandatory):
 class Exposure(GraphNode):
     type: ExposureType
     owner: Owner
-    resource_type: NodeType = field(metadata={"restrict": [NodeType.Exposure]})
+    resource_type: Literal[NodeType.Exposure]
     description: str = ""
     label: Optional[str] = None
     maturity: Optional[MaturityType] = None
@@ -1398,7 +1398,7 @@ class Metric(GraphNode):
     type_params: MetricTypeParams
     filter: Optional[WhereFilter] = None
     metadata: Optional[SourceFileMetadata] = None
-    resource_type: NodeType = field(metadata={"restrict": [NodeType.Metric]})
+    resource_type: Literal[NodeType.Metric]
     meta: Dict[str, Any] = field(default_factory=dict)
     tags: List[str] = field(default_factory=list)
     config: MetricConfig = field(default_factory=MetricConfig)
@@ -1481,7 +1481,7 @@ class Metric(GraphNode):
 class Group(BaseNode):
     name: str
     owner: Owner
-    resource_type: NodeType = field(metadata={"restrict": [NodeType.Group]})
+    resource_type: Literal[NodeType.Group]
 
 
 # ====================================
