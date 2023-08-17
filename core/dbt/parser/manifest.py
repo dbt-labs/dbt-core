@@ -79,6 +79,7 @@ from dbt.parser.read_files import (
     load_source_file,
     FileDiff,
     ReadFilesFromDiff,
+    ReadFiles,
 )
 from dbt.parser.partial import PartialParsing, special_override_macros
 from dbt.contracts.graph.manifest import (
@@ -259,7 +260,7 @@ class ManifestLoader:
         # We need to know if we're actually partially parsing. It could
         # have been enabled, but not happening because of some issue.
         self.partially_parsing = False
-        self.partial_parser = None
+        self.partial_parser: Optional[PartialParsing] = None
 
         # This is a saved manifest from a previous run that's used for partial parsing
         self.saved_manifest: Optional[Manifest] = self.read_manifest_for_partial_parse()
@@ -331,7 +332,7 @@ class ManifestLoader:
         return manifest
 
     # This is where the main action happens
-    def load(self):
+    def load(self) -> Manifest:
         start_read_files = time.perf_counter()
 
         # This updates the "files" dictionary in self.manifest, and creates
@@ -340,6 +341,7 @@ class ManifestLoader:
         # of parsers to lists of file strings. The file strings are
         # used to get the SourceFiles from the manifest files.
         saved_files = self.saved_manifest.files if self.saved_manifest else {}
+        file_reader: Optional[ReadFiles] = None
         if self.file_diff:
             # We're getting files from a file diff
             file_reader = ReadFilesFromDiff(
@@ -403,7 +405,7 @@ class ManifestLoader:
                     }
 
                     # get file info for local logs
-                    parse_file_type = None
+                    parse_file_type: str = ""
                     file_id = self.partial_parser.processing_file
                     if file_id:
                         source_file = None
@@ -484,7 +486,7 @@ class ManifestLoader:
             self.manifest.rebuild_disabled_lookup()
 
             # Load yaml files
-            parser_types = [SchemaParser]
+            parser_types = [SchemaParser]  # type: ignore
             for project in self.all_projects.values():
                 if project.project_name not in project_parser_files:
                     continue
@@ -1062,7 +1064,7 @@ class ManifestLoader:
 
     # Takes references in 'refs' array of nodes and exposures, finds the target
     # node, and updates 'depends_on.nodes' with the unique id
-    def process_refs(self, current_project: str, dependencies: Optional[Dict[str, Project]]):
+    def process_refs(self, current_project: str, dependencies: Optional[Mapping[str, Project]]):
         for node in self.manifest.nodes.values():
             if node.created_at < self.started_at:
                 continue
