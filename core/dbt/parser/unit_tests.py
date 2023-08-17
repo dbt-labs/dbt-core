@@ -1,4 +1,4 @@
-from dbt.contracts.graph.unit_tests import UnitTestSuite
+from dbt.contracts.graph.unit_tests import UnitTestSuite, UnparsedUnitTestSuite
 from dbt.contracts.graph.model_config import NodeConfig
 from dbt_extractor import py_extract_from_source  # type: ignore
 from dbt.contracts.graph.nodes import (
@@ -15,13 +15,13 @@ from dbt.parser.schemas import (
     YamlParseDictError,
     YamlReader,
 )
+from dbt.node_types import NodeType
 
 from dbt.exceptions import (
     ParsingError,
 )
 
 from dbt.contracts.files import FileHash
-from dbt.node_types import NodeType
 
 from dbt.context.providers import generate_parse_exposure, get_rendered
 from typing import List
@@ -201,10 +201,20 @@ class UnitTestParser(YamlReader):
     def parse(self):
         for data in self.get_key_dicts():
             try:
-                UnitTestSuite.validate(data)
-                unit_test = UnitTestSuite.from_dict(data)
+                UnparsedUnitTestSuite.validate(data)
+                unparsed = UnparsedUnitTestSuite.from_dict(data)
             except (ValidationError, JSONValidationError) as exc:
                 raise YamlParseDictError(self.yaml.path, self.key, data, exc)
             package_name = self.project.project_name
-            unit_test_unique_id = f"unit.{package_name}.{unit_test.model}"
-            self.manifest.unit_tests[unit_test_unique_id] = unit_test
+            unit_test_unique_id = f"unit.{package_name}.{unparsed.model}"
+            unit_test_suite = UnitTestSuite(
+                name=unparsed.model,
+                model=unparsed.model,
+                resource_type=NodeType.Unit,
+                package_name=package_name,
+                path=self.yaml.path.relative_path,
+                original_file_path=self.yaml.path.original_file_path,
+                unique_id=unit_test_unique_id,
+                tests=unparsed.tests,
+            )
+            self.manifest.unit_tests[unit_test_unique_id] = unit_test_suite
