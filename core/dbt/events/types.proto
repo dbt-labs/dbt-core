@@ -1248,6 +1248,17 @@ message SemanticValidationFailureMsg {
     SemanticValidationFailure data = 2;
 }
 
+// I071
+message UnversionedBreakingChange {
+    NodeInfo node_info = 1;
+    repeated string breaking_changes = 2;
+}
+
+message UnversionedBreakingChangeMsg {
+    EventInfo info = 1;
+    SemanticValidationFailure data = 2;
+}
+
 
 // M - Deps generation
 

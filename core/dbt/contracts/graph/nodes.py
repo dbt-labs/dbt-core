@@ -809,7 +809,7 @@ class ModelNode(CompiledNode):
                 warn_or_error(
                     UnversionedBreakingChange(
                         breaking_changes=breaking_changes,
-                        node=self,
+                        node_info=self,
                     )
                 )
             else:
