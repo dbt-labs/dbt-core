@@ -1250,13 +1250,12 @@ message SemanticValidationFailureMsg {
 
 // I071
 message UnversionedBreakingChange {
-    NodeInfo node_info = 1;
-    repeated string breaking_changes = 2;
+    repeated string breaking_changes = 1;
 }
 
 message UnversionedBreakingChangeMsg {
     EventInfo info = 1;
-    SemanticValidationFailure data = 2;
+    UnversionedBreakingChange data = 2;
 }
 
 

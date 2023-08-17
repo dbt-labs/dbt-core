@@ -806,12 +806,7 @@ class ModelNode(CompiledNode):
                 )
 
             if self.version is None:
-                warn_or_error(
-                    UnversionedBreakingChange(
-                        breaking_changes=breaking_changes,
-                        node_info=self,
-                    )
-                )
+                warn_or_error(UnversionedBreakingChange(breaking_changes=breaking_changes))
             else:
                 raise (
                     ContractBreakingChangeError(

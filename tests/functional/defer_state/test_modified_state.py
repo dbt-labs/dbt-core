@@ -5,7 +5,13 @@ import string
 
 import pytest
 
-from dbt.tests.util import run_dbt, update_config_file, write_file, get_manifest
+from dbt.tests.util import (
+    run_dbt,
+    update_config_file,
+    write_file,
+    get_manifest,
+    run_dbt_and_capture,
+)
 
 from dbt.exceptions import CompilationError, ContractBreakingChangeError
 
@@ -609,8 +615,14 @@ class TestChangedConstraint(BaseModifiedState):
         second_contract_checksum = model.contract.checksum
         # double check different contract_checksums
         assert first_contract_checksum != second_contract_checksum
-        with pytest.raises(ContractBreakingChangeError):
-            run_dbt(["run", "--models", "state:modified.contract", "--state", "./state"])
+        # since the models are unversioned, they raise a warning but not an error
+        _, logs = run_dbt_and_capture(
+            ["run", "--models", "state:modified.contract", "--state", "./state"]
+        )
+        expected_warning = "While comparing to previous project state, dbt detected a breaking change to an unversioned model"
+        expected_change = "Enforced column level constraints were removed"
+        assert expected_warning in logs
+        assert expected_change in logs
 
         # This should raise because a model level constraint was removed (primary_key on id)
         write_file(modified_model_constraint_schema_yml, "models", "schema.yml")
@@ -622,8 +634,13 @@ class TestChangedConstraint(BaseModifiedState):
         second_contract_checksum = model.contract.checksum
         # double check different contract_checksums
         assert first_contract_checksum != second_contract_checksum
-        with pytest.raises(ContractBreakingChangeError):
-            run_dbt(["run", "--models", "state:modified.contract", "--state", "./state"])
+        _, logs = run_dbt_and_capture(
+            ["run", "--models", "state:modified.contract", "--state", "./state"]
+        )
+        expected_warning = "While comparing to previous project state, dbt detected a breaking change to an unversioned model"
+        expected_change = "Enforced model level constraints were removed"
+        assert expected_warning in logs
+        assert expected_change in logs
 
 
 class TestChangedMaterializationConstraint(BaseModifiedState):
@@ -709,28 +726,35 @@ select 1 as id, 'blue' as color
 my_model_yml = """
 models:
   - name: my_model
+    latest_version: 1
     config:
       contract:
         enforced: true
     columns:
       - name: id
         data_type: int
+    versions:
+      - v: 1
 """
 
 modified_my_model_yml = """
 models:
   - name: my_model
+    latest_version: 1
     config:
       contract:
         enforced: true
     columns:
       - name: id
         data_type: text
+    versions:
+      - v: 1
 """
 
 modified_my_model_non_breaking_yml = """
 models:
   - name: my_model
+    latest_version: 1
     config:
       contract:
         enforced: true
@@ -739,6 +763,8 @@ models:
         data_type: int
       - name: color
         data_type: text
+    versions:
+      - v: 1
 """
 
 
@@ -780,7 +806,7 @@ class TestModifiedBodyAndContract:
 
         # The model's contract has changed, even if non-breaking, so it should be selected by 'state:modified.contract'
         results = run_dbt(["list", "-s", "state:modified.contract", "--state", "./state"])
-        assert results == ["test.my_model"]
+        assert results == ["test.my_model.v1"]
 
 
 modified_table_model_access_yml = """
