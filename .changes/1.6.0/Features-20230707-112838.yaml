@@ -1,6 +1,0 @@
-kind: Features
-body: Support validation of metrics and semantic models.
-time: 2023-07-07T11:28:38.760462-04:00
-custom:
-  Author: peterallenwebb
-  Issue: "7969"

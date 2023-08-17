@@ -1,4 +1,5 @@
 import pytest
+from unittest import mock
 
 from dbt.tests.util import run_dbt, get_manifest, write_file, rm_file, run_dbt_and_capture
 from dbt.tests.fixtures.project import write_project_files
@@ -71,6 +72,7 @@ from tests.functional.partial_parsing.fixtures import (
 from dbt.exceptions import CompilationError, ParsingError
 from dbt.contracts.files import ParseFileType
 from dbt.contracts.results import TestStatus
+from dbt.plugins.manifest import PluginNodes, ModelNodeArgs
 
 import re
 import os
@@ -736,3 +738,73 @@ class TestGroups:
         )
         with pytest.raises(ParsingError):
             results = run_dbt(["--partial-parse", "run"])
+
+
+class TestExternalModels:
+    @pytest.fixture(scope="class")
+    def external_model_node(self):
+        return ModelNodeArgs(
+            name="external_model",
+            package_name="external",
+            identifier="test_identifier",
+            schema="test_schema",
+        )
+
+    @pytest.fixture(scope="class")
+    def external_model_node_versioned(self):
+        return ModelNodeArgs(
+            name="external_model_versioned",
+            package_name="external",
+            identifier="test_identifier_v1",
+            schema="test_schema",
+            version=1,
+        )
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"model_one.sql": model_one_sql}
+
+    @mock.patch("dbt.plugins.get_plugin_manager")
+    def test_pp_external_models(
+        self, get_plugin_manager, project, external_model_node, external_model_node_versioned
+    ):
+        # initial plugin - one external model
+        external_nodes = PluginNodes()
+        external_nodes.add_model(external_model_node)
+        get_plugin_manager.return_value.get_nodes.return_value = external_nodes
+
+        # initial run
+        manifest = run_dbt(["parse"])
+        assert len(manifest.nodes) == 2
+        assert set(manifest.nodes.keys()) == {
+            "model.external.external_model",
+            "model.test.model_one",
+        }
+        assert len(manifest.external_node_unique_ids) == 1
+        assert manifest.external_node_unique_ids == ["model.external.external_model"]
+
+        # add a model file
+        write_file(model_two_sql, project.project_root, "models", "model_two.sql")
+        manifest = run_dbt(["--partial-parse", "parse"])
+        assert len(manifest.nodes) == 3
+
+        # add an external model
+        external_nodes.add_model(external_model_node_versioned)
+        manifest = run_dbt(["--partial-parse", "parse"])
+        assert len(manifest.nodes) == 4
+        assert len(manifest.external_node_unique_ids) == 2
+
+        # add a model file that depends on external model
+        write_file(
+            "SELECT * FROM {{ref('external', 'external_model')}}",
+            project.project_root,
+            "models",
+            "model_depends_on_external.sql",
+        )
+        manifest = run_dbt(["--partial-parse", "parse"])
+        assert len(manifest.nodes) == 5
+
+        # remove a model file that depends on external model
+        rm_file(project.project_root, "models", "model_depends_on_external.sql")
+        manifest = run_dbt(["--partial-parse", "parse"])
+        assert len(manifest.nodes) == 4

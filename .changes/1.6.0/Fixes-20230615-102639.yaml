@@ -1,6 +1,0 @@
-kind: Fixes
-body: Fix accidental propagation of log messages to root logger.
-time: 2023-06-15T10:26:39.139421-04:00
-custom:
-  Author: peterallenwebb
-  Issue: "7872"

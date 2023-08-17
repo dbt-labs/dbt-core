@@ -1,6 +1,0 @@
-kind: Fixes
-body: inject sql header in query for show
-time: 2023-05-09T10:29:32.12947-07:00
-custom:
-  Author: aranke
-  Issue: "7413"

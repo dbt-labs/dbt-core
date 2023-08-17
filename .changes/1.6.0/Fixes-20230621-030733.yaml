@@ -1,6 +1,0 @@
-kind: Fixes
-body: Fix a bad implicit string conversion regression in debug --config-dir code.
-time: 2023-06-21T03:07:33.815966-07:00
-custom:
-  Author: versusfacit
-  Issue: "7774"

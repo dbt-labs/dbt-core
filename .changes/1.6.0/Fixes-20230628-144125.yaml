@@ -1,6 +1,0 @@
-kind: Fixes
-body: Inline query emit proper error message
-time: 2023-06-28T14:41:25.699046-07:00
-custom:
-  Author: ChenyuLInx
-  Issue: "7940"

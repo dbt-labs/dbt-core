@@ -1,0 +1,6 @@
+kind: Fixes
+body: fix fqn-selection for external versioned models
+time: 2023-08-11T20:41:44.725144-04:00
+custom:
+  Author: michelleark
+  Issue: "8374"

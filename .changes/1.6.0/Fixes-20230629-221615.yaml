@@ -1,6 +1,0 @@
-kind: Fixes
-body: Allow on_schema_change = fail for contracted incremental models
-time: 2023-06-29T22:16:15.34895-04:00
-custom:
-  Author: michelleark
-  Issue: "7975"

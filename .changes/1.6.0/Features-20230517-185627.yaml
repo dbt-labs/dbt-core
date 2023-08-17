@@ -1,6 +1,0 @@
-kind: Features
-body: accept publications in dbt.invoke
-time: 2023-05-17T18:56:27.585784-04:00
-custom:
-  Author: MichelleArk
-  Issue: "7372"
