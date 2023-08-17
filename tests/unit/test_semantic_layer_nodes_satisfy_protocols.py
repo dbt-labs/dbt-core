@@ -174,6 +174,13 @@ def non_additive_dimension() -> NonAdditiveDimension:
     )
 
 
+@pytest.fixture(scope="session")
+def where_filter() -> WhereFilter:
+    return WhereFilter(
+        where_sql_template="{{ Dimension('enity_name__dimension_name') }} AND {{ TimeDimension('entity_name__time_dimension_name', 'month') }} AND {{ Entity('entity_name') }}"
+    )
+
+
 def test_file_slice_obj_satisfies_protocol(file_slice):
     assert isinstance(file_slice, RuntimeCheckableFileSlice)
 
@@ -323,7 +330,7 @@ def test_measure_satisfies_protocol_optionals_specified(
     assert isinstance(measure, RuntimeCheckableMeasure)
 
 
-def test_metric_node_satisfies_protocol():
+def test_metric_node_satisfies_protocol_optionals_unspecified():
     metric = Metric(
         name="a_metric",
         resource_type=NodeType.Metric,
@@ -344,10 +351,31 @@ def test_metric_node_satisfies_protocol():
     assert isinstance(metric, RuntimeCheckableMetric)
 
 
-def test_where_filter_satisfies_protocol():
-    where_filter = WhereFilter(
-        where_sql_template="{{ Dimension('enity_name__dimension_name') }} AND {{ TimeDimension('entity_name__time_dimension_name', 'month') }} AND {{ Entity('entity_name') }}"
+def test_metric_node_satisfies_protocol_optionals_specified(source_file_metadata, where_filter):
+    metric = Metric(
+        name="a_metric",
+        resource_type=NodeType.Metric,
+        package_name="package_name",
+        path="path.to.semantic_model",
+        original_file_path="path/to/file",
+        unique_id="not_like_the_other_semantic_models",
+        fqn=["fully", "qualified", "name"],
+        description="a test metric",
+        label="A test metric",
+        type=MetricType.SIMPLE,
+        type_params=MetricTypeParams(
+            measure=MetricInputMeasure(
+                name="a_test_measure", filter=WhereFilter(where_sql_template="a_dimension is true")
+            )
+        ),
+        filter=where_filter,
+        metadata=source_file_metadata,
+        group="test_group",
     )
+    assert isinstance(metric, RuntimeCheckableMetric)
+
+
+def test_where_filter_satisfies_protocol(where_filter):
     assert isinstance(where_filter, RuntimeCheckableWhereFilter)
 
 
