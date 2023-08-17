@@ -258,6 +258,13 @@ class ArtifactMixin(VersionedSchema, Writable, Readable):
 
 
 class Identifier(ValidatedStringMixin):
+    """Our definition of a valid Identifier is the same as what's valid for an unquoted database table name.
+
+    That is:
+    1. It can contain a-z, A-Z, 0-9, and _
+    1. It cannot start with a number
+    """
+
     ValidationRegex = r"^[^\d\W]\w*$"
 
     @classmethod
