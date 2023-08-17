@@ -1,6 +1,5 @@
-kind: Fixes
-body: revert prs 7196 and 6424 to have docker python version be 3.10.7 as dbt-spark
-  does not support 3.11py and is missing images in 1.6 and 1.5
+kind: Under the Hood
+body: Use python version 3.10.7 in Docker image.
 time: 2023-08-17T13:09:15.936349-05:00
 custom:
   Author: McKnight-42
