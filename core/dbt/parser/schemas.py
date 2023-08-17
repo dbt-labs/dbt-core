@@ -230,6 +230,12 @@ class SchemaParser(SimpleParser[YamlBlock, ModelNode]):
                 semantic_model_parser = SemanticModelParser(self, yaml_block)
                 semantic_model_parser.parse()
 
+            if "unit" in dct:
+                from dbt.parser.unit_tests import UnitTestParser
+
+                unit_test_parser = UnitTestParser(self, yaml_block)
+                unit_test_parser.parse()
+
 
 Parsed = TypeVar("Parsed", UnpatchedSourceDefinition, ParsedNodePatch, ParsedMacroPatch)
 NodeTarget = TypeVar("NodeTarget", UnparsedNodeUpdate, UnparsedAnalysisUpdate, UnparsedModelUpdate)

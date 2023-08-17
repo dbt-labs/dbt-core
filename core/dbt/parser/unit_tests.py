@@ -19,9 +19,8 @@ from dbt.parser.schemas import (
 from dbt.exceptions import (
     ParsingError,
 )
-from dbt.parser.search import FileBlock
 
-from dbt.contracts.files import FileHash, SchemaSourceFile
+from dbt.contracts.files import FileHash
 from dbt.node_types import NodeType
 
 from dbt.context.providers import generate_parse_exposure, get_rendered
@@ -33,22 +32,17 @@ def _is_model_node(node_id, manifest):
 
 
 class UnitTestManifestLoader:
-    @classmethod
-    def load(cls, manifest, root_project) -> Manifest:
-        unit_test_manifest = Manifest(macros=manifest.macros)
-        for file in manifest.files.values():
-            block = FileBlock(file)
-            if isinstance(file, SchemaSourceFile):
-                dct = file.dict_from_yaml
-                if "unit" in dct:
-                    yaml_block = YamlBlock.from_file_block(block, dct)
-                    # TODO: first root_project should be project, or we should only parse unit tests from root_project
-                    schema_parser = SchemaParser(root_project, manifest, root_project)
-                    parser = UnitTestParser(schema_parser, yaml_block, unit_test_manifest)
-                    parser.parse()
+    def __init__(self, manifest, root_project) -> None:
+        self.manifest = manifest
+        self.root_project = root_project
+        self.unit_test_manifest = Manifest(macros=manifest.macros)
+
+    def load(self) -> Manifest:
+        for unit_test_suite in self.manifest.unit_tests.values():
+            self.parse_unit_test_suite(unit_test_suite)
 
         model_to_unit_tests = {}
-        for node in unit_test_manifest.nodes.values():
+        for node in self.unit_test_manifest.nodes.values():
             if isinstance(node, UnitTestNode):
                 model_name = node.name.split("__")[0]
                 if model_name not in model_to_unit_tests:
@@ -56,24 +50,17 @@ class UnitTestManifestLoader:
                 else:
                     model_to_unit_tests[model_name].append(node.unique_id)
 
-        for node in unit_test_manifest.nodes.values():
+        for node in self.unit_test_manifest.nodes.values():
             if isinstance(node, UnitTestNode):
                 # a unit test should depend on its fixture nodes, and any unit tests on its ref'd nodes
                 for ref in node.refs:
                     for unique_id in model_to_unit_tests.get(ref.name, []):
                         node.depends_on.nodes.append(unique_id)
-        return unit_test_manifest
+        return self.unit_test_manifest
 
-
-class UnitTestParser(YamlReader):
-    def __init__(self, schema_parser: SchemaParser, yaml: YamlBlock, unit_test_manifest: Manifest):
-        super().__init__(schema_parser, yaml, "unit")
-        self.yaml = yaml
-        self.unit_test_manifest = unit_test_manifest
-
-    def parse_unit_test(self, unparsed: UnitTestSuite):
-        package_name = self.project.project_name
-        path = self.yaml.path.relative_path
+    def parse_unit_test_suite(self, unparsed: UnitTestSuite):
+        package_name = self.root_project.project_name
+        path = "placeholder"
         # TODO: fix
         checksum = "f8f57c9e32eafaacfb002a4d03a47ffb412178f58f49ba58fd6f436f09f8a1d6"
         unit_test_node_ids = []
@@ -143,7 +130,7 @@ class UnitTestParser(YamlReader):
             ctx = generate_parse_exposure(
                 unit_test_node,  # type: ignore
                 self.root_project,
-                self.schema_parser.manifest,
+                self.manifest,
                 package_name,
             )
             get_rendered(unit_test_node.raw_code, ctx, unit_test_node, capture_macros=True)
@@ -175,16 +162,6 @@ class UnitTestParser(YamlReader):
         for node_id in not_in_manifest:
             self.unit_test_manifest.nodes[node_id] = self.manifest.nodes[node_id]
 
-    def parse(self):
-        for data in self.get_key_dicts():
-            try:
-                UnitTestSuite.validate(data)
-                unparsed = UnitTestSuite.from_dict(data)
-            except (ValidationError, JSONValidationError) as exc:
-                raise YamlParseDictError(self.yaml.path, self.key, data, exc)
-
-            self.parse_unit_test(unparsed)
-
     def _build_raw_code(self, rows, column_name_to_data_types) -> str:
         return ("{{{{ get_fixture_sql({rows}, {column_name_to_data_types}) }}}}").format(
             rows=rows, column_name_to_data_types=column_name_to_data_types
@@ -213,3 +190,21 @@ class UnitTestParser(YamlReader):
             raise ParsingError("given input must be ref or source")
 
         return original_input_node
+
+
+class UnitTestParser(YamlReader):
+    def __init__(self, schema_parser: SchemaParser, yaml: YamlBlock):
+        super().__init__(schema_parser, yaml, "unit")
+        self.schema_parser = schema_parser
+        self.yaml = yaml
+
+    def parse(self):
+        for data in self.get_key_dicts():
+            try:
+                UnitTestSuite.validate(data)
+                unit_test = UnitTestSuite.from_dict(data)
+            except (ValidationError, JSONValidationError) as exc:
+                raise YamlParseDictError(self.yaml.path, self.key, data, exc)
+            package_name = self.project.project_name
+            unit_test_unique_id = f"unit.{package_name}.{unit_test.model}"
+            self.manifest.unit_tests[unit_test_unique_id] = unit_test
