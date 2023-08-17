@@ -1233,6 +1233,19 @@ class SemanticValidationFailure(WarnLevel):
         return self.msg
 
 
+class UnversionedBreakingChange(WarnLevel):
+    def code(self):
+        return "I071"
+
+    def message(self) -> str:
+        reasons = "\n\n".join(self.breaking_changes)
+
+        return (
+            "While comparing to previous project state, dbt detected a breaking change to an unversioned model."
+            f"\n\n{reasons}\n\n"
+        )
+
+
 # =======================================================
 # M - Deps generation
 # =======================================================

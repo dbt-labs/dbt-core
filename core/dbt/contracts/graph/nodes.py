@@ -44,6 +44,7 @@ from dbt.events.types import (
     SeedExceedsLimitSamePath,
     SeedExceedsLimitAndPathChanged,
     SeedExceedsLimitChecksumChanged,
+    UnversionedBreakingChange,
 )
 from dbt.events.contextvars import set_log_contextvars
 from dbt.flags import get_flags
@@ -758,7 +759,8 @@ class ModelNode(CompiledNode):
         # If a column has been added, it will be missing in the old.columns, and present in self.columns
         # That's a change (caught by the different checksums), but not a breaking change
 
-        # Did we find any changes that we consider breaking? If so, that's an error
+        # Did we find any changes that we consider breaking? If there's an enforced contract, that's
+        # a warning unless the model is versioned, then it's an error.
         if (
             contract_enforced_disabled
             or columns_removed
@@ -767,21 +769,59 @@ class ModelNode(CompiledNode):
             or enforced_column_constraint_removed
             or materialization_changed
         ):
-            raise (
-                ContractBreakingChangeError(
-                    contract_enforced_disabled=contract_enforced_disabled,
-                    columns_removed=columns_removed,
-                    column_type_changes=column_type_changes,
-                    enforced_column_constraint_removed=enforced_column_constraint_removed,
-                    enforced_model_constraint_removed=enforced_model_constraint_removed,
-                    materialization_changed=materialization_changed,
-                    node=self,
-                )
-            )
 
-        # Otherwise, though we didn't find any *breaking* changes, the contract has still changed -- same_contract: False
-        else:
-            return False
+            breaking_changes = []
+            if contract_enforced_disabled:
+                breaking_changes.append("The contract's enforcement has been disabled.")
+            if columns_removed:
+                columns_removed_str = "\n  - ".join(columns_removed)
+                breaking_changes.append(f"Columns were removed: \n - {columns_removed_str}")
+            if column_type_changes:
+                column_type_changes_str = "\n  - ".join(
+                    [f"{c[0]} ({c[1]} -> {c[2]})" for c in column_type_changes]
+                )
+                breaking_changes.append(
+                    f"Columns with data_type changes: \n - {column_type_changes_str}"
+                )
+            if enforced_column_constraint_removed:
+                column_constraint_changes_str = "\n  - ".join(
+                    [f"{c[0]} ({c[1]})" for c in enforced_column_constraint_removed]
+                )
+                breaking_changes.append(
+                    f"Enforced column level constraints were removed: \n - {column_constraint_changes_str}"
+                )
+            if enforced_model_constraint_removed:
+                model_constraint_changes_str = "\n  - ".join(
+                    [f"{c[0]} -> {c[1]}" for c in enforced_model_constraint_removed]
+                )
+                breaking_changes.append(
+                    f"Enforced model level constraints were removed: \n - {model_constraint_changes_str}"
+                )
+            if materialization_changed:
+                materialization_changes_str = "\n  - ".join(
+                    f"{materialization_changed[0]} -> {materialization_changed[1]}"
+                )
+                breaking_changes.append(
+                    f"Materialization changed with enforced constraints: \n - {materialization_changes_str}"
+                )
+
+            if self.version is None:
+                warn_or_error(
+                    UnversionedBreakingChange(
+                        breaking_changes=breaking_changes,
+                        node=self,
+                    )
+                )
+            else:
+                raise (
+                    ContractBreakingChangeError(
+                        breaking_changes=breaking_changes,
+                        node=self,
+                    )
+                )
+
+        # Otherwise, the contract has changed -- same_contract: False
+        return False
 
 
 # TODO: rm?
