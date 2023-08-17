@@ -1,6 +1,0 @@
-kind: Fixes
-body: Fix warning messages for deprecated dbt_project.yml configs
-time: 2023-05-06T18:09:00.361961+02:00
-custom:
-  Author: jtcohen6
-  Issue: "7424"

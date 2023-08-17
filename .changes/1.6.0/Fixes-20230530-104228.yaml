@@ -1,6 +1,0 @@
-kind: Fixes
-body: Fix empty --warn-error-options error message
-time: 2023-05-30T10:42:28.382804-04:00
-custom:
-  Author: michelleark
-  Issue: "7730"

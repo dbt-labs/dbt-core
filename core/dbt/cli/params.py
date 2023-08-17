@@ -171,6 +171,15 @@ use_colors_file = click.option(
     default=True,
 )
 
+log_file_max_bytes = click.option(
+    "--log-file-max-bytes",
+    envvar="DBT_LOG_FILE_MAX_BYTES",
+    help="Configure the max file size in bytes for a single dbt.log file, before rolling over. 0 means no limit.",
+    default=10 * 1024 * 1024,  # 10mb
+    type=click.INT,
+    hidden=True,
+)
+
 log_path = click.option(
     "--log-path",
     envvar="DBT_LOG_PATH",
@@ -246,6 +255,14 @@ partial_parse_file_path = click.option(
     default=None,
     hidden=True,
     type=click.Path(exists=True, dir_okay=False, resolve_path=True),
+)
+
+partial_parse_file_diff = click.option(
+    "--partial-parse-file-diff/--no-partial-parse-file-diff",
+    envvar="DBT_PARTIAL_PARSE_FILE_DIFF",
+    help="Internal flag for whether to compute a file diff during partial parsing.",
+    hidden=True,
+    default=True,
 )
 
 populate_cache = click.option(
@@ -380,9 +397,9 @@ inline = click.option(
 # Most CLI arguments should use the combined `select` option that aliases `--models` to `--select`.
 # However, if you need to split out these separators (like `dbt ls`), use the `models` and `raw_select` options instead.
 # See https://github.com/dbt-labs/dbt-core/pull/6774#issuecomment-1408476095 for more info.
-models = click.option(*model_decls, **select_attrs)
-raw_select = click.option(*select_decls, **select_attrs)
-select = click.option(*select_decls, *model_decls, **select_attrs)
+models = click.option(*model_decls, **select_attrs)  # type: ignore[arg-type]
+raw_select = click.option(*select_decls, **select_attrs)  # type: ignore[arg-type]
+select = click.option(*select_decls, *model_decls, **select_attrs)  # type: ignore[arg-type]
 
 selector = click.option(
     "--selector",

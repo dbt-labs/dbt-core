@@ -1,6 +1,0 @@
-kind: Fixes
-body: Move project_root contextvar into events.contextvars
-time: 2023-06-26T11:58:38.965299-04:00
-custom:
-  Author: gshank
-  Issue: "7937"

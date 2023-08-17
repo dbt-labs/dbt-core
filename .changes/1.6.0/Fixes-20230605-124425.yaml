@@ -1,6 +1,0 @@
-kind: Fixes
-body: fix RuntimeError when removing project dependency from dependencies.yml
-time: 2023-06-05T12:44:25.978022-04:00
-custom:
-  Author: michelleark
-  Issue: "7743"

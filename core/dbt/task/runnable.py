@@ -313,15 +313,6 @@ class GraphRunnableTask(ConfiguredTask):
                 cause = None
             self._mark_dependent_errors(node.unique_id, result, cause)
 
-        interim_run_result = self.get_result(
-            results=self.node_results,
-            elapsed_time=time.time() - self.started_at,
-            generated_at=datetime.utcnow(),
-        )
-
-        if self.args.write_json and hasattr(interim_run_result, "write"):
-            interim_run_result.write(self.result_path())
-
     def _cancel_connections(self, pool):
         """Given a pool, cancel all adapter connections and wait until all
         runners gentle terminates.
@@ -375,15 +366,27 @@ class GraphRunnableTask(ConfiguredTask):
                     )
 
             print_run_result_error(failure.result)
-            raise
+            # ensure information about all nodes is propagated to run results when failing fast
+            return self.node_results
         except KeyboardInterrupt:
+            run_result = self.get_result(
+                results=self.node_results,
+                elapsed_time=time.time() - self.started_at,
+                generated_at=datetime.utcnow(),
+            )
+
+            if self.args.write_json and hasattr(run_result, "write"):
+                run_result.write(self.result_path())
+
             self._cancel_connections(pool)
             print_run_end_messages(self.node_results, keyboard_interrupt=True)
+
             raise
-        finally:
-            pool.close()
-            pool.join()
-            return self.node_results
+
+        pool.close()
+        pool.join()
+
+        return self.node_results
 
     def _mark_dependent_errors(self, node_id, result, cause):
         if self.graph is None:
@@ -441,7 +444,7 @@ class GraphRunnableTask(ConfiguredTask):
         Run dbt for the query, based on the graph.
         """
         # We set up a context manager here with "task_contextvars" because we
-        # we need the project_root in runtime_initialize.
+        # need the project_root in runtime_initialize.
         with task_contextvars(project_root=self.config.project_root):
             self._runtime_initialize()
 
@@ -582,7 +585,7 @@ class GraphRunnableTask(ConfiguredTask):
                     create_futures.append(fut)
 
             for create_future in as_completed(create_futures):
-                # trigger/re-raise any excceptions while creating schemas
+                # trigger/re-raise any exceptions while creating schemas
                 create_future.result()
 
     def get_result(self, results, elapsed_time, generated_at):

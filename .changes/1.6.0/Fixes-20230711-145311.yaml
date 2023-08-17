@@ -1,6 +1,0 @@
-kind: Fixes
-body: Fix Dockerfile.test
-time: 2023-07-11T14:53:11.454863-06:00
-custom:
-  Author: dbeatty10
-  Issue: "7352"

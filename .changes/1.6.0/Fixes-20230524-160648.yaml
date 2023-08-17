@@ -1,6 +1,0 @@
-kind: Fixes
-body: Add `%` to adapter suite test cases for `persist_docs`
-time: 2023-05-24T16:06:48.477708-06:00
-custom:
-  Author: dbeatty10
-  Issue: "7698"

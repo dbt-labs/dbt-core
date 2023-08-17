@@ -105,14 +105,14 @@ class TestYamlRendering(unittest.TestCase):
         dct = {
             "name": "test{{ metric_name_end }}",
             "description": "{{ docs('my_doc') }}",
-            "filter": "{{ dimension('my_dim') }} = false",
+            "filter": "{{ Dimension('my_entity__my_dim') }} = false",
         }
         # We expect the expression and description will not be rendered, but
         # other fields will be
         expected = {
             "name": "test_metric",
             "description": "{{ docs('my_doc') }}",
-            "filter": "{{ dimension('my_dim') }} = false",
+            "filter": "{{ Dimension('my_entity__my_dim') }} = false",
         }
         dct = renderer.render_data(dct)
         self.assertEqual(dct, expected)

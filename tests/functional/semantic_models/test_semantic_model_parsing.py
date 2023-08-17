@@ -61,6 +61,8 @@ semantic_models:
       - name: user
         type: foreign
         expr: user_id
+      - name: id
+        type: primary
 
 metrics:
   - name: records_with_revenue

@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: Add ability to instantiate Flags class from dict
-time: 2023-05-15T09:51:16.291352-05:00
-custom:
-  Author: stu-k
-  Issue: "7607"

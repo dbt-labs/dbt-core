@@ -532,6 +532,7 @@ class SemanticModelParser(YamlReader):
             measures=self._get_measures(unparsed.measures),
             dimensions=self._get_dimensions(unparsed.dimensions),
             defaults=unparsed.defaults,
+            primary_entity=unparsed.primary_entity,
         )
 
         ctx = generate_parse_semantic_models(

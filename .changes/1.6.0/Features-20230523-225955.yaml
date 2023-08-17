@@ -1,6 +1,0 @@
-kind: Features
-body: Enable state for deferral to be separate from state for selectors
-time: 2023-05-23T22:59:55.920975-07:00
-custom:
-  Author: aranke
-  Issue: "7300"

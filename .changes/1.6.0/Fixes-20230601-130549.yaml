@@ -1,6 +1,0 @@
-kind: Fixes
-body: Fixed doc link in selector.py
-time: 2023-06-01T13:05:49.952-05:00
-custom:
-  Author: quazi-irfan
-  Issue: "7533"
