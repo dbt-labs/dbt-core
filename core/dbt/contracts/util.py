@@ -18,6 +18,7 @@ from dbt.dataclass_schema import (
     ValidationError,
 )
 from mashumaro.jsonschema import build_json_schema
+import functools
 
 
 SourceKey = Tuple[str, str]
@@ -194,6 +195,7 @@ class VersionedSchema(dbtClassMixin):
     dbt_schema_version: ClassVar[SchemaVersion]
 
     @classmethod
+    @functools.lru_cache
     def json_schema(cls) -> Dict[str, Any]:
         json_schema_obj = build_json_schema(cls, all_refs=True)
         json_schema = json_schema_obj.to_dict()

@@ -26,6 +26,7 @@ class SemverString(str, SerializableType):
         return SemverString(value)
 
 
+# This supports full semver, but also allows for 2 group version numbers, (allows '1.0').
 sem_ver_pattern = r"^(0|[1-9]\d*)\.(0|[1-9]\d*)(\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?)?$"
 
 
