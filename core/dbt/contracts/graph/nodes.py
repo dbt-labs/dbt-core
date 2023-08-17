@@ -34,8 +34,8 @@ from dbt.contracts.graph.unparsed import (
     UnparsedSourceDefinition,
     UnparsedSourceTableDefinition,
     UnparsedColumn,
-    UnparsedUnitTestOverrides,
 )
+from dbt.contracts.graph.unit_tests import UnitTestOverrides
 from dbt.contracts.graph.node_args import ModelNodeArgs
 from dbt.contracts.util import Replaceable, AdditionalPropertiesMixin
 from dbt.events.functions import warn_or_error
@@ -988,7 +988,7 @@ class GenericTestNode(TestShouldStoreFailures, CompiledNode, HasTestMetadata):
 class UnitTestNode(CompiledNode):
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Unit]})
     attached_node: Optional[str] = None
-    overrides: Optional[UnparsedUnitTestOverrides] = None
+    overrides: Optional[UnitTestOverrides] = None
 
 
 # ====================================

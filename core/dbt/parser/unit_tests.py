@@ -1,4 +1,4 @@
-from dbt.contracts.graph.unparsed import UnparsedUnitTestSuite
+from dbt.contracts.graph.unit_tests import UnitTestSuite
 from dbt.contracts.graph.model_config import NodeConfig
 from dbt_extractor import py_extract_from_source  # type: ignore
 from dbt.contracts.graph.nodes import (
@@ -71,7 +71,7 @@ class UnitTestParser(YamlReader):
         self.yaml = yaml
         self.unit_test_manifest = unit_test_manifest
 
-    def parse_unit_test(self, unparsed: UnparsedUnitTestSuite):
+    def parse_unit_test(self, unparsed: UnitTestSuite):
         package_name = self.project.project_name
         path = self.yaml.path.relative_path
         # TODO: fix
@@ -178,8 +178,8 @@ class UnitTestParser(YamlReader):
     def parse(self):
         for data in self.get_key_dicts():
             try:
-                UnparsedUnitTestSuite.validate(data)
-                unparsed = UnparsedUnitTestSuite.from_dict(data)
+                UnitTestSuite.validate(data)
+                unparsed = UnitTestSuite.from_dict(data)
             except (ValidationError, JSONValidationError) as exc:
                 raise YamlParseDictError(self.yaml.path, self.key, data, exc)
 
