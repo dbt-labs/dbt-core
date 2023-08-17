@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Fix mypy warnings for ManifestLoader.load()
+time: 2023-08-17T13:45:48.937252-04:00
+custom:
+  Author: gshank
+  Issue: "8401"
