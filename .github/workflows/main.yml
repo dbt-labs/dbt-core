@@ -227,13 +227,21 @@ jobs:
           path: integration_results.csv
 
   integration-report:
+    if: ${{ always() }}
     name: Integration Test Suite
     runs-on: ubuntu-latest
     needs: integration
     steps:
-      - name: "[Notification] Integration test suite passes"
+      - name: "Integration Tests Failed"
+        if: ${{ contains(needs.integration.result, 'failure') || contains(needs.integration.result, 'cancelled') }}
+        # when this is true the next step won't execute
         run: |
-          echo "::notice title="Integration test suite passes""
+          echo "::notice title='Integration test suite failed'"
+          exit 1
+
+      - name: "Integration Tests Passed"
+        run: |
+          echo "::notice title='Integration test suite passed'"
 
   build:
     name: build packages
