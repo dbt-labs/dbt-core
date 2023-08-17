@@ -569,21 +569,83 @@ class TestChangedContract(BaseModifiedState):
         expected_warning = "While comparing to previous project state, dbt detected a breaking change to an unversioned model"
         expected_change = "The contract's enforcement has been disabled."
 
-        # Now disable the contract. Should throw a warning.
+        # Now disable the contract. Should throw a warning - force wanring into an error.
         write_file(self.DISABLED_SCHEMA_YML, "models", "schema.yml")
-        _, logs = run_dbt_and_capture(
-            ["run", "--models", "state:modified.contract", "--state", "./state"]
-        )
-        expected_warning = "While comparing to previous project state, dbt detected a breaking change to an unversioned model"
-        expected_change = "The contract's enforcement has been disabled."
+        with pytest.raises(CompilationError):
+            _, logs = run_dbt_and_capture(
+                [
+                    "--warn-error",
+                    "run",
+                    "--models",
+                    "state:modified.contract",
+                    "--state",
+                    "./state",
+                ]
+            )
+            expected_warning = "While comparing to previous project state, dbt detected a breaking change to an unversioned model"
+            expected_change = "The contract's enforcement has been disabled."
 
 
-class TestChangedContractVersioned(TestChangedContract):
+class TestChangedContractVersioned(BaseModifiedState):
     MODEL_UNIQUE_ID = "model.test.table_model.v1"
     CONTRACT_SCHEMA_YML = versioned_contract_schema_yml
     MODIFIED_SCHEMA_YML = versioned_modified_contract_schema_yml
     DISABLED_SCHEMA_YML = versioned_disabled_contract_schema_yml
     NO_CONTRACT_SCHEMA_YML = versioned_no_contract_schema_yml
+
+    def test_changed_contract_versioned(self, project):
+        self.run_and_save_state()
+
+        # update contract for table_model
+        write_file(self.CONTRACT_SCHEMA_YML, "models", "schema.yml")
+
+        # This will find the table_model node modified both through a config change
+        # and by a non-breaking change to contract: true
+        results = run_dbt(["run", "--models", "state:modified", "--state", "./state"])
+        assert len(results) == 1
+        assert results[0].node.name == "table_model"
+
+        results = run_dbt(["run", "--exclude", "state:unmodified", "--state", "./state"])
+        assert len(results) == 1
+        assert results[0].node.name == "table_model"
+
+        manifest = get_manifest(project.project_root)
+        model_unique_id = self.MODEL_UNIQUE_ID
+        model = manifest.nodes[model_unique_id]
+        expected_unrendered_config = {"contract": {"enforced": True}, "materialized": "table"}
+        assert model.unrendered_config == expected_unrendered_config
+
+        # Run it again with "state:modified:contract", still finds modified due to contract: true
+        results = run_dbt(["run", "--models", "state:modified.contract", "--state", "./state"])
+        assert len(results) == 1
+        manifest = get_manifest(project.project_root)
+        model = manifest.nodes[model_unique_id]
+        first_contract_checksum = model.contract.checksum
+        assert first_contract_checksum
+        # save a new state
+        self.copy_state()
+
+        # This should raise because a column name has changed
+        write_file(self.MODIFIED_SCHEMA_YML, "models", "schema.yml")
+        results = run_dbt(["run"], expect_pass=False)
+        assert len(results) == 2
+        manifest = get_manifest(project.project_root)
+        model = manifest.nodes[model_unique_id]
+        second_contract_checksum = model.contract.checksum
+        # double check different contract_checksums
+        assert first_contract_checksum != second_contract_checksum
+        with pytest.raises(ContractBreakingChangeError):
+            results = run_dbt(["run", "--models", "state:modified.contract", "--state", "./state"])
+
+        # Go back to schema file without contract. Should raise an error.
+        write_file(self.NO_CONTRACT_SCHEMA_YML, "models", "schema.yml")
+        with pytest.raises(ContractBreakingChangeError):
+            results = run_dbt(["run", "--models", "state:modified.contract", "--state", "./state"])
+
+        # Now disable the contract. Should raise an error.
+        write_file(self.DISABLED_SCHEMA_YML, "models", "schema.yml")
+        with pytest.raises(ContractBreakingChangeError):
+            results = run_dbt(["run", "--models", "state:modified.contract", "--state", "./state"])
 
 
 class TestChangedConstraint(BaseModifiedState):
