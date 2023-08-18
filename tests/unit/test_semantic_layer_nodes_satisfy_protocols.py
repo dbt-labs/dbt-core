@@ -5,6 +5,7 @@ from dbt.contracts.graph.nodes import (
     Metric,
     MetricInput,
     MetricInputMeasure,
+    MetricTimeWindow,
     MetricTypeParams,
     NodeRelation,
     SemanticModel,
@@ -130,6 +131,11 @@ class RuntimeCheckableMeasureAggregationParams(
     pass
 
 
+@runtime_checkable
+class RuntimeCheckableMetricTimeWindow(MetricProtocols.MetricTimeWindow, Protocol):
+    pass
+
+
 @pytest.fixture(scope="session")
 def file_slice() -> FileSlice:
     return FileSlice(
@@ -178,6 +184,54 @@ def non_additive_dimension() -> NonAdditiveDimension:
 def where_filter() -> WhereFilter:
     return WhereFilter(
         where_sql_template="{{ Dimension('enity_name__dimension_name') }} AND {{ TimeDimension('entity_name__time_dimension_name', 'month') }} AND {{ Entity('entity_name') }}"
+    )
+
+
+@pytest.fixture(scope="session")
+def metric_time_window() -> MetricTimeWindow:
+    return MetricTimeWindow(count=1, granularity=TimeGranularity.DAY)
+
+
+@pytest.fixture(scope="session")
+def simple_metric_input() -> MetricInput:
+    return MetricInput(name="test_simple_metric_input")
+
+
+@pytest.fixture(scope="session")
+def complex_metric_input(metric_time_window, where_filter) -> MetricInput:
+    return MetricInput(
+        name="test_complex_metric_input",
+        filter=where_filter,
+        alias="aliased_metric_input",
+        offset_window=metric_time_window,
+        offset_to_grain=TimeGranularity.DAY,
+    )
+
+
+@pytest.fixture(scope="session")
+def simple_metric_input_measure() -> MetricInputMeasure:
+    return MetricInputMeasure(name="test_simple_metric_input_measure")
+
+
+@pytest.fixture(scope="session")
+def complex_metric_input_measure(where_filter) -> MetricInputMeasure:
+    return MetricInputMeasure(
+        name="test_complex_metric_input_measure", filter=where_filter, alias="complex_alias"
+    )
+
+
+@pytest.fixture(scope="session")
+def complex_metric_type_params(
+    metric_time_window, simple_metric_input, simple_metric_input_measure
+) -> MetricTypeParams:
+    return MetricTypeParams(
+        measure=simple_metric_input_measure,
+        numerator=simple_metric_input,
+        denominator=simple_metric_input,
+        expr="1 = 1",
+        window=metric_time_window,
+        grain_to_date=TimeGranularity.DAY,
+        metrics=[simple_metric_input],
     )
 
 
@@ -351,7 +405,9 @@ def test_metric_node_satisfies_protocol_optionals_unspecified():
     assert isinstance(metric, RuntimeCheckableMetric)
 
 
-def test_metric_node_satisfies_protocol_optionals_specified(source_file_metadata, where_filter):
+def test_metric_node_satisfies_protocol_optionals_specified(
+    complex_metric_type_params, source_file_metadata, where_filter
+):
     metric = Metric(
         name="a_metric",
         resource_type=NodeType.Metric,
@@ -363,11 +419,7 @@ def test_metric_node_satisfies_protocol_optionals_specified(source_file_metadata
         description="a test metric",
         label="A test metric",
         type=MetricType.SIMPLE,
-        type_params=MetricTypeParams(
-            measure=MetricInputMeasure(
-                name="a_test_measure", filter=WhereFilter(where_sql_template="a_dimension is true")
-            )
-        ),
+        type_params=complex_metric_type_params,
         filter=where_filter,
         metadata=source_file_metadata,
         group="test_group",
@@ -379,19 +431,23 @@ def test_where_filter_satisfies_protocol(where_filter):
     assert isinstance(where_filter, RuntimeCheckableWhereFilter)
 
 
-def test_metric_input():
-    metric_input = MetricInput(name="a_metric_input")
-    assert isinstance(metric_input, RuntimeCheckableMetricInput)
+def test_metric_time_window(metric_time_window):
+    assert isinstance(metric_time_window, RuntimeCheckableMetricTimeWindow)
 
 
-def test_metric_input_measure():
-    metric_input_measure = MetricInputMeasure(name="a_metric_input_measure")
-    assert isinstance(metric_input_measure, RuntimeCheckableMetricInputMeasure)
+def test_metric_input(simple_metric_input, complex_metric_input):
+    assert isinstance(simple_metric_input, RuntimeCheckableMetricInput)
+    assert isinstance(complex_metric_input, RuntimeCheckableMetricInput)
 
 
-def test_metric_type_params_satisfies_protocol():
-    type_params = MetricTypeParams()
-    assert isinstance(type_params, RuntimeCheckableMetricTypeParams)
+def test_metric_input_measure(simple_metric_input_measure, complex_metric_input_measure):
+    assert isinstance(simple_metric_input_measure, RuntimeCheckableMetricInputMeasure)
+    assert isinstance(complex_metric_input_measure, RuntimeCheckableMetricInputMeasure)
+
+
+def test_metric_type_params_satisfies_protocol(complex_metric_type_params):
+    assert isinstance(MetricTypeParams(), RuntimeCheckableMetricTypeParams)
+    assert isinstance(complex_metric_type_params, RuntimeCheckableMetricTypeParams)
 
 
 def test_non_additive_dimension_satisfies_protocol(non_additive_dimension):
