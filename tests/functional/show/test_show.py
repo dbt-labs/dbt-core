@@ -6,6 +6,7 @@ from tests.functional.show.fixtures import (
     models__second_ephemeral_model,
     seeds__sample_seed,
     models__sample_model,
+    models__sample_number_model,
     models__second_model,
     models__ephemeral_model,
     schema_yml,
@@ -14,11 +15,12 @@ from tests.functional.show.fixtures import (
 )
 
 
-class BaseTestShow:
+class TestShow:
     @pytest.fixture(scope="class")
     def models(self):
         return {
             "sample_model.sql": models__sample_model,
+            "sample_number_model.sql": models__sample_number_model,
             "second_model.sql": models__second_model,
             "ephemeral_model.sql": models__ephemeral_model,
             "sql_header.sql": models__sql_header,
@@ -28,8 +30,6 @@ class BaseTestShow:
     def seeds(self):
         return {"sample_seed.csv": seeds__sample_seed}
 
-
-class TestNone(BaseTestShow):
     def test_none(self, project):
         with pytest.raises(
             DbtRuntimeError, match="Either --select or --inline must be passed to show"
@@ -37,8 +37,6 @@ class TestNone(BaseTestShow):
             run_dbt(["seed"])
             run_dbt(["show"])
 
-
-class TestSelectModelText(BaseTestShow):
     def test_select_model_text(self, project):
         run_dbt(["build"])
         (results, log_output) = run_dbt_and_capture(["show", "--select", "second_model"])
@@ -48,8 +46,6 @@ class TestSelectModelText(BaseTestShow):
         assert "col_two" in log_output
         assert "answer" in log_output
 
-
-class TestSelectMultModelText(BaseTestShow):
     def test_select_multiple_model_text(self, project):
         run_dbt(["build"])
         (results, log_output) = run_dbt_and_capture(
@@ -59,8 +55,6 @@ class TestSelectMultModelText(BaseTestShow):
         assert "sample_num" in log_output
         assert "sample_bool" in log_output
 
-
-class TestSelectSingleMultModelJson(BaseTestShow):
     def test_select_single_model_json(self, project):
         run_dbt(["build"])
         (results, log_output) = run_dbt_and_capture(
@@ -70,8 +64,19 @@ class TestSelectSingleMultModelJson(BaseTestShow):
         assert "sample_num" in log_output
         assert "sample_bool" in log_output
 
+    def test_numeric_values(self, project):
+        run_dbt(["build"])
+        (results, log_output) = run_dbt_and_capture(
+            ["show", "--select", "sample_number_model", "--output", "json"]
+        )
+        assert "Previewing node 'sample_number_model'" not in log_output
+        assert "1.0" not in log_output
+        assert "1" in log_output
+        assert "3.0" in log_output
+        assert "4.3" in log_output
+        assert "5" in log_output
+        assert "5.0" not in log_output
 
-class TestInlinePass(BaseTestShow):
     def test_inline_pass(self, project):
         run_dbt(["build"])
         (results, log_output) = run_dbt_and_capture(
@@ -81,8 +86,6 @@ class TestInlinePass(BaseTestShow):
         assert "sample_num" in log_output
         assert "sample_bool" in log_output
 
-
-class TestShowExceptions(BaseTestShow):
     def test_inline_fail(self, project):
         with pytest.raises(DbtException, match="Error parsing inline query"):
             run_dbt(["show", "--inline", "select * from {{ ref('third_model') }}"])
@@ -91,8 +94,6 @@ class TestShowExceptions(BaseTestShow):
         with pytest.raises(DbtRuntimeError, match="Database Error"):
             run_dbt(["show", "--inline", "slect asdlkjfsld;j"])
 
-
-class TestEphemeralModels(BaseTestShow):
     def test_ephemeral_model(self, project):
         run_dbt(["build"])
         (results, log_output) = run_dbt_and_capture(["show", "--select", "ephemeral_model"])
@@ -105,8 +106,6 @@ class TestEphemeralModels(BaseTestShow):
         )
         assert "col_hundo" in log_output
 
-
-class TestLimit(BaseTestShow):
     @pytest.mark.parametrize(
         "args,expected",
         [
@@ -121,14 +120,10 @@ class TestLimit(BaseTestShow):
         results, log_output = run_dbt_and_capture(dbt_args)
         assert len(results.results[0].agate_table) == expected
 
-
-class TestSeed(BaseTestShow):
     def test_seed(self, project):
         (results, log_output) = run_dbt_and_capture(["show", "--select", "sample_seed"])
         assert "Previewing node 'sample_seed'" in log_output
 
-
-class TestSqlHeader(BaseTestShow):
     def test_sql_header(self, project):
         run_dbt(["build"])
         (results, log_output) = run_dbt_and_capture(["show", "--select", "sql_header"])
