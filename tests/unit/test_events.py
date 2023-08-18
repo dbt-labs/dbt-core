@@ -252,6 +252,8 @@ sample_values = [
     ),
     types.UnsupportedConstraintMaterialization(materialized=""),
     types.ParseInlineNodeError(exc=""),
+    types.SemanticValidationFailure(msg=""),
+    types.UnversionedBreakingChange(breaking_changes=[], model_name="", model_file_path=""),
     # M - Deps generation ======================
     types.GitSparseCheckoutSubdirectory(subdir=""),
     types.GitProgressCheckoutRevision(revision=""),
@@ -279,7 +281,6 @@ sample_values = [
     types.RegistryResponseMissingNestedKeys(response=""),
     types.RegistryResponseExtraNestedKeys(response=""),
     types.DepsSetDownloadDirectory(path=""),
-    types.SemanticValidationFailure(msg=""),
     # Q - Node execution ======================
     types.RunningOperationCaughtError(exc=""),
     types.CompileComplete(),
