@@ -224,11 +224,11 @@ class ContractBreakingChangeError(DbtRuntimeError):
         return "Breaking Change to Contract"
 
     def message(self):
-        reasons = "\n".join(self.breaking_changes)
+        reasons = "\n  - ".join(self.breaking_changes)
 
         return (
             "While comparing to previous project state, dbt detected a breaking change to an enforced contract."
-            f"\n- {reasons}\n"
+            f"\n  - {reasons}\n"
             "Consider making an additive (non-breaking) change instead, if possible.\n"
             "Otherwise, create a new model version: https://docs.getdbt.com/docs/collaborate/govern/model-versions"
         )

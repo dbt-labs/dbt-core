@@ -776,35 +776,36 @@ class ModelNode(CompiledNode):
                     "Contract enforcement was removed: Previously, this model's configuration included contract: {enforced: true}. It is no longer configured to enforce its contract, and this is a breaking change."
                 )
             if columns_removed:
-                columns_removed_str = "\n  - ".join(columns_removed)
-                breaking_changes.append(f"Columns were removed: \n - {columns_removed_str}")
+                columns_removed_str = "\n    - ".join(columns_removed)
+                breaking_changes.append(f"Columns were removed: \n    - {columns_removed_str}")
             if column_type_changes:
-                column_type_changes_str = "\n  - ".join(
+                column_type_changes_str = "\n    - ".join(
                     [f"{c[0]} ({c[1]} -> {c[2]})" for c in column_type_changes]
                 )
                 breaking_changes.append(
-                    f"Columns with data_type changes: \n - {column_type_changes_str}"
+                    f"Columns with data_type changes: \n    - {column_type_changes_str}"
                 )
             if enforced_column_constraint_removed:
-                column_constraint_changes_str = "\n  - ".join(
+                column_constraint_changes_str = "\n    - ".join(
                     [f"{c[0]} ({c[1]})" for c in enforced_column_constraint_removed]
                 )
                 breaking_changes.append(
-                    f"Enforced column level constraints were removed: \n - {column_constraint_changes_str}"
+                    f"Enforced column level constraints were removed: \n    - {column_constraint_changes_str}"
                 )
             if enforced_model_constraint_removed:
-                model_constraint_changes_str = "\n  - ".join(
+                model_constraint_changes_str = "\n    - ".join(
                     [f"{c[0]} -> {c[1]}" for c in enforced_model_constraint_removed]
                 )
                 breaking_changes.append(
-                    f"Enforced model level constraints were removed: \n - {model_constraint_changes_str}"
+                    f"Enforced model level constraints were removed: \n    - {model_constraint_changes_str}"
                 )
             if materialization_changed:
-                materialization_changes_str = "\n  - ".join(
+                materialization_changes_str = (
                     f"{materialization_changed[0]} -> {materialization_changed[1]}"
                 )
+
                 breaking_changes.append(
-                    f"Materialization changed with enforced constraints: \n - {materialization_changes_str}"
+                    f"Materialization changed with enforced constraints: \n    - {materialization_changes_str}"
                 )
 
             if self.version is None:

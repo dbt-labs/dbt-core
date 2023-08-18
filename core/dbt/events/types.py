@@ -1238,7 +1238,7 @@ class UnversionedBreakingChange(WarnLevel):
         return "I071"
 
     def message(self) -> str:
-        reasons = "\n".join(self.breaking_changes)
+        reasons = "\n  - ".join(self.breaking_changes)
 
         return (
             f"Breaking Change to Unversioned Contract for {self.model_name} ({self.model_file_path})"
