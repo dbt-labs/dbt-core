@@ -1251,6 +1251,8 @@ message SemanticValidationFailureMsg {
 // I071
 message UnversionedBreakingChange {
     repeated string breaking_changes = 1;
+    string model_name = 2;
+    string model_file_path = 3;
 }
 
 message UnversionedBreakingChangeMsg {

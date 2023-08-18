@@ -502,7 +502,7 @@ class TestChangedExposure(BaseModifiedState):
         assert len(results) == 0
 
 
-class TestChangedContract(BaseModifiedState):
+class TestChangedContractUnversioned(BaseModifiedState):
     MODEL_UNIQUE_ID = "model.test.table_model"
     CONTRACT_SCHEMA_YML = contract_schema_yml
     MODIFIED_SCHEMA_YML = modified_contract_schema_yml
@@ -567,9 +567,9 @@ class TestChangedContract(BaseModifiedState):
             ["run", "--models", "state:modified.contract", "--state", "./state"]
         )
         expected_warning = "While comparing to previous project state, dbt detected a breaking change to an unversioned model"
-        expected_change = "The contract's enforcement has been disabled."
+        expected_change = "Contract enforcement was removed"
 
-        # Now disable the contract. Should throw a warning - force wanring into an error.
+        # Now disable the contract. Should throw a warning - force warning into an error.
         write_file(self.DISABLED_SCHEMA_YML, "models", "schema.yml")
         with pytest.raises(CompilationError):
             _, logs = run_dbt_and_capture(
@@ -583,7 +583,7 @@ class TestChangedContract(BaseModifiedState):
                 ]
             )
             expected_warning = "While comparing to previous project state, dbt detected a breaking change to an unversioned model"
-            expected_change = "The contract's enforcement has been disabled."
+            expected_change = "Contract enforcement was removed"
 
 
 class TestChangedContractVersioned(BaseModifiedState):
@@ -648,7 +648,7 @@ class TestChangedContractVersioned(BaseModifiedState):
             results = run_dbt(["run", "--models", "state:modified.contract", "--state", "./state"])
 
 
-class TestChangedConstraint(BaseModifiedState):
+class TestChangedConstraintUnversioned(BaseModifiedState):
     def test_changed_constraint(self, project):
         self.run_and_save_state()
 

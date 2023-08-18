@@ -1238,11 +1238,12 @@ class UnversionedBreakingChange(WarnLevel):
         return "I071"
 
     def message(self) -> str:
-        reasons = "\n\n".join(self.breaking_changes)
+        reasons = "\n".join(self.breaking_changes)
 
         return (
-            "While comparing to previous project state, dbt detected a breaking change to an unversioned model."
-            f"\n\n{reasons}\n\n"
+            f"Breaking Change to Unversioned Contract for {self.model_name} ({self.model_file_path})"
+            "\nWhile comparing to previous project state, dbt detected a breaking change to an unversioned model."
+            f"\n  - {reasons}\n"
         )
 
 

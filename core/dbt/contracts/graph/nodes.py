@@ -772,7 +772,9 @@ class ModelNode(CompiledNode):
 
             breaking_changes = []
             if contract_enforced_disabled:
-                breaking_changes.append("The contract's enforcement has been disabled.")
+                breaking_changes.append(
+                    "Contract enforcement was removed: Previously, this model's configuration included contract: {enforced: true}. It is no longer configured to enforce its contract, and this is a breaking change."
+                )
             if columns_removed:
                 columns_removed_str = "\n  - ".join(columns_removed)
                 breaking_changes.append(f"Columns were removed: \n - {columns_removed_str}")
@@ -806,7 +808,14 @@ class ModelNode(CompiledNode):
                 )
 
             if self.version is None:
-                warn_or_error(UnversionedBreakingChange(breaking_changes=breaking_changes))
+                warn_or_error(
+                    UnversionedBreakingChange(
+                        breaking_changes=breaking_changes,
+                        model_name=self.name,
+                        model_file_path=self.original_file_path,
+                    ),
+                    node=self,
+                )
             else:
                 raise (
                     ContractBreakingChangeError(
