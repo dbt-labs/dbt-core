@@ -42,3 +42,4 @@ class UnitTestSuite(dbtClassMixin):
     path: str
     original_file_path: str
     unique_id: str
+    attached_node: str

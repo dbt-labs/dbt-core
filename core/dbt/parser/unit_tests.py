@@ -207,6 +207,14 @@ class UnitTestParser(YamlReader):
                 raise YamlParseDictError(self.yaml.path, self.key, data, exc)
             package_name = self.project.project_name
             unit_test_unique_id = f"unit.{package_name}.{unparsed.model}"
+
+            actual_node = self.manifest.ref_lookup.perform_lookup(
+                f"model.{package_name}.{unparsed.model}", self.manifest
+            )
+            if not actual_node:
+                raise ParsingError(
+                    "Unable to find model {unparsed.model} for unit tests in {self.yaml.path.original_file_path}"
+                )
             unit_test_suite = UnitTestSuite(
                 name=unparsed.model,
                 model=unparsed.model,
@@ -216,5 +224,6 @@ class UnitTestParser(YamlReader):
                 original_file_path=self.yaml.path.original_file_path,
                 unique_id=unit_test_unique_id,
                 tests=unparsed.tests,
+                attached_node=actual_node.unique_id,
             )
             self.manifest.unit_tests[unit_test_unique_id] = unit_test_suite
