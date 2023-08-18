@@ -671,6 +671,7 @@ class PartialParsing:
         handle_change("metrics", self.delete_schema_metric)
         handle_change("groups", self.delete_schema_group)
         handle_change("semantic_models", self.delete_schema_semantic_model)
+        handle_change("unit", self.delete_schema_unit_test)
 
     def _handle_element_change(
         self, schema_file, saved_yaml_dict, new_yaml_dict, env_var_changes, dict_key: str, delete
@@ -902,6 +903,14 @@ class PartialParsing:
                 schema_file.generated_metrics.remove(unique_id)
             elif unique_id in self.saved_manifest.disabled:
                 self.delete_disabled(unique_id, schema_file.file_id)
+
+    def delete_schema_unit_test(self, schema_file, unit_test_dict):
+        unit_tests = schema_file.unit_tests.copy()
+        for unique_id in unit_tests:
+            if unique_id in self.saved_manifest.unit_tests:
+                self.saved_manifest.unit_tests.pop(unique_id)
+                schema_file.unit_tests.remove(unique_id)
+            # No disabled unit test yet
 
     def get_schema_element(self, elem_list, elem_name):
         for element in elem_list:

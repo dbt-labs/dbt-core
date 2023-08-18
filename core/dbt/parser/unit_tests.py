@@ -226,4 +226,4 @@ class UnitTestParser(YamlReader):
                 tests=unparsed.tests,
                 attached_node=actual_node.unique_id,
             )
-            self.manifest.unit_tests[unit_test_unique_id] = unit_test_suite
+            self.manifest.add_unit_test(self.yaml.file, unit_test_suite)

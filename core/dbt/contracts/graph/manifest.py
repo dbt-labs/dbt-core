@@ -1376,6 +1376,12 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         self.semantic_models[semantic_model.unique_id] = semantic_model
         source_file.semantic_models.append(semantic_model.unique_id)
 
+    def add_unit_test(self, source_file: SchemaSourceFile, unit_test: UnitTestSuite):
+        if unit_test.unique_id in self.unit_tests:
+            raise DuplicateResourceNameError(unit_test, self.unit_tests[unit_test.unique_id])
+        self.unit_tests[unit_test.unique_id] = unit_test
+        source_file.unit_tests.append(unit_test.unique_id)
+
     # end of methods formerly in ParseResult
 
     # Provide support for copy.deepcopy() - we just need to avoid the lock!
