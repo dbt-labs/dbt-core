@@ -49,6 +49,12 @@ semantic_models:
         agg_time_dimension: ds
         agg_params:
           percentile: 0.99
+      - name: test_non_additive
+        expr: txn_revenue
+        agg: sum
+        non_additive_dimension:
+          name: ds
+          window_choice: max
 
     dimensions:
       - name: ds
@@ -125,7 +131,7 @@ class TestSemanticModelParsing:
             semantic_model.node_relation.relation_name
             == f'"dbt"."{project.test_schema}"."fct_revenue"'
         )
-        assert len(semantic_model.measures) == 5
+        assert len(semantic_model.measures) == 6
 
     def test_semantic_model_error(self, project):
         # Next, modify the default schema.yml to remove the semantic model.
