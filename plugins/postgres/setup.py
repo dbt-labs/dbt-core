@@ -73,6 +73,8 @@ setup(
         "{}~=2.8".format(DBT_PSYCOPG2_NAME),
         # installed via dbt-core, but referenced directly, don't pin to avoid version conflicts with dbt-core
         "agate",
+        # pinned version, which works with dbt-redshift
+        "boto3~=1.26.157",
     ],
     zip_safe=False,
     classifiers=[

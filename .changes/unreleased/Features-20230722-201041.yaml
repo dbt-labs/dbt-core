@@ -1,0 +1,6 @@
+kind: Features
+body: add IAM Authentication to dbt-postgres
+time: 2023-07-22T20:10:41.9286694+02:00
+custom:
+  Author: christopherscholz
+  Issue: "8186"

@@ -497,6 +497,17 @@ class TestConnectingPostgresAdapter(unittest.TestCase):
         with self.assertRaises(DbtConfigError):
             DebugTask.validate_connection(self.target_dict)
 
+    def test_debug_connection_iam_ok(self):
+        del self.target_dict["pass"]
+        self.target_dict["method"] = "iam"
+        with self.assertRaises(DbtConfigError):
+            DebugTask.validate_connection(self.target_dict)
+
+    def test_debug_connection_iam_fail_nopass(self):
+        self.target_dict["method"] = "iam"
+        with self.assertRaises(DbtConfigError):
+            DebugTask.validate_connection(self.target_dict)
+
     def test_connection_fail_select(self):
         self.mock_execute.side_effect = DatabaseError()
         with self.assertRaises(DbtConfigError):
