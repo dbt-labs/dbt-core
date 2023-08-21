@@ -1,4 +1,5 @@
 {% macro get_create_materialized_view_as_sql(relation, sql) -%}
+    {{- log('Applying CREATE to: ' ~ relation) -}}
     {{- adapter.dispatch('get_create_materialized_view_as_sql', 'dbt')(relation, sql) -}}
 {%- endmacro %}
 
