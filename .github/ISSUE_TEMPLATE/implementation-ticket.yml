@@ -34,9 +34,9 @@ body:
     attributes:
       label: Impact to Other Teams
       description: |
-        Will this change impact other teams?  Include details of the kinds of changes required (new tests, code changes, related tickets) and _add the relevant `Impact[team]` label_.
+        Will this change impact other teams?  Include details of the kinds of changes required (new tests, code changes, related tickets) and _add the relevant `Impact:[team]` label_.
       placeholder: |
-        Example: This change impacts `dbt-redshift` because the tests will need to be modified.  The `Impact[Adapter]` label has been added.
+        Example: This change impacts `dbt-redshift` because the tests will need to be modified.  The `Impact:[Adapter]` label has been added.
     validations:
       required: true
   - type: textarea
