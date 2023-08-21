@@ -2,6 +2,14 @@ models__sample_model = """
 select * from {{ ref('sample_seed') }}
 """
 
+models__sample_number_model = """
+select
+  cast(1.0 as int) as float_to_int_field,
+  3.0 as float_field,
+  4.3 as float_with_dec_field,
+  5 as int_field
+"""
+
 models__second_model = """
 select
     sample_num as col_one,
