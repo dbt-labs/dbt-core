@@ -1241,7 +1241,7 @@ class UnversionedBreakingChange(WarnLevel):
         reasons = "\n  - ".join(self.breaking_changes)
 
         return (
-            f"Breaking Change to Unversioned Contract for {self.model_name} ({self.model_file_path})"
+            f"Breaking change to contracted, unversioned model {self.model_name} ({self.model_file_path})"
             "\nWhile comparing to previous project state, dbt detected a breaking change to an unversioned model."
             f"\n  - {reasons}\n"
         )

@@ -221,7 +221,7 @@ class ContractBreakingChangeError(DbtRuntimeError):
 
     @property
     def type(self):
-        return "Breaking Change to Contract"
+        return "Breaking change to contract"
 
     def message(self):
         reasons = "\n  - ".join(self.breaking_changes)
