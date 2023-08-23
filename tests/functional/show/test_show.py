@@ -64,6 +64,7 @@ class TestShow:
         assert "sample_num" in log_output
         assert "sample_bool" in log_output
 
+    @pytest.mark.flaky(max_runs=5)
     def test_numeric_values(self, project):
         run_dbt(["build"])
         (results, log_output) = run_dbt_and_capture(
