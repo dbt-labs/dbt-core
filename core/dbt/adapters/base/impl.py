@@ -43,7 +43,7 @@ from dbt.exceptions import (
     UnexpectedNullError,
 )
 
-from dbt.adapters.protocol import AdapterConfig, ConnectionManagerProtocol
+from dbt.adapters.protocol import AdapterConfig
 from dbt.clients.agate_helper import empty_table, merge_tables, table_from_rows
 from dbt.clients.jinja import MacroGenerator
 from dbt.contracts.graph.manifest import Manifest, MacroManifest
@@ -60,7 +60,7 @@ from dbt.events.types import (
 )
 from dbt.utils import filter_null_values, executor, cast_to_str, AttrDict
 
-from dbt.adapters.base.connections import Connection, AdapterResponse
+from dbt.adapters.base.connections import Connection, AdapterResponse, BaseConnectionManager
 from dbt.adapters.base.meta import AdapterMeta, available
 from dbt.adapters.base.relation import (
     ComponentName,
@@ -208,7 +208,7 @@ class BaseAdapter(metaclass=AdapterMeta):
 
     Relation: Type[BaseRelation] = BaseRelation
     Column: Type[BaseColumn] = BaseColumn
-    ConnectionManager: Type[ConnectionManagerProtocol]
+    ConnectionManager: Type[BaseConnectionManager]
 
     # A set of clobber config fields accepted by this adapter
     # for use in materializations
@@ -315,14 +315,21 @@ class BaseAdapter(metaclass=AdapterMeta):
 
     @available.parse(lambda *a, **k: ("", empty_table()))
     def get_partitions_metadata(self, table: str) -> Tuple[agate.Table]:
-        """Obtain partitions metadata for a BigQuery partitioned table.
+        """
+        TODO: Can we move this to dbt-bigquery?
+        Obtain partitions metadata for a BigQuery partitioned table.
 
-        :param str table_id: a partitioned table id, in standard SQL format.
+        :param str table: a partitioned table id, in standard SQL format.
         :return: a partition metadata tuple, as described in
             https://cloud.google.com/bigquery/docs/creating-partitioned-tables#getting_partition_metadata_using_meta_tables.
         :rtype: agate.Table
         """
-        return self.connections.get_partitions_metadata(table=table)
+        if hasattr(self.connections, "get_partitions_metadata"):
+            return self.connections.get_partitions_metadata(table=table)
+        else:
+            raise NotImplementedError(
+                "`get_partitions_metadata` is not implemented for this adapter!"
+            )
 
     ###
     # Methods that should never be overridden
@@ -453,9 +460,10 @@ class BaseAdapter(metaclass=AdapterMeta):
         # it's possible that there were no relations in some schemas. We want
         # to insert the schemas we query into the cache's `.schemas` attribute
         # so we can check it later
-        cache_update: Set[Tuple[Optional[str], Optional[str]]] = set()
+        cache_update: Set[Tuple[Optional[str], str]] = set()
         for relation in cache_schemas:
-            cache_update.add((relation.database, relation.schema))
+            if relation.schema:
+                cache_update.add((relation.database, relation.schema))
         self.cache.update_schemas(cache_update)
 
     def set_relations_cache(
