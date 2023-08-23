@@ -378,12 +378,19 @@ class BaseConfig(AdditionalPropertiesAllowed, Replaceable):
 @dataclass
 class SemanticModelConfig(BaseConfig):
     enabled: bool = True
+    group: Optional[str] = field(
+        default=None,
+        metadata=CompareBehavior.Exclude.meta(),
+    )
 
 
 @dataclass
 class MetricConfig(BaseConfig):
     enabled: bool = True
-    group: Optional[str] = None
+    group: Optional[str] = field(
+        default=None,
+        metadata=CompareBehavior.Exclude.meta(),
+    )
 
 
 @dataclass

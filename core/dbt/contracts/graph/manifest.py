@@ -1359,6 +1359,8 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
                 source_file.add_test(node.unique_id, test_from)
             if isinstance(node, Metric):
                 source_file.metrics.append(node.unique_id)
+            if isinstance(node, SemanticModel):
+                source_file.semantic_models.append(node.unique_id)
             if isinstance(node, Exposure):
                 source_file.exposures.append(node.unique_id)
         else:
