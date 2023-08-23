@@ -75,14 +75,16 @@ message ColumnType {
 
 // ColumnConstraint
 message ColumnConstraint {
-    string column = 1;
-    string constraint_type = 2;
+    string column_name = 1;
+    string constraint_name = 2;
+    string constraint_type = 3;
 }
 
 // ModelConstraint
 message ModelConstraint {
-    string constraint_type = 1;
-    repeated string columns = 2;
+    string constraint_name = 1;
+    string constraint_type = 2;
+    repeated string columns = 3;
 }
 
 // GenericMessage, used for deserializing only
@@ -1275,8 +1277,8 @@ message UnversionedBreakingChange {
     bool contract_enforced_disabled = 4;
     repeated string columns_removed = 5;
     repeated ColumnType column_type_changes = 6;
-    // repeated ColumnConstraint enforced_column_constraint_removed = 7;
-    // repeated ModelConstraint enforced_model_constraint_removed = 8;
+    repeated ColumnConstraint enforced_column_constraint_removed = 7;
+    repeated ModelConstraint enforced_model_constraint_removed = 8;
     repeated string materialization_changed = 9;
 }
 

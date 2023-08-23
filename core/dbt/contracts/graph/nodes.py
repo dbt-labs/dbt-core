@@ -683,11 +683,11 @@ class ModelNode(CompiledNode):
         # These are the categories of breaking changes:
         contract_enforced_disabled: bool = False
         columns_removed: List[str] = []
-        column_type_changes: List[Tuple[str, str, str]] = []
-        enforced_column_constraint_removed: List[Tuple[str, str]] = []  # column, constraint_type
-        enforced_model_constraint_removed: List[
-            Tuple[str, List[str]]
-        ] = []  # constraint_type, columns
+        column_type_changes: List[Dict[str, str]] = []
+        enforced_column_constraint_removed: List[
+            Dict[str, str]
+        ] = []  # column_name, constraint_type
+        enforced_model_constraint_removed: List[Dict[str, Any]] = []  # constraint_type, columns
         materialization_changed: List[str] = []
 
         if old.contract.enforced is True and self.contract.enforced is False:
@@ -709,11 +709,11 @@ class ModelNode(CompiledNode):
             # Has this column's data type changed?
             elif old_value.data_type != self.columns[old_key].data_type:
                 column_type_changes.append(
-                    (
-                        str(old_value.name),
-                        str(old_value.data_type),
-                        str(self.columns[old_key].data_type),
-                    )
+                    {
+                        "column_name": str(old_value.name),
+                        "previous_column_type": str(old_value.data_type),
+                        "current_column_type": str(self.columns[old_key].data_type),
+                    }
                 )
 
             # track if there are any column level constraints for the materialization check late
@@ -734,7 +734,11 @@ class ModelNode(CompiledNode):
                         and constraint_support[old_constraint.type] == ConstraintSupport.ENFORCED
                     ):
                         enforced_column_constraint_removed.append(
-                            (old_key, str(old_constraint.type))
+                            {
+                                "column_name": old_key,
+                                "constraint_name": old_constraint.name,
+                                "constraint_type": ConstraintType(old_constraint.type),
+                            }
                         )
 
         # Now compare the model level constraints
@@ -745,7 +749,11 @@ class ModelNode(CompiledNode):
                     and constraint_support[old_constraint.type] == ConstraintSupport.ENFORCED
                 ):
                     enforced_model_constraint_removed.append(
-                        (str(old_constraint.type), old_constraint.columns)
+                        {
+                            "constraint_name": old_constraint.name,
+                            "constraint_type": ConstraintType(old_constraint.type),
+                            "columns": old_constraint.columns,
+                        }
                     )
 
         # Check for relevant materialization changes.
@@ -780,23 +788,18 @@ class ModelNode(CompiledNode):
                 breaking_changes.append(f"Columns were removed: \n    - {columns_removed_str}")
             if column_type_changes:
                 column_type_changes_str = "\n    - ".join(
-                    [f"{c[0]} ({c[1]} -> {c[2]})" for c in column_type_changes]
+                    [
+                        f"{c['column_name']} ({c['previous_column_type']} -> {c['current_column_type']})"
+                        for c in column_type_changes
+                    ]
                 )
                 breaking_changes.append(
                     f"Columns with data_type changes: \n    - {column_type_changes_str}"
                 )
             if enforced_column_constraint_removed:
-                # breakpoint()
-                # TODO: need to add logic to use the name if it exists, otherwise use the stringified type
-                # column_constraint_changes_str = "\n    - ".join(
-                #     [
-                #         f"'{str(c[1])}' constraint on column {c[0]}"
-                #         for c in enforced_column_constraint_removed
-                #     ]
-                # )
                 column_constraint_changes_str = "\n    - ".join(
                     [
-                        f"'{c[1]}' constraint on column {c[0]}"
+                        f"'{c['constraint_name'] if c['constraint_name'] is not None else c['constraint_type']}' constraint on column {c['column_name']}"
                         for c in enforced_column_constraint_removed
                     ]
                 )
@@ -804,16 +807,9 @@ class ModelNode(CompiledNode):
                     f"Enforced column level constraints were removed: \n    - {column_constraint_changes_str}"
                 )
             if enforced_model_constraint_removed:
-                # TODO: need to add logic to use the name if it exists, otherwise use the stringified type
-                # model_constraint_changes_str = "\n    - ".join(
-                #     [
-                #         f"'{str(c[0])}' constraint on columns {c[1]}"
-                #         for c in enforced_model_constraint_removed
-                #     ]
-                # )
                 model_constraint_changes_str = "\n    - ".join(
                     [
-                        f"'{c[0]}' constraint on columns {c[1]}"
+                        f"'{c['constraint_name'] if c['constraint_name'] is not None else c['constraint_type']}' constraint on columns {c['columns']}"
                         for c in enforced_model_constraint_removed
                     ]
                 )
@@ -835,8 +831,8 @@ class ModelNode(CompiledNode):
                         contract_enforced_disabled=contract_enforced_disabled,
                         columns_removed=columns_removed,
                         column_type_changes=column_type_changes,
-                        # enforced_column_constraint_removed=enforced_column_constraint_removed,
-                        # enforced_model_constraint_removed=enforced_model_constraint_removed,
+                        enforced_column_constraint_removed=enforced_column_constraint_removed,
+                        enforced_model_constraint_removed=enforced_model_constraint_removed,
                         breaking_changes=breaking_changes,
                         model_name=self.name,
                         model_file_path=self.original_file_path,
