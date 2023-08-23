@@ -199,14 +199,22 @@ class UnitTestTask(RunTask):
         self.manifest = self.collection
         self.job_queue = self.get_graph_queue()
 
-    def get_node_selector(self) -> UnitTestSelector:
+    def get_node_selector(self) -> ResourceTypeSelector:
         if self.manifest is None or self.graph is None:
             raise DbtInternalError("manifest and graph must be set to get perform node selection")
-        return UnitTestSelector(
-            graph=self.graph,
-            manifest=self.manifest,
-            previous_state=self.previous_state,
-        )
+        if self.using_unit_test_manifest is False:
+            return ResourceTypeSelector(
+                graph=self.graph,
+                manifest=self.manifest,
+                previous_state=self.previous_state,
+                resource_types=[NodeType.Model],
+            )
+        else:
+            return UnitTestSelector(
+                graph=self.graph,
+                manifest=self.manifest,
+                previous_state=self.previous_state,
+            )
 
     def get_runner_type(self, _):
         return UnitTestRunner
