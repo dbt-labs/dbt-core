@@ -41,21 +41,6 @@ class UnitTestManifestLoader:
         for unit_test_suite in self.manifest.unit_tests.values():
             self.parse_unit_test_suite(unit_test_suite)
 
-        model_to_unit_tests = {}
-        for node in self.unit_test_manifest.nodes.values():
-            if isinstance(node, UnitTestNode):
-                model_name = node.name.split("__")[0]
-                if model_name not in model_to_unit_tests:
-                    model_to_unit_tests[model_name] = [node.unique_id]
-                else:
-                    model_to_unit_tests[model_name].append(node.unique_id)
-
-        for node in self.unit_test_manifest.nodes.values():
-            if isinstance(node, UnitTestNode):
-                # a unit test should depend on its fixture nodes, and any unit tests on its ref'd nodes
-                for ref in node.refs:
-                    for unique_id in model_to_unit_tests.get(ref.name, []):
-                        node.depends_on.nodes.append(unique_id)
         return self.unit_test_manifest
 
     def parse_unit_test_suite(self, unparsed: UnitTestSuite):
@@ -65,9 +50,22 @@ class UnitTestManifestLoader:
         checksum = "f8f57c9e32eafaacfb002a4d03a47ffb412178f58f49ba58fd6f436f09f8a1d6"
         unit_test_node_ids = []
         for unit_test in unparsed.tests:
+            # A list of the ModelNodes constructed from unit test information and the original_input_node
             input_nodes = []
+            # A list of all of the original_input_nodes in the original manifest
             original_input_nodes = []
+            """
+            given:
+              - input: ref('my_model_a')
+                rows: []
+              - input: ref('my_model_b')
+                rows:
+                  - {id: 1, b: 2}
+                  - {id: 2, b: 2}
+            """
+            # Add the model "input" nodes, consisting of all referenced models in the unit test
             for given in unit_test.given:
+                # extract the original_input_node from the ref in the "input" key of the given list
                 original_input_node = self._get_original_input_node(given.input)
                 original_input_nodes.append(original_input_node)
 
@@ -102,10 +100,12 @@ class UnitTestManifestLoader:
                 )
                 input_nodes.append(input_node)
 
+            # Create unit test nodes based on the "actual" nodes
             actual_node = self.manifest.ref_lookup.perform_lookup(
                 f"model.{package_name}.{unparsed.model}", self.manifest
             )
             unit_test_unique_id = f"unit.{package_name}.{unit_test.name}.{unparsed.model}"
+            # Note: no depends_on, that's added later using input nodes
             unit_test_node = UnitTestNode(
                 resource_type=NodeType.Unit,
                 package_name=package_name,
@@ -136,18 +136,13 @@ class UnitTestManifestLoader:
             get_rendered(unit_test_node.raw_code, ctx, unit_test_node, capture_macros=True)
             # unit_test_node now has a populated refs/sources
 
-            # during compilation, refs will resolve to fixtures,
-            # so add original input node ids to depends on explicitly to preserve lineage
-            for original_input_node in original_input_nodes:
-                # TODO: consider nulling out the original_input_node.raw_code
-                self.unit_test_manifest.nodes[original_input_node.unique_id] = original_input_node
-                unit_test_node.depends_on.nodes.append(original_input_node.unique_id)
-
             self.unit_test_manifest.nodes[unit_test_node.unique_id] = unit_test_node
+
             # self.unit_test_manifest.nodes[actual_node.unique_id] = actual_node
             for input_node in input_nodes:
                 self.unit_test_manifest.nodes[input_node.unique_id] = input_node
                 # should be a process_refs / process_sources call isntead?
+                # Add unique ids of input_nodes to depends_on
                 unit_test_node.depends_on.nodes.append(input_node.unique_id)
             unit_test_node_ids.append(unit_test_node.unique_id)
 
@@ -168,6 +163,8 @@ class UnitTestManifestLoader:
         )
 
     def _get_original_input_node(self, input: str):
+        """input: ref('my_model_a')"""
+        # Exract the ref or sources
         statically_parsed = py_extract_from_source(f"{{{{ {input} }}}}")
         if statically_parsed["refs"]:
             # set refs and sources on the node object
