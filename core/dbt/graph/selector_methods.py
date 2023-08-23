@@ -103,7 +103,7 @@ SelectorTarget = Union[SourceDefinition, ManifestNode, Exposure, Metric]
 class SelectorMethod(metaclass=abc.ABCMeta):
     def __init__(
         self, manifest: Manifest, previous_state: Optional[PreviousState], arguments: List[str]
-    ):
+    ) -> None:
         self.manifest: Manifest = manifest
         self.previous_state = previous_state
         self.arguments: List[str] = arguments
@@ -467,7 +467,7 @@ class TestTypeSelectorMethod(SelectorMethod):
 
 
 class StateSelectorMethod(SelectorMethod):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.modified_macros: Optional[List[str]] = None
 

@@ -149,7 +149,7 @@ def get_logging_events(log_output, event_name):
 # Used in test cases to get the manifest from the partial parsing file
 # Note: this uses an internal version of the manifest, and in the future
 # parts of it will not be supported for external use.
-def get_manifest(project_root):
+def get_manifest(project_root) -> Optional[Manifest]:
     path = os.path.join(project_root, "target", "partial_parse.msgpack")
     if os.path.exists(path):
         with open(path, "rb") as fp:

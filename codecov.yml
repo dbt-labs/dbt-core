@@ -1,3 +1,6 @@
+ignore:
+  - ".github"
+  - ".changes"
 coverage:
   status:
     project:

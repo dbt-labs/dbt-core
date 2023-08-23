@@ -6,6 +6,7 @@ from tests.functional.show.fixtures import (
     models__second_ephemeral_model,
     seeds__sample_seed,
     models__sample_model,
+    models__sample_number_model,
     models__second_model,
     models__ephemeral_model,
     schema_yml,
@@ -19,6 +20,7 @@ class TestShow:
     def models(self):
         return {
             "sample_model.sql": models__sample_model,
+            "sample_number_model.sql": models__sample_number_model,
             "second_model.sql": models__second_model,
             "ephemeral_model.sql": models__ephemeral_model,
             "sql_header.sql": models__sql_header,
@@ -61,6 +63,19 @@ class TestShow:
         assert "Previewing node 'sample_model'" not in log_output
         assert "sample_num" in log_output
         assert "sample_bool" in log_output
+
+    def test_numeric_values(self, project):
+        run_dbt(["build"])
+        (results, log_output) = run_dbt_and_capture(
+            ["show", "--select", "sample_number_model", "--output", "json"]
+        )
+        assert "Previewing node 'sample_number_model'" not in log_output
+        assert "1.0" not in log_output
+        assert "1" in log_output
+        assert "3.0" in log_output
+        assert "4.3" in log_output
+        assert "5" in log_output
+        assert "5.0" not in log_output
 
     def test_inline_pass(self, project):
         run_dbt(["build"])

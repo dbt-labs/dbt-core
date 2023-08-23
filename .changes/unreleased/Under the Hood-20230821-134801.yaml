@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: 'Re-organize jinja macros: relation-specific in /macros/adapters/relations/<relation>,
+  relation agnostic in /macros/relations'
+time: 2023-08-21T13:48:01.474731-04:00
+custom:
+  Author: mikealfare
+  Issue: "8449"
