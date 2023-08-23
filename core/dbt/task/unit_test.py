@@ -23,6 +23,7 @@ from dbt.exceptions import (
     MissingMaterializationError,
 )
 from dbt.node_types import NodeType
+from dbt.parser.unit_tests import UnitTestManifestLoader
 
 
 @dataclass
@@ -168,10 +169,9 @@ class UnitTestTask(RunTask):
         constraints are satisfied.
     """
 
-    def __init__(self, args, config, manifest, collection):
-        # This will initialize the RunTask with the unit test manifest ("collection") as the manifest
-        super().__init__(args, config, collection)
-        self.collection = collection
+    def __init__(self, args, config, manifest):
+        # This will initialize the RunTask with the regular manifest
+        super().__init__(args, config, manifest)
         self.original_manifest = manifest
         self.using_unit_test_manifest = False
 
@@ -194,9 +194,13 @@ class UnitTestTask(RunTask):
         else:
             return ()
 
+    def build_unit_test_manifest(self):
+        loader = UnitTestManifestLoader(self.manifest, self.config, self.job_queue._selected)
+        return loader.load()
+
     def reset_job_queue_and_manifest(self):
         self.using_unit_test_manifest = True
-        self.manifest = self.collection
+        self.manifest = self.build_unit_test_manifest()
         self.job_queue = self.get_graph_queue()
 
     def get_node_selector(self) -> ResourceTypeSelector:

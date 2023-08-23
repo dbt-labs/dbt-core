@@ -6,6 +6,7 @@ from dbt.contracts.graph.nodes import (
     UnitTestNode,
     RefArgs,
 )
+from dbt.config import RuntimeConfig
 from dbt.contracts.graph.manifest import Manifest
 from dbt.parser.schemas import (
     SchemaParser,
@@ -22,9 +23,10 @@ from dbt.exceptions import (
 )
 
 from dbt.contracts.files import FileHash
+from dbt.graph import UniqueId
 
 from dbt.context.providers import generate_parse_exposure, get_rendered
-from typing import List
+from typing import List, Set
 
 
 def _is_model_node(node_id, manifest):
@@ -32,9 +34,10 @@ def _is_model_node(node_id, manifest):
 
 
 class UnitTestManifestLoader:
-    def __init__(self, manifest, root_project) -> None:
-        self.manifest = manifest
-        self.root_project = root_project
+    def __init__(self, manifest, root_project, selected) -> None:
+        self.manifest: Manifest = manifest
+        self.root_project: RuntimeConfig = root_project
+        self.selected: Set[UniqueId] = selected
         self.unit_test_manifest = Manifest(macros=manifest.macros)
 
     def load(self) -> Manifest:

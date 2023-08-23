@@ -879,14 +879,12 @@ def test(ctx, **kwargs):
 @requires.project
 @requires.runtime_config
 @requires.manifest
-@requires.unit_test_collection
 def unit_test(ctx, **kwargs):
     """Runs tests on data in deployed models. Run this after `dbt run`"""
     task = UnitTestTask(
         ctx.obj["flags"],
         ctx.obj["runtime_config"],
         ctx.obj["manifest"],
-        ctx.obj["unit_test_collection"],
     )
 
     results = task.run()

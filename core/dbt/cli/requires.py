@@ -23,7 +23,6 @@ from dbt.parser.manifest import ManifestLoader, write_manifest
 from dbt.profiler import profiler
 from dbt.tracking import active_user, initialize_from_flags, track_run
 from dbt.utils import cast_dict_to_dict_of_strings
-from dbt.parser.unit_tests import UnitTestManifestLoader
 from dbt.plugins import set_up_plugin_manager, get_plugin_manager
 
 from click import Context
@@ -266,25 +265,3 @@ def manifest(*args0, write=True, write_perf_info=False):
     if len(args0) == 0:
         return outer_wrapper
     return outer_wrapper(args0[0])
-
-
-def unit_test_collection(func):
-    """A decorator used by click command functions for generating a unit test collection provided a manifest"""
-
-    def wrapper(*args, **kwargs):
-        ctx = args[0]
-        assert isinstance(ctx, Context)
-
-        req_strs = ["manifest", "runtime_config"]
-        reqs = [ctx.obj.get(req_str) for req_str in req_strs]
-
-        if None in reqs:
-            raise DbtProjectError("manifest and runtime_config required for unit_test_collection")
-
-        collection = UnitTestManifestLoader(ctx.obj["manifest"], ctx.obj["runtime_config"]).load()
-
-        ctx.obj["unit_test_collection"] = collection
-
-        return func(*args, **kwargs)
-
-    return update_wrapper(wrapper, func)
