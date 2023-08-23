@@ -42,7 +42,8 @@ class UnitTestManifestLoader:
 
     def load(self) -> Manifest:
         for unit_test_suite in self.manifest.unit_tests.values():
-            self.parse_unit_test_suite(unit_test_suite)
+            if unit_test_suite.attached_node in self.selected:
+                self.parse_unit_test_suite(unit_test_suite)
 
         return self.unit_test_manifest
 

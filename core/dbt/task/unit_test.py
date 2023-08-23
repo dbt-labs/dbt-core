@@ -201,6 +201,7 @@ class UnitTestTask(RunTask):
     def reset_job_queue_and_manifest(self):
         self.using_unit_test_manifest = True
         self.manifest = self.build_unit_test_manifest()
+        self.compile_manifest()  # create the networkx graph
         self.job_queue = self.get_graph_queue()
 
     def get_node_selector(self) -> ResourceTypeSelector:
