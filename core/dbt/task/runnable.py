@@ -121,6 +121,7 @@ class GraphRunnableTask(ConfiguredTask):
             fire_event(DefaultSelector(name=default_selector_name))
             spec = self.config.get_selector(default_selector_name)
         else:
+            # This is what's used with no default selector and no selection
             # use --select and --exclude args
             spec = parse_difference(self.selection_arg, self.exclusion_arg, indirect_selection)
         return spec
@@ -135,8 +136,13 @@ class GraphRunnableTask(ConfiguredTask):
 
     def get_graph_queue(self) -> GraphQueue:
         selector = self.get_node_selector()
+        # Following uses self.selection_arg and self.exclusion_arg
         spec = self.get_selection_spec()
         return selector.get_graph_queue(spec)
+
+    # A callback for unit testing
+    def reset_job_queue_and_manifest(self):
+        pass
 
     def _runtime_initialize(self):
         self.compile_manifest()
@@ -144,6 +150,9 @@ class GraphRunnableTask(ConfiguredTask):
             raise DbtInternalError("_runtime_initialize never loaded the graph!")
 
         self.job_queue = self.get_graph_queue()
+
+        # for unit testing
+        self.reset_job_queue_and_manifest()
 
         # we use this a couple of times. order does not matter.
         self._flattened_nodes = []

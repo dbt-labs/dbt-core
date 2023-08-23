@@ -173,11 +173,31 @@ class UnitTestTask(RunTask):
         super().__init__(args, config, collection)
         self.collection = collection
         self.original_manifest = manifest
+        self.using_unit_test_manifest = False
 
     __test__ = False
 
     def raise_on_first_error(self):
         return False
+
+    @property
+    def selection_arg(self):
+        if self.using_unit_test_manifest is False:
+            return self.args.select
+        else:
+            return ()
+
+    @property
+    def exclusion_arg(self):
+        if self.using_unit_test_manifest is False:
+            return self.args.exclude
+        else:
+            return ()
+
+    def reset_job_queue_and_manifest(self):
+        self.using_unit_test_manifest = True
+        self.manifest = self.collection
+        self.job_queue = self.get_graph_queue()
 
     def get_node_selector(self) -> UnitTestSelector:
         if self.manifest is None or self.graph is None:
