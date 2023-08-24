@@ -1579,6 +1579,7 @@ class SemanticModel(GraphNode):
     created_at: float = field(default_factory=lambda: time.time())
     config: SemanticModelConfig = field(default_factory=SemanticModelConfig)
     primary_entity: Optional[str] = None
+    group: Optional[str] = None
 
     @property
     def entity_references(self) -> List[LinkableElementReference]:

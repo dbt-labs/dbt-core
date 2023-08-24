@@ -927,6 +927,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         groupable_nodes = list(
             chain(
                 self.nodes.values(),
+                self.semantic_models.values(),
                 self.metrics.values(),
             )
         )
@@ -1056,8 +1057,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
 
         return resolved_refs
 
-    # Called by dbt.parser.manifest._process_refs_for_exposure, _process_refs_for_metric,
-    # and dbt.parser.manifest._process_refs_for_node
+    # Called by dbt.parser.manifest._process_refs & ManifestLoader.check_for_model_deprecations
     def resolve_ref(
         self,
         source_node: GraphMemberNode,
