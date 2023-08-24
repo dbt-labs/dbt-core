@@ -4,11 +4,10 @@ import pytest
 
 from dbt_semantic_interfaces.type_enums.time_granularity import TimeGranularity
 
-from dbt.cli.main import dbtRunner
 from dbt.contracts.graph.manifest import Manifest
 from dbt.events.base_types import BaseEvent
 from dbt.tests.util import write_file
-
+from tests.functional.invariants.invariants import dbtTestRunner
 
 schema_yml = """models:
   - name: fct_revenue
@@ -113,7 +112,7 @@ class TestSemanticModelParsing:
         }
 
     def test_semantic_model_parsing(self, project):
-        runner = dbtRunner()
+        runner = dbtTestRunner()
         result = runner.invoke(["parse"])
         assert result.success
         assert isinstance(result.result, Manifest)
@@ -136,7 +135,7 @@ class TestSemanticModelParsing:
         error_schema_yml = schema_yml.replace("sum_of_things", "has_revenue")
         write_file(error_schema_yml, project.project_root, "models", "schema.yml")
         events: List[BaseEvent] = []
-        runner = dbtRunner(callbacks=[events.append])
+        runner = dbtTestRunner(callbacks=[events.append])
         result = runner.invoke(["parse"])
         assert not result.success
 
@@ -156,7 +155,7 @@ class TestSemanticModelPartialParsing:
     def test_semantic_model_changed_partial_parsing(self, project):
         # First, use the default schema.yml to define our semantic model, and
         # run the dbt parse command
-        runner = dbtRunner()
+        runner = dbtTestRunner()
         result = runner.invoke(["parse"])
         assert result.success
 
@@ -177,7 +176,7 @@ class TestSemanticModelPartialParsing:
     def test_semantic_model_deleted_partial_parsing(self, project):
         # First, use the default schema.yml to define our semantic model, and
         # run the dbt parse command
-        runner = dbtRunner()
+        runner = dbtTestRunner()
         result = runner.invoke(["parse"])
         assert result.success
         assert "semantic_model.test.revenue" in result.result.semantic_models
@@ -197,7 +196,7 @@ class TestSemanticModelPartialParsing:
         # First, use the default schema.yml to define our semantic model, and
         # run the dbt parse command
         write_file(schema_yml, project.project_root, "models", "schema.yml")
-        runner = dbtRunner()
+        runner = dbtTestRunner()
         result = runner.invoke(["parse"])
         assert result.success
 
