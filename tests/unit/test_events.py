@@ -253,7 +253,17 @@ sample_values = [
     types.UnsupportedConstraintMaterialization(materialized=""),
     types.ParseInlineNodeError(exc=""),
     types.SemanticValidationFailure(msg=""),
-    types.UnversionedBreakingChange(breaking_changes=[], model_name="", model_file_path=""),
+    types.UnversionedBreakingChange(
+        breaking_changes=[],
+        model_name="",
+        model_file_path="",
+        contract_enforced_disabled=True,
+        columns_removed=[],
+        column_type_changes=[],
+        enforced_column_constraint_removed=[],
+        enforced_model_constraint_removed=[],
+        materialization_changed=[],
+    ),
     # M - Deps generation ======================
     types.GitSparseCheckoutSubdirectory(subdir=""),
     types.GitProgressCheckoutRevision(revision=""),
