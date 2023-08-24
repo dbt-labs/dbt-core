@@ -172,6 +172,7 @@ class UnitTestTask(RunTask):
     def __init__(self, args, config, manifest):
         # This will initialize the RunTask with the regular manifest
         super().__init__(args, config, manifest)
+        # TODO: We might not need this, but leaving here for now.
         self.original_manifest = manifest
         self.using_unit_test_manifest = False
 
@@ -185,6 +186,8 @@ class UnitTestTask(RunTask):
         if self.using_unit_test_manifest is False:
             return self.args.select
         else:
+            # Everything in the unit test should be selected, since we
+            # created in from a selection list.
             return ()
 
     @property
@@ -192,6 +195,8 @@ class UnitTestTask(RunTask):
         if self.using_unit_test_manifest is False:
             return self.args.exclude
         else:
+            # Everything in the unit test should be selected, since we
+            # created in from a selection list.
             return ()
 
     def build_unit_test_manifest(self):
@@ -199,6 +204,8 @@ class UnitTestTask(RunTask):
         return loader.load()
 
     def reset_job_queue_and_manifest(self):
+        # We have the selected models from the "regular" manifest, now we switch
+        # to using the unit_test_manifest to run the unit tests.
         self.using_unit_test_manifest = True
         self.manifest = self.build_unit_test_manifest()
         self.compile_manifest()  # create the networkx graph
@@ -208,6 +215,7 @@ class UnitTestTask(RunTask):
         if self.manifest is None or self.graph is None:
             raise DbtInternalError("manifest and graph must be set to get perform node selection")
         if self.using_unit_test_manifest is False:
+            # Initial selection is done against models in the regular manifest
             return ResourceTypeSelector(
                 graph=self.graph,
                 manifest=self.manifest,
@@ -215,6 +223,7 @@ class UnitTestTask(RunTask):
                 resource_types=[NodeType.Model],
             )
         else:
+            # Selection for unit test execution purposes is done against UnitTestNodes
             return UnitTestSelector(
                 graph=self.graph,
                 manifest=self.manifest,

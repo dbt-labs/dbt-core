@@ -37,6 +37,7 @@ class UnitTestManifestLoader:
     def __init__(self, manifest, root_project, selected) -> None:
         self.manifest: Manifest = manifest
         self.root_project: RuntimeConfig = root_project
+        # selected comes from the initial selection against a "regular" manifest
         self.selected: Set[UniqueId] = selected
         self.unit_test_manifest = Manifest(macros=manifest.macros)
 
@@ -49,10 +50,6 @@ class UnitTestManifestLoader:
 
     def parse_unit_test_suite(self, unparsed: UnitTestSuite):
         package_name = self.root_project.project_name
-        path = "placeholder"
-        # TODO: fix
-        checksum = "f8f57c9e32eafaacfb002a4d03a47ffb412178f58f49ba58fd6f436f09f8a1d6"
-        unit_test_node_ids = []
         for unit_test in unparsed.tests:
             # A list of the ModelNodes constructed from unit test information and the original_input_node
             input_nodes = []
@@ -90,9 +87,8 @@ class UnitTestManifestLoader:
                     raw_code=self._build_raw_code(given.rows, original_input_node_columns),
                     resource_type=NodeType.Model,
                     package_name=package_name,
-                    path=path,
-                    # original_file_path=self.yaml.path.original_file_path,
-                    original_file_path=f"models_unit_test/{input_name}.sql",
+                    path=original_input_node.path,
+                    original_file_path=original_input_node.original_file_path,
                     unique_id=input_unique_id,
                     name=input_name,
                     config=NodeConfig(materialized="ephemeral"),
@@ -100,7 +96,7 @@ class UnitTestManifestLoader:
                     schema=original_input_node.schema,
                     alias=original_input_node.alias,
                     fqn=input_unique_id.split("."),
-                    checksum=FileHash(name="sha256", checksum=checksum),
+                    checksum=FileHash.empty(),
                 )
                 input_nodes.append(input_node)
 
@@ -113,9 +109,8 @@ class UnitTestManifestLoader:
             unit_test_node = UnitTestNode(
                 resource_type=NodeType.Unit,
                 package_name=package_name,
-                path=f"{unparsed.model}.sql",
-                # original_file_path=self.yaml.path.original_file_path,
-                original_file_path=f"models_unit_test/{unparsed.model}.sql",
+                path=unparsed.path,
+                original_file_path=unparsed.original_file_path,
                 unique_id=unit_test_unique_id,
                 name=f"{unparsed.model}__{unit_test.name}",
                 # TODO: merge with node config
@@ -125,7 +120,7 @@ class UnitTestManifestLoader:
                 schema=actual_node.schema,
                 alias=f"{unparsed.model}__{unit_test.name}",
                 fqn=unit_test_unique_id.split("."),
-                checksum=FileHash(name="sha256", checksum=checksum),
+                checksum=FileHash.empty(),
                 attached_node=actual_node.unique_id,
                 overrides=unit_test.overrides,
             )
@@ -142,24 +137,11 @@ class UnitTestManifestLoader:
 
             self.unit_test_manifest.nodes[unit_test_node.unique_id] = unit_test_node
 
-            # self.unit_test_manifest.nodes[actual_node.unique_id] = actual_node
             for input_node in input_nodes:
                 self.unit_test_manifest.nodes[input_node.unique_id] = input_node
                 # should be a process_refs / process_sources call isntead?
                 # Add unique ids of input_nodes to depends_on
                 unit_test_node.depends_on.nodes.append(input_node.unique_id)
-            unit_test_node_ids.append(unit_test_node.unique_id)
-
-        # find out all nodes that are referenced but not in unittest manifest
-        all_depends_on = set()
-        for node_id in self.unit_test_manifest.nodes:
-            if _is_model_node(node_id, self.unit_test_manifest):
-                all_depends_on.update(self.unit_test_manifest.nodes[node_id].depends_on.nodes)  # type: ignore
-        not_in_manifest = all_depends_on - set(self.unit_test_manifest.nodes.keys())
-
-        # copy those node also over into unit_test_manifest
-        for node_id in not_in_manifest:
-            self.unit_test_manifest.nodes[node_id] = self.manifest.nodes[node_id]
 
     def _build_raw_code(self, rows, column_name_to_data_types) -> str:
         return ("{{{{ get_fixture_sql({rows}, {column_name_to_data_types}) }}}}").format(
