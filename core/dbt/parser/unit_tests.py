@@ -51,10 +51,47 @@ class UnitTestManifestLoader:
     def parse_unit_test_suite(self, unparsed: UnitTestSuite):
         package_name = self.root_project.project_name
         for unit_test in unparsed.tests:
-            # A list of the ModelNodes constructed from unit test information and the original_input_node
-            input_nodes = []
-            # A list of all of the original_input_nodes in the original manifest
-            original_input_nodes = []
+            # Create unit test node based on the "actual" tested node
+            actual_node = self.manifest.ref_lookup.perform_lookup(
+                f"model.{package_name}.{unparsed.model}", self.manifest
+            )
+
+            # Create UnitTestNode based on model being tested. Since selection has
+            # already been done, we don't have to care about fields that are necessary
+            # for selection.
+            unit_test_unique_id = f"unit.{package_name}.{unit_test.name}.{unparsed.model}"
+            # Note: no depends_on, that's added later using input nodes
+            unit_test_node = UnitTestNode(
+                resource_type=NodeType.Unit,
+                package_name=package_name,
+                path=unparsed.path,
+                original_file_path=unparsed.original_file_path,
+                unique_id=unit_test_unique_id,
+                name=f"{unparsed.model}__{unit_test.name}",
+                config=NodeConfig(materialized="unit", _extra={"expected_rows": unit_test.expect}),
+                raw_code=actual_node.raw_code,
+                database=actual_node.database,
+                schema=actual_node.schema,
+                alias=f"{unparsed.model}__{unit_test.name}",
+                fqn=unit_test_unique_id.split("."),
+                checksum=FileHash.empty(),
+                attached_node=actual_node.unique_id,
+                overrides=unit_test.overrides,
+            )
+
+            # TODO: generalize this method
+            ctx = generate_parse_exposure(
+                unit_test_node,  # type: ignore
+                self.root_project,
+                self.manifest,
+                package_name,
+            )
+            get_rendered(unit_test_node.raw_code, ctx, unit_test_node, capture_macros=True)
+            # unit_test_node now has a populated refs/sources
+
+            self.unit_test_manifest.nodes[unit_test_node.unique_id] = unit_test_node
+
+            # Now create input_nodes for the test inputs
             """
             given:
               - input: ref('my_model_a')
@@ -68,7 +105,6 @@ class UnitTestManifestLoader:
             for given in unit_test.given:
                 # extract the original_input_node from the ref in the "input" key of the given list
                 original_input_node = self._get_original_input_node(given.input)
-                original_input_nodes.append(original_input_node)
 
                 original_input_node_columns = None
                 if (
@@ -98,46 +134,6 @@ class UnitTestManifestLoader:
                     fqn=input_unique_id.split("."),
                     checksum=FileHash.empty(),
                 )
-                input_nodes.append(input_node)
-
-            # Create unit test nodes based on the "actual" nodes
-            actual_node = self.manifest.ref_lookup.perform_lookup(
-                f"model.{package_name}.{unparsed.model}", self.manifest
-            )
-            unit_test_unique_id = f"unit.{package_name}.{unit_test.name}.{unparsed.model}"
-            # Note: no depends_on, that's added later using input nodes
-            unit_test_node = UnitTestNode(
-                resource_type=NodeType.Unit,
-                package_name=package_name,
-                path=unparsed.path,
-                original_file_path=unparsed.original_file_path,
-                unique_id=unit_test_unique_id,
-                name=f"{unparsed.model}__{unit_test.name}",
-                # TODO: merge with node config
-                config=NodeConfig(materialized="unit", _extra={"expected_rows": unit_test.expect}),
-                raw_code=actual_node.raw_code,
-                database=actual_node.database,
-                schema=actual_node.schema,
-                alias=f"{unparsed.model}__{unit_test.name}",
-                fqn=unit_test_unique_id.split("."),
-                checksum=FileHash.empty(),
-                attached_node=actual_node.unique_id,
-                overrides=unit_test.overrides,
-            )
-
-            # TODO: generalize this method
-            ctx = generate_parse_exposure(
-                unit_test_node,  # type: ignore
-                self.root_project,
-                self.manifest,
-                package_name,
-            )
-            get_rendered(unit_test_node.raw_code, ctx, unit_test_node, capture_macros=True)
-            # unit_test_node now has a populated refs/sources
-
-            self.unit_test_manifest.nodes[unit_test_node.unique_id] = unit_test_node
-
-            for input_node in input_nodes:
                 self.unit_test_manifest.nodes[input_node.unique_id] = input_node
                 # should be a process_refs / process_sources call isntead?
                 # Add unique ids of input_nodes to depends_on
