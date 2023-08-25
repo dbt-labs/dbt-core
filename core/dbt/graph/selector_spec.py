@@ -99,6 +99,7 @@ class SelectionCriteria:
         except ValueError as exc:
             raise InvalidSelectorError(f"'{method_parts[0]}' is not a valid method name") from exc
 
+        # Following is for cases like config.severity and config.materialized
         method_arguments: List[str] = method_parts[1:]
 
         return method_name, method_arguments

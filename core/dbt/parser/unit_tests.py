@@ -135,7 +135,6 @@ class UnitTestManifestLoader:
                     checksum=FileHash.empty(),
                 )
                 self.unit_test_manifest.nodes[input_node.unique_id] = input_node
-                # should be a process_refs / process_sources call isntead?
                 # Add unique ids of input_nodes to depends_on
                 unit_test_node.depends_on.nodes.append(input_node.unique_id)
 

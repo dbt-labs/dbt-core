@@ -26,7 +26,7 @@ from dbt.exceptions import (
     DbtRuntimeError,
 )
 from dbt.node_types import NodeType
-from dbt.events.contextvars import get_project_root
+from dbt.events.contextvars import get_project_root, get_contextvars
 
 
 SELECTOR_GLOB = "*"
@@ -143,6 +143,7 @@ class SelectorMethod(metaclass=abc.ABCMeta):
             if unique_id not in included_nodes:
                 continue
             yield unique_id, metric
+
 
     def all_nodes(
         self, included_nodes: Set[UniqueId]
@@ -440,10 +441,15 @@ class TestNameSelectorMethod(SelectorMethod):
     __test__ = False
 
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
-        for node, real_node in self.parsed_nodes(included_nodes):
-            if real_node.resource_type == NodeType.Test and hasattr(real_node, "test_metadata"):
-                if fnmatch(real_node.test_metadata.name, selector):  # type: ignore[union-attr]
-                    yield node
+        cvars = get_contextvars("task_")
+        command = cvars.get("command")
+        if command = "unit-test":
+            # we check manifest.unit_tests for test_name
+        else:
+            for unique_id, node in self.parsed_nodes(included_nodes):
+                if node.resource_type == NodeType.Test and hasattr(node, "test_metadata"):
+                    if fnmatch(node.test_metadata.name, selector):  # type: ignore[union-attr]
+                        yield unique_id
 
 
 class TestTypeSelectorMethod(SelectorMethod):
