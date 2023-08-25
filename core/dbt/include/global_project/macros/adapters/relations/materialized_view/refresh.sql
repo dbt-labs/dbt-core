@@ -5,5 +5,5 @@
 
 
 {% macro default__refresh_materialized_view(relation) %}
-    {{ exceptions.raise_compiler_error("Materialized views have not been implemented for this adapter.") }}
+    {{ exceptions.raise_compiler_error("`refresh_materialized_view` has not been implemented for this adapter.") }}
 {% endmacro %}
