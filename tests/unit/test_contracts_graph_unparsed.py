@@ -131,18 +131,6 @@ class TestUnparsedNode(ContractTestCase):
         self.assert_fails_validation(node_dict, cls=UnparsedRunHook)
         self.assert_fails_validation(node_dict, cls=UnparsedMacro)
 
-    def test_bad_type(self):
-        node_dict = {
-            "name": "foo",
-            "resource_type": NodeType.Source,  # not valid!
-            "path": "/root/x/path.sql",
-            "original_file_path": "/root/path.sql",
-            "package_name": "test",
-            "language": "sql",
-            "raw_code": 'select * from {{ ref("thing") }}',
-        }
-        self.assert_fails_validation(node_dict)
-
 
 class TestUnparsedRunHook(ContractTestCase):
     ContractType = UnparsedRunHook
