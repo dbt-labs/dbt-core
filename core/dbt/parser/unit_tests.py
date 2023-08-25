@@ -27,6 +27,7 @@ from dbt.graph import UniqueId
 
 from dbt.context.providers import generate_parse_exposure, get_rendered
 from typing import List, Set
+from dbt.utils import get_pseudo_test_path
 
 
 def _is_model_node(node_id, manifest):
@@ -61,13 +62,14 @@ class UnitTestManifestLoader:
             # for selection.
             unit_test_unique_id = f"unit.{package_name}.{unit_test.name}.{unparsed.model}"
             # Note: no depends_on, that's added later using input nodes
+            name = f"{unparsed.model}__{unit_test.name}"
             unit_test_node = UnitTestNode(
                 resource_type=NodeType.Unit,
                 package_name=package_name,
-                path=unparsed.path,
+                path=get_pseudo_test_path(name, unparsed.original_file_path),
                 original_file_path=unparsed.original_file_path,
                 unique_id=unit_test_unique_id,
-                name=f"{unparsed.model}__{unit_test.name}",
+                name=name,
                 config=NodeConfig(materialized="unit", _extra={"expected_rows": unit_test.expect}),
                 raw_code=actual_node.raw_code,
                 database=actual_node.database,

@@ -144,7 +144,6 @@ class SelectorMethod(metaclass=abc.ABCMeta):
                 continue
             yield unique_id, metric
 
-
     def all_nodes(
         self, included_nodes: Set[UniqueId]
     ) -> Iterator[Tuple[UniqueId, SelectorTarget]]:
@@ -443,8 +442,11 @@ class TestNameSelectorMethod(SelectorMethod):
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
         cvars = get_contextvars("task_")
         command = cvars.get("command")
-        if command = "unit-test":
+        if command == "unit-test":
             # we check manifest.unit_tests for test_name
+            for unique_id, unit_test in self.manifest.unit_tests.items():
+                if fnmatch(unit_test.name, selector):
+                    yield UniqueId(unique_id)
         else:
             for unique_id, node in self.parsed_nodes(included_nodes):
                 if node.resource_type == NodeType.Test and hasattr(node, "test_metadata"):

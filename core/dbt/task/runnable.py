@@ -454,7 +454,7 @@ class GraphRunnableTask(ConfiguredTask):
         """
         # We set up a context manager here with "task_contextvars" because we
         # need the project_root in runtime_initialize.
-        with task_contextvars(project_root=self.config.project_root,command=self.args.which):
+        with task_contextvars(project_root=self.config.project_root, command=self.args.which):
             self._runtime_initialize()
 
             if self._flattened_nodes is None:
