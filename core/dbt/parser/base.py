@@ -189,7 +189,7 @@ class ConfiguredParser(
         # message reasons
         return UnparsedNode(
             name=name,
-            resource_type=self.resource_type,  # type: ignore
+            resource_type=self.resource_type,
             path=path,
             original_file_path=original_file_path,
             package_name=self.project.project_name,

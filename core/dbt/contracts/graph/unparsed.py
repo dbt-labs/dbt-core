@@ -60,16 +60,7 @@ class UnparsedGenericTest(UnparsedBaseNode, HasCode):
 @dataclass
 class UnparsedNode(UnparsedBaseNode, HasCode):
     name: str
-    resource_type: Literal[
-        NodeType.Model,
-        NodeType.Analysis,
-        NodeType.Test,
-        NodeType.Snapshot,
-        NodeType.Operation,
-        NodeType.Seed,
-        NodeType.RPCCall,
-        NodeType.SqlOperation,
-    ]
+    resource_type: NodeType
 
     @property
     def search_name(self):
