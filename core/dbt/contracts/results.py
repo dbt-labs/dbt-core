@@ -221,9 +221,9 @@ def process_run_result(result: RunResult) -> RunResultOutput:
         message=result.message,
         adapter_response=result.adapter_response,
         failures=result.failures,
-        compiled=result.compiled if compiled else None,  # type:ignore
-        compiled_code=result.compiled_code if compiled else None,  # type:ignore
-        relation_name=result.relation_name if compiled else None,  # type:ignore
+        compiled=result.node.compiled if compiled else None,  # type:ignore
+        compiled_code=result.node.compiled_code if compiled else None,  # type:ignore
+        relation_name=result.node.relation_name if compiled else None,  # type:ignore
     )
 
 
