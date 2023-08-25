@@ -522,6 +522,30 @@ class SemanticModelParser(YamlReader):
         parser = MetricParser(self.schema_parser, yaml=self.yaml)
         parser.parse_metric(unparsed=unparsed_metric, generated=True)
 
+    def _generate_semantic_model_config(
+        self, target: UnparsedSemanticModel, fqn: List[str], package_name: str, rendered: bool
+    ):
+        generator: BaseContextConfigGenerator
+        if rendered:
+            generator = ContextConfigGenerator(self.root_project)
+        else:
+            generator = UnrenderedConfigGenerator(self.root_project)
+
+        # configs with precendence set
+        precedence_configs = dict()
+        # first apply metric configs
+        precedence_configs.update(target.config)
+
+        config = generator.calculate_node_config(
+            config_call_dict={},
+            fqn=fqn,
+            resource_type=NodeType.Metric,
+            project_name=package_name,
+            base=False,
+            patch_config_dict=precedence_configs,
+        )
+        return config
+
     def parse_semantic_model(self, unparsed: UnparsedSemanticModel):
         package_name = self.project.project_name
         unique_id = f"{NodeType.SemanticModel}.{package_name}.{unparsed.name}"
@@ -529,6 +553,22 @@ class SemanticModelParser(YamlReader):
 
         fqn = self.schema_parser.get_fqn_prefix(path)
         fqn.append(unparsed.name)
+
+        config = self._generate_semantic_model_config(
+            target=unparsed,
+            fqn=fqn,
+            package_name=package_name,
+            rendered=True,
+        )
+
+        config = config.finalize_and_validate()
+
+        unrendered_config = self._generate_semantic_model_config(
+            target=unparsed,
+            fqn=fqn,
+            package_name=package_name,
+            rendered=False,
+        )
 
         parsed = SemanticModel(
             description=unparsed.description,
@@ -546,6 +586,9 @@ class SemanticModelParser(YamlReader):
             dimensions=self._get_dimensions(unparsed.dimensions),
             defaults=unparsed.defaults,
             primary_entity=unparsed.primary_entity,
+            config=config,
+            unrendered_config=unrendered_config,
+            group=config.group,
         )
 
         ctx = generate_parse_semantic_models(

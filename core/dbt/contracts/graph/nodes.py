@@ -1578,6 +1578,7 @@ class SemanticModel(GraphNode):
     refs: List[RefArgs] = field(default_factory=list)
     created_at: float = field(default_factory=lambda: time.time())
     config: SemanticModelConfig = field(default_factory=SemanticModelConfig)
+    unrendered_config: Dict[str, Any] = field(default_factory=dict)
     primary_entity: Optional[str] = None
     group: Optional[str] = None
 
@@ -1637,6 +1638,12 @@ class SemanticModel(GraphNode):
     @property
     def depends_on_macros(self):
         return self.depends_on.macros
+
+    # def same_config(self, old: "SemanticModel") -> bool:
+    #     return self.config.same_contents(
+    #         self.unrendered_config,
+    #         old.unrendered_config,
+    #     )
 
     def checked_agg_time_dimension_for_measure(
         self, measure_reference: MeasureReference
