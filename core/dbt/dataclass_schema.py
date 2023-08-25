@@ -81,12 +81,7 @@ class dbtClassMixin(DataClassDictMixin):
         return json_schema
 
     @classmethod
-    def clean_dictionary_keys_for_validate(cls, data):
-        return data
-
-    @classmethod
     def validate(cls, data):
-        data = cls.clean_dictionary_keys_for_validate(data)
         json_schema = cls.json_schema()
         validator = jsonschema.Draft7Validator(json_schema)
         error = next(iter(validator.iter_errors(data)), None)
@@ -114,8 +109,7 @@ class dbtClassMixin(DataClassDictMixin):
                 # the field's metadata "alias". Since this method is mainly
                 # just used in merging config dicts, it mostly applies to
                 # pre-hook and post-hook.
-                field_alias = f.metadata.get("alias")
-                field_name = field_alias or f.name
+                field_name = f.metadata.get("alias", f.name)
                 mapped_fields.append((f, field_name))
             cls._mapped_fields[cls.__name__] = mapped_fields
         return cls._mapped_fields[cls.__name__]
@@ -123,11 +117,7 @@ class dbtClassMixin(DataClassDictMixin):
     # copied from hologram. Used in tests
     @classmethod
     def _get_field_names(cls):
-        fields = cls._get_fields()
-        field_names = []
-        for element in fields:
-            field_names.append(element[1])
-        return field_names
+        return [element[1] for element in cls._get_fields()]
 
 
 class ValidatedStringMixin(str, SerializableType):

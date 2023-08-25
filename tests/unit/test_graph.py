@@ -1,6 +1,6 @@
-from .utils import config_from_parts_or_dicts, generate_name_macros, inject_plugin
 import os
 
+from argparse import Namespace
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -19,15 +19,13 @@ from dbt.contracts.files import SourceFile, FileHash, FilePath
 from dbt.contracts.graph.manifest import MacroManifest, ManifestStateCheck
 from dbt.graph import NodeSelector, parse_difference
 from dbt.events.functions import setup_event_logger
-from dbt.flags import set_from_args
-from argparse import Namespace
-
-set_from_args(Namespace(WARN_ERROR=False), None)
 
 try:
     from queue import Empty
 except ImportError:
     from Queue import Empty
+
+from .utils import config_from_parts_or_dicts, generate_name_macros, inject_plugin
 
 
 class GraphTest(unittest.TestCase):
