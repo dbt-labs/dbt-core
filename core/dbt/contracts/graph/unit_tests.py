@@ -18,7 +18,7 @@ class UnitTestOverrides(dbtClassMixin):
 
 
 @dataclass
-class UnitTestCase(dbtClassMixin):
+class UnparsedUnitTestCase(dbtClassMixin):
     name: str
     given: Sequence[InputFixture]
     expect: List[Dict[str, Any]]
@@ -29,13 +29,12 @@ class UnitTestCase(dbtClassMixin):
 @dataclass
 class UnparsedUnitTestSuite(dbtClassMixin):
     model: str  # name of the model being unit tested
-    tests: Sequence[UnitTestCase]
+    tests: Sequence[UnparsedUnitTestCase]
 
 
 @dataclass
-class UnitTestSuite(dbtClassMixin):
+class UnitTestCase(dbtClassMixin):
     model: str
-    tests: Sequence[UnitTestCase]
     name: str
     resource_type: NodeType
     package_name: str
@@ -43,3 +42,7 @@ class UnitTestSuite(dbtClassMixin):
     original_file_path: str
     unique_id: str
     attached_node: str
+    given: Sequence[InputFixture]
+    expect: List[Dict[str, Any]]
+    description: str = ""
+    overrides: Optional[UnitTestOverrides] = None

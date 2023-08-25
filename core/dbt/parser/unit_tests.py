@@ -1,4 +1,4 @@
-from dbt.contracts.graph.unit_tests import UnitTestSuite, UnparsedUnitTestSuite
+from dbt.contracts.graph.unit_tests import UnitTestCase, UnparsedUnitTestSuite
 from dbt.contracts.graph.model_config import NodeConfig
 from dbt_extractor import py_extract_from_source  # type: ignore
 from dbt.contracts.graph.nodes import (
@@ -43,102 +43,103 @@ class UnitTestManifestLoader:
         self.unit_test_manifest = Manifest(macros=manifest.macros)
 
     def load(self) -> Manifest:
-        for unit_test_suite in self.manifest.unit_tests.values():
-            if unit_test_suite.attached_node in self.selected:
-                self.parse_unit_test_suite(unit_test_suite)
+        for unit_test_case in self.manifest.unit_tests.values():
+            if unit_test_case.attached_node in self.selected:
+                self.parse_unit_test_case(unit_test_case)
 
         return self.unit_test_manifest
 
-    def parse_unit_test_suite(self, unparsed: UnitTestSuite):
+    def parse_unit_test_case(self, test_case: UnitTestCase):
         package_name = self.root_project.project_name
-        for unit_test in unparsed.tests:
-            # Create unit test node based on the "actual" tested node
-            actual_node = self.manifest.ref_lookup.perform_lookup(
-                f"model.{package_name}.{unparsed.model}", self.manifest
-            )
 
-            # Create UnitTestNode based on model being tested. Since selection has
-            # already been done, we don't have to care about fields that are necessary
-            # for selection.
-            unit_test_unique_id = f"unit.{package_name}.{unit_test.name}.{unparsed.model}"
-            # Note: no depends_on, that's added later using input nodes
-            name = f"{unparsed.model}__{unit_test.name}"
-            unit_test_node = UnitTestNode(
-                resource_type=NodeType.Unit,
+        # Create unit test node based on the "actual" tested node
+        actual_node = self.manifest.ref_lookup.perform_lookup(
+            f"model.{package_name}.{test_case.model}", self.manifest
+        )
+
+        # Create UnitTestNode based on model being tested. Since selection has
+        # already been done, we don't have to care about fields that are necessary
+        # for selection.
+        # Note: no depends_on, that's added later using input nodes
+        name = f"{test_case.model}__{test_case.name}"
+        unit_test_node = UnitTestNode(
+            resource_type=NodeType.Unit,
+            package_name=package_name,
+            path=get_pseudo_test_path(name, test_case.original_file_path),
+            original_file_path=test_case.original_file_path,
+            unique_id=test_case.unique_id,
+            name=name,
+            config=NodeConfig(materialized="unit", _extra={"expected_rows": test_case.expect}),
+            raw_code=actual_node.raw_code,
+            database=actual_node.database,
+            schema=actual_node.schema,
+            alias=name,
+            fqn=test_case.unique_id.split("."),
+            checksum=FileHash.empty(),
+            attached_node=actual_node.unique_id,
+            overrides=test_case.overrides,
+        )
+
+        # TODO: generalize this method
+        ctx = generate_parse_exposure(
+            unit_test_node,  # type: ignore
+            self.root_project,
+            self.manifest,
+            package_name,
+        )
+        get_rendered(unit_test_node.raw_code, ctx, unit_test_node, capture_macros=True)
+        # unit_test_node now has a populated refs/sources
+
+        self.unit_test_manifest.nodes[unit_test_node.unique_id] = unit_test_node
+
+        # Now create input_nodes for the test inputs
+        """
+        given:
+          - input: ref('my_model_a')
+            rows: []
+          - input: ref('my_model_b')
+            rows:
+              - {id: 1, b: 2}
+              - {id: 2, b: 2}
+        """
+        # Add the model "input" nodes, consisting of all referenced models in the unit test.
+        # This creates a model for every input in every test, so there may be multiple
+        # input models substituting for the same input ref'd model.
+        for given in test_case.given:
+            # extract the original_input_node from the ref in the "input" key of the given list
+            original_input_node = self._get_original_input_node(given.input)
+
+            original_input_node_columns = None
+            if (
+                original_input_node.resource_type == NodeType.Model
+                and original_input_node.config.contract.enforced
+            ):
+                original_input_node_columns = {
+                    column.name: column.data_type for column in original_input_node.columns
+                }
+
+            # TODO: package_name?
+            input_name = f"{test_case.model}__{test_case.name}__{original_input_node.name}"
+            input_unique_id = f"model.{package_name}.{input_name}"
+
+            input_node = ModelNode(
+                raw_code=self._build_raw_code(given.rows, original_input_node_columns),
+                resource_type=NodeType.Model,
                 package_name=package_name,
-                path=get_pseudo_test_path(name, unparsed.original_file_path),
-                original_file_path=unparsed.original_file_path,
-                unique_id=unit_test_unique_id,
-                name=name,
-                config=NodeConfig(materialized="unit", _extra={"expected_rows": unit_test.expect}),
-                raw_code=actual_node.raw_code,
-                database=actual_node.database,
-                schema=actual_node.schema,
-                alias=f"{unparsed.model}__{unit_test.name}",
-                fqn=unit_test_unique_id.split("."),
+                path=original_input_node.path,
+                original_file_path=original_input_node.original_file_path,
+                unique_id=input_unique_id,
+                name=input_name,
+                config=NodeConfig(materialized="ephemeral"),
+                database=original_input_node.database,
+                schema=original_input_node.schema,
+                alias=original_input_node.alias,
+                fqn=input_unique_id.split("."),
                 checksum=FileHash.empty(),
-                attached_node=actual_node.unique_id,
-                overrides=unit_test.overrides,
             )
-
-            # TODO: generalize this method
-            ctx = generate_parse_exposure(
-                unit_test_node,  # type: ignore
-                self.root_project,
-                self.manifest,
-                package_name,
-            )
-            get_rendered(unit_test_node.raw_code, ctx, unit_test_node, capture_macros=True)
-            # unit_test_node now has a populated refs/sources
-
-            self.unit_test_manifest.nodes[unit_test_node.unique_id] = unit_test_node
-
-            # Now create input_nodes for the test inputs
-            """
-            given:
-              - input: ref('my_model_a')
-                rows: []
-              - input: ref('my_model_b')
-                rows:
-                  - {id: 1, b: 2}
-                  - {id: 2, b: 2}
-            """
-            # Add the model "input" nodes, consisting of all referenced models in the unit test
-            for given in unit_test.given:
-                # extract the original_input_node from the ref in the "input" key of the given list
-                original_input_node = self._get_original_input_node(given.input)
-
-                original_input_node_columns = None
-                if (
-                    original_input_node.resource_type == NodeType.Model
-                    and original_input_node.config.contract.enforced
-                ):
-                    original_input_node_columns = {
-                        column.name: column.data_type for column in original_input_node.columns
-                    }
-
-                # TODO: package_name?
-                input_name = f"{unparsed.model}__{unit_test.name}__{original_input_node.name}"
-                input_unique_id = f"model.{package_name}.{input_name}"
-
-                input_node = ModelNode(
-                    raw_code=self._build_raw_code(given.rows, original_input_node_columns),
-                    resource_type=NodeType.Model,
-                    package_name=package_name,
-                    path=original_input_node.path,
-                    original_file_path=original_input_node.original_file_path,
-                    unique_id=input_unique_id,
-                    name=input_name,
-                    config=NodeConfig(materialized="ephemeral"),
-                    database=original_input_node.database,
-                    schema=original_input_node.schema,
-                    alias=original_input_node.alias,
-                    fqn=input_unique_id.split("."),
-                    checksum=FileHash.empty(),
-                )
-                self.unit_test_manifest.nodes[input_node.unique_id] = input_node
-                # Add unique ids of input_nodes to depends_on
-                unit_test_node.depends_on.nodes.append(input_node.unique_id)
+            self.unit_test_manifest.nodes[input_node.unique_id] = input_node
+            # Add unique ids of input_nodes to depends_on
+            unit_test_node.depends_on.nodes.append(input_node.unique_id)
 
     def _build_raw_code(self, rows, column_name_to_data_types) -> str:
         return ("{{{{ get_fixture_sql({rows}, {column_name_to_data_types}) }}}}").format(
@@ -186,7 +187,6 @@ class UnitTestParser(YamlReader):
             except (ValidationError, JSONValidationError) as exc:
                 raise YamlParseDictError(self.yaml.path, self.key, data, exc)
             package_name = self.project.project_name
-            unit_test_unique_id = f"unit.{package_name}.{unparsed.model}"
 
             actual_node = self.manifest.ref_lookup.perform_lookup(
                 f"model.{package_name}.{unparsed.model}", self.manifest
@@ -195,15 +195,20 @@ class UnitTestParser(YamlReader):
                 raise ParsingError(
                     "Unable to find model {unparsed.model} for unit tests in {self.yaml.path.original_file_path}"
                 )
-            unit_test_suite = UnitTestSuite(
-                name=unparsed.model,
-                model=unparsed.model,
-                resource_type=NodeType.Unit,
-                package_name=package_name,
-                path=self.yaml.path.relative_path,
-                original_file_path=self.yaml.path.original_file_path,
-                unique_id=unit_test_unique_id,
-                tests=unparsed.tests,
-                attached_node=actual_node.unique_id,
-            )
-            self.manifest.add_unit_test(self.yaml.file, unit_test_suite)
+            for test in unparsed.tests:
+                unit_test_case_unique_id = f"unit.{package_name}.{test.name}.{unparsed.model}"
+                unit_test_case = UnitTestCase(
+                    name=test.name,
+                    model=unparsed.model,
+                    resource_type=NodeType.Unit,
+                    package_name=package_name,
+                    path=self.yaml.path.relative_path,
+                    original_file_path=self.yaml.path.original_file_path,
+                    unique_id=unit_test_case_unique_id,
+                    attached_node=actual_node.unique_id,
+                    given=test.given,
+                    expect=test.expect,
+                    description=test.description,
+                    overrides=test.overrides,
+                )
+                self.manifest.add_unit_test(self.yaml.file, unit_test_case)
