@@ -1,0 +1,7 @@
+kind: Fixes
+body: fix ambiguous reference error for tests and versions when model name is duplicated across
+  packages
+time: 2023-08-24T16:10:24.437362-04:00
+custom:
+  Author: michelleark
+  Issue: "8327 8493"

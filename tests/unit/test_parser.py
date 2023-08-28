@@ -612,7 +612,7 @@ class SchemaParserVersionedModels(SchemaParserTest):
     def setUp(self):
         super().setUp()
         my_model_v1_node = MockNode(
-            package="root",
+            package="snowplow",
             name="arbitrary_file_name",
             config=mock.MagicMock(enabled=True),
             refs=[],
@@ -621,7 +621,7 @@ class SchemaParserVersionedModels(SchemaParserTest):
             file_id="snowplow://models/arbitrary_file_name.sql",
         )
         my_model_v2_node = MockNode(
-            package="root",
+            package="snowplow",
             name="my_model_v2",
             config=mock.MagicMock(enabled=True),
             refs=[],
