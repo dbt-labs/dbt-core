@@ -533,13 +533,13 @@ class SemanticModelParser(YamlReader):
 
         # configs with precendence set
         precedence_configs = dict()
-        # first apply metric configs
+        # first apply semantic model configs
         precedence_configs.update(target.config)
 
         config = generator.calculate_node_config(
             config_call_dict={},
             fqn=fqn,
-            resource_type=NodeType.Metric,
+            resource_type=NodeType.SemanticModel,
             project_name=package_name,
             base=False,
             patch_config_dict=precedence_configs,
@@ -600,7 +600,7 @@ class SemanticModelParser(YamlReader):
 
         if parsed.model is not None:
             model_ref = "{{ " + parsed.model + " }}"
-            # This sets the "refs" in the SemanticModel from the MetricRefResolver in context/providers.py
+            # This sets the "refs" in the SemanticModel from the SemanticModelRefResolver in context/providers.py
             get_rendered(model_ref, ctx, parsed)
 
         # No ability to disable a semantic model at this time

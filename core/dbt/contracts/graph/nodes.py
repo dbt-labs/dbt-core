@@ -1639,12 +1639,6 @@ class SemanticModel(GraphNode):
     def depends_on_macros(self):
         return self.depends_on.macros
 
-    # def same_config(self, old: "SemanticModel") -> bool:
-    #     return self.config.same_contents(
-    #         self.unrendered_config,
-    #         old.unrendered_config,
-    #     )
-
     def checked_agg_time_dimension_for_measure(
         self, measure_reference: MeasureReference
     ) -> TimeDimensionReference:
