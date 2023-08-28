@@ -761,19 +761,44 @@ class TestExternalModels:
         )
 
     @pytest.fixture(scope="class")
+    def external_model_node_depends_on(self):
+        return ModelNodeArgs(
+            name="external_model_depends_on",
+            package_name="external",
+            identifier="test_identifier_depends_on",
+            schema="test_schema",
+            depends_on_nodes=["model.external.external_model_depends_on_parent"],
+        )
+
+    @pytest.fixture(scope="class")
+    def external_model_node_depends_on_parent(self):
+        return ModelNodeArgs(
+            name="external_model_depends_on_parent",
+            package_name="external",
+            identifier="test_identifier_depends_on_parent",
+            schema="test_schema",
+        )
+
+    @pytest.fixture(scope="class")
     def models(self):
         return {"model_one.sql": model_one_sql}
 
     @mock.patch("dbt.plugins.get_plugin_manager")
     def test_pp_external_models(
-        self, get_plugin_manager, project, external_model_node, external_model_node_versioned
+        self,
+        get_plugin_manager,
+        project,
+        external_model_node,
+        external_model_node_versioned,
+        external_model_node_depends_on,
+        external_model_node_depends_on_parent,
     ):
         # initial plugin - one external model
         external_nodes = PluginNodes()
         external_nodes.add_model(external_model_node)
         get_plugin_manager.return_value.get_nodes.return_value = external_nodes
 
-        # initial run
+        # initial parse
         manifest = run_dbt(["parse"])
         assert len(manifest.nodes) == 2
         assert set(manifest.nodes.keys()) == {
@@ -803,8 +828,21 @@ class TestExternalModels:
         )
         manifest = run_dbt(["--partial-parse", "parse"])
         assert len(manifest.nodes) == 5
+        assert len(manifest.external_node_unique_ids) == 2
 
         # remove a model file that depends on external model
         rm_file(project.project_root, "models", "model_depends_on_external.sql")
         manifest = run_dbt(["--partial-parse", "parse"])
         assert len(manifest.nodes) == 4
+
+        # add an external node with depends on
+        external_nodes.add_model(external_model_node_depends_on)
+        external_nodes.add_model(external_model_node_depends_on_parent)
+        manifest = run_dbt(["--partial-parse", "parse"])
+        assert len(manifest.nodes) == 6
+        assert len(manifest.external_node_unique_ids) == 4
+
+        # skip files parsing - ensure no issues
+        run_dbt(["--partial-parse", "parse"])
+        assert len(manifest.nodes) == 6
+        assert len(manifest.external_node_unique_ids) == 4
