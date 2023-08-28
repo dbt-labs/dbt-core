@@ -27,7 +27,7 @@ from dbt.exceptions import (
     DbtRuntimeError,
 )
 from dbt.node_types import NodeType
-from dbt.events.contextvars import get_project_root, get_contextvars
+from dbt.events.contextvars import get_project_root, get_command_name
 
 
 SELECTOR_GLOB = "*"
@@ -152,7 +152,7 @@ class SelectorMethod(metaclass=abc.ABCMeta):
                 continue
             yield unique_id, unit_test
 
-    def resource_type_nodes(self, included_nodes: Set[UniqueId]):
+    def parsed_and_unit_nodes(self, included_nodes: Set[UniqueId]):
         yield from chain(
             self.parsed_nodes(included_nodes),
             self.unit_tests(included_nodes),
@@ -215,7 +215,7 @@ class QualifiedNameSelectorMethod(SelectorMethod):
 
         :param str selector: The selector or node name
         """
-        parsed_nodes = list(self.parsed_nodes(included_nodes))
+        parsed_nodes = list(self.parsed_and_unit_nodes(included_nodes))
         for node, real_node in parsed_nodes:
             if self.node_is_match(selector, real_node.fqn, real_node.is_versioned):
                 yield node
@@ -436,9 +436,8 @@ class ResourceTypeSelectorMethod(SelectorMethod):
             resource_type = NodeType(selector)
         except ValueError as exc:
             raise DbtRuntimeError(f'Invalid resource_type selector "{selector}"') from exc
-        for unique_id, node in self.resource_type_nodes(included_nodes):
+        for unique_id, node in self.parsed_and_unit_nodes(included_nodes):
             if node.resource_type == resource_type:
-                print(f"--- ResourceType.search. {unique_id}")
                 yield unique_id
 
 
@@ -446,8 +445,7 @@ class TestNameSelectorMethod(SelectorMethod):
     __test__ = False
 
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
-        cvars = get_contextvars("task_")
-        command = cvars.get("command")
+        command = get_command_name()
         # Is this too kludgey?
         if command == "unit-test":
             # we check manifest.unit_tests for test_name

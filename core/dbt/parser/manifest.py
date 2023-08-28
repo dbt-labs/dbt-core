@@ -39,6 +39,7 @@ from dbt.constants import (
     MANIFEST_FILE_NAME,
     PARTIAL_PARSE_FILE_NAME,
     SEMANTIC_MANIFEST_FILE_NAME,
+    UNIT_TEST_MANIFEST_FILE_NAME,
 )
 from dbt.helper_types import PathSet
 from dbt.events.functions import fire_event, get_invocation_id, warn_or_error
@@ -58,6 +59,7 @@ from dbt.events.types import (
     DeprecatedReference,
     UpcomingReferenceDeprecation,
 )
+from dbt.events.contextvars import get_command_name
 from dbt.logger import DbtProcessState
 from dbt.node_types import NodeType, AccessType
 from dbt.clients.jinja import get_rendered, MacroStack
@@ -1690,7 +1692,11 @@ def write_semantic_manifest(manifest: Manifest, target_path: str) -> None:
 
 
 def write_manifest(manifest: Manifest, target_path: str):
-    path = os.path.join(target_path, MANIFEST_FILE_NAME)
+    if get_command_name() == "unit-test":
+        file_name = UNIT_TEST_MANIFEST_FILE_NAME
+    else:
+        file_name = MANIFEST_FILE_NAME
+    path = os.path.join(target_path, file_name)
     manifest.write(path)
 
     write_semantic_manifest(manifest=manifest, target_path=target_path)
