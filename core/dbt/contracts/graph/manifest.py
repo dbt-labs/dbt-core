@@ -897,6 +897,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             files={k: _deepcopy(v) for k, v in self.files.items()},
             state_check=_deepcopy(self.state_check),
             semantic_models={k: _deepcopy(v) for k, v in self.semantic_models.items()},
+            unit_tests={k: _deepcopy(v) for k, v in self.unit_tests.items()},
         )
         copy.build_flat_graph()
         return copy
@@ -956,6 +957,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             parent_map=self.parent_map,
             group_map=self.group_map,
             semantic_models=self.semantic_models,
+            unit_tests=self.unit_tests,
         )
 
     def write(self, path):
@@ -1411,6 +1413,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             self.disabled,
             self.env_vars,
             self.semantic_models,
+            self.unit_tests,
             self._doc_lookup,
             self._source_lookup,
             self._ref_lookup,
@@ -1487,6 +1490,11 @@ class WritableManifest(ArtifactMixin):
     metadata: ManifestMetadata = field(
         metadata=dict(
             description="Metadata about the manifest",
+        )
+    )
+    unit_tests: Mapping[UniqueID, UnitTestCase] = field(
+        metadata=dict(
+            description="The unit tests defined in the project",
         )
     )
 

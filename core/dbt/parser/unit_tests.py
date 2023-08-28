@@ -45,7 +45,6 @@ class UnitTestManifestLoader:
         self.unit_test_manifest = Manifest(macros=manifest.macros)
 
     def load(self) -> Manifest:
-        print(f"--- selected: {self.selected}")
         for unique_id in self.selected:
             unit_test_case = self.manifest.unit_tests[unique_id]
             self.parse_unit_test_case(unit_test_case)
