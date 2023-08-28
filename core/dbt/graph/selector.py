@@ -67,8 +67,7 @@ class NodeSelector(MethodManager):
         the selected set of unique IDs.
         """
         method = self.get_method(spec.method, spec.method_arguments)
-        included = set(method.search(included_nodes, spec.value))
-        return included
+        return set(method.search(included_nodes, spec.value))
 
     def get_nodes_from_criteria(
         self, spec: SelectionCriteria
