@@ -48,7 +48,6 @@ class NodeType(StrEnum):
             cls.Documentation,
             cls.RPCCall,
             cls.SqlOperation,
-            cls.Unit,
         ]
 
     @classmethod

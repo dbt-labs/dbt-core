@@ -18,6 +18,7 @@ from dbt.contracts.graph.nodes import (
     ResultNode,
     ManifestNode,
     ModelNode,
+    UnitTestCase,
 )
 from dbt.contracts.graph.unparsed import UnparsedVersion
 from dbt.contracts.state import PreviousState
@@ -144,6 +145,19 @@ class SelectorMethod(metaclass=abc.ABCMeta):
                 continue
             yield unique_id, metric
 
+    def unit_tests(self, included_nodes: Set[UniqueId]) -> Iterator[Tuple[UniqueId, UnitTestCase]]:
+        for unique_id, unit_test in self.manifest.unit_tests.items():
+            unique_id = UniqueId(unique_id)
+            if unique_id not in included_nodes:
+                continue
+            yield unique_id, unit_test
+
+    def resource_type_nodes(self, included_nodes: Set[UniqueId]):
+        yield from chain(
+            self.parsed_nodes(included_nodes),
+            self.unit_tests(included_nodes),
+        )
+
     def all_nodes(
         self, included_nodes: Set[UniqueId]
     ) -> Iterator[Tuple[UniqueId, SelectorTarget]]:
@@ -152,22 +166,13 @@ class SelectorMethod(metaclass=abc.ABCMeta):
             self.source_nodes(included_nodes),
             self.exposure_nodes(included_nodes),
             self.metric_nodes(included_nodes),
+            self.unit_tests(included_nodes),
         )
 
     def configurable_nodes(
         self, included_nodes: Set[UniqueId]
     ) -> Iterator[Tuple[UniqueId, ResultNode]]:
         yield from chain(self.parsed_nodes(included_nodes), self.source_nodes(included_nodes))
-
-    def non_source_nodes(
-        self,
-        included_nodes: Set[UniqueId],
-    ) -> Iterator[Tuple[UniqueId, Union[Exposure, ManifestNode, Metric]]]:
-        yield from chain(
-            self.parsed_nodes(included_nodes),
-            self.exposure_nodes(included_nodes),
-            self.metric_nodes(included_nodes),
-        )
 
     def groupable_nodes(
         self,
@@ -431,9 +436,10 @@ class ResourceTypeSelectorMethod(SelectorMethod):
             resource_type = NodeType(selector)
         except ValueError as exc:
             raise DbtRuntimeError(f'Invalid resource_type selector "{selector}"') from exc
-        for node, real_node in self.parsed_nodes(included_nodes):
-            if real_node.resource_type == resource_type:
-                yield node
+        for unique_id, node in self.resource_type_nodes(included_nodes):
+            if node.resource_type == resource_type:
+                print(f"--- ResourceType.search. {unique_id}")
+                yield unique_id
 
 
 class TestNameSelectorMethod(SelectorMethod):
@@ -442,6 +448,7 @@ class TestNameSelectorMethod(SelectorMethod):
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
         cvars = get_contextvars("task_")
         command = cvars.get("command")
+        # Is this too kludgey?
         if command == "unit-test":
             # we check manifest.unit_tests for test_name
             for unique_id, unit_test in self.manifest.unit_tests.items():

@@ -34,8 +34,9 @@ from dbt.contracts.graph.unparsed import (
     UnparsedSourceDefinition,
     UnparsedSourceTableDefinition,
     UnparsedColumn,
+    UnitTestOverrides,
+    InputFixture,
 )
-from dbt.contracts.graph.unit_tests import UnitTestOverrides
 from dbt.contracts.graph.node_args import ModelNodeArgs
 from dbt.contracts.util import Replaceable, AdditionalPropertiesMixin
 from dbt.events.functions import warn_or_error
@@ -991,6 +992,21 @@ class UnitTestNode(CompiledNode):
     overrides: Optional[UnitTestOverrides] = None
 
 
+@dataclass
+class UnitTestCase(GraphNode):
+    model: str
+    attached_node: str
+    given: Sequence[InputFixture]
+    expect: List[Dict[str, Any]]
+    description: str = ""
+    overrides: Optional[UnitTestOverrides] = None
+    depends_on: DependsOn = field(default_factory=DependsOn)
+
+    @property
+    def depends_on_nodes(self):
+        return self.depends_on.nodes
+
+
 # ====================================
 # Snapshot node
 # ====================================
@@ -1687,6 +1703,7 @@ GraphMemberNode = Union[
     Exposure,
     Metric,
     SemanticModel,
+    UnitTestCase,
 ]
 
 # All "nodes" (or node-like objects) in this file

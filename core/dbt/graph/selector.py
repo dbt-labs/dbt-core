@@ -31,6 +31,8 @@ def can_select_indirectly(node):
     """
     if node.resource_type == NodeType.Test:
         return True
+    elif node.resource_type == NodeType.Unit:
+        return True
     else:
         return False
 
@@ -65,7 +67,8 @@ class NodeSelector(MethodManager):
         the selected set of unique IDs.
         """
         method = self.get_method(spec.method, spec.method_arguments)
-        return set(method.search(included_nodes, spec.value))
+        included = set(method.search(included_nodes, spec.value))
+        return included
 
     def get_nodes_from_criteria(
         self, spec: SelectionCriteria
@@ -170,6 +173,8 @@ class NodeSelector(MethodManager):
             return metric.config.enabled
         elif unique_id in self.manifest.semantic_models:
             return True
+        elif unique_id in self.manifest.unit_tests:
+            return True
         node = self.manifest.nodes[unique_id]
 
         if self.include_empty_nodes:
@@ -195,6 +200,8 @@ class NodeSelector(MethodManager):
             node = self.manifest.metrics[unique_id]
         elif unique_id in self.manifest.semantic_models:
             node = self.manifest.semantic_models[unique_id]
+        elif unique_id in self.manifest.unit_tests:
+            node = self.manifest.unit_tests[unique_id]
         else:
             raise DbtInternalError(f"Node {unique_id} not found in the manifest!")
         return self.node_is_match(node)
@@ -240,8 +247,11 @@ class NodeSelector(MethodManager):
             )
 
         for unique_id in self.graph.select_successors(selected):
-            if unique_id in self.manifest.nodes:
-                node = self.manifest.nodes[unique_id]
+            if unique_id in self.manifest.nodes or unique_id in self.manifest.unit_tests:
+                if unique_id in self.manifest.nodes:
+                    node = self.manifest.nodes[unique_id]
+                elif unique_id in self.manifest.unit_tests:
+                    node = self.manifest.unit_tests[unique_id]  # type: ignore
                 if can_select_indirectly(node):
                     # should we add it in directly?
                     if indirect_selection == IndirectSelection.Eager or set(

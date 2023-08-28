@@ -96,6 +96,7 @@ def _generate_stats(manifest: Manifest):
     stats[NodeType.Macro] += len(manifest.macros)
     stats[NodeType.Group] += len(manifest.groups)
     stats[NodeType.SemanticModel] += len(manifest.semantic_models)
+    stats[NodeType.Unit] += len(manifest.unit_tests)
 
     # TODO: should we be counting dimensions + entities?
 
@@ -196,6 +197,8 @@ class Linker:
             self.link_node(exposure, manifest)
         for metric in manifest.metrics.values():
             self.link_node(metric, manifest)
+        for unit_test in manifest.unit_tests.values():
+            self.link_node(unit_test, manifest)
 
         cycle = self.find_cycles()
 

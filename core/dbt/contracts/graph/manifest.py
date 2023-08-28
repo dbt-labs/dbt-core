@@ -40,8 +40,8 @@ from dbt.contracts.graph.nodes import (
     SemanticModel,
     SourceDefinition,
     UnpatchedSourceDefinition,
+    UnitTestCase,
 )
-from dbt.contracts.graph.unit_tests import UnitTestCase
 from dbt.contracts.graph.unparsed import SourcePatch, NodeVersion, UnparsedVersion
 from dbt.contracts.graph.manifest_upgrade import upgrade_manifest_json
 from dbt.contracts.files import SourceFile, SchemaSourceFile, FileHash, AnySourceFile
@@ -974,6 +974,8 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             return self.metrics[unique_id]
         elif unique_id in self.semantic_models:
             return self.semantic_models[unique_id]
+        elif unique_id in self.unit_tests:
+            return self.unit_tests[unique_id]
         else:
             # something terrible has happened
             raise dbt.exceptions.DbtInternalError(

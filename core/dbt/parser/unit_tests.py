@@ -1,10 +1,12 @@
-from dbt.contracts.graph.unit_tests import UnitTestCase, UnparsedUnitTestSuite
 from dbt.contracts.graph.model_config import NodeConfig
 from dbt_extractor import py_extract_from_source  # type: ignore
+from dbt.contracts.graph.unparsed import UnparsedUnitTestSuite
 from dbt.contracts.graph.nodes import (
     ModelNode,
     UnitTestNode,
     RefArgs,
+    UnitTestCase,
+    DependsOn,
 )
 from dbt.config import RuntimeConfig
 from dbt.contracts.graph.manifest import Manifest
@@ -43,9 +45,10 @@ class UnitTestManifestLoader:
         self.unit_test_manifest = Manifest(macros=manifest.macros)
 
     def load(self) -> Manifest:
-        for unit_test_case in self.manifest.unit_tests.values():
-            if unit_test_case.attached_node in self.selected:
-                self.parse_unit_test_case(unit_test_case)
+        print(f"--- selected: {self.selected}")
+        for unique_id in self.selected:
+            unit_test_case = self.manifest.unit_tests[unique_id]
+            self.parse_unit_test_case(unit_test_case)
 
         return self.unit_test_manifest
 
@@ -63,12 +66,12 @@ class UnitTestManifestLoader:
         # Note: no depends_on, that's added later using input nodes
         name = f"{test_case.model}__{test_case.name}"
         unit_test_node = UnitTestNode(
+            name=name,
             resource_type=NodeType.Unit,
             package_name=package_name,
             path=get_pseudo_test_path(name, test_case.original_file_path),
             original_file_path=test_case.original_file_path,
             unique_id=test_case.unique_id,
-            name=name,
             config=NodeConfig(materialized="unit", _extra={"expected_rows": test_case.expect}),
             raw_code=actual_node.raw_code,
             database=actual_node.database,
@@ -210,5 +213,7 @@ class UnitTestParser(YamlReader):
                     expect=test.expect,
                     description=test.description,
                     overrides=test.overrides,
+                    depends_on=DependsOn(nodes=[actual_node.unique_id]),
+                    fqn=[package_name, test.name],
                 )
                 self.manifest.add_unit_test(self.yaml.file, unit_test_case)

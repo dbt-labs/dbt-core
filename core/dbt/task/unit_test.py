@@ -153,6 +153,7 @@ class UnitTestRunner(CompileRunner):
 
 
 class UnitTestSelector(ResourceTypeSelector):
+    # This is what filters out nodes except Unit Tests, in filter_selection
     def __init__(self, graph, manifest, previous_state):
         super().__init__(
             graph=graph,
@@ -214,21 +215,12 @@ class UnitTestTask(RunTask):
     def get_node_selector(self) -> ResourceTypeSelector:
         if self.manifest is None or self.graph is None:
             raise DbtInternalError("manifest and graph must be set to get perform node selection")
-        if self.using_unit_test_manifest is False:
-            # Initial selection is done against models in the regular manifest
-            return ResourceTypeSelector(
-                graph=self.graph,
-                manifest=self.manifest,
-                previous_state=self.previous_state,
-                resource_types=[NodeType.Model],
-            )
-        else:
-            # Selection for unit test execution purposes is done against UnitTestNodes
-            return UnitTestSelector(
-                graph=self.graph,
-                manifest=self.manifest,
-                previous_state=self.previous_state,
-            )
+        # Filter out everything except unit tests
+        return UnitTestSelector(
+            graph=self.graph,
+            manifest=self.manifest,
+            previous_state=self.previous_state,
+        )
 
     def get_runner_type(self, _):
         return UnitTestRunner
