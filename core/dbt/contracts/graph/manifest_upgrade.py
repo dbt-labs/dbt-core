@@ -83,6 +83,9 @@ def upgrade_manifest_json(manifest: dict, manifest_schema_version: int) -> dict:
         manifest["groups"] = {}
     if "group_map" not in manifest:
         manifest["group_map"] = {}
+    # add unit_tests key
+    if "unit_tests" not in manifest:
+        manifest["unit_tests"] = {}
     for metric_content in manifest.get("metrics", {}).values():
         # handle attr renames + value translation ("expression" -> "derived")
         metric_content = upgrade_ref_content(metric_content)

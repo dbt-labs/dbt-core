@@ -469,6 +469,7 @@ def verify_manifest(project, expected_manifest, start_time, manifest_schema_path
         "exposures",
         "selectors",
         "semantic_models",
+        "unit_tests",
     }
 
     assert set(manifest.keys()) == manifest_keys
