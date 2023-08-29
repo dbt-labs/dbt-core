@@ -603,8 +603,12 @@ class SemanticModelParser(YamlReader):
             # This sets the "refs" in the SemanticModel from the SemanticModelRefResolver in context/providers.py
             get_rendered(model_ref, ctx, parsed)
 
-        # No ability to disable a semantic model at this time
-        self.manifest.add_semantic_model(self.yaml.file, parsed)
+        # if the semantic model is disabled we do not want it included in the manifest,
+        # only in the disabled dict
+        if parsed.config.enabled:
+            self.manifest.add_semantic_model(self.yaml.file, parsed)
+        else:
+            self.manifest.add_disabled(self.yaml.file, parsed)
 
         # Create a metric for each measure with `create_metric = True`
         for measure in unparsed.measures:

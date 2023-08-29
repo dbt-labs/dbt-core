@@ -95,6 +95,7 @@ from dbt.contracts.graph.nodes import (
     Exposure,
     Metric,
     SeedNode,
+    SemanticModel,
     ManifestNode,
     ResultNode,
     ModelNode,
@@ -1220,11 +1221,16 @@ class ManifestLoader:
         for metric in manifest.metrics.values():
             self.check_valid_group_config_node(metric, group_names)
 
+        for semantic_model in manifest.semantic_models.values():
+            self.check_valid_group_config_node(semantic_model, group_names)
+
         for node in manifest.nodes.values():
             self.check_valid_group_config_node(node, group_names)
 
     def check_valid_group_config_node(
-        self, groupable_node: Union[Metric, ManifestNode], valid_group_names: Set[str]
+        self,
+        groupable_node: Union[Metric, SemanticModel, ManifestNode],
+        valid_group_names: Set[str],
     ):
         groupable_node_group = groupable_node.group
         if groupable_node_group and groupable_node_group not in valid_group_names:
@@ -1491,6 +1497,11 @@ def _process_metric_node(
         if target_semantic_model is None:
             raise dbt.exceptions.ParsingError(
                 f"A semantic model having a measure `{metric.type_params.measure.name}` does not exist but was referenced.",
+                node=metric,
+            )
+        if target_semantic_model.config.enabled is False:
+            raise dbt.exceptions.ParsingError(
+                f"A semantic model having a measure `{metric.type_params.measure.name}` is disabled but was referenced.",
                 node=metric,
             )
 

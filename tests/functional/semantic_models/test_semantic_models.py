@@ -7,7 +7,7 @@ from dbt.tests.util import run_dbt
 
 from tests.functional.semantic_models.fixtures import (
     models_people_sql,
-    metricflow_time_spine_sql,
+    simple_metricflow_time_spine_sql,
     semantic_model_people_yml,
     models_people_metrics_yml,
 )
@@ -18,7 +18,7 @@ class TestSemanticModelDependsOn:
     def models(self):
         return {
             "people.sql": models_people_sql,
-            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+            "metricflow_time_spine.sql": simple_metricflow_time_spine_sql,
             "semantic_models.yml": semantic_model_people_yml,
             "people_metrics.yml": models_people_metrics_yml,
         }
@@ -41,7 +41,7 @@ class TestSemanticModelUnknownModel:
     def models(self):
         return {
             "not_people.sql": models_people_sql,
-            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+            "metricflow_time_spine.sql": simple_metricflow_time_spine_sql,
             "semantic_models.yml": semantic_model_people_yml,
             "people_metrics.yml": models_people_metrics_yml,
         }
