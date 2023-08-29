@@ -12,17 +12,6 @@ from dbt.exceptions import DbtRuntimeError
 BOM = BOM_UTF8.decode("utf-8")  # '\ufeff'
 
 
-class Integer(agate.data_types.DataType):
-    def cast(self, d):
-        if type(d) == int:
-            return d
-        else:
-            raise agate.exceptions.CastError('Can not parse value "%s" as Integer.' % d)
-
-    def jsonify(self, d):
-        return d
-
-
 class Number(agate.data_types.Number):
     # undo the change in https://github.com/wireservice/agate/pull/733
     # i.e. do not cast True and False to numeric 1 and 0
@@ -58,7 +47,6 @@ def build_type_tester(
 ) -> agate.TypeTester:
 
     types = [
-        Integer(null_values=("null", "")),
         Number(null_values=("null", "")),
         agate.data_types.Date(null_values=("null", ""), date_format="%Y-%m-%d"),
         agate.data_types.DateTime(null_values=("null", ""), datetime_format="%Y-%m-%d %H:%M:%S"),

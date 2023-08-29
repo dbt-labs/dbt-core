@@ -5,7 +5,13 @@ import string
 
 import pytest
 
-from dbt.tests.util import run_dbt, update_config_file, write_file, get_manifest
+from dbt.tests.util import (
+    run_dbt,
+    update_config_file,
+    write_file,
+    get_manifest,
+    run_dbt_and_capture,
+)
 
 from dbt.exceptions import CompilationError, ContractBreakingChangeError
 
@@ -496,7 +502,7 @@ class TestChangedExposure(BaseModifiedState):
         assert len(results) == 0
 
 
-class TestChangedContract(BaseModifiedState):
+class TestChangedContractUnversioned(BaseModifiedState):
     MODEL_UNIQUE_ID = "model.test.table_model"
     CONTRACT_SCHEMA_YML = contract_schema_yml
     MODIFIED_SCHEMA_YML = modified_contract_schema_yml
@@ -504,6 +510,90 @@ class TestChangedContract(BaseModifiedState):
     NO_CONTRACT_SCHEMA_YML = no_contract_schema_yml
 
     def test_changed_contract(self, project):
+        self.run_and_save_state()
+
+        # update contract for table_model
+        write_file(self.CONTRACT_SCHEMA_YML, "models", "schema.yml")
+
+        # This will find the table_model node modified both through a config change
+        # and by a non-breaking change to contract: true
+        results = run_dbt(["run", "--models", "state:modified", "--state", "./state"])
+        assert len(results) == 1
+        assert results[0].node.name == "table_model"
+
+        results = run_dbt(["run", "--exclude", "state:unmodified", "--state", "./state"])
+        assert len(results) == 1
+        assert results[0].node.name == "table_model"
+
+        manifest = get_manifest(project.project_root)
+        model_unique_id = self.MODEL_UNIQUE_ID
+        model = manifest.nodes[model_unique_id]
+        expected_unrendered_config = {"contract": {"enforced": True}, "materialized": "table"}
+        assert model.unrendered_config == expected_unrendered_config
+
+        # Run it again with "state:modified:contract", still finds modified due to contract: true
+        results = run_dbt(["run", "--models", "state:modified.contract", "--state", "./state"])
+        assert len(results) == 1
+        manifest = get_manifest(project.project_root)
+        model = manifest.nodes[model_unique_id]
+        first_contract_checksum = model.contract.checksum
+        assert first_contract_checksum
+        # save a new state
+        self.copy_state()
+
+        # This should raise because a column name has changed
+        write_file(self.MODIFIED_SCHEMA_YML, "models", "schema.yml")
+        results = run_dbt(["run"], expect_pass=False)
+        assert len(results) == 2
+        manifest = get_manifest(project.project_root)
+        model = manifest.nodes[model_unique_id]
+        second_contract_checksum = model.contract.checksum
+        # double check different contract_checksums
+        assert first_contract_checksum != second_contract_checksum
+
+        _, logs = run_dbt_and_capture(
+            ["run", "--models", "state:modified.contract", "--state", "./state"], expect_pass=False
+        )
+        expected_error = "This model has an enforced contract that failed."
+        expected_warning = "While comparing to previous project state, dbt detected a breaking change to an unversioned model"
+        expected_change = "Please ensure the name, data_type, and number of columns in your contract match the columns in your model's definition"
+        assert expected_error in logs
+        assert expected_warning in logs
+        assert expected_change in logs
+
+        # Go back to schema file without contract. Should throw a warning.
+        write_file(self.NO_CONTRACT_SCHEMA_YML, "models", "schema.yml")
+        _, logs = run_dbt_and_capture(
+            ["run", "--models", "state:modified.contract", "--state", "./state"]
+        )
+        expected_warning = "While comparing to previous project state, dbt detected a breaking change to an unversioned model"
+        expected_change = "Contract enforcement was removed"
+
+        # Now disable the contract. Should throw a warning - force warning into an error.
+        write_file(self.DISABLED_SCHEMA_YML, "models", "schema.yml")
+        with pytest.raises(CompilationError):
+            _, logs = run_dbt_and_capture(
+                [
+                    "--warn-error",
+                    "run",
+                    "--models",
+                    "state:modified.contract",
+                    "--state",
+                    "./state",
+                ]
+            )
+            expected_warning = "While comparing to previous project state, dbt detected a breaking change to an unversioned model"
+            expected_change = "Contract enforcement was removed"
+
+
+class TestChangedContractVersioned(BaseModifiedState):
+    MODEL_UNIQUE_ID = "model.test.table_model.v1"
+    CONTRACT_SCHEMA_YML = versioned_contract_schema_yml
+    MODIFIED_SCHEMA_YML = versioned_modified_contract_schema_yml
+    DISABLED_SCHEMA_YML = versioned_disabled_contract_schema_yml
+    NO_CONTRACT_SCHEMA_YML = versioned_no_contract_schema_yml
+
+    def test_changed_contract_versioned(self, project):
         self.run_and_save_state()
 
         # update contract for table_model
@@ -558,15 +648,7 @@ class TestChangedContract(BaseModifiedState):
             results = run_dbt(["run", "--models", "state:modified.contract", "--state", "./state"])
 
 
-class TestChangedContractVersioned(TestChangedContract):
-    MODEL_UNIQUE_ID = "model.test.table_model.v1"
-    CONTRACT_SCHEMA_YML = versioned_contract_schema_yml
-    MODIFIED_SCHEMA_YML = versioned_modified_contract_schema_yml
-    DISABLED_SCHEMA_YML = versioned_disabled_contract_schema_yml
-    NO_CONTRACT_SCHEMA_YML = versioned_no_contract_schema_yml
-
-
-class TestChangedConstraint(BaseModifiedState):
+class TestChangedConstraintUnversioned(BaseModifiedState):
     def test_changed_constraint(self, project):
         self.run_and_save_state()
 
@@ -609,8 +691,14 @@ class TestChangedConstraint(BaseModifiedState):
         second_contract_checksum = model.contract.checksum
         # double check different contract_checksums
         assert first_contract_checksum != second_contract_checksum
-        with pytest.raises(ContractBreakingChangeError):
-            run_dbt(["run", "--models", "state:modified.contract", "--state", "./state"])
+        # since the models are unversioned, they raise a warning but not an error
+        _, logs = run_dbt_and_capture(
+            ["run", "--models", "state:modified.contract", "--state", "./state"]
+        )
+        expected_warning = "While comparing to previous project state, dbt detected a breaking change to an unversioned model"
+        expected_change = "Enforced column level constraints were removed"
+        assert expected_warning in logs
+        assert expected_change in logs
 
         # This should raise because a model level constraint was removed (primary_key on id)
         write_file(modified_model_constraint_schema_yml, "models", "schema.yml")
@@ -622,8 +710,13 @@ class TestChangedConstraint(BaseModifiedState):
         second_contract_checksum = model.contract.checksum
         # double check different contract_checksums
         assert first_contract_checksum != second_contract_checksum
-        with pytest.raises(ContractBreakingChangeError):
-            run_dbt(["run", "--models", "state:modified.contract", "--state", "./state"])
+        _, logs = run_dbt_and_capture(
+            ["run", "--models", "state:modified.contract", "--state", "./state"]
+        )
+        expected_warning = "While comparing to previous project state, dbt detected a breaking change to an unversioned model"
+        expected_change = "Enforced model level constraints were removed"
+        assert expected_warning in logs
+        assert expected_change in logs
 
 
 class TestChangedMaterializationConstraint(BaseModifiedState):
@@ -669,8 +762,13 @@ class TestChangedMaterializationConstraint(BaseModifiedState):
         second_contract_checksum = model.contract.checksum
         # double check different contract_checksums
         assert first_contract_checksum != second_contract_checksum
-        with pytest.raises(ContractBreakingChangeError):
-            run_dbt(["run", "--models", "state:modified.contract", "--state", "./state"])
+        _, logs = run_dbt_and_capture(
+            ["run", "--models", "state:modified.contract", "--state", "./state"]
+        )
+        expected_warning = "While comparing to previous project state, dbt detected a breaking change to an unversioned model"
+        expected_change = "Materialization changed with enforced constraints"
+        assert expected_warning in logs
+        assert expected_change in logs
 
         # This should not raise because materialization changed from table to incremental, both enforce constraints
         write_file(table_model_now_incremental_sql, "models", "table_model.sql")
@@ -709,28 +807,35 @@ select 1 as id, 'blue' as color
 my_model_yml = """
 models:
   - name: my_model
+    latest_version: 1
     config:
       contract:
         enforced: true
     columns:
       - name: id
         data_type: int
+    versions:
+      - v: 1
 """
 
 modified_my_model_yml = """
 models:
   - name: my_model
+    latest_version: 1
     config:
       contract:
         enforced: true
     columns:
       - name: id
         data_type: text
+    versions:
+      - v: 1
 """
 
 modified_my_model_non_breaking_yml = """
 models:
   - name: my_model
+    latest_version: 1
     config:
       contract:
         enforced: true
@@ -739,6 +844,8 @@ models:
         data_type: int
       - name: color
         data_type: text
+    versions:
+      - v: 1
 """
 
 
@@ -780,7 +887,7 @@ class TestModifiedBodyAndContract:
 
         # The model's contract has changed, even if non-breaking, so it should be selected by 'state:modified.contract'
         results = run_dbt(["list", "-s", "state:modified.contract", "--state", "./state"])
-        assert results == ["test.my_model"]
+        assert results == ["test.my_model.v1"]
 
 
 modified_table_model_access_yml = """

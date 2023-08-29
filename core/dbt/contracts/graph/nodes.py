@@ -44,6 +44,7 @@ from dbt.events.types import (
     SeedExceedsLimitSamePath,
     SeedExceedsLimitAndPathChanged,
     SeedExceedsLimitChecksumChanged,
+    UnversionedBreakingChange,
 )
 from dbt.events.contextvars import set_log_contextvars
 from dbt.flags import get_flags
@@ -682,11 +683,11 @@ class ModelNode(CompiledNode):
         # These are the categories of breaking changes:
         contract_enforced_disabled: bool = False
         columns_removed: List[str] = []
-        column_type_changes: List[Tuple[str, str, str]] = []
-        enforced_column_constraint_removed: List[Tuple[str, str]] = []  # column, constraint_type
-        enforced_model_constraint_removed: List[
-            Tuple[str, List[str]]
-        ] = []  # constraint_type, columns
+        column_type_changes: List[Dict[str, str]] = []
+        enforced_column_constraint_removed: List[
+            Dict[str, str]
+        ] = []  # column_name, constraint_type
+        enforced_model_constraint_removed: List[Dict[str, Any]] = []  # constraint_type, columns
         materialization_changed: List[str] = []
 
         if old.contract.enforced is True and self.contract.enforced is False:
@@ -708,11 +709,11 @@ class ModelNode(CompiledNode):
             # Has this column's data type changed?
             elif old_value.data_type != self.columns[old_key].data_type:
                 column_type_changes.append(
-                    (
-                        str(old_value.name),
-                        str(old_value.data_type),
-                        str(self.columns[old_key].data_type),
-                    )
+                    {
+                        "column_name": str(old_value.name),
+                        "previous_column_type": str(old_value.data_type),
+                        "current_column_type": str(self.columns[old_key].data_type),
+                    }
                 )
 
             # track if there are any column level constraints for the materialization check late
@@ -733,7 +734,11 @@ class ModelNode(CompiledNode):
                         and constraint_support[old_constraint.type] == ConstraintSupport.ENFORCED
                     ):
                         enforced_column_constraint_removed.append(
-                            (old_key, str(old_constraint.type))
+                            {
+                                "column_name": old_key,
+                                "constraint_name": old_constraint.name,
+                                "constraint_type": ConstraintType(old_constraint.type),
+                            }
                         )
 
         # Now compare the model level constraints
@@ -744,7 +749,11 @@ class ModelNode(CompiledNode):
                     and constraint_support[old_constraint.type] == ConstraintSupport.ENFORCED
                 ):
                     enforced_model_constraint_removed.append(
-                        (str(old_constraint.type), old_constraint.columns)
+                        {
+                            "constraint_name": old_constraint.name,
+                            "constraint_type": ConstraintType(old_constraint.type),
+                            "columns": old_constraint.columns,
+                        }
                     )
 
         # Check for relevant materialization changes.
@@ -758,7 +767,8 @@ class ModelNode(CompiledNode):
         # If a column has been added, it will be missing in the old.columns, and present in self.columns
         # That's a change (caught by the different checksums), but not a breaking change
 
-        # Did we find any changes that we consider breaking? If so, that's an error
+        # Did we find any changes that we consider breaking? If there's an enforced contract, that's
+        # a warning unless the model is versioned, then it's an error.
         if (
             contract_enforced_disabled
             or columns_removed
@@ -767,21 +777,78 @@ class ModelNode(CompiledNode):
             or enforced_column_constraint_removed
             or materialization_changed
         ):
-            raise (
-                ContractBreakingChangeError(
-                    contract_enforced_disabled=contract_enforced_disabled,
-                    columns_removed=columns_removed,
-                    column_type_changes=column_type_changes,
-                    enforced_column_constraint_removed=enforced_column_constraint_removed,
-                    enforced_model_constraint_removed=enforced_model_constraint_removed,
-                    materialization_changed=materialization_changed,
+
+            breaking_changes = []
+            if contract_enforced_disabled:
+                breaking_changes.append(
+                    "Contract enforcement was removed: Previously, this model had an enforced contract. It is no longer configured to enforce its contract, and this is a breaking change."
+                )
+            if columns_removed:
+                columns_removed_str = "\n    - ".join(columns_removed)
+                breaking_changes.append(f"Columns were removed: \n    - {columns_removed_str}")
+            if column_type_changes:
+                column_type_changes_str = "\n    - ".join(
+                    [
+                        f"{c['column_name']} ({c['previous_column_type']} -> {c['current_column_type']})"
+                        for c in column_type_changes
+                    ]
+                )
+                breaking_changes.append(
+                    f"Columns with data_type changes: \n    - {column_type_changes_str}"
+                )
+            if enforced_column_constraint_removed:
+                column_constraint_changes_str = "\n    - ".join(
+                    [
+                        f"'{c['constraint_name'] if c['constraint_name'] is not None else c['constraint_type']}' constraint on column {c['column_name']}"
+                        for c in enforced_column_constraint_removed
+                    ]
+                )
+                breaking_changes.append(
+                    f"Enforced column level constraints were removed: \n    - {column_constraint_changes_str}"
+                )
+            if enforced_model_constraint_removed:
+                model_constraint_changes_str = "\n    - ".join(
+                    [
+                        f"'{c['constraint_name'] if c['constraint_name'] is not None else c['constraint_type']}' constraint on columns {c['columns']}"
+                        for c in enforced_model_constraint_removed
+                    ]
+                )
+                breaking_changes.append(
+                    f"Enforced model level constraints were removed: \n    - {model_constraint_changes_str}"
+                )
+            if materialization_changed:
+                materialization_changes_str = (
+                    f"{materialization_changed[0]} -> {materialization_changed[1]}"
+                )
+
+                breaking_changes.append(
+                    f"Materialization changed with enforced constraints: \n    - {materialization_changes_str}"
+                )
+
+            if self.version is None:
+                warn_or_error(
+                    UnversionedBreakingChange(
+                        contract_enforced_disabled=contract_enforced_disabled,
+                        columns_removed=columns_removed,
+                        column_type_changes=column_type_changes,
+                        enforced_column_constraint_removed=enforced_column_constraint_removed,
+                        enforced_model_constraint_removed=enforced_model_constraint_removed,
+                        breaking_changes=breaking_changes,
+                        model_name=self.name,
+                        model_file_path=self.original_file_path,
+                    ),
                     node=self,
                 )
-            )
+            else:
+                raise (
+                    ContractBreakingChangeError(
+                        breaking_changes=breaking_changes,
+                        node=self,
+                    )
+                )
 
-        # Otherwise, though we didn't find any *breaking* changes, the contract has still changed -- same_contract: False
-        else:
-            return False
+        # Otherwise, the contract has changed -- same_contract: False
+        return False
 
 
 # TODO: rm?
