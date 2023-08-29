@@ -17,7 +17,9 @@ def assert_run_results_have_compiled_node_attributes(
     run_results = get_run_results(os.getcwd())
     for r in run_results["results"]:
         if r["unique_id"].startswith("model") and r["status"] == "success":
-            assert hasattr(r, "compiled_code")
+            assert "compiled_code" in r
+            assert "compiled" in r
+            assert "relation_name" in r
 
 
 def get_run_results(target_path):
