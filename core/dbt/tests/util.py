@@ -5,7 +5,7 @@ import yaml
 import json
 import warnings
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from contextlib import contextmanager
 from dbt.adapters.factory import Adapter
 
@@ -156,6 +156,16 @@ def get_manifest(project_root) -> Optional[Manifest]:
             manifest_mp = fp.read()
         manifest: Manifest = Manifest.from_msgpack(manifest_mp)
         return manifest
+    else:
+        return None
+
+
+# Used in test cases to get the run_results.json file.
+def get_run_results(project_root) -> Any:
+    path = os.path.join(project_root, "target", "run_results.json")
+    if os.path.exists(path):
+        with open(path) as run_result_text:
+            return json.load(run_result_text)
     else:
         return None
 

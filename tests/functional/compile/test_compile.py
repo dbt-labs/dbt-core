@@ -15,7 +15,7 @@ from tests.functional.compile.fixtures import (
     schema_yml,
     model_multiline_jinja,
 )
-from tests.functional.invariants.invariants import dbtTestRunner
+from tests.functional.assertions.test_runner import dbtTestRunner
 
 
 def norm_whitespace(string):

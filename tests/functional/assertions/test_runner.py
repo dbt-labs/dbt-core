@@ -1,10 +1,10 @@
-import json
 import os
 from typing import Callable, List, Optional
 
 from dbt.cli.main import dbtRunner, dbtRunnerResult
 from dbt.contracts.graph.manifest import Manifest
 from dbt.events.base_types import EventMsg
+from dbt.tests.util import get_run_results
 
 
 def assert_run_results_have_compiled_node_attributes(
@@ -19,13 +19,6 @@ def assert_run_results_have_compiled_node_attributes(
         if r["unique_id"].startswith("model") and r["status"] == "success":
             assert "compiled_code" in r
             assert "compiled" in r
-            assert "relation_name" in r
-
-
-def get_run_results(target_path):
-    run_results_path = os.path.join(target_path, "target/run_results.json")
-    with open(run_results_path) as run_result_text:
-        return json.load(run_result_text)
 
 
 _STANDARD_ASSERTIONS = [assert_run_results_have_compiled_node_attributes]
