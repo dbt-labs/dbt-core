@@ -1,0 +1,7 @@
+kind: Fixes
+body: 'Fix "Internal Error: Expected node <unique-id> not found in manifest" when
+  depends_on set on ModelNodeArgs'
+time: 2023-08-28T12:58:58.061228-04:00
+custom:
+  Author: michelleark
+  Issue: "8506"

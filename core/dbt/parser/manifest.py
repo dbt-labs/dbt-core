@@ -557,7 +557,7 @@ class ManifestLoader:
                 )
                 # parent and child maps will be rebuilt by write_manifest
 
-        if not skip_parsing:
+        if not skip_parsing or external_nodes_modified:
             # write out the fully parsed manifest
             self.write_manifest_for_partial_parse()
 
@@ -755,10 +755,13 @@ class ManifestLoader:
     def inject_external_nodes(self) -> bool:
         # Remove previously existing external nodes since we are regenerating them
         manifest_nodes_modified = False
+        # Remove all dependent nodes before removing referencing nodes
         for unique_id in self.manifest.external_node_unique_ids:
-            self.manifest.nodes.pop(unique_id)
             remove_dependent_project_references(self.manifest, unique_id)
             manifest_nodes_modified = True
+        for unique_id in self.manifest.external_node_unique_ids:
+            # remove external nodes from manifest only after dependent project references safely removed
+            self.manifest.nodes.pop(unique_id)
 
         # Inject any newly-available external nodes
         pm = plugins.get_plugin_manager(self.root_project.project_name)
