@@ -310,14 +310,16 @@ class SemanticModelByMeasureLookup(dbtClassMixin):
         self.storage: DefaultDict[str, Dict[PackageName, UniqueID]] = defaultdict(dict)
         self.populate(manifest)
 
-    def get_unique_id(self, search_name: str, package: Optional[PackageName]):
+    def get_unique_id(
+        self, search_name: str, package: Optional[PackageName], manifest: "Manifest"
+    ):
         return find_unique_id_for_package(self.storage, search_name, package)
 
     def find(
         self, search_name: str, package: Optional[PackageName], manifest: "Manifest"
     ) -> Optional[SemanticModel]:
         """Tries to find a SemanticModel based on a measure name"""
-        unique_id = self.get_unique_id(search_name, package)
+        unique_id = self.get_unique_id(search_name, package, manifest)
         if unique_id is not None:
             return self.perform_lookup(unique_id, manifest)
         return None
@@ -331,18 +333,31 @@ class SemanticModelByMeasureLookup(dbtClassMixin):
         """Populate storage with all the measure + package paths to the Manifest's SemanticModels"""
         for semantic_model in manifest.semantic_models.values():
             self.add(semantic_model=semantic_model)
+        for disabled in manifest.disabled.values():
+            for node in disabled:
+                if isinstance(node, SemanticModel):
+                    self.add(semantic_model=node)
 
     def perform_lookup(self, unique_id: UniqueID, manifest: "Manifest") -> SemanticModel:
         """Tries to get a SemanticModel from the Manifest"""
-        semantic_model = manifest.semantic_models.get(unique_id)
-        if semantic_model is None:
+        enabled_semantic_model: Optional[SemanticModel] = manifest.semantic_models.get(unique_id)
+        disabled_semantic_model: Optional[List] = manifest.disabled.get(unique_id)
+
+        semantic_model: SemanticModel  # to keep mypy happy
+        if isinstance(enabled_semantic_model, SemanticModel):
+            semantic_model = enabled_semantic_model
+        elif disabled_semantic_model is not None and isinstance(
+            disabled_semantic_model[0], SemanticModel
+        ):
+            semantic_model = disabled_semantic_model[0]
+        else:
             raise dbt.exceptions.DbtInternalError(
                 f"Semantic model `{unique_id}` found in cache but not found in manifest"
             )
         return semantic_model
 
 
-# This handles both models/seeds/snapshots and sources/metrics/exposures
+# This handles both models/seeds/snapshots and sources/metrics/exposures/semantic_models
 class DisabledLookup(dbtClassMixin):
     def __init__(self, manifest: "Manifest"):
         self.storage: Dict[str, Dict[PackageName, List[Any]]] = {}
@@ -1156,6 +1171,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             semantic_model = self.semantic_model_by_measure_lookup.find(
                 target_measure_name, pkg, self
             )
+            # need to return it even if it's disabled so know it's not fully missing
             if semantic_model is not None:
                 return semantic_model
 
