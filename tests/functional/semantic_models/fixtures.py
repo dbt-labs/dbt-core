@@ -17,6 +17,9 @@ groups:
   - name: some_group
     owner:
       email: me@gmail.com
+  - name: some_other_group
+    owner:
+      email: me@gmail.com
 """
 
 models_people_metrics_yml = """
@@ -55,8 +58,6 @@ version: 2
 
 semantic_models:
   - name: semantic_people
-    config:
-      group: some_group
     model: ref('people')
     dimensions:
       - name: favorite_color

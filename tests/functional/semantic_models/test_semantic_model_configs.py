@@ -85,9 +85,7 @@ class TestMismatchesConfigProjectLevel:
         manifest = get_manifest(project.project_root)
         assert "semantic_model.test.semantic_people" in manifest.semantic_models
         assert "group.test.some_group" in manifest.groups
-        assert (
-            manifest.semantic_models["semantic_model.test.semantic_people"].group == "some_group"
-        )
+        assert manifest.semantic_models["semantic_model.test.semantic_people"].group is None
 
         new_enabled_config = {
             "semantic-models": {
@@ -136,8 +134,26 @@ class TestConfigProjectLevel:
         manifest = get_manifest(project.project_root)
         assert "semantic_model.test.semantic_people" in manifest.semantic_models
         assert "group.test.some_group" in manifest.groups
+        assert "group.test.some_other_group" in manifest.groups
+        assert manifest.semantic_models["semantic_model.test.semantic_people"].group is None
+
+        new_group_config = {
+            "semantic-models": {
+                "test": {
+                    "group": "some_other_group",
+                }
+            },
+        }
+        update_config_file(new_group_config, project.project_root, "dbt_project.yml")
+        run_dbt(["parse"])
+        manifest = get_manifest(project.project_root)
+
+        assert "semantic_model.test.semantic_people" in manifest.semantic_models
+        assert "group.test.some_other_group" in manifest.groups
+        assert "group.test.some_group" in manifest.groups
         assert (
-            manifest.semantic_models["semantic_model.test.semantic_people"].group == "some_group"
+            manifest.semantic_models["semantic_model.test.semantic_people"].group
+            == "some_other_group"
         )
 
         new_enabled_config = {
