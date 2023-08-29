@@ -12,6 +12,7 @@ from tests.functional.semantic_models.fixtures import (
     models_people_metrics_yml,
     disabled_semantic_model_people_yml,
     enabled_semantic_model_people_yml,
+    groups_yml,
 )
 
 
@@ -24,6 +25,7 @@ class TestConfigYamlLevel:
             "metricflow_time_spine.sql": metricflow_time_spine_sql,
             "semantic_models.yml": disabled_semantic_model_people_yml,
             "people_metrics.yml": disabled_models_people_metrics_yml,
+            "groups.yml": groups_yml,
         }
 
     def test_yaml_level(self, project):
@@ -31,6 +33,9 @@ class TestConfigYamlLevel:
         manifest = get_manifest(project.project_root)
         assert "semantic_model.test.semantic_people" not in manifest.semantic_models
         assert "semantic_model.test.semantic_people" in manifest.disabled
+
+        assert "group.test.some_group" in manifest.groups
+        assert "semantic_model.test.semantic_people" not in manifest.groups
 
 
 # Test disabled config at semantic_models level with a still enabled metric
@@ -42,6 +47,7 @@ class TestDisabledConfigYamlLevelEnabledMetric:
             "metricflow_time_spine.sql": metricflow_time_spine_sql,
             "semantic_models.yml": disabled_semantic_model_people_yml,
             "people_metrics.yml": models_people_metrics_yml,
+            "groups.yml": groups_yml,
         }
 
     def test_yaml_level(self, project):
@@ -61,6 +67,7 @@ class TestMismatchesConfigProjectLevel:
             "metricflow_time_spine.sql": metricflow_time_spine_sql,
             "semantic_models.yml": semantic_model_people_yml,
             "people_metrics.yml": models_people_metrics_yml,
+            "groups.yml": groups_yml,
         }
 
     @pytest.fixture(scope="class")
@@ -77,6 +84,10 @@ class TestMismatchesConfigProjectLevel:
         run_dbt(["parse"])
         manifest = get_manifest(project.project_root)
         assert "semantic_model.test.semantic_people" in manifest.semantic_models
+        assert "group.test.some_group" in manifest.groups
+        assert (
+            manifest.semantic_models["semantic_model.test.semantic_people"].group == "some_group"
+        )
 
         new_enabled_config = {
             "semantic-models": {
@@ -102,6 +113,7 @@ class TestConfigProjectLevel:
             "metricflow_time_spine.sql": metricflow_time_spine_sql,
             "semantic_models.yml": semantic_model_people_yml,
             "people_metrics.yml": models_people_metrics_yml,
+            "groups.yml": groups_yml,
         }
 
     @pytest.fixture(scope="class")
@@ -123,6 +135,10 @@ class TestConfigProjectLevel:
         run_dbt(["parse"])
         manifest = get_manifest(project.project_root)
         assert "semantic_model.test.semantic_people" in manifest.semantic_models
+        assert "group.test.some_group" in manifest.groups
+        assert (
+            manifest.semantic_models["semantic_model.test.semantic_people"].group == "some_group"
+        )
 
         new_enabled_config = {
             "semantic-models": {
@@ -143,6 +159,9 @@ class TestConfigProjectLevel:
         assert "semantic_model.test.semantic_people" not in manifest.semantic_models
         assert "semantic_model.test.semantic_people" in manifest.disabled
 
+        assert "group.test.some_group" in manifest.groups
+        assert "semantic_model.test.semantic_people" not in manifest.groups
+
 
 # Test inheritence - set configs at project and semantic_model level - expect semantic_model level to win
 class TestConfigsInheritence:
@@ -153,6 +172,7 @@ class TestConfigsInheritence:
             "metricflow_time_spine.sql": metricflow_time_spine_sql,
             "semantic_models.yml": enabled_semantic_model_people_yml,
             "people_metrics.yml": models_people_metrics_yml,
+            "groups.yml": groups_yml,
         }
 
     @pytest.fixture(scope="class")

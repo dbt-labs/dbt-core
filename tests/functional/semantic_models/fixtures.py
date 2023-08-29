@@ -10,6 +10,15 @@ union all
 select 3 as id, 'Callum' as first_name, 'McCann' as last_name, 'emerald' as favorite_color, true as loves_dbt, 0 as tenure, current_timestamp as created_at
 """
 
+groups_yml = """
+version: 2
+
+groups:
+  - name: some_group
+    owner:
+      email: me@gmail.com
+"""
+
 models_people_metrics_yml = """
 version: 2
 
@@ -31,6 +40,7 @@ metrics:
   - name: number_of_people
     config:
       enabled: false
+      group: some_group
     label: "Number of people"
     description: Total count of people
     type: simple
@@ -45,6 +55,8 @@ version: 2
 
 semantic_models:
   - name: semantic_people
+    config:
+      group: some_group
     model: ref('people')
     dimensions:
       - name: favorite_color
@@ -75,6 +87,7 @@ semantic_models:
     model: ref('people')
     config:
       enabled: true
+      group: some_group
     dimensions:
       - name: favorite_color
         type: categorical
