@@ -38,14 +38,6 @@ def get_project_root():
         return None
 
 
-def get_command_name():
-    cvars = get_contextvars(TASK_PREFIX)
-    if "command" in cvars:
-        return cvars["command"]
-    else:
-        return "run"
-
-
 def clear_contextvars(prefix: str) -> None:
     ctx = contextvars.copy_context()
     for k in ctx:

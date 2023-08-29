@@ -454,7 +454,7 @@ class GraphRunnableTask(ConfiguredTask):
         """
         # We set up a context manager here with "task_contextvars" because we
         # need the project_root in runtime_initialize.
-        with task_contextvars(project_root=self.config.project_root, command=self.args.which):
+        with task_contextvars(project_root=self.config.project_root):
             self._runtime_initialize()
 
             if self._flattened_nodes is None:
@@ -490,7 +490,8 @@ class GraphRunnableTask(ConfiguredTask):
             )
 
         if self.args.write_json:
-            write_manifest(self.manifest, self.config.project_target_path)
+            # args.which used to determine file name for unit test manifest
+            write_manifest(self.manifest, self.config.project_target_path, self.args.which)
             if hasattr(result, "write"):
                 result.write(self.result_path())
 

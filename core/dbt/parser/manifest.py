@@ -59,7 +59,6 @@ from dbt.events.types import (
     DeprecatedReference,
     UpcomingReferenceDeprecation,
 )
-from dbt.events.contextvars import get_command_name
 from dbt.logger import DbtProcessState
 from dbt.node_types import NodeType, AccessType
 from dbt.clients.jinja import get_rendered, MacroStack
@@ -1694,11 +1693,14 @@ def write_semantic_manifest(manifest: Manifest, target_path: str) -> None:
     semantic_manifest.write_json_to_file(path)
 
 
-def write_manifest(manifest: Manifest, target_path: str):
-    if get_command_name() == "unit-test":
+def write_manifest(manifest: Manifest, target_path: str, which: Optional[str] = None):
+    if which and which == "unit-test":
         file_name = UNIT_TEST_MANIFEST_FILE_NAME
     else:
         file_name = MANIFEST_FILE_NAME
+    import traceback
+
+    traceback.print_stack()
     path = os.path.join(target_path, file_name)
     manifest.write(path)
 
