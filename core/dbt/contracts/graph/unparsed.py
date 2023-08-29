@@ -761,7 +761,7 @@ class UnitTestOverrides(dbtClassMixin):
 
 
 @dataclass
-class UnparsedUnitTestCase(dbtClassMixin):
+class UnparsedUnitTestDefinition(dbtClassMixin):
     name: str
     given: Sequence[InputFixture]
     expect: List[Dict[str, Any]]
@@ -772,4 +772,4 @@ class UnparsedUnitTestCase(dbtClassMixin):
 @dataclass
 class UnparsedUnitTestSuite(dbtClassMixin):
     model: str  # name of the model being unit tested
-    tests: Sequence[UnparsedUnitTestCase]
+    tests: Sequence[UnparsedUnitTestDefinition]

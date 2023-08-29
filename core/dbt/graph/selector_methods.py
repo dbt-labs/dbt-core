@@ -18,7 +18,7 @@ from dbt.contracts.graph.nodes import (
     ResultNode,
     ManifestNode,
     ModelNode,
-    UnitTestCase,
+    UnitTestDefinition,
 )
 from dbt.contracts.graph.unparsed import UnparsedVersion
 from dbt.contracts.state import PreviousState
@@ -145,7 +145,9 @@ class SelectorMethod(metaclass=abc.ABCMeta):
                 continue
             yield unique_id, metric
 
-    def unit_tests(self, included_nodes: Set[UniqueId]) -> Iterator[Tuple[UniqueId, UnitTestCase]]:
+    def unit_tests(
+        self, included_nodes: Set[UniqueId]
+    ) -> Iterator[Tuple[UniqueId, UnitTestDefinition]]:
         for unique_id, unit_test in self.manifest.unit_tests.items():
             unique_id = UniqueId(unique_id)
             if unique_id not in included_nodes:

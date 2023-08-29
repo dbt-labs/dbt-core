@@ -5,7 +5,7 @@ from dbt.contracts.graph.nodes import (
     ModelNode,
     UnitTestNode,
     RefArgs,
-    UnitTestCase,
+    UnitTestDefinition,
     DependsOn,
 )
 from dbt.config import RuntimeConfig
@@ -51,7 +51,7 @@ class UnitTestManifestLoader:
 
         return self.unit_test_manifest
 
-    def parse_unit_test_case(self, test_case: UnitTestCase):
+    def parse_unit_test_case(self, test_case: UnitTestDefinition):
         package_name = self.root_project.project_name
 
         # Create unit test node based on the "actual" tested node
@@ -199,7 +199,7 @@ class UnitTestParser(YamlReader):
                 )
             for test in unparsed.tests:
                 unit_test_case_unique_id = f"unit.{package_name}.{test.name}.{unparsed.model}"
-                unit_test_case = UnitTestCase(
+                unit_test_case = UnitTestDefinition(
                     name=test.name,
                     model=unparsed.model,
                     resource_type=NodeType.Unit,

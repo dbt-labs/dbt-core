@@ -40,7 +40,7 @@ from dbt.contracts.graph.nodes import (
     SemanticModel,
     SourceDefinition,
     UnpatchedSourceDefinition,
-    UnitTestCase,
+    UnitTestDefinition,
 )
 from dbt.contracts.graph.unparsed import SourcePatch, NodeVersion, UnparsedVersion
 from dbt.contracts.graph.manifest_upgrade import upgrade_manifest_json
@@ -743,7 +743,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     disabled: MutableMapping[str, List[GraphMemberNode]] = field(default_factory=dict)
     env_vars: MutableMapping[str, str] = field(default_factory=dict)
     semantic_models: MutableMapping[str, SemanticModel] = field(default_factory=dict)
-    unit_tests: MutableMapping[str, UnitTestCase] = field(default_factory=dict)
+    unit_tests: MutableMapping[str, UnitTestDefinition] = field(default_factory=dict)
 
     _doc_lookup: Optional[DocLookup] = field(
         default=None, metadata={"serialize": lambda x: None, "deserialize": lambda x: None}
@@ -1380,7 +1380,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         self.semantic_models[semantic_model.unique_id] = semantic_model
         source_file.semantic_models.append(semantic_model.unique_id)
 
-    def add_unit_test(self, source_file: SchemaSourceFile, unit_test: UnitTestCase):
+    def add_unit_test(self, source_file: SchemaSourceFile, unit_test: UnitTestDefinition):
         if unit_test.unique_id in self.unit_tests:
             raise DuplicateResourceNameError(unit_test, self.unit_tests[unit_test.unique_id])
         self.unit_tests[unit_test.unique_id] = unit_test
@@ -1492,7 +1492,7 @@ class WritableManifest(ArtifactMixin):
             description="Metadata about the manifest",
         )
     )
-    unit_tests: Mapping[UniqueID, UnitTestCase] = field(
+    unit_tests: Mapping[UniqueID, UnitTestDefinition] = field(
         metadata=dict(
             description="The unit tests defined in the project",
         )

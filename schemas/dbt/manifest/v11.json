@@ -153,7 +153,7 @@
                   "$ref": "#/definitions/SemanticModel"
                 },
                 {
-                  "$ref": "#/definitions/UnitTestCase"
+                  "$ref": "#/definitions/UnitTestDefinition"
                 }
               ]
             }
@@ -226,13 +226,13 @@
     "unit_tests": {
       "type": "object",
       "additionalProperties": {
-        "$ref": "#/definitions/UnitTestCase"
+        "$ref": "#/definitions/UnitTestDefinition"
       },
       "description": "The unit tests defined in the project"
     }
   },
   "additionalProperties": false,
-  "description": "WritableManifest(metadata: dbt.contracts.graph.manifest.ManifestMetadata, nodes: Mapping[str, Union[dbt.contracts.graph.nodes.AnalysisNode, dbt.contracts.graph.nodes.SingularTestNode, dbt.contracts.graph.nodes.HookNode, dbt.contracts.graph.nodes.ModelNode, dbt.contracts.graph.nodes.RPCNode, dbt.contracts.graph.nodes.SqlNode, dbt.contracts.graph.nodes.GenericTestNode, dbt.contracts.graph.nodes.SnapshotNode, dbt.contracts.graph.nodes.UnitTestNode, dbt.contracts.graph.nodes.SeedNode]], sources: Mapping[str, dbt.contracts.graph.nodes.SourceDefinition], macros: Mapping[str, dbt.contracts.graph.nodes.Macro], docs: Mapping[str, dbt.contracts.graph.nodes.Documentation], exposures: Mapping[str, dbt.contracts.graph.nodes.Exposure], metrics: Mapping[str, dbt.contracts.graph.nodes.Metric], groups: Mapping[str, dbt.contracts.graph.nodes.Group], selectors: Mapping[str, Any], disabled: Union[Mapping[str, List[Union[dbt.contracts.graph.nodes.AnalysisNode, dbt.contracts.graph.nodes.SingularTestNode, dbt.contracts.graph.nodes.HookNode, dbt.contracts.graph.nodes.ModelNode, dbt.contracts.graph.nodes.RPCNode, dbt.contracts.graph.nodes.SqlNode, dbt.contracts.graph.nodes.GenericTestNode, dbt.contracts.graph.nodes.SnapshotNode, dbt.contracts.graph.nodes.UnitTestNode, dbt.contracts.graph.nodes.SeedNode, dbt.contracts.graph.nodes.SourceDefinition, dbt.contracts.graph.nodes.Exposure, dbt.contracts.graph.nodes.Metric, dbt.contracts.graph.nodes.SemanticModel, dbt.contracts.graph.nodes.UnitTestCase]]], NoneType], parent_map: Union[Dict[str, List[str]], NoneType], child_map: Union[Dict[str, List[str]], NoneType], group_map: Union[Dict[str, List[str]], NoneType], semantic_models: Mapping[str, dbt.contracts.graph.nodes.SemanticModel], unit_tests: Mapping[str, dbt.contracts.graph.nodes.UnitTestCase])",
+  "description": "WritableManifest(metadata: dbt.contracts.graph.manifest.ManifestMetadata, nodes: Mapping[str, Union[dbt.contracts.graph.nodes.AnalysisNode, dbt.contracts.graph.nodes.SingularTestNode, dbt.contracts.graph.nodes.HookNode, dbt.contracts.graph.nodes.ModelNode, dbt.contracts.graph.nodes.RPCNode, dbt.contracts.graph.nodes.SqlNode, dbt.contracts.graph.nodes.GenericTestNode, dbt.contracts.graph.nodes.SnapshotNode, dbt.contracts.graph.nodes.UnitTestNode, dbt.contracts.graph.nodes.SeedNode]], sources: Mapping[str, dbt.contracts.graph.nodes.SourceDefinition], macros: Mapping[str, dbt.contracts.graph.nodes.Macro], docs: Mapping[str, dbt.contracts.graph.nodes.Documentation], exposures: Mapping[str, dbt.contracts.graph.nodes.Exposure], metrics: Mapping[str, dbt.contracts.graph.nodes.Metric], groups: Mapping[str, dbt.contracts.graph.nodes.Group], selectors: Mapping[str, Any], disabled: Union[Mapping[str, List[Union[dbt.contracts.graph.nodes.AnalysisNode, dbt.contracts.graph.nodes.SingularTestNode, dbt.contracts.graph.nodes.HookNode, dbt.contracts.graph.nodes.ModelNode, dbt.contracts.graph.nodes.RPCNode, dbt.contracts.graph.nodes.SqlNode, dbt.contracts.graph.nodes.GenericTestNode, dbt.contracts.graph.nodes.SnapshotNode, dbt.contracts.graph.nodes.UnitTestNode, dbt.contracts.graph.nodes.SeedNode, dbt.contracts.graph.nodes.SourceDefinition, dbt.contracts.graph.nodes.Exposure, dbt.contracts.graph.nodes.Metric, dbt.contracts.graph.nodes.SemanticModel, dbt.contracts.graph.nodes.UnitTestDefinition]]], NoneType], parent_map: Union[Dict[str, List[str]], NoneType], child_map: Union[Dict[str, List[str]], NoneType], group_map: Union[Dict[str, List[str]], NoneType], semantic_models: Mapping[str, dbt.contracts.graph.nodes.SemanticModel], unit_tests: Mapping[str, dbt.contracts.graph.nodes.UnitTestDefinition])",
   "definitions": {
     "ManifestMetadata": {
       "type": "object",
@@ -5961,7 +5961,7 @@
       "additionalProperties": true,
       "description": "SemanticModelConfig(_extra: Dict[str, Any] = <factory>, enabled: bool = True)"
     },
-    "UnitTestCase": {
+    "UnitTestDefinition": {
       "type": "object",
       "required": [
         "name",
@@ -6060,7 +6060,7 @@
         }
       },
       "additionalProperties": false,
-      "description": "UnitTestCase(name: str, resource_type: dbt.node_types.NodeType, package_name: str, path: str, original_file_path: str, unique_id: str, fqn: List[str], model: str, attached_node: str, given: Sequence[dbt.contracts.graph.unparsed.InputFixture], expect: List[Dict[str, Any]], description: str = '', overrides: Union[dbt.contracts.graph.unparsed.UnitTestOverrides, NoneType] = None, depends_on: dbt.contracts.graph.nodes.DependsOn = <factory>)"
+      "description": "UnitTestDefinition(name: str, resource_type: dbt.node_types.NodeType, package_name: str, path: str, original_file_path: str, unique_id: str, fqn: List[str], model: str, attached_node: str, given: Sequence[dbt.contracts.graph.unparsed.InputFixture], expect: List[Dict[str, Any]], description: str = '', overrides: Union[dbt.contracts.graph.unparsed.UnitTestOverrides, NoneType] = None, depends_on: dbt.contracts.graph.nodes.DependsOn = <factory>)"
     },
     "InputFixture": {
       "type": "object",

@@ -1060,7 +1060,7 @@ class UnitTestNode(CompiledNode):
 
 
 @dataclass
-class UnitTestCase(GraphNode):
+class UnitTestDefinition(GraphNode):
     model: str
     attached_node: str
     given: Sequence[InputFixture]
@@ -1770,7 +1770,7 @@ GraphMemberNode = Union[
     Exposure,
     Metric,
     SemanticModel,
-    UnitTestCase,
+    UnitTestDefinition,
 ]
 
 # All "nodes" (or node-like objects) in this file
