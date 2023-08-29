@@ -1698,9 +1698,7 @@ def write_manifest(manifest: Manifest, target_path: str, which: Optional[str] = 
         file_name = UNIT_TEST_MANIFEST_FILE_NAME
     else:
         file_name = MANIFEST_FILE_NAME
-    import traceback
 
-    traceback.print_stack()
     path = os.path.join(target_path, file_name)
     manifest.write(path)
 
