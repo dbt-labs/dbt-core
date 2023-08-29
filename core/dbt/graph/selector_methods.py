@@ -27,7 +27,7 @@ from dbt.exceptions import (
     DbtRuntimeError,
 )
 from dbt.node_types import NodeType
-from dbt.events.contextvars import get_project_root, get_command_name
+from dbt.events.contextvars import get_project_root
 
 
 SELECTOR_GLOB = "*"
@@ -445,18 +445,13 @@ class TestNameSelectorMethod(SelectorMethod):
     __test__ = False
 
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
-        command = get_command_name()
-        # Is this too kludgey?
-        if command == "unit-test":
-            # we check manifest.unit_tests for test_name
-            for unique_id, unit_test in self.manifest.unit_tests.items():
-                if fnmatch(unit_test.name, selector):
-                    yield UniqueId(unique_id)
-        else:
-            for unique_id, node in self.parsed_nodes(included_nodes):
-                if node.resource_type == NodeType.Test and hasattr(node, "test_metadata"):
-                    if fnmatch(node.test_metadata.name, selector):  # type: ignore[union-attr]
-                        yield unique_id
+        for unique_id, node in self.parsed_and_unit_nodes(included_nodes):
+            if node.resource_type == NodeType.Test and hasattr(node, "test_metadata"):
+                if fnmatch(node.test_metadata.name, selector):  # type: ignore[union-attr]
+                    yield unique_id
+            elif node.resource_type == NodeType.Unit:
+                if fnmatch(node.name, selector):
+                    yield unique_id
 
 
 class TestTypeSelectorMethod(SelectorMethod):
