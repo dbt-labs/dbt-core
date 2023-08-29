@@ -157,7 +157,7 @@ class TestConfigsInheritence:
 
     @pytest.fixture(scope="class")
     def project_config_update(self):
-        return {"semantic_models": {"enabled": False}}
+        return {"semantic-models": {"enabled": False}}
 
     def test_project_plus_yaml_level(self, project):
         run_dbt(["parse"])
