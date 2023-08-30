@@ -416,6 +416,7 @@ def translate_aliases(
 
 # Note that this only affects hologram json validation.
 # It has no effect on mashumaro serialization.
+# Q: Can this be removed?
 def restrict_to(*restrictions):
     """Create the metadata for a restricted dataclass field"""
     return {"restrict": list(restrictions)}

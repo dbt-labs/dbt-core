@@ -26,6 +26,7 @@ types-docutils
 types-PyYAML
 types-freezegun
 types-Jinja2
+types-jsonschema
 types-mock
 types-protobuf
 types-python-dateutil

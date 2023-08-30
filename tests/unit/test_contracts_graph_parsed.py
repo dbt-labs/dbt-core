@@ -349,42 +349,6 @@ def complex_parsed_model_object():
     )
 
 
-{
-    "enabled": True,
-    "tags": [],
-    "meta": {},
-    "materialized": "ephemeral",
-    "persist_docs": {},
-    "quoting": {},
-    "column_types": {"a": "text"},
-    "on_schema_change": "ignore",
-    "on_configuration_change": "apply",
-    "grants": {},
-    "packages": [],
-    "docs": {"show": True},
-    "contract": {"enforced": False},
-    "post-hook": [{"sql": 'insert into blah(a, b) select "1", 1', "transaction": True}],
-    "pre-hook": [],
-}
-
-{
-    "column_types": {"a": "text"},
-    "enabled": True,
-    "materialized": "ephemeral",
-    "persist_docs": {},
-    "post-hook": [{"sql": 'insert into blah(a, b) select "1", 1', "transaction": True}],
-    "pre-hook": [],
-    "quoting": {},
-    "tags": [],
-    "on_schema_change": "ignore",
-    "on_configuration_change": "apply",
-    "meta": {},
-    "grants": {},
-    "docs": {"show": True},
-    "packages": [],
-}
-
-
 def test_model_basic(basic_parsed_model_object, base_parsed_model_dict, minimal_parsed_model_dict):
     node = basic_parsed_model_object
     node_dict = base_parsed_model_dict

@@ -23,7 +23,7 @@ from dbt.dataclass_schema import dbtClassMixin, StrEnum, ExtensibleDbtClassMixin
 from dataclasses import dataclass, field
 from datetime import timedelta
 from pathlib import Path
-from typing import Optional, List, Union, Dict, Any, Sequence
+from typing import Optional, List, Union, Dict, Any, Sequence, Literal
 
 
 @dataclass
@@ -49,31 +49,18 @@ class HasCode(dbtClassMixin):
 
 @dataclass
 class UnparsedMacro(UnparsedBaseNode, HasCode):
-    resource_type: NodeType = field(metadata={"restrict": [NodeType.Macro]})
+    resource_type: Literal[NodeType.Macro]
 
 
 @dataclass
 class UnparsedGenericTest(UnparsedBaseNode, HasCode):
-    resource_type: NodeType = field(metadata={"restrict": [NodeType.Macro]})
+    resource_type: Literal[NodeType.Macro]
 
 
 @dataclass
 class UnparsedNode(UnparsedBaseNode, HasCode):
     name: str
-    resource_type: NodeType = field(
-        metadata={
-            "restrict": [
-                NodeType.Model,
-                NodeType.Analysis,
-                NodeType.Test,
-                NodeType.Snapshot,
-                NodeType.Operation,
-                NodeType.Seed,
-                NodeType.RPCCall,
-                NodeType.SqlOperation,
-            ]
-        }
-    )
+    resource_type: NodeType
 
     @property
     def search_name(self):
@@ -82,7 +69,7 @@ class UnparsedNode(UnparsedBaseNode, HasCode):
 
 @dataclass
 class UnparsedRunHook(UnparsedNode):
-    resource_type: NodeType = field(metadata={"restrict": [NodeType.Operation]})
+    resource_type: Literal[NodeType.Operation]
     index: Optional[int] = None
 
 

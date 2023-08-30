@@ -236,6 +236,7 @@ class ConfiguredParser(
             "checksum": block.file.checksum.to_dict(omit_none=True),
         }
         dct.update(kwargs)
+
         try:
             return self.parse_from_dict(dct, validate=True)
         except ValidationError as exc:

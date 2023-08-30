@@ -1,4 +1,4 @@
-from hologram import ValidationError
+from dbt.dataclass_schema import ValidationError
 import pytest
 import os
 

@@ -1,17 +1,16 @@
-from mashumaro.dialects.msgpack import MessagePackDialect as MessagePackDialect
+from _typeshed import Incomplete
+from mashumaro.dialect import Dialect as Dialect
+from mashumaro.helper import pass_through as pass_through
 from mashumaro.mixins.dict import DataClassDictMixin as DataClassDictMixin
-from typing import Any, Dict, Type, TypeVar
-from typing_extensions import Protocol as Protocol
+from typing import Any, Callable, Dict, TypeVar, Type
 
-EncodedData = bytes
 T = TypeVar("T", bound="DataClassMessagePackMixin")
-DEFAULT_DICT_PARAMS: Any
+EncodedData = bytes
+Encoder = Callable[[Any], EncodedData]
+Decoder = Callable[[EncodedData], Dict[Any, Any]]
 
-class Encoder:
-    def __call__(self, o: Any, **kwargs: Any) -> EncodedData: ...
-
-class Decoder:
-    def __call__(self, packed: EncodedData, **kwargs: Any) -> Dict[Any, Any]: ...
+class MessagePackDialect(Dialect):
+    serialization_strategy: Incomplete
 
 def default_encoder(data: Any) -> EncodedData: ...
 def default_decoder(data: EncodedData) -> Dict[Any, Any]: ...
