@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import os
 from typing import Any, Dict, NoReturn, Optional, Mapping, Iterable, Set, List
@@ -109,10 +111,10 @@ def contextproperty(value):
 
 
 class ContextMeta(type):
-    def __new__(mcls, name, bases, dct):
-        context_members = {}
-        context_attrs = {}
-        new_dct = {}
+    def __new__(mcls, name, bases, dct: Dict[str, Any]) -> ContextMeta:
+        context_members: Dict[str, Any] = {}
+        context_attrs: Dict[str, Any] = {}
+        new_dct: Dict[str, Any] = {}
 
         for base in bases:
             context_members.update(getattr(base, "_context_members_", {}))
