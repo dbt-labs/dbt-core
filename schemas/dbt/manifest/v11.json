@@ -1,5 +1,5 @@
 {
-  "$ref": "#/$defs/WritableManifest",
+  "$ref": "#/defs/WritableManifest",
   "$defs": {
     "ManifestMetadata": {
       "type": "object",
@@ -35,7 +35,6 @@
           }
         },
         "project_name": {
-          "description": "Name of the root project",
           "anyOf": [
             {
               "type": "string"
@@ -47,7 +46,6 @@
           "default": null
         },
         "project_id": {
-          "description": "A unique identifier for the project, hashed from the project name",
           "anyOf": [
             {
               "type": "string"
@@ -59,7 +57,6 @@
           "default": null
         },
         "user_id": {
-          "description": "A unique identifier for the user",
           "anyOf": [
             {
               "type": "string",
@@ -72,7 +69,6 @@
           "default": null
         },
         "send_anonymous_usage_stats": {
-          "description": "Whether dbt is configured to send anonymous usage statistics",
           "anyOf": [
             {
               "type": "boolean"
@@ -84,7 +80,6 @@
           "default": null
         },
         "adapter_type": {
-          "description": "The type name of the adapter",
           "anyOf": [
             {
               "type": "string"
@@ -96,7 +91,13 @@
           "default": null
         }
       },
-      "additionalProperties": false
+      "additionalProperties": false,
+      "required": [
+        "dbt_schema_version",
+        "generated_at",
+        "invocation_id",
+        "env"
+      ]
     },
     "FileHash": {
       "type": "object",
@@ -277,13 +278,13 @@
         "post-hook": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/Hook"
+            "$ref": "#/defs/Hook"
           }
         },
         "pre-hook": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/Hook"
+            "$ref": "#/defs/Hook"
           }
         },
         "quoting": {
@@ -357,13 +358,28 @@
           }
         },
         "docs": {
-          "$ref": "#/$defs/Docs"
+          "$ref": "#/defs/Docs"
         },
         "contract": {
-          "$ref": "#/$defs/ContractConfig"
+          "$ref": "#/defs/ContractConfig"
         }
       },
-      "additionalProperties": true
+      "additionalProperties": false,
+      "required": [
+        "_extra",
+        "tags",
+        "meta",
+        "persist_docs",
+        "post-hook",
+        "pre-hook",
+        "quoting",
+        "column_types",
+        "on_configuration_change",
+        "grants",
+        "packages",
+        "docs",
+        "contract"
+      ]
     },
     "ColumnLevelConstraint": {
       "type": "object",
@@ -446,7 +462,7 @@
         "constraints": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/ColumnLevelConstraint"
+            "$ref": "#/defs/ColumnLevelConstraint"
           }
         },
         "quote": {
@@ -473,9 +489,13 @@
           }
         }
       },
-      "additionalProperties": true,
+      "additionalProperties": false,
       "required": [
-        "name"
+        "name",
+        "meta",
+        "constraints",
+        "tags",
+        "_extra"
       ]
     },
     "RefArgs": {
@@ -533,7 +553,11 @@
           }
         }
       },
-      "additionalProperties": false
+      "additionalProperties": false,
+      "required": [
+        "macros",
+        "nodes"
+      ]
     },
     "InjectedCTE": {
       "type": "object",
@@ -619,10 +643,10 @@
           "type": "string"
         },
         "checksum": {
-          "$ref": "#/$defs/FileHash"
+          "$ref": "#/defs/FileHash"
         },
         "config": {
-          "$ref": "#/$defs/NodeConfig"
+          "$ref": "#/defs/NodeConfig"
         },
         "_event_status": {
           "type": "object",
@@ -643,7 +667,7 @@
         "columns": {
           "type": "object",
           "additionalProperties": {
-            "$ref": "#/$defs/ColumnInfo"
+            "$ref": "#/defs/ColumnInfo"
           },
           "propertyNames": {
             "type": "string"
@@ -667,7 +691,7 @@
           "default": null
         },
         "docs": {
-          "$ref": "#/$defs/Docs"
+          "$ref": "#/defs/Docs"
         },
         "patch_path": {
           "anyOf": [
@@ -732,7 +756,7 @@
         "refs": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/RefArgs"
+            "$ref": "#/defs/RefArgs"
           }
         },
         "sources": {
@@ -754,7 +778,7 @@
           }
         },
         "depends_on": {
-          "$ref": "#/$defs/DependsOn"
+          "$ref": "#/defs/DependsOn"
         },
         "compiled_path": {
           "anyOf": [
@@ -789,7 +813,7 @@
         "extra_ctes": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/InjectedCTE"
+            "$ref": "#/defs/InjectedCTE"
           }
         },
         "_pre_injected_sql": {
@@ -804,7 +828,7 @@
           "default": null
         },
         "contract": {
-          "$ref": "#/$defs/Contract"
+          "$ref": "#/defs/Contract"
         }
       },
       "additionalProperties": false,
@@ -819,7 +843,22 @@
         "unique_id",
         "fqn",
         "alias",
-        "checksum"
+        "checksum",
+        "config",
+        "_event_status",
+        "tags",
+        "columns",
+        "meta",
+        "docs",
+        "unrendered_config",
+        "created_at",
+        "config_call_dict",
+        "refs",
+        "sources",
+        "metrics",
+        "depends_on",
+        "extra_ctes",
+        "contract"
       ]
     },
     "TestConfig": {
@@ -954,7 +993,12 @@
           "default": "!= 0"
         }
       },
-      "additionalProperties": true
+      "additionalProperties": false,
+      "required": [
+        "_extra",
+        "tags",
+        "meta"
+      ]
     },
     "SingularTestNode": {
       "type": "object",
@@ -1001,10 +1045,10 @@
           "type": "string"
         },
         "checksum": {
-          "$ref": "#/$defs/FileHash"
+          "$ref": "#/defs/FileHash"
         },
         "config": {
-          "$ref": "#/$defs/TestConfig"
+          "$ref": "#/defs/TestConfig"
         },
         "_event_status": {
           "type": "object",
@@ -1025,7 +1069,7 @@
         "columns": {
           "type": "object",
           "additionalProperties": {
-            "$ref": "#/$defs/ColumnInfo"
+            "$ref": "#/defs/ColumnInfo"
           },
           "propertyNames": {
             "type": "string"
@@ -1049,7 +1093,7 @@
           "default": null
         },
         "docs": {
-          "$ref": "#/$defs/Docs"
+          "$ref": "#/defs/Docs"
         },
         "patch_path": {
           "anyOf": [
@@ -1114,7 +1158,7 @@
         "refs": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/RefArgs"
+            "$ref": "#/defs/RefArgs"
           }
         },
         "sources": {
@@ -1136,7 +1180,7 @@
           }
         },
         "depends_on": {
-          "$ref": "#/$defs/DependsOn"
+          "$ref": "#/defs/DependsOn"
         },
         "compiled_path": {
           "anyOf": [
@@ -1171,7 +1215,7 @@
         "extra_ctes": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/InjectedCTE"
+            "$ref": "#/defs/InjectedCTE"
           }
         },
         "_pre_injected_sql": {
@@ -1186,7 +1230,7 @@
           "default": null
         },
         "contract": {
-          "$ref": "#/$defs/Contract"
+          "$ref": "#/defs/Contract"
         }
       },
       "additionalProperties": false,
@@ -1201,7 +1245,22 @@
         "unique_id",
         "fqn",
         "alias",
-        "checksum"
+        "checksum",
+        "config",
+        "_event_status",
+        "tags",
+        "columns",
+        "meta",
+        "docs",
+        "unrendered_config",
+        "created_at",
+        "config_call_dict",
+        "refs",
+        "sources",
+        "metrics",
+        "depends_on",
+        "extra_ctes",
+        "contract"
       ]
     },
     "HookNode": {
@@ -1249,10 +1308,10 @@
           "type": "string"
         },
         "checksum": {
-          "$ref": "#/$defs/FileHash"
+          "$ref": "#/defs/FileHash"
         },
         "config": {
-          "$ref": "#/$defs/NodeConfig"
+          "$ref": "#/defs/NodeConfig"
         },
         "_event_status": {
           "type": "object",
@@ -1273,7 +1332,7 @@
         "columns": {
           "type": "object",
           "additionalProperties": {
-            "$ref": "#/$defs/ColumnInfo"
+            "$ref": "#/defs/ColumnInfo"
           },
           "propertyNames": {
             "type": "string"
@@ -1297,7 +1356,7 @@
           "default": null
         },
         "docs": {
-          "$ref": "#/$defs/Docs"
+          "$ref": "#/defs/Docs"
         },
         "patch_path": {
           "anyOf": [
@@ -1362,7 +1421,7 @@
         "refs": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/RefArgs"
+            "$ref": "#/defs/RefArgs"
           }
         },
         "sources": {
@@ -1384,7 +1443,7 @@
           }
         },
         "depends_on": {
-          "$ref": "#/$defs/DependsOn"
+          "$ref": "#/defs/DependsOn"
         },
         "compiled_path": {
           "anyOf": [
@@ -1419,7 +1478,7 @@
         "extra_ctes": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/InjectedCTE"
+            "$ref": "#/defs/InjectedCTE"
           }
         },
         "_pre_injected_sql": {
@@ -1434,7 +1493,7 @@
           "default": null
         },
         "contract": {
-          "$ref": "#/$defs/Contract"
+          "$ref": "#/defs/Contract"
         },
         "index": {
           "anyOf": [
@@ -1460,7 +1519,22 @@
         "unique_id",
         "fqn",
         "alias",
-        "checksum"
+        "checksum",
+        "config",
+        "_event_status",
+        "tags",
+        "columns",
+        "meta",
+        "docs",
+        "unrendered_config",
+        "created_at",
+        "config_call_dict",
+        "refs",
+        "sources",
+        "metrics",
+        "depends_on",
+        "extra_ctes",
+        "contract"
       ]
     },
     "ModelLevelConstraint": {
@@ -1516,7 +1590,8 @@
       },
       "additionalProperties": false,
       "required": [
-        "type"
+        "type",
+        "columns"
       ]
     },
     "DeferRelation": {
@@ -1603,10 +1678,10 @@
           "type": "string"
         },
         "checksum": {
-          "$ref": "#/$defs/FileHash"
+          "$ref": "#/defs/FileHash"
         },
         "config": {
-          "$ref": "#/$defs/NodeConfig"
+          "$ref": "#/defs/NodeConfig"
         },
         "_event_status": {
           "type": "object",
@@ -1627,7 +1702,7 @@
         "columns": {
           "type": "object",
           "additionalProperties": {
-            "$ref": "#/$defs/ColumnInfo"
+            "$ref": "#/defs/ColumnInfo"
           },
           "propertyNames": {
             "type": "string"
@@ -1651,7 +1726,7 @@
           "default": null
         },
         "docs": {
-          "$ref": "#/$defs/Docs"
+          "$ref": "#/defs/Docs"
         },
         "patch_path": {
           "anyOf": [
@@ -1716,7 +1791,7 @@
         "refs": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/RefArgs"
+            "$ref": "#/defs/RefArgs"
           }
         },
         "sources": {
@@ -1738,7 +1813,7 @@
           }
         },
         "depends_on": {
-          "$ref": "#/$defs/DependsOn"
+          "$ref": "#/defs/DependsOn"
         },
         "compiled_path": {
           "anyOf": [
@@ -1773,7 +1848,7 @@
         "extra_ctes": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/InjectedCTE"
+            "$ref": "#/defs/InjectedCTE"
           }
         },
         "_pre_injected_sql": {
@@ -1788,7 +1863,7 @@
           "default": null
         },
         "contract": {
-          "$ref": "#/$defs/Contract"
+          "$ref": "#/defs/Contract"
         },
         "access": {
           "enum": [
@@ -1801,7 +1876,7 @@
         "constraints": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/ModelLevelConstraint"
+            "$ref": "#/defs/ModelLevelConstraint"
           }
         },
         "version": {
@@ -1847,7 +1922,7 @@
         "defer_relation": {
           "anyOf": [
             {
-              "$ref": "#/$defs/DeferRelation"
+              "$ref": "#/defs/DeferRelation"
             },
             {
               "type": "null"
@@ -1868,7 +1943,23 @@
         "unique_id",
         "fqn",
         "alias",
-        "checksum"
+        "checksum",
+        "config",
+        "_event_status",
+        "tags",
+        "columns",
+        "meta",
+        "docs",
+        "unrendered_config",
+        "created_at",
+        "config_call_dict",
+        "refs",
+        "sources",
+        "metrics",
+        "depends_on",
+        "extra_ctes",
+        "contract",
+        "constraints"
       ]
     },
     "RPCNode": {
@@ -1916,10 +2007,10 @@
           "type": "string"
         },
         "checksum": {
-          "$ref": "#/$defs/FileHash"
+          "$ref": "#/defs/FileHash"
         },
         "config": {
-          "$ref": "#/$defs/NodeConfig"
+          "$ref": "#/defs/NodeConfig"
         },
         "_event_status": {
           "type": "object",
@@ -1940,7 +2031,7 @@
         "columns": {
           "type": "object",
           "additionalProperties": {
-            "$ref": "#/$defs/ColumnInfo"
+            "$ref": "#/defs/ColumnInfo"
           },
           "propertyNames": {
             "type": "string"
@@ -1964,7 +2055,7 @@
           "default": null
         },
         "docs": {
-          "$ref": "#/$defs/Docs"
+          "$ref": "#/defs/Docs"
         },
         "patch_path": {
           "anyOf": [
@@ -2029,7 +2120,7 @@
         "refs": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/RefArgs"
+            "$ref": "#/defs/RefArgs"
           }
         },
         "sources": {
@@ -2051,7 +2142,7 @@
           }
         },
         "depends_on": {
-          "$ref": "#/$defs/DependsOn"
+          "$ref": "#/defs/DependsOn"
         },
         "compiled_path": {
           "anyOf": [
@@ -2086,7 +2177,7 @@
         "extra_ctes": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/InjectedCTE"
+            "$ref": "#/defs/InjectedCTE"
           }
         },
         "_pre_injected_sql": {
@@ -2101,7 +2192,7 @@
           "default": null
         },
         "contract": {
-          "$ref": "#/$defs/Contract"
+          "$ref": "#/defs/Contract"
         }
       },
       "additionalProperties": false,
@@ -2116,7 +2207,22 @@
         "unique_id",
         "fqn",
         "alias",
-        "checksum"
+        "checksum",
+        "config",
+        "_event_status",
+        "tags",
+        "columns",
+        "meta",
+        "docs",
+        "unrendered_config",
+        "created_at",
+        "config_call_dict",
+        "refs",
+        "sources",
+        "metrics",
+        "depends_on",
+        "extra_ctes",
+        "contract"
       ]
     },
     "SqlNode": {
@@ -2164,10 +2270,10 @@
           "type": "string"
         },
         "checksum": {
-          "$ref": "#/$defs/FileHash"
+          "$ref": "#/defs/FileHash"
         },
         "config": {
-          "$ref": "#/$defs/NodeConfig"
+          "$ref": "#/defs/NodeConfig"
         },
         "_event_status": {
           "type": "object",
@@ -2188,7 +2294,7 @@
         "columns": {
           "type": "object",
           "additionalProperties": {
-            "$ref": "#/$defs/ColumnInfo"
+            "$ref": "#/defs/ColumnInfo"
           },
           "propertyNames": {
             "type": "string"
@@ -2212,7 +2318,7 @@
           "default": null
         },
         "docs": {
-          "$ref": "#/$defs/Docs"
+          "$ref": "#/defs/Docs"
         },
         "patch_path": {
           "anyOf": [
@@ -2277,7 +2383,7 @@
         "refs": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/RefArgs"
+            "$ref": "#/defs/RefArgs"
           }
         },
         "sources": {
@@ -2299,7 +2405,7 @@
           }
         },
         "depends_on": {
-          "$ref": "#/$defs/DependsOn"
+          "$ref": "#/defs/DependsOn"
         },
         "compiled_path": {
           "anyOf": [
@@ -2334,7 +2440,7 @@
         "extra_ctes": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/InjectedCTE"
+            "$ref": "#/defs/InjectedCTE"
           }
         },
         "_pre_injected_sql": {
@@ -2349,7 +2455,7 @@
           "default": null
         },
         "contract": {
-          "$ref": "#/$defs/Contract"
+          "$ref": "#/defs/Contract"
         }
       },
       "additionalProperties": false,
@@ -2364,7 +2470,22 @@
         "unique_id",
         "fqn",
         "alias",
-        "checksum"
+        "checksum",
+        "config",
+        "_event_status",
+        "tags",
+        "columns",
+        "meta",
+        "docs",
+        "unrendered_config",
+        "created_at",
+        "config_call_dict",
+        "refs",
+        "sources",
+        "metrics",
+        "depends_on",
+        "extra_ctes",
+        "contract"
       ]
     },
     "TestMetadata": {
@@ -2394,7 +2515,8 @@
       },
       "additionalProperties": false,
       "required": [
-        "name"
+        "name",
+        "kwargs"
       ]
     },
     "GenericTestNode": {
@@ -2402,7 +2524,7 @@
       "title": "GenericTestNode",
       "properties": {
         "test_metadata": {
-          "$ref": "#/$defs/TestMetadata"
+          "$ref": "#/defs/TestMetadata"
         },
         "database": {
           "anyOf": [
@@ -2445,10 +2567,10 @@
           "type": "string"
         },
         "checksum": {
-          "$ref": "#/$defs/FileHash"
+          "$ref": "#/defs/FileHash"
         },
         "config": {
-          "$ref": "#/$defs/TestConfig"
+          "$ref": "#/defs/TestConfig"
         },
         "_event_status": {
           "type": "object",
@@ -2469,7 +2591,7 @@
         "columns": {
           "type": "object",
           "additionalProperties": {
-            "$ref": "#/$defs/ColumnInfo"
+            "$ref": "#/defs/ColumnInfo"
           },
           "propertyNames": {
             "type": "string"
@@ -2493,7 +2615,7 @@
           "default": null
         },
         "docs": {
-          "$ref": "#/$defs/Docs"
+          "$ref": "#/defs/Docs"
         },
         "patch_path": {
           "anyOf": [
@@ -2558,7 +2680,7 @@
         "refs": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/RefArgs"
+            "$ref": "#/defs/RefArgs"
           }
         },
         "sources": {
@@ -2580,7 +2702,7 @@
           }
         },
         "depends_on": {
-          "$ref": "#/$defs/DependsOn"
+          "$ref": "#/defs/DependsOn"
         },
         "compiled_path": {
           "anyOf": [
@@ -2615,7 +2737,7 @@
         "extra_ctes": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/InjectedCTE"
+            "$ref": "#/defs/InjectedCTE"
           }
         },
         "_pre_injected_sql": {
@@ -2630,7 +2752,7 @@
           "default": null
         },
         "contract": {
-          "$ref": "#/$defs/Contract"
+          "$ref": "#/defs/Contract"
         },
         "column_name": {
           "anyOf": [
@@ -2679,7 +2801,22 @@
         "unique_id",
         "fqn",
         "alias",
-        "checksum"
+        "checksum",
+        "config",
+        "_event_status",
+        "tags",
+        "columns",
+        "meta",
+        "docs",
+        "unrendered_config",
+        "created_at",
+        "config_call_dict",
+        "refs",
+        "sources",
+        "metrics",
+        "depends_on",
+        "extra_ctes",
+        "contract"
       ]
     },
     "SnapshotConfig": {
@@ -2783,13 +2920,13 @@
         "post-hook": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/Hook"
+            "$ref": "#/defs/Hook"
           }
         },
         "pre-hook": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/Hook"
+            "$ref": "#/defs/Hook"
           }
         },
         "quoting": {
@@ -2857,10 +2994,10 @@
           }
         },
         "docs": {
-          "$ref": "#/$defs/Docs"
+          "$ref": "#/defs/Docs"
         },
         "contract": {
-          "$ref": "#/$defs/ContractConfig"
+          "$ref": "#/defs/ContractConfig"
         },
         "strategy": {
           "anyOf": [
@@ -2924,7 +3061,22 @@
           "default": null
         }
       },
-      "additionalProperties": true
+      "additionalProperties": false,
+      "required": [
+        "_extra",
+        "tags",
+        "meta",
+        "persist_docs",
+        "post-hook",
+        "pre-hook",
+        "quoting",
+        "column_types",
+        "on_configuration_change",
+        "grants",
+        "packages",
+        "docs",
+        "contract"
+      ]
     },
     "SnapshotNode": {
       "type": "object",
@@ -2971,10 +3123,10 @@
           "type": "string"
         },
         "checksum": {
-          "$ref": "#/$defs/FileHash"
+          "$ref": "#/defs/FileHash"
         },
         "config": {
-          "$ref": "#/$defs/SnapshotConfig"
+          "$ref": "#/defs/SnapshotConfig"
         },
         "_event_status": {
           "type": "object",
@@ -2995,7 +3147,7 @@
         "columns": {
           "type": "object",
           "additionalProperties": {
-            "$ref": "#/$defs/ColumnInfo"
+            "$ref": "#/defs/ColumnInfo"
           },
           "propertyNames": {
             "type": "string"
@@ -3019,7 +3171,7 @@
           "default": null
         },
         "docs": {
-          "$ref": "#/$defs/Docs"
+          "$ref": "#/defs/Docs"
         },
         "patch_path": {
           "anyOf": [
@@ -3084,7 +3236,7 @@
         "refs": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/RefArgs"
+            "$ref": "#/defs/RefArgs"
           }
         },
         "sources": {
@@ -3106,7 +3258,7 @@
           }
         },
         "depends_on": {
-          "$ref": "#/$defs/DependsOn"
+          "$ref": "#/defs/DependsOn"
         },
         "compiled_path": {
           "anyOf": [
@@ -3141,7 +3293,7 @@
         "extra_ctes": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/InjectedCTE"
+            "$ref": "#/defs/InjectedCTE"
           }
         },
         "_pre_injected_sql": {
@@ -3156,12 +3308,12 @@
           "default": null
         },
         "contract": {
-          "$ref": "#/$defs/Contract"
+          "$ref": "#/defs/Contract"
         },
         "defer_relation": {
           "anyOf": [
             {
-              "$ref": "#/$defs/DeferRelation"
+              "$ref": "#/defs/DeferRelation"
             },
             {
               "type": "null"
@@ -3183,7 +3335,21 @@
         "fqn",
         "alias",
         "checksum",
-        "config"
+        "config",
+        "_event_status",
+        "tags",
+        "columns",
+        "meta",
+        "docs",
+        "unrendered_config",
+        "created_at",
+        "config_call_dict",
+        "refs",
+        "sources",
+        "metrics",
+        "depends_on",
+        "extra_ctes",
+        "contract"
       ]
     },
     "SeedConfig": {
@@ -3287,13 +3453,13 @@
         "post-hook": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/Hook"
+            "$ref": "#/defs/Hook"
           }
         },
         "pre-hook": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/Hook"
+            "$ref": "#/defs/Hook"
           }
         },
         "quoting": {
@@ -3367,10 +3533,10 @@
           }
         },
         "docs": {
-          "$ref": "#/$defs/Docs"
+          "$ref": "#/defs/Docs"
         },
         "contract": {
-          "$ref": "#/$defs/ContractConfig"
+          "$ref": "#/defs/ContractConfig"
         },
         "delimiter": {
           "type": "string",
@@ -3388,7 +3554,22 @@
           "default": null
         }
       },
-      "additionalProperties": true
+      "additionalProperties": false,
+      "required": [
+        "_extra",
+        "tags",
+        "meta",
+        "persist_docs",
+        "post-hook",
+        "pre-hook",
+        "quoting",
+        "column_types",
+        "on_configuration_change",
+        "grants",
+        "packages",
+        "docs",
+        "contract"
+      ]
     },
     "MacroDependsOn": {
       "type": "object",
@@ -3401,7 +3582,10 @@
           }
         }
       },
-      "additionalProperties": false
+      "additionalProperties": false,
+      "required": [
+        "macros"
+      ]
     },
     "SeedNode": {
       "type": "object",
@@ -3448,10 +3632,10 @@
           "type": "string"
         },
         "checksum": {
-          "$ref": "#/$defs/FileHash"
+          "$ref": "#/defs/FileHash"
         },
         "config": {
-          "$ref": "#/$defs/SeedConfig"
+          "$ref": "#/defs/SeedConfig"
         },
         "_event_status": {
           "type": "object",
@@ -3472,7 +3656,7 @@
         "columns": {
           "type": "object",
           "additionalProperties": {
-            "$ref": "#/$defs/ColumnInfo"
+            "$ref": "#/defs/ColumnInfo"
           },
           "propertyNames": {
             "type": "string"
@@ -3496,7 +3680,7 @@
           "default": null
         },
         "docs": {
-          "$ref": "#/$defs/Docs"
+          "$ref": "#/defs/Docs"
         },
         "patch_path": {
           "anyOf": [
@@ -3566,12 +3750,12 @@
           "default": null
         },
         "depends_on": {
-          "$ref": "#/$defs/MacroDependsOn"
+          "$ref": "#/defs/MacroDependsOn"
         },
         "defer_relation": {
           "anyOf": [
             {
-              "$ref": "#/$defs/DeferRelation"
+              "$ref": "#/defs/DeferRelation"
             },
             {
               "type": "null"
@@ -3592,7 +3776,17 @@
         "unique_id",
         "fqn",
         "alias",
-        "checksum"
+        "checksum",
+        "config",
+        "_event_status",
+        "tags",
+        "columns",
+        "meta",
+        "docs",
+        "unrendered_config",
+        "created_at",
+        "config_call_dict",
+        "depends_on"
       ]
     },
     "Quoting": {
@@ -3686,7 +3880,7 @@
         "warn_after": {
           "anyOf": [
             {
-              "$ref": "#/$defs/Time"
+              "$ref": "#/defs/Time"
             },
             {
               "type": "null"
@@ -3696,7 +3890,7 @@
         "error_after": {
           "anyOf": [
             {
-              "$ref": "#/$defs/Time"
+              "$ref": "#/defs/Time"
             },
             {
               "type": "null"
@@ -3715,7 +3909,11 @@
           "default": null
         }
       },
-      "additionalProperties": false
+      "additionalProperties": false,
+      "required": [
+        "warn_after",
+        "error_after"
+      ]
     },
     "ExternalPartition": {
       "type": "object",
@@ -3746,7 +3944,11 @@
           }
         }
       },
-      "additionalProperties": true
+      "additionalProperties": false,
+      "required": [
+        "_extra",
+        "meta"
+      ]
     },
     "ExternalTable": {
       "type": "object",
@@ -3813,7 +4015,7 @@
             {
               "type": "array",
               "items": {
-                "$ref": "#/$defs/ExternalPartition"
+                "$ref": "#/defs/ExternalPartition"
               }
             },
             {
@@ -3823,7 +4025,10 @@
           "default": null
         }
       },
-      "additionalProperties": true
+      "additionalProperties": false,
+      "required": [
+        "_extra"
+      ]
     },
     "SourceConfig": {
       "type": "object",
@@ -3840,7 +4045,10 @@
           "default": true
         }
       },
-      "additionalProperties": true
+      "additionalProperties": false,
+      "required": [
+        "_extra"
+      ]
     },
     "SourceDefinition": {
       "type": "object",
@@ -3902,7 +4110,7 @@
           }
         },
         "quoting": {
-          "$ref": "#/$defs/Quoting"
+          "$ref": "#/defs/Quoting"
         },
         "loaded_at_field": {
           "anyOf": [
@@ -3918,7 +4126,7 @@
         "freshness": {
           "anyOf": [
             {
-              "$ref": "#/$defs/FreshnessThreshold"
+              "$ref": "#/defs/FreshnessThreshold"
             },
             {
               "type": "null"
@@ -3929,7 +4137,7 @@
         "external": {
           "anyOf": [
             {
-              "$ref": "#/$defs/ExternalTable"
+              "$ref": "#/defs/ExternalTable"
             },
             {
               "type": "null"
@@ -3944,7 +4152,7 @@
         "columns": {
           "type": "object",
           "additionalProperties": {
-            "$ref": "#/$defs/ColumnInfo"
+            "$ref": "#/defs/ColumnInfo"
           },
           "propertyNames": {
             "type": "string"
@@ -3969,7 +4177,7 @@
           }
         },
         "config": {
-          "$ref": "#/$defs/SourceConfig"
+          "$ref": "#/defs/SourceConfig"
         },
         "patch_path": {
           "anyOf": [
@@ -4017,7 +4225,16 @@
         "source_name",
         "source_description",
         "loader",
-        "identifier"
+        "identifier",
+        "_event_status",
+        "quoting",
+        "columns",
+        "meta",
+        "source_meta",
+        "tags",
+        "config",
+        "unrendered_config",
+        "created_at"
       ]
     },
     "MacroArgument": {
@@ -4074,7 +4291,7 @@
           "type": "string"
         },
         "depends_on": {
-          "$ref": "#/$defs/MacroDependsOn"
+          "$ref": "#/defs/MacroDependsOn"
         },
         "description": {
           "type": "string",
@@ -4087,7 +4304,7 @@
           }
         },
         "docs": {
-          "$ref": "#/$defs/Docs"
+          "$ref": "#/defs/Docs"
         },
         "patch_path": {
           "anyOf": [
@@ -4103,7 +4320,7 @@
         "arguments": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/MacroArgument"
+            "$ref": "#/defs/MacroArgument"
           }
         },
         "created_at": {
@@ -4135,7 +4352,12 @@
         "path",
         "original_file_path",
         "unique_id",
-        "macro_sql"
+        "macro_sql",
+        "depends_on",
+        "meta",
+        "docs",
+        "arguments",
+        "created_at"
       ]
     },
     "Documentation": {
@@ -4208,7 +4430,10 @@
           "default": null
         }
       },
-      "additionalProperties": true
+      "additionalProperties": false,
+      "required": [
+        "_extra"
+      ]
     },
     "ExposureConfig": {
       "type": "object",
@@ -4225,7 +4450,10 @@
           "default": true
         }
       },
-      "additionalProperties": true
+      "additionalProperties": false,
+      "required": [
+        "_extra"
+      ]
     },
     "Exposure": {
       "type": "object",
@@ -4265,7 +4493,7 @@
           ]
         },
         "owner": {
-          "$ref": "#/$defs/Owner"
+          "$ref": "#/defs/Owner"
         },
         "description": {
           "type": "string",
@@ -4310,7 +4538,7 @@
           }
         },
         "config": {
-          "$ref": "#/$defs/ExposureConfig"
+          "$ref": "#/defs/ExposureConfig"
         },
         "unrendered_config": {
           "type": "object",
@@ -4330,12 +4558,12 @@
           "default": null
         },
         "depends_on": {
-          "$ref": "#/$defs/DependsOn"
+          "$ref": "#/defs/DependsOn"
         },
         "refs": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/RefArgs"
+            "$ref": "#/defs/RefArgs"
           }
         },
         "sources": {
@@ -4370,7 +4598,16 @@
         "unique_id",
         "fqn",
         "type",
-        "owner"
+        "owner",
+        "meta",
+        "tags",
+        "config",
+        "unrendered_config",
+        "depends_on",
+        "refs",
+        "sources",
+        "metrics",
+        "created_at"
       ]
     },
     "WhereFilter": {
@@ -4396,7 +4633,7 @@
         "filter": {
           "anyOf": [
             {
-              "$ref": "#/$defs/WhereFilter"
+              "$ref": "#/defs/WhereFilter"
             },
             {
               "type": "null"
@@ -4454,7 +4691,7 @@
         "filter": {
           "anyOf": [
             {
-              "$ref": "#/$defs/WhereFilter"
+              "$ref": "#/defs/WhereFilter"
             },
             {
               "type": "null"
@@ -4476,7 +4713,7 @@
         "offset_window": {
           "anyOf": [
             {
-              "$ref": "#/$defs/MetricTimeWindow"
+              "$ref": "#/defs/MetricTimeWindow"
             },
             {
               "type": "null"
@@ -4514,7 +4751,7 @@
         "measure": {
           "anyOf": [
             {
-              "$ref": "#/$defs/MetricInputMeasure"
+              "$ref": "#/defs/MetricInputMeasure"
             },
             {
               "type": "null"
@@ -4525,13 +4762,13 @@
         "input_measures": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/MetricInputMeasure"
+            "$ref": "#/defs/MetricInputMeasure"
           }
         },
         "numerator": {
           "anyOf": [
             {
-              "$ref": "#/$defs/MetricInput"
+              "$ref": "#/defs/MetricInput"
             },
             {
               "type": "null"
@@ -4542,7 +4779,7 @@
         "denominator": {
           "anyOf": [
             {
-              "$ref": "#/$defs/MetricInput"
+              "$ref": "#/defs/MetricInput"
             },
             {
               "type": "null"
@@ -4564,7 +4801,7 @@
         "window": {
           "anyOf": [
             {
-              "$ref": "#/$defs/MetricTimeWindow"
+              "$ref": "#/defs/MetricTimeWindow"
             },
             {
               "type": "null"
@@ -4594,7 +4831,7 @@
             {
               "type": "array",
               "items": {
-                "$ref": "#/$defs/MetricInput"
+                "$ref": "#/defs/MetricInput"
               }
             },
             {
@@ -4604,7 +4841,10 @@
           "default": null
         }
       },
-      "additionalProperties": false
+      "additionalProperties": false,
+      "required": [
+        "input_measures"
+      ]
     },
     "FileSlice": {
       "type": "object",
@@ -4639,7 +4879,7 @@
           "type": "string"
         },
         "file_slice": {
-          "$ref": "#/$defs/FileSlice"
+          "$ref": "#/defs/FileSlice"
         }
       },
       "additionalProperties": false,
@@ -4674,7 +4914,10 @@
           "default": null
         }
       },
-      "additionalProperties": true
+      "additionalProperties": false,
+      "required": [
+        "_extra"
+      ]
     },
     "Metric": {
       "type": "object",
@@ -4719,12 +4962,12 @@
           ]
         },
         "type_params": {
-          "$ref": "#/$defs/MetricTypeParams"
+          "$ref": "#/defs/MetricTypeParams"
         },
         "filter": {
           "anyOf": [
             {
-              "$ref": "#/$defs/WhereFilter"
+              "$ref": "#/defs/WhereFilter"
             },
             {
               "type": "null"
@@ -4735,7 +4978,7 @@
         "metadata": {
           "anyOf": [
             {
-              "$ref": "#/$defs/SourceFileMetadata"
+              "$ref": "#/defs/SourceFileMetadata"
             },
             {
               "type": "null"
@@ -4756,7 +4999,7 @@
           }
         },
         "config": {
-          "$ref": "#/$defs/MetricConfig"
+          "$ref": "#/defs/MetricConfig"
         },
         "unrendered_config": {
           "type": "object",
@@ -4774,12 +5017,12 @@
           }
         },
         "depends_on": {
-          "$ref": "#/$defs/DependsOn"
+          "$ref": "#/defs/DependsOn"
         },
         "refs": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/RefArgs"
+            "$ref": "#/defs/RefArgs"
           }
         },
         "metrics": {
@@ -4818,7 +5061,16 @@
         "description",
         "label",
         "type",
-        "type_params"
+        "type_params",
+        "meta",
+        "tags",
+        "config",
+        "unrendered_config",
+        "sources",
+        "depends_on",
+        "refs",
+        "metrics",
+        "created_at"
       ]
     },
     "Group": {
@@ -4844,7 +5096,7 @@
           "type": "string"
         },
         "owner": {
-          "$ref": "#/$defs/Owner"
+          "$ref": "#/defs/Owner"
         }
       },
       "additionalProperties": false,
@@ -5079,7 +5331,7 @@
         "agg_params": {
           "anyOf": [
             {
-              "$ref": "#/$defs/MeasureAggregationParameters"
+              "$ref": "#/defs/MeasureAggregationParameters"
             },
             {
               "type": "null"
@@ -5090,7 +5342,7 @@
         "non_additive_dimension": {
           "anyOf": [
             {
-              "$ref": "#/$defs/NonAdditiveDimension"
+              "$ref": "#/defs/NonAdditiveDimension"
             },
             {
               "type": "null"
@@ -5147,7 +5399,7 @@
         "validity_params": {
           "anyOf": [
             {
-              "$ref": "#/$defs/DimensionValidityParams"
+              "$ref": "#/defs/DimensionValidityParams"
             },
             {
               "type": "null"
@@ -5192,7 +5444,7 @@
         "type_params": {
           "anyOf": [
             {
-              "$ref": "#/$defs/DimensionTypeParams"
+              "$ref": "#/defs/DimensionTypeParams"
             },
             {
               "type": "null"
@@ -5214,7 +5466,7 @@
         "metadata": {
           "anyOf": [
             {
-              "$ref": "#/$defs/SourceFileMetadata"
+              "$ref": "#/defs/SourceFileMetadata"
             },
             {
               "type": "null"
@@ -5242,9 +5494,23 @@
         "enabled": {
           "type": "boolean",
           "default": true
+        },
+        "group": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
-      "additionalProperties": true
+      "additionalProperties": false,
+      "required": [
+        "_extra"
+      ]
     },
     "SemanticModel": {
       "type": "object",
@@ -5296,7 +5562,7 @@
         "node_relation": {
           "anyOf": [
             {
-              "$ref": "#/$defs/NodeRelation"
+              "$ref": "#/defs/NodeRelation"
             },
             {
               "type": "null"
@@ -5317,7 +5583,7 @@
         "defaults": {
           "anyOf": [
             {
-              "$ref": "#/$defs/Defaults"
+              "$ref": "#/defs/Defaults"
             },
             {
               "type": "null"
@@ -5328,25 +5594,25 @@
         "entities": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/Entity"
+            "$ref": "#/defs/Entity"
           }
         },
         "measures": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/Measure"
+            "$ref": "#/defs/Measure"
           }
         },
         "dimensions": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/Dimension"
+            "$ref": "#/defs/Dimension"
           }
         },
         "metadata": {
           "anyOf": [
             {
-              "$ref": "#/$defs/SourceFileMetadata"
+              "$ref": "#/defs/SourceFileMetadata"
             },
             {
               "type": "null"
@@ -5355,21 +5621,38 @@
           "default": null
         },
         "depends_on": {
-          "$ref": "#/$defs/DependsOn"
+          "$ref": "#/defs/DependsOn"
         },
         "refs": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/RefArgs"
+            "$ref": "#/defs/RefArgs"
           }
         },
         "created_at": {
           "type": "number"
         },
         "config": {
-          "$ref": "#/$defs/SemanticModelConfig"
+          "$ref": "#/defs/SemanticModelConfig"
+        },
+        "unrendered_config": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          }
         },
         "primary_entity": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "group": {
           "anyOf": [
             {
               "type": "string"
@@ -5391,7 +5674,15 @@
         "unique_id",
         "fqn",
         "model",
-        "node_relation"
+        "node_relation",
+        "entities",
+        "measures",
+        "dimensions",
+        "depends_on",
+        "refs",
+        "created_at",
+        "config",
+        "unrendered_config"
       ]
     },
     "WritableManifest": {
@@ -5399,39 +5690,38 @@
       "title": "WritableManifest",
       "properties": {
         "metadata": {
-          "$ref": "#/$defs/ManifestMetadata"
+          "$ref": "#/defs/ManifestMetadata"
         },
         "nodes": {
           "type": "object",
-          "description": "The nodes defined in the dbt project and its dependencies",
           "additionalProperties": {
             "anyOf": [
               {
-                "$ref": "#/$defs/AnalysisNode"
+                "$ref": "#/defs/AnalysisNode"
               },
               {
-                "$ref": "#/$defs/SingularTestNode"
+                "$ref": "#/defs/SingularTestNode"
               },
               {
-                "$ref": "#/$defs/HookNode"
+                "$ref": "#/defs/HookNode"
               },
               {
-                "$ref": "#/$defs/ModelNode"
+                "$ref": "#/defs/ModelNode"
               },
               {
-                "$ref": "#/$defs/RPCNode"
+                "$ref": "#/defs/RPCNode"
               },
               {
-                "$ref": "#/$defs/SqlNode"
+                "$ref": "#/defs/SqlNode"
               },
               {
-                "$ref": "#/$defs/GenericTestNode"
+                "$ref": "#/defs/GenericTestNode"
               },
               {
-                "$ref": "#/$defs/SnapshotNode"
+                "$ref": "#/defs/SnapshotNode"
               },
               {
-                "$ref": "#/$defs/SeedNode"
+                "$ref": "#/defs/SeedNode"
               }
             ]
           },
@@ -5441,9 +5731,8 @@
         },
         "sources": {
           "type": "object",
-          "description": "The sources defined in the dbt project and its dependencies",
           "additionalProperties": {
-            "$ref": "#/$defs/SourceDefinition"
+            "$ref": "#/defs/SourceDefinition"
           },
           "propertyNames": {
             "type": "string"
@@ -5451,9 +5740,8 @@
         },
         "macros": {
           "type": "object",
-          "description": "The macros defined in the dbt project and its dependencies",
           "additionalProperties": {
-            "$ref": "#/$defs/Macro"
+            "$ref": "#/defs/Macro"
           },
           "propertyNames": {
             "type": "string"
@@ -5461,9 +5749,8 @@
         },
         "docs": {
           "type": "object",
-          "description": "The docs defined in the dbt project and its dependencies",
           "additionalProperties": {
-            "$ref": "#/$defs/Documentation"
+            "$ref": "#/defs/Documentation"
           },
           "propertyNames": {
             "type": "string"
@@ -5471,9 +5758,8 @@
         },
         "exposures": {
           "type": "object",
-          "description": "The exposures defined in the dbt project and its dependencies",
           "additionalProperties": {
-            "$ref": "#/$defs/Exposure"
+            "$ref": "#/defs/Exposure"
           },
           "propertyNames": {
             "type": "string"
@@ -5481,9 +5767,8 @@
         },
         "metrics": {
           "type": "object",
-          "description": "The metrics defined in the dbt project and its dependencies",
           "additionalProperties": {
-            "$ref": "#/$defs/Metric"
+            "$ref": "#/defs/Metric"
           },
           "propertyNames": {
             "type": "string"
@@ -5491,9 +5776,8 @@
         },
         "groups": {
           "type": "object",
-          "description": "The groups defined in the dbt project",
           "additionalProperties": {
-            "$ref": "#/$defs/Group"
+            "$ref": "#/defs/Group"
           },
           "propertyNames": {
             "type": "string"
@@ -5501,13 +5785,11 @@
         },
         "selectors": {
           "type": "object",
-          "description": "The selectors defined in selectors.yml",
           "propertyNames": {
             "type": "string"
           }
         },
         "disabled": {
-          "description": "A mapping of the disabled nodes in the target",
           "anyOf": [
             {
               "type": "object",
@@ -5516,43 +5798,43 @@
                 "items": {
                   "anyOf": [
                     {
-                      "$ref": "#/$defs/AnalysisNode"
+                      "$ref": "#/defs/AnalysisNode"
                     },
                     {
-                      "$ref": "#/$defs/SingularTestNode"
+                      "$ref": "#/defs/SingularTestNode"
                     },
                     {
-                      "$ref": "#/$defs/HookNode"
+                      "$ref": "#/defs/HookNode"
                     },
                     {
-                      "$ref": "#/$defs/ModelNode"
+                      "$ref": "#/defs/ModelNode"
                     },
                     {
-                      "$ref": "#/$defs/RPCNode"
+                      "$ref": "#/defs/RPCNode"
                     },
                     {
-                      "$ref": "#/$defs/SqlNode"
+                      "$ref": "#/defs/SqlNode"
                     },
                     {
-                      "$ref": "#/$defs/GenericTestNode"
+                      "$ref": "#/defs/GenericTestNode"
                     },
                     {
-                      "$ref": "#/$defs/SnapshotNode"
+                      "$ref": "#/defs/SnapshotNode"
                     },
                     {
-                      "$ref": "#/$defs/SeedNode"
+                      "$ref": "#/defs/SeedNode"
                     },
                     {
-                      "$ref": "#/$defs/SourceDefinition"
+                      "$ref": "#/defs/SourceDefinition"
                     },
                     {
-                      "$ref": "#/$defs/Exposure"
+                      "$ref": "#/defs/Exposure"
                     },
                     {
-                      "$ref": "#/$defs/Metric"
+                      "$ref": "#/defs/Metric"
                     },
                     {
-                      "$ref": "#/$defs/SemanticModel"
+                      "$ref": "#/defs/SemanticModel"
                     }
                   ]
                 }
@@ -5567,7 +5849,6 @@
           ]
         },
         "parent_map": {
-          "description": "A mapping from\u00a0child nodes to their dependencies",
           "anyOf": [
             {
               "type": "object",
@@ -5587,7 +5868,6 @@
           ]
         },
         "child_map": {
-          "description": "A mapping from parent nodes to their dependents",
           "anyOf": [
             {
               "type": "object",
@@ -5607,7 +5887,6 @@
           ]
         },
         "group_map": {
-          "description": "A mapping from group names to their nodes",
           "anyOf": [
             {
               "type": "object",
@@ -5628,9 +5907,8 @@
         },
         "semantic_models": {
           "type": "object",
-          "description": "The semantic models defined in the dbt project",
           "additionalProperties": {
-            "$ref": "#/$defs/SemanticModel"
+            "$ref": "#/defs/SemanticModel"
           },
           "propertyNames": {
             "type": "string"
