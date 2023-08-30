@@ -1501,7 +1501,7 @@ def _process_metric_node(
             )
         if target_semantic_model.config.enabled is False:
             raise dbt.exceptions.ParsingError(
-                f"A semantic model having a measure `{metric.type_params.measure.name}` is disabled but was referenced.",
+                f"The measure `{metric.type_params.measure.name}` is referenced on disabled semantic model `{target_semantic_model.name}`.",
                 node=metric,
             )
 
