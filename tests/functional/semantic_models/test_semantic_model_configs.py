@@ -53,7 +53,7 @@ class TestDisabledConfigYamlLevelEnabledMetric:
     def test_yaml_level(self, project):
         with pytest.raises(
             ParsingError,
-            match="A semantic model having a measure `people` is disabled but was referenced",
+            match="The measure `people` is referenced on disabled semantic model `semantic_people`.",
         ):
             run_dbt(["parse"])
 
@@ -97,7 +97,7 @@ class TestMismatchesConfigProjectLevel:
         update_config_file(new_enabled_config, project.project_root, "dbt_project.yml")
         with pytest.raises(
             ParsingError,
-            match="A semantic model having a measure `people` is disabled but was referenced",
+            match="The measure `people` is referenced on disabled semantic model `semantic_people`.",
         ):
             run_dbt(["parse"])
 
