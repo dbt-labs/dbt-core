@@ -86,11 +86,11 @@ def get_context_modules() -> Dict[str, Dict[str, Any]]:
 
 
 class ContextMember:
-    def __init__(self, value, name=None):
+    def __init__(self, value: Any, name: Optional[str] = None) -> None:
         self.name = name
         self.inner = value
 
-    def key(self, default):
+    def key(self, default: str) -> str:
         if self.name is None:
             return default
         return self.name
