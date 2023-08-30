@@ -148,27 +148,28 @@ class Var:
         return self._cli_vars
 
     @property
-    def node_name(self):
+    def node_name(self) -> str:
         if self._node is not None:
             return self._node.name
         else:
             return "<Configuration>"
 
-    def get_missing_var(self, var_name):
-        raise RequiredVarNotFoundError(var_name, self._merged, self._node)
+    def get_missing_var(self, var_name: str) -> NoReturn:
+        # TODO function name implies a non exception resolution
+        raise RequiredVarNotFoundError(var_name, dict(self._merged), self._node)
 
-    def has_var(self, var_name: str):
+    def has_var(self, var_name: str) -> bool:
         return var_name in self._merged
 
-    def get_rendered_var(self, var_name):
+    def get_rendered_var(self, var_name: str) -> Any:
         raw = self._merged[var_name]
         # if bool/int/float/etc are passed in, don't compile anything
         if not isinstance(raw, str):
             return raw
 
-        return get_rendered(raw, self._context)
+        return get_rendered(raw, dict(self._context))
 
-    def __call__(self, var_name, default=_VAR_NOTSET):
+    def __call__(self, var_name: str, default: Any = _VAR_NOTSET) -> Any:
         if self.has_var(var_name):
             return self.get_rendered_var(var_name)
         elif default is not self._VAR_NOTSET:
