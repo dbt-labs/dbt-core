@@ -8,7 +8,7 @@ from dbt.contracts.graph.manifest import Manifest
 from dbt.events.base_types import BaseEvent
 from dbt.tests.util import write_file
 
-from .fixtures import (
+from tests.functional.semantic_models.fixtures import (
     schema_without_semantic_model_yml,
     fct_revenue_sql,
     metricflow_time_spine_sql,
