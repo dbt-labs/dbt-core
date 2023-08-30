@@ -36,7 +36,7 @@ from dbt.contracts.graph.semantic_models import (
 from dbt.exceptions import DbtInternalError, YamlParseDictError, JSONValidationError
 from dbt.context.providers import generate_parse_exposure, generate_parse_semantic_models
 
-from dbt.contracts.graph.model_config import MetricConfig, ExposureConfig, SemanticModelConfig
+from dbt.contracts.graph.model_config import MetricConfig, ExposureConfig
 from dbt.context.context_config import (
     BaseContextConfigGenerator,
     ContextConfigGenerator,
@@ -569,11 +569,6 @@ class SemanticModelParser(YamlReader):
             package_name=package_name,
             rendered=False,
         )
-
-        if not isinstance(config, SemanticModelConfig):
-            raise DbtInternalError(
-                f"Calculated a {type(config)} for a semantic model, but expected a SemanticModelConfig"
-            )
 
         parsed = SemanticModel(
             description=unparsed.description,
