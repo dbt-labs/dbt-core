@@ -181,13 +181,17 @@ class Var:
 
 
 class BaseContext(metaclass=ContextMeta):
-    # subclass is TargetContext
-    def __init__(self, cli_vars):
-        self._ctx = {}
-        self.cli_vars = cli_vars
-        self.env_vars = {}
+    # Set by ContextMeta
+    _context_members_: Dict[str, Any]
+    _context_attrs_: Dict[str, Any]
 
-    def generate_builtins(self):
+    # subclass is TargetContext
+    def __init__(self, cli_vars: Dict[str, Any]) -> None:
+        self._ctx: Dict[str, Any] = {}
+        self.cli_vars: Dict[str, Any] = cli_vars
+        self.env_vars: Dict[str, Any] = {}
+
+    def generate_builtins(self) -> Dict[str, Any]:
         builtins: Dict[str, Any] = {}
         for key, value in self._context_members_.items():
             if hasattr(value, "__get__"):
@@ -197,7 +201,7 @@ class BaseContext(metaclass=ContextMeta):
         return builtins
 
     # no dbtClassMixin so this is not an actual override
-    def to_dict(self):
+    def to_dict(self) -> Dict[str, Any]:
         self._ctx["context"] = self._ctx
         builtins = self.generate_builtins()
         self._ctx["builtins"] = builtins
