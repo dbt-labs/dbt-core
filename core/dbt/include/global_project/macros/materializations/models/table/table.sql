@@ -1,5 +1,6 @@
 {% materialization table, default %}
 
+  {% set original_query_tag = set_query_tag() %}
   {%- set existing_relation = load_cached_relation(this) -%}
   {%- set target_relation = this.incorporate(type='table') %}
   {%- set intermediate_relation =  make_intermediate_relation(target_relation) -%}
@@ -59,6 +60,8 @@
   {{ drop_relation_if_exists(backup_relation) }}
 
   {{ run_hooks(post_hooks, inside_transaction=False) }}
+
+  {% do unset_query_tag(original_query_tag) %}
 
   {{ return({'relations': [target_relation]}) }}
 {% endmaterialization %}
