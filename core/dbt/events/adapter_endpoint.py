@@ -15,32 +15,32 @@ from dbt.events.types import (
 class AdapterLogger:
     name: str
 
-    def debug(self, msg, *args):
+    def debug(self, msg, *args) -> None:
         event = AdapterEventDebug(
             name=self.name, base_msg=str(msg), args=list(args), node_info=get_node_info()
         )
         fire_event(event)
 
-    def info(self, msg, *args):
+    def info(self, msg, *args) -> None:
         event = AdapterEventInfo(
             name=self.name, base_msg=str(msg), args=list(args), node_info=get_node_info()
         )
         fire_event(event)
 
-    def warning(self, msg, *args):
+    def warning(self, msg, *args) -> None:
         event = AdapterEventWarning(
             name=self.name, base_msg=str(msg), args=list(args), node_info=get_node_info()
         )
         fire_event(event)
 
-    def error(self, msg, *args):
+    def error(self, msg, *args) -> None:
         event = AdapterEventError(
             name=self.name, base_msg=str(msg), args=list(args), node_info=get_node_info()
         )
         fire_event(event)
 
     # The default exc_info=True is what makes this method different
-    def exception(self, msg, *args):
+    def exception(self, msg, *args) -> None:
         exc_info = str(traceback.format_exc())
         event = AdapterEventError(
             name=self.name,
@@ -51,7 +51,7 @@ class AdapterLogger:
         )
         fire_event(event)
 
-    def critical(self, msg, *args):
+    def critical(self, msg, *args) -> None:
         event = AdapterEventError(
             name=self.name, base_msg=str(msg), args=list(args), node_info=get_node_info()
         )

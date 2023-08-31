@@ -8,7 +8,7 @@ import logging
 from logging.handlers import RotatingFileHandler
 import threading
 import traceback
-from typing import Any, Callable, List, Optional, TextIO, Protocol
+from typing import Any, Callable, List, Optional, Protocol, TextIO, Tuple
 from uuid import uuid4
 from dbt.events.format import timestamp_to_datetime_string
 
@@ -215,7 +215,7 @@ class EventManager:
         logger.event_manager = self
         self.loggers.append(logger)
 
-    def flush(self):
+    def flush(self) -> None:
         for logger in self.loggers:
             logger.flush()
 
@@ -223,6 +223,7 @@ class EventManager:
 class IEventManager(Protocol):
     callbacks: List[Callable[[EventMsg], None]]
     invocation_id: str
+    loggers: List[_Logger]
 
     def fire_event(self, e: BaseEvent, level: Optional[EventLevel] = None) -> None:
         ...
@@ -232,8 +233,9 @@ class IEventManager(Protocol):
 
 
 class TestEventManager(IEventManager):
-    def __init__(self):
-        self.event_history = []
+    def __init__(self) -> None:
+        self.event_history: List[Tuple[BaseEvent, Optional[EventLevel]]] = []
+        self.loggers = []
 
     def fire_event(self, e: BaseEvent, level: Optional[EventLevel] = None) -> None:
         self.event_history.append((e, level))
