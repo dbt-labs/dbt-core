@@ -39,6 +39,10 @@ class BaseRelation(FakeAPIObject, Hashable):
     renameable_relations: List[str] = field(
         default_factory=lambda: [RelationType.Table, RelationType.View]
     )
+    # register relation types that are replaceable, i.e. they have "create or replace" capability
+    replaceable_relations: List[str] = field(
+        default_factory=lambda: [RelationType.Table, RelationType.View]
+    )
 
     def _is_exactish_match(self, field: ComponentName, value: str) -> bool:
         if self.dbt_created and self.quote_policy.get_part(field) is False:
@@ -290,8 +294,12 @@ class BaseRelation(FakeAPIObject, Hashable):
         return cls.from_dict(kwargs)
 
     @property
-    def can_be_renamed(self):
+    def can_be_renamed(self) -> bool:
         return self.type in self.renameable_relations
+
+    @property
+    def can_be_replaced(self) -> bool:
+        return self.type in self.replaceable_relations
 
     def __repr__(self) -> str:
         return "<{} {}>".format(self.__class__.__name__, self.render())
