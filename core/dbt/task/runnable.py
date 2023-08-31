@@ -5,7 +5,7 @@ from concurrent.futures import as_completed
 from datetime import datetime
 from multiprocessing.dummy import Pool as ThreadPool
 from pathlib import Path
-from typing import Optional, Dict, List, Set, Tuple, Iterable, AbstractSet
+from typing import AbstractSet, Any, Optional, Dict, List, Set, Tuple, Iterable
 
 import dbt.exceptions
 import dbt.tracking
@@ -66,13 +66,13 @@ RUNNING_STATE = DbtProcessState("running")
 class GraphRunnableTask(ConfiguredTask):
     MARK_DEPENDENT_ERRORS_STATUSES = [NodeStatus.Error]
 
-    def __init__(self, args, config, manifest):
+    def __init__(self, args, config, manifest) -> None:
         super().__init__(args, config, manifest)
         self._flattened_nodes: Optional[List[ResultNode]] = None
         self._raise_next_tick = None
-        self._skipped_children = {}
+        self._skipped_children: Dict[str, Any] = {}
         self.job_queue: Optional[GraphQueue] = None
-        self.node_results = []
+        self.node_results: List[Any] = []
         self.num_nodes: int = 0
         self.previous_state: Optional[PreviousState] = None
         self.previous_defer_state: Optional[PreviousState] = None

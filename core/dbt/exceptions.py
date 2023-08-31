@@ -20,7 +20,7 @@ class MacroReturn(builtins.BaseException):
     It's how we return a value from a macro.
     """
 
-    def __init__(self, value):
+    def __init__(self, value) -> None:
         self.value = value
 
 
@@ -37,7 +37,7 @@ class Exception(builtins.Exception):
 
 
 class DbtInternalError(Exception):
-    def __init__(self, msg: str):
+    def __init__(self, msg: str) -> None:
         self.stack: List = []
         self.msg = scrub_secrets(msg, env_secrets())
 
@@ -81,7 +81,7 @@ class DbtRuntimeError(RuntimeError, Exception):
     CODE = 10001
     MESSAGE = "Runtime error"
 
-    def __init__(self, msg: str, node=None):
+    def __init__(self, msg: str, node=None) -> None:
         self.stack: List = []
         self.node = node
         self.msg = scrub_secrets(msg, env_secrets())
@@ -215,7 +215,7 @@ class ContractBreakingChangeError(DbtRuntimeError):
         self,
         breaking_changes: List[str],
         node=None,
-    ):
+    ) -> None:
         self.breaking_changes = breaking_changes
         super().__init__(self.message(), node)
 
@@ -259,7 +259,7 @@ class dbtPluginError(DbtRuntimeError):
 
 # TODO: this isn't raised in the core codebase.  Is it raised elsewhere?
 class JSONValidationError(DbtValidationError):
-    def __init__(self, typename, errors):
+    def __init__(self, typename, errors) -> None:
         self.typename = typename
         self.errors = errors
         self.errors_message = ", ".join(errors)
@@ -272,7 +272,7 @@ class JSONValidationError(DbtValidationError):
 
 
 class IncompatibleSchemaError(DbtRuntimeError):
-    def __init__(self, expected: str, found: Optional[str] = None):
+    def __init__(self, expected: str, found: Optional[str] = None) -> None:
         self.expected = expected
         self.found = found
         self.filename = "input file"
@@ -326,7 +326,7 @@ class DbtConfigError(DbtRuntimeError):
     CODE = 10007
     MESSAGE = "DBT Configuration Error"
 
-    def __init__(self, msg: str, project=None, result_type="invalid_project", path=None):
+    def __init__(self, msg: str, project=None, result_type="invalid_project", path=None) -> None:
         self.project = project
         super().__init__(msg)
         self.result_type = result_type
@@ -344,7 +344,7 @@ class FailFastError(DbtRuntimeError):
     CODE = 10013
     MESSAGE = "FailFast Error"
 
-    def __init__(self, msg: str, result=None, node=None):
+    def __init__(self, msg: str, result=None, node=None) -> None:
         super().__init__(msg=msg, node=node)
         self.result = result
 
@@ -366,7 +366,7 @@ class DbtProfileError(DbtConfigError):
 
 
 class SemverError(Exception):
-    def __init__(self, msg: Optional[str] = None):
+    def __init__(self, msg: Optional[str] = None) -> None:
         self.msg = msg
         if msg is not None:
             super().__init__(msg)
@@ -379,7 +379,7 @@ class VersionsNotCompatibleError(SemverError):
 
 
 class NotImplementedError(Exception):
-    def __init__(self, msg: str):
+    def __init__(self, msg: str) -> None:
         self.msg = msg
         self.formatted_msg = f"ERROR: {self.msg}"
         super().__init__(self.formatted_msg)
@@ -390,7 +390,7 @@ class FailedToConnectError(DbtDatabaseError):
 
 
 class CommandError(DbtRuntimeError):
-    def __init__(self, cwd: str, cmd: List[str], msg: str = "Error running command"):
+    def __init__(self, cwd: str, cmd: List[str], msg: str = "Error running command") -> None:
         cmd_scrubbed = list(scrub_secrets(cmd_txt, env_secrets()) for cmd_txt in cmd)
         super().__init__(msg)
         self.cwd = cwd
@@ -404,12 +404,12 @@ class CommandError(DbtRuntimeError):
 
 
 class ExecutableError(CommandError):
-    def __init__(self, cwd: str, cmd: List[str], msg: str):
+    def __init__(self, cwd: str, cmd: List[str], msg: str) -> None:
         super().__init__(cwd, cmd, msg)
 
 
 class WorkingDirectoryError(CommandError):
-    def __init__(self, cwd: str, cmd: List[str], msg: str):
+    def __init__(self, cwd: str, cmd: List[str], msg: str) -> None:
         super().__init__(cwd, cmd, msg)
 
     def __str__(self):
@@ -425,7 +425,7 @@ class CommandResultError(CommandError):
         stdout: bytes,
         stderr: bytes,
         msg: str = "Got a non-zero returncode",
-    ):
+    ) -> None:
         super().__init__(cwd, cmd, msg)
         self.returncode = returncode
         self.stdout = scrub_secrets(stdout.decode("utf-8"), env_secrets())
@@ -437,7 +437,7 @@ class CommandResultError(CommandError):
 
 
 class InvalidConnectionError(DbtRuntimeError):
-    def __init__(self, thread_id, known: List):
+    def __init__(self, thread_id, known: List) -> None:
         self.thread_id = thread_id
         self.known = known
         super().__init__(
@@ -446,7 +446,7 @@ class InvalidConnectionError(DbtRuntimeError):
 
 
 class InvalidSelectorError(DbtRuntimeError):
-    def __init__(self, name: str):
+    def __init__(self, name: str) -> None:
         self.name = name
         super().__init__(name)
 
@@ -466,7 +466,7 @@ class ConnectionError(Exception):
 
 # event level exception
 class EventCompilationError(CompilationError):
-    def __init__(self, msg: str, node):
+    def __init__(self, msg: str, node) -> None:
         self.msg = scrub_secrets(msg, env_secrets())
         self.node = node
         super().__init__(msg=self.msg)
