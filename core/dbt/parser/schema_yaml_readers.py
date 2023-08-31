@@ -55,7 +55,7 @@ from typing import List, Optional, Union
 
 
 class ExposureParser(YamlReader):
-    def __init__(self, schema_parser: SchemaParser, yaml: YamlBlock):
+    def __init__(self, schema_parser: SchemaParser, yaml: YamlBlock) -> None:
         super().__init__(schema_parser, yaml, NodeType.Exposure.pluralize())
         self.schema_parser = schema_parser
         self.yaml = yaml
@@ -158,7 +158,7 @@ class ExposureParser(YamlReader):
 
 
 class MetricParser(YamlReader):
-    def __init__(self, schema_parser: SchemaParser, yaml: YamlBlock):
+    def __init__(self, schema_parser: SchemaParser, yaml: YamlBlock) -> None:
         super().__init__(schema_parser, yaml, NodeType.Metric.pluralize())
         self.schema_parser = schema_parser
         self.yaml = yaml
@@ -398,7 +398,7 @@ class MetricParser(YamlReader):
 
 
 class GroupParser(YamlReader):
-    def __init__(self, schema_parser: SchemaParser, yaml: YamlBlock):
+    def __init__(self, schema_parser: SchemaParser, yaml: YamlBlock) -> None:
         super().__init__(schema_parser, yaml, NodeType.Group.pluralize())
         self.schema_parser = schema_parser
         self.yaml = yaml
@@ -432,7 +432,7 @@ class GroupParser(YamlReader):
 
 
 class SemanticModelParser(YamlReader):
-    def __init__(self, schema_parser: SchemaParser, yaml: YamlBlock):
+    def __init__(self, schema_parser: SchemaParser, yaml: YamlBlock) -> None:
         super().__init__(schema_parser, yaml, "semantic_models")
         self.schema_parser = schema_parser
         self.yaml = yaml

@@ -64,7 +64,7 @@ class dbtRunner:
         self,
         manifest: Optional[Manifest] = None,
         callbacks: Optional[List[Callable[[EventMsg], None]]] = None,
-    ):
+    ) -> None:
         self.manifest = manifest
 
         if callbacks is None:

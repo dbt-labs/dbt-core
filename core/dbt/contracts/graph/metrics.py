@@ -2,7 +2,7 @@ from dbt.node_types import NodeType
 
 
 class MetricReference(object):
-    def __init__(self, metric_name, package_name=None):
+    def __init__(self, metric_name, package_name=None) -> None:
         self.metric_name = metric_name
         self.package_name = package_name
 
@@ -17,7 +17,7 @@ class ResolvedMetricReference(MetricReference):
     for working with metrics (ie. __str__ and templating functions)
     """
 
-    def __init__(self, node, manifest, Relation):
+    def __init__(self, node, manifest, Relation) -> None:
         super().__init__(node.name, node.package_name)
         self.node = node
         self.manifest = manifest

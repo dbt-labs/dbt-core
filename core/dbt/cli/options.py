@@ -8,7 +8,7 @@ from dbt.cli.option_types import ChoiceTuple
 # Implementation from: https://stackoverflow.com/a/48394004
 # Note MultiOption options must be specified with type=tuple or type=ChoiceTuple (https://github.com/pallets/click/issues/2012)
 class MultiOption(click.Option):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         self.save_other_options = kwargs.pop("save_other_options", True)
         nargs = kwargs.pop("nargs", -1)
         assert nargs == -1, "nargs, if set, must be -1 not {}".format(nargs)
