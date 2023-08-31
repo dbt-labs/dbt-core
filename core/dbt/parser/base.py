@@ -214,7 +214,11 @@ class ConfiguredParser(
             name = block.name
         if block.path.relative_path.endswith(".py"):
             language = ModelLanguage.python
-            config.add_config_call({"materialized": "table"})
+            config.add_config_call(
+                {
+                    "_dbt_node_type_configs": {"materialized": "table"},
+                }
+            )
         else:
             # this is not ideal but we have a lot of tests to adjust if don't do it
             language = ModelLanguage.sql
