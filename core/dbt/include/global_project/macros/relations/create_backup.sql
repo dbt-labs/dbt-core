@@ -1,10 +1,10 @@
-{%- macro get_backup_sql(relation) -%}
-    {{- log('Applying BACKUP to: ' ~ relation) -}}
-    {{- adapter.dispatch('get_backup_sql', 'dbt')(relation) -}}
+{%- macro get_create_backup_sql(relation) -%}
+    {{- log('Applying CREATE BACKUP to: ' ~ relation) -}}
+    {{- adapter.dispatch('get_create_backup_sql', 'dbt')(relation) -}}
 {%- endmacro -%}
 
 
-{%- macro default__get_backup_sql(relation) -%}
+{%- macro default__get_create_backup_sql(relation) -%}
 
     -- get the standard backup name
     {% set backup_relation = make_backup_relation(relation, relation.type) %}

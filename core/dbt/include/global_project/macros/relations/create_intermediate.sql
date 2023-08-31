@@ -1,10 +1,10 @@
-{%- macro get_stage_sql(relation, sql) -%}
-    {{- log('Applying STAGE to: ' ~ relation) -}}
-    {{- adapter.dispatch('get_stage_sql', 'dbt')(relation, sql) -}}
+{%- macro get_create_intermediate_sql(relation, sql) -%}
+    {{- log('Applying CREATE INTERMEDIATE to: ' ~ relation) -}}
+    {{- adapter.dispatch('get_create_intermediate_sql', 'dbt')(relation, sql) -}}
 {%- endmacro -%}
 
 
-{%- macro default__get_stage_sql(relation, sql) -%}
+{%- macro default__get_create_intermediate_sql(relation, sql) -%}
 
     -- get the standard intermediate name
     {% set intermediate_relation = make_intermediate_relation(relation) %}
