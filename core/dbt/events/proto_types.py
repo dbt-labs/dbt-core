@@ -1968,6 +1968,7 @@ class LogSnapshotResult(betterproto.Message):
     cfg: Dict[str, str] = betterproto.map_field(
         7, betterproto.TYPE_STRING, betterproto.TYPE_STRING
     )
+    result_message: str = betterproto.string_field(8)
 
 
 @dataclass

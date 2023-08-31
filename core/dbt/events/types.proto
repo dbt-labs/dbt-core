@@ -1566,6 +1566,7 @@ message LogSnapshotResult {
     int32 total = 5;
     float execution_time = 6;
     map<string, string> cfg = 7;
+    string result_message = 8;
 }
 
 message LogSnapshotResultMsg {
