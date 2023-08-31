@@ -7,6 +7,7 @@ from dbt_semantic_interfaces.type_enums.time_granularity import TimeGranularity
 from dbt.contracts.graph.manifest import Manifest
 from dbt.events.base_types import BaseEvent
 from dbt.tests.util import write_file
+from tests.functional.assertions.test_runner import dbtTestRunner
 
 from tests.functional.semantic_models.fixtures import (
     schema_without_semantic_model_yml,
