@@ -15,5 +15,5 @@ from dbt.contracts.relation import RelationType
 )
 def test_can_be_renamed(relation_type, result):
     my_relation = BaseRelation.create(type=relation_type)
-    my_relation = replace(my_relation, relations_that_can_be_renamed=[RelationType.View])
+    my_relation = replace(my_relation, renameable_relations=[RelationType.View])
     assert my_relation.can_be_renamed is result
