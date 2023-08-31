@@ -1614,7 +1614,7 @@ class LogSnapshotResult(DynamicLevel):
             status = red(self.status.upper())
         else:
             info = "OK snapshotted"
-            status = green(self.status)
+            status = green(self.result_message)
 
         msg = "{info} {description}".format(info=info, description=self.description, **self.cfg)
         return format_fancy_output_line(
