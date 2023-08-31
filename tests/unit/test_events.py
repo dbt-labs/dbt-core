@@ -2,7 +2,7 @@ import pytest
 import re
 from typing import TypeVar
 
-from dbt.contracts.results import TimingInfo
+from dbt.contracts.results import TimingInfo, RunResult, RunStatus
 from dbt.events import AdapterLogger, types
 from dbt.events.base_types import (
     BaseEvent,
@@ -14,10 +14,14 @@ from dbt.events.base_types import (
     WarnLevel,
     msg_from_base_event,
 )
-from dbt.events.functions import msg_to_dict, msg_to_json
+from dbt.events.eventmgr import TestEventManager, EventManager
+from dbt.events.functions import msg_to_dict, msg_to_json, ctx_set_event_manager
 from dbt.events.helpers import get_json_string_utcnow
+from dbt.events.types import RunResultError
 from dbt.flags import set_from_args
 from argparse import Namespace
+
+from dbt.task.printer import print_run_result_error
 
 set_from_args(Namespace(WARN_ERROR=False), None)
 
@@ -388,8 +392,6 @@ sample_values = [
     types.RunResultErrorNoMessage(status=""),
     types.SQLCompiledPath(path=""),
     types.CheckNodeTestFailure(relation_name=""),
-    types.FirstRunResultError(msg=""),
-    types.AfterFirstRunResultError(msg=""),
     types.EndOfRunSummary(num_errors=0, num_warnings=0, keyboard_interrupt=False),
     types.LogSkipBecauseError(schema="", relation="", index=0, total=0),
     types.EnsureGitInstalled(),
@@ -485,3 +487,34 @@ def test_bad_serialization():
         str(excinfo.value)
         == "[Note]: Unable to parse dict {'param_event_doesnt_have': 'This should break'}"
     )
+
+
+def test_single_run_error():
+
+    try:
+        # Add a recording event manager to the context, so we can test events.
+        event_mgr = TestEventManager()
+        ctx_set_event_manager(event_mgr)
+
+        error_result = RunResult(
+            status=RunStatus.Error,
+            timing=[],
+            thread_id="",
+            execution_time=0.0,
+            node=None,
+            adapter_response=dict(),
+            message="oh no!",
+            failures=[],
+        )
+
+        print_run_result_error(error_result)
+        events = [e for e in event_mgr.event_history if isinstance(e[0], RunResultError)]
+
+        assert len(events) == 1
+        assert events[0][0].msg == "oh no!"
+
+    finally:
+        # Set an empty event manager unconditionally on exit. This is an early
+        # attempt at unit testing events, and we need to think about how it
+        # could be done in a thread safe way in the long run.
+        ctx_set_event_manager(EventManager())
