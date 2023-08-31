@@ -13,6 +13,9 @@
     {% if is_replaceable and existing_relation.is_view %}
         {{ get_replace_view_sql(target_relation, sql) }}
 
+    {% elif is_replaceable and existing_relation.is_table %}
+        {{ get_replace_table_sql(target_relation, sql) }}
+
     {% elif is_replaceable and existing_relation.is_materialized_view %}
         {{ get_replace_materialized_view_sql(target_relation, sql) }}
 
