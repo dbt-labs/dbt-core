@@ -11,7 +11,6 @@ from dbt.contracts.relation import (
     Policy,
     Path,
 )
-from dbt.dataclass_schema import StrEnum
 from dbt.exceptions import (
     ApproximateMatchError,
     DbtInternalError,
@@ -37,7 +36,7 @@ class BaseRelation(FakeAPIObject, Hashable):
     quote_policy: Policy = field(default_factory=lambda: Policy())
     dbt_created: bool = False
     # register relation types that can be renamed for the purpose of replacing relations using stages and backups
-    renameable_relations: List[StrEnum] = field(
+    renameable_relations: List[str] = field(
         default_factory=lambda: [RelationType.Table, RelationType.View]
     )
 
