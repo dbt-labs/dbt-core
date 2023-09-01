@@ -36,13 +36,9 @@ class BaseRelation(FakeAPIObject, Hashable):
     quote_policy: Policy = field(default_factory=lambda: Policy())
     dbt_created: bool = False
     # register relation types that can be renamed for the purpose of replacing relations using stages and backups
-    renameable_relations: List[str] = field(
-        default_factory=lambda: [RelationType.Table, RelationType.View]
-    )
+    renameable_relations: List[str] = field(default_factory=list)
     # register relation types that are replaceable, i.e. they have "create or replace" capability
-    replaceable_relations: List[str] = field(
-        default_factory=lambda: [RelationType.Table, RelationType.View]
-    )
+    replaceable_relations: List[str] = field(default_factory=list)
 
     def _is_exactish_match(self, field: ComponentName, value: str) -> bool:
         if self.dbt_created and self.quote_policy.get_part(field) is False:
