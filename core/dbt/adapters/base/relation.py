@@ -1,6 +1,6 @@
 from collections.abc import Hashable
 from dataclasses import dataclass, field
-from typing import Optional, TypeVar, Any, Type, Dict, Iterator, Tuple, Set, List
+from typing import Optional, TypeVar, Any, Type, Dict, Iterator, Tuple, Set, FrozenSet
 
 from dbt.contracts.graph.nodes import SourceDefinition, ManifestNode, ResultNode, ParsedNode
 from dbt.contracts.relation import (
@@ -36,9 +36,9 @@ class BaseRelation(FakeAPIObject, Hashable):
     quote_policy: Policy = field(default_factory=lambda: Policy())
     dbt_created: bool = False
     # register relation types that can be renamed for the purpose of replacing relations using stages and backups
-    renameable_relations: List[str] = field(default_factory=list)
+    renameable_relations: FrozenSet[str] = frozenset()
     # register relation types that are replaceable, i.e. they have "create or replace" capability
-    replaceable_relations: List[str] = field(default_factory=list)
+    replaceable_relations: FrozenSet[str] = frozenset()
 
     def _is_exactish_match(self, field: ComponentName, value: str) -> bool:
         if self.dbt_created and self.quote_policy.get_part(field) is False:

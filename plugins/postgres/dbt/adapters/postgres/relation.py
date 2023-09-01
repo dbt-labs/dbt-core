@@ -21,15 +21,19 @@ from dbt.adapters.postgres.relation_configs import (
 
 @dataclass(frozen=True, eq=False, repr=False)
 class PostgresRelation(BaseRelation):
-    renameable_relations = [
-        RelationType.View,
-        RelationType.Table,
-        RelationType.MaterializedView,
-    ]
-    replaceable_relations = [
-        RelationType.View,
-        RelationType.Table,
-    ]
+    renameable_relations = frozenset(
+        {
+            RelationType.View,
+            RelationType.Table,
+            RelationType.MaterializedView,
+        }
+    )
+    replaceable_relations = frozenset(
+        {
+            RelationType.View,
+            RelationType.Table,
+        }
+    )
 
     def __post_init__(self):
         # Check for length of Postgres table/view names.
