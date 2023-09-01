@@ -169,7 +169,8 @@ class NodeSelector(MethodManager):
             metric = self.manifest.metrics[unique_id]
             return metric.config.enabled
         elif unique_id in self.manifest.semantic_models:
-            return True
+            semantic_model = self.manifest.semantic_models[unique_id]
+            return semantic_model.config.enabled
         node = self.manifest.nodes[unique_id]
 
         if self.include_empty_nodes:

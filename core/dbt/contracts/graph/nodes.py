@@ -6,7 +6,7 @@ from enum import Enum
 import hashlib
 
 from mashumaro.types import SerializableType
-from typing import Optional, Union, List, Dict, Any, Sequence, Tuple, Iterator
+from typing import Optional, Union, List, Dict, Any, Sequence, Tuple, Iterator, Literal
 
 from dbt.dataclass_schema import dbtClassMixin, ExtensibleDbtClassMixin
 
@@ -44,6 +44,7 @@ from dbt.events.types import (
     SeedExceedsLimitSamePath,
     SeedExceedsLimitAndPathChanged,
     SeedExceedsLimitChecksumChanged,
+    UnversionedBreakingChange,
 )
 from dbt.events.contextvars import set_log_contextvars
 from dbt.flags import get_flags
@@ -555,18 +556,18 @@ class CompiledNode(ParsedNode):
 
 @dataclass
 class AnalysisNode(CompiledNode):
-    resource_type: NodeType = field(metadata={"restrict": [NodeType.Analysis]})
+    resource_type: Literal[NodeType.Analysis]
 
 
 @dataclass
 class HookNode(CompiledNode):
-    resource_type: NodeType = field(metadata={"restrict": [NodeType.Operation]})
+    resource_type: Literal[NodeType.Operation]
     index: Optional[int] = None
 
 
 @dataclass
 class ModelNode(CompiledNode):
-    resource_type: NodeType = field(metadata={"restrict": [NodeType.Model]})
+    resource_type: Literal[NodeType.Model]
     access: AccessType = AccessType.Protected
     constraints: List[ModelLevelConstraint] = field(default_factory=list)
     version: Optional[NodeVersion] = None
@@ -682,11 +683,11 @@ class ModelNode(CompiledNode):
         # These are the categories of breaking changes:
         contract_enforced_disabled: bool = False
         columns_removed: List[str] = []
-        column_type_changes: List[Tuple[str, str, str]] = []
-        enforced_column_constraint_removed: List[Tuple[str, str]] = []  # column, constraint_type
-        enforced_model_constraint_removed: List[
-            Tuple[str, List[str]]
-        ] = []  # constraint_type, columns
+        column_type_changes: List[Dict[str, str]] = []
+        enforced_column_constraint_removed: List[
+            Dict[str, str]
+        ] = []  # column_name, constraint_type
+        enforced_model_constraint_removed: List[Dict[str, Any]] = []  # constraint_type, columns
         materialization_changed: List[str] = []
 
         if old.contract.enforced is True and self.contract.enforced is False:
@@ -708,11 +709,11 @@ class ModelNode(CompiledNode):
             # Has this column's data type changed?
             elif old_value.data_type != self.columns[old_key].data_type:
                 column_type_changes.append(
-                    (
-                        str(old_value.name),
-                        str(old_value.data_type),
-                        str(self.columns[old_key].data_type),
-                    )
+                    {
+                        "column_name": str(old_value.name),
+                        "previous_column_type": str(old_value.data_type),
+                        "current_column_type": str(self.columns[old_key].data_type),
+                    }
                 )
 
             # track if there are any column level constraints for the materialization check late
@@ -733,7 +734,11 @@ class ModelNode(CompiledNode):
                         and constraint_support[old_constraint.type] == ConstraintSupport.ENFORCED
                     ):
                         enforced_column_constraint_removed.append(
-                            (old_key, str(old_constraint.type))
+                            {
+                                "column_name": old_key,
+                                "constraint_name": old_constraint.name,
+                                "constraint_type": ConstraintType(old_constraint.type),
+                            }
                         )
 
         # Now compare the model level constraints
@@ -744,7 +749,11 @@ class ModelNode(CompiledNode):
                     and constraint_support[old_constraint.type] == ConstraintSupport.ENFORCED
                 ):
                     enforced_model_constraint_removed.append(
-                        (str(old_constraint.type), old_constraint.columns)
+                        {
+                            "constraint_name": old_constraint.name,
+                            "constraint_type": ConstraintType(old_constraint.type),
+                            "columns": old_constraint.columns,
+                        }
                     )
 
         # Check for relevant materialization changes.
@@ -758,7 +767,8 @@ class ModelNode(CompiledNode):
         # If a column has been added, it will be missing in the old.columns, and present in self.columns
         # That's a change (caught by the different checksums), but not a breaking change
 
-        # Did we find any changes that we consider breaking? If so, that's an error
+        # Did we find any changes that we consider breaking? If there's an enforced contract, that's
+        # a warning unless the model is versioned, then it's an error.
         if (
             contract_enforced_disabled
             or columns_removed
@@ -767,32 +777,89 @@ class ModelNode(CompiledNode):
             or enforced_column_constraint_removed
             or materialization_changed
         ):
-            raise (
-                ContractBreakingChangeError(
-                    contract_enforced_disabled=contract_enforced_disabled,
-                    columns_removed=columns_removed,
-                    column_type_changes=column_type_changes,
-                    enforced_column_constraint_removed=enforced_column_constraint_removed,
-                    enforced_model_constraint_removed=enforced_model_constraint_removed,
-                    materialization_changed=materialization_changed,
+
+            breaking_changes = []
+            if contract_enforced_disabled:
+                breaking_changes.append(
+                    "Contract enforcement was removed: Previously, this model had an enforced contract. It is no longer configured to enforce its contract, and this is a breaking change."
+                )
+            if columns_removed:
+                columns_removed_str = "\n    - ".join(columns_removed)
+                breaking_changes.append(f"Columns were removed: \n    - {columns_removed_str}")
+            if column_type_changes:
+                column_type_changes_str = "\n    - ".join(
+                    [
+                        f"{c['column_name']} ({c['previous_column_type']} -> {c['current_column_type']})"
+                        for c in column_type_changes
+                    ]
+                )
+                breaking_changes.append(
+                    f"Columns with data_type changes: \n    - {column_type_changes_str}"
+                )
+            if enforced_column_constraint_removed:
+                column_constraint_changes_str = "\n    - ".join(
+                    [
+                        f"'{c['constraint_name'] if c['constraint_name'] is not None else c['constraint_type']}' constraint on column {c['column_name']}"
+                        for c in enforced_column_constraint_removed
+                    ]
+                )
+                breaking_changes.append(
+                    f"Enforced column level constraints were removed: \n    - {column_constraint_changes_str}"
+                )
+            if enforced_model_constraint_removed:
+                model_constraint_changes_str = "\n    - ".join(
+                    [
+                        f"'{c['constraint_name'] if c['constraint_name'] is not None else c['constraint_type']}' constraint on columns {c['columns']}"
+                        for c in enforced_model_constraint_removed
+                    ]
+                )
+                breaking_changes.append(
+                    f"Enforced model level constraints were removed: \n    - {model_constraint_changes_str}"
+                )
+            if materialization_changed:
+                materialization_changes_str = (
+                    f"{materialization_changed[0]} -> {materialization_changed[1]}"
+                )
+
+                breaking_changes.append(
+                    f"Materialization changed with enforced constraints: \n    - {materialization_changes_str}"
+                )
+
+            if self.version is None:
+                warn_or_error(
+                    UnversionedBreakingChange(
+                        contract_enforced_disabled=contract_enforced_disabled,
+                        columns_removed=columns_removed,
+                        column_type_changes=column_type_changes,
+                        enforced_column_constraint_removed=enforced_column_constraint_removed,
+                        enforced_model_constraint_removed=enforced_model_constraint_removed,
+                        breaking_changes=breaking_changes,
+                        model_name=self.name,
+                        model_file_path=self.original_file_path,
+                    ),
                     node=self,
                 )
-            )
+            else:
+                raise (
+                    ContractBreakingChangeError(
+                        breaking_changes=breaking_changes,
+                        node=self,
+                    )
+                )
 
-        # Otherwise, though we didn't find any *breaking* changes, the contract has still changed -- same_contract: False
-        else:
-            return False
+        # Otherwise, the contract has changed -- same_contract: False
+        return False
 
 
 # TODO: rm?
 @dataclass
 class RPCNode(CompiledNode):
-    resource_type: NodeType = field(metadata={"restrict": [NodeType.RPCCall]})
+    resource_type: Literal[NodeType.RPCCall]
 
 
 @dataclass
 class SqlNode(CompiledNode):
-    resource_type: NodeType = field(metadata={"restrict": [NodeType.SqlOperation]})
+    resource_type: Literal[NodeType.SqlOperation]
 
 
 # ====================================
@@ -802,7 +869,7 @@ class SqlNode(CompiledNode):
 
 @dataclass
 class SeedNode(ParsedNode):  # No SQLDefaults!
-    resource_type: NodeType = field(metadata={"restrict": [NodeType.Seed]})
+    resource_type: Literal[NodeType.Seed]
     config: SeedConfig = field(default_factory=SeedConfig)
     # seeds need the root_path because the contents are not loaded initially
     # and we need the root_path to load the seed later
@@ -928,7 +995,7 @@ class TestShouldStoreFailures:
 
 @dataclass
 class SingularTestNode(TestShouldStoreFailures, CompiledNode):
-    resource_type: NodeType = field(metadata={"restrict": [NodeType.Test]})
+    resource_type: Literal[NodeType.Test]
     # Was not able to make mypy happy and keep the code working. We need to
     # refactor the various configs.
     config: TestConfig = field(default_factory=TestConfig)  # type: ignore
@@ -964,7 +1031,7 @@ class HasTestMetadata(dbtClassMixin):
 
 @dataclass
 class GenericTestNode(TestShouldStoreFailures, CompiledNode, HasTestMetadata):
-    resource_type: NodeType = field(metadata={"restrict": [NodeType.Test]})
+    resource_type: Literal[NodeType.Test]
     column_name: Optional[str] = None
     file_key_name: Optional[str] = None
     # Was not able to make mypy happy and keep the code working. We need to
@@ -997,13 +1064,13 @@ class IntermediateSnapshotNode(CompiledNode):
     # uses a regular node config, which the snapshot parser will then convert
     # into a full ParsedSnapshotNode after rendering. Note: it currently does
     # not work to set snapshot config in schema files because of the validation.
-    resource_type: NodeType = field(metadata={"restrict": [NodeType.Snapshot]})
+    resource_type: Literal[NodeType.Snapshot]
     config: EmptySnapshotConfig = field(default_factory=EmptySnapshotConfig)
 
 
 @dataclass
 class SnapshotNode(CompiledNode):
-    resource_type: NodeType = field(metadata={"restrict": [NodeType.Snapshot]})
+    resource_type: Literal[NodeType.Snapshot]
     config: SnapshotConfig
     defer_relation: Optional[DeferRelation] = None
 
@@ -1016,7 +1083,7 @@ class SnapshotNode(CompiledNode):
 @dataclass
 class Macro(BaseNode):
     macro_sql: str
-    resource_type: NodeType = field(metadata={"restrict": [NodeType.Macro]})
+    resource_type: Literal[NodeType.Macro]
     depends_on: MacroDependsOn = field(default_factory=MacroDependsOn)
     description: str = ""
     meta: Dict[str, Any] = field(default_factory=dict)
@@ -1046,7 +1113,7 @@ class Macro(BaseNode):
 @dataclass
 class Documentation(BaseNode):
     block_contents: str
-    resource_type: NodeType = field(metadata={"restrict": [NodeType.Documentation]})
+    resource_type: Literal[NodeType.Documentation]
 
     @property
     def search_name(self):
@@ -1077,7 +1144,7 @@ class UnpatchedSourceDefinition(BaseNode):
     source: UnparsedSourceDefinition
     table: UnparsedSourceTableDefinition
     fqn: List[str]
-    resource_type: NodeType = field(metadata={"restrict": [NodeType.Source]})
+    resource_type: Literal[NodeType.Source]
     patch_path: Optional[str] = None
 
     def get_full_source_name(self):
@@ -1122,7 +1189,7 @@ class ParsedSourceMandatory(GraphNode, HasRelationMetadata):
     source_description: str
     loader: str
     identifier: str
-    resource_type: NodeType = field(metadata={"restrict": [NodeType.Source]})
+    resource_type: Literal[NodeType.Source]
 
 
 @dataclass
@@ -1249,7 +1316,7 @@ class SourceDefinition(NodeInfoMixin, ParsedSourceMandatory):
 class Exposure(GraphNode):
     type: ExposureType
     owner: Owner
-    resource_type: NodeType = field(metadata={"restrict": [NodeType.Exposure]})
+    resource_type: Literal[NodeType.Exposure]
     description: str = ""
     label: Optional[str] = None
     maturity: Optional[MaturityType] = None
@@ -1398,7 +1465,7 @@ class Metric(GraphNode):
     type_params: MetricTypeParams
     filter: Optional[WhereFilter] = None
     metadata: Optional[SourceFileMetadata] = None
-    resource_type: NodeType = field(metadata={"restrict": [NodeType.Metric]})
+    resource_type: Literal[NodeType.Metric]
     meta: Dict[str, Any] = field(default_factory=dict)
     tags: List[str] = field(default_factory=list)
     config: MetricConfig = field(default_factory=MetricConfig)
@@ -1481,7 +1548,7 @@ class Metric(GraphNode):
 class Group(BaseNode):
     name: str
     owner: Owner
-    resource_type: NodeType = field(metadata={"restrict": [NodeType.Group]})
+    resource_type: Literal[NodeType.Group]
 
 
 # ====================================
@@ -1511,7 +1578,9 @@ class SemanticModel(GraphNode):
     refs: List[RefArgs] = field(default_factory=list)
     created_at: float = field(default_factory=lambda: time.time())
     config: SemanticModelConfig = field(default_factory=SemanticModelConfig)
+    unrendered_config: Dict[str, Any] = field(default_factory=dict)
     primary_entity: Optional[str] = None
+    group: Optional[str] = None
 
     @property
     def entity_references(self) -> List[LinkableElementReference]:

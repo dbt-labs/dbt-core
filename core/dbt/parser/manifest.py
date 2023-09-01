@@ -95,6 +95,7 @@ from dbt.contracts.graph.nodes import (
     Exposure,
     Metric,
     SeedNode,
+    SemanticModel,
     ManifestNode,
     ResultNode,
     ModelNode,
@@ -559,7 +560,7 @@ class ManifestLoader:
                 )
                 # parent and child maps will be rebuilt by write_manifest
 
-        if not skip_parsing:
+        if not skip_parsing or external_nodes_modified:
             # write out the fully parsed manifest
             self.write_manifest_for_partial_parse()
 
@@ -757,10 +758,13 @@ class ManifestLoader:
     def inject_external_nodes(self) -> bool:
         # Remove previously existing external nodes since we are regenerating them
         manifest_nodes_modified = False
+        # Remove all dependent nodes before removing referencing nodes
         for unique_id in self.manifest.external_node_unique_ids:
-            self.manifest.nodes.pop(unique_id)
             remove_dependent_project_references(self.manifest, unique_id)
             manifest_nodes_modified = True
+        for unique_id in self.manifest.external_node_unique_ids:
+            # remove external nodes from manifest only after dependent project references safely removed
+            self.manifest.nodes.pop(unique_id)
 
         # Inject any newly-available external nodes
         pm = plugins.get_plugin_manager(self.root_project.project_name)
@@ -1217,11 +1221,16 @@ class ManifestLoader:
         for metric in manifest.metrics.values():
             self.check_valid_group_config_node(metric, group_names)
 
+        for semantic_model in manifest.semantic_models.values():
+            self.check_valid_group_config_node(semantic_model, group_names)
+
         for node in manifest.nodes.values():
             self.check_valid_group_config_node(node, group_names)
 
     def check_valid_group_config_node(
-        self, groupable_node: Union[Metric, ManifestNode], valid_group_names: Set[str]
+        self,
+        groupable_node: Union[Metric, SemanticModel, ManifestNode],
+        valid_group_names: Set[str],
     ):
         groupable_node_group = groupable_node.group
         if groupable_node_group and groupable_node_group not in valid_group_names:
@@ -1488,6 +1497,11 @@ def _process_metric_node(
         if target_semantic_model is None:
             raise dbt.exceptions.ParsingError(
                 f"A semantic model having a measure `{metric.type_params.measure.name}` does not exist but was referenced.",
+                node=metric,
+            )
+        if target_semantic_model.config.enabled is False:
+            raise dbt.exceptions.ParsingError(
+                f"The measure `{metric.type_params.measure.name}` is referenced on disabled semantic model `{target_semantic_model.name}`.",
                 node=metric,
             )
 

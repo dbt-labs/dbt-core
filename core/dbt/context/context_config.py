@@ -45,6 +45,8 @@ class UnrenderedConfig(ConfigSource):
             model_configs = unrendered.get("tests")
         elif resource_type == NodeType.Metric:
             model_configs = unrendered.get("metrics")
+        elif resource_type == NodeType.SemanticModel:
+            model_configs = unrendered.get("semantic_models")
         elif resource_type == NodeType.Exposure:
             model_configs = unrendered.get("exposures")
         else:
@@ -70,6 +72,8 @@ class RenderedConfig(ConfigSource):
             model_configs = self.project.tests
         elif resource_type == NodeType.Metric:
             model_configs = self.project.metrics
+        elif resource_type == NodeType.SemanticModel:
+            model_configs = self.project.semantic_models
         elif resource_type == NodeType.Exposure:
             model_configs = self.project.exposures
         else:
@@ -189,9 +193,21 @@ class ContextConfigGenerator(BaseContextConfigGenerator[C]):
 
     def _update_from_config(self, result: C, partial: Dict[str, Any], validate: bool = False) -> C:
         translated = self._active_project.credentials.translate_aliases(partial)
-        return result.update_from(
+        translated = self.translate_hook_names(translated)
+        updated = result.update_from(
             translated, self._active_project.credentials.type, validate=validate
         )
+        return updated
+
+    def translate_hook_names(self, project_dict):
+        # This is a kind of kludge because the fix for #6411 specifically allowed misspelling
+        # the hook field names in dbt_project.yml, which only ever worked because we didn't
+        # run validate on the dbt_project configs.
+        if "pre_hook" in project_dict:
+            project_dict["pre-hook"] = project_dict.pop("pre_hook")
+        if "post_hook" in project_dict:
+            project_dict["post-hook"] = project_dict.pop("post_hook")
+        return project_dict
 
     def calculate_node_config_dict(
         self,

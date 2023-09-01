@@ -1233,6 +1233,20 @@ class SemanticValidationFailure(WarnLevel):
         return self.msg
 
 
+class UnversionedBreakingChange(WarnLevel):
+    def code(self):
+        return "I071"
+
+    def message(self) -> str:
+        reasons = "\n  - ".join(self.breaking_changes)
+
+        return (
+            f"Breaking change to contracted, unversioned model {self.model_name} ({self.model_file_path})"
+            "\nWhile comparing to previous project state, dbt detected a breaking change to an unversioned model."
+            f"\n  - {reasons}\n"
+        )
+
+
 # =======================================================
 # M - Deps generation
 # =======================================================
@@ -1614,7 +1628,7 @@ class LogSnapshotResult(DynamicLevel):
             status = red(self.status.upper())
         else:
             info = "OK snapshotted"
-            status = green(self.status)
+            status = green(self.result_message)
 
         msg = "{info} {description}".format(info=info, description=self.description, **self.cfg)
         return format_fancy_output_line(

@@ -3,7 +3,7 @@ import json
 import re
 import io
 import agate
-from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
+from typing import Any, Dict, List, Mapping, Optional, Union
 
 from dbt.dataclass_schema import ValidationError
 from dbt.events.helpers import env_secrets, scrub_secrets
@@ -213,67 +213,22 @@ class ContractBreakingChangeError(DbtRuntimeError):
 
     def __init__(
         self,
-        contract_enforced_disabled: bool,
-        columns_removed: List[str],
-        column_type_changes: List[Tuple[str, str, str]],
-        enforced_column_constraint_removed: List[Tuple[str, str]],
-        enforced_model_constraint_removed: List[Tuple[str, List[str]]],
-        materialization_changed: List[str],
+        breaking_changes: List[str],
         node=None,
     ):
-        self.contract_enforced_disabled = contract_enforced_disabled
-        self.columns_removed = columns_removed
-        self.column_type_changes = column_type_changes
-        self.enforced_column_constraint_removed = enforced_column_constraint_removed
-        self.enforced_model_constraint_removed = enforced_model_constraint_removed
-        self.materialization_changed = materialization_changed
+        self.breaking_changes = breaking_changes
         super().__init__(self.message(), node)
 
     @property
     def type(self):
-        return "Breaking Change to Contract"
+        return "Breaking change to contract"
 
     def message(self):
-        breaking_changes = []
-        if self.contract_enforced_disabled:
-            breaking_changes.append("The contract's enforcement has been disabled.")
-        if self.columns_removed:
-            columns_removed_str = "\n  - ".join(self.columns_removed)
-            breaking_changes.append(f"Columns were removed: \n - {columns_removed_str}")
-        if self.column_type_changes:
-            column_type_changes_str = "\n  - ".join(
-                [f"{c[0]} ({c[1]} -> {c[2]})" for c in self.column_type_changes]
-            )
-            breaking_changes.append(
-                f"Columns with data_type changes: \n - {column_type_changes_str}"
-            )
-        if self.enforced_column_constraint_removed:
-            column_constraint_changes_str = "\n  - ".join(
-                [f"{c[0]} ({c[1]})" for c in self.enforced_column_constraint_removed]
-            )
-            breaking_changes.append(
-                f"Enforced column level constraints were removed: \n - {column_constraint_changes_str}"
-            )
-        if self.enforced_model_constraint_removed:
-            model_constraint_changes_str = "\n  - ".join(
-                [f"{c[0]} -> {c[1]}" for c in self.enforced_model_constraint_removed]
-            )
-            breaking_changes.append(
-                f"Enforced model level constraints were removed: \n - {model_constraint_changes_str}"
-            )
-        if self.materialization_changed:
-            materialization_changes_str = "\n  - ".join(
-                f"{self.materialization_changed[0]} -> {self.materialization_changed[1]}"
-            )
-            breaking_changes.append(
-                f"Materialization changed with enforced constraints: \n - {materialization_changes_str}"
-            )
-
-        reasons = "\n\n".join(breaking_changes)
+        reasons = "\n  - ".join(self.breaking_changes)
 
         return (
             "While comparing to previous project state, dbt detected a breaking change to an enforced contract."
-            f"\n\n{reasons}\n\n"
+            f"\n  - {reasons}\n"
             "Consider making an additive (non-breaking) change instead, if possible.\n"
             "Otherwise, create a new model version: https://docs.getdbt.com/docs/collaborate/govern/model-versions"
         )

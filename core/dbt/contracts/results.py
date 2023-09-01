@@ -1,7 +1,7 @@
 import threading
 
 from dbt.contracts.graph.unparsed import FreshnessThreshold
-from dbt.contracts.graph.nodes import SourceDefinition, ResultNode
+from dbt.contracts.graph.nodes import CompiledNode, SourceDefinition, ResultNode
 from dbt.contracts.util import (
     BaseArtifactMetadata,
     ArtifactMixin,
@@ -203,9 +203,15 @@ class RunResultsMetadata(BaseArtifactMetadata):
 @dataclass
 class RunResultOutput(BaseResult):
     unique_id: str
+    compiled: Optional[bool]
+    compiled_code: Optional[str]
+    relation_name: Optional[str]
 
 
 def process_run_result(result: RunResult) -> RunResultOutput:
+
+    compiled = isinstance(result.node, CompiledNode)
+
     return RunResultOutput(
         unique_id=result.node.unique_id,
         status=result.status,
@@ -215,6 +221,9 @@ def process_run_result(result: RunResult) -> RunResultOutput:
         message=result.message,
         adapter_response=result.adapter_response,
         failures=result.failures,
+        compiled=result.node.compiled if compiled else None,  # type:ignore
+        compiled_code=result.node.compiled_code if compiled else None,  # type:ignore
+        relation_name=result.node.relation_name if compiled else None,  # type:ignore
     )
 
 
@@ -237,7 +246,7 @@ class RunExecutionResult(
 
 
 @dataclass
-@schema_version("run-results", 4)
+@schema_version("run-results", 5)
 class RunResultsArtifact(ExecutionResult, ArtifactMixin):
     results: Sequence[RunResultOutput]
     args: Dict[str, Any] = field(default_factory=dict)

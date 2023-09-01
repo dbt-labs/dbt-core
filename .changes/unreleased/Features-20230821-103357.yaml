@@ -1,0 +1,6 @@
+kind: Features
+body: Add node attributes related to compilation to run_results.json
+time: 2023-08-21T10:33:57.200883-04:00
+custom:
+  Author: peterallenwebb
+  Issue: "7519"

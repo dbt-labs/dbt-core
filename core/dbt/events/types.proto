@@ -66,6 +66,27 @@ message ReferenceKeyMsg {
     string identifier = 3;
 }
 
+//ColumnType
+message ColumnType {
+    string column_name = 1;
+    string previous_column_type = 2;
+    string current_column_type = 3;
+}
+
+// ColumnConstraint
+message ColumnConstraint {
+    string column_name = 1;
+    string constraint_name = 2;
+    string constraint_type = 3;
+}
+
+// ModelConstraint
+message ModelConstraint {
+    string constraint_name = 1;
+    string constraint_type = 2;
+    repeated string columns = 3;
+}
+
 // GenericMessage, used for deserializing only
 message GenericMessage {
     EventInfo info = 1;
@@ -1248,6 +1269,24 @@ message SemanticValidationFailureMsg {
     SemanticValidationFailure data = 2;
 }
 
+// I071
+message UnversionedBreakingChange {
+    repeated string breaking_changes = 1;
+    string model_name = 2;
+    string model_file_path = 3;
+    bool contract_enforced_disabled = 4;
+    repeated string columns_removed = 5;
+    repeated ColumnType column_type_changes = 6;
+    repeated ColumnConstraint enforced_column_constraint_removed = 7;
+    repeated ModelConstraint enforced_model_constraint_removed = 8;
+    repeated string materialization_changed = 9;
+}
+
+message UnversionedBreakingChangeMsg {
+    EventInfo info = 1;
+    UnversionedBreakingChange data = 2;
+}
+
 
 // M - Deps generation
 
@@ -1650,6 +1689,7 @@ message LogSnapshotResult {
     int32 total = 5;
     float execution_time = 6;
     map<string, string> cfg = 7;
+    string result_message = 8;
 }
 
 message LogSnapshotResultMsg {

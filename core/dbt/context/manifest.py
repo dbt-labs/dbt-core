@@ -67,7 +67,7 @@ class ManifestContext(ConfiguredContext):
             dct.update(self.namespace)
         return dct
 
-    @contextproperty
+    @contextproperty()
     def context_macro_stack(self):
         return self.macro_stack
 

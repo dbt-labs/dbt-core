@@ -24,6 +24,11 @@ from .utils import (
     clear_plugin,
 )
 
+from dbt.flags import set_from_args
+from argparse import Namespace
+
+set_from_args(Namespace(WARN_ERROR=False), None)
+
 
 class TestPostgresAdapter(unittest.TestCase):
     def setUp(self):

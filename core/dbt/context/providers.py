@@ -754,19 +754,19 @@ class ProviderContext(ManifestContext):
             self.model,
         )
 
-    @contextproperty
+    @contextproperty()
     def dbt_metadata_envs(self) -> Dict[str, str]:
         return get_metadata_vars()
 
-    @contextproperty
+    @contextproperty()
     def invocation_args_dict(self):
         return args_to_dict(self.config.args)
 
-    @contextproperty
+    @contextproperty()
     def _sql_results(self) -> Dict[str, Optional[AttrDict]]:
         return self.sql_results
 
-    @contextmember
+    @contextmember()
     def load_result(self, name: str) -> Optional[AttrDict]:
         if name in self.sql_results:
             # handle the special case of "main" macro
@@ -787,7 +787,7 @@ class ProviderContext(ManifestContext):
             # Handle trying to load a result that was never stored
             return None
 
-    @contextmember
+    @contextmember()
     def store_result(
         self, name: str, response: Any, agate_table: Optional[agate.Table] = None
     ) -> str:
@@ -803,7 +803,7 @@ class ProviderContext(ManifestContext):
         )
         return ""
 
-    @contextmember
+    @contextmember()
     def store_raw_result(
         self,
         name: str,
@@ -815,7 +815,7 @@ class ProviderContext(ManifestContext):
         response = AdapterResponse(_message=message, code=code, rows_affected=rows_affected)
         return self.store_result(name, response, agate_table)
 
-    @contextproperty
+    @contextproperty()
     def validation(self):
         def validate_any(*args) -> Callable[[T], None]:
             def inner(value: T) -> None:
@@ -836,7 +836,7 @@ class ProviderContext(ManifestContext):
             }
         )
 
-    @contextmember
+    @contextmember()
     def write(self, payload: str) -> str:
         # macros/source defs aren't 'writeable'.
         if isinstance(self.model, (Macro, SourceDefinition)):
@@ -845,11 +845,11 @@ class ProviderContext(ManifestContext):
         self.model.write_node(self.config.project_root, self.model.build_path, payload)
         return ""
 
-    @contextmember
+    @contextmember()
     def render(self, string: str) -> str:
         return get_rendered(string, self._ctx, self.model)
 
-    @contextmember
+    @contextmember()
     def try_or_compiler_error(
         self, message_if_exception: str, func: Callable, *args, **kwargs
     ) -> Any:
@@ -858,7 +858,7 @@ class ProviderContext(ManifestContext):
         except Exception:
             raise CompilationError(message_if_exception, self.model)
 
-    @contextmember
+    @contextmember()
     def load_agate_table(self) -> agate.Table:
         if not isinstance(self.model, SeedNode):
             raise LoadAgateTableNotSeedError(self.model.resource_type, node=self.model)
@@ -873,7 +873,7 @@ class ProviderContext(ManifestContext):
         table.original_abspath = os.path.abspath(path)
         return table
 
-    @contextproperty
+    @contextproperty()
     def ref(self) -> Callable:
         """The most important function in dbt is `ref()`; it's impossible to
         build even moderately complex models without it. `ref()` is how you
@@ -914,11 +914,11 @@ class ProviderContext(ManifestContext):
         """
         return self.provider.ref(self.db_wrapper, self.model, self.config, self.manifest)
 
-    @contextproperty
+    @contextproperty()
     def source(self) -> Callable:
         return self.provider.source(self.db_wrapper, self.model, self.config, self.manifest)
 
-    @contextproperty
+    @contextproperty()
     def metric(self) -> Callable:
         return self.provider.metric(self.db_wrapper, self.model, self.config, self.manifest)
 
@@ -979,7 +979,7 @@ class ProviderContext(ManifestContext):
         """  # noqa
         return self.provider.Config(self.model, self.context_config)
 
-    @contextproperty
+    @contextproperty()
     def execute(self) -> bool:
         """`execute` is a Jinja variable that returns True when dbt is in
         "execute" mode.
@@ -1040,7 +1040,7 @@ class ProviderContext(ManifestContext):
         """  # noqa
         return self.provider.execute
 
-    @contextproperty
+    @contextproperty()
     def exceptions(self) -> Dict[str, Any]:
         """The exceptions namespace can be used to raise warnings and errors in
         dbt userspace.
@@ -1078,15 +1078,15 @@ class ProviderContext(ManifestContext):
         """  # noqa
         return wrapped_exports(self.model)
 
-    @contextproperty
+    @contextproperty()
     def database(self) -> str:
         return self.config.credentials.database
 
-    @contextproperty
+    @contextproperty()
     def schema(self) -> str:
         return self.config.credentials.schema
 
-    @contextproperty
+    @contextproperty()
     def var(self) -> ModelConfiguredVar:
         return self.provider.Var(
             context=self._ctx,
@@ -1103,22 +1103,22 @@ class ProviderContext(ManifestContext):
         """
         return self.db_wrapper
 
-    @contextproperty
+    @contextproperty()
     def api(self) -> Dict[str, Any]:
         return {
             "Relation": self.db_wrapper.Relation,
             "Column": self.adapter.Column,
         }
 
-    @contextproperty
+    @contextproperty()
     def column(self) -> Type[Column]:
         return self.adapter.Column
 
-    @contextproperty
+    @contextproperty()
     def env(self) -> Dict[str, Any]:
         return self.target
 
-    @contextproperty
+    @contextproperty()
     def graph(self) -> Dict[str, Any]:
         """The `graph` context variable contains information about the nodes in
         your dbt project. Models, sources, tests, and snapshots are all
@@ -1234,23 +1234,23 @@ class ProviderContext(ManifestContext):
             ret["compiled_sql"] = ret["compiled_code"]
         return ret
 
-    @contextproperty
+    @contextproperty()
     def pre_hooks(self) -> Optional[List[Dict[str, Any]]]:
         return None
 
-    @contextproperty
+    @contextproperty()
     def post_hooks(self) -> Optional[List[Dict[str, Any]]]:
         return None
 
-    @contextproperty
+    @contextproperty()
     def sql(self) -> Optional[str]:
         return None
 
-    @contextproperty
+    @contextproperty()
     def sql_now(self) -> str:
         return self.adapter.date_function()
 
-    @contextmember
+    @contextmember()
     def adapter_macro(self, name: str, *args, **kwargs):
         """This was deprecated in v0.18 in favor of adapter.dispatch"""
         msg = (
@@ -1262,7 +1262,7 @@ class ProviderContext(ManifestContext):
         )
         raise CompilationError(msg)
 
-    @contextmember
+    @contextmember()
     def env_var(self, var: str, default: Optional[str] = None) -> str:
         """The env_var() function. Return the environment variable named 'var'.
         If there is no such environment variable set, return the default.
@@ -1306,7 +1306,7 @@ class ProviderContext(ManifestContext):
         else:
             raise EnvVarMissingError(var)
 
-    @contextproperty
+    @contextproperty()
     def selected_resources(self) -> List[str]:
         """The `selected_resources` variable contains a list of the resources
         selected based on the parameters provided to the dbt command.
@@ -1315,7 +1315,7 @@ class ProviderContext(ManifestContext):
         """
         return selected_resources.SELECTED_RESOURCES
 
-    @contextmember
+    @contextmember()
     def submit_python_job(self, parsed_model: Dict, compiled_code: str) -> AdapterResponse:
         # Check macro_stack and that the unique id is for a materialization macro
         if not (
@@ -1358,7 +1358,7 @@ class MacroContext(ProviderContext):
 class ModelContext(ProviderContext):
     model: ManifestNode
 
-    @contextproperty
+    @contextproperty()
     def pre_hooks(self) -> List[Dict[str, Any]]:
         if self.model.resource_type in [NodeType.Source, NodeType.Test]:
             return []
@@ -1367,7 +1367,7 @@ class ModelContext(ProviderContext):
             h.to_dict(omit_none=True) for h in self.model.config.pre_hook  # type: ignore[union-attr] # noqa
         ]
 
-    @contextproperty
+    @contextproperty()
     def post_hooks(self) -> List[Dict[str, Any]]:
         if self.model.resource_type in [NodeType.Source, NodeType.Test]:
             return []
@@ -1376,7 +1376,7 @@ class ModelContext(ProviderContext):
             h.to_dict(omit_none=True) for h in self.model.config.post_hook  # type: ignore[union-attr] # noqa
         ]
 
-    @contextproperty
+    @contextproperty()
     def sql(self) -> Optional[str]:
         # only doing this in sql model for backward compatible
         if self.model.language == ModelLanguage.sql:  # type: ignore[union-attr]
@@ -1393,7 +1393,7 @@ class ModelContext(ProviderContext):
         else:
             return None
 
-    @contextproperty
+    @contextproperty()
     def compiled_code(self) -> Optional[str]:
         if getattr(self.model, "defer_relation", None):
             # TODO https://github.com/dbt-labs/dbt-core/issues/7976
@@ -1404,15 +1404,15 @@ class ModelContext(ProviderContext):
         else:
             return None
 
-    @contextproperty
+    @contextproperty()
     def database(self) -> str:
         return getattr(self.model, "database", self.config.credentials.database)
 
-    @contextproperty
+    @contextproperty()
     def schema(self) -> str:
         return getattr(self.model, "schema", self.config.credentials.schema)
 
-    @contextproperty
+    @contextproperty()
     def this(self) -> Optional[RelationProxy]:
         """`this` makes available schema information about the currently
         executing model. It's is useful in any context in which you need to
@@ -1447,7 +1447,7 @@ class ModelContext(ProviderContext):
             return None
         return self.db_wrapper.Relation.create_from(self.config, self.model)
 
-    @contextproperty
+    @contextproperty()
     def defer_relation(self) -> Optional[RelationProxy]:
         """
         For commands which add information about this node's corresponding
@@ -1661,7 +1661,7 @@ class TestContext(ProviderContext):
         )
         self.namespace = macro_namespace
 
-    @contextmember
+    @contextmember()
     def env_var(self, var: str, default: Optional[str] = None) -> str:
         return_value = None
         if var.startswith(SECRET_ENV_PREFIX):

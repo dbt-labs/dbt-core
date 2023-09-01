@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Switch from hologram to mashumaro jsonschema
+time: 2023-07-18T14:54:28.41453-04:00
+custom:
+  Author: gshank
+  Issue: "8426"

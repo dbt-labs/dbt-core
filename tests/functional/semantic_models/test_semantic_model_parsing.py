@@ -4,109 +4,17 @@ import pytest
 
 from dbt_semantic_interfaces.type_enums.time_granularity import TimeGranularity
 
-from dbt.cli.main import dbtRunner
 from dbt.contracts.graph.manifest import Manifest
 from dbt.events.base_types import BaseEvent
 from dbt.tests.util import write_file
+from tests.functional.assertions.test_runner import dbtTestRunner
 
-
-schema_yml = """models:
-  - name: fct_revenue
-    description: This is the model fct_revenue. It should be able to use doc blocks
-
-semantic_models:
-  - name: revenue
-    description: This is the revenue semantic model. It should be able to use doc blocks
-    model: ref('fct_revenue')
-
-    defaults:
-      agg_time_dimension: ds
-
-    measures:
-      - name: txn_revenue
-        expr: revenue
-        agg: sum
-        agg_time_dimension: ds
-        create_metric: true
-      - name: sum_of_things
-        expr: 2
-        agg: sum
-        agg_time_dimension: ds
-      - name: has_revenue
-        expr: true
-        agg: sum_boolean
-        agg_time_dimension: ds
-      - name: discrete_order_value_p99
-        expr: order_total
-        agg: percentile
-        agg_time_dimension: ds
-        agg_params:
-          percentile: 0.99
-          use_discrete_percentile: True
-          use_approximate_percentile: False
-      - name: test_agg_params_optional_are_empty
-        expr: order_total
-        agg: percentile
-        agg_time_dimension: ds
-        agg_params:
-          percentile: 0.99
-      - name: test_non_additive
-        expr: txn_revenue
-        agg: sum
-        non_additive_dimension:
-          name: ds
-          window_choice: max
-
-    dimensions:
-      - name: ds
-        type: time
-        expr: created_at
-        type_params:
-          time_granularity: day
-
-    entities:
-      - name: user
-        type: foreign
-        expr: user_id
-      - name: id
-        type: primary
-
-metrics:
-  - name: simple_metric
-    label: Simple Metric
-    type: simple
-    type_params:
-      measure: sum_of_things
-"""
-
-schema_without_semantic_model_yml = """models:
-  - name: fct_revenue
-    description: This is the model fct_revenue. It should be able to use doc blocks
-"""
-
-fct_revenue_sql = """select
-  1 as id,
-  10 as user_id,
-  1000 as revenue,
-  current_timestamp as created_at"""
-
-metricflow_time_spine_sql = """
-with days as (
-    {{dbt_utils.date_spine('day'
-    , "to_date('01/01/2000','mm/dd/yyyy')"
-    , "to_date('01/01/2027','mm/dd/yyyy')"
-    )
-    }}
-),
-
-final as (
-    select cast(date_day as date) as date_day
-    from days
+from tests.functional.semantic_models.fixtures import (
+    schema_without_semantic_model_yml,
+    fct_revenue_sql,
+    metricflow_time_spine_sql,
+    schema_yml,
 )
-
-select *
-from final
-"""
 
 
 class TestSemanticModelParsing:
@@ -119,7 +27,7 @@ class TestSemanticModelParsing:
         }
 
     def test_semantic_model_parsing(self, project):
-        runner = dbtRunner()
+        runner = dbtTestRunner()
         result = runner.invoke(["parse"])
         assert result.success
         assert isinstance(result.result, Manifest)
@@ -142,7 +50,7 @@ class TestSemanticModelParsing:
         error_schema_yml = schema_yml.replace("sum_of_things", "has_revenue")
         write_file(error_schema_yml, project.project_root, "models", "schema.yml")
         events: List[BaseEvent] = []
-        runner = dbtRunner(callbacks=[events.append])
+        runner = dbtTestRunner(callbacks=[events.append])
         result = runner.invoke(["parse"])
         assert not result.success
 
@@ -162,7 +70,7 @@ class TestSemanticModelPartialParsing:
     def test_semantic_model_changed_partial_parsing(self, project):
         # First, use the default schema.yml to define our semantic model, and
         # run the dbt parse command
-        runner = dbtRunner()
+        runner = dbtTestRunner()
         result = runner.invoke(["parse"])
         assert result.success
 
@@ -183,7 +91,7 @@ class TestSemanticModelPartialParsing:
     def test_semantic_model_deleted_partial_parsing(self, project):
         # First, use the default schema.yml to define our semantic model, and
         # run the dbt parse command
-        runner = dbtRunner()
+        runner = dbtTestRunner()
         result = runner.invoke(["parse"])
         assert result.success
         assert "semantic_model.test.revenue" in result.result.semantic_models
@@ -203,7 +111,7 @@ class TestSemanticModelPartialParsing:
         # First, use the default schema.yml to define our semantic model, and
         # run the dbt parse command
         write_file(schema_yml, project.project_root, "models", "schema.yml")
-        runner = dbtRunner()
+        runner = dbtTestRunner()
         result = runner.invoke(["parse"])
         assert result.success
 
