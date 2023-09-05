@@ -31,6 +31,7 @@ class ResolvedMetricReference(MetricReference):
 
     @classmethod
     def parent_metrics(cls, metric_node, manifest):
+        """For a given metric, yeilds all upstream metrics."""
         yield metric_node
 
         for parent_unique_id in metric_node.depends_on.nodes:
@@ -40,6 +41,7 @@ class ResolvedMetricReference(MetricReference):
 
     @classmethod
     def parent_metrics_names(cls, metric_node, manifest):
+        """For a given metric, yeilds all upstream metric names"""
         yield metric_node.name
 
         for parent_unique_id in metric_node.depends_on.nodes:
@@ -49,6 +51,10 @@ class ResolvedMetricReference(MetricReference):
 
     @classmethod
     def reverse_dag_parsing(cls, metric_node, manifest, metric_depth_count):
+        """For the given metric, yeilds dictionaries having {<metric_name>: <depth_from_initial_metric} of upstream derived metrics.
+
+        This function is intended as a helper function for other metric helper functions.
+        """
         if metric_node.calculation_method == "derived":
             yield {metric_node.name: metric_depth_count}
             metric_depth_count = metric_depth_count + 1
@@ -63,10 +69,12 @@ class ResolvedMetricReference(MetricReference):
                 yield from cls.reverse_dag_parsing(node, manifest, metric_depth_count)
 
     def full_metric_dependency(self):
+        """Returns a unique list of all upstream metric names."""
         to_return = list(set(self.parent_metrics_names(self.node, self.manifest)))
         return to_return
 
     def base_metric_dependency(self):
+        """Returns a list of names for all upstream non-derived metrics."""
         in_scope_metrics = list(self.parent_metrics(self.node, self.manifest))
 
         to_return = []
@@ -77,6 +85,7 @@ class ResolvedMetricReference(MetricReference):
         return to_return
 
     def derived_metric_dependency(self):
+        """Returns a list of names for all upstream derived metrics."""
         in_scope_metrics = list(self.parent_metrics(self.node, self.manifest))
 
         to_return = []
@@ -87,6 +96,7 @@ class ResolvedMetricReference(MetricReference):
         return to_return
 
     def derived_metric_dependency_depth(self):
+        """Returns a list of {<metric_name>: <depth_from_initial_metric>} for all upstream metrics."""
         metric_depth_count = 1
         to_return = list(self.reverse_dag_parsing(self.node, self.manifest, metric_depth_count))
 
