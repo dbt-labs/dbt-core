@@ -223,6 +223,7 @@ class Project(HyphenatedDbtClassMixin, Replaceable):
     )
     packages: List[PackageSpec] = field(default_factory=list)
     query_comment: Optional[Union[QueryComment, NoValue, str]] = field(default_factory=NoValue)
+    dbt_cloud: Optional[Dict[str, Any]] = None
 
     @classmethod
     def validate(cls, data):
@@ -239,6 +240,10 @@ class Project(HyphenatedDbtClassMixin, Replaceable):
                     or not isinstance(entry["search_order"], list)
                 ):
                     raise ValidationError(f"Invalid project dispatch config: {entry}")
+        if "dbt_cloud" in data and not isinstance(data["dbt_cloud"], dict):
+            raise ValidationError(
+                f"Invalid dbt_cloud config. Expected a 'dict' but got '{type(data['dbt_cloud'])}'"
+            )
 
 
 @dataclass
