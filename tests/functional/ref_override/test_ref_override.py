@@ -58,6 +58,18 @@ select
 from {{ ref('versioned_model', version=1) }}
 """
 
+models__package_ref_override_sql = """
+select
+    *
+from {{ ref('package', 'versioned_model') }}
+"""
+
+models__package_version_ref_override_sql = """
+select
+    *
+from {{ ref('package', 'versioned_model', version=1) }}
+"""
+
 models__v1_sql = """
 select 1
 """
@@ -74,27 +86,45 @@ models:
       - v: 2
 """
 
-macros__version_ref_override_macro_sql = """
+macros__package_version_ref_override_macro_sql = """
 -- Macro to override ref and always return the same result
-{% macro ref(modelname, version=none) %}
-{% do return(builtins.ref(modelname, version=2)) %}
+{% macro ref() %}
+
+{% set packagename = none %}
+{%- if (varargs | length) == 1 -%}
+    {% set modelname = varargs[0] %}
+{%- else -%}
+    {% set packagename = varargs[0] %}
+    {% set modelname = varargs[1] %}
+{% endif %}
+
+{% set version = kwargs.get('version') %}
+
+{% if packagename is not none %}
+    {% do return(builtins.ref('test', modelname, version=2)) %}
+{% else %}
+    {% do return(builtins.ref(modelname, version=2)) %}
+{% endif %}
 {% endmacro %}
 """
 
 
-class TestVersionRefOverride:
+class TestAdvancedRefOverride:
     @pytest.fixture(scope="class")
     def models(self):
         return {
-            "versioned_ref_override.sql": models__version_ref_override_sql,
+            "version_ref_override.sql": models__version_ref_override_sql,
+            "package_ref_override.sql": models__package_ref_override_sql,
+            "package_version_ref_override.sql": models__package_version_ref_override_sql,
             "versioned_model_v1.sql": models__v1_sql,
             "versioned_model_v2.sql": models__v2_sql,
+            "model.sql": models__v1_sql,
             "schema.yml": schema__versions_yml,
         }
 
     @pytest.fixture(scope="class")
     def macros(self):
-        return {"ref_override_macro.sql": macros__version_ref_override_macro_sql}
+        return {"ref_override_macro.sql": macros__package_version_ref_override_macro_sql}
 
     def test_ref_override(
         self,
@@ -104,4 +134,10 @@ class TestVersionRefOverride:
 
         # We want versioned_ref_override to equal to versioned_model_v2, otherwise the
         # ref override macro has not worked
-        check_relations_equal(project.adapter, ["versioned_ref_override", "versioned_model_v2"])
+        check_relations_equal(project.adapter, ["version_ref_override", "versioned_model_v2"])
+
+        check_relations_equal(project.adapter, ["package_ref_override", "versioned_model_v2"])
+
+        check_relations_equal(
+            project.adapter, ["package_version_ref_override", "versioned_model_v2"]
+        )
