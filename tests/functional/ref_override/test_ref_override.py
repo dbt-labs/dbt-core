@@ -1,7 +1,6 @@
 import pytest
 
 from dbt.tests.util import run_dbt, check_relations_equal
-from dbt.tests.fixtures.project import write_project_files
 
 
 models__ref_override_sql = """
@@ -28,44 +27,18 @@ seeds__seed_1_csv = """a,b
 3,6"""
 
 
-@pytest.fixture(scope="class")
-def models():
-    return {"ref_override.sql": models__ref_override_sql}
-
-
-@pytest.fixture(scope="class")
-def macros():
-    return {"ref_override_macro.sql": macros__ref_override_macro_sql}
-
-
-@pytest.fixture(scope="class")
-def seeds():
-    return {"seed_2.csv": seeds__seed_2_csv, "seed_1.csv": seeds__seed_1_csv}
-
-
-@pytest.fixture(scope="class")
-def project_files(
-    project_root,
-    models,
-    macros,
-    seeds,
-):
-    write_project_files(project_root, "models", models)
-    write_project_files(project_root, "macros", macros)
-    write_project_files(project_root, "seeds", seeds)
-
-
 class TestRefOverride:
     @pytest.fixture(scope="class")
-    def project_config_update(self):
-        return {
-            "config-version": 2,
-            "seed-paths": ["seeds"],
-            "macro-paths": ["macros"],
-            "seeds": {
-                "quote_columns": False,
-            },
-        }
+    def models(self):
+        return {"ref_override.sql": models__ref_override_sql}
+
+    @pytest.fixture(scope="class")
+    def macros(self):
+        return {"ref_override_macro.sql": macros__ref_override_macro_sql}
+
+    @pytest.fixture(scope="class")
+    def seeds(self):
+        return {"seed_2.csv": seeds__seed_2_csv, "seed_1.csv": seeds__seed_1_csv}
 
     def test_ref_override(
         self,
@@ -77,3 +50,58 @@ class TestRefOverride:
         # We want it to equal seed_2 and not seed_1. If it's
         # still pointing at seed_1 then the override hasn't worked.
         check_relations_equal(project.adapter, ["ref_override", "seed_2"])
+
+
+models__version_ref_override_sql = """
+select
+    *
+from {{ ref('versioned_model', version=1) }}
+"""
+
+models__v1_sql = """
+select 1
+"""
+
+models__v2_sql = """
+select 2
+"""
+
+schema__versions_yml = """
+models:
+  - name: versioned_model
+    versions:
+      - v: 1
+      - v: 2
+"""
+
+macros__version_ref_override_macro_sql = """
+-- Macro to override ref and always return the same result
+{% macro ref(modelname, version=none) %}
+{% do return(builtins.ref(modelname, version=2)) %}
+{% endmacro %}
+"""
+
+
+class TestVersionRefOverride:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "versioned_ref_override.sql": models__version_ref_override_sql,
+            "versioned_model_v1.sql": models__v1_sql,
+            "versioned_model_v2.sql": models__v2_sql,
+            "schema.yml": schema__versions_yml,
+        }
+
+    @pytest.fixture(scope="class")
+    def macros(self):
+        return {"ref_override_macro.sql": macros__version_ref_override_macro_sql}
+
+    def test_ref_override(
+        self,
+        project,
+    ):
+        run_dbt(["run"])
+
+        # We want versioned_ref_override to equal to versioned_model_v2, otherwise the
+        # ref override macro has not worked
+        check_relations_equal(project.adapter, ["versioned_ref_override", "versioned_model_v2"])
