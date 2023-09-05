@@ -150,14 +150,9 @@ class UnparsedVersion(dbtClassMixin):
 
     def __lt__(self, other):
         try:
-            v = type(other.v)(self.v)
-            return v < other.v
+            return float(self.v) < float(other.v)
         except ValueError:
-            try:
-                other_v = type(self.v)(other.v)
-                return self.v < other_v
-            except ValueError:
-                return str(self.v) < str(other.v)
+            return str(self.v) < str(other.v)
 
     @property
     def include_exclude(self) -> dbt.helper_types.IncludeExclude:
