@@ -89,7 +89,8 @@ models:
 macros__package_version_ref_override_macro_sql = """
 -- Macro to override ref and always return the same result
 {% macro ref() %}
-
+-- extract user-provided positional and keyword arguments
+{% set version = kwargs.get('version') %}
 {% set packagename = none %}
 {%- if (varargs | length) == 1 -%}
     {% set modelname = varargs[0] %}
@@ -98,13 +99,15 @@ macros__package_version_ref_override_macro_sql = """
     {% set modelname = varargs[1] %}
 {% endif %}
 
-{% set version = kwargs.get('version') %}
-
+{%- set version_override = 2 -%}
+{%- set packagename_override = 'test' -%}
+-- call builtins.ref based on provided positional arguments
 {% if packagename is not none %}
-    {% do return(builtins.ref('test', modelname, version=2)) %}
+    {% do return(builtins.ref(packagename_override, modelname, version=version_override)) %}
 {% else %}
-    {% do return(builtins.ref(modelname, version=2)) %}
+    {% do return(builtins.ref(modelname, version=version_override)) %}
 {% endif %}
+
 {% endmacro %}
 """
 
