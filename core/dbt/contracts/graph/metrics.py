@@ -1,4 +1,12 @@
 from dbt.node_types import NodeType
+from dbt.contracts.graph.manifest import Manifest, Metric
+from dbt_semantic_interfaces.type_enums import MetricType
+
+from typing import Dict, Iterator
+
+
+DERIVED_METRICS = [MetricType.DERIVED, MetricType.RATIO]
+BASE_METRICS = [MetricType.SIMPLE, MetricType.CUMULATIVE]
 
 
 class MetricReference(object):
@@ -50,22 +58,20 @@ class ResolvedMetricReference(MetricReference):
                 yield from cls.parent_metrics_names(node, manifest)
 
     @classmethod
-    def reverse_dag_parsing(cls, metric_node, manifest, metric_depth_count):
+    def reverse_dag_parsing(
+        cls, metric_node: Metric, manifest: Manifest, metric_depth_count: int
+    ) -> Iterator[Dict[str, int]]:
         """For the given metric, yeilds dictionaries having {<metric_name>: <depth_from_initial_metric} of upstream derived metrics.
 
         This function is intended as a helper function for other metric helper functions.
         """
-        if metric_node.calculation_method == "derived":
+        if metric_node.type in DERIVED_METRICS:
             yield {metric_node.name: metric_depth_count}
             metric_depth_count = metric_depth_count + 1
 
         for parent_unique_id in metric_node.depends_on.nodes:
             node = manifest.metrics.get(parent_unique_id)
-            if (
-                node
-                and node.resource_type == NodeType.Metric
-                and node.calculation_method == "derived"
-            ):
+            if node and node.resource_type == NodeType.Metric and node.type in DERIVED_METRICS:
                 yield from cls.reverse_dag_parsing(node, manifest, metric_depth_count)
 
     def full_metric_dependency(self):
