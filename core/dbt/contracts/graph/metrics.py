@@ -66,12 +66,11 @@ class ResolvedMetricReference(MetricReference):
         """
         if metric_node.type in DERIVED_METRICS:
             yield {metric_node.name: metric_depth_count}
-            metric_depth_count = metric_depth_count + 1
 
-        for parent_unique_id in metric_node.depends_on.nodes:
-            metric = manifest.metrics.get(parent_unique_id)
-            if metric is not None and metric.type in DERIVED_METRICS:
-                yield from cls.reverse_dag_parsing(metric, manifest, metric_depth_count)
+            for parent_unique_id in metric_node.depends_on.nodes:
+                metric = manifest.metrics.get(parent_unique_id)
+                if metric is not None:
+                    yield from cls.reverse_dag_parsing(metric, manifest, metric_depth_count + 1)
 
     def full_metric_dependency(self):
         """Returns a unique list of all upstream metric names."""
