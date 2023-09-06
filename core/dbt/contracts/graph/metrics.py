@@ -1,4 +1,3 @@
-from dbt.node_types import NodeType
 from dbt.contracts.graph.manifest import Manifest, Metric
 from dbt_semantic_interfaces.type_enums import MetricType
 
@@ -43,9 +42,9 @@ class ResolvedMetricReference(MetricReference):
         yield metric_node
 
         for parent_unique_id in metric_node.depends_on.nodes:
-            node = manifest.metrics.get(parent_unique_id)
-            if node and node.resource_type == NodeType.Metric:
-                yield from cls.parent_metrics(node, manifest)
+            metric = manifest.metrics.get(parent_unique_id)
+            if metric is not None:
+                yield from cls.parent_metrics(metric, manifest)
 
     @classmethod
     def parent_metrics_names(cls, metric_node: Metric, manifest: Manifest) -> Iterator[str]:
@@ -53,9 +52,9 @@ class ResolvedMetricReference(MetricReference):
         yield metric_node.name
 
         for parent_unique_id in metric_node.depends_on.nodes:
-            node = manifest.metrics.get(parent_unique_id)
-            if node and node.resource_type == NodeType.Metric:
-                yield from cls.parent_metrics_names(node, manifest)
+            metric = manifest.metrics.get(parent_unique_id)
+            if metric is not None:
+                yield from cls.parent_metrics_names(metric, manifest)
 
     @classmethod
     def reverse_dag_parsing(
@@ -70,9 +69,9 @@ class ResolvedMetricReference(MetricReference):
             metric_depth_count = metric_depth_count + 1
 
         for parent_unique_id in metric_node.depends_on.nodes:
-            node = manifest.metrics.get(parent_unique_id)
-            if node and node.resource_type == NodeType.Metric and node.type in DERIVED_METRICS:
-                yield from cls.reverse_dag_parsing(node, manifest, metric_depth_count)
+            metric = manifest.metrics.get(parent_unique_id)
+            if metric is not None and metric.type in DERIVED_METRICS:
+                yield from cls.reverse_dag_parsing(metric, manifest, metric_depth_count)
 
     def full_metric_dependency(self):
         """Returns a unique list of all upstream metric names."""
