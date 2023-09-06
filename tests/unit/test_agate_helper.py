@@ -165,6 +165,14 @@ class TestAgateHelper(unittest.TestCase):
         assert isinstance(result.column_types[3], agate.data_types.Number)
         self.assertEqual(len(result), 4)
 
+        result = agate_helper.merge_tables([t3, t2])
+        self.assertEqual(result.column_names, ("a", "b", "c", "d"))
+        assert isinstance(result.column_types[0], agate_helper.Integer)
+        assert isinstance(result.column_types[1], agate.data_types.Text)
+        assert isinstance(result.column_types[2], agate.data_types.Text)
+        assert isinstance(result.column_types[3], agate.data_types.Number)
+        self.assertEqual(len(result), 4)
+
         result = agate_helper.merge_tables([t1, t2, t3])
         self.assertEqual(result.column_names, ("a", "b", "c", "d"))
         assert isinstance(result.column_types[0], agate_helper.Integer)
