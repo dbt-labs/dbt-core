@@ -40,7 +40,12 @@ from dbt.contracts.graph.unparsed import (
 from dbt.contracts.graph.node_args import ModelNodeArgs
 from dbt.contracts.util import Replaceable, AdditionalPropertiesMixin
 from dbt.events.functions import warn_or_error
-from dbt.exceptions import ParsingError, ContractBreakingChangeError
+from dbt.exceptions import (
+    ParsingError,
+    ContractBreakingChangeError,
+    TagsNotListOfStringsError,
+    TagNotStringError,
+)
 from dbt.events.types import (
     SeedIncreased,
     SeedExceedsLimitSamePath,
@@ -73,6 +78,7 @@ from .model_config import (
     EmptySnapshotConfig,
     SnapshotConfig,
     SemanticModelConfig,
+    UnitTestConfig,
 )
 
 
@@ -1068,10 +1074,24 @@ class UnitTestDefinition(GraphNode):
     description: str = ""
     overrides: Optional[UnitTestOverrides] = None
     depends_on: DependsOn = field(default_factory=DependsOn)
+    config: UnitTestConfig = field(default_factory=UnitTestConfig)
 
     @property
     def depends_on_nodes(self):
         return self.depends_on.nodes
+
+    @property
+    def tags(self) -> List[str]:
+        # TODO: refactor for reuse in TestBuilder.tags
+        tags = self.config.get("tags", [])
+        if isinstance(tags, str):
+            tags = [tags]
+        if not isinstance(tags, list):
+            raise TagsNotListOfStringsError(tags)
+        for tag in tags:
+            if not isinstance(tag, str):
+                raise TagNotStringError(tag)
+        return tags[:]
 
 
 # ====================================
@@ -1698,10 +1718,6 @@ class SemanticModel(GraphNode):
             if self.primary_entity is not None
             else None
         )
-
-    @property
-    def group(self):
-        return None
 
 
 # ====================================

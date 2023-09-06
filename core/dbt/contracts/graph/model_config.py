@@ -640,6 +640,18 @@ class SnapshotConfig(EmptySnapshotConfig):
         return self.from_dict(data)
 
 
+@dataclass
+class UnitTestConfig(BaseConfig):
+    tags: Union[str, List[str]] = field(
+        default_factory=list_str,
+        metadata=metas(ShowBehavior.Hide, MergeBehavior.Append, CompareBehavior.Exclude),
+    )
+    meta: Dict[str, Any] = field(
+        default_factory=dict,
+        metadata=MergeBehavior.Update.meta(),
+    )
+
+
 RESOURCE_TYPES: Dict[NodeType, Type[BaseConfig]] = {
     NodeType.Metric: MetricConfig,
     NodeType.SemanticModel: SemanticModelConfig,
@@ -650,6 +662,7 @@ RESOURCE_TYPES: Dict[NodeType, Type[BaseConfig]] = {
     NodeType.Unit: TestConfig,
     NodeType.Model: NodeConfig,
     NodeType.Snapshot: SnapshotConfig,
+    NodeType.Unit: UnitTestConfig,
 }
 
 

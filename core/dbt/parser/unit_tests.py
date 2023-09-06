@@ -7,6 +7,7 @@ from dbt.contracts.graph.nodes import (
     RefArgs,
     UnitTestDefinition,
     DependsOn,
+    UnitTestConfig,
 )
 from dbt.config import RuntimeConfig
 from dbt.contracts.graph.manifest import Manifest
@@ -199,6 +200,13 @@ class UnitTestParser(YamlReader):
                 )
             for test in unparsed.tests:
                 unit_test_case_unique_id = f"unit.{package_name}.{test.name}.{unparsed.model}"
+                unit_test_fqn = ["unit", package_name, test.name]
+
+                config = self.schema_parser.initial_config(unit_test_fqn)
+                unit_test_config_dict = config.build_config_dict(
+                    patch_config_dict=test.config, resource_type=NodeType.Unit
+                )
+
                 unit_test_case = UnitTestDefinition(
                     name=test.name,
                     model=unparsed.model,
@@ -213,6 +221,7 @@ class UnitTestParser(YamlReader):
                     description=test.description,
                     overrides=test.overrides,
                     depends_on=DependsOn(nodes=[actual_node.unique_id]),
-                    fqn=[package_name, test.name],
+                    fqn=unit_test_fqn,
+                    config=UnitTestConfig.from_dict(unit_test_config_dict),
                 )
                 self.manifest.add_unit_test(self.yaml.file, unit_test_case)
