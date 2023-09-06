@@ -38,7 +38,7 @@ class ResolvedMetricReference(MetricReference):
         return f"{self.node.name}"
 
     @classmethod
-    def parent_metrics(cls, metric_node, manifest):
+    def parent_metrics(cls, metric_node: Metric, manifest: Manifest) -> Iterator[Metric]:
         """For a given metric, yeilds all upstream metrics."""
         yield metric_node
 
@@ -48,7 +48,7 @@ class ResolvedMetricReference(MetricReference):
                 yield from cls.parent_metrics(node, manifest)
 
     @classmethod
-    def parent_metrics_names(cls, metric_node, manifest):
+    def parent_metrics_names(cls, metric_node: Metric, manifest: Manifest) -> Iterator[str]:
         """For a given metric, yeilds all upstream metric names"""
         yield metric_node.name
 
