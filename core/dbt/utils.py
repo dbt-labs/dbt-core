@@ -18,7 +18,7 @@ from pathlib import PosixPath, WindowsPath
 from contextlib import contextmanager
 
 from dbt.events.types import RetryExternalCall, RecordRetryException
-from dbt.exceptions import DbtInternalError, DbtConfigError, DuplicateAliasError
+from dbt.exceptions import DbtInternalError, DbtConfigError, DuplicateAliasError, RecursionError
 from dbt.helper_types import WarnErrorOptions
 from dbt import flags
 from enum import Enum
