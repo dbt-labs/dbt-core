@@ -127,7 +127,7 @@ class TestAgateHelper(unittest.TestCase):
         self.assertEqual(result.column_names, ("a", "b", "c"))
         assert isinstance(result.column_types[0], agate_helper.Integer)
         assert isinstance(result.column_types[1], agate.data_types.Text)
-        assert isinstance(result.column_types[2], agate.data_types.Number)
+        assert isinstance(result.column_types[2], agate_helper.Integer)
         self.assertEqual(len(result), 4)
 
     def test_merge_mixed(self):
@@ -153,7 +153,7 @@ class TestAgateHelper(unittest.TestCase):
         self.assertEqual(result.column_names, ("a", "b", "c", "d"))
         assert isinstance(result.column_types[0], agate_helper.Integer)
         assert isinstance(result.column_types[1], agate.data_types.Text)
-        assert isinstance(result.column_types[2], agate.data_types.Number)
+        assert isinstance(result.column_types[2], agate_helper.Integer)
         assert isinstance(result.column_types[3], agate.data_types.Number)
         self.assertEqual(len(result), 4)
 
