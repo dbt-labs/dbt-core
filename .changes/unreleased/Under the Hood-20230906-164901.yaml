@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Add typing to __init__ in base.py
+time: 2023-09-06T16:49:01.150713+01:00
+custom:
+  Author: aranke
+  Issue: "8398"
