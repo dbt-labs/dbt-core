@@ -81,7 +81,7 @@ class TestEphemeralCompilation:
 
     def test__suppress_injected_ctes(self, project):
         compile_output = run_dbt(
-            ["compile", "--suppress-ephemeral-ctes", "--select", "fct_eph_first"]
+            ["compile", "--no-inject-ephemeral-ctes", "--select", "fct_eph_first"]
         )
         assert isinstance(compile_output, RunExecutionResult)
         node_result = compile_output.results[0]

@@ -321,7 +321,7 @@ class Compiler:
             raise DbtRuntimeError("Cannot inject ctes into an uncompiled node", model)
 
         # tech debt: safe flag/arg access (#6259)
-        if getattr(self.config.args, "suppress_ephemeral_ctes", False):
+        if not getattr(self.config.args, "inject_ephemeral_ctes", True):
             return (model, [])
 
         # extra_ctes_injected flag says that we've already recursively injected the ctes
