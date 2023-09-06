@@ -1,0 +1,6 @@
+kind: Fixes
+body: Parse the correct schema version from manifest
+time: 2023-09-06T16:24:27.849069+01:00
+custom:
+  Author: aranke
+  Issue: "8544"
