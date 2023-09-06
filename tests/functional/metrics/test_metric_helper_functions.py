@@ -32,7 +32,7 @@ class TestMetricHelperFunctions:
         assert isinstance(manifest, Manifest)
 
         parsed_metric = manifest.metrics["metric.test.average_tenure_plus_one"]
-        testing_metric = ResolvedMetricReference(parsed_metric, manifest, None)
+        testing_metric = ResolvedMetricReference(parsed_metric, manifest)
 
         full_metric_dependency = set(testing_metric.full_metric_dependency())
         expected_full_metric_dependency = set(

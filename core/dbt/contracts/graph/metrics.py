@@ -24,11 +24,10 @@ class ResolvedMetricReference(MetricReference):
     for working with metrics (ie. __str__ and templating functions)
     """
 
-    def __init__(self, node: Metric, manifest: Manifest, Relation=None):
+    def __init__(self, node: Metric, manifest: Manifest):
         super().__init__(node.name, node.package_name)
         self.node = node
         self.manifest = manifest
-        self.Relation = Relation
 
     def __getattr__(self, key):
         return getattr(self.node, key)
