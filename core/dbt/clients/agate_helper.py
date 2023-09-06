@@ -14,7 +14,10 @@ BOM = BOM_UTF8.decode("utf-8")  # '\ufeff'
 
 class Integer(agate.data_types.DataType):
     def cast(self, d):
-        if type(d) == int:
+        # by default agate will cast none as a Number
+        # but we need to cast it as an Integer to preserve
+        # the type when merging and unioning tables
+        if type(d) == int or d is None:
             return d
         else:
             raise agate.exceptions.CastError('Can not parse value "%s" as Integer.' % d)
@@ -177,7 +180,7 @@ class ColumnTypeBuilder(Dict[str, NullableAgateType]):
         elif isinstance(value, _NullMarker):
             # use the existing value
             return
-        # when one table column is Number while another is Integer, let the column become Number on merge
+        # when one table column is Number while another is Integer, force the column to Number on merge
         elif isinstance(value, Integer) and isinstance(existing_type, agate.data_types.Number):
             # use the existing value
             return
@@ -195,8 +198,9 @@ class ColumnTypeBuilder(Dict[str, NullableAgateType]):
         result: Dict[str, agate.data_types.DataType] = {}
         for key, value in self.items():
             if isinstance(value, _NullMarker):
-                # this is what agate would do.
-                result[key] = agate.data_types.Number()
+                # agate would make it a Number but we'll make it Integer so that if this column
+                # gets merged with another Integer column, it won't get forced to a Number
+                result[key] = Integer()
             else:
                 result[key] = value
         return result
