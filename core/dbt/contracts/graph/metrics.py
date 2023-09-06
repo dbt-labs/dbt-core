@@ -80,26 +80,22 @@ class ResolvedMetricReference(MetricReference):
         return to_return
 
     def base_metric_dependency(self) -> List[str]:
-        """Returns a list of names for all upstream non-derived metrics."""
+        """Returns a unique list of names for all upstream non-derived metrics."""
         in_scope_metrics = list(self.parent_metrics(self.node, self.manifest))
+        base_metrics = {
+            metric.name for metric in in_scope_metrics if metric.type not in DERIVED_METRICS
+        }
 
-        to_return = []
-        for metric in in_scope_metrics:
-            if metric.type not in DERIVED_METRICS and metric.name not in to_return:
-                to_return.append(metric.name)
-
-        return to_return
+        return list(base_metrics)
 
     def derived_metric_dependency(self) -> List[str]:
-        """Returns a list of names for all upstream derived metrics."""
+        """Returns a unique list of names for all upstream derived metrics."""
         in_scope_metrics = list(self.parent_metrics(self.node, self.manifest))
+        derived_metrics = {
+            metric.name for metric in in_scope_metrics if metric.type in DERIVED_METRICS
+        }
 
-        to_return = []
-        for metric in in_scope_metrics:
-            if metric.type in DERIVED_METRICS and metric.name not in to_return:
-                to_return.append(metric.name)
-
-        return to_return
+        return list(derived_metrics)
 
     def derived_metric_dependency_depth(self):
         """Returns a list of {<metric_name>: <depth_from_initial_metric>} for all upstream metrics."""
