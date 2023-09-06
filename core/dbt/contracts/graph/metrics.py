@@ -2,7 +2,7 @@ from dbt.node_types import NodeType
 from dbt.contracts.graph.manifest import Manifest, Metric
 from dbt_semantic_interfaces.type_enums import MetricType
 
-from typing import Dict, Iterator
+from typing import Dict, Iterator, List
 
 
 DERIVED_METRICS = [MetricType.DERIVED, MetricType.RATIO]
@@ -79,24 +79,24 @@ class ResolvedMetricReference(MetricReference):
         to_return = list(set(self.parent_metrics_names(self.node, self.manifest)))
         return to_return
 
-    def base_metric_dependency(self):
+    def base_metric_dependency(self) -> List[str]:
         """Returns a list of names for all upstream non-derived metrics."""
         in_scope_metrics = list(self.parent_metrics(self.node, self.manifest))
 
         to_return = []
         for metric in in_scope_metrics:
-            if metric.calculation_method != "derived" and metric.name not in to_return:
+            if metric.type not in DERIVED_METRICS and metric.name not in to_return:
                 to_return.append(metric.name)
 
         return to_return
 
-    def derived_metric_dependency(self):
+    def derived_metric_dependency(self) -> List[str]:
         """Returns a list of names for all upstream derived metrics."""
         in_scope_metrics = list(self.parent_metrics(self.node, self.manifest))
 
         to_return = []
         for metric in in_scope_metrics:
-            if metric.calculation_method == "derived" and metric.name not in to_return:
+            if metric.type in DERIVED_METRICS and metric.name not in to_return:
                 to_return.append(metric.name)
 
         return to_return
