@@ -7,6 +7,7 @@ from tests.functional.show.fixtures import (
     seeds__sample_seed,
     models__sample_model,
     models__sample_number_model,
+    models__sample_number_model_with_nulls,
     models__second_model,
     models__ephemeral_model,
     schema_yml,
@@ -21,6 +22,7 @@ class TestShow:
         return {
             "sample_model.sql": models__sample_model,
             "sample_number_model.sql": models__sample_number_model,
+            "sample_number_model_with_nulls.sql": models__sample_number_model_with_nulls,
             "second_model.sql": models__second_model,
             "ephemeral_model.sql": models__ephemeral_model,
             "sql_header.sql": models__sql_header,
@@ -70,6 +72,19 @@ class TestShow:
             ["show", "--select", "sample_number_model", "--output", "json"]
         )
         assert "Previewing node 'sample_number_model'" not in log_output
+        assert "1.0" not in log_output
+        assert "1" in log_output
+        assert "3.0" in log_output
+        assert "4.3" in log_output
+        assert "5" in log_output
+        assert "5.0" not in log_output
+
+    def test_numeric_values_with_nulls(self, project):
+        run_dbt(["build"])
+        (results, log_output) = run_dbt_and_capture(
+            ["show", "--select", "sample_number_model_with_nulls", "--output", "json"]
+        )
+        assert "Previewing node 'sample_number_model_with_nulls'" not in log_output
         assert "1.0" not in log_output
         assert "1" in log_output
         assert "3.0" in log_output
