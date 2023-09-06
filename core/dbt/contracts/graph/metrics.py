@@ -97,7 +97,7 @@ class ResolvedMetricReference(MetricReference):
 
         return list(derived_metrics)
 
-    def derived_metric_dependency_depth(self):
+    def derived_metric_dependency_depth(self) -> List[Dict[str, int]]:
         """Returns a list of {<metric_name>: <depth_from_initial_metric>} for all upstream metrics."""
         metric_depth_count = 1
         to_return = list(self.reverse_dag_parsing(self.node, self.manifest, metric_depth_count))
