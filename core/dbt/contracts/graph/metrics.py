@@ -1,7 +1,7 @@
 from dbt.contracts.graph.manifest import Manifest, Metric
 from dbt_semantic_interfaces.type_enums import MetricType
 
-from typing import Dict, Iterator, List
+from typing import Any, Dict, Iterator, List
 
 
 DERIVED_METRICS = [MetricType.DERIVED, MetricType.RATIO]
@@ -24,15 +24,15 @@ class ResolvedMetricReference(MetricReference):
     for working with metrics (ie. __str__ and templating functions)
     """
 
-    def __init__(self, node: Metric, manifest: Manifest):
+    def __init__(self, node: Metric, manifest: Manifest) -> None:
         super().__init__(node.name, node.package_name)
         self.node = node
         self.manifest = manifest
 
-    def __getattr__(self, key):
+    def __getattr__(self, key) -> Any:
         return getattr(self.node, key)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.node.name}"
 
     @classmethod
