@@ -1528,7 +1528,8 @@ def get_manifest_schema_version(dct: dict) -> int:
     schema_version = dct.get("metadata", {}).get("dbt_schema_version", None)
     if not schema_version:
         raise ValueError("Manifest doesn't have schema version")
-    return int(schema_version.split(".")[-2][-1])
+
+    return int(schema_version.split("/")[-1].split(".")[0][1:])
 
 
 def _check_duplicates(value: BaseNode, src: Mapping[str, BaseNode]):
