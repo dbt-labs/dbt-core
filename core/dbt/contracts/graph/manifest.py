@@ -1529,6 +1529,13 @@ def get_manifest_schema_version(dct: dict) -> int:
     if not schema_version:
         raise ValueError("Manifest doesn't have schema version")
 
+    # schema_version is in this format: https://schemas.getdbt.com/dbt/manifest/v10.json
+    # What the code below is doing:
+    # 1. Split on "/" – v10.json
+    # 2. Split on "." – v10
+    # 3. Skip first character – 10
+    # 4. Convert to int
+    # TODO: If this gets more complicated, turn into a regex
     return int(schema_version.split("/")[-1].split(".")[0][1:])
 
 
