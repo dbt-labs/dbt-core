@@ -206,6 +206,7 @@ class UnitTestParser(YamlReader):
                 unit_test_config_dict = config.build_config_dict(
                     patch_config_dict=test.config, resource_type=NodeType.Unit
                 )
+                unit_test_config_dict = self.render_entry(unit_test_config_dict)
 
                 unit_test_case = UnitTestDefinition(
                     name=test.name,
