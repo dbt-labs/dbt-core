@@ -49,12 +49,8 @@ class ResolvedMetricReference(MetricReference):
     @classmethod
     def parent_metrics_names(cls, metric_node: Metric, manifest: Manifest) -> Iterator[str]:
         """For a given metric, yeilds all upstream metric names"""
-        yield metric_node.name
-
-        for parent_unique_id in metric_node.depends_on.nodes:
-            metric = manifest.metrics.get(parent_unique_id)
-            if metric is not None:
-                yield from cls.parent_metrics_names(metric, manifest)
+        for metric in cls.parent_metrics(metric_node, manifest):
+            yield metric.name
 
     @classmethod
     def reverse_dag_parsing(
