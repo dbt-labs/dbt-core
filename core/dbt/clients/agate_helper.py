@@ -177,6 +177,13 @@ class ColumnTypeBuilder(Dict[str, NullableAgateType]):
         elif isinstance(value, _NullMarker):
             # use the existing value
             return
+        # when one table column is Number while another is Integer, let the column become Number on merge
+        elif isinstance(value, Integer) and isinstance(existing_type, agate.data_types.Number):
+            # use the existing value
+            return
+        elif isinstance(existing_type, Integer) and isinstance(value, agate.data_types.Number):
+            # overwrite
+            super().__setitem__(key, value)
         elif not isinstance(value, type(existing_type)):
             # actual type mismatch!
             raise DbtRuntimeError(
