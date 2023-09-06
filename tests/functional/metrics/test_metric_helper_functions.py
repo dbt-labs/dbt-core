@@ -1,6 +1,7 @@
 import pytest
 
-from dbt.tests.util import run_dbt, get_manifest
+from dbt.tests.util import run_dbt
+from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.metrics import ResolvedMetricReference
 
 from tests.functional.metrics.fixtures import (
@@ -27,11 +28,9 @@ class TestMetricHelperFunctions:
     ):
 
         # initial parse
-        run_dbt(["parse"])
+        manifest = run_dbt(["parse"])
+        assert isinstance(manifest, Manifest)
 
-        # make sure all the metrics are in the manifest
-        manifest = get_manifest(project.project_root)
-        assert manifest is not None
         parsed_metric = manifest.metrics["metric.test.average_tenure_plus_one"]
         testing_metric = ResolvedMetricReference(parsed_metric, manifest, None)
 
