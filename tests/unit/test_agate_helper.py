@@ -121,39 +121,64 @@ class TestAgateHelper(unittest.TestCase):
             self.assertEqual(tbl[0][0], expected)
 
     def test_merge_allnull(self):
-        t1 = agate.Table([(1, "a", None), (2, "b", None)], ("a", "b", "c"))
-        t2 = agate.Table([(3, "c", None), (4, "d", None)], ("a", "b", "c"))
+        t1 = agate_helper.table_from_rows([(1, "a", None), (2, "b", None)], ("a", "b", "c"))
+        t2 = agate_helper.table_from_rows([(3, "c", None), (4, "d", None)], ("a", "b", "c"))
         result = agate_helper.merge_tables([t1, t2])
         self.assertEqual(result.column_names, ("a", "b", "c"))
-        assert isinstance(result.column_types[0], agate.data_types.Number)
+        assert isinstance(result.column_types[0], agate_helper.Integer)
         assert isinstance(result.column_types[1], agate.data_types.Text)
-        assert isinstance(result.column_types[2], agate.data_types.Number)
+        assert isinstance(result.column_types[2], agate_helper.Integer)
         self.assertEqual(len(result), 4)
 
     def test_merge_mixed(self):
-        t1 = agate.Table([(1, "a", None), (2, "b", None)], ("a", "b", "c"))
-        t2 = agate.Table([(3, "c", "dog"), (4, "d", "cat")], ("a", "b", "c"))
-        t3 = agate.Table([(3, "c", None), (4, "d", None)], ("a", "b", "c"))
+        t1 = agate_helper.table_from_rows(
+            [(1, "a", None, None), (2, "b", None, None)], ("a", "b", "c", "d")
+        )
+        t2 = agate_helper.table_from_rows(
+            [(3, "c", "dog", 1), (4, "d", "cat", 5)], ("a", "b", "c", "d")
+        )
+        t3 = agate_helper.table_from_rows(
+            [(3, "c", None, 1.5), (4, "d", None, 3.5)], ("a", "b", "c", "d")
+        )
 
         result = agate_helper.merge_tables([t1, t2])
-        self.assertEqual(result.column_names, ("a", "b", "c"))
-        assert isinstance(result.column_types[0], agate.data_types.Number)
+        self.assertEqual(result.column_names, ("a", "b", "c", "d"))
+        assert isinstance(result.column_types[0], agate_helper.Integer)
         assert isinstance(result.column_types[1], agate.data_types.Text)
         assert isinstance(result.column_types[2], agate.data_types.Text)
+        assert isinstance(result.column_types[3], agate_helper.Integer)
+        self.assertEqual(len(result), 4)
+
+        result = agate_helper.merge_tables([t1, t3])
+        self.assertEqual(result.column_names, ("a", "b", "c", "d"))
+        assert isinstance(result.column_types[0], agate_helper.Integer)
+        assert isinstance(result.column_types[1], agate.data_types.Text)
+        assert isinstance(result.column_types[2], agate_helper.Integer)
+        assert isinstance(result.column_types[3], agate.data_types.Number)
         self.assertEqual(len(result), 4)
 
         result = agate_helper.merge_tables([t2, t3])
-        self.assertEqual(result.column_names, ("a", "b", "c"))
-        assert isinstance(result.column_types[0], agate.data_types.Number)
+        self.assertEqual(result.column_names, ("a", "b", "c", "d"))
+        assert isinstance(result.column_types[0], agate_helper.Integer)
         assert isinstance(result.column_types[1], agate.data_types.Text)
         assert isinstance(result.column_types[2], agate.data_types.Text)
+        assert isinstance(result.column_types[3], agate.data_types.Number)
+        self.assertEqual(len(result), 4)
+
+        result = agate_helper.merge_tables([t3, t2])
+        self.assertEqual(result.column_names, ("a", "b", "c", "d"))
+        assert isinstance(result.column_types[0], agate_helper.Integer)
+        assert isinstance(result.column_types[1], agate.data_types.Text)
+        assert isinstance(result.column_types[2], agate.data_types.Text)
+        assert isinstance(result.column_types[3], agate.data_types.Number)
         self.assertEqual(len(result), 4)
 
         result = agate_helper.merge_tables([t1, t2, t3])
-        self.assertEqual(result.column_names, ("a", "b", "c"))
-        assert isinstance(result.column_types[0], agate.data_types.Number)
+        self.assertEqual(result.column_names, ("a", "b", "c", "d"))
+        assert isinstance(result.column_types[0], agate_helper.Integer)
         assert isinstance(result.column_types[1], agate.data_types.Text)
         assert isinstance(result.column_types[2], agate.data_types.Text)
+        assert isinstance(result.column_types[3], agate.data_types.Number)
         self.assertEqual(len(result), 6)
 
     def test_nocast_string_types(self):
@@ -191,7 +216,7 @@ class TestAgateHelper(unittest.TestCase):
         self.assertEqual(len(tbl), len(result_set))
 
         assert isinstance(tbl.column_types[0], agate.data_types.Boolean)
-        assert isinstance(tbl.column_types[1], agate.data_types.Number)
+        assert isinstance(tbl.column_types[1], agate_helper.Integer)
 
         expected = [
             [True, Decimal(1)],
