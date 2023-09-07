@@ -41,9 +41,9 @@ class ResolvedMetricReference(MetricReference):
         yield metric_node
 
         for parent_unique_id in metric_node.depends_on.nodes:
-            metric = manifest.metrics.get(parent_unique_id)
-            if metric is not None:
-                yield from cls.parent_metrics(metric, manifest)
+            node = manifest.expect(parent_unique_id)
+            if isinstance(node, Metric):
+                yield from cls.parent_metrics(node, manifest)
 
     @classmethod
     def parent_metrics_names(cls, metric_node: Metric, manifest: Manifest) -> Iterator[str]:
@@ -63,9 +63,9 @@ class ResolvedMetricReference(MetricReference):
             yield {metric_node.name: metric_depth_count}
 
             for parent_unique_id in metric_node.depends_on.nodes:
-                metric = manifest.metrics.get(parent_unique_id)
-                if metric is not None:
-                    yield from cls.reverse_dag_parsing(metric, manifest, metric_depth_count + 1)
+                node = manifest.expect(parent_unique_id)
+                if isinstance(node, Metric):
+                    yield from cls.reverse_dag_parsing(node, manifest, metric_depth_count + 1)
 
     def full_metric_dependency(self):
         """Returns a unique list of all upstream metric names."""
