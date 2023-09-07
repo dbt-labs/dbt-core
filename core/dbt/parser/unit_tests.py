@@ -10,6 +10,7 @@ from dbt.contracts.graph.nodes import (
     UnitTestConfig,
 )
 from dbt.config import RuntimeConfig
+from dbt.context.context_config import ContextConfig
 from dbt.contracts.graph.manifest import Manifest
 from dbt.parser.schemas import (
     SchemaParser,
@@ -199,13 +200,16 @@ class UnitTestParser(YamlReader):
                     "Unable to find model {unparsed.model} for unit tests in {self.yaml.path.original_file_path}"
                 )
             for test in unparsed.tests:
-                unit_test_case_unique_id = f"unit.{package_name}.{test.name}.{unparsed.model}"
-                unit_test_fqn = ["unit", package_name, test.name]
+                unit_test_case_unique_id = f"unit.{package_name}.{unparsed.model}.{test.name}"
+                unit_test_fqn = [package_name, unparsed.model, test.name]
 
-                config = self.schema_parser.initial_config(unit_test_fqn)
-                unit_test_config_dict = config.build_config_dict(
-                    patch_config_dict=test.config, resource_type=NodeType.Unit
+                config = ContextConfig(
+                    self.schema_parser.root_project,
+                    unit_test_fqn,
+                    NodeType.Unit,
+                    self.schema_parser.project.project_name,
                 )
+                unit_test_config_dict = config.build_config_dict(patch_config_dict=test.config)
                 unit_test_config_dict = self.render_entry(unit_test_config_dict)
 
                 unit_test_case = UnitTestDefinition(

@@ -49,6 +49,8 @@ class UnrenderedConfig(ConfigSource):
             model_configs = unrendered.get("semantic_models")
         elif resource_type == NodeType.Exposure:
             model_configs = unrendered.get("exposures")
+        elif resource_type == NodeType.Unit:
+            model_configs = unrendered.get("unit_tests")
         else:
             model_configs = unrendered.get("models")
         if model_configs is None:
@@ -76,6 +78,8 @@ class RenderedConfig(ConfigSource):
             model_configs = self.project.semantic_models
         elif resource_type == NodeType.Exposure:
             model_configs = self.project.exposures
+        elif resource_type == NodeType.Unit:
+            model_configs = self.project.unit_tests
         else:
             model_configs = self.project.models
         return model_configs
@@ -339,7 +343,6 @@ class ContextConfig:
         *,
         rendered: bool = True,
         patch_config_dict: Optional[dict] = None,
-        resource_type: Optional[NodeType] = None,
     ) -> Dict[str, Any]:
         if rendered:
             # TODO CT-211
@@ -351,8 +354,7 @@ class ContextConfig:
         return src.calculate_node_config_dict(
             config_call_dict=self._config_call_dict,
             fqn=self._fqn,
-            # TODO: rethink if this is necessary
-            resource_type=resource_type or self._resource_type,
+            resource_type=self._resource_type,
             project_name=self._project_name,
             base=base,
             patch_config_dict=patch_config_dict,
