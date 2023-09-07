@@ -193,7 +193,7 @@ class ExecutionContext:
 
 
 class BaseRunner(metaclass=ABCMeta):
-    def __init__(self, config, adapter, node, node_index, num_nodes):
+    def __init__(self, config, adapter, node, node_index, num_nodes) -> None:
         self.config = config
         self.adapter = adapter
         self.node = node
