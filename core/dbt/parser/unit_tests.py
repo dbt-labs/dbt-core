@@ -1,6 +1,11 @@
+from typing import List, Set
+
+from dbt.config import RuntimeConfig
+from dbt.context.context_config import ContextConfig
+from dbt.context.providers import generate_parse_exposure, get_rendered
+from dbt.contracts.files import FileHash
+from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.model_config import NodeConfig
-from dbt_extractor import py_extract_from_source  # type: ignore
-from dbt.contracts.graph.unparsed import UnparsedUnitTestSuite
 from dbt.contracts.graph.nodes import (
     ModelNode,
     UnitTestNode,
@@ -9,9 +14,10 @@ from dbt.contracts.graph.nodes import (
     DependsOn,
     UnitTestConfig,
 )
-from dbt.config import RuntimeConfig
-from dbt.context.context_config import ContextConfig
-from dbt.contracts.graph.manifest import Manifest
+from dbt.contracts.graph.unparsed import UnparsedUnitTestSuite
+from dbt.exceptions import ParsingError
+from dbt.graph import UniqueId
+from dbt.node_types import NodeType
 from dbt.parser.schemas import (
     SchemaParser,
     YamlBlock,
@@ -19,23 +25,10 @@ from dbt.parser.schemas import (
     JSONValidationError,
     YamlParseDictError,
     YamlReader,
+    ParseResult,
 )
-from dbt.node_types import NodeType
-
-from dbt.exceptions import (
-    ParsingError,
-)
-
-from dbt.contracts.files import FileHash
-from dbt.graph import UniqueId
-
-from dbt.context.providers import generate_parse_exposure, get_rendered
-from typing import List, Set
 from dbt.utils import get_pseudo_test_path
-
-
-def _is_model_node(node_id, manifest):
-    return manifest.nodes[node_id].resource_type == NodeType.Model
+from dbt_extractor import py_extract_from_source  # type: ignore
 
 
 class UnitTestManifestLoader:
@@ -178,30 +171,36 @@ class UnitTestManifestLoader:
 
 
 class UnitTestParser(YamlReader):
-    def __init__(self, schema_parser: SchemaParser, yaml: YamlBlock):
+    def __init__(self, schema_parser: SchemaParser, yaml: YamlBlock) -> None:
         super().__init__(schema_parser, yaml, "unit")
         self.schema_parser = schema_parser
         self.yaml = yaml
 
-    def parse(self):
+    def parse(self) -> ParseResult:
         for data in self.get_key_dicts():
             try:
                 UnparsedUnitTestSuite.validate(data)
                 unparsed = UnparsedUnitTestSuite.from_dict(data)
             except (ValidationError, JSONValidationError) as exc:
                 raise YamlParseDictError(self.yaml.path, self.key, data, exc)
-            package_name = self.project.project_name
 
-            actual_node = self.manifest.ref_lookup.perform_lookup(
-                f"model.{package_name}.{unparsed.model}", self.manifest
+            # Find tested model node
+            package_name = self.project.project_name
+            model_name_split = unparsed.model.split()
+            model_name = model_name_split[0]
+            model_version = model_name_split[1] if len(model_name_split) == 2 else None
+
+            tested_node = self.manifest.ref_lookup.find(
+                model_name, package_name, model_version, self.manifest
             )
-            if not actual_node:
+            if not tested_node:
                 raise ParsingError(
-                    "Unable to find model {unparsed.model} for unit tests in {self.yaml.path.original_file_path}"
+                    f"Unable to find model '{package_name}.{unparsed.model}' for unit tests in {self.yaml.path.original_file_path}"
                 )
+
             for test in unparsed.tests:
                 unit_test_case_unique_id = f"unit.{package_name}.{unparsed.model}.{test.name}"
-                unit_test_fqn = [package_name, unparsed.model, test.name]
+                unit_test_fqn = [package_name] + model_name_split + [test.name]
 
                 config = ContextConfig(
                     self.schema_parser.root_project,
@@ -220,13 +219,14 @@ class UnitTestParser(YamlReader):
                     path=self.yaml.path.relative_path,
                     original_file_path=self.yaml.path.original_file_path,
                     unique_id=unit_test_case_unique_id,
-                    attached_node=actual_node.unique_id,
                     given=test.given,
                     expect=test.expect,
                     description=test.description,
                     overrides=test.overrides,
-                    depends_on=DependsOn(nodes=[actual_node.unique_id]),
+                    depends_on=DependsOn(nodes=[tested_node.unique_id]),
                     fqn=unit_test_fqn,
                     config=UnitTestConfig.from_dict(unit_test_config_dict),
                 )
                 self.manifest.add_unit_test(self.yaml.file, unit_test_case)
+
+        return ParseResult()

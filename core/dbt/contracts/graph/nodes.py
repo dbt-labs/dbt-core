@@ -1068,7 +1068,6 @@ class UnitTestNode(CompiledNode):
 @dataclass
 class UnitTestDefinition(GraphNode):
     model: str
-    attached_node: str
     given: Sequence[InputFixture]
     expect: List[Dict[str, Any]]
     description: str = ""

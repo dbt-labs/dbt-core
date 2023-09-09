@@ -176,13 +176,14 @@ class BaseParserTest(unittest.TestCase):
         return FileBlock(file=source_file)
 
     def assert_has_manifest_lengths(
-        self, manifest, macros=3, nodes=0, sources=0, docs=0, disabled=0
+        self, manifest, macros=3, nodes=0, sources=0, docs=0, disabled=0, unit_tests=0
     ):
         self.assertEqual(len(manifest.macros), macros)
         self.assertEqual(len(manifest.nodes), nodes)
         self.assertEqual(len(manifest.sources), sources)
         self.assertEqual(len(manifest.docs), docs)
         self.assertEqual(len(manifest.disabled), disabled)
+        self.assertEqual(len(manifest.unit_tests), unit_tests)
 
 
 def assertEqualNodes(node_one, node_two):
@@ -371,8 +372,8 @@ class SchemaParserTest(BaseParserTest):
             manifest=self.manifest,
         )
 
-    def file_block_for(self, data, filename):
-        return super().file_block_for(data, filename, "models")
+    def file_block_for(self, data, filename, searched="models"):
+        return super().file_block_for(data, filename, searched)
 
     def yaml_block_for(self, test_yml: str, filename: str):
         file_block = self.file_block_for(data=test_yml, filename=filename)
