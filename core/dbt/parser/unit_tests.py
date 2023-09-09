@@ -1,4 +1,4 @@
-from typing import List, Set
+from typing import List, Set, Dict, Any
 
 from dbt.config import RuntimeConfig
 from dbt.context.context_config import ContextConfig
@@ -178,44 +178,22 @@ class UnitTestParser(YamlReader):
 
     def parse(self) -> ParseResult:
         for data in self.get_key_dicts():
-            try:
-                UnparsedUnitTestSuite.validate(data)
-                unparsed = UnparsedUnitTestSuite.from_dict(data)
-            except (ValidationError, JSONValidationError) as exc:
-                raise YamlParseDictError(self.yaml.path, self.key, data, exc)
+            unit_test_suite = self._get_unit_test_suite(data)
+            model_name_split = unit_test_suite.model.split()
+            tested_model_node = self._find_tested_model_node(unit_test_suite)
 
-            # Find tested model node
-            package_name = self.project.project_name
-            model_name_split = unparsed.model.split()
-            model_name = model_name_split[0]
-            model_version = model_name_split[1] if len(model_name_split) == 2 else None
-
-            tested_node = self.manifest.ref_lookup.find(
-                model_name, package_name, model_version, self.manifest
-            )
-            if not tested_node:
-                raise ParsingError(
-                    f"Unable to find model '{package_name}.{unparsed.model}' for unit tests in {self.yaml.path.original_file_path}"
+            for test in unit_test_suite.tests:
+                unit_test_case_unique_id = (
+                    f"unit.{self.project.project_name}.{unit_test_suite.model}.{test.name}"
                 )
+                unit_test_fqn = [self.project.project_name] + model_name_split + [test.name]
+                unit_test_config = self._build_unit_test_config(unit_test_fqn, test.config)
 
-            for test in unparsed.tests:
-                unit_test_case_unique_id = f"unit.{package_name}.{unparsed.model}.{test.name}"
-                unit_test_fqn = [package_name] + model_name_split + [test.name]
-
-                config = ContextConfig(
-                    self.schema_parser.root_project,
-                    unit_test_fqn,
-                    NodeType.Unit,
-                    self.schema_parser.project.project_name,
-                )
-                unit_test_config_dict = config.build_config_dict(patch_config_dict=test.config)
-                unit_test_config_dict = self.render_entry(unit_test_config_dict)
-
-                unit_test_case = UnitTestDefinition(
+                unit_test_definition = UnitTestDefinition(
                     name=test.name,
-                    model=unparsed.model,
+                    model=unit_test_suite.model,
                     resource_type=NodeType.Unit,
-                    package_name=package_name,
+                    package_name=self.project.project_name,
                     path=self.yaml.path.relative_path,
                     original_file_path=self.yaml.path.original_file_path,
                     unique_id=unit_test_case_unique_id,
@@ -223,10 +201,47 @@ class UnitTestParser(YamlReader):
                     expect=test.expect,
                     description=test.description,
                     overrides=test.overrides,
-                    depends_on=DependsOn(nodes=[tested_node.unique_id]),
+                    depends_on=DependsOn(nodes=[tested_model_node.unique_id]),
                     fqn=unit_test_fqn,
-                    config=UnitTestConfig.from_dict(unit_test_config_dict),
+                    config=unit_test_config,
                 )
-                self.manifest.add_unit_test(self.yaml.file, unit_test_case)
+                self.manifest.add_unit_test(self.yaml.file, unit_test_definition)
 
         return ParseResult()
+
+    def _get_unit_test_suite(self, data: Dict[str, Any]) -> UnparsedUnitTestSuite:
+        try:
+            UnparsedUnitTestSuite.validate(data)
+            return UnparsedUnitTestSuite.from_dict(data)
+        except (ValidationError, JSONValidationError) as exc:
+            raise YamlParseDictError(self.yaml.path, self.key, data, exc)
+
+    def _find_tested_model_node(self, unit_test_suite: UnparsedUnitTestSuite) -> ModelNode:
+        package_name = self.project.project_name
+        model_name_split = unit_test_suite.model.split()
+        model_name = model_name_split[0]
+        model_version = model_name_split[1] if len(model_name_split) == 2 else None
+
+        tested_node = self.manifest.ref_lookup.find(
+            model_name, package_name, model_version, self.manifest
+        )
+        if not tested_node:
+            raise ParsingError(
+                f"Unable to find model '{package_name}.{unit_test_suite.model}' for unit tests in {self.yaml.path.original_file_path}"
+            )
+
+        return tested_node
+
+    def _build_unit_test_config(
+        self, unit_test_fqn: List[str], config_dict: Dict[str, Any]
+    ) -> UnitTestConfig:
+        config = ContextConfig(
+            self.schema_parser.root_project,
+            unit_test_fqn,
+            NodeType.Unit,
+            self.schema_parser.project.project_name,
+        )
+        unit_test_config_dict = config.build_config_dict(patch_config_dict=config_dict)
+        unit_test_config_dict = self.render_entry(unit_test_config_dict)
+
+        return UnitTestConfig.from_dict(unit_test_config_dict)
