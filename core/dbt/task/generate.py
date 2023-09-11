@@ -5,6 +5,7 @@ from typing import Dict, List, Any, Optional, Tuple, Set
 import agate
 
 from dbt.dataclass_schema import ValidationError
+from dbt.clients.system import load_file_contents, write_file
 
 from .compile import CompileTask
 
@@ -268,26 +269,20 @@ class GenerateTask(CompileTask):
 
         if self.args.static:
 
-            # Read manifest.json
-            manifest_path = os.path.join(self.config.project_target_path, MANIFEST_FILE_NAME)
-            with open(manifest_path, "r") as m:
-                read_manifest_data = m.read()
-
-            # Read catalog.json
-            with open(catalog_path, "r") as c:
-                read_catalog_data = c.read()
-
-            # Inline manifest.json and catalog.json from the
-            # DOCS_INDEX_FILE_PATH, writing to a static_index.html
-            index_file = open(DOCS_INDEX_FILE_PATH, "r")
-            static_index_file = open(
-                os.path.join(self.config.project_target_path, "static_index.html"), "w"
+            # Read manifest.json and catalog.json
+            read_manifest_data = load_file_contents(
+                os.path.join(self.config.project_target_path, MANIFEST_FILE_NAME)
             )
-            with index_file, static_index_file:
-                index_data = index_file.read()
-                index_data = index_data.replace('"MANIFEST.JSON INLINE DATA"', read_manifest_data)
-                index_data = index_data.replace('"CATALOG.JSON INLINE DATA"', read_catalog_data)
-                static_index_file.write(index_data)
+            read_catalog_data = load_file_contents(catalog_path)
+
+            # Create new static index file contents
+            index_data = load_file_contents(DOCS_INDEX_FILE_PATH)
+            index_data = index_data.replace('"MANIFEST.JSON INLINE DATA"', read_manifest_data)
+            index_data = index_data.replace('"CATALOG.JSON INLINE DATA"', read_catalog_data)
+
+            # Write out the new index file
+            static_index_path = os.path.join(self.config.project_target_path, "static_index.html")
+            write_file(static_index_path, index_data)
 
         if exceptions:
             fire_event(WriteCatalogFailure(num_exceptions=len(exceptions)))
