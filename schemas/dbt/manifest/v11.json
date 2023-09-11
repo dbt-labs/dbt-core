@@ -10,7 +10,7 @@
         },
         "dbt_version": {
           "type": "string",
-          "default": "1.7.0b1"
+          "default": "1.7.0b2"
         },
         "generated_at": {
           "type": "string"
@@ -1463,6 +1463,203 @@
         "checksum"
       ]
     },
+    "ModelConfig": {
+      "type": "object",
+      "title": "ModelConfig",
+      "properties": {
+        "_extra": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          }
+        },
+        "enabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "alias": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "schema": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "database": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "tags": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "meta": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          }
+        },
+        "group": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "materialized": {
+          "type": "string",
+          "default": "view"
+        },
+        "incremental_strategy": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "persist_docs": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          }
+        },
+        "post-hook": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Hook"
+          }
+        },
+        "pre-hook": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Hook"
+          }
+        },
+        "quoting": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          }
+        },
+        "column_types": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          }
+        },
+        "full_refresh": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "unique_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "on_schema_change": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": "ignore"
+        },
+        "on_configuration_change": {
+          "enum": [
+            "apply",
+            "continue",
+            "fail"
+          ]
+        },
+        "grants": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          }
+        },
+        "packages": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "docs": {
+          "$ref": "#/$defs/Docs"
+        },
+        "contract": {
+          "$ref": "#/$defs/ContractConfig"
+        },
+        "access": {
+          "enum": [
+            "private",
+            "protected",
+            "public"
+          ],
+          "default": "protected"
+        }
+      },
+      "additionalProperties": true
+    },
     "ModelLevelConstraint": {
       "type": "object",
       "title": "ModelLevelConstraint",
@@ -1606,7 +1803,7 @@
           "$ref": "#/$defs/FileHash"
         },
         "config": {
-          "$ref": "#/$defs/NodeConfig"
+          "$ref": "#/$defs/ModelConfig"
         },
         "_event_status": {
           "type": "object",
