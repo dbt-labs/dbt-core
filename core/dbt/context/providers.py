@@ -1504,7 +1504,7 @@ class ModelContext(ProviderContext):
 class UnitTestContext(ModelContext):
     model: UnitTestNode
 
-    @contextmember
+    @contextmember()
     def env_var(self, var: str, default: Optional[str] = None) -> str:
         """The env_var() function. Return the overriden unit test environment variable named 'var'.
 
