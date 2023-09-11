@@ -1,6 +1,6 @@
 import traceback
 from dataclasses import dataclass
-from dbt.events.functions import fire_event, set_package_log_level
+from dbt.events.functions import fire_event, set_package_logging
 from dbt.events.contextvars import get_node_info
 from dbt.events.types import (
     AdapterEventDebug,
@@ -59,4 +59,4 @@ class AdapterLogger:
 
     @staticmethod
     def set_adapter_dependency_log_level(package_name, level):
-        set_package_log_level(package_name, level)
+        set_package_logging(package_name, level)
