@@ -5756,6 +5756,38 @@
         "input"
       ]
     },
+    "UnitTestConfig": {
+      "type": "object",
+      "title": "UnitTestConfig",
+      "properties": {
+        "_extra": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          }
+        },
+        "tags": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "meta": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": true
+    },
     "UnitTestDefinition": {
       "type": "object",
       "title": "UnitTestDefinition",
@@ -5804,9 +5836,6 @@
         "model": {
           "type": "string"
         },
-        "attached_node": {
-          "type": "string"
-        },
         "given": {
           "type": "array",
           "items": {
@@ -5839,6 +5868,9 @@
         },
         "depends_on": {
           "$ref": "#/$defs/DependsOn"
+        },
+        "config": {
+          "$ref": "#/$defs/UnitTestConfig"
         }
       },
       "additionalProperties": false,
@@ -5851,7 +5883,6 @@
         "unique_id",
         "fqn",
         "model",
-        "attached_node",
         "given",
         "expect"
       ]
