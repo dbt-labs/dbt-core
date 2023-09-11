@@ -1,3 +1,5 @@
+import logging
+
 from dbt.constants import METADATA_ENV_PREFIX
 from dbt.events.base_types import BaseEvent, EventLevel, EventMsg
 from dbt.events.eventmgr import EventManager, LoggerConfig, LineFormat, NoFilter, IEventManager
@@ -9,7 +11,7 @@ from functools import partial
 import json
 import os
 import sys
-from typing import Callable, Dict, List, Optional, TextIO
+from typing import Callable, Dict, List, Optional, TextIO, Union
 import uuid
 from google.protobuf.json_format import MessageToDict
 
@@ -94,7 +96,6 @@ def _get_stdout_config(
     level: EventLevel,
     log_cache_events: bool,
 ) -> LoggerConfig:
-
     return LoggerConfig(
         name="stdout_log",
         level=level,
@@ -296,3 +297,8 @@ def set_invocation_id() -> None:
 def ctx_set_event_manager(event_manager: IEventManager):
     global EVENT_MANAGER
     EVENT_MANAGER = event_manager
+
+
+def set_package_log_level(package_name: str, level: Union[str, int]):
+    log = logging.getLogger(package_name)
+    log.setLevel(level)
