@@ -1,6 +1,0 @@
-kind: Fixes
-body: print model version in dbt show if specified
-time: 2023-05-08T04:27:07.9965-07:00
-custom:
-  Author: aranke
-  Issue: "7407"

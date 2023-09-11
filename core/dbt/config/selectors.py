@@ -21,7 +21,7 @@ The selectors.yml file in this project is malformed. Please double check
 the contents of this file and fix any errors before retrying.
 
 You can find more information on the syntax for this file here:
-https://docs.getdbt.com/docs/package-management
+https://docs.getdbt.com/reference/node-selection/yaml-selectors
 
 Validator Error:
 {error}

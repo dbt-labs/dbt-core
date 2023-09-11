@@ -9,17 +9,19 @@ ARG build_for=linux/amd64
 ##
 # base image (abstract)
 ##
-FROM --platform=$build_for python:3.11.2-slim-bullseye as base
+# Please do not upgrade beyond python3.10.7 currently as dbt-spark does not support
+# 3.11py and images do not get made properly
+FROM --platform=$build_for python:3.10.7-slim-bullseye as base
 
 # N.B. The refs updated automagically every release via bumpversion
 # N.B. dbt-postgres is currently found in the core codebase so a value of dbt-core@<some_version> is correct
 
-ARG dbt_core_ref=dbt-core@v1.6.0b1
-ARG dbt_postgres_ref=dbt-core@v1.6.0b1
-ARG dbt_redshift_ref=dbt-redshift@v1.6.0b1
-ARG dbt_bigquery_ref=dbt-bigquery@v1.6.0b1
-ARG dbt_snowflake_ref=dbt-snowflake@v1.6.0b1
-ARG dbt_spark_ref=dbt-spark@v1.6.0b1
+ARG dbt_core_ref=dbt-core@v1.7.0b2
+ARG dbt_postgres_ref=dbt-core@v1.7.0b2
+ARG dbt_redshift_ref=dbt-redshift@v1.7.0b2
+ARG dbt_bigquery_ref=dbt-bigquery@v1.7.0b2
+ARG dbt_snowflake_ref=dbt-snowflake@v1.7.0b2
+ARG dbt_spark_ref=dbt-spark@v1.7.0b2
 # special case args
 ARG dbt_spark_version=all
 ARG dbt_third_party
@@ -50,7 +52,6 @@ RUN python -m pip install --upgrade pip setuptools wheel --no-cache-dir
 
 # Set docker basics
 WORKDIR /usr/app/dbt/
-VOLUME /usr/app
 ENTRYPOINT ["dbt"]
 
 ##

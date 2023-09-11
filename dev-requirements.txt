@@ -1,11 +1,12 @@
 black==23.3.0
 bumpversion
+ddtrace
 docutils
 flake8
 flaky
 freezegun==0.3.12
 ipdb
-mypy==0.981
+mypy==1.4.1
 pip-tools
 pre-commit
 protobuf>=4.0.0
@@ -15,6 +16,7 @@ pytest-csv
 pytest-dotenv
 pytest-logbook
 pytest-mock
+pytest-split
 pytest-xdist
 sphinx
 tox>=3.13
@@ -24,6 +26,7 @@ types-docutils
 types-PyYAML
 types-freezegun
 types-Jinja2
+types-jsonschema
 types-mock
 types-protobuf
 types-python-dateutil
@@ -31,3 +34,4 @@ types-pytz
 types-requests
 types-setuptools
 wheel
+mocker

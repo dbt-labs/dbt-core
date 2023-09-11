@@ -109,3 +109,25 @@ class TestVersionSelection:
     def test_select_models_two_versions(self, project):
         results = run_dbt(["ls", "--models", "version:latest version:old"])
         assert sorted(results) == ["test.versioned.v1", "test.versioned.v2"]
+
+
+my_model_yml = """
+models:
+  - name: my_model
+    versions:
+      - v: 0
+"""
+
+
+class TestVersionZero:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_model.sql": "select 1 as id",
+            "another.sql": "select * from {{ ref('my_model') }}",
+            "schema.yml": my_model_yml,
+        }
+
+    def test_version_zero(self, project):
+        results = run_dbt(["run"])
+        assert len(results) == 2

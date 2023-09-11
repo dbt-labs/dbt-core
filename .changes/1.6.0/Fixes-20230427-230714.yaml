@@ -1,6 +1,0 @@
-kind: Fixes
-body: 'Fix var precedence in configs: root vars override package vars'
-time: 2023-04-27T23:07:14.992529-04:00
-custom:
-  Author: MichelleArk
-  Issue: "6705"

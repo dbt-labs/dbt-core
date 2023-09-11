@@ -1,7 +1,7 @@
 import agate
 from typing import Any, Optional, Tuple, Type, List
 
-from dbt.contracts.connection import Connection
+from dbt.contracts.connection import Connection, AdapterResponse
 from dbt.exceptions import RelationTypeNullError
 from dbt.adapters.base import BaseAdapter, available
 from dbt.adapters.cache import _make_ref_key_dict
@@ -22,6 +22,7 @@ RENAME_RELATION_MACRO_NAME = "rename_relation"
 TRUNCATE_RELATION_MACRO_NAME = "truncate_relation"
 DROP_RELATION_MACRO_NAME = "drop_relation"
 ALTER_COLUMN_TYPE_MACRO_NAME = "alter_column_type"
+VALIDATE_SQL_MACRO_NAME = "validate_sql"
 
 
 class SQLAdapter(BaseAdapter):
@@ -197,6 +198,7 @@ class SQLAdapter(BaseAdapter):
             )
         return relations
 
+    @classmethod
     def quote(self, identifier):
         return '"{}"'.format(identifier)
 
@@ -216,6 +218,34 @@ class SQLAdapter(BaseAdapter):
         kwargs = {"information_schema": information_schema, "schema": schema}
         results = self.execute_macro(CHECK_SCHEMA_EXISTS_MACRO_NAME, kwargs=kwargs)
         return results[0][0] > 0
+
+    def validate_sql(self, sql: str) -> AdapterResponse:
+        """Submit the given SQL to the engine for validation, but not execution.
+
+        By default we simply prefix the query with the explain keyword and allow the
+        exceptions thrown by the underlying engine on invalid SQL inputs to bubble up
+        to the exception handler. For adjustments to the explain statement - such as
+        for adapters that have different mechanisms for hinting at query validation
+        or dry-run - callers may be able to override the validate_sql_query macro with
+        the addition of an <adapter>__validate_sql implementation.
+
+        :param sql str: The sql to validate
+        """
+        kwargs = {
+            "sql": sql,
+        }
+        result = self.execute_macro(VALIDATE_SQL_MACRO_NAME, kwargs=kwargs)
+        # The statement macro always returns an AdapterResponse in the output AttrDict's
+        # `response` property, and we preserve the full payload in case we want to
+        # return fetched output for engines where explain plans are emitted as columnar
+        # results. Any macro override that deviates from this behavior may encounter an
+        # assertion error in the runtime.
+        adapter_response = result.response  # type: ignore[attr-defined]
+        assert isinstance(adapter_response, AdapterResponse), (
+            f"Expected AdapterResponse from validate_sql macro execution, "
+            f"got {type(adapter_response)}."
+        )
+        return adapter_response
 
     # This is for use in the test suite
     def run_sql_for_tests(self, sql, fetch, conn):

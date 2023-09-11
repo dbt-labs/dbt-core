@@ -5,10 +5,10 @@
 1. [About this document](#about-this-document)
 2. [Getting the code](#getting-the-code)
 3. [Setting up an environment](#setting-up-an-environment)
-4. [Running `dbt` in development](#running-dbt-core-in-development)
+4. [Running dbt-core in development](#running-dbt-core-in-development)
 5. [Testing dbt-core](#testing)
 6. [Debugging](#debugging)
-7. [Adding a changelog entry](#adding-a-changelog-entry)
+7. [Adding or modifying a changelog entry](#adding-or-modifying-a-changelog-entry)
 8. [Submitting a Pull Request](#submitting-a-pull-request)
 
 ## About this document
@@ -56,7 +56,7 @@ There are some tools that will be helpful to you in developing locally. While th
 
 These are the tools used in `dbt-core` development and testing:
 
-- [`tox`](https://tox.readthedocs.io/en/latest/) to manage virtualenvs across python versions. We currently target the latest patch releases for Python 3.7, 3.8, 3.9, 3.10 and 3.11
+- [`tox`](https://tox.readthedocs.io/en/latest/) to manage virtualenvs across python versions. We currently target the latest patch releases for Python 3.8, 3.9, 3.10 and 3.11
 - [`pytest`](https://docs.pytest.org/en/latest/) to define, discover, and run tests
 - [`flake8`](https://flake8.pycqa.org/en/latest/) for code linting
 - [`black`](https://github.com/psf/black) for code formatting
@@ -113,7 +113,7 @@ When installed in this way, any changes you make to your local copy of the sourc
 
 With your virtualenv activated, the `dbt` script should point back to the source code you've cloned on your machine. You can verify this by running `which dbt`. This command should show you a path to an executable in your virtualenv.
 
-Configure your [profile](https://docs.getdbt.com/docs/configure-your-profile) as necessary to connect to your target databases. It may be a good idea to add a new profile pointing to a local Postgres instance, or a specific test sandbox within your data warehouse if appropriate.
+Configure your [profile](https://docs.getdbt.com/docs/configure-your-profile) as necessary to connect to your target databases. It may be a good idea to add a new profile pointing to a local Postgres instance, or a specific test sandbox within your data warehouse if appropriate. Make sure to create a profile before running integration tests.
 
 ## Testing
 
@@ -163,7 +163,7 @@ suites.
 
 #### `tox`
 
-[`tox`](https://tox.readthedocs.io/en/latest/) takes care of managing virtualenvs and install dependencies in order to run tests. You can also run tests in parallel, for example, you can run unit tests for Python 3.7, Python 3.8, Python 3.9, Python 3.10 and Python 3.11 checks in parallel with `tox -p`. Also, you can run unit tests for specific python versions with `tox -e py37`. The configuration for these tests in located in `tox.ini`.
+[`tox`](https://tox.readthedocs.io/en/latest/) takes care of managing virtualenvs and install dependencies in order to run tests. You can also run tests in parallel, for example, you can run unit tests for Python 3.8, Python 3.9, Python 3.10 and Python 3.11 checks in parallel with `tox -p`. Also, you can run unit tests for specific python versions with `tox -e py38`. The configuration for these tests in located in `tox.ini`.
 
 #### `pytest`
 
@@ -171,12 +171,10 @@ Finally, you can also run a specific test or group of tests using [`pytest`](htt
 
 ```sh
 # run all unit tests in a file
-python3 -m pytest test/unit/test_graph.py
+python3 -m pytest tests/unit/test_graph.py
 # run a specific unit test
-python3 -m pytest test/unit/test_graph.py::GraphTest::test__dependency_list
-# run specific Postgres integration tests (old way)
-python3 -m pytest -m profile_postgres test/integration/074_postgres_unlogged_table_tests
-# run specific Postgres integration tests (new way)
+python3 -m pytest tests/unit/test_graph.py::GraphTest::test__dependency_list
+# run specific Postgres functional tests
 python3 -m pytest tests/functional/sources
 ```
 
@@ -185,9 +183,8 @@ python3 -m pytest tests/functional/sources
 ### Unit, Integration, Functional?
 
 Here are some general rules for adding tests:
-* unit tests (`test/unit` & `tests/unit`) don’t need to access a database; "pure Python" tests should be written as unit tests
-* functional tests (`test/integration` & `tests/functional`) cover anything that interacts with a database, namely adapter
-* *everything in* `test/*` *is being steadily migrated to* `tests/*`
+* unit tests (`tests/unit`) don’t need to access a database; "pure Python" tests should be written as unit tests
+* functional tests (`tests/functional`) cover anything that interacts with a database, namely adapter
 
 ## Debugging
 

@@ -1,5 +1,7 @@
+import threading
+
 from dbt.contracts.graph.unparsed import FreshnessThreshold
-from dbt.contracts.graph.nodes import SourceDefinition, ResultNode
+from dbt.contracts.graph.nodes import CompiledNode, SourceDefinition, ResultNode
 from dbt.contracts.util import (
     BaseArtifactMetadata,
     ArtifactMixin,
@@ -161,6 +163,20 @@ class RunResult(NodeResult):
     def skipped(self):
         return self.status == RunStatus.Skipped
 
+    @classmethod
+    def from_node(cls, node: ResultNode, status: RunStatus, message: Optional[str]):
+        thread_id = threading.current_thread().name
+        return RunResult(
+            status=status,
+            thread_id=thread_id,
+            execution_time=0,
+            timing=[],
+            message=message,
+            node=node,
+            adapter_response={},
+            failures=None,
+        )
+
 
 @dataclass
 class ExecutionResult(dbtClassMixin):
@@ -187,9 +203,15 @@ class RunResultsMetadata(BaseArtifactMetadata):
 @dataclass
 class RunResultOutput(BaseResult):
     unique_id: str
+    compiled: Optional[bool]
+    compiled_code: Optional[str]
+    relation_name: Optional[str]
 
 
 def process_run_result(result: RunResult) -> RunResultOutput:
+
+    compiled = isinstance(result.node, CompiledNode)
+
     return RunResultOutput(
         unique_id=result.node.unique_id,
         status=result.status,
@@ -199,6 +221,9 @@ def process_run_result(result: RunResult) -> RunResultOutput:
         message=result.message,
         adapter_response=result.adapter_response,
         failures=result.failures,
+        compiled=result.node.compiled if compiled else None,  # type:ignore
+        compiled_code=result.node.compiled_code if compiled else None,  # type:ignore
+        relation_name=result.node.relation_name if compiled else None,  # type:ignore
     )
 
 
@@ -221,7 +246,7 @@ class RunExecutionResult(
 
 
 @dataclass
-@schema_version("run-results", 4)
+@schema_version("run-results", 5)
 class RunResultsArtifact(ExecutionResult, ArtifactMixin):
     results: Sequence[RunResultOutput]
     args: Dict[str, Any] = field(default_factory=dict)
@@ -245,40 +270,6 @@ class RunResultsArtifact(ExecutionResult, ArtifactMixin):
 
     def write(self, path: str):
         write_json(path, self.to_dict(omit_none=False))
-
-
-@dataclass
-class RunOperationResult(ExecutionResult):
-    success: bool
-
-
-@dataclass
-class RunOperationResultMetadata(BaseArtifactMetadata):
-    dbt_schema_version: str = field(
-        default_factory=lambda: str(RunOperationResultsArtifact.dbt_schema_version)
-    )
-
-
-@dataclass
-@schema_version("run-operation-result", 1)
-class RunOperationResultsArtifact(RunOperationResult, ArtifactMixin):
-    @classmethod
-    def from_success(
-        cls,
-        success: bool,
-        elapsed_time: float,
-        generated_at: datetime,
-    ):
-        meta = RunOperationResultMetadata(
-            dbt_schema_version=str(cls.dbt_schema_version),
-            generated_at=generated_at,
-        )
-        return cls(
-            metadata=meta,
-            results=[],
-            elapsed_time=elapsed_time,
-            success=success,
-        )
 
 
 # due to issues with typing.Union collapsing subclasses, this can't subclass

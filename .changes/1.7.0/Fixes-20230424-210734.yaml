@@ -1,0 +1,6 @@
+kind: Fixes
+body: Copy dir during `dbt deps` if symlink fails
+time: 2023-04-24T21:07:34.336797+05:30
+custom:
+  Author: anjutiwari
+  Issue: "7428 8223"

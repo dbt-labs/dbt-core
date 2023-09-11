@@ -1,9 +1,15 @@
 import pytest
 
-from dbt.tests.util import run_dbt, get_manifest
+from dbt.tests.util import run_dbt
+from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.metrics import ResolvedMetricReference
 
-from tests.functional.metrics.fixtures import models_people_sql, basic_metrics_yml
+from tests.functional.metrics.fixtures import (
+    models_people_sql,
+    basic_metrics_yml,
+    semantic_model_people_yml,
+    metricflow_time_spine_sql,
+)
 
 
 class TestMetricHelperFunctions:
@@ -11,21 +17,22 @@ class TestMetricHelperFunctions:
     def models(self):
         return {
             "metrics.yml": basic_metrics_yml,
+            "semantic_people.yml": semantic_model_people_yml,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
             "people.sql": models_people_sql,
         }
 
-    def test_expression_metric(
+    def test_derived_metric(
         self,
         project,
     ):
 
         # initial parse
-        run_dbt(["compile"])
+        manifest = run_dbt(["parse"])
+        assert isinstance(manifest, Manifest)
 
-        # make sure all the metrics are in the manifest
-        manifest = get_manifest(project.project_root)
         parsed_metric = manifest.metrics["metric.test.average_tenure_plus_one"]
-        testing_metric = ResolvedMetricReference(parsed_metric, manifest, None)
+        testing_metric = ResolvedMetricReference(parsed_metric, manifest)
 
         full_metric_dependency = set(testing_metric.full_metric_dependency())
         expected_full_metric_dependency = set(

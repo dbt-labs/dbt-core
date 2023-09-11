@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Fix untyped functions in task/runnable.py (mypy warning)
+time: 2023-09-06T13:24:35.448782-04:00
+custom:
+  Author: michelleark
+  Issue: "8402"

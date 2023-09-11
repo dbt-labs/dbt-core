@@ -1,4 +1,4 @@
-{% macro postgres_get_relations () -%}
+{% macro postgres__get_relations() -%}
 
   {#
       -- in pg_depend, objid is the dependent, refobjid is the referenced object
@@ -42,7 +42,7 @@
             referenced_class.kind
         from relation
         join class as referenced_class on relation.class=referenced_class.id
-        where referenced_class.kind in ('r', 'v')
+        where referenced_class.kind in ('r', 'v', 'm')
     ),
     relationships as (
         select
@@ -73,4 +73,8 @@
   {%- endcall -%}
 
   {{ return(load_result('relations').table) }}
+{% endmacro %}
+
+{% macro postgres_get_relations() %}
+  {{ return(postgres__get_relations()) }}
 {% endmacro %}

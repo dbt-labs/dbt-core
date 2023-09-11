@@ -1,0 +1,6 @@
+kind: Features
+body: Support configuration of semantic models with the addition of enable/disable and group enablement.
+time: 2023-08-28T09:21:00.551633-05:00
+custom:
+  Author: emmyoop
+  Issue: "7968"

@@ -61,7 +61,7 @@ class SchemaGenericTestParser(SimpleParser):
     def get_compiled_path(cls, block: FileBlock) -> str:
         return block.path.relative_path
 
-    def parse_file(self, block: FileBlock, dct: Dict = None) -> None:
+    def parse_file(self, block: FileBlock, dct: Optional[Dict] = None) -> None:
         pass
 
     def parse_from_dict(self, dct, validate=True) -> GenericTestNode:
@@ -233,7 +233,7 @@ class SchemaGenericTestParser(SimpleParser):
         attached_node = None  # type: Optional[Union[ManifestNode, GraphMemberNode]]
         if not isinstance(target, UnpatchedSourceDefinition):
             attached_node_unique_id = self.manifest.ref_lookup.get_unique_id(
-                target.name, None, version
+                target.name, target.package_name, version
             )
             if attached_node_unique_id:
                 attached_node = self.manifest.nodes[attached_node_unique_id]

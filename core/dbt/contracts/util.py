@@ -16,8 +16,9 @@ from dbt.dataclass_schema import dbtClassMixin
 from dbt.dataclass_schema import (
     ValidatedStringMixin,
     ValidationError,
-    register_pattern,
 )
+from mashumaro.jsonschema import build_json_schema
+import functools
 
 
 SourceKey = Tuple[str, str]
@@ -90,7 +91,9 @@ class AdditionalPropertiesMixin:
         cls_keys = cls._get_field_names()
         new_dict = {}
         for key, value in data.items():
-            if key not in cls_keys and key != "_extra":
+            # The pre-hook/post-hook mess hasn't been converted yet... That happens in
+            # the super().__pre_deserialize__ below...
+            if key not in cls_keys and key not in ["_extra", "pre-hook", "post-hook"]:
                 if "_extra" not in new_dict:
                     new_dict["_extra"] = {}
                 new_dict["_extra"][key] = value
@@ -192,11 +195,12 @@ class VersionedSchema(dbtClassMixin):
     dbt_schema_version: ClassVar[SchemaVersion]
 
     @classmethod
-    def json_schema(cls, embeddable: bool = False) -> Dict[str, Any]:
-        result = super().json_schema(embeddable=embeddable)
-        if not embeddable:
-            result["$id"] = str(cls.dbt_schema_version)
-        return result
+    @functools.lru_cache
+    def json_schema(cls) -> Dict[str, Any]:
+        json_schema_obj = build_json_schema(cls, all_refs=True)
+        json_schema = json_schema_obj.to_dict()
+        json_schema["$id"] = str(cls.dbt_schema_version)
+        return json_schema
 
     @classmethod
     def is_compatible_version(cls, schema_version):
@@ -258,6 +262,13 @@ class ArtifactMixin(VersionedSchema, Writable, Readable):
 
 
 class Identifier(ValidatedStringMixin):
+    """Our definition of a valid Identifier is the same as what's valid for an unquoted database table name.
+
+    That is:
+    1. It can contain a-z, A-Z, 0-9, and _
+    1. It cannot start with a number
+    """
+
     ValidationRegex = r"^[^\d\W]\w*$"
 
     @classmethod
@@ -271,6 +282,3 @@ class Identifier(ValidatedStringMixin):
             return False
 
         return True
-
-
-register_pattern(Identifier, r"^[^\d\W]\w*$")

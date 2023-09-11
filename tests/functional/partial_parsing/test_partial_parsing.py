@@ -1,4 +1,5 @@
 import pytest
+from unittest import mock
 
 from dbt.tests.util import run_dbt, get_manifest, write_file, rm_file, run_dbt_and_capture
 from dbt.tests.fixtures.project import write_project_files
@@ -8,9 +9,6 @@ from tests.functional.partial_parsing.fixtures import (
     models_schema1_yml,
     models_schema2_yml,
     models_schema2b_yml,
-    models_versions_schema_yml,
-    models_versions_defined_in_schema_yml,
-    models_versions_updated_schema_yml,
     model_three_sql,
     model_three_modified_sql,
     model_four1_sql,
@@ -71,9 +69,11 @@ from tests.functional.partial_parsing.fixtures import (
     groups_schema_yml_two_groups_private_orders_invalid_access,
 )
 
-from dbt.exceptions import CompilationError, ParsingError, DuplicateVersionedUnversionedError
+from dbt.exceptions import CompilationError, ParsingError
 from dbt.contracts.files import ParseFileType
 from dbt.contracts.results import TestStatus
+from dbt.plugins.manifest import PluginNodes, ModelNodeArgs
+
 import re
 import os
 
@@ -300,72 +300,6 @@ class TestModels:
         model_id = "model.test.model_three"
         assert model_id in manifest.nodes
         assert model_id not in manifest.disabled
-
-
-class TestVersionedModels:
-    @pytest.fixture(scope="class")
-    def models(self):
-        return {
-            "model_one_v1.sql": model_one_sql,
-            "model_one.sql": model_one_sql,
-            "model_one_downstream.sql": model_four2_sql,
-            "schema.yml": models_versions_schema_yml,
-        }
-
-    def test_pp_versioned_models(self, project):
-        results = run_dbt(["run"])
-        assert len(results) == 3
-
-        manifest = get_manifest(project.project_root)
-        model_one_node = manifest.nodes["model.test.model_one.v1"]
-        assert not model_one_node.is_latest_version
-        model_two_node = manifest.nodes["model.test.model_one.v2"]
-        assert model_two_node.is_latest_version
-        # assert unpinned ref points to latest version
-        model_one_downstream_node = manifest.nodes["model.test.model_one_downstream"]
-        assert model_one_downstream_node.depends_on.nodes == ["model.test.model_one.v2"]
-
-        # update schema.yml block - model_one is now 'defined_in: model_one_different'
-        rm_file(project.project_root, "models", "model_one.sql")
-        write_file(model_one_sql, project.project_root, "models", "model_one_different.sql")
-        write_file(
-            models_versions_defined_in_schema_yml, project.project_root, "models", "schema.yml"
-        )
-        results = run_dbt(["--partial-parse", "run"])
-        assert len(results) == 3
-
-        # update versions schema.yml block - latest_version from 2 to 1
-        write_file(
-            models_versions_updated_schema_yml, project.project_root, "models", "schema.yml"
-        )
-        results, log_output = run_dbt_and_capture(
-            ["--partial-parse", "--log-format", "json", "run"]
-        )
-        assert len(results) == 3
-
-        manifest = get_manifest(project.project_root)
-        model_one_node = manifest.nodes["model.test.model_one.v1"]
-        assert model_one_node.is_latest_version
-        model_two_node = manifest.nodes["model.test.model_one.v2"]
-        assert not model_two_node.is_latest_version
-        # assert unpinned ref points to latest version
-        model_one_downstream_node = manifest.nodes["model.test.model_one_downstream"]
-        assert model_one_downstream_node.depends_on.nodes == ["model.test.model_one.v1"]
-        # assert unpinned ref to latest-not-max version yields an "FYI" info-level log
-        assert "UnpinnedRefNewVersionAvailable" in log_output
-
-        # update versioned model
-        write_file(model_two_sql, project.project_root, "models", "model_one_different.sql")
-        results = run_dbt(["--partial-parse", "run"])
-        assert len(results) == 3
-        manifest = get_manifest(project.project_root)
-        assert len(manifest.nodes) == 3
-        print(f"--- nodes: {manifest.nodes.keys()}")
-
-        # create a new model_one in model_one.sql and re-parse
-        write_file(model_one_sql, project.project_root, "models", "model_one.sql")
-        with pytest.raises(DuplicateVersionedUnversionedError):
-            run_dbt(["parse"])
 
 
 class TestSources:
@@ -804,3 +738,111 @@ class TestGroups:
         )
         with pytest.raises(ParsingError):
             results = run_dbt(["--partial-parse", "run"])
+
+
+class TestExternalModels:
+    @pytest.fixture(scope="class")
+    def external_model_node(self):
+        return ModelNodeArgs(
+            name="external_model",
+            package_name="external",
+            identifier="test_identifier",
+            schema="test_schema",
+        )
+
+    @pytest.fixture(scope="class")
+    def external_model_node_versioned(self):
+        return ModelNodeArgs(
+            name="external_model_versioned",
+            package_name="external",
+            identifier="test_identifier_v1",
+            schema="test_schema",
+            version=1,
+        )
+
+    @pytest.fixture(scope="class")
+    def external_model_node_depends_on(self):
+        return ModelNodeArgs(
+            name="external_model_depends_on",
+            package_name="external",
+            identifier="test_identifier_depends_on",
+            schema="test_schema",
+            depends_on_nodes=["model.external.external_model_depends_on_parent"],
+        )
+
+    @pytest.fixture(scope="class")
+    def external_model_node_depends_on_parent(self):
+        return ModelNodeArgs(
+            name="external_model_depends_on_parent",
+            package_name="external",
+            identifier="test_identifier_depends_on_parent",
+            schema="test_schema",
+        )
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"model_one.sql": model_one_sql}
+
+    @mock.patch("dbt.plugins.get_plugin_manager")
+    def test_pp_external_models(
+        self,
+        get_plugin_manager,
+        project,
+        external_model_node,
+        external_model_node_versioned,
+        external_model_node_depends_on,
+        external_model_node_depends_on_parent,
+    ):
+        # initial plugin - one external model
+        external_nodes = PluginNodes()
+        external_nodes.add_model(external_model_node)
+        get_plugin_manager.return_value.get_nodes.return_value = external_nodes
+
+        # initial parse
+        manifest = run_dbt(["parse"])
+        assert len(manifest.nodes) == 2
+        assert set(manifest.nodes.keys()) == {
+            "model.external.external_model",
+            "model.test.model_one",
+        }
+        assert len(manifest.external_node_unique_ids) == 1
+        assert manifest.external_node_unique_ids == ["model.external.external_model"]
+
+        # add a model file
+        write_file(model_two_sql, project.project_root, "models", "model_two.sql")
+        manifest = run_dbt(["--partial-parse", "parse"])
+        assert len(manifest.nodes) == 3
+
+        # add an external model
+        external_nodes.add_model(external_model_node_versioned)
+        manifest = run_dbt(["--partial-parse", "parse"])
+        assert len(manifest.nodes) == 4
+        assert len(manifest.external_node_unique_ids) == 2
+
+        # add a model file that depends on external model
+        write_file(
+            "SELECT * FROM {{ref('external', 'external_model')}}",
+            project.project_root,
+            "models",
+            "model_depends_on_external.sql",
+        )
+        manifest = run_dbt(["--partial-parse", "parse"])
+        assert len(manifest.nodes) == 5
+        assert len(manifest.external_node_unique_ids) == 2
+
+        # remove a model file that depends on external model
+        rm_file(project.project_root, "models", "model_depends_on_external.sql")
+        manifest = run_dbt(["--partial-parse", "parse"])
+        assert len(manifest.nodes) == 4
+
+        # add an external node with depends on
+        external_nodes.add_model(external_model_node_depends_on)
+        external_nodes.add_model(external_model_node_depends_on_parent)
+        manifest = run_dbt(["--partial-parse", "parse"])
+        assert len(manifest.nodes) == 6
+        assert len(manifest.external_node_unique_ids) == 4
+
+        # skip files parsing - ensure no issues
+        run_dbt(["--partial-parse", "parse"])
+        assert len(manifest.nodes) == 6
+        assert len(manifest.external_node_unique_ids) == 4

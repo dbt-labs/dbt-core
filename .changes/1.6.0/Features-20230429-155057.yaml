@@ -1,7 +1,0 @@
-kind: Features
-body: Allow duplicate manifest node (models, seeds, analyses, snapshots) names across
-  packages
-time: 2023-04-29T15:50:57.757832-04:00
-custom:
-  Author: MichelleArk
-  Issue: "7446"

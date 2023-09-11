@@ -1,0 +1,155 @@
+# **what?**
+# This workflow will test all test(s) at the input path given number of times to determine if it's flaky or not.  You can test with any supported OS/Python combination.
+# This is batched in 10 to allow more test iterations faster.
+
+# **why?**
+# Testing if a test is flaky and if a previously flaky test has been fixed.  This allows easy testing on supported python versions and OS combinations.
+
+# **when?**
+# This is triggered manually from dbt-core.
+
+name: Flaky Tester
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to check out'
+        type: string
+        required: true
+        default: 'main'
+      test_path:
+        description: 'Path to single test to run (ex: tests/functional/retry/test_retry.py::TestRetry::test_fail_fast)'
+        type: string
+        required: true
+        default: 'tests/functional/...'
+      python_version:
+        description: 'Version of Python to Test Against'
+        type: choice
+        options:
+          - '3.8'
+          - '3.9'
+          - '3.10'
+          - '3.11'
+      os:
+        description: 'OS to run test in'
+        type: choice
+        options:
+          - 'ubuntu-latest'
+          - 'macos-latest'
+          - 'windows-latest'
+      num_runs_per_batch:
+        description: 'Max number of times to run the test per batch.  We always run 10 batches.'
+        type: number
+        required: true
+        default: '50'
+
+permissions: read-all
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    steps:
+      - name: "[DEBUG] Output Inputs"
+        run: |
+          echo "Branch: ${{ inputs.branch }}"
+          echo "test_path: ${{ inputs.test_path }}"
+          echo "python_version: ${{ inputs.python_version }}"
+          echo "os: ${{ inputs.os }}"
+          echo "num_runs_per_batch: ${{ inputs.num_runs_per_batch }}"
+
+  pytest:
+    runs-on: ${{ inputs.os }}
+    strategy:
+      # run all batches, even if one fails.  This informs how flaky the test may be.
+      fail-fast: false
+      # using a matrix to speed up the jobs since the matrix will run in parallel when runners are available
+      matrix:
+        batch: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
+    env:
+      PYTEST_ADDOPTS: "-v --color=yes -n4 --csv integration_results.csv"
+      DBT_TEST_USER_1: dbt_test_user_1
+      DBT_TEST_USER_2: dbt_test_user_2
+      DBT_TEST_USER_3: dbt_test_user_3
+      DD_CIVISIBILITY_AGENTLESS_ENABLED: true
+      DD_API_KEY: ${{ secrets.DATADOG_API_KEY }}
+      DD_SITE: datadoghq.com
+      DD_ENV: ci
+      DD_SERVICE: ${{ github.event.repository.name }}
+
+    steps:
+      - name: "Checkout code"
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ inputs.branch }}
+
+      - name: "Setup Python"
+        uses: actions/setup-python@v4
+        with:
+          python-version: "${{ inputs.python_version }}"
+
+      - name: "Setup Dev Environment"
+        run: make dev
+
+      - name: "Set up postgres (linux)"
+        if: inputs.os == 'ubuntu-latest'
+        run: make setup-db
+
+        # mac and windows don't use make due to limitations with docker with those runners in GitHub
+      - name: "Set up postgres (macos)"
+        if: inputs.os == 'macos-latest'
+        uses: ./.github/actions/setup-postgres-macos
+
+      - name: "Set up postgres (windows)"
+        if: inputs.os == 'windows-latest'
+        uses: ./.github/actions/setup-postgres-windows
+
+      - name: "Test Command"
+        id: command
+        run: |
+          test_command="python -m pytest ${{ inputs.test_path }}"
+          echo "test_command=$test_command" >> $GITHUB_OUTPUT
+
+      - name: "Run test ${{ inputs.num_runs_per_batch }} times"
+        id: pytest
+        run: |
+          set +e
+          for ((i=1; i<=${{ inputs.num_runs_per_batch }}; i++))
+          do
+            echo "Running pytest iteration $i..."
+            python -m pytest --ddtrace ${{ inputs.test_path }}
+            exit_code=$?
+
+            if [[ $exit_code -eq 0 ]]; then
+              success=$((success + 1))
+              echo "Iteration $i: Success"
+            else
+              failure=$((failure + 1))
+              echo "Iteration $i: Failure"
+            fi
+
+            echo
+            echo "==========================="
+            echo "Successful runs: $success"
+            echo "Failed runs: $failure"
+            echo "==========================="
+            echo
+          done
+
+          echo "failure=$failure" >> $GITHUB_OUTPUT
+
+      - name: "Success and Failure Summary: ${{ inputs.os }}/Python ${{ inputs.python_version }}"
+        run: |
+          echo "Batch: ${{ matrix.batch }}"
+          echo "Successful runs: ${{ steps.pytest.outputs.success }}"
+          echo "Failed runs: ${{ steps.pytest.outputs.failure }}"
+
+      - name: "Error for Failures"
+        if: ${{ steps.pytest.outputs.failure }}
+        run: |
+            echo "Batch ${{ matrix.batch }} failed ${{ steps.pytest.outputs.failure }} of ${{ inputs.num_runs_per_batch }} tests"
+            exit 1

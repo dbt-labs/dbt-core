@@ -12,7 +12,7 @@ from dbt.task.base import ConfiguredTask
 
 class ServeTask(ConfiguredTask):
     def run(self):
-        os.chdir(self.config.target_path)
+        os.chdir(self.config.project_target_path)
         shutil.copyfile(DOCS_INDEX_FILE_PATH, "index.html")
 
         port = self.args.port

@@ -1,0 +1,6 @@
+kind: Fixes
+body: Update metric helper functions to work with new semantic layer metrics
+time: 2023-09-06T12:02:12.156534-07:00
+custom:
+  Author: QMalcolm
+  Issue: "8134"

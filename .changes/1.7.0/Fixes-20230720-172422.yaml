@@ -1,0 +1,6 @@
+kind: Fixes
+body: Update `dbt deps` download retry logic to handle `EOFError` exceptions
+time: 2023-07-20T17:24:22.969951-07:00
+custom:
+  Author: QMalcolm
+  Issue: "6653"

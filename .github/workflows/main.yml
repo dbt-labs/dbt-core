@@ -33,6 +33,11 @@ defaults:
   run:
     shell: bash
 
+# top-level adjustments can be made here
+env:
+  # number of parallel processes to spawn for python integration testing
+  PYTHON_INTEGRATION_TEST_WORKERS: 5
+
 jobs:
   code-quality:
     name: code-quality
@@ -69,11 +74,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.7", "3.8", "3.9", "3.10", "3.11"]
+        python-version: ["3.8", "3.9", "3.10", "3.11"]
 
     env:
       TOXENV: "unit"
-      PYTEST_ADDOPTS: "-v --color=yes --csv unit_results.csv"
 
     steps:
       - name: Check out the repository
@@ -101,36 +105,73 @@ jobs:
           CURRENT_DATE=$(date +'%Y-%m-%dT%H_%M_%S') # no colons allowed for artifacts
           echo "date=$CURRENT_DATE" >> $GITHUB_OUTPUT
 
-      - uses: actions/upload-artifact@v3
-        if: always()
+      - name: Upload Unit Test Coverage to Codecov
+        if: ${{ matrix.python-version == '3.11' }}
+        uses: codecov/codecov-action@v3
         with:
-          name: unit_results_${{ matrix.python-version }}-${{ steps.date.outputs.date }}.csv
-          path: unit_results.csv
+          token: ${{ secrets.CODECOV_TOKEN }}
+          flags: unit
+
+  integration-metadata:
+    name: integration test metadata generation
+    runs-on: ubuntu-latest
+    outputs:
+      split-groups: ${{ steps.generate-split-groups.outputs.split-groups }}
+      include: ${{ steps.generate-include.outputs.include }}
+
+    steps:
+      - name: generate split-groups
+        id: generate-split-groups
+        run: |
+          MATRIX_JSON="["
+          for B in $(seq 1 ${{ env.PYTHON_INTEGRATION_TEST_WORKERS }}); do
+              MATRIX_JSON+=$(sed 's/^/"/;s/$/"/' <<< "${B}")
+          done
+          MATRIX_JSON="${MATRIX_JSON//\"\"/\", \"}"
+          MATRIX_JSON+="]"
+          echo "split-groups=${MATRIX_JSON}"
+          echo "split-groups=${MATRIX_JSON}" >> $GITHUB_OUTPUT
+
+      - name: generate include
+        id: generate-include
+        run: |
+          INCLUDE=('"python-version":"3.8","os":"windows-latest"' '"python-version":"3.8","os":"macos-latest"' )
+          INCLUDE_GROUPS="["
+          for include in ${INCLUDE[@]}; do
+              for group in $(seq 1 ${{ env.PYTHON_INTEGRATION_TEST_WORKERS }}); do
+                  INCLUDE_GROUPS+=$(sed 's/$/, /' <<< "{\"split-group\":\"${group}\",${include}}")
+              done
+          done
+          INCLUDE_GROUPS=$(echo $INCLUDE_GROUPS | sed 's/,*$//g')
+          INCLUDE_GROUPS+="]"
+          echo "include=${INCLUDE_GROUPS}"
+          echo "include=${INCLUDE_GROUPS}" >> $GITHUB_OUTPUT
 
   integration:
-    name: integration test / python ${{ matrix.python-version }} / ${{ matrix.os }}
+    name: (${{ matrix.split-group }}) integration test / python ${{ matrix.python-version }} / ${{ matrix.os }}
 
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 45
-
+    timeout-minutes: 30
+    needs:
+      - integration-metadata
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.7", "3.8", "3.9", "3.10", "3.11"]
+        python-version: ["3.8", "3.9", "3.10", "3.11"]
         os: [ubuntu-20.04]
-        include:
-          - python-version: 3.8
-            os: windows-latest
-          - python-version: 3.8
-            os: macos-latest
-
+        split-group: ${{ fromJson(needs.integration-metadata.outputs.split-groups) }}
+        include: ${{ fromJson(needs.integration-metadata.outputs.include) }}
     env:
       TOXENV: integration
-      PYTEST_ADDOPTS: "-v --color=yes -n4 --csv integration_results.csv"
       DBT_INVOCATION_ENV: github-actions
       DBT_TEST_USER_1: dbt_test_user_1
       DBT_TEST_USER_2: dbt_test_user_2
       DBT_TEST_USER_3: dbt_test_user_3
+      DD_CIVISIBILITY_AGENTLESS_ENABLED: true
+      DD_API_KEY: ${{ secrets.DATADOG_API_KEY }}
+      DD_SITE: datadoghq.com
+      DD_ENV: ci
+      DD_SERVICE: ${{ github.event.repository.name }}
 
     steps:
       - name: Check out the repository
@@ -161,7 +202,9 @@ jobs:
           tox --version
 
       - name: Run tests
-        run: tox
+        run: tox -- --ddtrace
+        env:
+          PYTEST_ADDOPTS: ${{ format('--splits {0} --group {1}', env.PYTHON_INTEGRATION_TEST_WORKERS, matrix.split-group) }}
 
       - name: Get current date
         if: always()
@@ -176,11 +219,29 @@ jobs:
           name: logs_${{ matrix.python-version }}_${{ matrix.os }}_${{ steps.date.outputs.date }}
           path: ./logs
 
-      - uses: actions/upload-artifact@v3
-        if: always()
+      - name: Upload Integration Test Coverage to Codecov
+        if: ${{ matrix.python-version == '3.11' }}
+        uses: codecov/codecov-action@v3
         with:
-          name: integration_results_${{ matrix.python-version }}_${{ matrix.os }}_${{ steps.date.outputs.date }}.csv
-          path: integration_results.csv
+          token: ${{ secrets.CODECOV_TOKEN }}
+          flags: integration
+
+  integration-report:
+    if: ${{ always() }}
+    name: Integration Test Suite
+    runs-on: ubuntu-latest
+    needs: integration
+    steps:
+      - name: "Integration Tests Failed"
+        if: ${{ contains(needs.integration.result, 'failure') || contains(needs.integration.result, 'cancelled') }}
+        # when this is true the next step won't execute
+        run: |
+          echo "::notice title='Integration test suite failed'"
+          exit 1
+
+      - name: "Integration Tests Passed"
+        run: |
+          echo "::notice title='Integration test suite passed'"
 
   build:
     name: build packages

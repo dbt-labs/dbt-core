@@ -1,15 +1,18 @@
 import pytest
 
-from dbt.exceptions import DbtRuntimeError
+from dbt.exceptions import DbtRuntimeError, Exception as DbtException
 from dbt.tests.util import run_dbt_and_capture, run_dbt
 from tests.functional.show.fixtures import (
     models__second_ephemeral_model,
     seeds__sample_seed,
     models__sample_model,
+    models__sample_number_model,
+    models__sample_number_model_with_nulls,
     models__second_model,
     models__ephemeral_model,
     schema_yml,
     models__sql_header,
+    private_model_yml,
 )
 
 
@@ -18,6 +21,8 @@ class TestShow:
     def models(self):
         return {
             "sample_model.sql": models__sample_model,
+            "sample_number_model.sql": models__sample_number_model,
+            "sample_number_model_with_nulls.sql": models__sample_number_model_with_nulls,
             "second_model.sql": models__second_model,
             "ephemeral_model.sql": models__ephemeral_model,
             "sql_header.sql": models__sql_header,
@@ -61,6 +66,32 @@ class TestShow:
         assert "sample_num" in log_output
         assert "sample_bool" in log_output
 
+    def test_numeric_values(self, project):
+        run_dbt(["build"])
+        (results, log_output) = run_dbt_and_capture(
+            ["show", "--select", "sample_number_model", "--output", "json"]
+        )
+        assert "Previewing node 'sample_number_model'" not in log_output
+        assert "1.0" not in log_output
+        assert "1" in log_output
+        assert "3.0" in log_output
+        assert "4.3" in log_output
+        assert "5" in log_output
+        assert "5.0" not in log_output
+
+    def test_numeric_values_with_nulls(self, project):
+        run_dbt(["build"])
+        (results, log_output) = run_dbt_and_capture(
+            ["show", "--select", "sample_number_model_with_nulls", "--output", "json"]
+        )
+        assert "Previewing node 'sample_number_model_with_nulls'" not in log_output
+        assert "1.0" not in log_output
+        assert "1" in log_output
+        assert "3.0" in log_output
+        assert "4.3" in log_output
+        assert "5" in log_output
+        assert "5.0" not in log_output
+
     def test_inline_pass(self, project):
         run_dbt(["build"])
         (results, log_output) = run_dbt_and_capture(
@@ -71,11 +102,12 @@ class TestShow:
         assert "sample_bool" in log_output
 
     def test_inline_fail(self, project):
-        run_dbt(["build"])
-        with pytest.raises(
-            DbtRuntimeError, match="depends on a node named 'third_model' which was not found"
-        ):
+        with pytest.raises(DbtException, match="Error parsing inline query"):
             run_dbt(["show", "--inline", "select * from {{ ref('third_model') }}"])
+
+    def test_inline_fail_database_error(self, project):
+        with pytest.raises(DbtRuntimeError, match="Database Error"):
+            run_dbt(["show", "--inline", "slect asdlkjfsld;j"])
 
     def test_ephemeral_model(self, project):
         run_dbt(["build"])
@@ -137,3 +169,20 @@ class TestShowModelVersions:
         (results, log_output) = run_dbt_and_capture(["show", "--select", "sample_model.v2"])
         assert "Previewing node 'sample_model.v1'" not in log_output
         assert "Previewing node 'sample_model.v2'" in log_output
+
+
+class TestShowPrivateModel:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": private_model_yml,
+            "private_model.sql": models__sample_model,
+        }
+
+    @pytest.fixture(scope="class")
+    def seeds(self):
+        return {"sample_seed.csv": seeds__sample_seed}
+
+    def test_version_unspecified(self, project):
+        run_dbt(["build"])
+        run_dbt(["show", "--inline", "select * from {{ ref('private_model') }}"])

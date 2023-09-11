@@ -1,0 +1,9 @@
+ignore:
+  - ".github"
+  - ".changes"
+coverage:
+  status:
+    project:
+      default:
+        target: auto
+        threshold: 0.01% # Reduce noise by ignoring rounding errors in coverage drops

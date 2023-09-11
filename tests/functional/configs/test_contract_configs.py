@@ -1,6 +1,7 @@
 import pytest
+import os
 from dbt.exceptions import ParsingError, ValidationError
-from dbt.tests.util import run_dbt, get_manifest, get_artifact, run_dbt_and_capture
+from dbt.tests.util import run_dbt, get_manifest, get_artifact, run_dbt_and_capture, write_file
 
 my_model_sql = """
 {{
@@ -56,10 +57,10 @@ select
   cast('2019-01-01' as date) as date_day
 """
 
-my_ephemeral_model_sql = """
+my_view_model_sql = """
 {{
   config(
-    materialized = "ephemeral"
+    materialized = "view"
   )
 }}
 
@@ -99,6 +100,34 @@ models:
             - type: not_null
             - type: primary_key
             - type: check
+              expression: (id > 0)
+        tests:
+          - unique
+      - name: color
+        data_type: text
+      - name: date_day
+        data_type: date
+"""
+
+model_schema_ignore_unsupported_yml = """
+version: 2
+models:
+  - name: my_model
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: id
+        quote: true
+        data_type: integer
+        description: hello
+        constraints:
+            - type: not_null
+              warn_unsupported: False
+            - type: primary_key
+              warn_unsupported: False
+            - type: check
+              warn_unsupported: False
               expression: (id > 0)
         tests:
           - unique
@@ -359,7 +388,7 @@ class TestModelLevelContractErrorMessages:
             run_dbt(["run"], expect_pass=False)
 
         exc_str = " ".join(str(err_info.value).split())
-        expected_materialization_error = "Invalid value for on_schema_change: ignore. Models materialized as incremental with contracts enabled must set on_schema_change to 'append_new_columns'"
+        expected_materialization_error = "Invalid value for on_schema_change: ignore. Models materialized as incremental with contracts enabled must set on_schema_change to 'append_new_columns' or 'fail'"
         assert expected_materialization_error in str(exc_str)
 
 
@@ -367,8 +396,8 @@ class TestModelLevelConstraintsErrorMessages:
     @pytest.fixture(scope="class")
     def models(self):
         return {
-            "my_model.sql": my_ephemeral_model_sql,
-            "constraints_schema.yml": model_schema_errors_yml,
+            "my_model.py": my_model_python_error,
+            "constraints_schema.yml": model_schema_yml,
         }
 
     def test__config_errors(self, project):
@@ -376,11 +405,38 @@ class TestModelLevelConstraintsErrorMessages:
             run_dbt(["run"], expect_pass=False)
 
         exc_str = " ".join(str(err_info.value).split())
-        expected_materialization_error = "Only table, view, and incremental materializations are supported for constraints, but found 'ephemeral'"
+        expected_materialization_error = "Language Error: Expected 'sql' but found 'python'"
         assert expected_materialization_error in str(exc_str)
         # This is a compile time error and we won't get here because the materialization check is parse time
         expected_empty_data_type_error = "Columns with `data_type` Blank/Null not allowed on contracted models. Columns Blank/Null: ['date_day']"
         assert expected_empty_data_type_error not in str(exc_str)
+
+
+class TestModelLevelConstraintsWarningMessages:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_model.sql": my_view_model_sql,
+            "constraints_schema.yml": model_schema_yml,
+        }
+
+    def test__config_warning(self, project):
+        _, log_output = run_dbt_and_capture(["run"])
+
+        expected_materialization_warning = (
+            "Constraint types are not supported for view materializations"
+        )
+        assert expected_materialization_warning in str(log_output)
+
+        # change to not show warnings, message should not be in logs
+        models_dir = os.path.join(project.project_root, "models")
+        write_file(model_schema_ignore_unsupported_yml, models_dir, "constraints_schema.yml")
+        _, log_output = run_dbt_and_capture(["run"])
+
+        expected_materialization_warning = (
+            "Constraint types are not supported for view materializations"
+        )
+        assert expected_materialization_warning not in str(log_output)
 
 
 class TestSchemaContractEnabledConfigs:
@@ -415,3 +471,18 @@ class TestPythonModelLevelContractErrorMessages:
         exc_str = " ".join(str(err_info.value).split())
         expected_python_error = "Language Error: Expected 'sql' but found 'python'"
         assert expected_python_error in exc_str
+
+
+class TestModelContractMissingYAMLColumns:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_model.sql": my_model_contract_sql,
+        }
+
+    def test__missing_column_contract_error(self, project):
+        results = run_dbt(["run"], expect_pass=False)
+        expected_error = (
+            "This model has an enforced contract, and its 'columns' specification is missing"
+        )
+        assert expected_error in results[0].message

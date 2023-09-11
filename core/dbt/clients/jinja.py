@@ -191,7 +191,7 @@ NativeSandboxEnvironment.template_class = NativeSandboxTemplate  # type: ignore
 
 
 class TemplateCache:
-    def __init__(self):
+    def __init__(self) -> None:
         self.file_cache: Dict[str, jinja2.Template] = {}
 
     def get_node_template(self, node) -> jinja2.Template:
@@ -565,6 +565,8 @@ def _requote_result(raw_value: str, rendered: str) -> str:
 # is small enough that I've just chosen the more readable option.
 _HAS_RENDER_CHARS_PAT = re.compile(r"({[{%#]|[#}%]})")
 
+_render_cache: Dict[str, Any] = dict()
+
 
 def get_rendered(
     string: str,
@@ -572,15 +574,21 @@ def get_rendered(
     node=None,
     capture_macros: bool = False,
     native: bool = False,
-) -> str:
+) -> Any:
     # performance optimization: if there are no jinja control characters in the
     # string, we can just return the input. Fall back to jinja if the type is
     # not a string or if native rendering is enabled (so '1' -> 1, etc...)
     # If this is desirable in the native env as well, we could handle the
     # native=True case by passing the input string to ast.literal_eval, like
     # the native renderer does.
-    if not native and isinstance(string, str) and _HAS_RENDER_CHARS_PAT.search(string) is None:
-        return string
+    has_render_chars = not isinstance(string, str) or _HAS_RENDER_CHARS_PAT.search(string)
+
+    if not has_render_chars:
+        if not native:
+            return string
+        elif string in _render_cache:
+            return _render_cache[string]
+
     template = get_template(
         string,
         ctx,
@@ -588,7 +596,13 @@ def get_rendered(
         capture_macros=capture_macros,
         native=native,
     )
-    return render_template(template, ctx, node)
+
+    rendered = render_template(template, ctx, node)
+
+    if not has_render_chars and native:
+        _render_cache[string] = rendered
+
+    return rendered
 
 
 def undefined_error(msg) -> NoReturn:

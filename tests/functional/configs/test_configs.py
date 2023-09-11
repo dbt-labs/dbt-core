@@ -1,4 +1,4 @@
-from hologram import ValidationError
+from dbt.dataclass_schema import ValidationError
 import pytest
 import os
 
@@ -58,11 +58,13 @@ class TestTargetConfigs(BaseConfigProject):
         }
 
     def test_alternative_target_paths(self, project):
+        # chdir to a different directory to test creation of target directory under project_root
+        os.chdir(project.profiles_dir)
         run_dbt(["seed"])
 
         target_path = ""
-        for d in os.listdir("."):
-            if os.path.isdir(d) and d.startswith("target_"):
+        for d in os.listdir(project.project_root):
+            if os.path.isdir(os.path.join(project.project_root, d)) and d.startswith("target_"):
                 target_path = d
         assert os.path.exists(os.path.join(project.project_root, target_path, "manifest.json"))
 

@@ -1,9 +1,12 @@
-import pytest
+import json
 import os
 import shutil
-from dbt.tests.util import run_dbt, get_manifest
+
+import pytest
+
+from dbt.contracts.graph.manifest import WritableManifest, get_manifest_schema_version
 from dbt.exceptions import IncompatibleSchemaError
-from dbt.contracts.graph.manifest import WritableManifest
+from dbt.tests.util import run_dbt, get_manifest
 
 # This project must have one of each kind of node type, plus disabled versions, for
 # test coverage to be complete.
@@ -113,6 +116,10 @@ analyses__disabled_a_sql = """
 select 9 as id
 """
 
+metricflow_time_spine_sql = """
+SELECT to_date('02/20/2023', 'mm/dd/yyyy') as date_day
+"""
+
 # Use old attribute names (v1.0-1.2) to test forward/backward compatibility with the rename in v1.3
 models__schema_yml = """
 version: 2
@@ -127,24 +134,45 @@ models:
        tests:
        - not_null
 
+semantic_models:
+  - name: semantic_people
+    model: ref('my_model')
+    dimensions:
+      - name: favorite_color
+        type: categorical
+      - name: created_at
+        type: TIME
+        type_params:
+          time_granularity: day
+    measures:
+      - name: years_tenure
+        agg: SUM
+        expr: tenure
+      - name: people
+        agg: count
+        expr: id
+      - name: customers
+        agg: count
+        expr: id
+    entities:
+      - name: id
+        type: primary
+    defaults:
+      agg_time_dimension: created_at
+
 metrics:
   - name: my_metric
     label: Count records
-    model: ref('my_model')
-
-    type: count
-    sql: "*"
-    timestamp: updated_at
-    time_grains: [day]
+    type: simple
+    type_params:
+      measure: customers
   - name: disabled_metric
     label: Count records
-    model: ref('my_model')
     config:
         enabled: False
-    type: count
-    sql: "*"
-    timestamp: updated_at
-    time_grains: [day]
+    type: simple
+    type_params:
+      measure: customers
 
 sources:
   - name: my_source
@@ -204,7 +232,7 @@ seeds:
 
 
 class TestPreviousVersionState:
-    CURRENT_EXPECTED_MANIFEST_VERSION = 10
+    CURRENT_EXPECTED_MANIFEST_VERSION = 11
 
     @pytest.fixture(scope="class")
     def models(self):
@@ -213,6 +241,7 @@ class TestPreviousVersionState:
             "schema.yml": models__schema_yml,
             "somedoc.md": docs__somedoc_md,
             "disabled_model.sql": models__disabled_model_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
         }
 
     @pytest.fixture(scope="class")
@@ -255,10 +284,10 @@ class TestPreviousVersionState:
         # This is mainly used to test changes to the test project in isolation from
         # the other noise.
         results = run_dbt(["run"])
-        assert len(results) == 1
+        assert len(results) == 2
         manifest = get_manifest(project.project_root)
         # model, snapshot, seed, singular test, generic test, analysis
-        assert len(manifest.nodes) == 7
+        assert len(manifest.nodes) == 8
         assert len(manifest.sources) == 1
         assert len(manifest.exposures) == 1
         assert len(manifest.metrics) == 1
@@ -283,12 +312,13 @@ class TestPreviousVersionState:
     # The actual test method. Run `dbt list --select state:modified --state ...`
     # once for each past manifest version. They all have the same content, but different
     # schema/structure, only some of which are forward-compatible with the
-    # current WriteableManifest class.
+    # current WritableManifest class.
     def compare_previous_state(
         self,
         project,
         compare_manifest_version,
         expect_pass,
+        num_results,
     ):
         state_path = os.path.join(project.test_data_dir, f"state/v{compare_manifest_version}")
         cli_args = [
@@ -302,7 +332,7 @@ class TestPreviousVersionState:
         ]
         if expect_pass:
             results = run_dbt(cli_args, expect_pass=expect_pass)
-            assert len(results) == 0
+            assert len(results) == num_results
         else:
             with pytest.raises(IncompatibleSchemaError):
                 run_dbt(cli_args, expect_pass=expect_pass)
@@ -314,14 +344,24 @@ class TestPreviousVersionState:
         ), "Sounds like you've bumped the manifest version and need to update this test!"
         # If we need a newly generated manifest, uncomment the following line and commit the result
         # self.generate_latest_manifest(project, current_schema_version)
-        self.compare_previous_state(project, current_schema_version, True)
+        self.compare_previous_state(project, current_schema_version, True, 0)
 
     def test_backwards_compatible_versions(self, project):
         # manifest schema version 4 and greater should always be forward compatible
         for schema_version in range(4, self.CURRENT_EXPECTED_MANIFEST_VERSION):
-            self.compare_previous_state(project, schema_version, True)
+            self.compare_previous_state(project, schema_version, True, 1)
 
     def test_nonbackwards_compatible_versions(self, project):
         # schema versions 1, 2, 3 are all not forward compatible
         for schema_version in range(1, 4):
-            self.compare_previous_state(project, schema_version, False)
+            self.compare_previous_state(project, schema_version, False, 0)
+
+    def test_get_manifest_schema_version(self, project):
+        for schema_version in range(1, self.CURRENT_EXPECTED_MANIFEST_VERSION):
+            manifest_path = os.path.join(
+                project.test_data_dir, f"state/v{schema_version}/manifest.json"
+            )
+            manifest = json.load(open(manifest_path))
+
+            manifest_version = get_manifest_schema_version(manifest)
+            assert manifest_version == schema_version

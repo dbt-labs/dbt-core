@@ -1,7 +1,7 @@
 from copy import deepcopy
 from dataclasses import dataclass
 from dataclasses import field
-from datetime import datetime
+import datetime
 import os
 import traceback
 from typing import (
@@ -15,13 +15,15 @@ from typing import (
     Union,
     Tuple,
     Set,
-    MutableMapping,
 )
 from itertools import chain
 import time
+
+from dbt.contracts.graph.semantic_manifest import SemanticManifest
 from dbt.events.base_types import EventLevel
 import json
 import pprint
+import msgpack
 
 import dbt.exceptions
 import dbt.tracking
@@ -33,11 +35,13 @@ from dbt.adapters.factory import (
     get_relation_class_by_name,
     get_adapter_package_names,
 )
-from dbt.constants import DEPENDENCIES_FILE_NAME, MANIFEST_FILE_NAME, PARTIAL_PARSE_FILE_NAME
+from dbt.constants import (
+    MANIFEST_FILE_NAME,
+    PARTIAL_PARSE_FILE_NAME,
+    SEMANTIC_MANIFEST_FILE_NAME,
+)
 from dbt.helper_types import PathSet
-from dbt.clients.yaml_helper import load_yaml_text
 from dbt.events.functions import fire_event, get_invocation_id, warn_or_error
-from dbt.events.helpers import datetime_to_json_string
 from dbt.events.types import (
     PartialParsingErrorProcessingFile,
     PartialParsingError,
@@ -50,7 +54,9 @@ from dbt.events.types import (
     NodeNotFoundOrDisabled,
     StateCheckVarsHash,
     Note,
-    PublicationArtifactChanged,
+    DeprecatedModel,
+    DeprecatedReference,
+    UpcomingReferenceDeprecation,
 )
 from dbt.logger import DbtProcessState
 from dbt.node_types import NodeType, AccessType
@@ -61,8 +67,6 @@ from dbt.clients.system import (
     path_exists,
     read_json,
     write_file,
-    resolve_path_from_base,
-    load_file_contents,
 )
 from dbt.config import Project, RuntimeConfig
 from dbt.context.docs import generate_runtime_docs_context
@@ -75,6 +79,7 @@ from dbt.parser.read_files import (
     load_source_file,
     FileDiff,
     ReadFilesFromDiff,
+    ReadFiles,
 )
 from dbt.parser.partial import PartialParsing, special_override_macros
 from dbt.contracts.graph.manifest import (
@@ -84,31 +89,24 @@ from dbt.contracts.graph.manifest import (
     ManifestStateCheck,
     ParsingInfo,
 )
-from dbt.graph.graph import UniqueId
 from dbt.contracts.graph.nodes import (
     SourceDefinition,
     Macro,
     Exposure,
     Metric,
     SeedNode,
+    SemanticModel,
     ManifestNode,
     ResultNode,
     ModelNode,
+    NodeRelation,
 )
 from dbt.contracts.graph.unparsed import NodeVersion
 from dbt.contracts.util import Writable
-from dbt.contracts.publication import (
-    PublicationConfig,
-    PublicationArtifact,
-    PublicationMetadata,
-    PublicModel,
-    ProjectDependencies,
-)
 from dbt.exceptions import (
     TargetNotFoundError,
     AmbiguousAliasError,
-    PublicationConfigNotFound,
-    ProjectDependencyCycleError,
+    InvalidAccessTypeError,
 )
 from dbt.parser.base import Parser
 from dbt.parser.analysis import AnalysisParser
@@ -126,9 +124,52 @@ from dbt.parser.sources import SourcePatcher
 from dbt.version import __version__
 
 from dbt.dataclass_schema import StrEnum, dbtClassMixin
+from dbt import plugins
+
+from dbt_semantic_interfaces.enum_extension import assert_values_exhausted
+from dbt_semantic_interfaces.type_enums import MetricType
 
 PARSING_STATE = DbtProcessState("parsing")
 PERF_INFO_FILE_NAME = "perf_info.json"
+
+
+def extended_mashumaro_encoder(data):
+    return msgpack.packb(data, default=extended_msgpack_encoder, use_bin_type=True)
+
+
+def extended_msgpack_encoder(obj):
+    if type(obj) is datetime.date:
+        date_bytes = msgpack.ExtType(1, obj.isoformat().encode())
+        return date_bytes
+    elif type(obj) is datetime.datetime:
+        datetime_bytes = msgpack.ExtType(2, obj.isoformat().encode())
+        return datetime_bytes
+
+    return obj
+
+
+def extended_mashumuro_decoder(data):
+    return msgpack.unpackb(data, ext_hook=extended_msgpack_decoder, raw=False)
+
+
+def extended_msgpack_decoder(code, data):
+    if code == 1:
+        d = datetime.date.fromisoformat(data.decode())
+        return d
+    elif code == 2:
+        dt = datetime.datetime.fromisoformat(data.decode())
+        return dt
+    else:
+        return msgpack.ExtType(code, data)
+
+
+def version_to_str(version: Optional[Union[str, int]]) -> str:
+    if isinstance(version, int):
+        return str(version)
+    elif isinstance(version, str):
+        return version
+
+    return ""
 
 
 class ReparseReason(StrEnum):
@@ -194,12 +235,10 @@ class ManifestLoader:
         all_projects: Mapping[str, Project],
         macro_hook: Optional[Callable[[Manifest], Any]] = None,
         file_diff: Optional[FileDiff] = None,
-        publications: Optional[List[PublicationArtifact]] = None,
     ) -> None:
         self.root_project: RuntimeConfig = root_project
         self.all_projects: Mapping[str, Project] = all_projects
         self.file_diff = file_diff
-        self.publications = publications
         self.manifest: Manifest = Manifest()
         self.new_manifest = self.manifest
         self.manifest.metadata = root_project.get_metadata()
@@ -222,7 +261,7 @@ class ManifestLoader:
         # We need to know if we're actually partially parsing. It could
         # have been enabled, but not happening because of some issue.
         self.partially_parsing = False
-        self.partial_parser = None
+        self.partial_parser: Optional[PartialParsing] = None
 
         # This is a saved manifest from a previous run that's used for partial parsing
         self.saved_manifest: Optional[Manifest] = self.read_manifest_for_partial_parse()
@@ -237,7 +276,6 @@ class ManifestLoader:
         file_diff: Optional[FileDiff] = None,
         reset: bool = False,
         write_perf_info=False,
-        publications: Optional[List[PublicationArtifact]] = None,
     ) -> Manifest:
 
         adapter = get_adapter(config)  # type: ignore
@@ -248,8 +286,17 @@ class ManifestLoader:
             adapter.clear_macro_manifest()
         macro_hook = adapter.connections.set_query_header
 
+        flags = get_flags()
+        if not flags.PARTIAL_PARSE_FILE_DIFF:
+            file_diff = FileDiff.from_dict(
+                {
+                    "deleted": [],
+                    "changed": [],
+                    "added": [],
+                }
+            )
         # Hack to test file_diffs
-        if os.environ.get("DBT_PP_FILE_DIFF_TEST"):
+        elif os.environ.get("DBT_PP_FILE_DIFF_TEST"):
             file_diff_path = "file_diff.json"
             if path_exists(file_diff_path):
                 file_diff_dct = read_json(file_diff_path)
@@ -265,7 +312,6 @@ class ManifestLoader:
                 projects,
                 macro_hook=macro_hook,
                 file_diff=file_diff,
-                publications=publications,
             )
 
             manifest = loader.load()
@@ -282,12 +328,12 @@ class ManifestLoader:
             loader.track_project_load()
 
             if write_perf_info:
-                loader.write_perf_info(config.target_path)
+                loader.write_perf_info(config.project_target_path)
 
         return manifest
 
     # This is where the main action happens
-    def load(self):
+    def load(self) -> Manifest:
         start_read_files = time.perf_counter()
 
         # This updates the "files" dictionary in self.manifest, and creates
@@ -296,6 +342,7 @@ class ManifestLoader:
         # of parsers to lists of file strings. The file strings are
         # used to get the SourceFiles from the manifest files.
         saved_files = self.saved_manifest.files if self.saved_manifest else {}
+        file_reader: Optional[ReadFiles] = None
         if self.file_diff:
             # We're getting files from a file diff
             file_reader = ReadFilesFromDiff(
@@ -359,7 +406,7 @@ class ManifestLoader:
                     }
 
                     # get file info for local logs
-                    parse_file_type = None
+                    parse_file_type: str = ""
                     file_id = self.partial_parser.processing_file
                     if file_id:
                         source_file = None
@@ -440,7 +487,7 @@ class ManifestLoader:
             self.manifest.rebuild_disabled_lookup()
 
             # Load yaml files
-            parser_types = [SchemaParser]
+            parser_types = [SchemaParser]  # type: ignore
             for project in self.all_projects.values():
                 if project.project_name not in project_parser_files:
                     continue
@@ -467,9 +514,10 @@ class ManifestLoader:
             # copy the selectors from the root_project to the manifest
             self.manifest.selectors = self.root_project.manifest_selectors
 
-            # load manifest.dependencies and associated publication artifacts to create the external nodes
-            public_nodes_changed = self.build_public_nodes()
-            if public_nodes_changed:
+            # inject any available external nodes
+            self.manifest.build_parent_and_child_maps()
+            external_nodes_modified = self.inject_external_nodes()
+            if external_nodes_modified:
                 self.manifest.rebuild_ref_lookup()
 
             # update the refs, sources, docs and metrics depends_on.nodes
@@ -477,10 +525,15 @@ class ManifestLoader:
             # determine whether they need processing.
             start_process = time.perf_counter()
             self.process_sources(self.root_project.project_name)
-            self.process_refs(self.root_project.project_name)
+            self.process_refs(self.root_project.project_name, self.root_project.dependencies)
             self.process_docs(self.root_project)
             self.process_metrics(self.root_project)
             self.check_valid_group_config()
+            self.check_valid_access_property()
+
+            semantic_manifest = SemanticManifest(self.manifest)
+            if not semantic_manifest.validate():
+                raise dbt.exceptions.ParsingError("Semantic Manifest validation failed.")
 
             # update tracking data
             self._perf_info.process_manifest_elapsed = time.perf_counter() - start_process
@@ -491,27 +544,66 @@ class ManifestLoader:
                 self.manifest._parsing_info.static_analysis_path_count
             )
 
-        # Load dependencies, load the publication artifacts and create the external nodes.
-        # Reprocess refs if changes.
-        public_nodes_changed = False
+        # Inject any available external nodes, reprocess refs if changes to the manifest were made.
+        external_nodes_modified = False
         if skip_parsing:
             # If we didn't skip parsing, this will have already run because it must run
             # before process_refs. If we did skip parsing, then it's possible that only
-            # publications have changed and we need to run this to capture that.
+            # external nodes have changed and we need to run this to capture that.
             self.manifest.build_parent_and_child_maps()
-            public_nodes_changed = self.build_public_nodes()
-            if public_nodes_changed:
+            external_nodes_modified = self.inject_external_nodes()
+            if external_nodes_modified:
                 self.manifest.rebuild_ref_lookup()
-                self.process_refs(self.root_project.project_name)
+                self.process_refs(
+                    self.root_project.project_name,
+                    self.root_project.dependencies,
+                )
                 # parent and child maps will be rebuilt by write_manifest
 
-        if not skip_parsing or public_nodes_changed:
-            # Write out the <project_name>_publication.json file for this project
-            write_publication_artifact(self.root_project, self.manifest)
+        if not skip_parsing or external_nodes_modified:
             # write out the fully parsed manifest
             self.write_manifest_for_partial_parse()
 
+        self.check_for_model_deprecations()
+
         return self.manifest
+
+    def check_for_model_deprecations(self):
+        for node in self.manifest.nodes.values():
+            if isinstance(node, ModelNode):
+                if (
+                    node.deprecation_date
+                    and node.deprecation_date < datetime.datetime.now().astimezone()
+                ):
+                    warn_or_error(
+                        DeprecatedModel(
+                            model_name=node.name,
+                            model_version=version_to_str(node.version),
+                            deprecation_date=node.deprecation_date.isoformat(),
+                        )
+                    )
+
+                resolved_refs = self.manifest.resolve_refs(node, self.root_project.project_name)
+                resolved_model_refs = [r for r in resolved_refs if isinstance(r, ModelNode)]
+                node.depends_on
+                for resolved_ref in resolved_model_refs:
+                    if resolved_ref.deprecation_date:
+
+                        if resolved_ref.deprecation_date < datetime.datetime.now().astimezone():
+                            event_cls = DeprecatedReference
+                        else:
+                            event_cls = UpcomingReferenceDeprecation
+
+                        warn_or_error(
+                            event_cls(
+                                model_name=node.name,
+                                ref_model_package=resolved_ref.package_name,
+                                ref_model_name=resolved_ref.name,
+                                ref_model_version=version_to_str(resolved_ref.version),
+                                ref_model_latest_version=str(resolved_ref.latest_version),
+                                ref_model_deprecation_date=resolved_ref.deprecation_date.isoformat(),
+                            )
+                        )
 
     def load_and_parse_macros(self, project_parser_files):
         for project in self.all_projects.values():
@@ -647,9 +739,7 @@ class ManifestLoader:
                     macro.depends_on.add_macro(dep_macro_id)  # will check for dupes
 
     def write_manifest_for_partial_parse(self):
-        path = os.path.join(
-            self.root_project.project_root, self.root_project.target_path, PARTIAL_PARSE_FILE_NAME
-        )
+        path = os.path.join(self.root_project.project_target_path, PARTIAL_PARSE_FILE_NAME)
         try:
             # This shouldn't be necessary, but we have gotten bug reports (#3757) of the
             # saved manifest not matching the code version.
@@ -658,120 +748,35 @@ class ManifestLoader:
                     UnableToPartialParse(reason="saved manifest contained the wrong version")
                 )
                 self.manifest.metadata.dbt_version = __version__
-            manifest_msgpack = self.manifest.to_msgpack()
+            manifest_msgpack = self.manifest.to_msgpack(extended_mashumaro_encoder)
             make_directory(os.path.dirname(path))
             with open(path, "wb") as fp:
                 fp.write(manifest_msgpack)
         except Exception:
             raise
 
-    def build_public_nodes(self) -> bool:
-        """This method loads the dependencies from dependencies.yml, reads in the
-        the publication artifacts and adds the PublicModels to the manifest
-        "public_nodes" dictionary. It returns a boolean that indicates that
-        public nodes have been rebuilt."""
-        public_nodes_changed = False
+    def inject_external_nodes(self) -> bool:
+        # Remove previously existing external nodes since we are regenerating them
+        manifest_nodes_modified = False
+        # Remove all dependent nodes before removing referencing nodes
+        for unique_id in self.manifest.external_node_unique_ids:
+            remove_dependent_project_references(self.manifest, unique_id)
+            manifest_nodes_modified = True
+        for unique_id in self.manifest.external_node_unique_ids:
+            # remove external nodes from manifest only after dependent project references safely removed
+            self.manifest.nodes.pop(unique_id)
 
-        # Load the dependencies from the dependencies.yml file
-        # TODO: dependencies might be better in the RuntimeConfig and
-        # loaded somewhere earlier, but leaving this here for later refactoring.
-        # Loading it elsewhere would make it harder to detect that there were
-        # no dependencies previously and still are none, though that could be
-        # inferred from the manifest publication configs.
-        dependencies_filepath = resolve_path_from_base(
-            DEPENDENCIES_FILE_NAME, self.root_project.project_root
-        )
-        saved_manifest_dependencies = self.manifest.project_dependencies
-        if path_exists(dependencies_filepath):
-            contents = load_file_contents(dependencies_filepath)
-            dependencies_dict = load_yaml_text(contents)
-            dependencies = ProjectDependencies.from_dict(dependencies_dict)
-            self.manifest.project_dependencies = dependencies
-        else:
-            self.manifest.project_dependencies = None
+        # Inject any newly-available external nodes
+        pm = plugins.get_plugin_manager(self.root_project.project_name)
+        plugin_model_nodes = pm.get_nodes().models
+        for node_arg in plugin_model_nodes.values():
+            node = ModelNode.from_args(node_arg)
+            # node may already exist from package or running project - in which case we should avoid clobbering it with an external node
+            if node.unique_id not in self.manifest.nodes:
+                self.manifest.add_node_nofile(node)
+                manifest_nodes_modified = True
 
-        # Return False if there weren't any dependencies before and aren't any now.
-        if saved_manifest_dependencies is None and self.manifest.project_dependencies is None:
-            return False
-
-        # collect the names of the projects for later use
-        project_dependency_names = []
-        if self.manifest.project_dependencies:
-            for project in self.manifest.project_dependencies.projects:
-                project_dependency_names.append(project.name)
-
-        # clean up previous publications that are no longer specified
-        # and save previous publications, for later removal of references
-        saved_manifest_publications: MutableMapping[str, PublicationConfig] = {}
-        if self.manifest.publications:
-            for project_name, publication in self.manifest.publications.items():
-                if project_name not in project_dependency_names:
-                    remove_dependent_project_references(self.manifest, publication)
-                    self.manifest.publications.pop(project_name)
-                    fire_event(
-                        PublicationArtifactChanged(
-                            action="removed",
-                            project_name=project_name,
-                            generated_at=datetime_to_json_string(
-                                publication.metadata.generated_at
-                            ),
-                        )
-                    )
-                    public_nodes_changed = True
-            saved_manifest_publications = self.manifest.publications
-            self.manifest.publications = {}
-            # Empty public_nodes since we're re-generating them all
-            self.manifest.public_nodes = {}
-
-        if self.manifest.project_dependencies:
-            self.load_new_public_nodes()
-
-        # Now that we've loaded the current publications and public_nodes, look for
-        # changed publications so we can reset the public_nodes references
-        for project_name, publication in self.manifest.publications.items():
-            if (
-                project_name in saved_manifest_publications
-                and publication.metadata.generated_at
-                != saved_manifest_publications[project_name].metadata.generated_at
-            ):
-                remove_dependent_project_references(
-                    self.manifest, saved_manifest_publications[project_name]
-                )
-                fire_event(
-                    PublicationArtifactChanged(
-                        action="updated",
-                        project_name=project_name,
-                        generated_at=datetime_to_json_string(publication.metadata.generated_at),
-                    )
-                )
-                public_nodes_changed = True
-            elif project_name not in saved_manifest_publications:
-                fire_event(
-                    PublicationArtifactChanged(
-                        action="added",
-                        project_name=project_name,
-                        generated_at=datetime_to_json_string(publication.metadata.generated_at),
-                    )
-                )
-                public_nodes_changed = True
-
-        return public_nodes_changed
-
-    def load_new_public_nodes(self):
-        for project in self.manifest.project_dependencies.projects:
-            publication = (
-                next(p for p in self.publications if p.project_name == project.name)
-                if self.publications
-                else None
-            )
-            if publication:
-                publication_config = PublicationConfig.from_publication(publication)
-                self.manifest.publications[project.name] = publication_config
-                # Add to dictionary of public_nodes and save id in PublicationConfig
-                for public_node in publication.public_models.values():
-                    self.manifest.public_nodes[public_node.unique_id] = public_node
-            else:
-                raise PublicationConfigNotFound(project=project.name)
+        return manifest_nodes_modified
 
     def is_partial_parsable(self, manifest: Manifest) -> Tuple[bool, Optional[str]]:
         """Compare the global hashes of the read-in parse results' values to
@@ -859,11 +864,12 @@ class ManifestLoader:
         return False
 
     def read_manifest_for_partial_parse(self) -> Optional[Manifest]:
-        if not get_flags().PARTIAL_PARSE:
+        flags = get_flags()
+        if not flags.PARTIAL_PARSE:
             fire_event(PartialParsingNotEnabled())
             return None
-        path = os.path.join(
-            self.root_project.project_root, self.root_project.target_path, PARTIAL_PARSE_FILE_NAME
+        path = flags.PARTIAL_PARSE_FILE_PATH or os.path.join(
+            self.root_project.project_target_path, PARTIAL_PARSE_FILE_NAME
         )
 
         reparse_reason = None
@@ -872,14 +878,14 @@ class ManifestLoader:
             try:
                 with open(path, "rb") as fp:
                     manifest_mp = fp.read()
-                manifest: Manifest = Manifest.from_msgpack(manifest_mp)  # type: ignore
+                manifest: Manifest = Manifest.from_msgpack(manifest_mp, decoder=extended_mashumuro_decoder)  # type: ignore
                 # keep this check inside the try/except in case something about
                 # the file has changed in weird ways, perhaps due to being a
                 # different version of dbt
                 is_partial_parsable, reparse_reason = self.is_partial_parsable(manifest)
                 if is_partial_parsable:
                     # We don't want to have stale generated_at dates
-                    manifest.metadata.generated_at = datetime.utcnow()
+                    manifest.metadata.generated_at = datetime.datetime.utcnow()
                     # or invocation_ids
                     manifest.metadata.invocation_id = get_invocation_id()
                     return manifest
@@ -1062,38 +1068,54 @@ class ManifestLoader:
 
     # Takes references in 'refs' array of nodes and exposures, finds the target
     # node, and updates 'depends_on.nodes' with the unique id
-    def process_refs(self, current_project: str):
+    def process_refs(self, current_project: str, dependencies: Optional[Mapping[str, Project]]):
         for node in self.manifest.nodes.values():
             if node.created_at < self.started_at:
                 continue
-            _process_refs_for_node(self.manifest, current_project, node)
+            _process_refs(self.manifest, current_project, node, dependencies)
         for exposure in self.manifest.exposures.values():
             if exposure.created_at < self.started_at:
                 continue
-            _process_refs_for_exposure(self.manifest, current_project, exposure)
+            _process_refs(self.manifest, current_project, exposure, dependencies)
         for metric in self.manifest.metrics.values():
             if metric.created_at < self.started_at:
                 continue
-            _process_refs_for_metric(self.manifest, current_project, metric)
+            _process_refs(self.manifest, current_project, metric, dependencies)
+        for semantic_model in self.manifest.semantic_models.values():
+            if semantic_model.created_at < self.started_at:
+                continue
+            _process_refs(self.manifest, current_project, semantic_model, dependencies)
+            self.update_semantic_model(semantic_model)
 
     # Takes references in 'metrics' array of nodes and exposures, finds the target
     # node, and updates 'depends_on.nodes' with the unique id
     def process_metrics(self, config: RuntimeConfig):
         current_project = config.project_name
+        for metric in self.manifest.metrics.values():
+            if metric.created_at < self.started_at:
+                continue
+            _process_metric_node(self.manifest, current_project, metric)
+            _process_metrics_for_node(self.manifest, current_project, metric)
         for node in self.manifest.nodes.values():
             if node.created_at < self.started_at:
                 continue
             _process_metrics_for_node(self.manifest, current_project, node)
-        for metric in self.manifest.metrics.values():
-            # TODO: Can we do this if the metric is derived & depends on
-            # some other metric for its definition? Maybe....
-            if metric.created_at < self.started_at:
-                continue
-            _process_metrics_for_node(self.manifest, current_project, metric)
         for exposure in self.manifest.exposures.values():
             if exposure.created_at < self.started_at:
                 continue
             _process_metrics_for_node(self.manifest, current_project, exposure)
+
+    def update_semantic_model(self, semantic_model) -> None:
+        # This has to be done at the end of parsing because the referenced model
+        # might have alias/schema/database fields that are updated by yaml config.
+        if semantic_model.depends_on_nodes[0]:
+            refd_node = self.manifest.nodes[semantic_model.depends_on_nodes[0]]
+            semantic_model.node_relation = NodeRelation(
+                relation_name=refd_node.relation_name,
+                alias=refd_node.alias,
+                schema_name=refd_node.schema,
+                database=refd_node.database,
+            )
 
     # nodes: node and column descriptions
     # sources: source and table descriptions, column descriptions
@@ -1199,11 +1221,16 @@ class ManifestLoader:
         for metric in manifest.metrics.values():
             self.check_valid_group_config_node(metric, group_names)
 
+        for semantic_model in manifest.semantic_models.values():
+            self.check_valid_group_config_node(semantic_model, group_names)
+
         for node in manifest.nodes.values():
             self.check_valid_group_config_node(node, group_names)
 
     def check_valid_group_config_node(
-        self, groupable_node: Union[Metric, ManifestNode], valid_group_names: Set[str]
+        self,
+        groupable_node: Union[Metric, SemanticModel, ManifestNode],
+        valid_group_names: Set[str],
     ):
         groupable_node_group = groupable_node.group
         if groupable_node_group and groupable_node_group not in valid_group_names:
@@ -1211,6 +1238,19 @@ class ManifestLoader:
                 f"Invalid group '{groupable_node_group}', expected one of {sorted(list(valid_group_names))}",
                 node=groupable_node,
             )
+
+    def check_valid_access_property(self):
+        for node in self.manifest.nodes.values():
+            if (
+                isinstance(node, ModelNode)
+                and node.access == AccessType.Public
+                and node.get_materialization() == "ephemeral"
+            ):
+                raise InvalidAccessTypeError(
+                    unique_id=node.unique_id,
+                    field_value=node.access,
+                    materialization=node.get_materialization(),
+                )
 
     def write_perf_info(self, target_path: str):
         path = os.path.join(target_path, PERF_INFO_FILE_NAME)
@@ -1366,9 +1406,17 @@ def _process_docs_for_metrics(context: Dict[str, Any], metric: Metric) -> None:
     metric.description = get_rendered(metric.description, context)
 
 
-def _process_refs_for_exposure(manifest: Manifest, current_project: str, exposure: Exposure):
-    """Given a manifest and exposure in that manifest, process its refs"""
-    for ref in exposure.refs:
+def _process_refs(
+    manifest: Manifest, current_project: str, node, dependencies: Optional[Mapping[str, Project]]
+) -> None:
+    """Given a manifest and node in that manifest, process its refs"""
+
+    dependencies = dependencies or {}
+
+    if isinstance(node, SeedNode):
+        return
+
+    for ref in node.refs:
         target_model: Optional[Union[Disabled, ManifestNode]] = None
         target_model_name: str = ref.name
         target_model_package: Optional[str] = ref.package
@@ -1380,20 +1428,20 @@ def _process_refs_for_exposure(manifest: Manifest, current_project: str, exposur
             )
 
         target_model = manifest.resolve_ref(
-            exposure,
+            node,
             target_model_name,
             target_model_package,
             target_model_version,
             current_project,
-            exposure.package_name,
+            node.package_name,
         )
 
         if target_model is None or isinstance(target_model, Disabled):
             # This may raise. Even if it doesn't, we don't want to add
             # this exposure to the graph b/c there is no destination exposure
-            exposure.config.enabled = False
+            node.config.enabled = False
             invalid_target_fail_unless_test(
-                node=exposure,
+                node=node,
                 target_name=target_model_name,
                 target_kind="node",
                 target_package=target_model_package,
@@ -1403,66 +1451,98 @@ def _process_refs_for_exposure(manifest: Manifest, current_project: str, exposur
             )
 
             continue
-        elif isinstance(target_model, ModelNode) and target_model.access == AccessType.Private:
-            # Exposures do not have a group and so can never reference private models
+        elif manifest.is_invalid_private_ref(node, target_model, dependencies):
             raise dbt.exceptions.DbtReferenceError(
-                unique_id=exposure.unique_id,
+                unique_id=node.unique_id,
                 ref_unique_id=target_model.unique_id,
-                group=dbt.utils.cast_to_str(target_model.group),
+                access=AccessType.Private,
+                scope=dbt.utils.cast_to_str(target_model.group),
+            )
+        elif manifest.is_invalid_protected_ref(node, target_model, dependencies):
+            raise dbt.exceptions.DbtReferenceError(
+                unique_id=node.unique_id,
+                ref_unique_id=target_model.unique_id,
+                access=AccessType.Protected,
+                scope=target_model.package_name,
             )
 
         target_model_id = target_model.unique_id
+        node.depends_on.add_node(target_model_id)
 
-        exposure.depends_on.add_node(target_model_id)
 
+def _process_metric_node(
+    manifest: Manifest,
+    current_project: str,
+    metric: Metric,
+) -> None:
+    """Sets a metric's `input_measures` and `depends_on` properties"""
 
-def _process_refs_for_metric(manifest: Manifest, current_project: str, metric: Metric):
-    """Given a manifest and a metric in that manifest, process its refs"""
-    for ref in metric.refs:
-        target_model: Optional[Union[Disabled, ManifestNode]] = None
-        target_model_name: str = ref.name
-        target_model_package: Optional[str] = ref.package
-        target_model_version: Optional[NodeVersion] = ref.version
+    # This ensures that if this metrics input_measures have already been set
+    # we skip the work. This could happen either due to recursion or if multiple
+    # metrics derive from another given metric.
+    # NOTE: This does not protect against infinite loops
+    if len(metric.type_params.input_measures) > 0:
+        return
 
-        if len(ref.positional_args) < 1 or len(ref.positional_args) > 2:
-            raise dbt.exceptions.DbtInternalError(
-                f"Refs should always be 1 or 2 arguments - got {len(ref.positional_args)}"
-            )
-
-        target_model = manifest.resolve_ref(
-            metric,
-            target_model_name,
-            target_model_package,
-            target_model_version,
-            current_project,
-            metric.package_name,
+    if metric.type is MetricType.SIMPLE or metric.type is MetricType.CUMULATIVE:
+        assert (
+            metric.type_params.measure is not None
+        ), f"{metric} should have a measure defined, but it does not."
+        metric.type_params.input_measures.append(metric.type_params.measure)
+        target_semantic_model = manifest.resolve_semantic_model_for_measure(
+            target_measure_name=metric.type_params.measure.name,
+            current_project=current_project,
+            node_package=metric.package_name,
         )
-
-        if target_model is None or isinstance(target_model, Disabled):
-            # This may raise. Even if it doesn't, we don't want to add
-            # this metric to the graph b/c there is no destination metric
-            metric.config.enabled = False
-            invalid_target_fail_unless_test(
+        if target_semantic_model is None:
+            raise dbt.exceptions.ParsingError(
+                f"A semantic model having a measure `{metric.type_params.measure.name}` does not exist but was referenced.",
                 node=metric,
-                target_name=target_model_name,
-                target_kind="node",
-                target_package=target_model_package,
-                target_version=target_model_version,
-                disabled=(isinstance(target_model, Disabled)),
-                should_warn_if_disabled=False,
             )
-            continue
-        elif isinstance(target_model, ModelNode) and target_model.access == AccessType.Private:
-            if not metric.group or metric.group != target_model.group:
-                raise dbt.exceptions.DbtReferenceError(
-                    unique_id=metric.unique_id,
-                    ref_unique_id=target_model.unique_id,
-                    group=dbt.utils.cast_to_str(target_model.group),
+        if target_semantic_model.config.enabled is False:
+            raise dbt.exceptions.ParsingError(
+                f"The measure `{metric.type_params.measure.name}` is referenced on disabled semantic model `{target_semantic_model.name}`.",
+                node=metric,
+            )
+
+        metric.depends_on.add_node(target_semantic_model.unique_id)
+
+    elif metric.type is MetricType.DERIVED or metric.type is MetricType.RATIO:
+        input_metrics = metric.input_metrics
+        if metric.type is MetricType.RATIO:
+            if metric.type_params.numerator is None or metric.type_params.denominator is None:
+                raise dbt.exceptions.ParsingError(
+                    "Invalid ratio metric. Both a numerator and denominator must be specified",
+                    node=metric,
+                )
+            input_metrics = [metric.type_params.numerator, metric.type_params.denominator]
+
+        for input_metric in input_metrics:
+            target_metric = manifest.resolve_metric(
+                target_metric_name=input_metric.name,
+                target_metric_package=None,
+                current_project=current_project,
+                node_package=metric.package_name,
+            )
+
+            if target_metric is None:
+                raise dbt.exceptions.ParsingError(
+                    f"The metric `{input_metric.name}` does not exist but was referenced.",
+                    node=metric,
+                )
+            elif isinstance(target_metric, Disabled):
+                raise dbt.exceptions.ParsingError(
+                    f"The metric `{input_metric.name}` is disabled and thus cannot be referenced.",
+                    node=metric,
                 )
 
-        target_model_id = target_model.unique_id
-
-        metric.depends_on.add_node(target_model_id)
+            _process_metric_node(
+                manifest=manifest, current_project=current_project, metric=target_metric
+            )
+            metric.type_params.input_measures.extend(target_metric.type_params.input_measures)
+            metric.depends_on.add_node(target_metric.unique_id)
+    else:
+        assert_values_exhausted(metric.type)
 
 
 def _process_metrics_for_node(
@@ -1514,72 +1594,13 @@ def _process_metrics_for_node(
         node.depends_on.add_node(target_metric_id)
 
 
-def _process_refs_for_node(manifest: Manifest, current_project: str, node: ManifestNode):
-    """Given a manifest and a node in that manifest, process its refs"""
-
-    if isinstance(node, SeedNode):
-        return
-
-    for ref in node.refs:
-        target_model: Optional[Union[Disabled, ManifestNode]] = None
-        target_model_name: str = ref.name
-        target_model_package: Optional[str] = ref.package
-        target_model_version: Optional[NodeVersion] = ref.version
-
-        if len(ref.positional_args) < 1 or len(ref.positional_args) > 2:
-            raise dbt.exceptions.DbtInternalError(
-                f"Refs should always be 1 or 2 arguments - got {len(ref.positional_args)}"
-            )
-
-        target_model = manifest.resolve_ref(
-            node,
-            target_model_name,
-            target_model_package,
-            target_model_version,
-            current_project,
-            node.package_name,
-        )
-
-        if target_model is None or isinstance(target_model, Disabled):
-            # This may raise. Even if it doesn't, we don't want to add
-            # this node to the graph b/c there is no destination node
-            node.config.enabled = False
-            invalid_target_fail_unless_test(
-                node=node,
-                target_name=target_model_name,
-                target_kind="node",
-                target_package=target_model_package,
-                target_version=target_model_version,
-                disabled=(isinstance(target_model, Disabled)),
-                should_warn_if_disabled=False,
-            )
-            continue
-
-        # Handle references to models that are private
-        elif isinstance(target_model, ModelNode) and target_model.access == AccessType.Private:
-            if not node.group or node.group != target_model.group:
-                raise dbt.exceptions.DbtReferenceError(
-                    unique_id=node.unique_id,
-                    ref_unique_id=target_model.unique_id,
-                    group=dbt.utils.cast_to_str(target_model.group),
-                )
-
-        target_model_id = target_model.unique_id
-
-        if target_model.is_public_node:
-            node.depends_on.add_public_node(target_model_id)
-        else:
-            node.depends_on.add_node(target_model_id)
-
-
-def remove_dependent_project_references(manifest: Manifest, publication: PublicationConfig):
-    for unique_id in publication.public_node_ids:
-        for child_id in manifest.child_map[unique_id]:
-            node = manifest.expect(child_id)
-            if hasattr(node.depends_on, "public_nodes"):
-                node.depends_on.public_nodes.remove(unique_id)  # type: ignore
-                # set created_at so process_refs happens
-                node.created_at = time.time()
+def remove_dependent_project_references(manifest, external_node_unique_id):
+    for child_id in manifest.child_map[external_node_unique_id]:
+        node = manifest.expect(child_id)
+        # child node may have been modified and already recreated its depends_on.nodes list
+        if external_node_unique_id in node.depends_on_nodes:
+            node.depends_on_nodes.remove(external_node_unique_id)
+        node.created_at = time.time()
 
 
 def _process_sources_for_exposure(manifest: Manifest, current_project: str, exposure: Exposure):
@@ -1671,83 +1692,19 @@ def process_macro(config: RuntimeConfig, manifest: Manifest, macro: Macro) -> No
 def process_node(config: RuntimeConfig, manifest: Manifest, node: ManifestNode):
 
     _process_sources_for_node(manifest, config.project_name, node)
-    _process_refs_for_node(manifest, config.project_name, node)
+    _process_refs(manifest, config.project_name, node, config.dependencies)
     ctx = generate_runtime_docs_context(config, node, manifest, config.project_name)
     _process_docs_for_node(ctx, node)
 
 
-def write_publication_artifact(root_project: RuntimeConfig, manifest: Manifest):
-    # The manifest.json is written out in a task, so we're not writing it here
-
-    # build publication metadata
-    metadata = PublicationMetadata(
-        adapter_type=root_project.credentials.type,
-        quoting=root_project.quoting,
-    )
-
-    # get a set of public model ids first so it can be used in constructing dependencies
-    public_node_ids = {
-        node.unique_id
-        for node in manifest.nodes.values()
-        if isinstance(node, ModelNode) and node.access == AccessType.Public
-    }
-
-    # Get the Graph object from the Linker
-    from dbt.compilation import Linker
-
-    linker = Linker()
-    graph = linker.get_graph(manifest)
-
-    public_models = {}
-    for unique_id in public_node_ids:
-        model = manifest.nodes[unique_id]
-        assert isinstance(model, ModelNode)
-        # public_node_dependencies is the intersection of all parent nodes plus public nodes
-        parents: Set[UniqueId] = graph.select_parents({UniqueId(unique_id)})
-        public_node_dependencies: Set[UniqueId] = parents.intersection(public_node_ids)
-
-        public_model = PublicModel(
-            name=model.name,
-            package_name=model.package_name,
-            unique_id=model.unique_id,
-            relation_name=dbt.utils.cast_to_str(model.relation_name),
-            database=model.database,
-            schema=model.schema,
-            identifier=model.alias,
-            version=model.version,
-            latest_version=model.latest_version,
-            public_node_dependencies=list(public_node_dependencies),
-            generated_at=metadata.generated_at,
-        )
-        public_models[unique_id] = public_model
-
-    dependencies = []
-    # Get dependencies from dependencies.yml
-    if manifest.project_dependencies:
-        for dep_project in manifest.project_dependencies.projects:
-            dependencies.append(dep_project.name)
-    # Get dependencies from publication dependencies
-    for pub_project in manifest.publications.values():
-        for project_name in pub_project.dependencies:
-            if project_name == root_project.project_name:
-                raise ProjectDependencyCycleError(
-                    pub_project_name=pub_project.project_name, project_name=project_name
-                )
-            if project_name not in dependencies:
-                dependencies.append(project_name)
-
-    publication = PublicationArtifact(
-        metadata=metadata,
-        project_name=root_project.project_name,
-        public_models=public_models,
-        dependencies=dependencies,
-    )
-    # write out publication artifact <project_name>_publication.json
-    publication_file_name = f"{root_project.project_name}_publication.json"
-    path = os.path.join(root_project.target_path, publication_file_name)
-    publication.write(path)
+def write_semantic_manifest(manifest: Manifest, target_path: str) -> None:
+    path = os.path.join(target_path, SEMANTIC_MANIFEST_FILE_NAME)
+    semantic_manifest = SemanticManifest(manifest)
+    semantic_manifest.write_json_to_file(path)
 
 
 def write_manifest(manifest: Manifest, target_path: str):
     path = os.path.join(target_path, MANIFEST_FILE_NAME)
     manifest.write(path)
+
+    write_semantic_manifest(manifest=manifest, target_path=target_path)

@@ -23,8 +23,17 @@ from dbt.tests.adapter.constraints.fixtures import (
     my_model_incremental_wrong_name_sql,
     my_model_with_nulls_sql,
     my_model_incremental_with_nulls_sql,
+    my_model_with_quoted_column_name_sql,
     model_schema_yml,
+    model_fk_constraint_schema_yml,
     constrained_model_schema_yml,
+    model_quoted_column_schema_yml,
+    foreign_key_model_sql,
+    my_model_wrong_order_depends_on_fk_sql,
+    my_model_incremental_wrong_order_depends_on_fk_sql,
+    my_model_contract_sql_header_sql,
+    my_model_incremental_contract_sql_header_sql,
+    model_contract_header_schema_yml,
 )
 
 
@@ -158,7 +167,15 @@ class BaseConstraintsColumnsEqual:
 
 
 def _normalize_whitespace(input: str) -> str:
-    return re.sub(r"\s+", " ", input).lower().strip()
+    subbed = re.sub(r"\s+", " ", input)
+    return re.sub(r"\s?([\(\),])\s?", r"\1", subbed).lower().strip()
+
+
+def _find_and_replace(sql, find, replace):
+    sql_tokens = sql.split()
+    for idx in [n for n, x in enumerate(sql_tokens) if find in x]:
+        sql_tokens[idx] = replace
+    return " ".join(sql_tokens)
 
 
 class BaseConstraintsRuntimeDdlEnforcement:
@@ -171,15 +188,16 @@ class BaseConstraintsRuntimeDdlEnforcement:
     @pytest.fixture(scope="class")
     def models(self):
         return {
-            "my_model.sql": my_model_wrong_order_sql,
-            "constraints_schema.yml": model_schema_yml,
+            "my_model.sql": my_model_wrong_order_depends_on_fk_sql,
+            "foreign_key_model.sql": foreign_key_model_sql,
+            "constraints_schema.yml": model_fk_constraint_schema_yml,
         }
 
     @pytest.fixture(scope="class")
     def expected_sql(self):
         return """
 create table <model_identifier> (
-    id integer not null primary key check (id > 0),
+    id integer not null primary key check ((id > 0)) check (id >= 1) references <foreign_key_model_identifier> (id) unique,
     color text,
     date_day text
 ) ;
@@ -195,6 +213,7 @@ insert into <model_identifier> (
        date_day
        from
     (
+        -- depends_on: <foreign_key_model_identifier>
         select
             'blue' as color,
             1 as id,
@@ -204,22 +223,27 @@ insert into <model_identifier> (
 """
 
     def test__constraints_ddl(self, project, expected_sql):
-        results = run_dbt(["run", "-s", "my_model"])
-        assert len(results) == 1
+        unformatted_constraint_schema_yml = read_file("models", "constraints_schema.yml")
+        write_file(
+            unformatted_constraint_schema_yml.format(schema=project.test_schema),
+            "models",
+            "constraints_schema.yml",
+        )
+
+        results = run_dbt(["run", "-s", "+my_model"])
+        # assert at least my_model was run - additional upstreams may or may not be provided to the test setup via models fixture
+        assert len(results) >= 1
 
         # grab the sql and replace the model identifier to make it generic for all adapters
         # the name is not what we're testing here anyways and varies based on materialization
         # TODO: consider refactoring this to introspect logs instead
         generated_sql = read_file("target", "run", "test", "models", "my_model.sql")
-        generated_sql_modified = _normalize_whitespace(generated_sql)
-        generated_sql_list = generated_sql_modified.split(" ")
-        for idx in [n for n, x in enumerate(generated_sql_list) if "my_model" in x]:
-            generated_sql_list[idx] = "<model_identifier>"
-        generated_sql_generic = " ".join(generated_sql_list)
+        generated_sql_generic = _find_and_replace(generated_sql, "my_model", "<model_identifier>")
+        generated_sql_generic = _find_and_replace(
+            generated_sql_generic, "foreign_key_model", "<foreign_key_model_identifier>"
+        )
 
-        expected_sql_check = _normalize_whitespace(expected_sql)
-
-        assert expected_sql_check == generated_sql_generic
+        assert _normalize_whitespace(expected_sql) == _normalize_whitespace(generated_sql_generic)
 
 
 class BaseConstraintsRollback:
@@ -310,8 +334,9 @@ class BaseIncrementalConstraintsRuntimeDdlEnforcement(BaseConstraintsRuntimeDdlE
     @pytest.fixture(scope="class")
     def models(self):
         return {
-            "my_model.sql": my_model_incremental_wrong_order_sql,
-            "constraints_schema.yml": model_schema_yml,
+            "my_model.sql": my_model_incremental_wrong_order_depends_on_fk_sql,
+            "foreign_key_model.sql": foreign_key_model_sql,
+            "constraints_schema.yml": model_fk_constraint_schema_yml,
         }
 
 
@@ -358,6 +383,45 @@ class TestIncrementalConstraintsRollback(BaseIncrementalConstraintsRollback):
     pass
 
 
+class BaseContractSqlHeader:
+    """Tests a contracted model with a sql header dependency."""
+
+    def test__contract_sql_header(self, project):
+        run_dbt(["run", "-s", "my_model_contract_sql_header"])
+
+        manifest = get_manifest(project.project_root)
+        model_id = "model.test.my_model_contract_sql_header"
+        model_config = manifest.nodes[model_id].config
+
+        assert model_config.contract.enforced
+
+
+class BaseTableContractSqlHeader(BaseContractSqlHeader):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_model_contract_sql_header.sql": my_model_contract_sql_header_sql,
+            "constraints_schema.yml": model_contract_header_schema_yml,
+        }
+
+
+class BaseIncrementalContractSqlHeader(BaseContractSqlHeader):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_model_contract_sql_header.sql": my_model_incremental_contract_sql_header_sql,
+            "constraints_schema.yml": model_contract_header_schema_yml,
+        }
+
+
+class TestTableContractSqlHeader(BaseTableContractSqlHeader):
+    pass
+
+
+class TestIncrementalContractSqlHeader(BaseIncrementalContractSqlHeader):
+    pass
+
+
 class BaseModelConstraintsRuntimeEnforcement:
     """
     These model-level constraints pass muster for dbt's preflight checks. Make sure they're
@@ -368,7 +432,8 @@ class BaseModelConstraintsRuntimeEnforcement:
     @pytest.fixture(scope="class")
     def models(self):
         return {
-            "my_model.sql": my_model_sql,
+            "my_model.sql": my_model_wrong_order_depends_on_fk_sql,
+            "foreign_key_model.sql": foreign_key_model_sql,
             "constraints_schema.yml": constrained_model_schema_yml,
         }
 
@@ -379,9 +444,11 @@ create table <model_identifier> (
     id integer not null,
     color text,
     date_day text,
-    check (id > 0),
+    check ((id > 0)),
+    check (id >= 1),
     primary key (id),
-    constraint strange_uniqueness_requirement unique (color, date_day)
+    constraint strange_uniqueness_requirement unique (color, date_day),
+    foreign key (id) references <foreign_key_model_identifier> (id)
 ) ;
 insert into <model_identifier> (
     id ,
@@ -395,25 +462,71 @@ insert into <model_identifier> (
        date_day
        from
     (
+        -- depends_on: <foreign_key_model_identifier>
         select
-            1 as id,
             'blue' as color,
+            1 as id,
             '2019-01-01' as date_day
     ) as model_subq
 );
 """
 
     def test__model_constraints_ddl(self, project, expected_sql):
-        results = run_dbt(["run", "-s", "my_model"])
-        assert len(results) == 1
+        unformatted_constraint_schema_yml = read_file("models", "constraints_schema.yml")
+        write_file(
+            unformatted_constraint_schema_yml.format(schema=project.test_schema),
+            "models",
+            "constraints_schema.yml",
+        )
+
+        results = run_dbt(["run", "-s", "+my_model"])
+        # assert at least my_model was run - additional upstreams may or may not be provided to the test setup via models fixture
+        assert len(results) >= 1
         generated_sql = read_file("target", "run", "test", "models", "my_model.sql")
-        generated_sql_list = _normalize_whitespace(generated_sql).split(" ")
-        generated_sql_list = [
-            "<model_identifier>" if "my_model" in s else s for s in generated_sql_list
-        ]
-        generated_sql_generic = " ".join(generated_sql_list)
-        assert _normalize_whitespace(expected_sql) == generated_sql_generic
+
+        generated_sql_generic = _find_and_replace(generated_sql, "my_model", "<model_identifier>")
+        generated_sql_generic = _find_and_replace(
+            generated_sql_generic, "foreign_key_model", "<foreign_key_model_identifier>"
+        )
+
+        assert _normalize_whitespace(expected_sql) == _normalize_whitespace(generated_sql_generic)
 
 
 class TestModelConstraintsRuntimeEnforcement(BaseModelConstraintsRuntimeEnforcement):
+    pass
+
+
+class BaseConstraintQuotedColumn(BaseConstraintsRuntimeDdlEnforcement):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_model.sql": my_model_with_quoted_column_name_sql,
+            "constraints_schema.yml": model_quoted_column_schema_yml,
+        }
+
+    @pytest.fixture(scope="class")
+    def expected_sql(self):
+        return """
+create table <model_identifier> (
+    id integer not null,
+    "from" text not null,
+    date_day text,
+    check (("from" = 'blue'))
+) ;
+insert into <model_identifier> (
+    id, "from", date_day
+)
+(
+    select id, "from", date_day
+    from (
+        select
+          'blue' as "from",
+          1 as id,
+          '2019-01-01' as date_day
+    ) as model_subq
+);
+"""
+
+
+class TestConstraintQuotedColumn(BaseConstraintQuotedColumn):
     pass

@@ -1,0 +1,6 @@
+kind: Features
+body: Accept a `dbt-cloud` config in dbt_project.yml
+time: 2023-08-30T21:28:28.976746-05:00
+custom:
+  Author: emmyoop
+  Issue: "8438"

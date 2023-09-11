@@ -1,6 +1,6 @@
 from collections.abc import Hashable
 from dataclasses import dataclass, field
-from typing import Optional, TypeVar, Any, Type, Dict, Iterator, Tuple, Set
+from typing import Optional, TypeVar, Any, Type, Dict, Iterator, Tuple, Set, List
 
 from dbt.contracts.graph.nodes import SourceDefinition, ManifestNode, ResultNode, ParsedNode
 from dbt.contracts.relation import (
@@ -35,6 +35,10 @@ class BaseRelation(FakeAPIObject, Hashable):
     include_policy: Policy = field(default_factory=lambda: Policy())
     quote_policy: Policy = field(default_factory=lambda: Policy())
     dbt_created: bool = False
+    # register relation types that can be renamed for the purpose of replacing relations using stages and backups
+    renameable_relations: List[str] = field(
+        default_factory=lambda: [RelationType.Table, RelationType.View]
+    )
 
     def _is_exactish_match(self, field: ComponentName, value: str) -> bool:
         if self.dbt_created and self.quote_policy.get_part(field) is False:
@@ -169,7 +173,6 @@ class BaseRelation(FakeAPIObject, Hashable):
         return self.include(identifier=False).replace_path(identifier=None)
 
     def _render_iterator(self) -> Iterator[Tuple[Optional[ComponentName], Optional[str]]]:
-
         for key in ComponentName:
             path_part: Optional[str] = None
             if self.include_policy.get_part(key):
@@ -286,6 +289,10 @@ class BaseRelation(FakeAPIObject, Hashable):
         )
         return cls.from_dict(kwargs)
 
+    @property
+    def can_be_renamed(self):
+        return self.type in self.renameable_relations
+
     def __repr__(self) -> str:
         return "<{} {}>".format(self.__class__.__name__, self.render())
 
@@ -328,6 +335,10 @@ class BaseRelation(FakeAPIObject, Hashable):
     def is_view(self) -> bool:
         return self.type == RelationType.View
 
+    @property
+    def is_materialized_view(self) -> bool:
+        return self.type == RelationType.MaterializedView
+
     @classproperty
     def Table(cls) -> str:
         return str(RelationType.Table)
@@ -343,6 +354,10 @@ class BaseRelation(FakeAPIObject, Hashable):
     @classproperty
     def External(cls) -> str:
         return str(RelationType.External)
+
+    @classproperty
+    def MaterializedView(cls) -> str:
+        return str(RelationType.MaterializedView)
 
     @classproperty
     def get_relation_type(cls) -> Type[RelationType]:

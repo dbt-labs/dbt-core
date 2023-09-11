@@ -1,29 +1,29 @@
 import os
 import time
-from pathlib import Path
 from abc import abstractmethod
 from concurrent.futures import as_completed
 from datetime import datetime
 from multiprocessing.dummy import Pool as ThreadPool
+from pathlib import Path
 from typing import Optional, Dict, List, Set, Tuple, Iterable, AbstractSet
 
-from .printer import (
-    print_run_result_error,
-    print_run_end_messages,
-)
-
-from dbt.task.base import ConfiguredTask
+import dbt.exceptions
+import dbt.tracking
+import dbt.utils
 from dbt.adapters.base import BaseRelation
 from dbt.adapters.factory import get_adapter
-from dbt.logger import (
-    DbtProcessState,
-    TextOnly,
-    UniqueID,
-    TimestampNamed,
-    DbtModelState,
-    ModelMetadata,
-    NodeCount,
+from dbt.contracts.graph.manifest import WritableManifest
+from dbt.contracts.graph.nodes import ResultNode
+from dbt.contracts.results import (
+    NodeStatus,
+    RunExecutionResult,
+    RunningStatus,
+    RunResult,
+    RunStatus,
+    BaseResult,
 )
+from dbt.contracts.state import PreviousState
+from dbt.events.contextvars import log_contextvars, task_contextvars
 from dbt.events.functions import fire_event, warn_or_error
 from dbt.events.types import (
     Formatting,
@@ -36,51 +36,62 @@ from dbt.events.types import (
     EndRunResult,
     NothingToDo,
 )
-from dbt.events.contextvars import log_contextvars
-from dbt.contracts.graph.nodes import ResultNode
-from dbt.contracts.results import NodeStatus, RunExecutionResult, RunningStatus
-from dbt.contracts.state import PreviousState
 from dbt.exceptions import (
     DbtInternalError,
     NotImplementedError,
     DbtRuntimeError,
     FailFastError,
 )
-
-from dbt.graph import GraphQueue, NodeSelector, SelectionSpec, parse_difference
-from dbt.parser.manifest import write_manifest
-import dbt.tracking
-
-import dbt.exceptions
 from dbt.flags import get_flags
-import dbt.utils
+from dbt.graph import GraphQueue, NodeSelector, SelectionSpec, parse_difference, UniqueId
+from dbt.logger import (
+    DbtProcessState,
+    TextOnly,
+    UniqueID,
+    TimestampNamed,
+    DbtModelState,
+    ModelMetadata,
+    NodeCount,
+)
+from dbt.parser.manifest import write_manifest
+from dbt.task.base import ConfiguredTask, BaseRunner
+from .printer import (
+    print_run_result_error,
+    print_run_end_messages,
+)
 
 RESULT_FILE_NAME = "run_results.json"
 RUNNING_STATE = DbtProcessState("running")
 
 
 class GraphRunnableTask(ConfiguredTask):
-
     MARK_DEPENDENT_ERRORS_STATUSES = [NodeStatus.Error]
 
-    def __init__(self, args, config, manifest):
+    def __init__(self, args, config, manifest) -> None:
         super().__init__(args, config, manifest)
         self._flattened_nodes: Optional[List[ResultNode]] = None
-        self._raise_next_tick = None
-        self._skipped_children = {}
+        self._raise_next_tick: Optional[DbtRuntimeError] = None
+        self._skipped_children: Dict[str, Optional[RunResult]] = {}
         self.job_queue: Optional[GraphQueue] = None
-        self.node_results = []
+        self.node_results: List[BaseResult] = []
         self.num_nodes: int = 0
         self.previous_state: Optional[PreviousState] = None
+        self.previous_defer_state: Optional[PreviousState] = None
         self.run_count: int = 0
         self.started_at: float = 0
 
-        self.set_previous_state()
-
-    def set_previous_state(self):
-        if self.args.state is not None:
+        if self.args.state:
             self.previous_state = PreviousState(
-                path=self.args.state, current_path=Path(self.config.target_path)
+                state_path=self.args.state,
+                target_path=Path(self.config.target_path),
+                project_root=Path(self.config.project_root),
+            )
+
+        if self.args.defer_state:
+            self.previous_defer_state = PreviousState(
+                state_path=self.args.defer_state,
+                target_path=Path(self.config.target_path),
+                project_root=Path(self.config.project_root),
             )
 
     def index_offset(self, value: int) -> int:
@@ -156,9 +167,9 @@ class GraphRunnableTask(ConfiguredTask):
         raise NotImplementedError("Not Implemented")
 
     def result_path(self):
-        return os.path.join(self.config.target_path, RESULT_FILE_NAME)
+        return os.path.join(self.config.project_target_path, RESULT_FILE_NAME)
 
-    def get_runner(self, node):
+    def get_runner(self, node) -> BaseRunner:
         adapter = get_adapter(self.config)
         run_count: int = 0
         num_nodes: int = 0
@@ -174,7 +185,7 @@ class GraphRunnableTask(ConfiguredTask):
         cls = self.get_runner_type(node)
         return cls(self.config, adapter, node, run_count, num_nodes)
 
-    def call_runner(self, runner):
+    def call_runner(self, runner: BaseRunner) -> RunResult:
         uid_context = UniqueID(runner.node.unique_id)
         with RUNNING_STATE, uid_context, log_contextvars(node_info=runner.node.node_info):
             startctx = TimestampNamed("node_started_at")
@@ -282,7 +293,7 @@ class GraphRunnableTask(ConfiguredTask):
 
         return
 
-    def _handle_result(self, result):
+    def _handle_result(self, result: RunResult):
         """Mark the result as completed, insert the `CompileResultNode` into
         the manifest, and mark any descendants (potentially with a 'cause' if
         the result was an ephemeral model) as skipped.
@@ -302,15 +313,6 @@ class GraphRunnableTask(ConfiguredTask):
             else:
                 cause = None
             self._mark_dependent_errors(node.unique_id, result, cause)
-
-        interim_run_result = self.get_result(
-            results=self.node_results,
-            elapsed_time=time.time() - self.started_at,
-            generated_at=datetime.utcnow(),
-        )
-
-        if self.args.write_json and hasattr(interim_run_result, "write"):
-            interim_run_result.write(self.result_path())
 
     def _cancel_connections(self, pool):
         """Given a pool, cancel all adapter connections and wait until all
@@ -353,15 +355,33 @@ class GraphRunnableTask(ConfiguredTask):
         pool = ThreadPool(num_threads)
         try:
             self.run_queue(pool)
-
         except FailFastError as failure:
             self._cancel_connections(pool)
-            print_run_result_error(failure.result)
-            raise
 
+            executed_node_ids = [r.node.unique_id for r in self.node_results]
+
+            for r in self._flattened_nodes:
+                if r.unique_id not in executed_node_ids:
+                    self.node_results.append(
+                        RunResult.from_node(r, RunStatus.Skipped, "Skipping due to fail_fast")
+                    )
+
+            print_run_result_error(failure.result)
+            # ensure information about all nodes is propagated to run results when failing fast
+            return self.node_results
         except KeyboardInterrupt:
+            run_result = self.get_result(
+                results=self.node_results,
+                elapsed_time=time.time() - self.started_at,
+                generated_at=datetime.utcnow(),
+            )
+
+            if self.args.write_json and hasattr(run_result, "write"):
+                run_result.write(self.result_path())
+
             self._cancel_connections(pool)
             print_run_end_messages(self.node_results, keyboard_interrupt=True)
+
             raise
 
         pool.close()
@@ -369,13 +389,17 @@ class GraphRunnableTask(ConfiguredTask):
 
         return self.node_results
 
-    def _mark_dependent_errors(self, node_id, result, cause):
+    def _mark_dependent_errors(
+        self, node_id: str, result: RunResult, cause: Optional[RunResult]
+    ) -> None:
         if self.graph is None:
             raise DbtInternalError("graph is None in _mark_dependent_errors")
-        for dep_node_id in self.graph.get_dependent_nodes(node_id):
+        for dep_node_id in self.graph.get_dependent_nodes(UniqueId(node_id)):
             self._skipped_children[dep_node_id] = cause
 
-    def populate_adapter_cache(self, adapter, required_schemas: Set[BaseRelation] = None):
+    def populate_adapter_cache(
+        self, adapter, required_schemas: Optional[Set[BaseRelation]] = None
+    ):
         if not self.args.populate_cache:
             return
 
@@ -422,25 +446,30 @@ class GraphRunnableTask(ConfiguredTask):
         """
         Run dbt for the query, based on the graph.
         """
-        self._runtime_initialize()
+        # We set up a context manager here with "task_contextvars" because we
+        # need the project_root in runtime_initialize.
+        with task_contextvars(project_root=self.config.project_root):
+            self._runtime_initialize()
 
-        if self._flattened_nodes is None:
-            raise DbtInternalError("after _runtime_initialize, _flattened_nodes was still None")
+            if self._flattened_nodes is None:
+                raise DbtInternalError(
+                    "after _runtime_initialize, _flattened_nodes was still None"
+                )
 
-        if len(self._flattened_nodes) == 0:
-            with TextOnly():
-                fire_event(Formatting(""))
-            warn_or_error(NothingToDo())
-            result = self.get_result(
-                results=[],
-                generated_at=datetime.utcnow(),
-                elapsed_time=0.0,
-            )
-        else:
-            with TextOnly():
-                fire_event(Formatting(""))
-            selected_uids = frozenset(n.unique_id for n in self._flattened_nodes)
-            result = self.execute_with_hooks(selected_uids)
+            if len(self._flattened_nodes) == 0:
+                with TextOnly():
+                    fire_event(Formatting(""))
+                warn_or_error(NothingToDo())
+                result = self.get_result(
+                    results=[],
+                    generated_at=datetime.utcnow(),
+                    elapsed_time=0.0,
+                )
+            else:
+                with TextOnly():
+                    fire_event(Formatting(""))
+                selected_uids = frozenset(n.unique_id for n in self._flattened_nodes)
+                result = self.execute_with_hooks(selected_uids)
 
         # We have other result types here too, including FreshnessResult
         if isinstance(result, RunExecutionResult):
@@ -455,7 +484,7 @@ class GraphRunnableTask(ConfiguredTask):
             )
 
         if self.args.write_json:
-            write_manifest(self.manifest, self.config.target_path)
+            write_manifest(self.manifest, self.config.project_target_path)
             if hasattr(result, "write"):
                 result.write(self.result_path())
 
@@ -559,7 +588,7 @@ class GraphRunnableTask(ConfiguredTask):
                     create_futures.append(fut)
 
             for create_future in as_completed(create_futures):
-                # trigger/re-raise any excceptions while creating schemas
+                # trigger/re-raise any exceptions while creating schemas
                 create_future.result()
 
     def get_result(self, results, elapsed_time, generated_at):
@@ -572,3 +601,14 @@ class GraphRunnableTask(ConfiguredTask):
 
     def task_end_messages(self, results):
         print_run_end_messages(results)
+
+    def _get_deferred_manifest(self) -> Optional[WritableManifest]:
+        state = self.previous_defer_state or self.previous_state
+        if not state:
+            raise DbtRuntimeError(
+                "--state or --defer-state are required for deferral, but neither was provided"
+            )
+
+        if not state.manifest:
+            raise DbtRuntimeError(f'Could not find manifest in --state path: "{state}"')
+        return state.manifest

@@ -1,7 +1,7 @@
 /* {#
        Core materialization implementation. BigQuery and Snowflake are similar
-       because both can use `create or replace view` where the resulting view schema
-       is not necessarily the same as the existing view. On Redshift, this would
+       because both can use `create or replace view` where the resulting view's columns
+       are not necessarily the same as those of the existing view. On Redshift, this would
        result in: ERROR:  cannot change number of columns in view
 
        This implementation is superior to the create_temp, swap_with_existing, drop_old

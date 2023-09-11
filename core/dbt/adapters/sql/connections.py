@@ -1,6 +1,6 @@
 import abc
 import time
-from typing import List, Optional, Tuple, Any, Iterable, Dict, Union
+from typing import List, Optional, Tuple, Any, Iterable, Dict
 
 import agate
 
@@ -52,7 +52,6 @@ class SQLConnectionManager(BaseConnectionManager):
         bindings: Optional[Any] = None,
         abridge_sql_log: bool = False,
     ) -> Tuple[Connection, Any]:
-
         connection = self.get_thread_connection()
         if auto_begin and connection.transaction_open is False:
             self.begin()
@@ -131,14 +130,6 @@ class SQLConnectionManager(BaseConnectionManager):
             data = cls.process_results(column_names, rows)
 
         return dbt.clients.agate_helper.table_from_data_flat(data, column_names)
-
-    @classmethod
-    def data_type_code_to_name(cls, type_code: Union[int, str]) -> str:
-        """Get the string representation of the data type from the type_code."""
-        # https://peps.python.org/pep-0249/#type-objects
-        raise dbt.exceptions.NotImplementedError(
-            "`data_type_code_to_name` is not implemented for this adapter!"
-        )
 
     def execute(
         self, sql: str, auto_begin: bool = False, fetch: bool = False, limit: Optional[int] = None

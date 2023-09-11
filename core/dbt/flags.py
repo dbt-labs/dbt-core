@@ -3,6 +3,7 @@ from os import getenv as os_getenv
 from argparse import Namespace
 from multiprocessing import get_context
 from typing import Optional
+from pathlib import Path
 
 
 # for setting up logger for legacy logger
@@ -86,6 +87,7 @@ def get_flag_dict():
         "introspect",
         "target_path",
         "log_path",
+        "invocation_command",
     }
     return {key: getattr(GLOBAL_FLAGS, key.upper(), None) for key in flag_attr}
 
@@ -95,6 +97,8 @@ def get_flag_dict():
 def get_flag_obj():
     new_flags = Namespace()
     for key, val in get_flag_dict().items():
+        if isinstance(val, Path):
+            val = str(val)
         setattr(new_flags, key.upper(), val)
     # The following 3 are CLI arguments only so they're not full-fledged flags,
     # but we put in flags for users.

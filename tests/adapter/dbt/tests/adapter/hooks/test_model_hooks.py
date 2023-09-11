@@ -35,7 +35,8 @@ MODEL_PRE_HOOK = """
         target_pass,
         target_threads,
         run_started_at,
-        invocation_id
+        invocation_id,
+        thread_id
    ) VALUES (
     'start',
     '{{ target.dbname }}',
@@ -47,7 +48,8 @@ MODEL_PRE_HOOK = """
     '{{ target.get("pass", "") }}',
     {{ target.threads }},
     '{{ run_started_at }}',
-    '{{ invocation_id }}'
+    '{{ invocation_id }}',
+    '{{ thread_id }}'
    )
 """
 
@@ -63,7 +65,8 @@ MODEL_POST_HOOK = """
         target_pass,
         target_threads,
         run_started_at,
-        invocation_id
+        invocation_id,
+        thread_id
    ) VALUES (
     'end',
     '{{ target.dbname }}',
@@ -75,7 +78,8 @@ MODEL_POST_HOOK = """
     '{{ target.get("pass", "") }}',
     {{ target.threads }},
     '{{ run_started_at }}',
-    '{{ invocation_id }}'
+    '{{ invocation_id }}',
+    '{{ thread_id }}'
    )
 """
 
@@ -98,6 +102,7 @@ class BaseTestPrePost(object):
             "target_pass",
             "run_started_at",
             "invocation_id",
+            "thread_id",
         ]
         field_list = ", ".join(['"{}"'.format(f) for f in fields])
         query = f"select {field_list} from {project.test_schema}.on_model_hook where test_state = '{state}'"
@@ -127,6 +132,7 @@ class BaseTestPrePost(object):
             assert (
                 ctx["invocation_id"] is not None and len(ctx["invocation_id"]) > 0
             ), "invocation_id was not set"
+            assert ctx["thread_id"].startswith("Thread-")
 
 
 class TestPrePostModelHooks(BaseTestPrePost):
@@ -204,7 +210,8 @@ class TestHookRefs(BaseTestPrePost):
                         '{{ target.get(pass, "") }}' as target_pass,
                         {{ target.threads }} as target_threads,
                         '{{ run_started_at }}' as run_started_at,
-                        '{{ invocation_id }}' as invocation_id
+                        '{{ invocation_id }}' as invocation_id,
+                        '{{ thread_id }}' as thread_id
                         from {{ ref('post') }}""".strip()
                         ],
                     }

@@ -4,13 +4,14 @@ from dbt.helper_types import NoValue
 from dbt.dataclass_schema import (
     dbtClassMixin,
     ValidationError,
-    HyphenatedDbtClassMixin,
     ExtensibleDbtClassMixin,
-    register_pattern,
+    dbtMashConfig,
 )
 from dataclasses import dataclass, field
-from typing import Optional, List, Dict, Union, Any
+from typing import Optional, List, Dict, Union, Any, ClassVar
+from typing_extensions import Annotated
 from mashumaro.types import SerializableType
+from mashumaro.jsonschema.annotations import Pattern
 
 
 DEFAULT_SEND_ANONYMOUS_USAGE_STATS = True
@@ -25,12 +26,8 @@ class SemverString(str, SerializableType):
         return SemverString(value)
 
 
-# this supports full semver,
-# but also allows for 2 group version numbers, (allows '1.0').
-register_pattern(
-    SemverString,
-    r"^(0|[1-9]\d*)\.(0|[1-9]\d*)(\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?)?$",  # noqa
-)
+# This supports full semver, but also allows for 2 group version numbers, (allows '1.0').
+sem_ver_pattern = r"^(0|[1-9]\d*)\.(0|[1-9]\d*)(\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?)?$"
 
 
 @dataclass
@@ -42,7 +39,7 @@ class Quoting(dbtClassMixin, Mergeable):
 
 
 @dataclass
-class Package(Replaceable, HyphenatedDbtClassMixin):
+class Package(dbtClassMixin, Replaceable):
     pass
 
 
@@ -65,7 +62,7 @@ class TarballPackage(Package):
 class GitPackage(Package):
     git: str
     revision: Optional[RawVersion] = None
-    warn_unpinned: Optional[bool] = None
+    warn_unpinned: Optional[bool] = field(default=None, metadata={"alias": "warn-unpinned"})
     subdirectory: Optional[str] = None
 
     def get_revisions(self) -> List[str]:
@@ -182,10 +179,13 @@ BANNED_PROJECT_NAMES = {
 
 
 @dataclass
-class Project(HyphenatedDbtClassMixin, Replaceable):
-    name: Identifier
+class Project(dbtClassMixin, Replaceable):
+    _hyphenated: ClassVar[bool] = True
+    # Annotated is used by mashumaro for jsonschema generation
+    name: Annotated[Identifier, Pattern(r"^[^\d\W]\w*$")]
     config_version: Optional[int] = 2
-    version: Optional[Union[SemverString, float]] = None
+    # Annotated is used by mashumaro for jsonschema generation
+    version: Optional[Union[Annotated[SemverString, Pattern(sem_ver_pattern)], float]] = None
     project_root: Optional[str] = None
     source_paths: Optional[List[str]] = None
     model_paths: Optional[List[str]] = None
@@ -214,6 +214,7 @@ class Project(HyphenatedDbtClassMixin, Replaceable):
     sources: Dict[str, Any] = field(default_factory=dict)
     tests: Dict[str, Any] = field(default_factory=dict)
     metrics: Dict[str, Any] = field(default_factory=dict)
+    semantic_models: Dict[str, Any] = field(default_factory=dict)
     exposures: Dict[str, Any] = field(default_factory=dict)
     vars: Optional[Dict[str, Any]] = field(
         default=None,
@@ -223,6 +224,36 @@ class Project(HyphenatedDbtClassMixin, Replaceable):
     )
     packages: List[PackageSpec] = field(default_factory=list)
     query_comment: Optional[Union[QueryComment, NoValue, str]] = field(default_factory=NoValue)
+    restrict_access: bool = False
+    dbt_cloud: Optional[Dict[str, Any]] = None
+
+    class Config(dbtMashConfig):
+        # These tell mashumaro to use aliases for jsonschema and for "from_dict"
+        aliases = {
+            "config_version": "config-version",
+            "project_root": "project-root",
+            "source_paths": "source-paths",
+            "model_paths": "model-paths",
+            "macro_paths": "macro-paths",
+            "data_paths": "data-paths",
+            "seed_paths": "seed-paths",
+            "test_paths": "test-paths",
+            "analysis_paths": "analysis-paths",
+            "docs_paths": "docs-paths",
+            "asset_paths": "asset-paths",
+            "target_path": "target-path",
+            "snapshot_paths": "snapshot-paths",
+            "clean_targets": "clean-targets",
+            "log_path": "log-path",
+            "packages_install_path": "packages-install-path",
+            "on_run_start": "on-run-start",
+            "on_run_end": "on-run-end",
+            "require_dbt_version": "require-dbt-version",
+            "query_comment": "query-comment",
+            "restrict_access": "restrict-access",
+            "semantic_models": "semantic-models",
+            "dbt_cloud": "dbt-cloud",
+        }
 
     @classmethod
     def validate(cls, data):
@@ -239,6 +270,10 @@ class Project(HyphenatedDbtClassMixin, Replaceable):
                     or not isinstance(entry["search_order"], list)
                 ):
                     raise ValidationError(f"Invalid project dispatch config: {entry}")
+        if "dbt_cloud" in data and not isinstance(data["dbt_cloud"], dict):
+            raise ValidationError(
+                f"Invalid dbt_cloud config. Expected a 'dict' but got '{type(data['dbt_cloud'])}'"
+            )
 
 
 @dataclass
@@ -266,10 +301,10 @@ class UserConfig(ExtensibleDbtClassMixin, Replaceable, UserConfigContract):
 
 
 @dataclass
-class ProfileConfig(HyphenatedDbtClassMixin, Replaceable):
-    profile_name: str = field(metadata={"preserve_underscore": True})
-    target_name: str = field(metadata={"preserve_underscore": True})
-    user_config: UserConfig = field(metadata={"preserve_underscore": True})
+class ProfileConfig(dbtClassMixin, Replaceable):
+    profile_name: str
+    target_name: str
+    user_config: UserConfig
     threads: int
     # TODO: make this a dynamic union of some kind?
     credentials: Optional[Dict[str, Any]]

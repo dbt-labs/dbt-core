@@ -1,11 +1,7 @@
 # **what?**
 # The purpose of this workflow is to trigger CI to run for each
 # release branch and main branch on a regular cadence. If the CI workflow
-# fails for a branch, it will post to dev-core-alerts to raise awareness.
-# The 'aurelien-baudet/workflow-dispatch' Action triggers the existing
-# CI worklow file on the given branch to run so that even if we change the
-# CI workflow file in the future, the one that is tailored for the given
-# release branch will be used.
+# fails for a branch, it will post to #dev-core-alerts to raise awareness.
 
 # **why?**
 # Ensures release branches and main are always shippable and not broken.
@@ -28,63 +24,8 @@ on:
 permissions: read-all
 
 jobs:
-  fetch-latest-branches:
-    runs-on: ubuntu-latest
-
-    outputs:
-      latest-branches: ${{ steps.get-latest-branches.outputs.repo-branches }}
-
-    steps:
-      - name: "Fetch dbt-core Latest Branches"
-        uses: dbt-labs/actions/fetch-repo-branches@v1.1.1
-        id: get-latest-branches
-        with:
-          repo_name: ${{ github.event.repository.name }}
-          organization: "dbt-labs"
-          pat: ${{ secrets.GITHUB_TOKEN }}
-          fetch_protected_branches_only: true
-          regex: "^1.[0-9]+.latest$"
-          perform_match_method: "match"
-          retries: 3
-
-      - name: "[ANNOTATION] ${{ github.event.repository.name }} - branches to test"
-        run: |
-          title="${{ github.event.repository.name }} - branches to test"
-          message="The workflow will run tests for the following branches of the ${{ github.event.repository.name }} repo: ${{ steps.get-latest-branches.outputs.repo-branches }}"
-          echo "::notice $title::$message"
-
-  kick-off-ci:
-    needs: [fetch-latest-branches]
-    name: Kick-off CI
-    runs-on: ubuntu-latest
-
-    strategy:
-      # must run CI 1 branch at a time b/c the workflow-dispatch Action polls for
-      # latest run for results and it gets confused when we kick off multiple runs
-      # at once. There is a race condition so we will just run in sequential order.
-      max-parallel: 1
-      fail-fast: false
-      matrix:
-        branch: ${{ fromJSON(needs.fetch-latest-branches.outputs.latest-branches) }}
-        include:
-          - branch: 'main'
-
-    steps:
-    - name: Call CI workflow for ${{ matrix.branch }} branch
-      id: trigger-step
-      uses: aurelien-baudet/workflow-dispatch@v2
-      with:
-        workflow: main.yml
-        ref: ${{ matrix.branch }}
-        token: ${{ secrets.FISHTOWN_BOT_PAT }}
-
-    - name: Post failure to Slack
-      uses: ravsamhq/notify-slack-action@v2
-      if: ${{ always() && !contains(steps.trigger-step.outputs.workflow-conclusion,'success') }}
-      with:
-        status: ${{ job.status }}
-        notification_title: 'dbt-core scheduled run of "${{ matrix.branch }}" branch not successful'
-        message_format: ':x: CI on branch "${{ matrix.branch }}" ${{ steps.trigger-step.outputs.workflow-conclusion }}'
-        footer: 'Linked failed CI run ${{ steps.trigger-step.outputs.workflow-url }}'
-      env:
-        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_DEV_CORE_ALERTS }}
+  run_tests:
+    uses: dbt-labs/actions/.github/workflows/release-branch-tests.yml@main
+    with:
+      workflows_to_run: '["main.yml"]'
+    secrets: inherit

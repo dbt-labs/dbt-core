@@ -1,8 +1,18 @@
 import os
+
 import pytest
 import yaml
 
-from dbt.tests.util import check_table_does_exist, run_dbt
+from dbt.exceptions import DbtInternalError
+from dbt.tests.util import (
+    check_table_does_exist,
+    run_dbt,
+    write_file,
+    mkdir,
+    run_dbt_and_capture,
+    rm_dir,
+    rm_file,
+)
 from tests.functional.run_operations.fixtures import happy_macros_sql, sad_macros_sql, model_sql
 
 
@@ -66,7 +76,11 @@ class TestOperations:
         self.run_operation("syntax_error", False)
 
     def test_macro_missing(self, project):
-        self.run_operation("this_macro_does_not_exist", False)
+        with pytest.raises(
+            DbtInternalError,
+            match="dbt could not find a macro with the name 'this_macro_does_not_exist' in any package",
+        ):
+            self.run_operation("this_macro_does_not_exist", False)
 
     def test_cannot_connect(self, project):
         self.run_operation("no_args", extra_args=["--target", "noaccess"], expect_pass=False)
@@ -90,3 +104,38 @@ class TestOperations:
     def test_print(self, project):
         # Tests that calling the `print()` macro does not cause an exception
         self.run_operation("print_something")
+
+    def test_run_operation_local_macro(self, project):
+        pkg_macro = """
+{% macro something_cool() %}
+    {{ log("something cool", info=true) }}
+{% endmacro %}
+        """
+
+        mkdir("pkg/macros")
+
+        write_file(pkg_macro, "pkg/macros/something_cool.sql")
+
+        pkg_yaml = """
+packages:
+    - local: pkg
+        """
+
+        write_file(pkg_yaml, "packages.yml")
+
+        pkg_dbt_project = """
+name: 'pkg'
+        """
+
+        write_file(pkg_dbt_project, "pkg/dbt_project.yml")
+
+        run_dbt(["deps"])
+
+        results, log_output = run_dbt_and_capture(["run-operation", "something_cool"])
+        assert "something cool" in log_output
+
+        results, log_output = run_dbt_and_capture(["run-operation", "pkg.something_cool"])
+        assert "something cool" in log_output
+
+        rm_dir("pkg")
+        rm_file("packages.yml")

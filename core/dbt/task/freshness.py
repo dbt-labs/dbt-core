@@ -159,7 +159,7 @@ class FreshnessTask(GraphRunnableTask):
         if self.args.output:
             return os.path.realpath(self.args.output)
         else:
-            return os.path.join(self.config.target_path, RESULT_FILE_NAME)
+            return os.path.join(self.config.project_target_path, RESULT_FILE_NAME)
 
     def raise_on_first_error(self):
         return False

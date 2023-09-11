@@ -40,7 +40,8 @@ macros__before_and_after = """
         target_pass,
         target_threads,
         run_started_at,
-        invocation_id
+        invocation_id,
+        thread_id
    ) VALUES (
     '{{ state }}',
     '{{ target.dbname }}',
@@ -52,7 +53,8 @@ macros__before_and_after = """
     '{{ target.get("pass", "") }}',
     {{ target.threads }},
     '{{ run_started_at }}',
-    '{{ invocation_id }}'
+    '{{ invocation_id }}',
+    '{{ thread_id }}'
    )
 
 {% endmacro %}
@@ -83,7 +85,8 @@ models__hooks_configured = """
                 target_pass,\
                 target_threads,\
                 run_started_at,\
-                invocation_id
+                invocation_id,\
+                thread_id
             ) VALUES (\
                 'start',\
                 '{{ target.dbname }}',\
@@ -95,7 +98,8 @@ models__hooks_configured = """
                 '{{ target.get(\\"pass\\", \\"\\") }}',\
                 {{ target.threads }},\
                 '{{ run_started_at }}',\
-                '{{ invocation_id }}'\
+                '{{ invocation_id }}',\
+                '{{ thread_id }}'\
         )",
         "post-hook": "\
             insert into {{this.schema}}.on_model_hook (\
@@ -109,7 +113,9 @@ models__hooks_configured = """
                 target_pass,\
                 target_threads,\
                 run_started_at,\
-                invocation_id
+                invocation_id,\
+                thread_id
+
             ) VALUES (\
                 'end',\
                 '{{ target.dbname }}',\
@@ -121,7 +127,8 @@ models__hooks_configured = """
                 '{{ target.get(\\"pass\\", \\"\\") }}',\
                 {{ target.threads }},\
                 '{{ run_started_at }}',\
-                '{{ invocation_id }}'\
+                '{{ invocation_id }}',\
+                '{{ thread_id }}'\
             )"
     })
 }}
@@ -144,7 +151,8 @@ models__hooks_error = """
                 target_pass,\
                 target_threads,\
                 run_started_at,\
-                invocation_id
+                invocation_id,\
+                thread_id
             ) VALUES (\
                 'start',\
                 '{{ target.dbname }}',\
@@ -156,7 +164,8 @@ models__hooks_error = """
                 '{{ target.get(\\"pass\\", \\"\\") }}',\
                 {{ target.threads }},\
                 '{{ run_started_at }}',\
-                '{{ invocation_id }}'
+                '{{ invocation_id }}',\
+                '{{ thread_id }}'
         )",
         "pre-hook": "\
             insert into {{this.schema}}.on_model_hook (\
@@ -170,7 +179,8 @@ models__hooks_error = """
                 target_pass,\
                 target_threads,\
                 run_started_at,\
-                invocation_id
+                invocation_id,\
+                thread_id
             ) VALUES (\
                 'start',\
                 '{{ target.dbname }}',\
@@ -182,7 +192,8 @@ models__hooks_error = """
                 '{{ target.get(\\"pass\\", \\"\\") }}',\
                 {{ target.threads }},\
                 '{{ run_started_at }}',\
-                '{{ invocation_id }}'
+                '{{ invocation_id }}',\
+                '{{ thread_id }}'
         )",
         "post-hook": "\
             insert into {{this.schema}}.on_model_hook (\
@@ -196,7 +207,8 @@ models__hooks_error = """
                 target_pass,\
                 target_threads,\
                 run_started_at,\
-                invocation_id
+                invocation_id,\
+                thread_id
             ) VALUES (\
                 'end',\
                 '{{ target.dbname }}',\
@@ -208,7 +220,8 @@ models__hooks_error = """
                 '{{ target.get(\\"pass\\", \\"\\") }}',\
                 {{ target.threads }},\
                 '{{ run_started_at }}',\
-                '{{ invocation_id }}'\
+                '{{ invocation_id }}',\
+                '{{ thread_id }}'\
             )"
     })
 }}
@@ -231,7 +244,8 @@ models__hooks_kwargs = """
                 target_pass,\
                 target_threads,\
                 run_started_at,\
-                invocation_id
+                invocation_id,\
+                thread_id
             ) VALUES (\
                 'start',\
                 '{{ target.dbname }}',\
@@ -243,7 +257,8 @@ models__hooks_kwargs = """
                 '{{ target.get(\\"pass\\", \\"\\") }}',\
                 {{ target.threads }},\
                 '{{ run_started_at }}',\
-                '{{ invocation_id }}'\
+                '{{ invocation_id }}',\
+                '{{ thread_id }}'\
         )",
         post_hook="\
             insert into {{this.schema}}.on_model_hook (\
@@ -257,7 +272,8 @@ models__hooks_kwargs = """
                 target_pass,\
                 target_threads,\
                 run_started_at,\
-                invocation_id\
+                invocation_id,\
+                thread_id\
             ) VALUES (\
                 'end',\
                 '{{ target.dbname }}',\
@@ -269,7 +285,8 @@ models__hooks_kwargs = """
                 '{{ target.get(\\"pass\\", \\"\\") }}',\
                 {{ target.threads }},\
                 '{{ run_started_at }}',\
-                '{{ invocation_id }}'\
+                '{{ invocation_id }}',\
+                '{{ thread_id }}'\
             )"
     )
 }}
@@ -292,7 +309,8 @@ models__hooked = """
                 '{{ target.get(\\"pass\\", \\"\\") }}' as target_pass,\
                 {{ target.threads }} as target_threads,\
                 '{{ run_started_at }}' as run_started_at,\
-                '{{ invocation_id }}' as invocation_id
+                '{{ invocation_id }}' as invocation_id,\
+                '{{ thread_id }}' as thread_id
                 from {{ ref('pre') }}\
                 "
     })

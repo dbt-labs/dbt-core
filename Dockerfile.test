@@ -3,13 +3,13 @@
 #  See `/docker` for a generic and production-ready docker file
 ##
 
-FROM ubuntu:23.04
+FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND noninteractive
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-    software-properties-common \
+    software-properties-common gpg-agent \
     && add-apt-repository ppa:git-core/ppa -y \
     && apt-get dist-upgrade -y \
     && apt-get install -y --no-install-recommends \
@@ -30,16 +30,9 @@ RUN apt-get update \
     unixodbc-dev \
     && add-apt-repository ppa:deadsnakes/ppa \
     && apt-get install -y \
-    python \
-    python-dev \
+    python-is-python3 \
+    python-dev-is-python3 \
     python3-pip \
-    python3.6 \
-    python3.6-dev \
-    python3-pip \
-    python3.6-venv \
-    python3.7 \
-    python3.7-dev \
-    python3.7-venv \
     python3.8 \
     python3.8-dev \
     python3.8-venv \

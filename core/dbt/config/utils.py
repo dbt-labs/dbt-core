@@ -19,6 +19,6 @@ def parse_cli_yaml_string(var_string: str, cli_option_name: str) -> Dict[str, An
             return cli_vars
         else:
             raise OptionNotYamlDictError(var_type, cli_option_name)
-    except DbtValidationError:
+    except (DbtValidationError, OptionNotYamlDictError):
         fire_event(InvalidOptionYAML(option_name=cli_option_name))
         raise

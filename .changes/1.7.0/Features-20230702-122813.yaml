@@ -1,0 +1,7 @@
+kind: Features
+body: Enable re-population of metadata vars post-environment change during programmatic
+  invocation
+time: 2023-07-02T12:28:13.416305-04:00
+custom:
+  Author: gem7318
+  Issue: "8010"

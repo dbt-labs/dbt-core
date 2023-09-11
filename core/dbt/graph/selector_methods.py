@@ -26,6 +26,7 @@ from dbt.exceptions import (
     DbtRuntimeError,
 )
 from dbt.node_types import NodeType
+from dbt.events.contextvars import get_project_root
 
 
 SELECTOR_GLOB = "*"
@@ -36,6 +37,7 @@ class MethodName(StrEnum):
     FQN = "fqn"
     Tag = "tag"
     Group = "group"
+    Access = "access"
     Source = "source"
     Path = "path"
     File = "file"
@@ -59,8 +61,8 @@ def is_selected_node(fqn: List[str], node_selector: str, is_versioned: bool) -> 
         flat_node_selector = node_selector.split(".")
         if fqn[-2] == node_selector:
             return True
-        # If this is a versioned model, then the last two segments should be allowed to exactly match
-        elif fqn[-2:] == flat_node_selector[-2:]:
+        # If this is a versioned model, then the last two segments should be allowed to exactly match on either the '.' or '_' delimiter
+        elif "_".join(fqn[-2:]) == "_".join(flat_node_selector[-2:]):
             return True
     else:
         if fqn[-1] == node_selector:
@@ -101,7 +103,7 @@ SelectorTarget = Union[SourceDefinition, ManifestNode, Exposure, Metric]
 class SelectorMethod(metaclass=abc.ABCMeta):
     def __init__(
         self, manifest: Manifest, previous_state: Optional[PreviousState], arguments: List[str]
-    ):
+    ) -> None:
         self.manifest: Manifest = manifest
         self.previous_state = previous_state
         self.arguments: List[str] = arguments
@@ -230,6 +232,16 @@ class GroupSelectorMethod(SelectorMethod):
                 yield node
 
 
+class AccessSelectorMethod(SelectorMethod):
+    def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
+        """yields model nodes matching the specified access level"""
+        for node, real_node in self.parsed_nodes(included_nodes):
+            if not isinstance(real_node, ModelNode):
+                continue
+            if selector == real_node.access:
+                yield node
+
+
 class SourceSelectorMethod(SelectorMethod):
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
         """yields nodes from included are the specified source."""
@@ -313,8 +325,12 @@ class MetricSelectorMethod(SelectorMethod):
 class PathSelectorMethod(SelectorMethod):
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
         """Yields nodes from included that match the given path."""
-        # use '.' and not 'root' for easy comparison
-        root = Path.cwd()
+        # get project root from contextvar
+        project_root = get_project_root()
+        if project_root:
+            root = Path(project_root)
+        else:
+            root = Path.cwd()
         paths = set(p.relative_to(root) for p in root.glob(selector))
         for node, real_node in self.all_nodes(included_nodes):
             ofp = Path(real_node.original_file_path)
@@ -334,6 +350,8 @@ class FileSelectorMethod(SelectorMethod):
         """Yields nodes from included that match the given file name."""
         for node, real_node in self.all_nodes(included_nodes):
             if fnmatch(Path(real_node.original_file_path).name, selector):
+                yield node
+            elif fnmatch(Path(real_node.original_file_path).stem, selector):
                 yield node
 
 
@@ -419,6 +437,8 @@ class ResourceTypeSelectorMethod(SelectorMethod):
 
 
 class TestNameSelectorMethod(SelectorMethod):
+    __test__ = False
+
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
         for node, real_node in self.parsed_nodes(included_nodes):
             if real_node.resource_type == NodeType.Test and hasattr(real_node, "test_metadata"):
@@ -427,6 +447,8 @@ class TestNameSelectorMethod(SelectorMethod):
 
 
 class TestTypeSelectorMethod(SelectorMethod):
+    __test__ = False
+
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
         search_type: Type
         # continue supporting 'schema' + 'data' for backwards compatibility
@@ -445,7 +467,7 @@ class TestTypeSelectorMethod(SelectorMethod):
 
 
 class StateSelectorMethod(SelectorMethod):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.modified_macros: Optional[List[str]] = None
 
@@ -526,6 +548,11 @@ class StateSelectorMethod(SelectorMethod):
         upstream_macro_change = self.check_macros_modified(new)
         return different_contents or upstream_macro_change
 
+    def check_unmodified_content(
+        self, old: Optional[SelectorTarget], new: SelectorTarget, adapter_type: str
+    ) -> bool:
+        return not self.check_modified_content(old, new, adapter_type)
+
     def check_modified_macros(self, old, new: SelectorTarget) -> bool:
         return self.check_macros_modified(new)
 
@@ -570,8 +597,10 @@ class StateSelectorMethod(SelectorMethod):
         state_checks = {
             # it's new if there is no old version
             "new": lambda old, new: old is None,
+            "old": lambda old, new: old is not None,
             # use methods defined above to compare properties of old + new
             "modified": self.check_modified_content,
+            "unmodified": self.check_unmodified_content,
             "modified.body": self.check_modified_factory("same_body"),
             "modified.configs": self.check_modified_factory("same_config"),
             "modified.persisted_descriptions": self.check_modified_factory(
@@ -603,7 +632,11 @@ class StateSelectorMethod(SelectorMethod):
                 previous_node = manifest.metrics[node]
 
             keyword_args = {}
-            if checker.__name__ in ["same_contract", "check_modified_content"]:
+            if checker.__name__ in [
+                "same_contract",
+                "check_modified_content",
+                "check_unmodified_content",
+            ]:
                 keyword_args["adapter_type"] = adapter_type  # type: ignore
 
             if checker(previous_node, real_node, **keyword_args):  # type: ignore
@@ -713,6 +746,7 @@ class MethodManager:
         MethodName.FQN: QualifiedNameSelectorMethod,
         MethodName.Tag: TagSelectorMethod,
         MethodName.Group: GroupSelectorMethod,
+        MethodName.Access: AccessSelectorMethod,
         MethodName.Source: SourceSelectorMethod,
         MethodName.Path: PathSelectorMethod,
         MethodName.File: FileSelectorMethod,

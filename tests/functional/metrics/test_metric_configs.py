@@ -1,17 +1,19 @@
 import pytest
-from hologram import ValidationError
+from dbt.dataclass_schema import ValidationError
 from dbt.contracts.graph.model_config import MetricConfig
-from dbt.exceptions import CompilationError
+from dbt.exceptions import CompilationError, ParsingError
 from dbt.tests.util import run_dbt, update_config_file, get_manifest
 
 
 from tests.functional.metrics.fixtures import (
     models_people_sql,
     models_people_metrics_yml,
+    metricflow_time_spine_sql,
     disabled_metric_level_schema_yml,
     enabled_metric_level_schema_yml,
     models_people_metrics_sql,
     invalid_config_metric_yml,
+    semantic_model_people_yml,
 )
 
 
@@ -29,6 +31,8 @@ class TestMetricEnabledConfigProjectLevel(MetricConfigTests):
     def models(self):
         return {
             "people.sql": models_people_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+            "semantic_model_people.yml": semantic_model_people_yml,
             "schema.yml": models_people_metrics_yml,
         }
 
@@ -36,7 +40,7 @@ class TestMetricEnabledConfigProjectLevel(MetricConfigTests):
     def project_config_update(self):
         return {
             "metrics": {
-                "number_of_people": {
+                "average_tenure_minus_people": {
                     "enabled": True,
                 },
             }
@@ -45,12 +49,12 @@ class TestMetricEnabledConfigProjectLevel(MetricConfigTests):
     def test_enabled_metric_config_dbt_project(self, project):
         run_dbt(["parse"])
         manifest = get_manifest(project.project_root)
-        assert "metric.test.number_of_people" in manifest.metrics
+        assert "metric.test.average_tenure_minus_people" in manifest.metrics
 
         new_enabled_config = {
             "metrics": {
                 "test": {
-                    "number_of_people": {
+                    "average_tenure_minus_people": {
                         "enabled": False,
                     },
                 }
@@ -59,7 +63,7 @@ class TestMetricEnabledConfigProjectLevel(MetricConfigTests):
         update_config_file(new_enabled_config, project.project_root, "dbt_project.yml")
         run_dbt(["parse"])
         manifest = get_manifest(project.project_root)
-        assert "metric.test.number_of_people" not in manifest.metrics
+        assert "metric.test.average_tenure_minus_people" not in manifest.metrics
         assert "metric.test.collective_tenure" in manifest.metrics
 
 
@@ -69,6 +73,8 @@ class TestConfigYamlMetricLevel(MetricConfigTests):
     def models(self):
         return {
             "people.sql": models_people_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+            "semantic_model_people.yml": semantic_model_people_yml,
             "schema.yml": disabled_metric_level_schema_yml,
         }
 
@@ -85,6 +91,8 @@ class TestMetricConfigsInheritence(MetricConfigTests):
     def models(self):
         return {
             "people.sql": models_people_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+            "semantic_model_people.yml": semantic_model_people_yml,
             "schema.yml": enabled_metric_level_schema_yml,
         }
 
@@ -112,6 +120,8 @@ class TestDisabledMetricRef(MetricConfigTests):
     def models(self):
         return {
             "people.sql": models_people_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+            "semantic_model_people.yml": semantic_model_people_yml,
             "people_metrics.sql": models_people_metrics_sql,
             "schema.yml": models_people_metrics_yml,
         }
@@ -122,11 +132,19 @@ class TestDisabledMetricRef(MetricConfigTests):
         assert "metric.test.number_of_people" in manifest.metrics
         assert "metric.test.collective_tenure" in manifest.metrics
         assert "model.test.people_metrics" in manifest.nodes
+        assert "metric.test.average_tenure" in manifest.metrics
+        assert "metric.test.average_tenure_minus_people" in manifest.metrics
 
         new_enabled_config = {
             "metrics": {
                 "test": {
                     "number_of_people": {
+                        "enabled": False,
+                    },
+                    "average_tenure_minus_people": {
+                        "enabled": False,
+                    },
+                    "average_tenure": {
                         "enabled": False,
                     },
                 }
@@ -144,6 +162,8 @@ class TestInvalidMetric(MetricConfigTests):
     def models(self):
         return {
             "people.sql": models_people_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+            "semantic_model_people.yml": semantic_model_people_yml,
             "schema.yml": invalid_config_metric_yml,
         }
 
@@ -152,3 +172,35 @@ class TestInvalidMetric(MetricConfigTests):
             run_dbt(["parse"])
         expected_msg = "'True and False' is not of type 'boolean'"
         assert expected_msg in str(excinfo.value)
+
+
+class TestDisabledMetric(MetricConfigTests):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "people.sql": models_people_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+            "semantic_model_people.yml": semantic_model_people_yml,
+            "schema.yml": models_people_metrics_yml,
+        }
+
+    def test_disabling_upstream_metric_errors(self, project):
+        run_dbt(["parse"])  # shouldn't error out yet
+
+        new_enabled_config = {
+            "metrics": {
+                "test": {
+                    "number_of_people": {
+                        "enabled": False,
+                    },
+                }
+            }
+        }
+
+        update_config_file(new_enabled_config, project.project_root, "dbt_project.yml")
+        with pytest.raises(ParsingError) as excinfo:
+            run_dbt(["parse"])
+            expected_msg = (
+                "The metric `number_of_people` is disabled and thus cannot be referenced."
+            )
+            assert expected_msg in str(excinfo.value)

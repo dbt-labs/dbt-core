@@ -19,7 +19,7 @@ on:
 permissions: read-all
 
 jobs:
-  call-label-action:
+  call-transition-action:
     uses: dbt-labs/actions/.github/workflows/jira-transition-actions.yml@main
     secrets:
       JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}

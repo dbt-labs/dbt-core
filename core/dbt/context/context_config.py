@@ -1,7 +1,7 @@
 from abc import abstractmethod
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import List, Iterator, Dict, Any, TypeVar, Generic
+from typing import List, Iterator, Dict, Any, TypeVar, Generic, Optional
 
 from dbt.config import RuntimeConfig, Project, IsFQNResource
 from dbt.contracts.graph.model_config import BaseConfig, get_config_for, _listify
@@ -45,6 +45,8 @@ class UnrenderedConfig(ConfigSource):
             model_configs = unrendered.get("tests")
         elif resource_type == NodeType.Metric:
             model_configs = unrendered.get("metrics")
+        elif resource_type == NodeType.SemanticModel:
+            model_configs = unrendered.get("semantic_models")
         elif resource_type == NodeType.Exposure:
             model_configs = unrendered.get("exposures")
         else:
@@ -70,6 +72,8 @@ class RenderedConfig(ConfigSource):
             model_configs = self.project.tests
         elif resource_type == NodeType.Metric:
             model_configs = self.project.metrics
+        elif resource_type == NodeType.SemanticModel:
+            model_configs = self.project.semantic_models
         elif resource_type == NodeType.Exposure:
             model_configs = self.project.exposures
         else:
@@ -130,7 +134,7 @@ class BaseContextConfigGenerator(Generic[T]):
         resource_type: NodeType,
         project_name: str,
         base: bool,
-        patch_config_dict: Dict[str, Any] = None,
+        patch_config_dict: Optional[Dict[str, Any]] = None,
     ) -> BaseConfig:
         own_config = self.get_node_project(project_name)
 
@@ -166,7 +170,7 @@ class BaseContextConfigGenerator(Generic[T]):
         resource_type: NodeType,
         project_name: str,
         base: bool,
-        patch_config_dict: Dict[str, Any],
+        patch_config_dict: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         ...
 
@@ -189,9 +193,21 @@ class ContextConfigGenerator(BaseContextConfigGenerator[C]):
 
     def _update_from_config(self, result: C, partial: Dict[str, Any], validate: bool = False) -> C:
         translated = self._active_project.credentials.translate_aliases(partial)
-        return result.update_from(
+        translated = self.translate_hook_names(translated)
+        updated = result.update_from(
             translated, self._active_project.credentials.type, validate=validate
         )
+        return updated
+
+    def translate_hook_names(self, project_dict):
+        # This is a kind of kludge because the fix for #6411 specifically allowed misspelling
+        # the hook field names in dbt_project.yml, which only ever worked because we didn't
+        # run validate on the dbt_project configs.
+        if "pre_hook" in project_dict:
+            project_dict["pre-hook"] = project_dict.pop("pre_hook")
+        if "post_hook" in project_dict:
+            project_dict["post-hook"] = project_dict.pop("post_hook")
+        return project_dict
 
     def calculate_node_config_dict(
         self,
@@ -200,7 +216,7 @@ class ContextConfigGenerator(BaseContextConfigGenerator[C]):
         resource_type: NodeType,
         project_name: str,
         base: bool,
-        patch_config_dict: dict = None,
+        patch_config_dict: Optional[dict] = None,
     ) -> Dict[str, Any]:
         config = self.calculate_node_config(
             config_call_dict=config_call_dict,
@@ -225,7 +241,7 @@ class UnrenderedConfigGenerator(BaseContextConfigGenerator[Dict[str, Any]]):
         resource_type: NodeType,
         project_name: str,
         base: bool,
-        patch_config_dict: dict = None,
+        patch_config_dict: Optional[dict] = None,
     ) -> Dict[str, Any]:
         # TODO CT-211
         return self.calculate_node_config(
@@ -318,7 +334,11 @@ class ContextConfig:
                 config_call_dict[k] = v
 
     def build_config_dict(
-        self, base: bool = False, *, rendered: bool = True, patch_config_dict: dict = None
+        self,
+        base: bool = False,
+        *,
+        rendered: bool = True,
+        patch_config_dict: Optional[dict] = None,
     ) -> Dict[str, Any]:
         if rendered:
             # TODO CT-211

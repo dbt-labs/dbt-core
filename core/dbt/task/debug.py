@@ -1,8 +1,12 @@
 # coding=utf-8
+import importlib
 import os
 import platform
 import sys
-from typing import Optional, Dict, Any, List
+
+from collections import namedtuple
+from enum import Flag
+from typing import Optional, Dict, Any, List, Tuple
 
 from dbt.events.functions import fire_event
 from dbt.events.types import (
@@ -15,6 +19,7 @@ import dbt.exceptions
 from dbt.adapters.factory import get_adapter, register_adapter
 from dbt.config import PartialProject, Project, Profile
 from dbt.config.renderer import DbtProjectYamlRenderer, ProfileRenderer
+from dbt.contracts.results import RunStatus
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.links import ProfileConfigDocs
 from dbt.ui import green, red
@@ -58,8 +63,18 @@ documentation:
 FILE_NOT_FOUND = "file not found"
 
 
+SubtaskStatus = namedtuple(
+    "SubtaskStatus", ["log_msg", "run_status", "details", "summary_message"]
+)
+
+
+class DebugRunStatus(Flag):
+    SUCCESS = True
+    FAIL = False
+
+
 class DebugTask(BaseTask):
-    def __init__(self, args, config):
+    def __init__(self, args, config) -> None:
         super().__init__(args, config)
         self.profiles_dir = args.PROFILES_DIR
         self.profile_path = os.path.join(self.profiles_dir, "profiles.yml")
@@ -77,13 +92,9 @@ class DebugTask(BaseTask):
 
         # set by _load_*
         self.profile: Optional[Profile] = None
-        self.profile_fail_details = ""
         self.raw_profile_data: Optional[Dict[str, Any]] = None
         self.profile_name: Optional[str] = None
         self.project: Optional[Project] = None
-        self.project_fail_details = ""
-        self.any_failure = False
-        self.messages: List[str] = []
 
     @property
     def project_profile(self):
@@ -91,85 +102,150 @@ class DebugTask(BaseTask):
             return None
         return self.project.profile_name
 
-    def path_info(self):
-        open_cmd = dbt.clients.system.open_dir_cmd()
-        fire_event(OpenCommand(open_cmd=open_cmd, profiles_dir=self.profiles_dir))
-
-    def run(self):
+    def run(self) -> bool:
+        # WARN: this is a legacy workflow that is not compatible with other runtime flags
         if self.args.config_dir:
-            self.path_info()
-            return not self.any_failure
+            fire_event(
+                OpenCommand(
+                    open_cmd=dbt.clients.system.open_dir_cmd(), profiles_dir=str(self.profiles_dir)
+                )
+            )
+            return DebugRunStatus.SUCCESS.value
 
-        version = get_installed_version().to_version_string(skip_matcher=True)
+        version: str = get_installed_version().to_version_string(skip_matcher=True)
         fire_event(DebugCmdOut(msg="dbt version: {}".format(version)))
         fire_event(DebugCmdOut(msg="python version: {}".format(sys.version.split()[0])))
         fire_event(DebugCmdOut(msg="python path: {}".format(sys.executable)))
         fire_event(DebugCmdOut(msg="os info: {}".format(platform.platform())))
+
+        # Load profile if possible, then load adapter info (which requires the profile)
+        load_profile_status: SubtaskStatus = self._load_profile()
+        fire_event(DebugCmdOut(msg="Using profiles dir at {}".format(self.profiles_dir)))
         fire_event(DebugCmdOut(msg="Using profiles.yml file at {}".format(self.profile_path)))
         fire_event(DebugCmdOut(msg="Using dbt_project.yml file at {}".format(self.project_path)))
-        self.test_configuration()
-        self.test_dependencies()
-        self.test_connection()
+        if load_profile_status.run_status == RunStatus.Success:
+            if self.profile is None:
+                raise dbt.exceptions.DbtInternalError(
+                    "Profile should not be None if loading profile completed"
+                )
+            else:
+                adapter_type: str = self.profile.credentials.type
 
-        if self.any_failure:
-            fire_event(
-                DebugCmdResult(msg=red(f"{(pluralize(len(self.messages), 'check'))} failed:"))
+            adapter_version: str = self._read_adapter_version(
+                f"dbt.adapters.{adapter_type}.__version__"
             )
+            fire_event(DebugCmdOut(msg="adapter type: {}".format(adapter_type)))
+            fire_event(DebugCmdOut(msg="adapter version: {}".format(adapter_version)))
+
+        # Get project loaded to do additional checks
+        load_project_status: SubtaskStatus = self._load_project()
+
+        dependencies_statuses: List[SubtaskStatus] = []
+        if self.args.connection:
+            fire_event(DebugCmdOut(msg="Skipping steps before connection verification"))
+        else:
+            # this job's status not logged since already accounted for in _load_* commands
+            self.test_configuration(load_profile_status.log_msg, load_project_status.log_msg)
+            dependencies_statuses = self.test_dependencies()
+
+        # Test connection
+        connection_status = self.test_connection()
+
+        # Log messages from any fails
+        all_statuses: List[SubtaskStatus] = [
+            load_profile_status,
+            load_project_status,
+            *dependencies_statuses,
+            connection_status,
+        ]
+        all_failing_statuses: List[SubtaskStatus] = list(
+            filter(lambda status: status.run_status == RunStatus.Error, all_statuses)
+        )
+
+        failure_count: int = len(all_failing_statuses)
+        if failure_count > 0:
+            fire_event(DebugCmdResult(msg=red(f"{(pluralize(failure_count, 'check'))} failed:")))
+            for status in all_failing_statuses:
+                fire_event(DebugCmdResult(msg=f"{status.summary_message}\n"))
+            return DebugRunStatus.FAIL.value
         else:
             fire_event(DebugCmdResult(msg=green("All checks passed!")))
+            return DebugRunStatus.SUCCESS.value
 
-        for message in self.messages:
-            fire_event(DebugCmdResult(msg=f"{message}\n"))
-
-        return not self.any_failure
+    # ==============================
+    # Override for elsewhere in core
+    # ==============================
 
     def interpret_results(self, results):
         return results
 
-    def _load_project(self):
-        if not os.path.exists(self.project_path):
-            self.project_fail_details = FILE_NOT_FOUND
-            return red("ERROR not found")
+    # ===============
+    # Loading profile
+    # ===============
 
-        renderer = DbtProjectYamlRenderer(self.profile, self.cli_vars)
-
-        try:
-            self.project = Project.from_project_root(
-                self.project_dir,
-                renderer,
-                verify_version=self.args.VERSION_CHECK,
+    def _load_profile(self) -> SubtaskStatus:
+        """
+        Side effects: load self.profile
+                      load self.target_name
+                      load self.raw_profile_data
+        """
+        if not os.path.exists(self.profile_path):
+            return SubtaskStatus(
+                log_msg=red("ERROR not found"),
+                run_status=RunStatus.Error,
+                details=FILE_NOT_FOUND,
+                summary_message=MISSING_PROFILE_MESSAGE.format(
+                    path=self.profile_path, url=ProfileConfigDocs
+                ),
             )
-        except dbt.exceptions.DbtConfigError as exc:
-            self.project_fail_details = str(exc)
-            return red("ERROR invalid")
 
-        return green("OK found and valid")
+        raw_profile_data = load_yaml_text(dbt.clients.system.load_file_contents(self.profile_path))
+        if isinstance(raw_profile_data, dict):
+            self.raw_profile_data = raw_profile_data
 
-    def _profile_found(self):
-        if not self.raw_profile_data:
-            return red("ERROR not found")
-        assert self.raw_profile_data is not None
-        if self.profile_name in self.raw_profile_data:
-            return green("OK found")
+        profile_errors = []
+        profile_names, summary_message = self._choose_profile_names()
+        renderer = ProfileRenderer(self.cli_vars)
+        for profile_name in profile_names:
+            try:
+                profile: Profile = Profile.render(
+                    renderer,
+                    profile_name,
+                    self.args.profile,
+                    self.args.target,
+                    # TODO: Generalize safe access to flags.THREADS:
+                    # https://github.com/dbt-labs/dbt-core/issues/6259
+                    getattr(self.args, "threads", None),
+                )
+            except dbt.exceptions.DbtConfigError as exc:
+                profile_errors.append(str(exc))
+            else:
+                if len(profile_names) == 1:
+                    # if a profile was specified, set it on the task
+                    self.target_name = self._choose_target_name(profile_name)
+                    self.profile = profile
+
+        if profile_errors:
+            details = "\n\n".join(profile_errors)
+            return SubtaskStatus(
+                log_msg=red("ERROR invalid"),
+                run_status=RunStatus.Error,
+                details=details,
+                summary_message=(
+                    summary_message + f"Profile loading failed for the following reason:"
+                    f"\n{details}"
+                    f"\n"
+                ),
+            )
         else:
-            return red("ERROR not found")
+            return SubtaskStatus(
+                log_msg=green("OK found and valid"),
+                run_status=RunStatus.Success,
+                details="",
+                summary_message="Profile is valid",
+            )
 
-    def _target_found(self):
-        requirements = self.raw_profile_data and self.profile_name and self.target_name
-        if not requirements:
-            return red("ERROR not found")
-        # mypy appeasement, we checked just above
-        assert self.raw_profile_data is not None
-        assert self.profile_name is not None
-        assert self.target_name is not None
-        if self.profile_name not in self.raw_profile_data:
-            return red("ERROR not found")
-        profiles = self.raw_profile_data[self.profile_name]["outputs"]
-        if self.target_name not in profiles:
-            return red("ERROR not found")
-        return green("OK found")
-
-    def _choose_profile_names(self) -> Optional[List[str]]:
+    def _choose_profile_names(self) -> Tuple[List[str], str]:
         project_profile: Optional[str] = None
         if os.path.exists(self.project_path):
             try:
@@ -185,7 +261,7 @@ class DebugTask(BaseTask):
         args_profile: Optional[str] = getattr(self.args, "profile", None)
 
         try:
-            return [Profile.pick_profile_name(args_profile, project_profile)]
+            return [Profile.pick_profile_name(args_profile, project_profile)], ""
         except dbt.exceptions.DbtConfigError:
             pass
         # try to guess
@@ -194,16 +270,30 @@ class DebugTask(BaseTask):
         if self.raw_profile_data:
             profiles = [k for k in self.raw_profile_data if k != "config"]
             if project_profile is None:
-                self.messages.append("Could not load dbt_project.yml")
+                summary_message = "Could not load dbt_project.yml\n"
             elif len(profiles) == 0:
-                self.messages.append("The profiles.yml has no profiles")
+                summary_message = "The profiles.yml has no profiles\n"
             elif len(profiles) == 1:
-                self.messages.append(ONLY_PROFILE_MESSAGE.format(profiles[0]))
+                summary_message = ONLY_PROFILE_MESSAGE.format(profiles[0])
             else:
-                self.messages.append(
-                    MULTIPLE_PROFILE_MESSAGE.format("\n".join(" - {}".format(o) for o in profiles))
+                summary_message = MULTIPLE_PROFILE_MESSAGE.format(
+                    "\n".join(" - {}".format(o) for o in profiles)
                 )
-        return profiles
+        return profiles, summary_message
+
+    def _read_adapter_version(self, module) -> str:
+        """read the version out of a standard adapter file"""
+        try:
+            version = importlib.import_module(module).version
+        except ModuleNotFoundError:
+            version = red("ERROR not found")
+        except Exception as exc:
+            version = red("ERROR {}".format(exc))
+            raise dbt.exceptions.DbtInternalError(
+                f"Error when reading adapter version from {module}: {exc}"
+            )
+
+        return version
 
     def _choose_target_name(self, profile_name: str):
         has_raw_profile = (
@@ -227,75 +317,109 @@ class DebugTask(BaseTask):
         )
         return target_name
 
-    def _load_profile(self):
-        if not os.path.exists(self.profile_path):
-            self.profile_fail_details = FILE_NOT_FOUND
-            self.messages.append(
-                MISSING_PROFILE_MESSAGE.format(path=self.profile_path, url=ProfileConfigDocs)
+    # ===============
+    # Loading project
+    # ===============
+
+    def _load_project(self) -> SubtaskStatus:
+        """
+        Side effect: load self.project
+        """
+        if not os.path.exists(self.project_path):
+            return SubtaskStatus(
+                log_msg=red("ERROR not found"),
+                run_status=RunStatus.Error,
+                details=FILE_NOT_FOUND,
+                summary_message=(
+                    f"Project loading failed for the following reason:"
+                    f"\n project path <{self.project_path}> not found"
+                ),
             )
-            self.any_failure = True
-            return red("ERROR not found")
+
+        renderer = DbtProjectYamlRenderer(self.profile, self.cli_vars)
 
         try:
-            raw_profile_data = load_yaml_text(
-                dbt.clients.system.load_file_contents(self.profile_path)
+            self.project = Project.from_project_root(
+                self.project_dir,
+                renderer,
+                verify_version=self.args.VERSION_CHECK,
             )
-        except Exception:
-            pass  # we'll report this when we try to load the profile for real
+        except dbt.exceptions.DbtConfigError as exc:
+            return SubtaskStatus(
+                log_msg=red("ERROR invalid"),
+                run_status=RunStatus.Error,
+                details=str(exc),
+                summary_message=(
+                    f"Project loading failed for the following reason:" f"\n{str(exc)}" f"\n"
+                ),
+            )
         else:
-            if isinstance(raw_profile_data, dict):
-                self.raw_profile_data = raw_profile_data
+            return SubtaskStatus(
+                log_msg=green("OK found and valid"),
+                run_status=RunStatus.Success,
+                details="",
+                summary_message="Project is valid",
+            )
 
-        profile_errors = []
-        profile_names = self._choose_profile_names()
-        renderer = ProfileRenderer(self.cli_vars)
-        for profile_name in profile_names:
-            try:
-                profile: Profile = Profile.render(
-                    renderer,
-                    profile_name,
-                    self.args.profile,
-                    self.args.target,
-                    # TODO: Generalize safe access to flags.THREADS:
-                    # https://github.com/dbt-labs/dbt-core/issues/6259
-                    getattr(self.args, "threads", None),
-                )
-            except dbt.exceptions.DbtConfigError as exc:
-                profile_errors.append(str(exc))
-            else:
-                if len(profile_names) == 1:
-                    # if a profile was specified, set it on the task
-                    self.target_name = self._choose_target_name(profile_name)
-                    self.profile = profile
+    def _profile_found(self) -> str:
+        if not self.raw_profile_data:
+            return red("ERROR not found")
+        assert self.raw_profile_data is not None
+        if self.profile_name in self.raw_profile_data:
+            return green("OK found")
+        else:
+            return red("ERROR not found")
 
-        if profile_errors:
-            self.profile_fail_details = "\n\n".join(profile_errors)
-            return red("ERROR invalid")
-        return green("OK found and valid")
+    def _target_found(self) -> str:
+        requirements = self.raw_profile_data and self.profile_name and self.target_name
+        if not requirements:
+            return red("ERROR not found")
+        # mypy appeasement, we checked just above
+        assert self.raw_profile_data is not None
+        assert self.profile_name is not None
+        assert self.target_name is not None
+        if self.profile_name not in self.raw_profile_data:
+            return red("ERROR not found")
+        profiles = self.raw_profile_data[self.profile_name]["outputs"]
+        if self.target_name not in profiles:
+            return red("ERROR not found")
+        else:
+            return green("OK found")
 
-    def test_git(self):
+    # ============
+    # Config tests
+    # ============
+
+    def test_git(self) -> SubtaskStatus:
         try:
             dbt.clients.system.run_cmd(os.getcwd(), ["git", "--help"])
         except dbt.exceptions.ExecutableError as exc:
-            self.messages.append("Error from git --help: {!s}".format(exc))
-            self.any_failure = True
-            return red("ERROR")
-        return green("OK found")
+            return SubtaskStatus(
+                log_msg=red("ERROR"),
+                run_status=RunStatus.Error,
+                details="git error",
+                summary_message="Error from git --help: {!s}".format(exc),
+            )
+        else:
+            return SubtaskStatus(
+                log_msg=green("OK found"),
+                run_status=RunStatus.Success,
+                details="",
+                summary_message="git is installed and on the path",
+            )
 
-    def test_dependencies(self):
+    def test_dependencies(self) -> List[SubtaskStatus]:
         fire_event(DebugCmdOut(msg="Required dependencies:"))
 
-        logline_msg = self.test_git()
-        fire_event(DebugCmdResult(msg=f" - git [{logline_msg}]\n"))
+        git_test_status = self.test_git()
+        fire_event(DebugCmdResult(msg=f" - git [{git_test_status.log_msg}]\n"))
 
-    def test_configuration(self):
+        return [git_test_status]
+
+    def test_configuration(self, profile_status_msg, project_status_msg):
         fire_event(DebugCmdOut(msg="Configuration:"))
-
-        profile_status = self._load_profile()
-        fire_event(DebugCmdOut(msg=f"  profiles.yml file [{profile_status}]"))
-
-        project_status = self._load_project()
-        fire_event(DebugCmdOut(msg=f"  dbt_project.yml file [{project_status}]"))
+        fire_event(DebugCmdOut(msg=f"  profiles.yml file [{profile_status_msg}]"))
+        fire_event(DebugCmdOut(msg=f"  dbt_project.yml file [{project_status_msg}]"))
 
         # skip profile stuff if we can't find a profile name
         if self.profile_name is not None:
@@ -310,72 +434,57 @@ class DebugTask(BaseTask):
                 )
             )
 
-        self._log_project_fail()
-        self._log_profile_fail()
-
-    def _log_project_fail(self):
-        if not self.project_fail_details:
-            return
-
-        self.any_failure = True
-        if self.project_fail_details == FILE_NOT_FOUND:
-            return
-        msg = (
-            f"Project loading failed for the following reason:"
-            f"\n{self.project_fail_details}"
-            f"\n"
-        )
-        self.messages.append(msg)
-
-    def _log_profile_fail(self):
-        if not self.profile_fail_details:
-            return
-
-        self.any_failure = True
-        if self.profile_fail_details == FILE_NOT_FOUND:
-            return
-        msg = (
-            f"Profile loading failed for the following reason:"
-            f"\n{self.profile_fail_details}"
-            f"\n"
-        )
-        self.messages.append(msg)
+    # ===============
+    # Connection test
+    # ===============
 
     @staticmethod
-    def attempt_connection(profile):
-        """Return a string containing the error message, or None if there was
-        no error.
-        """
+    def attempt_connection(profile) -> Optional[str]:
+        """Return a string containing the error message, or None if there was no error."""
         register_adapter(profile)
         adapter = get_adapter(profile)
         try:
             with adapter.connection_named("debug"):
+                # is defined in adapter class
                 adapter.debug_query()
         except Exception as exc:
             return COULD_NOT_CONNECT_MESSAGE.format(
                 err=str(exc),
                 url=ProfileConfigDocs,
             )
-
         return None
 
-    def _connection_result(self):
-        result = self.attempt_connection(self.profile)
-        if result is not None:
-            self.messages.append(result)
-            self.any_failure = True
-            return red("ERROR")
-        return green("OK connection ok")
+    def test_connection(self) -> SubtaskStatus:
+        if self.profile is None:
+            fire_event(DebugCmdOut(msg="Connection test skipped since no profile was found"))
+            return SubtaskStatus(
+                log_msg=red("SKIPPED"),
+                run_status=RunStatus.Skipped,
+                details="No profile found",
+                summary_message="Connection test skipped since no profile was found",
+            )
 
-    def test_connection(self):
-        if not self.profile:
-            return
         fire_event(DebugCmdOut(msg="Connection:"))
         for k, v in self.profile.credentials.connection_info():
             fire_event(DebugCmdOut(msg=f"  {k}: {v}"))
 
-        res = self._connection_result()
-        fire_event(DebugCmdOut(msg=f"  Connection test: [{res}]\n"))
+        connection_result = self.attempt_connection(self.profile)
+        if connection_result is None:
+            status = SubtaskStatus(
+                log_msg=green("OK connection ok"),
+                run_status=RunStatus.Success,
+                details="",
+                summary_message="Connection test passed",
+            )
+        else:
+            status = SubtaskStatus(
+                log_msg=red("ERROR"),
+                run_status=RunStatus.Error,
+                details="Failure in connecting to db",
+                summary_message=connection_result,
+            )
+        fire_event(DebugCmdOut(msg=f"  Connection test: [{status.log_msg}]\n"))
+        return status
 
     @classmethod
     def validate_connection(cls, target_dict):

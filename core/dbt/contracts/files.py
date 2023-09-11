@@ -225,9 +225,12 @@ class SchemaSourceFile(BaseSourceFile):
     sources: List[str] = field(default_factory=list)
     exposures: List[str] = field(default_factory=list)
     metrics: List[str] = field(default_factory=list)
+    # metrics generated from semantic_model measures
+    generated_metrics: List[str] = field(default_factory=list)
     groups: List[str] = field(default_factory=list)
     # node patches contain models, seeds, snapshots, analyses
     ndp: List[str] = field(default_factory=list)
+    semantic_models: List[str] = field(default_factory=list)
     # any macro patches in this file by macro unique_id.
     mcp: Dict[str, str] = field(default_factory=dict)
     # any source patches in this file. The entries are package, name pairs

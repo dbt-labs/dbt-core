@@ -33,10 +33,17 @@
   If any differences in name, data_type or number of columns exist between the two schemas, raises a compiler error
 #}
 {% macro assert_columns_equivalent(sql) %}
+
+  {#-- First ensure the user has defined 'columns' in yaml specification --#}
+  {%- set user_defined_columns = model['columns'] -%}
+  {%- if not user_defined_columns -%}
+      {{ exceptions.raise_contract_error([], []) }}
+  {%- endif -%}
+
   {#-- Obtain the column schema provided by sql file. #}
-  {%- set sql_file_provided_columns = get_column_schema_from_query(sql) -%}
+  {%- set sql_file_provided_columns = get_column_schema_from_query(sql, config.get('sql_header', none)) -%}
   {#--Obtain the column schema provided by the schema file by generating an 'empty schema' query from the model's columns. #}
-  {%- set schema_file_provided_columns = get_column_schema_from_query(get_empty_schema_sql(model['columns'])) -%}
+  {%- set schema_file_provided_columns = get_column_schema_from_query(get_empty_schema_sql(user_defined_columns)) -%}
 
   {#-- create dictionaries with name and formatted data type and strings for exception #}
   {%- set sql_columns = format_columns(sql_file_provided_columns) -%}

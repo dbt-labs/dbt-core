@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix using list command with path selector and project-dir
+time: 2023-08-14T14:57:02.02816-04:00
+custom:
+  Author: gshank
+  Issue: "8385"
