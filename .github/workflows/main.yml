@@ -227,7 +227,8 @@ jobs:
           path: integration_results.csv
 
   integration-report:
-    name: integration test suite
+    if: ${{ always() }}
+    name: Integration Test Suite
     runs-on: ubuntu-latest
     needs: integration
     steps:
