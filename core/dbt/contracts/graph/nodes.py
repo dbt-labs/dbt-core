@@ -43,8 +43,6 @@ from dbt.events.functions import warn_or_error
 from dbt.exceptions import (
     ParsingError,
     ContractBreakingChangeError,
-    TagsNotListOfStringsError,
-    TagNotStringError,
 )
 from dbt.events.types import (
     SeedIncreased,
@@ -1081,16 +1079,8 @@ class UnitTestDefinition(GraphNode):
 
     @property
     def tags(self) -> List[str]:
-        # TODO: refactor for reuse in TestBuilder.tags
-        tags = self.config.get("tags", [])
-        if isinstance(tags, str):
-            tags = [tags]
-        if not isinstance(tags, list):
-            raise TagsNotListOfStringsError(tags)
-        for tag in tags:
-            if not isinstance(tag, str):
-                raise TagNotStringError(tag)
-        return tags[:]
+        tags = self.config.tags
+        return [tags] if isinstance(tags, str) else tags
 
 
 # ====================================
