@@ -254,6 +254,7 @@ def docs(ctx, **kwargs):
 @p.select
 @p.selector
 @p.empty_catalog
+@p.static
 @p.state
 @p.defer_state
 @p.deprecated_state

@@ -457,6 +457,13 @@ empty_catalog = click.option(
     is_flag=True,
 )
 
+static = click.option(
+    "--static",
+    help="Generate an additional static_index.html with manifest and catalog built-in.",
+    default=False,
+    is_flag=True,
+)
+
 state = click.option(
     "--state",
     envvar="DBT_STATE",

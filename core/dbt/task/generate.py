@@ -36,7 +36,9 @@ from dbt.parser.manifest import write_manifest
 import dbt.utils
 import dbt.compilation
 import dbt.exceptions
-
+from dbt.constants import (
+    MANIFEST_FILE_NAME,
+)
 
 CATALOG_FILENAME = "catalog.json"
 
@@ -259,14 +261,37 @@ class GenerateTask(CompileTask):
             errors=errors,
         )
 
-        path = os.path.join(self.config.project_target_path, CATALOG_FILENAME)
-        results.write(path)
+        catalog_path = os.path.join(self.config.project_target_path, CATALOG_FILENAME)
+        results.write(catalog_path)
         if self.args.compile:
             write_manifest(self.manifest, self.config.project_target_path)
 
+        if self.args.static:
+
+            # Read manifest.json
+            manifest_path = os.path.join(self.config.project_target_path, MANIFEST_FILE_NAME)
+            with open(manifest_path, "r") as m:
+                read_manifest_data = m.read()
+
+            # Read catalog.json
+            with open(catalog_path, "r") as c:
+                read_catalog_data = c.read()
+
+            # Inline manifest.json and catalog.json from the
+            # DOCS_INDEX_FILE_PATH, writing to a static_index.html
+            index_file = open(DOCS_INDEX_FILE_PATH, "r")
+            static_index_file = open(
+                os.path.join(self.config.project_target_path, "static_index.html"), "w"
+            )
+            with index_file, static_index_file:
+                index_data = index_file.read()
+                index_data = index_data.replace('"MANIFEST.JSON INLINE DATA"', read_manifest_data)
+                index_data = index_data.replace('"CATALOG.JSON INLINE DATA"', read_catalog_data)
+                static_index_file.write(index_data)
+
         if exceptions:
             fire_event(WriteCatalogFailure(num_exceptions=len(exceptions)))
-        fire_event(CatalogWritten(path=os.path.abspath(path)))
+        fire_event(CatalogWritten(path=os.path.abspath(catalog_path)))
         return results
 
     def get_catalog_results(
