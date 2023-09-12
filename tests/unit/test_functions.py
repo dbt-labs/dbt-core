@@ -62,7 +62,7 @@ def test_msg_to_dict_handles_exceptions_gracefully():
 
 
 def test_setup_event_logger_specify_max_bytes(mocker):
-    patched_file_handler = mocker.patch("dbt.events.eventmgr.RotatingFileHandler")
+    patched_file_handler = mocker.patch("dbt.events.logger.RotatingFileHandler")
     args = Namespace(log_file_max_bytes=1234567)
     flags.set_from_args(args, {})
     setup_event_logger(flags.get_flags())

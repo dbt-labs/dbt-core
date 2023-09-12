@@ -693,7 +693,7 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
                 )
                 # ref lookup without version - version is not set yet
                 versioned_model_unique_id = self.manifest.ref_lookup.get_unique_id(
-                    versioned_model_name, None, None
+                    versioned_model_name, target.package_name, None
                 )
 
                 versioned_model_node = None
@@ -702,7 +702,7 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
                 # If this is the latest version, it's allowed to define itself in a model file name that doesn't have a suffix
                 if versioned_model_unique_id is None and unparsed_version.v == latest_version:
                     versioned_model_unique_id = self.manifest.ref_lookup.get_unique_id(
-                        block.name, None, None
+                        block.name, target.package_name, None
                     )
 
                 if versioned_model_unique_id is None:

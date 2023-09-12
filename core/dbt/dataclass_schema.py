@@ -1,97 +1,123 @@
-from typing import (
-    Type,
-    ClassVar,
-    cast,
-)
+from typing import ClassVar, cast, get_type_hints, List, Tuple, Dict, Any, Optional
 import re
-from dataclasses import fields
+import jsonschema
+from dataclasses import fields, Field
 from enum import Enum
 from datetime import datetime
 from dateutil.parser import parse
-
-from hologram import JsonSchemaMixin, FieldEncoder, ValidationError
 
 # type: ignore
 from mashumaro import DataClassDictMixin
 from mashumaro.config import TO_DICT_ADD_OMIT_NONE_FLAG, BaseConfig as MashBaseConfig
 from mashumaro.types import SerializableType, SerializationStrategy
+from mashumaro.jsonschema import build_json_schema
+
+import functools
+
+
+class ValidationError(jsonschema.ValidationError):
+    pass
 
 
 class DateTimeSerialization(SerializationStrategy):
-    def serialize(self, value):
+    def serialize(self, value) -> str:
         out = value.isoformat()
         # Assume UTC if timezone is missing
         if value.tzinfo is None:
             out += "Z"
         return out
 
-    def deserialize(self, value):
+    def deserialize(self, value) -> datetime:
         return value if isinstance(value, datetime) else parse(cast(str, value))
 
 
-# This class pulls in both JsonSchemaMixin from Hologram and
-# DataClassDictMixin from our fork of Mashumaro. The 'to_dict'
-# and 'from_dict' methods come from Mashumaro. Building
-# jsonschemas for every class and the 'validate' method
-# come from Hologram.
-class dbtClassMixin(DataClassDictMixin, JsonSchemaMixin):
+class dbtMashConfig(MashBaseConfig):
+    code_generation_options = [
+        TO_DICT_ADD_OMIT_NONE_FLAG,
+    ]
+    serialization_strategy = {
+        datetime: DateTimeSerialization(),
+    }
+    json_schema = {
+        "additionalProperties": False,
+    }
+    serialize_by_alias = True
+
+
+# This class pulls in DataClassDictMixin from Mashumaro. The 'to_dict'
+# and 'from_dict' methods come from Mashumaro.
+class dbtClassMixin(DataClassDictMixin):
     """The Mixin adds methods to generate a JSON schema and
     convert to and from JSON encodable dicts with validation
     against the schema
     """
 
-    class Config(MashBaseConfig):
-        code_generation_options = [
-            TO_DICT_ADD_OMIT_NONE_FLAG,
-        ]
-        serialization_strategy = {
-            datetime: DateTimeSerialization(),
-        }
+    _mapped_fields: ClassVar[Optional[Dict[Any, List[Tuple[Field, str]]]]] = None
 
-    _hyphenated: ClassVar[bool] = False
+    # Config class used by Mashumaro
+    class Config(dbtMashConfig):
+        pass
+
     ADDITIONAL_PROPERTIES: ClassVar[bool] = False
 
-    # This is called by the mashumaro to_dict in order to handle
-    # nested classes.
-    # Munges the dict that's returned.
-    def __post_serialize__(self, dct):
-        if self._hyphenated:
-            new_dict = {}
-            for key in dct:
-                if "_" in key:
-                    new_key = key.replace("_", "-")
-                    new_dict[new_key] = dct[key]
-                else:
-                    new_dict[key] = dct[key]
-            dct = new_dict
-
-        return dct
-
-    # This is called by the mashumaro _from_dict method, before
-    # performing the conversion to a dict
+    # This is called by the mashumaro from_dict in order to handle
+    # nested classes. We no longer do any munging here, but leaving here
+    # so that subclasses can leave super() in place for possible future needs.
     @classmethod
     def __pre_deserialize__(cls, data):
-        # `data` might not be a dict, e.g. for `query_comment`, which accepts
-        # a dict or a string; only snake-case for dict values.
-        if cls._hyphenated and isinstance(data, dict):
-            new_dict = {}
-            for key in data:
-                if "-" in key:
-                    new_key = key.replace("-", "_")
-                    new_dict[new_key] = data[key]
-                else:
-                    new_dict[key] = data[key]
-            data = new_dict
         return data
 
-    # This is used in the hologram._encode_field method, which calls
-    # a 'to_dict' method which does not have the same parameters in
-    # hologram and in mashumaro.
-    def _local_to_dict(self, **kwargs):
-        args = {}
-        if "omit_none" in kwargs:
-            args["omit_none"] = kwargs["omit_none"]
-        return self.to_dict(**args)
+    # This is called by the mashumaro to_dict in order to handle
+    # nested classes. We no longer do any munging here, but leaving here
+    # so that subclasses can leave super() in place for possible future needs.
+    def __post_serialize__(self, data):
+        return data
+
+    @classmethod
+    @functools.lru_cache
+    def json_schema(cls):
+        json_schema_obj = build_json_schema(cls)
+        json_schema = json_schema_obj.to_dict()
+        return json_schema
+
+    @classmethod
+    def validate(cls, data):
+        json_schema = cls.json_schema()
+        validator = jsonschema.Draft7Validator(json_schema)
+        error = next(iter(validator.iter_errors(data)), None)
+        if error is not None:
+            raise ValidationError.create_from(error) from error
+
+    # This method was copied from hologram. Used in model_config.py and relation.py
+    @classmethod
+    def _get_fields(cls) -> List[Tuple[Field, str]]:
+        if cls._mapped_fields is None:
+            cls._mapped_fields = {}
+        if cls.__name__ not in cls._mapped_fields:
+            mapped_fields = []
+            type_hints = get_type_hints(cls)
+
+            for f in fields(cls):  # type: ignore
+                # Skip internal fields
+                if f.name.startswith("_"):
+                    continue
+
+                # Note fields() doesn't resolve forward refs
+                f.type = type_hints[f.name]
+
+                # hologram used the "field_mapping" here, but we use the
+                # the field's metadata "alias". Since this method is mainly
+                # just used in merging config dicts, it mostly applies to
+                # pre-hook and post-hook.
+                field_name = f.metadata.get("alias", f.name)
+                mapped_fields.append((f, field_name))
+            cls._mapped_fields[cls.__name__] = mapped_fields
+        return cls._mapped_fields[cls.__name__]
+
+    # copied from hologram. Used in tests
+    @classmethod
+    def _get_field_names(cls):
+        return [element[1] for element in cls._get_fields()]
 
 
 class ValidatedStringMixin(str, SerializableType):
@@ -130,38 +156,10 @@ class StrEnum(str, SerializableType, Enum):
         return cls(value)
 
 
-class HyphenatedDbtClassMixin(dbtClassMixin):
-    # used by from_dict/to_dict
-    _hyphenated: ClassVar[bool] = True
-
-    # used by jsonschema validation, _get_fields
-    @classmethod
-    def field_mapping(cls):
-        result = {}
-        for field in fields(cls):
-            skip = field.metadata.get("preserve_underscore")
-            if skip:
-                continue
-
-            if "_" in field.name:
-                result[field.name] = field.name.replace("_", "-")
-        return result
-
-
 class ExtensibleDbtClassMixin(dbtClassMixin):
     ADDITIONAL_PROPERTIES = True
 
-
-# This is used by Hologram in jsonschema validation
-def register_pattern(base_type: Type, pattern: str) -> None:
-    """base_type should be a typing.NewType that should always have the given
-    regex pattern. That means that its underlying type ('__supertype__') had
-    better be a str!
-    """
-
-    class PatternEncoder(FieldEncoder):
-        @property
-        def json_schema(self):
-            return {"type": "string", "pattern": pattern}
-
-    dbtClassMixin.register_field_encoders({base_type: PatternEncoder()})
+    class Config(dbtMashConfig):
+        json_schema = {
+            "additionalProperties": True,
+        }

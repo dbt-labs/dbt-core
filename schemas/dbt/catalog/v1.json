@@ -1,107 +1,22 @@
 {
-  "type": "object",
-  "required": [
-    "metadata",
-    "nodes",
-    "sources"
-  ],
-  "properties": {
-    "metadata": {
-      "$ref": "#/definitions/CatalogMetadata"
-    },
-    "nodes": {
-      "type": "object",
-      "additionalProperties": {
-        "$ref": "#/definitions/CatalogTable"
-      }
-    },
-    "sources": {
-      "type": "object",
-      "additionalProperties": {
-        "$ref": "#/definitions/CatalogTable"
-      }
-    },
-    "errors": {
-      "oneOf": [
-        {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        {
-          "type": "null"
-        }
-      ]
-    }
-  },
-  "additionalProperties": false,
-  "description": "CatalogArtifact(metadata: dbt.contracts.results.CatalogMetadata, nodes: Dict[str, dbt.contracts.results.CatalogTable], sources: Dict[str, dbt.contracts.results.CatalogTable], errors: Optional[List[str]] = None, _compile_results: Optional[Any] = None)",
-  "definitions": {
+  "$ref": "#/$defs/CatalogArtifact",
+  "$defs": {
     "CatalogMetadata": {
       "type": "object",
-      "required": [],
+      "title": "CatalogMetadata",
       "properties": {
         "dbt_schema_version": {
-          "type": "string",
-          "default": "https://schemas.getdbt.com/dbt/catalog/v1.json"
+          "type": "string"
         },
         "dbt_version": {
           "type": "string",
-          "default": "1.5.0a1"
+          "default": "1.7.0b1"
         },
         "generated_at": {
-          "type": "string",
-          "format": "date-time",
-          "default": "2023-02-09T23:46:55.265093Z"
+          "type": "string"
         },
         "invocation_id": {
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": "e6a9b266-203d-4fec-93af-fb8f55423a6b"
-        },
-        "env": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "string"
-          },
-          "default": {}
-        }
-      },
-      "additionalProperties": false,
-      "description": "CatalogMetadata(dbt_schema_version: str = <factory>, dbt_version: str = '1.5.0a1', generated_at: datetime.datetime = <factory>, invocation_id: Optional[str] = <factory>, env: Dict[str, str] = <factory>)"
-    },
-    "CatalogTable": {
-      "type": "object",
-      "required": [
-        "metadata",
-        "columns",
-        "stats"
-      ],
-      "properties": {
-        "metadata": {
-          "$ref": "#/definitions/TableMetadata"
-        },
-        "columns": {
-          "type": "object",
-          "additionalProperties": {
-            "$ref": "#/definitions/ColumnMetadata"
-          }
-        },
-        "stats": {
-          "type": "object",
-          "additionalProperties": {
-            "$ref": "#/definitions/StatsItem"
-          }
-        },
-        "unique_id": {
-          "oneOf": [
+          "anyOf": [
             {
               "type": "string"
             },
@@ -109,18 +24,22 @@
               "type": "null"
             }
           ]
+        },
+        "env": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "propertyNames": {
+            "type": "string"
+          }
         }
       },
-      "additionalProperties": false,
-      "description": "CatalogTable(metadata: dbt.contracts.results.TableMetadata, columns: Dict[str, dbt.contracts.results.ColumnMetadata], stats: Dict[str, dbt.contracts.results.StatsItem], unique_id: Optional[str] = None)"
+      "additionalProperties": false
     },
     "TableMetadata": {
       "type": "object",
-      "required": [
-        "type",
-        "schema",
-        "name"
-      ],
+      "title": "TableMetadata",
       "properties": {
         "type": {
           "type": "string"
@@ -132,46 +51,49 @@
           "type": "string"
         },
         "database": {
-          "oneOf": [
+          "anyOf": [
             {
               "type": "string"
             },
             {
               "type": "null"
             }
-          ]
+          ],
+          "default": null
         },
         "comment": {
-          "oneOf": [
+          "anyOf": [
             {
               "type": "string"
             },
             {
               "type": "null"
             }
-          ]
+          ],
+          "default": null
         },
         "owner": {
-          "oneOf": [
+          "anyOf": [
             {
               "type": "string"
             },
             {
               "type": "null"
             }
-          ]
+          ],
+          "default": null
         }
       },
       "additionalProperties": false,
-      "description": "TableMetadata(type: str, schema: str, name: str, database: Optional[str] = None, comment: Optional[str] = None, owner: Optional[str] = None)"
+      "required": [
+        "type",
+        "schema",
+        "name"
+      ]
     },
     "ColumnMetadata": {
       "type": "object",
-      "required": [
-        "type",
-        "index",
-        "name"
-      ],
+      "title": "ColumnMetadata",
       "properties": {
         "type": {
           "type": "string"
@@ -183,26 +105,27 @@
           "type": "string"
         },
         "comment": {
-          "oneOf": [
+          "anyOf": [
             {
               "type": "string"
             },
             {
               "type": "null"
             }
-          ]
+          ],
+          "default": null
         }
       },
       "additionalProperties": false,
-      "description": "ColumnMetadata(type: str, index: int, name: str, comment: Optional[str] = None)"
+      "required": [
+        "type",
+        "index",
+        "name"
+      ]
     },
     "StatsItem": {
       "type": "object",
-      "required": [
-        "id",
-        "label",
-        "include"
-      ],
+      "title": "StatsItem",
       "properties": {
         "id": {
           "type": "string"
@@ -211,7 +134,7 @@
           "type": "string"
         },
         "value": {
-          "oneOf": [
+          "anyOf": [
             {
               "type": "boolean"
             },
@@ -230,20 +153,125 @@
           "type": "boolean"
         },
         "description": {
-          "oneOf": [
+          "anyOf": [
             {
               "type": "string"
             },
             {
               "type": "null"
             }
-          ]
+          ],
+          "default": null
         }
       },
       "additionalProperties": false,
-      "description": "StatsItem(id: str, label: str, value: Union[bool, str, float, NoneType], include: bool, description: Optional[str] = None)"
+      "required": [
+        "id",
+        "label",
+        "value",
+        "include"
+      ]
+    },
+    "CatalogTable": {
+      "type": "object",
+      "title": "CatalogTable",
+      "properties": {
+        "metadata": {
+          "$ref": "#/$defs/TableMetadata"
+        },
+        "columns": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/ColumnMetadata"
+          },
+          "propertyNames": {
+            "type": "string"
+          }
+        },
+        "stats": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/StatsItem"
+          },
+          "propertyNames": {
+            "type": "string"
+          }
+        },
+        "unique_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "metadata",
+        "columns",
+        "stats"
+      ]
+    },
+    "CatalogArtifact": {
+      "type": "object",
+      "title": "CatalogArtifact",
+      "properties": {
+        "metadata": {
+          "$ref": "#/$defs/CatalogMetadata"
+        },
+        "nodes": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/CatalogTable"
+          },
+          "propertyNames": {
+            "type": "string"
+          }
+        },
+        "sources": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/CatalogTable"
+          },
+          "propertyNames": {
+            "type": "string"
+          }
+        },
+        "errors": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "_compile_results": {
+          "anyOf": [
+            {},
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "metadata",
+        "nodes",
+        "sources"
+      ]
     }
   },
-  "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://schemas.getdbt.com/dbt/catalog/v1.json"
 }

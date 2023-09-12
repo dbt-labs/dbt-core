@@ -331,18 +331,29 @@ class SemanticModelByMeasureLookup(dbtClassMixin):
         """Populate storage with all the measure + package paths to the Manifest's SemanticModels"""
         for semantic_model in manifest.semantic_models.values():
             self.add(semantic_model=semantic_model)
+        for disabled in manifest.disabled.values():
+            for node in disabled:
+                if isinstance(node, SemanticModel):
+                    self.add(semantic_model=node)
 
     def perform_lookup(self, unique_id: UniqueID, manifest: "Manifest") -> SemanticModel:
         """Tries to get a SemanticModel from the Manifest"""
-        semantic_model = manifest.semantic_models.get(unique_id)
-        if semantic_model is None:
+        enabled_semantic_model: Optional[SemanticModel] = manifest.semantic_models.get(unique_id)
+        disabled_semantic_model: Optional[List] = manifest.disabled.get(unique_id)
+
+        if isinstance(enabled_semantic_model, SemanticModel):
+            return enabled_semantic_model
+        elif disabled_semantic_model is not None and isinstance(
+            disabled_semantic_model[0], SemanticModel
+        ):
+            return disabled_semantic_model[0]
+        else:
             raise dbt.exceptions.DbtInternalError(
                 f"Semantic model `{unique_id}` found in cache but not found in manifest"
             )
-        return semantic_model
 
 
-# This handles both models/seeds/snapshots and sources/metrics/exposures
+# This handles both models/seeds/snapshots and sources/metrics/exposures/semantic_models
 class DisabledLookup(dbtClassMixin):
     def __init__(self, manifest: "Manifest"):
         self.storage: Dict[str, Dict[PackageName, List[Any]]] = {}
@@ -927,6 +938,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         groupable_nodes = list(
             chain(
                 self.nodes.values(),
+                self.semantic_models.values(),
                 self.metrics.values(),
             )
         )
@@ -1056,8 +1068,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
 
         return resolved_refs
 
-    # Called by dbt.parser.manifest._process_refs_for_exposure, _process_refs_for_metric,
-    # and dbt.parser.manifest._process_refs_for_node
+    # Called by dbt.parser.manifest._process_refs & ManifestLoader.check_for_model_deprecations
     def resolve_ref(
         self,
         source_node: GraphMemberNode,
@@ -1156,6 +1167,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             semantic_model = self.semantic_model_by_measure_lookup.find(
                 target_measure_name, pkg, self
             )
+            # need to return it even if it's disabled so know it's not fully missing
             if semantic_model is not None:
                 return semantic_model
 
@@ -1331,10 +1343,13 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         self.exposures[exposure.unique_id] = exposure
         source_file.exposures.append(exposure.unique_id)
 
-    def add_metric(self, source_file: SchemaSourceFile, metric: Metric):
+    def add_metric(self, source_file: SchemaSourceFile, metric: Metric, generated: bool = False):
         _check_duplicates(metric, self.metrics)
         self.metrics[metric.unique_id] = metric
-        source_file.metrics.append(metric.unique_id)
+        if not generated:
+            source_file.metrics.append(metric.unique_id)
+        else:
+            source_file.generated_metrics.append(metric.unique_id)
 
     def add_group(self, source_file: SchemaSourceFile, group: Group):
         _check_duplicates(group, self.groups)
@@ -1356,6 +1371,8 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
                 source_file.add_test(node.unique_id, test_from)
             if isinstance(node, Metric):
                 source_file.metrics.append(node.unique_id)
+            if isinstance(node, SemanticModel):
+                source_file.semantic_models.append(node.unique_id)
             if isinstance(node, Exposure):
                 source_file.exposures.append(node.unique_id)
         else:
@@ -1511,7 +1528,15 @@ def get_manifest_schema_version(dct: dict) -> int:
     schema_version = dct.get("metadata", {}).get("dbt_schema_version", None)
     if not schema_version:
         raise ValueError("Manifest doesn't have schema version")
-    return int(schema_version.split(".")[-2][-1])
+
+    # schema_version is in this format: https://schemas.getdbt.com/dbt/manifest/v10.json
+    # What the code below is doing:
+    # 1. Split on "/" – v10.json
+    # 2. Split on "." – v10
+    # 3. Skip first character – 10
+    # 4. Convert to int
+    # TODO: If this gets more complicated, turn into a regex
+    return int(schema_version.split("/")[-1].split(".")[0][1:])
 
 
 def _check_duplicates(value: BaseNode, src: Mapping[str, BaseNode]):

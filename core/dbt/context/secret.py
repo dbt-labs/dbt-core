@@ -14,7 +14,7 @@ class SecretContext(BaseContext):
     """This context is used in profiles.yml + packages.yml. It can render secret
     env vars that aren't usable elsewhere"""
 
-    @contextmember
+    @contextmember()
     def env_var(self, var: str, default: Optional[str] = None) -> str:
         """The env_var() function. Return the environment variable named 'var'.
         If there is no such environment variable set, return the default.

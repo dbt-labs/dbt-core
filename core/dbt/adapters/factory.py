@@ -19,7 +19,7 @@ Adapter = AdapterProtocol
 
 
 class AdapterContainer:
-    def __init__(self):
+    def __init__(self) -> None:
         self.lock = threading.Lock()
         self.adapters: Dict[str, Adapter] = {}
         self.plugins: Dict[str, AdapterPlugin] = {}

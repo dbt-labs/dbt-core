@@ -79,6 +79,7 @@ from dbt.parser.read_files import (
     load_source_file,
     FileDiff,
     ReadFilesFromDiff,
+    ReadFiles,
 )
 from dbt.parser.partial import PartialParsing, special_override_macros
 from dbt.contracts.graph.manifest import (
@@ -94,6 +95,7 @@ from dbt.contracts.graph.nodes import (
     Exposure,
     Metric,
     SeedNode,
+    SemanticModel,
     ManifestNode,
     ResultNode,
     ModelNode,
@@ -122,7 +124,7 @@ from dbt.parser.sources import SourcePatcher
 from dbt.version import __version__
 
 from dbt.dataclass_schema import StrEnum, dbtClassMixin
-from dbt.plugins import get_plugin_manager
+from dbt import plugins
 
 from dbt_semantic_interfaces.enum_extension import assert_values_exhausted
 from dbt_semantic_interfaces.type_enums import MetricType
@@ -259,7 +261,7 @@ class ManifestLoader:
         # We need to know if we're actually partially parsing. It could
         # have been enabled, but not happening because of some issue.
         self.partially_parsing = False
-        self.partial_parser = None
+        self.partial_parser: Optional[PartialParsing] = None
 
         # This is a saved manifest from a previous run that's used for partial parsing
         self.saved_manifest: Optional[Manifest] = self.read_manifest_for_partial_parse()
@@ -284,8 +286,17 @@ class ManifestLoader:
             adapter.clear_macro_manifest()
         macro_hook = adapter.connections.set_query_header
 
+        flags = get_flags()
+        if not flags.PARTIAL_PARSE_FILE_DIFF:
+            file_diff = FileDiff.from_dict(
+                {
+                    "deleted": [],
+                    "changed": [],
+                    "added": [],
+                }
+            )
         # Hack to test file_diffs
-        if os.environ.get("DBT_PP_FILE_DIFF_TEST"):
+        elif os.environ.get("DBT_PP_FILE_DIFF_TEST"):
             file_diff_path = "file_diff.json"
             if path_exists(file_diff_path):
                 file_diff_dct = read_json(file_diff_path)
@@ -322,7 +333,7 @@ class ManifestLoader:
         return manifest
 
     # This is where the main action happens
-    def load(self):
+    def load(self) -> Manifest:
         start_read_files = time.perf_counter()
 
         # This updates the "files" dictionary in self.manifest, and creates
@@ -331,6 +342,7 @@ class ManifestLoader:
         # of parsers to lists of file strings. The file strings are
         # used to get the SourceFiles from the manifest files.
         saved_files = self.saved_manifest.files if self.saved_manifest else {}
+        file_reader: Optional[ReadFiles] = None
         if self.file_diff:
             # We're getting files from a file diff
             file_reader = ReadFilesFromDiff(
@@ -394,7 +406,7 @@ class ManifestLoader:
                     }
 
                     # get file info for local logs
-                    parse_file_type = None
+                    parse_file_type: str = ""
                     file_id = self.partial_parser.processing_file
                     if file_id:
                         source_file = None
@@ -475,7 +487,7 @@ class ManifestLoader:
             self.manifest.rebuild_disabled_lookup()
 
             # Load yaml files
-            parser_types = [SchemaParser]
+            parser_types = [SchemaParser]  # type: ignore
             for project in self.all_projects.values():
                 if project.project_name not in project_parser_files:
                     continue
@@ -503,6 +515,7 @@ class ManifestLoader:
             self.manifest.selectors = self.root_project.manifest_selectors
 
             # inject any available external nodes
+            self.manifest.build_parent_and_child_maps()
             external_nodes_modified = self.inject_external_nodes()
             if external_nodes_modified:
                 self.manifest.rebuild_ref_lookup()
@@ -547,7 +560,7 @@ class ManifestLoader:
                 )
                 # parent and child maps will be rebuilt by write_manifest
 
-        if not skip_parsing:
+        if not skip_parsing or external_nodes_modified:
             # write out the fully parsed manifest
             self.write_manifest_for_partial_parse()
 
@@ -745,13 +758,16 @@ class ManifestLoader:
     def inject_external_nodes(self) -> bool:
         # Remove previously existing external nodes since we are regenerating them
         manifest_nodes_modified = False
+        # Remove all dependent nodes before removing referencing nodes
         for unique_id in self.manifest.external_node_unique_ids:
-            self.manifest.nodes.pop(unique_id)
             remove_dependent_project_references(self.manifest, unique_id)
             manifest_nodes_modified = True
+        for unique_id in self.manifest.external_node_unique_ids:
+            # remove external nodes from manifest only after dependent project references safely removed
+            self.manifest.nodes.pop(unique_id)
 
         # Inject any newly-available external nodes
-        pm = get_plugin_manager(self.root_project.project_name)
+        pm = plugins.get_plugin_manager(self.root_project.project_name)
         plugin_model_nodes = pm.get_nodes().models
         for node_arg in plugin_model_nodes.values():
             node = ModelNode.from_args(node_arg)
@@ -1052,7 +1068,7 @@ class ManifestLoader:
 
     # Takes references in 'refs' array of nodes and exposures, finds the target
     # node, and updates 'depends_on.nodes' with the unique id
-    def process_refs(self, current_project: str, dependencies: Optional[Dict[str, Project]]):
+    def process_refs(self, current_project: str, dependencies: Optional[Mapping[str, Project]]):
         for node in self.manifest.nodes.values():
             if node.created_at < self.started_at:
                 continue
@@ -1205,11 +1221,16 @@ class ManifestLoader:
         for metric in manifest.metrics.values():
             self.check_valid_group_config_node(metric, group_names)
 
+        for semantic_model in manifest.semantic_models.values():
+            self.check_valid_group_config_node(semantic_model, group_names)
+
         for node in manifest.nodes.values():
             self.check_valid_group_config_node(node, group_names)
 
     def check_valid_group_config_node(
-        self, groupable_node: Union[Metric, ManifestNode], valid_group_names: Set[str]
+        self,
+        groupable_node: Union[Metric, SemanticModel, ManifestNode],
+        valid_group_names: Set[str],
     ):
         groupable_node_group = groupable_node.group
         if groupable_node_group and groupable_node_group not in valid_group_names:
@@ -1476,6 +1497,11 @@ def _process_metric_node(
         if target_semantic_model is None:
             raise dbt.exceptions.ParsingError(
                 f"A semantic model having a measure `{metric.type_params.measure.name}` does not exist but was referenced.",
+                node=metric,
+            )
+        if target_semantic_model.config.enabled is False:
+            raise dbt.exceptions.ParsingError(
+                f"The measure `{metric.type_params.measure.name}` is referenced on disabled semantic model `{target_semantic_model.name}`.",
                 node=metric,
             )
 

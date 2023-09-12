@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Add functional test for advanced ref override
+time: 2023-09-06T11:02:49.253486-04:00
+custom:
+  Author: michelleark
+  Issue: "8566"

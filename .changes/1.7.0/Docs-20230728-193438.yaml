@@ -1,0 +1,6 @@
+kind: Docs
+body: Fix newline escapes and improve formatting in docker README
+time: 2023-07-28T19:34:38.351042747+02:00
+custom:
+  Author: jamezrin
+  Issue: "8211"

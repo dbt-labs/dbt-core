@@ -141,6 +141,7 @@ class dbtRunner:
 @p.macro_debugging
 @p.partial_parse
 @p.partial_parse_file_path
+@p.partial_parse_file_diff
 @p.populate_cache
 @p.print
 @p.printer_width
@@ -329,6 +330,7 @@ def docs_serve(ctx, **kwargs):
 @p.state
 @p.defer_state
 @p.deprecated_state
+@p.compile_inject_ephemeral_ctes
 @p.target
 @p.target_path
 @p.threads

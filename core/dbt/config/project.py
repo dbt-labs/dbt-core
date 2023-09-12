@@ -426,8 +426,10 @@ class PartialProject(RenderComponents):
         sources: Dict[str, Any]
         tests: Dict[str, Any]
         metrics: Dict[str, Any]
+        semantic_models: Dict[str, Any]
         exposures: Dict[str, Any]
         vars_value: VarProvider
+        dbt_cloud: Dict[str, Any]
 
         dispatch = cfg.dispatch
         models = cfg.models
@@ -436,6 +438,7 @@ class PartialProject(RenderComponents):
         sources = cfg.sources
         tests = cfg.tests
         metrics = cfg.metrics
+        semantic_models = cfg.semantic_models
         exposures = cfg.exposures
         if cfg.vars is None:
             vars_dict: Dict[str, Any] = {}
@@ -459,6 +462,8 @@ class PartialProject(RenderComponents):
             manifest_selectors = SelectorDict.parse_from_selectors_list(
                 rendered.selectors_dict["selectors"]
             )
+        dbt_cloud = cfg.dbt_cloud
+
         project = Project(
             project_name=name,
             version=version,
@@ -492,12 +497,14 @@ class PartialProject(RenderComponents):
             sources=sources,
             tests=tests,
             metrics=metrics,
+            semantic_models=semantic_models,
             exposures=exposures,
             vars=vars_value,
             config_version=cfg.config_version,
             unrendered=unrendered,
             project_env_vars=project_env_vars,
             restrict_access=cfg.restrict_access,
+            dbt_cloud=dbt_cloud,
         )
         # sanity check - this means an internal issue
         project.validate()
@@ -598,6 +605,7 @@ class Project:
     sources: Dict[str, Any]
     tests: Dict[str, Any]
     metrics: Dict[str, Any]
+    semantic_models: Dict[str, Any]
     exposures: Dict[str, Any]
     vars: VarProvider
     dbt_version: List[VersionSpecifier]
@@ -609,6 +617,7 @@ class Project:
     unrendered: RenderComponents
     project_env_vars: Dict[str, Any]
     restrict_access: bool
+    dbt_cloud: Dict[str, Any]
 
     @property
     def all_source_paths(self) -> List[str]:
@@ -673,11 +682,13 @@ class Project:
                 "sources": self.sources,
                 "tests": self.tests,
                 "metrics": self.metrics,
+                "semantic-models": self.semantic_models,
                 "exposures": self.exposures,
                 "vars": self.vars.to_dict(),
                 "require-dbt-version": [v.to_version_string() for v in self.dbt_version],
                 "config-version": self.config_version,
                 "restrict-access": self.restrict_access,
+                "dbt-cloud": self.dbt_cloud,
             }
         )
         if self.query_comment:

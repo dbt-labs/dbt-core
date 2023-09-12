@@ -74,7 +74,7 @@ class DebugRunStatus(Flag):
 
 
 class DebugTask(BaseTask):
-    def __init__(self, args, config):
+    def __init__(self, args, config) -> None:
         super().__init__(args, config)
         self.profiles_dir = args.PROFILES_DIR
         self.profile_path = os.path.join(self.profiles_dir, "profiles.yml")
@@ -149,13 +149,14 @@ class DebugTask(BaseTask):
             dependencies_statuses = self.test_dependencies()
 
         # Test connection
-        self.test_connection()
+        connection_status = self.test_connection()
 
         # Log messages from any fails
         all_statuses: List[SubtaskStatus] = [
             load_profile_status,
             load_project_status,
             *dependencies_statuses,
+            connection_status,
         ]
         all_failing_statuses: List[SubtaskStatus] = list(
             filter(lambda status: status.run_status == RunStatus.Error, all_statuses)

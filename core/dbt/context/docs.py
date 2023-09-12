@@ -24,7 +24,7 @@ class DocsRuntimeContext(SchemaYamlContext):
         self.node = node
         self.manifest = manifest
 
-    @contextmember
+    @contextmember()
     def doc(self, *args: str) -> str:
         """The `doc` function is used to reference docs blocks in schema.yml
         files. It is analogous to the `ref` function. For more information,

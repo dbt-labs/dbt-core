@@ -40,7 +40,7 @@ class MacroResolver:
         self._build_internal_packages_namespace()
         self._build_macros_by_name()
 
-    def _build_internal_packages_namespace(self):
+    def _build_internal_packages_namespace(self) -> None:
         # Iterate in reverse-order and overwrite: the packages that are first
         # in the list are the ones we want to "win".
         self.internal_packages_namespace: MacroNamespace = {}
@@ -56,7 +56,7 @@ class MacroResolver:
     # root package namespace
     # non-internal packages (that aren't local or root)
     # dbt internal packages
-    def _build_macros_by_name(self):
+    def _build_macros_by_name(self) -> None:
         macros_by_name = {}
 
         # all internal packages (already in the right order)
@@ -78,7 +78,7 @@ class MacroResolver:
         self,
         package_namespaces: Dict[str, MacroNamespace],
         macro: Macro,
-    ):
+    ) -> None:
         if macro.package_name in package_namespaces:
             namespace = package_namespaces[macro.package_name]
         else:
@@ -89,7 +89,7 @@ class MacroResolver:
             raise DuplicateMacroNameError(macro, macro, macro.package_name)
         package_namespaces[macro.package_name][macro.name] = macro
 
-    def add_macro(self, macro: Macro):
+    def add_macro(self, macro: Macro) -> None:
         macro_name: str = macro.name
 
         # internal macros (from plugins) will be processed separately from
@@ -103,11 +103,11 @@ class MacroResolver:
             if macro.package_name == self.root_project_name:
                 self.root_package_macros[macro_name] = macro
 
-    def add_macros(self):
+    def add_macros(self) -> None:
         for macro in self.macros.values():
             self.add_macro(macro)
 
-    def get_macro(self, local_package, macro_name):
+    def get_macro(self, local_package, macro_name) -> Optional[Macro]:
         local_package_macros = {}
         # If the macro is explicitly prefixed with an internal namespace
         # (e.g. 'dbt.some_macro'), look there first
@@ -125,7 +125,7 @@ class MacroResolver:
             return self.macros_by_name[macro_name]
         return None
 
-    def get_macro_id(self, local_package, macro_name):
+    def get_macro_id(self, local_package, macro_name) -> Optional[str]:
         macro = self.get_macro(local_package, macro_name)
         if macro is None:
             return None

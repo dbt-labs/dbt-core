@@ -1,6 +1,6 @@
 from collections.abc import Hashable
 from dataclasses import dataclass, field
-from typing import Optional, TypeVar, Any, Type, Dict, Iterator, Tuple, Set
+from typing import Optional, TypeVar, Any, Type, Dict, Iterator, Tuple, Set, FrozenSet
 
 from dbt.contracts.graph.nodes import SourceDefinition, ManifestNode, ResultNode, ParsedNode
 from dbt.contracts.relation import (
@@ -35,6 +35,10 @@ class BaseRelation(FakeAPIObject, Hashable):
     include_policy: Policy = field(default_factory=lambda: Policy())
     quote_policy: Policy = field(default_factory=lambda: Policy())
     dbt_created: bool = False
+    # register relation types that can be renamed for the purpose of replacing relations using stages and backups
+    renameable_relations: FrozenSet[str] = frozenset()
+    # register relation types that are replaceable, i.e. they have "create or replace" capability
+    replaceable_relations: FrozenSet[str] = frozenset()
 
     def _is_exactish_match(self, field: ComponentName, value: str) -> bool:
         if self.dbt_created and self.quote_policy.get_part(field) is False:
@@ -169,7 +173,6 @@ class BaseRelation(FakeAPIObject, Hashable):
         return self.include(identifier=False).replace_path(identifier=None)
 
     def _render_iterator(self) -> Iterator[Tuple[Optional[ComponentName], Optional[str]]]:
-
         for key in ComponentName:
             path_part: Optional[str] = None
             if self.include_policy.get_part(key):
@@ -285,6 +288,14 @@ class BaseRelation(FakeAPIObject, Hashable):
             }
         )
         return cls.from_dict(kwargs)
+
+    @property
+    def can_be_renamed(self) -> bool:
+        return self.type in self.renameable_relations
+
+    @property
+    def can_be_replaced(self) -> bool:
+        return self.type in self.replaceable_relations
 
     def __repr__(self) -> str:
         return "<{} {}>".format(self.__class__.__name__, self.render())
