@@ -16,49 +16,41 @@ permissions:
   packages: write
 
 on:
-  workflow_call:
-    inputs:
-      package:
-       description: The package to release. _One_ of [dbt-core, dbt-redshift, dbt-bigquery, dbt-snowflake, dbt-spark, dbt-postgres]
-       required: true
-       type: string
   workflow_dispatch:
     inputs:
       package:
        description: The package to release. _One_ of [dbt-core, dbt-redshift, dbt-bigquery, dbt-snowflake, dbt-spark, dbt-postgres]
        required: true
-       type: string
       version_number:
        description: The release version number (i.e. 1.0.0b1). Do not include `latest` tags or a leading `v`!
        required: true
-       type: string
 
 jobs:
   get_version_meta:
-    name: Get version metadata
+    name: Get version meta
     runs-on: ubuntu-latest
-    
     outputs:
+      major: ${{ steps.version.outputs.major }}
+      minor: ${{ steps.version.outputs.minor }}
+      patch: ${{ steps.version.outputs.patch }}
       latest: ${{ steps.latest.outputs.latest }}
       minor_latest: ${{ steps.latest.outputs.minor_latest }}
-
     steps:
-      - name: "[DEBUG] Print Variables"
-
+      - uses: actions/checkout@v3
+      - name: Split version
+        id: version
         run: |
-          echo "All variables defined as inputs"
-          echo "The package:          ${{ inputs.package }}"
-          echo "The version_number:          ${{ inputs.version_number }}"
-
-      - name: "Check out the repository"
-        uses: actions/checkout@v3
+          IFS="." read -r MAJOR MINOR PATCH <<< ${{ github.event.inputs.version_number }}
+          echo "major=$MAJOR" >> $GITHUB_OUTPUT
+          echo "minor=$MINOR" >> $GITHUB_OUTPUT
+          echo "patch=$PATCH" >> $GITHUB_OUTPUT
 
       - name: Is pkg 'latest'
         id: latest
         uses: ./.github/actions/latest-wrangler
         with:
-          package: ${{ inputs.package }}
-          new_version: ${{ inputs.version_number }}
+          package: ${{ github.event.inputs.package }}
+          new_version: ${{ github.event.inputs.version_number }}
           gh_token: ${{ secrets.GITHUB_TOKEN }}
           halt_on_missing: False
 
@@ -75,18 +67,11 @@ jobs:
     runs-on: ubuntu-latest
     needs: [setup_image_builder, get_version_meta]
     steps:
-
-      - name: "Parse Version Into Parts"
-        id: semver
-        uses: dbt-labs/actions/parse-semver@v1
-        with:
-          version: ${{ inputs.version_number }}
-
       - name: Get docker build arg
         id: build_arg
         run: |
-          BUILD_ARG_NAME=$(echo ${{ inputs.package }} | sed 's/\-/_/g')
-          BUILD_ARG_VALUE=$(echo ${{ inputs.package }} | sed 's/postgres/core/g')
+          BUILD_ARG_NAME=$(echo ${{ github.event.inputs.package }} | sed 's/\-/_/g')
+          BUILD_ARG_VALUE=$(echo ${{ github.event.inputs.package }} | sed 's/postgres/core/g')
           echo "build_arg_name=$BUILD_ARG_NAME" >> $GITHUB_OUTPUT
           echo "build_arg_value=$BUILD_ARG_VALUE" >> $GITHUB_OUTPUT
 
@@ -102,11 +87,11 @@ jobs:
         with:
           file: docker/Dockerfile
           push: True
-          target: ${{ inputs.package }}
+          target: ${{ github.event.inputs.package }}
           build-args: |
-            ${{ steps.build_arg.outputs.build_arg_name }}_ref=${{ steps.build_arg.outputs.build_arg_value }}@v${{ steps.semver.outputs.version }}
+            ${{ steps.build_arg.outputs.build_arg_name }}_ref=${{ steps.build_arg.outputs.build_arg_value }}@v${{ github.event.inputs.version_number }}
           tags: |
-            ghcr.io/leahwicz/${{ inputs.package }}:${{ steps.semver.outputs.version }}
+            ghcr.io/dbt-labs/${{ github.event.inputs.package }}:${{ github.event.inputs.version_number }}
 
       - name: Build and push MINOR.latest tag
         uses: docker/build-push-action@v4
@@ -114,11 +99,11 @@ jobs:
         with:
           file: docker/Dockerfile
           push: True
-          target: ${{ inputs.package }}
+          target: ${{ github.event.inputs.package }}
           build-args: |
-            ${{ steps.build_arg.outputs.build_arg_name }}_ref=${{ steps.build_arg.outputs.build_arg_value }}@v${{ steps.semver.outputs.version }}
+            ${{ steps.build_arg.outputs.build_arg_name }}_ref=${{ steps.build_arg.outputs.build_arg_value }}@v${{ github.event.inputs.version_number }}
           tags: |
-            ghcr.io/leahwicz/${{ inputs.package }}:${{ steps.semver.outputs.major }}.${{ steps.semver.outputs.minor }}.latest
+            ghcr.io/dbt-labs/${{ github.event.inputs.package }}:${{ needs.get_version_meta.outputs.major }}.${{ needs.get_version_meta.outputs.minor }}.latest
 
       - name: Build and push latest tag
         uses: docker/build-push-action@v4
@@ -126,8 +111,8 @@ jobs:
         with:
           file: docker/Dockerfile
           push: True
-          target: ${{ inputs.package }}
+          target: ${{ github.event.inputs.package }}
           build-args: |
-            ${{ steps.build_arg.outputs.build_arg_name }}_ref=${{ steps.build_arg.outputs.build_arg_value }}@v${{ steps.semver.outputs.version }}
+            ${{ steps.build_arg.outputs.build_arg_name }}_ref=${{ steps.build_arg.outputs.build_arg_value }}@v${{ github.event.inputs.version_number }}
           tags: |
-            ghcr.io/leahwicz/${{ inputs.package }}:latest
+            ghcr.io/dbt-labs/${{ github.event.inputs.package }}:latest

@@ -108,14 +108,13 @@ on:
 
 permissions:
   contents: write # this is the permission that allows creating a new release
-  packages: write
 
 defaults:
   run:
     shell: bash
 
 jobs:
-  pypi-release:
+  log-inputs:
     name: Log Inputs
     runs-on: ubuntu-latest
     steps:
@@ -131,22 +130,100 @@ jobs:
           echo Test run:                           ${{ inputs.test_run }}
           echo Nightly release:                    ${{ inputs.nightly_release }}
 
+  bump-version-generate-changelog:
+    name: Bump package version, Generate changelog
 
-  docker-core-release:
-    name: Docker dbt-core Release
-    if: ${{ !inputs.test_run }}
-    needs: [pypi-release]
+    uses: dbt-labs/dbt-release/.github/workflows/release-prep.yml@main
 
-    uses: leahwicz/dbt-core/.github/workflows/release-docker.yml@main
     with:
-      package: dbt-core
-      
+      sha: ${{ inputs.sha }}
+      version_number: ${{ inputs.version_number }}
+      target_branch: ${{ inputs.target_branch }}
+      env_setup_script_path: ${{ inputs.env_setup_script_path }}
+      test_run: ${{ inputs.test_run }}
+      nightly_release: ${{ inputs.nightly_release }}
 
-  docker-postgres-release:
-    name: Docker dbt-postgres Release
-    needs: [docker-core-release]
+    secrets: inherit
 
-    uses: leahwicz/dbt-core/.github/workflows/release-docker.yml@main
+  log-outputs-bump-version-generate-changelog:
+    name: "[Log output] Bump package version, Generate changelog"
+    if: ${{ !failure() && !cancelled() }}
+
+    needs: [bump-version-generate-changelog]
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Print variables
+        run: |
+          echo Final SHA     : ${{ needs.bump-version-generate-changelog.outputs.final_sha }}
+          echo Changelog path: ${{ needs.bump-version-generate-changelog.outputs.changelog_path }}
+
+  build-test-package:
+    name: Build, Test, Package
+    if: ${{ !failure() && !cancelled() }}
+    needs: [bump-version-generate-changelog]
+
+    uses: dbt-labs/dbt-release/.github/workflows/build.yml@main
+
     with:
-      package: dbt-postgres
+      sha: ${{ needs.bump-version-generate-changelog.outputs.final_sha }}
+      version_number: ${{ inputs.version_number }}
+      changelog_path: ${{ needs.bump-version-generate-changelog.outputs.changelog_path }}
+      build_script_path: ${{ inputs.build_script_path }}
+      s3_bucket_name: ${{ inputs.s3_bucket_name }}
+      package_test_command: ${{ inputs.package_test_command }}
+      test_run: ${{ inputs.test_run }}
+      nightly_release: ${{ inputs.nightly_release }}
 
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+  github-release:
+    name: GitHub Release
+    if: ${{ !failure() && !cancelled() }}
+
+    needs: [bump-version-generate-changelog, build-test-package]
+
+    uses: dbt-labs/dbt-release/.github/workflows/github-release.yml@main
+
+    with:
+      sha: ${{ needs.bump-version-generate-changelog.outputs.final_sha }}
+      version_number: ${{ inputs.version_number }}
+      changelog_path: ${{ needs.bump-version-generate-changelog.outputs.changelog_path }}
+      test_run: ${{ inputs.test_run }}
+
+  pypi-release:
+    name: PyPI Release
+
+    needs: [github-release]
+
+    uses: dbt-labs/dbt-release/.github/workflows/pypi-release.yml@main
+
+    with:
+      version_number: ${{ inputs.version_number }}
+      test_run: ${{ inputs.test_run }}
+
+    secrets:
+      PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+      TEST_PYPI_API_TOKEN: ${{ secrets.TEST_PYPI_API_TOKEN }}
+
+  slack-notification:
+    name: Slack Notification
+    if: ${{ failure() && (!inputs.test_run || inputs.nightly_release) }}
+
+    needs:
+      [
+        bump-version-generate-changelog,
+        build-test-package,
+        github-release,
+        pypi-release,
+      ]
+
+    uses: dbt-labs/dbt-release/.github/workflows/slack-post-notification.yml@main
+    with:
+      status: "failure"
+
+    secrets:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_DEV_CORE_ALERTS }}
