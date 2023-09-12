@@ -7,3 +7,7 @@ coverage:
       default:
         target: auto
         threshold: 0.1% # Reduce noise by ignoring rounding errors in coverage drops
+    patch:
+      default:
+        target: auto
+        threshold: 80%
