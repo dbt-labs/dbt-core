@@ -1,10 +1,11 @@
-import pytest
 import os
 import shutil
-from copy import deepcopy
 from collections import Counter
+from copy import deepcopy
+
+import pytest
+
 from dbt.exceptions import DbtRuntimeError
-from dbt.tests.util import run_dbt
 from dbt.tests.adapter.dbt_clone.fixtures import (
     seed_csv,
     table_model_sql,
@@ -18,6 +19,7 @@ from dbt.tests.adapter.dbt_clone.fixtures import (
     infinite_macros_sql,
     custom_can_clone_tables_false_macros_sql,
 )
+from dbt.tests.util import run_dbt, run_dbt_and_capture
 
 
 class BaseClone:
@@ -215,3 +217,18 @@ class TestPostgresCloneNotPossible(BaseCloneNotPossible):
             project.adapter.drop_schema(relation)
 
     pass
+
+
+class TestCloneSameTargetAndState(BaseClone):
+    def test_clone_same_target_and_state(self, project, unique_schema, other_schema):
+        project.create_test_schema(other_schema)
+        self.run_and_save_state(project.project_root)
+
+        clone_args = [
+            "clone",
+            "--state",
+            "target",
+        ]
+
+        results, output = run_dbt_and_capture(clone_args, expect_pass=False)
+        assert "Warning: The state and target directories are the same: 'target'" in output

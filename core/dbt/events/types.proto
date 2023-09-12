@@ -1287,6 +1287,15 @@ message UnversionedBreakingChangeMsg {
     UnversionedBreakingChange data = 2;
 }
 
+// I072
+message WarnStateTargetEqual {
+    string state_path = 1;
+}
+
+message WarnStateTargetEqualMsg {
+    EventInfo info = 1;
+    WarnStateTargetEqual data = 2;
+}
 
 // M - Deps generation
 

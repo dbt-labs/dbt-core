@@ -1,8 +1,11 @@
 from pathlib import Path
-from .graph.manifest import WritableManifest
-from .results import RunResultsArtifact
-from .results import FreshnessExecutionResultArtifact
 from typing import Optional
+
+from dbt.contracts.graph.manifest import WritableManifest
+from dbt.contracts.results import FreshnessExecutionResultArtifact
+from dbt.contracts.results import RunResultsArtifact
+from dbt.events.functions import fire_event
+from dbt.events.types import WarnStateTargetEqual
 from dbt.exceptions import IncompatibleSchemaError
 
 
@@ -15,6 +18,9 @@ class PreviousState:
         self.results: Optional[RunResultsArtifact] = None
         self.sources: Optional[FreshnessExecutionResultArtifact] = None
         self.sources_current: Optional[FreshnessExecutionResultArtifact] = None
+
+        if self.state_path == self.target_path:
+            fire_event(WarnStateTargetEqual(state_path=str(self.state_path)))
 
         # Note: if state_path is absolute, project_root will be ignored.
         manifest_path = self.project_root / self.state_path / "manifest.json"
