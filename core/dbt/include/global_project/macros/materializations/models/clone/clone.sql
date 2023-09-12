@@ -37,7 +37,7 @@
               {{ log("Target relation and defer relation are the same, skipping clone for relation: " ~ target_relation) }}
           {% else %}
               {{ create_or_replace_clone(target_relation, defer_relation) }}
-          {% endif %
+          {% endif %}
 
       {% endcall %}
 
