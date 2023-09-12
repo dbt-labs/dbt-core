@@ -14,6 +14,7 @@ from dbt.events.format import timestamp_to_datetime_string
 
 from dbt.events.base_types import BaseEvent, EventLevel, msg_from_base_event, EventMsg
 import dbt.utils
+from dbt.events.functions import get_rotating_file_handler
 
 # A Filter is a function which takes a BaseEvent and returns True if the event
 # should be logged, False otherwise.
@@ -98,12 +99,7 @@ class _Logger:
             self._python_logger = self._get_python_log_for_handler(stream_handler)
 
         if config.output_file_name:
-            file_handler = RotatingFileHandler(
-                filename=str(config.output_file_name),
-                encoding="utf8",
-                maxBytes=config.output_file_max_bytes,  # type: ignore
-                backupCount=5,
-            )
+            file_handler = get_rotating_file_handler(config.output_file_name, config.output_file_max_bytes)
             self._python_logger = self._get_python_log_for_handler(file_handler)
 
     def _get_python_log_for_handler(self, handler: logging.Handler):
