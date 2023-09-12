@@ -1,0 +1,6 @@
+kind: Fixes
+body: Add explicit support for integers for the show command
+time: 2023-08-03T09:35:02.163968-05:00
+custom:
+  Author: dave-connors-3
+  Issue: "8153"
