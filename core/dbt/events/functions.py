@@ -302,4 +302,6 @@ def ctx_set_event_manager(event_manager: IEventManager):
 def set_package_logging(package_name: str, default_level: Union[str, int]):
     log = logging.getLogger(package_name)
     log.setLevel(default_level)
-    log.addHandler(logging.StreamHandler(sys.stdout))
+    std_out_handler = logging.StreamHandler(sys.stdout)
+    std_out_handler.setLevel(default_level)
+    log.addHandler(std_out_handler)
