@@ -382,17 +382,16 @@ class Compiler:
 
             _add_prepended_cte(prepended_ctes, InjectedCTE(id=cte.id, sql=sql))
 
-        injected_sql = inject_ctes_into_sql(
-            model.compiled_code,
-            prepended_ctes,
-        )
-
         # Check again before updating for multi-threading
         if not model.extra_ctes_injected:
+            injected_sql = inject_ctes_into_sql(
+                model.compiled_code,
+                prepended_ctes,
+            )
+            model.extra_ctes_injected = True
             model._pre_injected_sql = model.compiled_code
             model.compiled_code = injected_sql
             model.extra_ctes = prepended_ctes
-            model.extra_ctes_injected = True
 
         # if model.extra_ctes is not set to prepended ctes, something went wrong
         return model, model.extra_ctes
@@ -529,10 +528,10 @@ class Compiler:
         recursive method to "prepend" the ctes.
         """
         # Make sure Lexer for sqlparse 0.4.4 is initialized
-        # from sqlparse.lexer import Lexer  # type: ignore
+        from sqlparse.lexer import Lexer  # type: ignore
 
-        # if hasattr(Lexer, "get_default_instance"):
-        #     Lexer.get_default_instance()
+        if hasattr(Lexer, "get_default_instance"):
+            Lexer.get_default_instance()
 
         node = self._compile_code(node, manifest, extra_context)
 
