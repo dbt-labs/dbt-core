@@ -1,6 +1,6 @@
 from collections.abc import Hashable
 from dataclasses import dataclass, field
-from typing import Optional, TypeVar, Any, Type, Dict, Iterator, Tuple, Set, FrozenSet
+from typing import Optional, TypeVar, Any, Type, Dict, Iterator, Tuple, Set, Iterable
 
 from dbt.contracts.graph.nodes import SourceDefinition, ManifestNode, ResultNode, ParsedNode
 from dbt.contracts.relation import (
@@ -35,10 +35,18 @@ class BaseRelation(FakeAPIObject, Hashable):
     include_policy: Policy = field(default_factory=lambda: Policy())
     quote_policy: Policy = field(default_factory=lambda: Policy())
     dbt_created: bool = False
+
     # register relation types that can be renamed for the purpose of replacing relations using stages and backups
-    renameable_relations: FrozenSet[str] = frozenset()
-    # register relation types that are replaceable, i.e. they have "create or replace" capability
-    replaceable_relations: FrozenSet[str] = frozenset()
+    # adding a relation type here also requires defining the associated rename macro
+    # e.g. adding RelationType.View in dbt-postgres requires that you define:
+    # include/postgres/macros/relations/view/rename.sql::postgres__get_rename_view_sql()
+    renameable_relations: Iterable[str] = ()
+
+    # register relation types that are atomically replaceable, e.g. they have "create or replace" syntax
+    # adding a relation type here also requires defining the associated replace macro
+    # e.g. adding RelationType.View in dbt-postgres requires that you define:
+    # include/postgres/macros/relations/view/replace.sql::postgres__get_replace_view_sql()
+    replaceable_relations: Iterable[str] = ()
 
     def _is_exactish_match(self, field: ComponentName, value: str) -> bool:
         if self.dbt_created and self.quote_policy.get_part(field) is False:
@@ -291,11 +299,11 @@ class BaseRelation(FakeAPIObject, Hashable):
 
     @property
     def can_be_renamed(self) -> bool:
-        return self.type in self.renameable_relations
+        return self.type in self.renameable_relations if self.type else False
 
     @property
     def can_be_replaced(self) -> bool:
-        return self.type in self.replaceable_relations
+        return self.type in self.replaceable_relations if self.type else False
 
     def __repr__(self) -> str:
         return "<{} {}>".format(self.__class__.__name__, self.render())
