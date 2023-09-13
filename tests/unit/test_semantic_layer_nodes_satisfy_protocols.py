@@ -312,6 +312,7 @@ def test_semantic_model_node_satisfies_protocol_optionals_specified(
             schema_name="test_schema_name",
         ),
         description="test_description",
+        label="test label",
         defaults=semantic_model_defaults,
         metadata=source_file_metadata,
         primary_entity="test_primary_entity",
@@ -334,6 +335,7 @@ def test_dimension_satisfies_protocol_optionals_specified(
         name="test_dimension",
         type=DimensionType.TIME,
         description="test_description",
+        label="test_label",
         type_params=dimension_type_params,
         expr="1",
         metadata=source_file_metadata,
@@ -353,6 +355,7 @@ def test_entity_satisfies_protocol_optionals_specified():
     entity = Entity(
         name="test_entity",
         description="a test entity",
+        label="A test entity",
         type=EntityType.PRIMARY,
         expr="id",
         role="a_role",
@@ -374,6 +377,7 @@ def test_measure_satisfies_protocol_optionals_specified(
     measure = Measure(
         name="test_measure",
         description="a test measure",
+        label="A test measure",
         agg="sum",
         create_metric=True,
         expr="amount",
