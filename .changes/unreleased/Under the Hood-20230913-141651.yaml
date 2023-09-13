@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Fix test_numeric_values to look for more specific strings
+time: 2023-09-13T14:16:51.453247-04:00
+custom:
+  Author: gshank
+  Issue: "8470"
