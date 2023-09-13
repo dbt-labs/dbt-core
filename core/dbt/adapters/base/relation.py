@@ -300,11 +300,11 @@ class BaseRelation(FakeAPIObject, Hashable):
 
     @property
     def can_be_renamed(self) -> bool:
-        return self.type in self.renameable_relations if self.type else False
+        return self.type in self.renameable_relations
 
     @property
     def can_be_replaced(self) -> bool:
-        return self.type in self.replaceable_relations if self.type else False
+        return self.type in self.replaceable_relations
 
     def __repr__(self) -> str:
         return "<{} {}>".format(self.__class__.__name__, self.render())
