@@ -1,0 +1,8 @@
+kind: Features
+body: Loosen typing requirement on renameable/replaceable relations to Iterable to
+  allow adapters more flexibility in registering relation types, include docstrings
+  as suggestions
+time: 2023-09-13T18:27:07.974612-04:00
+custom:
+  Author: mikealfare
+  Issue: "8647"
