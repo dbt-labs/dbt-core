@@ -120,7 +120,6 @@ class TestUnitTests:
         return {"vars": {"my_test": "my_test_var"}}
 
     def test_basic(self, project):
-        run_dbt(["deps"])
         results = run_dbt(["run"])
         assert len(results) == 3
 
