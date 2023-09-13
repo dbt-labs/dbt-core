@@ -1,3 +1,5 @@
+from dbt.contracts.graph.nodes import ModelNode
+from dbt.contracts.results import RunExecutionResult, RunResult
 import pytest
 from dbt.tests.util import run_dbt
 
@@ -53,6 +55,16 @@ models:
 """
 
 
+SUPPRESSED_CTE_EXPECTED_OUTPUT = """-- fct_eph_first.sql
+
+
+with int_eph_first as(
+    select * from __dbt__cte__int_eph_first
+)
+
+select * from int_eph_first"""
+
+
 class TestEphemeralCompilation:
     @pytest.fixture(scope="class")
     def models(self):
@@ -67,5 +79,13 @@ class TestEphemeralCompilation:
         results = run_dbt(["run"])
         assert len(results) == 0
 
-        results = run_dbt(["test"])
-        len(results) == 4
+    def test__suppress_injected_ctes(self, project):
+        compile_output = run_dbt(
+            ["compile", "--no-inject-ephemeral-ctes", "--select", "fct_eph_first"]
+        )
+        assert isinstance(compile_output, RunExecutionResult)
+        node_result = compile_output.results[0]
+        assert isinstance(node_result, RunResult)
+        node = node_result.node
+        assert isinstance(node, ModelNode)
+        assert node.compiled_code == SUPPRESSED_CTE_EXPECTED_OUTPUT

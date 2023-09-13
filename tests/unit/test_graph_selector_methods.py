@@ -639,6 +639,21 @@ def versioned_model_v3(seed):
 
 
 @pytest.fixture
+def versioned_model_v12_string(seed):
+    return make_model(
+        "pkg",
+        "versioned_model",
+        'select * from {{ ref("seed") }}',
+        config_kwargs={"materialized": "table"},
+        refs=[seed],
+        sources=[],
+        path="subdirectory/versioned_model_v12.sql",
+        version="12",
+        latest_version=2,
+    )
+
+
+@pytest.fixture
 def versioned_model_v4_nested_dir(seed):
     return make_model(
         "pkg",
@@ -732,6 +747,7 @@ def manifest(
     versioned_model_v2,
     versioned_model_v3,
     versioned_model_v4_nested_dir,
+    versioned_model_v12_string,
     ext_source_2,
     ext_source_other,
     ext_source_other_2,
@@ -760,6 +776,7 @@ def manifest(
         versioned_model_v2,
         versioned_model_v3,
         versioned_model_v4_nested_dir,
+        versioned_model_v12_string,
         ext_model,
         table_id_unique,
         table_id_not_null,
@@ -823,6 +840,7 @@ def test_select_fqn(manifest):
         "versioned_model.v2",
         "versioned_model.v3",
         "versioned_model.v4",
+        "versioned_model.v12",
         "table_model",
         "table_model_py",
         "table_model_csv",
@@ -840,6 +858,7 @@ def test_select_fqn(manifest):
         "versioned_model.v2",
         "versioned_model.v3",
         "versioned_model.v4",
+        "versioned_model.v12",
     }
     assert search_manifest_using_method(manifest, method, "versioned_model.v1") == {
         "versioned_model.v1"
@@ -1051,6 +1070,7 @@ def test_select_package(manifest):
         "versioned_model.v2",
         "versioned_model.v3",
         "versioned_model.v4",
+        "versioned_model.v12",
         "table_model",
         "table_model_py",
         "table_model_csv",
@@ -1103,6 +1123,7 @@ def test_select_config_materialized(manifest):
         "versioned_model.v2",
         "versioned_model.v3",
         "versioned_model.v4",
+        "versioned_model.v12",
         "mynamespace.union_model",
     }
 
@@ -1189,6 +1210,7 @@ def test_select_version(manifest):
     assert search_manifest_using_method(manifest, method, "prerelease") == {
         "versioned_model.v3",
         "versioned_model.v4",
+        "versioned_model.v12",
     }
     assert search_manifest_using_method(manifest, method, "none") == {
         "table_model_py",
