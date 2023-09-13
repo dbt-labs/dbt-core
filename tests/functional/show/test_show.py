@@ -82,6 +82,8 @@ class TestShowNumeric(ShowBase):
         (_, log_output) = run_dbt_and_capture(
             ["show", "--select", "sample_number_model", "--output", "json"]
         )
+        # json log output needs the escapes removed for string matching
+        log_output = log_output.replace("\\", "")
         assert "Previewing node 'sample_number_model'" not in log_output
         assert '"float_to_int_field": 1.0' not in log_output
         assert '"float_to_int_field": 1' in log_output
@@ -97,6 +99,8 @@ class TestShowNumericNulls(ShowBase):
         (_, log_output) = run_dbt_and_capture(
             ["show", "--select", "sample_number_model_with_nulls", "--output", "json"]
         )
+        # json log output needs the escapes removed for string matching
+        log_output = log_output.replace("\\", "")
         assert "Previewing node 'sample_number_model_with_nulls'" not in log_output
         assert '"float_to_int_field": 1.0' not in log_output
         assert '"float_to_int_field": 1' in log_output
