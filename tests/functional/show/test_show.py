@@ -83,12 +83,12 @@ class TestShowNumeric(ShowBase):
             ["show", "--select", "sample_number_model", "--output", "json"]
         )
         assert "Previewing node 'sample_number_model'" not in log_output
-        assert "1.0" not in log_output
-        assert "1" in log_output
-        assert "3.0" in log_output
-        assert "4.3" in log_output
-        assert "5" in log_output
-        assert "5.0" not in log_output
+        assert '"float_to_int_field": 1.0' not in log_output
+        assert '"float_to_int_field": 1' in log_output
+        assert '"float_field": 3.0' in log_output
+        assert '"float_with_dec_field": 4.3' in log_output
+        assert '"int_field": 5' in log_output
+        assert '"int_field": 5.0' not in log_output
 
 
 class TestShowNumericNulls(ShowBase):
@@ -98,12 +98,12 @@ class TestShowNumericNulls(ShowBase):
             ["show", "--select", "sample_number_model_with_nulls", "--output", "json"]
         )
         assert "Previewing node 'sample_number_model_with_nulls'" not in log_output
-        assert "1.0" not in log_output
-        assert "1" in log_output
-        assert "3.0" in log_output
-        assert "4.3" in log_output
-        assert "5" in log_output
-        assert "5.0" not in log_output
+        assert '"float_to_int_field": 1.0' not in log_output
+        assert '"float_to_int_field": 1' in log_output
+        assert '"float_field": 3.0' in log_output
+        assert '"float_with_dec_field": 4.3' in log_output
+        assert '"int_field": 5' in log_output
+        assert '"int_field": 5.0' not in log_output
 
 
 class TestShowInline(ShowBase):
