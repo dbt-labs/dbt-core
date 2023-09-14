@@ -1252,7 +1252,8 @@ class WarnStateTargetEqual(WarnLevel):
 
     def message(self) -> str:
         return yellow(
-            f"Warning: The state and target directories are the same: '{self.state_path}'"
+            f"Warning: The state and target directories are the same: '{self.state_path}'. "
+            f"This could lead to missing changes due to overwritten state including non-idempotent retries."
         )
 
 
