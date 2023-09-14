@@ -1,6 +1,0 @@
-kind: Features
-body: Support `label` for smenatic_models, measures, dimensions and entities.
-time: 2023-09-13T15:58:02.649003-05:00
-custom:
-  Author: emmyoop
-  Issue: "8595"
