@@ -336,7 +336,6 @@ class TestAccess:
         # Use access and group in config
         write_file(v5_schema_yml, project.project_root, "models", "schema.yml")
         manifest = run_dbt(["parse"])
-        # ['model.test.another_model', 'model.test.my_model', 'model.test.ref_my_model', 'model.test.people_model', 'model.test.metricflow_time_spine']
         assert len(manifest.nodes) == 5
         assert manifest.nodes["model.test.my_model"].access == AccessType.Private
         assert manifest.nodes["model.test.my_model"].group == "analytics"

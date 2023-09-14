@@ -334,11 +334,7 @@ class ConfiguredParser(
             parsed_node.group = config_dict["group"]
 
         # If we have access in the config, copy to node level
-        if (
-            parsed_node.resource_type == NodeType.Model
-            and "access" in config_dict
-            and config_dict["access"]
-        ):
+        if parsed_node.resource_type == NodeType.Model and config_dict.get("access", None):
             if AccessType.is_valid(config_dict["access"]):
                 parsed_node.access = AccessType(config_dict["access"])
             else:
