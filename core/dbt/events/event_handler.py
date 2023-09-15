@@ -23,6 +23,11 @@ def log_level_to_event_level(log_level: int) -> EventLevel:
 
 
 class DbtEventLoggingHandler(logging.Handler):
+    """A logging handler that wraps the EventManager
+    This allows non-dbt packages to log to the dbt event stream.
+    All logs are generated as "Note" events.
+    """
+
     def __init__(self, event_manager: IEventManager, level=logging.NOTSET):
         super().__init__(level)
         self.event_manager = event_manager
@@ -33,10 +38,9 @@ class DbtEventLoggingHandler(logging.Handler):
         self.event_manager.fire_event(e=note, level=level)
 
 
-def set_package_logging(
-    package_name: str, default_level: Union[str, int], event_mgr: IEventManager
-):
+def set_package_logging(package_name: str, log_level: Union[str, int], event_mgr: IEventManager):
+    """Attach dbt's custom logging handler to the package's logger."""
     log = logging.getLogger(package_name)
-    log.setLevel(default_level)
-    event_handler = DbtEventLoggingHandler(event_manager=event_mgr)
+    log.setLevel(log_level)
+    event_handler = DbtEventLoggingHandler(event_manager=event_mgr, level=log_level)
     log.addHandler(event_handler)
