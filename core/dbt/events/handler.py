@@ -1,6 +1,7 @@
 import logging
 from typing import Union
 
+from dbt.events.base_types import EventLevel
 from dbt.events.types import Note
 
 from dbt.events.eventmgr import IEventManager
@@ -12,8 +13,9 @@ class DbtLoggingHandler(logging.Handler):
         self.event_manager = event_manager
 
     def emit(self, record: logging.LogRecord):
-        note = Note(message=record.getMessage())
-        self.event_manager.fire_event(e=note)
+        note = Note(msg=record.getMessage())
+        level = EventLevel(record.levelname)
+        self.event_manager.fire_event(e=note, level=level)
 
 
 def set_package_logging(
