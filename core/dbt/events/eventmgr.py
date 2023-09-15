@@ -5,7 +5,6 @@ from datetime import datetime
 from enum import Enum
 import json
 import logging
-from logging.handlers import RotatingFileHandler
 import threading
 import traceback
 from typing import Any, Callable, List, Optional, TextIO, Protocol
@@ -99,7 +98,9 @@ class _Logger:
             self._python_logger = self._get_python_log_for_handler(stream_handler)
 
         if config.output_file_name:
-            file_handler = get_rotating_file_handler(config.output_file_name, config.output_file_max_bytes)
+            file_handler = get_rotating_file_handler(
+                config.output_file_name, config.output_file_max_bytes
+            )
             self._python_logger = self._get_python_log_for_handler(file_handler)
 
     def _get_python_log_for_handler(self, handler: logging.Handler):

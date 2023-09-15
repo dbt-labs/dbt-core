@@ -4,6 +4,7 @@ from logging.handlers import RotatingFileHandler
 from dbt.constants import METADATA_ENV_PREFIX
 from dbt.events.base_types import BaseEvent, EventLevel, EventMsg
 from dbt.events.eventmgr import EventManager, LoggerConfig, LineFormat, NoFilter, IEventManager
+from dbt.events.handler import DbtLoggingHandler
 from dbt.events.helpers import env_secrets, scrub_secrets
 from dbt.events.types import Note
 from dbt.flags import get_flags, ENABLE_LEGACY_LOGGER
@@ -303,19 +304,15 @@ def ctx_set_event_manager(event_manager: IEventManager):
 
 def get_rotating_file_handler(output_file_name, output_file_max_bytes) -> RotatingFileHandler:
     return RotatingFileHandler(
-                filename=str(output_file_name),
-                encoding="utf8",
-                maxBytes=output_file_max_bytes,  # type: ignore
-                backupCount=5,
-            )
+        filename=str(output_file_name),
+        encoding="utf8",
+        maxBytes=output_file_max_bytes,  # type: ignore
+        backupCount=5,
+    )
+
 
 def set_package_logging(package_name: str, default_level: Union[str, int]):
     log = logging.getLogger(package_name)
     log.setLevel(default_level)
-    flags = get_flags()
-    log_file = os.path.join(flags.LOG_PATH, "dbt.log")
-    file_handler = get_rotating_file_handler(log_file, flags.LOG_SIZE_BYTES)
-    log.addHandler(file_handler)
-    std_out_handler = logging.StreamHandler(_CAPTURE_STREAM if _CAPTURE_STREAM else OUTPUT_STREAM)
-    std_out_handler.setLevel(default_level)
-    log.addHandler(std_out_handler)
+    event_handler = DbtLoggingHandler(event_manager=EVENT_MANAGER)
+    log.addHandler(event_handler)
