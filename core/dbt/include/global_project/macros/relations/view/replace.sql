@@ -1,3 +1,15 @@
+{% macro get_replace_view_sql(relation, sql) %}
+    {{- adapter.dispatch('get_replace_view_sql', 'dbt')(relation, sql) -}}
+{% endmacro %}
+
+
+{% macro default__get_replace_view_sql(relation, sql) %}
+    {{ exceptions.raise_compiler_error(
+        "`get_replace_view_sql` has not been implemented for this adapter."
+    ) }}
+{% endmacro %}
+
+
 /* {#
        Core materialization implementation. BigQuery and Snowflake are similar
        because both can use `create or replace view` where the resulting view's columns
@@ -41,4 +53,14 @@
 
   {{ return({'relations': [target_relation]}) }}
 
+{% endmacro %}
+
+
+{% macro handle_existing_table(full_refresh, old_relation) %}
+    {{ adapter.dispatch('handle_existing_table', 'dbt')(full_refresh, old_relation) }}
+{% endmacro %}
+
+{% macro default__handle_existing_table(full_refresh, old_relation) %}
+    {{ log("Dropping relation " ~ old_relation ~ " because it is of type " ~ old_relation.type) }}
+    {{ adapter.drop_relation(old_relation) }}
 {% endmacro %}

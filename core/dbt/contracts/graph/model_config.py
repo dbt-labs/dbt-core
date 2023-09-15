@@ -14,7 +14,7 @@ from dbt.contracts.graph.utils import validate_color
 from dbt.contracts.util import Replaceable, list_str
 from dbt.exceptions import DbtInternalError, CompilationError
 from dbt import hooks
-from dbt.node_types import NodeType
+from dbt.node_types import NodeType, AccessType
 from mashumaro.jsonschema.annotations import Pattern
 
 
@@ -516,6 +516,14 @@ class NodeConfig(NodeAndTestConfig):
     @classmethod
     def field_mapping(cls):
         return {"post_hook": "post-hook", "pre_hook": "pre-hook"}
+
+
+@dataclass
+class ModelConfig(NodeConfig):
+    access: AccessType = field(
+        default=AccessType.Protected,
+        metadata=MergeBehavior.Update.meta(),
+    )
 
 
 @dataclass

@@ -16,7 +16,15 @@ import time
 from pathlib import PosixPath, WindowsPath
 
 from contextlib import contextmanager
+
 from dbt.events.types import RetryExternalCall, RecordRetryException
+from dbt.exceptions import (
+    ConnectionError,
+    DbtInternalError,
+    DbtConfigError,
+    DuplicateAliasError,
+    RecursionError,
+)
 from dbt.helper_types import WarnErrorOptions
 from dbt import flags
 from enum import Enum
@@ -38,9 +46,6 @@ from typing import (
     Set,
     Sequence,
 )
-
-import dbt.events.functions
-import dbt.exceptions
 
 DECIMALS: Tuple[Type[Any], ...]
 try:
@@ -93,13 +98,13 @@ DOCS_PREFIX = "dbt_docs__"
 
 def get_dbt_macro_name(name):
     if name is None:
-        raise dbt.exceptions.DbtInternalError("Got None for a macro name!")
+        raise DbtInternalError("Got None for a macro name!")
     return f"{MACRO_PREFIX}{name}"
 
 
 def get_dbt_docs_name(name):
     if name is None:
-        raise dbt.exceptions.DbtInternalError("Got None for a doc name!")
+        raise DbtInternalError("Got None for a doc name!")
     return f"{DOCS_PREFIX}{name}"
 
 
@@ -198,7 +203,7 @@ def _deep_map_render(
     else:
         container_types: Tuple[Type[Any], ...] = (list, dict)
         ok_types = container_types + atomic_types
-        raise dbt.exceptions.DbtConfigError(
+        raise DbtConfigError(
             "in _deep_map_render, expected one of {!r}, got {!r}".format(ok_types, type(value))
         )
 
@@ -229,7 +234,7 @@ def deep_map_render(func: Callable[[Any, Tuple[Union[str, int], ...]], Any], val
         return _deep_map_render(func, value, ())
     except RuntimeError as exc:
         if "maximum recursion depth exceeded" in str(exc):
-            raise dbt.exceptions.RecursionError("Cycle detected in deep_map_render")
+            raise RecursionError("Cycle detected in deep_map_render")
         raise
 
 
@@ -372,7 +377,7 @@ class Translator:
         for key, value in kwargs.items():
             canonical_key = self.aliases.get(key, key)
             if canonical_key in result:
-                raise dbt.exceptions.DuplicateAliasError(kwargs, self.aliases, canonical_key)
+                raise DuplicateAliasError(kwargs, self.aliases, canonical_key)
             result[canonical_key] = self.translate_value(value)
         return result
 
@@ -606,14 +611,15 @@ def _connection_exception_retry(fn, max_attempts: int, attempt: int = 0):
         EOFError,
     ) as exc:
         if attempt <= max_attempts - 1:
-            dbt.events.functions.fire_event(RecordRetryException(exc=str(exc)))
-            dbt.events.functions.fire_event(RetryExternalCall(attempt=attempt, max=max_attempts))
+            # This import needs to be inline to avoid circular dependency
+            from dbt.events.functions import fire_event
+
+            fire_event(RecordRetryException(exc=str(exc)))
+            fire_event(RetryExternalCall(attempt=attempt, max=max_attempts))
             time.sleep(1)
             return _connection_exception_retry(fn, max_attempts, attempt + 1)
         else:
-            raise dbt.exceptions.ConnectionError(
-                "External connection exception occurred: " + str(exc)
-            )
+            raise ConnectionError("External connection exception occurred: " + str(exc))
 
 
 # This is used to serialize the args in the run_results and in the logs.

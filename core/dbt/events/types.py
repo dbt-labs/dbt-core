@@ -1,6 +1,5 @@
 import json
 
-from dbt.ui import line_wrap_message, warning_tag, red, green, yellow
 from dbt.constants import MAXIMUM_SEED_SIZE_NAME, PIN_PACKAGE_URL
 from dbt.events.base_types import (
     DynamicLevel,
@@ -11,8 +10,8 @@ from dbt.events.base_types import (
     EventLevel,
 )
 from dbt.events.format import format_fancy_output_line, pluralize, timestamp_to_datetime_string
-
 from dbt.node_types import NodeType
+from dbt.ui import line_wrap_message, warning_tag, red, green, yellow
 
 
 # The classes in this file represent the data necessary to describe a
@@ -1244,6 +1243,17 @@ class UnversionedBreakingChange(WarnLevel):
             f"Breaking change to contracted, unversioned model {self.model_name} ({self.model_file_path})"
             "\nWhile comparing to previous project state, dbt detected a breaking change to an unversioned model."
             f"\n  - {reasons}\n"
+        )
+
+
+class WarnStateTargetEqual(WarnLevel):
+    def code(self):
+        return "I072"
+
+    def message(self) -> str:
+        return yellow(
+            f"Warning: The state and target directories are the same: '{self.state_path}'. "
+            f"This could lead to missing changes due to overwritten state including non-idempotent retries."
         )
 
 

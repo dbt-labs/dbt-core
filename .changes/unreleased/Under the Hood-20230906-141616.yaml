@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Audit potential circular dependencies
+time: 2023-09-06T14:16:16.58457+01:00
+custom:
+  Author: aranke
+  Issue: "8349"

@@ -1,15 +1,12 @@
-resolves #  
-[docs](https://github.com/dbt-labs/docs.getdbt.com/issues/new/choose) dbt-labs/docs.getdbt.com/#  
+resolves #
 
 <!---
   Include the number of the issue addressed by this PR above if applicable.
   PRs for code changes without an associated issue *will not be merged*.
   See CONTRIBUTING.md for more information.
 
-  Include the number of the docs issue that was opened for this PR. If
-  this change has no user-facing implications, "N/A" suffices instead. New
-  docs tickets can be created by clicking the link above or by going to
-  https://github.com/dbt-labs/docs.getdbt.com/issues/new/choose.
+  Add the `user docs` label to this PR if it will need docs changes.  An 
+  issue will get opened in docs.getdbt.com upon successful merge of this PR.
 -->
 
 ### Problem
