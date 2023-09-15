@@ -60,7 +60,7 @@ class AdapterLogger:
 
     @staticmethod
     def set_adapter_dependency_log_level(package_name, level):
-        """By default dbt suppresses non-dbt package logs. This method allows
+        """By default, dbt suppresses non-dbt package logs. This method allows
         you to set the log level for a specific package.
         """
         set_package_logging(package_name, level, EVENT_MANAGER)

@@ -9,6 +9,7 @@ from dbt.events.eventmgr import IEventManager
 _log_level_to_event_level_map = {
     logging.DEBUG: EventLevel.DEBUG,
     logging.INFO: EventLevel.INFO,
+    logging.WARN: EventLevel.WARN,
     logging.WARNING: EventLevel.WARN,
     logging.ERROR: EventLevel.ERROR,
     logging.CRITICAL: EventLevel.ERROR,
@@ -21,7 +22,7 @@ class DbtEventLoggingHandler(logging.Handler):
     All logs are generated as "Note" events.
     """
 
-    def __init__(self, event_manager: IEventManager, level=logging.NOTSET):
+    def __init__(self, event_manager: IEventManager, level):
         super().__init__(level)
         self.event_manager = event_manager
 
