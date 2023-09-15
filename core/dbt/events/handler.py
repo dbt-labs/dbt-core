@@ -1,4 +1,5 @@
 import logging
+from typing import Union
 
 from dbt.events.types import Note
 
@@ -13,3 +14,12 @@ class DbtLoggingHandler(logging.Handler):
     def emit(self, record: logging.LogRecord):
         note = Note(message=record.getMessage())
         self.event_manager.fire_event(e=note)
+
+
+def set_package_logging(
+    package_name: str, default_level: Union[str, int], event_mgr: IEventManager
+):
+    log = logging.getLogger(package_name)
+    log.setLevel(default_level)
+    event_handler = DbtLoggingHandler(event_manager=event_mgr)
+    log.addHandler(event_handler)
