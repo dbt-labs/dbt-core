@@ -6,20 +6,13 @@ from dbt.events.types import Note
 
 from dbt.events.eventmgr import IEventManager
 
-
-def log_level_to_event_level(log_level: int) -> EventLevel:
-    if log_level == logging.DEBUG:
-        return EventLevel.DEBUG
-    elif log_level == logging.INFO:
-        return EventLevel.INFO
-    elif log_level == logging.WARNING:
-        return EventLevel.WARN
-    elif log_level == logging.ERROR:
-        return EventLevel.ERROR
-    elif log_level == logging.CRITICAL:
-        return EventLevel.ERROR
-    else:
-        return EventLevel.DEBUG
+_log_level_to_event_level_map = {
+    logging.DEBUG: EventLevel.DEBUG,
+    logging.INFO: EventLevel.INFO,
+    logging.WARNING: EventLevel.WARN,
+    logging.ERROR: EventLevel.ERROR,
+    logging.CRITICAL: EventLevel.ERROR,
+}
 
 
 class DbtEventLoggingHandler(logging.Handler):
@@ -34,7 +27,7 @@ class DbtEventLoggingHandler(logging.Handler):
 
     def emit(self, record: logging.LogRecord):
         note = Note(msg=record.getMessage())
-        level = log_level_to_event_level(record.levelno)
+        level = _log_level_to_event_level_map[record.levelno]
         self.event_manager.fire_event(e=note, level=level)
 
 
