@@ -16,7 +16,6 @@ from google.protobuf.json_format import MessageToDict
 import dbt.utils
 
 LOG_VERSION = 3
-OUTPUT_STREAM = sys.stdout
 metadata_vars: Optional[Dict[str, str]] = None
 
 # These are the logging events issued by the "clean" command,
@@ -106,7 +105,7 @@ def _get_stdout_config(
             log_cache_events,
             line_format,
         ),
-        output_stream=OUTPUT_STREAM,
+        output_stream=sys.stdout,
     )
 
 
@@ -125,6 +124,7 @@ def _get_logfile_config(
     level: EventLevel,
     log_file_max_bytes: int,
 ) -> LoggerConfig:
+
     return LoggerConfig(
         name="file_log",
         line_format=line_format,
