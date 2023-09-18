@@ -33,7 +33,7 @@ class MultiOption(click.Option):
         def parser_process(value, state):
             # method to hook to the parser.process
             done = False
-            value = [value]
+            value = str.split(value, " ")
             if self.save_other_options:
                 # grab everything up to the next option
                 while state.rargs and not done:
