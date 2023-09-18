@@ -1,0 +1,15 @@
+
+version: 2
+
+models:
+  - name: model_one
+    columns:
+      - name: id
+        tests:
+          - even_rows
+
+  - name: model_two
+    columns:
+      - name: id
+        tests:
+          - even_rows

@@ -2,6 +2,7 @@
 # Eventually the hooks described here will be run as tests before merging each PR.
 
 exclude: ^(core/dbt/docs/build/|core/dbt/events/types_pb2.py)
+exclude: ^(sample_project)
 
 # Force all unspecified python hooks to run python 3.8
 default_language_version:
