@@ -7,7 +7,7 @@ from dbt.events.eventmgr import TestEventManager
 
 def test_event_logging_handler_emits_records_correctly():
     event_manager = TestEventManager()
-    handler = DbtEventLoggingHandler(event_manager=event_manager)
+    handler = DbtEventLoggingHandler(event_manager=event_manager, level=logging.DEBUG)
     log = logging.getLogger("test")
     log.setLevel(logging.DEBUG)
     log.addHandler(handler)
