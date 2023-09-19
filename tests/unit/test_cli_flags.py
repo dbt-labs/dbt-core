@@ -370,7 +370,7 @@ class TestFlags:
         }
         result = self._create_flags_from_dict(Command.RUN, args_dict)
         assert "model_one" in result.select[0]
-        assert "model_two" in result.select[0]
+        assert "model_two" in result.select[1]
 
     def test_from_dict__build(self):
         args_dict = {
