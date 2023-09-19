@@ -366,7 +366,7 @@ class TestFlags:
     def test_from_dict__run(self):
         args_dict = {
             "print": False,
-            "select": ["model_one", "model_two"],
+            "select": "model_one, model_two",
         }
         result = self._create_flags_from_dict(Command.RUN, args_dict)
         assert "model_one" in result.select[0]
@@ -382,7 +382,7 @@ class TestFlags:
         assert "some/path" in str(result.state)
 
     def test_from_dict__seed(self):
-        args_dict = {"use_colors": False, "exclude": ["model_three"]}
+        args_dict = {"use_colors": False, "exclude": "model_three"}
         result = self._create_flags_from_dict(Command.SEED, args_dict)
         assert result.use_colors is False
         assert "model_three" in result.exclude[0]
