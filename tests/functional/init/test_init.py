@@ -1,9 +1,12 @@
 import click
 import os
+import yaml
 import pytest
 from pathlib import Path
 from unittest import mock
 from unittest.mock import Mock, call
+
+from dbt.exceptions import DbtRuntimeError
 
 from dbt.tests.util import run_dbt
 
@@ -84,6 +87,11 @@ test:
 """
             )
 
+    def test_init_task_in_project_specifying_profile_errors(self):
+        with pytest.raises(DbtRuntimeError) as error:
+            run_dbt(["init", "--profile", "test"], expect_pass=False)
+            assert "Can not init existing project with specified profile" in str(error)
+
 
 class TestInitProjectWithoutExistingProfilesYml:
     @mock.patch("dbt.task.init._get_adapter_plugin_names")
@@ -158,6 +166,20 @@ class TestInitProjectWithoutExistingProfilesYml:
   target: dev
 """
             )
+
+    @mock.patch.object(Path, "exists", autospec=True)
+    def test_init_task_in_project_without_profile_yml_specifying_profile_errors(self, exists):
+        def exists_side_effect(path):
+            # Override responses on specific files, default to 'real world' if not overriden
+            return {"profiles.yml": False}.get(path.name, os.path.exists(path))
+
+        exists.side_effect = exists_side_effect
+
+        # Even through no profiles.yml file exists, the init will not modify project.yml,
+        # so this errors
+        with pytest.raises(DbtRuntimeError) as error:
+            run_dbt(["init", "--profile", "test"], expect_pass=False)
+            assert "Could not find profile named test" in str(error)
 
 
 class TestInitProjectWithoutExistingProfilesYmlOrTemplate:
@@ -708,3 +730,128 @@ class TestInitInsideProjectAndSkipProfileSetup(TestInitInsideOfProjectBase):
         # skip interactive profile setup
         run_dbt(["init", "--skip-profile-setup"])
         assert len(manager.mock_calls) == 0
+
+
+class TestInitOutsideOfProjectWithSpecifiedProfile(TestInitOutsideOfProjectBase):
+    @mock.patch("dbt.task.init._get_adapter_plugin_names")
+    @mock.patch("click.prompt")
+    def test_init_task_outside_of_project_with_specified_profile(
+        self, mock_prompt, mock_get_adapter, project, project_name, unique_schema, dbt_profile_data
+    ):
+        manager = Mock()
+        manager.attach_mock(mock_prompt, "prompt")
+        manager.prompt.side_effect = [
+            project_name,
+        ]
+        mock_get_adapter.return_value = [project.adapter.type()]
+        run_dbt(["init", "--profile", "test"])
+
+        manager.assert_has_calls(
+            [
+                call.prompt("Enter a name for your project (letters, digits, underscore)"),
+            ]
+        )
+
+        # profiles.yml is NOT overwritten, so assert that the text matches that of the
+        # original fixture
+        with open(os.path.join(project.profiles_dir, "profiles.yml"), "r") as f:
+            assert f.read() == yaml.safe_dump(dbt_profile_data)
+
+        with open(os.path.join(project.project_root, project_name, "dbt_project.yml"), "r") as f:
+            assert (
+                f.read()
+                == f"""
+# Name your project! Project names should contain only lowercase characters
+# and underscores. A good package name should reflect your organization's
+# name or the intended use of these models
+name: '{project_name}'
+version: '1.0.0'
+config-version: 2
+
+# This setting configures which "profile" dbt uses for this project.
+profile: 'test'
+
+# These configurations specify where dbt should look for different types of files.
+# The `model-paths` config, for example, states that models in this project can be
+# found in the "models/" directory. You probably won't need to change these!
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+clean-targets:         # directories to be removed by `dbt clean`
+  - "target"
+  - "dbt_packages"
+
+
+# Configuring models
+# Full documentation: https://docs.getdbt.com/docs/configuring-models
+
+# In this example config, we tell dbt to build all models in the example/
+# directory as views. These settings can be overridden in the individual model
+# files using the `{{{{ config(...) }}}}` macro.
+models:
+  {project_name}:
+    # Config indicated by + and applies to all files under models/example/
+    example:
+      +materialized: view
+"""
+            )
+
+
+class TestInitOutsideOfProjectSpecifyingInvalidProfile(TestInitOutsideOfProjectBase):
+    @mock.patch("dbt.task.init._get_adapter_plugin_names")
+    @mock.patch("click.prompt")
+    def test_init_task_outside_project_specifying_invalid_profile_errors(
+        self, mock_prompt, mock_get_adapter, project, project_name
+    ):
+        manager = Mock()
+        manager.attach_mock(mock_prompt, "prompt")
+        manager.prompt.side_effect = [
+            project_name,
+        ]
+        mock_get_adapter.return_value = [project.adapter.type()]
+
+        with pytest.raises(DbtRuntimeError) as error:
+            run_dbt(["init", "--profile", "invalid"], expect_pass=False)
+            assert "Could not find profile named invalid" in str(error)
+
+        manager.assert_has_calls(
+            [
+                call.prompt("Enter a name for your project (letters, digits, underscore)"),
+            ]
+        )
+
+
+class TestInitOutsideOfProjectSpecifyingProfileNoProfilesYml(TestInitOutsideOfProjectBase):
+    @mock.patch("dbt.task.init._get_adapter_plugin_names")
+    @mock.patch("click.prompt")
+    def test_init_task_outside_project_specifying_profile_no_profiles_yml_errors(
+        self, mock_prompt, mock_get_adapter, project, project_name
+    ):
+        manager = Mock()
+        manager.attach_mock(mock_prompt, "prompt")
+        manager.prompt.side_effect = [
+            project_name,
+        ]
+        mock_get_adapter.return_value = [project.adapter.type()]
+
+        # Override responses on specific files, default to 'real world' if not overriden
+        original_isfile = os.path.isfile
+        with mock.patch(
+            "os.path.isfile",
+            new=lambda path: {"profiles.yml": False}.get(
+                os.path.basename(path), original_isfile(path)
+            ),
+        ):
+            with pytest.raises(DbtRuntimeError) as error:
+                run_dbt(["init", "--profile", "test"], expect_pass=False)
+                assert "Could not find profile named invalid" in str(error)
+
+        manager.assert_has_calls(
+            [
+                call.prompt("Enter a name for your project (letters, digits, underscore)"),
+            ]
+        )

@@ -1,0 +1,6 @@
+kind: Features
+body: Add --no-inject-ephemeral-ctes flag for `compile` command, for usage by linting.
+time: 2023-08-23T14:04:07.617476-04:00
+custom:
+  Author: benmosher
+  Issue: "8480"

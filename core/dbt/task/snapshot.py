@@ -27,6 +27,7 @@ class SnapshotRunner(ModelRunner):
                 total=self.num_nodes,
                 execution_time=result.execution_time,
                 node_info=model.node_info,
+                result_message=result.message,
             ),
             level=level,
         )

@@ -1,3 +1,5 @@
+from dbt.contracts.graph.nodes import ModelNode
+from dbt.contracts.results import RunExecutionResult, RunResult
 import pytest
 from dbt.tests.util import run_dbt
 
@@ -7,50 +9,32 @@ from dbt.tests.util import run_dbt
 # fails fairly regularly if that is broken, but does occasionally work (depending
 # on the order in which things are compiled). It requires multi-threading to fail.
 
-
-fct_eph_first_sql = """
--- fct_eph_first.sql
-{{ config(materialized='ephemeral') }}
-
-with int_eph_first as(
-    select * from {{ ref('int_eph_first') }}
+from tests.functional.materializations.fixtures import (
+    fct_eph_first_sql,
+    int_eph_first_sql,
+    schema_yml,
+    bar_sql,
+    bar1_sql,
+    bar2_sql,
+    bar3_sql,
+    bar4_sql,
+    bar5_sql,
+    baz_sql,
+    baz1_sql,
+    foo_sql,
+    foo1_sql,
+    foo2_sql,
 )
 
-select * from int_eph_first
-"""
 
-int_eph_first_sql = """
--- int_eph_first.sql
-{{ config(materialized='ephemeral') }}
+SUPPRESSED_CTE_EXPECTED_OUTPUT = """-- fct_eph_first.sql
 
-select
-    1 as first_column,
-    2 as second_column
-"""
 
-schema_yml = """
-version: 2
+with int_eph_first as(
+    select * from __dbt__cte__int_eph_first
+)
 
-models:
-  - name: int_eph_first
-    columns:
-      - name: first_column
-        tests:
-          - not_null
-      - name: second_column
-        tests:
-          - not_null
-
-  - name: fct_eph_first
-    columns:
-      - name: first_column
-        tests:
-          - not_null
-      - name: second_column
-        tests:
-          - not_null
-
-"""
+select * from int_eph_first"""
 
 
 class TestEphemeralCompilation:
@@ -67,5 +51,38 @@ class TestEphemeralCompilation:
         results = run_dbt(["run"])
         assert len(results) == 0
 
-        results = run_dbt(["test"])
-        len(results) == 4
+    def test__suppress_injected_ctes(self, project):
+        compile_output = run_dbt(
+            ["compile", "--no-inject-ephemeral-ctes", "--select", "fct_eph_first"]
+        )
+        assert isinstance(compile_output, RunExecutionResult)
+        node_result = compile_output.results[0]
+        assert isinstance(node_result, RunResult)
+        node = node_result.node
+        assert isinstance(node, ModelNode)
+        assert node.compiled_code == SUPPRESSED_CTE_EXPECTED_OUTPUT
+
+
+# From: https://github.com/jeremyyeo/ephemeral-invalid-sql-repro/tree/main/models
+class TestLargeEphemeralCompilation:
+    @pytest.fixture(scope="class")
+    def models(self):
+
+        return {
+            "bar.sql": bar_sql,
+            "bar_1.sql": bar1_sql,
+            "bar_2.sql": bar2_sql,
+            "bar_3.sql": bar3_sql,
+            "bar_4.sql": bar4_sql,
+            "bar_5.sql": bar5_sql,
+            "baz.sql": baz_sql,
+            "baz_1.sql": baz1_sql,
+            "foo.sql": foo_sql,
+            "foo_1.sql": foo1_sql,
+            "foo_2.sql": foo2_sql,
+        }
+
+    def test_ephemeral_compilation(self, project):
+        # 8/11 table models are built as expected. no compilation errors
+        results = run_dbt(["build"])
+        assert len(results) == 8

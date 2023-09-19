@@ -77,10 +77,3 @@
 {% macro load_relation(relation) %}
     {{ return(load_cached_relation(relation)) }}
 {% endmacro %}
-
-
-{% macro drop_relation_if_exists(relation) %}
-  {% if relation is not none %}
-    {{ adapter.drop_relation(relation) }}
-  {% endif %}
-{% endmacro %}

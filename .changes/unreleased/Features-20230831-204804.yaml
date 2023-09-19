@@ -1,0 +1,6 @@
+kind: Features
+body: Support atomic replace in the global replace macro
+time: 2023-08-31T20:48:04.098933-04:00
+custom:
+  Author: mikealfare
+  Issue: "8539"

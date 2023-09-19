@@ -1,7 +1,8 @@
 from dbt.constants import METADATA_ENV_PREFIX
 from dbt.events.base_types import BaseEvent, EventLevel, EventMsg
-from dbt.events.eventmgr import EventManager, LoggerConfig, LineFormat, NoFilter, IEventManager
-from dbt.events.helpers import env_secrets, scrub_secrets
+from dbt.events.eventmgr import EventManager, IEventManager
+from dbt.events.logger import LoggerConfig, NoFilter, LineFormat
+from dbt.exceptions import scrub_secrets, env_secrets
 from dbt.events.types import Note
 from dbt.flags import get_flags, ENABLE_LEGACY_LOGGER
 from dbt.logger import GLOBAL_LOGGER, make_log_dir_if_missing
@@ -106,6 +107,7 @@ def _get_stdout_config(
             log_cache_events,
             line_format,
         ),
+        invocation_id=EVENT_MANAGER.invocation_id,
         output_stream=sys.stdout,
     )
 
@@ -132,6 +134,7 @@ def _get_logfile_config(
         level=level,  # File log is *always* debug level
         scrubber=env_scrubber,
         filter=partial(_logfile_filter, bool(get_flags().LOG_CACHE_EVENTS), line_format),
+        invocation_id=EVENT_MANAGER.invocation_id,
         output_file_name=log_path,
         output_file_max_bytes=log_file_max_bytes,
     )

@@ -1,5 +1,6 @@
-import pickle
 from datetime import timedelta
+import pickle
+import pytest
 
 from dbt.contracts.graph.unparsed import (
     UnparsedNode,
@@ -928,3 +929,25 @@ class TestUnparsedVersion(ContractTestCase):
         version = self.get_ok_dict()
         del version["v"]
         self.assert_fails_validation(version)
+
+
+@pytest.mark.parametrize(
+    "left,right,expected_lt",
+    [
+        # same types
+        (2, 12, True),
+        (12, 2, False),
+        ("a", "b", True),
+        ("b", "a", False),
+        # mismatched types - numeric
+        (2, 12.0, True),
+        (12.0, 2, False),
+        (2, "12", True),
+        ("12", 2, False),
+        # mismatched types
+        (1, "test", True),
+        ("test", 1, False),
+    ],
+)
+def test_unparsed_version_lt(left, right, expected_lt):
+    assert (UnparsedVersion(left) < UnparsedVersion(right)) == expected_lt

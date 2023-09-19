@@ -330,6 +330,7 @@ def docs_serve(ctx, **kwargs):
 @p.state
 @p.defer_state
 @p.deprecated_state
+@p.compile_inject_ephemeral_ctes
 @p.target
 @p.target_path
 @p.threads

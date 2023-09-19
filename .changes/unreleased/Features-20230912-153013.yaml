@@ -1,0 +1,6 @@
+kind: Features
+body: Allow setting "access" as a config in addition to as a property
+time: 2023-09-12T15:30:13.859595-04:00
+custom:
+  Author: gshank
+  Issue: "8383"

@@ -40,6 +40,14 @@ compile_docs = click.option(
     default=True,
 )
 
+compile_inject_ephemeral_ctes = click.option(
+    "--inject-ephemeral-ctes/--no-inject-ephemeral-ctes",
+    envvar=None,
+    help="Internal flag controlling injection of referenced ephemeral models' CTEs during `compile`.",
+    hidden=True,
+    default=True,
+)
+
 config_dir = click.option(
     "--config-dir",
     envvar=None,
@@ -307,7 +315,7 @@ printer_width = click.option(
 profile = click.option(
     "--profile",
     envvar=None,
-    help="Which profile to load. Overrides setting in dbt_project.yml.",
+    help="Which existing profile to load. Overrides setting in dbt_project.yml.",
 )
 
 profiles_dir = click.option(

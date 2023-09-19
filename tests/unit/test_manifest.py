@@ -19,7 +19,7 @@ from dbt.contracts.graph.manifest import Manifest, ManifestMetadata
 from dbt.contracts.graph.nodes import (
     ModelNode,
     DependsOn,
-    NodeConfig,
+    ModelConfig,
     SeedNode,
     SourceDefinition,
     Exposure,
@@ -112,7 +112,7 @@ class ManifestTest(unittest.TestCase):
 
         self.maxDiff = None
 
-        self.model_config = NodeConfig.from_dict(
+        self.model_config = ModelConfig.from_dict(
             {
                 "enabled": True,
                 "materialized": "view",
@@ -669,7 +669,7 @@ class MixedManifestTest(unittest.TestCase):
     def setUp(self):
         self.maxDiff = None
 
-        self.model_config = NodeConfig.from_dict(
+        self.model_config = ModelConfig.from_dict(
             {
                 "enabled": True,
                 "materialized": "view",

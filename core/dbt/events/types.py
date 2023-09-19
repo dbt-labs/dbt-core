@@ -1,6 +1,5 @@
 import json
 
-from dbt.ui import line_wrap_message, warning_tag, red, green, yellow
 from dbt.constants import MAXIMUM_SEED_SIZE_NAME, PIN_PACKAGE_URL
 from dbt.events.base_types import (
     DynamicLevel,
@@ -11,8 +10,8 @@ from dbt.events.base_types import (
     EventLevel,
 )
 from dbt.events.format import format_fancy_output_line, pluralize, timestamp_to_datetime_string
-
 from dbt.node_types import NodeType
+from dbt.ui import line_wrap_message, warning_tag, red, green, yellow
 
 
 # The classes in this file represent the data necessary to describe a
@@ -1247,6 +1246,17 @@ class UnversionedBreakingChange(WarnLevel):
         )
 
 
+class WarnStateTargetEqual(WarnLevel):
+    def code(self):
+        return "I072"
+
+    def message(self) -> str:
+        return yellow(
+            f"Warning: The state and target directories are the same: '{self.state_path}'. "
+            f"This could lead to missing changes due to overwritten state including non-idempotent retries."
+        )
+
+
 # =======================================================
 # M - Deps generation
 # =======================================================
@@ -1628,7 +1638,7 @@ class LogSnapshotResult(DynamicLevel):
             status = red(self.status.upper())
         else:
             info = "OK snapshotted"
-            status = green(self.status)
+            status = green(self.result_message)
 
         msg = "{info} {description}".format(info=info, description=self.description, **self.cfg)
         return format_fancy_output_line(

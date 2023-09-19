@@ -1,9 +1,12 @@
-import pytest
+import json
 import os
 import shutil
-from dbt.tests.util import run_dbt, get_manifest
+
+import pytest
+
+from dbt.contracts.graph.manifest import WritableManifest, get_manifest_schema_version
 from dbt.exceptions import IncompatibleSchemaError
-from dbt.contracts.graph.manifest import WritableManifest
+from dbt.tests.util import run_dbt, get_manifest
 
 # This project must have one of each kind of node type, plus disabled versions, for
 # test coverage to be complete.
@@ -352,3 +355,13 @@ class TestPreviousVersionState:
         # schema versions 1, 2, 3 are all not forward compatible
         for schema_version in range(1, 4):
             self.compare_previous_state(project, schema_version, False, 0)
+
+    def test_get_manifest_schema_version(self, project):
+        for schema_version in range(1, self.CURRENT_EXPECTED_MANIFEST_VERSION):
+            manifest_path = os.path.join(
+                project.test_data_dir, f"state/v{schema_version}/manifest.json"
+            )
+            manifest = json.load(open(manifest_path))
+
+            manifest_version = get_manifest_schema_version(manifest)
+            assert manifest_version == schema_version

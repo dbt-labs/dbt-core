@@ -429,6 +429,7 @@ class PartialProject(RenderComponents):
         semantic_models: Dict[str, Any]
         exposures: Dict[str, Any]
         vars_value: VarProvider
+        dbt_cloud: Dict[str, Any]
 
         dispatch = cfg.dispatch
         models = cfg.models
@@ -461,6 +462,8 @@ class PartialProject(RenderComponents):
             manifest_selectors = SelectorDict.parse_from_selectors_list(
                 rendered.selectors_dict["selectors"]
             )
+        dbt_cloud = cfg.dbt_cloud
+
         project = Project(
             project_name=name,
             version=version,
@@ -501,6 +504,7 @@ class PartialProject(RenderComponents):
             unrendered=unrendered,
             project_env_vars=project_env_vars,
             restrict_access=cfg.restrict_access,
+            dbt_cloud=dbt_cloud,
         )
         # sanity check - this means an internal issue
         project.validate()
@@ -613,6 +617,7 @@ class Project:
     unrendered: RenderComponents
     project_env_vars: Dict[str, Any]
     restrict_access: bool
+    dbt_cloud: Dict[str, Any]
 
     @property
     def all_source_paths(self) -> List[str]:
@@ -683,6 +688,7 @@ class Project:
                 "require-dbt-version": [v.to_version_string() for v in self.dbt_version],
                 "config-version": self.config_version,
                 "restrict-access": self.restrict_access,
+                "dbt-cloud": self.dbt_cloud,
             }
         )
         if self.query_comment:

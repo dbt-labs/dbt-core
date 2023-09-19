@@ -18,9 +18,14 @@ from dbt.context.context_config import ContextConfig
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import Contract, BaseNode, ManifestNode
 from dbt.contracts.graph.unparsed import Docs, UnparsedNode
-from dbt.exceptions import DbtInternalError, ConfigUpdateError, DictParseError
+from dbt.exceptions import (
+    DbtInternalError,
+    ConfigUpdateError,
+    DictParseError,
+    InvalidAccessTypeError,
+)
 from dbt import hooks
-from dbt.node_types import NodeType, ModelLanguage
+from dbt.node_types import NodeType, ModelLanguage, AccessType
 from dbt.parser.search import FileBlock
 
 # internally, the parser may store a less-restrictive type that will be
@@ -327,6 +332,15 @@ class ConfiguredParser(
         # If we have group in the config, copy to node level
         if "group" in config_dict and config_dict["group"]:
             parsed_node.group = config_dict["group"]
+
+        # If we have access in the config, copy to node level
+        if parsed_node.resource_type == NodeType.Model and config_dict.get("access", None):
+            if AccessType.is_valid(config_dict["access"]):
+                parsed_node.access = AccessType(config_dict["access"])
+            else:
+                raise InvalidAccessTypeError(
+                    unique_id=parsed_node.unique_id, field_value=config_dict["access"]
+                )
 
         # If we have docs in the config, merge with the node level, for backwards
         # compatibility with earlier node-only config.
