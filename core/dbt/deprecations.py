@@ -23,7 +23,7 @@ class DBTDeprecation:
     @property
     def event(self) -> abc.ABCMeta:
         if self._event is not None:
-            module_path = dbt.events.types
+            module_path = dbt.common.events.types
             class_name = self._event
 
             try:
@@ -36,7 +36,7 @@ class DBTDeprecation:
     def show(self, *args, **kwargs) -> None:
         if self.name not in active_deprecations:
             event = self.event(**kwargs)
-            dbt.events.functions.warn_or_error(event)
+            dbt.common.events.functions.warn_or_error(event)
             self.track_deprecation_warn()
             active_deprecations.add(self.name)
 

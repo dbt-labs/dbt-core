@@ -24,8 +24,8 @@ from dbt.contracts.graph.unparsed import (
     UnparsedColumn,
     Time,
 )
-from dbt.events.functions import warn_or_error
-from dbt.events.types import UnusedTables
+from dbt.common.events.functions import warn_or_error
+from dbt.common.events.types import UnusedTables
 from dbt.exceptions import DbtInternalError
 from dbt.node_types import NodeType
 

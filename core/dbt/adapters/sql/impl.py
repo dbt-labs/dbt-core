@@ -6,8 +6,8 @@ from dbt.exceptions import RelationTypeNullError
 from dbt.adapters.base import BaseAdapter, available
 from dbt.adapters.cache import _make_ref_key_dict
 from dbt.adapters.sql import SQLConnectionManager
-from dbt.events.functions import fire_event
-from dbt.events.types import ColTypeChange, SchemaCreation, SchemaDrop
+from dbt.common.events.functions import fire_event
+from dbt.common.events.types import ColTypeChange, SchemaCreation, SchemaDrop
 
 
 from dbt.adapters.base.relation import BaseRelation

@@ -17,8 +17,8 @@ from dbt.parser.schemas import yaml_from_file, schema_file_keys
 from dbt.exceptions import ParsingError
 from dbt.parser.search import filesystem_search
 from typing import Optional, Dict, List, Mapping, MutableMapping
-from dbt.events.types import InputFileDiffError
-from dbt.events.functions import fire_event
+from dbt.common.events.types import InputFileDiffError
+from dbt.common.events.functions import fire_event
 from typing import Protocol
 
 

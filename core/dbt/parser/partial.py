@@ -8,9 +8,9 @@ from dbt.contracts.files import (
     parse_file_type_to_parser,
     SchemaSourceFile,
 )
-from dbt.events.functions import fire_event
-from dbt.events.base_types import EventLevel
-from dbt.events.types import (
+from dbt.common.events.functions import fire_event
+from dbt.common.events.base_types import EventLevel
+from dbt.common.events.types import (
     PartialParsingEnabled,
     PartialParsingFile,
 )

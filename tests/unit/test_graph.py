@@ -18,7 +18,7 @@ from dbt import tracking
 from dbt.contracts.files import SourceFile, FileHash, FilePath
 from dbt.contracts.graph.manifest import MacroManifest, ManifestStateCheck
 from dbt.graph import NodeSelector, parse_difference
-from dbt.events.functions import setup_event_logger
+from dbt.common.events.functions import setup_event_logger
 
 try:
     from queue import Empty

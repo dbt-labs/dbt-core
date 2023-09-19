@@ -15,8 +15,8 @@ from typing import Any, Callable, Dict, List, NoReturn, Optional, Tuple, Type, U
 
 import dbt.exceptions
 import requests
-from dbt.events.functions import fire_event
-from dbt.events.types import (
+from dbt.common.events.functions import fire_event
+from dbt.common.events.types import (
     SystemCouldNotWrite,
     SystemExecutingCmd,
     SystemStdOut,

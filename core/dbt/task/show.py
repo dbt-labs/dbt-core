@@ -4,9 +4,9 @@ import time
 
 from dbt.contracts.graph.nodes import SeedNode
 from dbt.contracts.results import RunResult, RunStatus
-from dbt.events.base_types import EventLevel
-from dbt.events.functions import fire_event
-from dbt.events.types import ShowNode, Note
+from dbt.common.events.base_types import EventLevel
+from dbt.common.events.functions import fire_event
+from dbt.common.events.types import ShowNode, Note
 from dbt.exceptions import DbtRuntimeError
 from dbt.task.compile import CompileTask, CompileRunner
 from dbt.task.seed import SeedRunner

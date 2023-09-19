@@ -37,16 +37,16 @@ from dbt.contracts.graph.unparsed import (
 )
 from dbt.contracts.graph.node_args import ModelNodeArgs
 from dbt.contracts.util import Replaceable, AdditionalPropertiesMixin
-from dbt.events.functions import warn_or_error
+from dbt.common.events.functions import warn_or_error
 from dbt.exceptions import ParsingError, ContractBreakingChangeError
-from dbt.events.types import (
+from dbt.common.events.types import (
     SeedIncreased,
     SeedExceedsLimitSamePath,
     SeedExceedsLimitAndPathChanged,
     SeedExceedsLimitChecksumChanged,
     UnversionedBreakingChange,
 )
-from dbt.events.contextvars import set_log_contextvars
+from dbt.common.events.contextvars import set_log_contextvars
 from dbt.flags import get_flags
 from dbt.node_types import ModelLanguage, NodeType, AccessType
 from dbt_semantic_interfaces.call_parameter_sets import FilterCallParameterSets

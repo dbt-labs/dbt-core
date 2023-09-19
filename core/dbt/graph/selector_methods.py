@@ -26,7 +26,7 @@ from dbt.exceptions import (
     DbtRuntimeError,
 )
 from dbt.node_types import NodeType
-from dbt.events.contextvars import get_project_root
+from dbt.common.events.contextvars import get_project_root
 
 
 SELECTOR_GLOB = "*"

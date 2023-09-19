@@ -1,9 +1,9 @@
 from dbt.constants import METADATA_ENV_PREFIX
-from dbt.events.base_types import BaseEvent, EventLevel, EventMsg
-from dbt.events.eventmgr import EventManager, IEventManager
-from dbt.events.logger import LoggerConfig, NoFilter, LineFormat
+from dbt.common.events.base_types import BaseEvent, EventLevel, EventMsg
+from dbt.common.events.eventmgr import EventManager, IEventManager
+from dbt.common.events.logger import LoggerConfig, NoFilter, LineFormat
 from dbt.exceptions import scrub_secrets, env_secrets
-from dbt.events.types import Note
+from dbt.common.events.types import Note
 from dbt.flags import get_flags, ENABLE_LEGACY_LOGGER
 from dbt.logger import GLOBAL_LOGGER, make_log_dir_if_missing
 from functools import partial

@@ -36,9 +36,9 @@ from dbt.contracts.graph.manifest import Manifest
 from dbt.adapters.base.query_headers import (
     MacroQueryStringSetter,
 )
-from dbt.events import AdapterLogger
-from dbt.events.functions import fire_event
-from dbt.events.types import (
+from dbt.common.events import AdapterLogger
+from dbt.common.events.functions import fire_event
+from dbt.common.events.types import (
     NewConnection,
     ConnectionReused,
     ConnectionLeftOpenInCleanup,
@@ -48,7 +48,7 @@ from dbt.events.types import (
     Rollback,
     RollbackFailed,
 )
-from dbt.events.contextvars import get_node_info
+from dbt.common.events.contextvars import get_node_info
 from dbt import flags
 from dbt.utils import cast_to_str
 

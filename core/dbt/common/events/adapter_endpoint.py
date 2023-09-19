@@ -1,8 +1,8 @@
 import traceback
 from dataclasses import dataclass
-from dbt.events.functions import fire_event
-from dbt.events.contextvars import get_node_info
-from dbt.events.types import (
+from dbt.common.events.functions import fire_event
+from dbt.common.events.contextvars import get_node_info
+from dbt.common.events.types import (
     AdapterEventDebug,
     AdapterEventInfo,
     AdapterEventWarning,

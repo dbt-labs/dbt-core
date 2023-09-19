@@ -44,8 +44,8 @@ from dbt.exceptions import (
     YamlParseListError,
     InvalidAccessTypeError,
 )
-from dbt.events.functions import warn_or_error
-from dbt.events.types import (
+from dbt.common.events.functions import warn_or_error
+from dbt.common.events.types import (
     MacroNotFoundForPatch,
     NoNodeForYamlKey,
     ValidationWarning,

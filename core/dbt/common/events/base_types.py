@@ -1,11 +1,11 @@
 from enum import Enum
 import os
 import threading
-from dbt.events import types_pb2
+from dbt.common.events import types_pb2
 import sys
 from google.protobuf.json_format import ParseDict, MessageToDict, MessageToJson
 from google.protobuf.message import Message
-from dbt.events.helpers import get_json_string_utcnow
+from dbt.common.events.helpers import get_json_string_utcnow
 from typing import Optional
 
 if sys.version_info >= (3, 8):
@@ -21,13 +21,13 @@ else:
 
 
 def get_global_metadata_vars() -> dict:
-    from dbt.events.functions import get_metadata_vars
+    from dbt.common.events.functions import get_metadata_vars
 
     return get_metadata_vars()
 
 
 def get_invocation_id() -> str:
-    from dbt.events.functions import get_invocation_id
+    from dbt.common.events.functions import get_invocation_id
 
     return get_invocation_id()
 
@@ -72,8 +72,8 @@ class BaseEvent:
             self.pb_msg = ParseDict(kwargs, msg_cls())
         except Exception:
             # Imports need to be here to avoid circular imports
-            from dbt.events.types import Note
-            from dbt.events.functions import fire_event
+            from dbt.common.events.types import Note
+            from dbt.common.events.functions import fire_event
 
             error_msg = f"[{class_name}]: Unable to parse dict {kwargs}"
             # If we're testing throw an error so that we notice failures

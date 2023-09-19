@@ -9,15 +9,20 @@ from dbt.cli.exceptions import (
 from dbt.cli.flags import Flags
 from dbt.config import RuntimeConfig
 from dbt.config.runtime import load_project, load_profile, UnsetProfile
-from dbt.events.functions import fire_event, LOG_VERSION, set_invocation_id, setup_event_logger
-from dbt.events.types import (
+from dbt.common.events.functions import (
+    fire_event,
+    LOG_VERSION,
+    set_invocation_id,
+    setup_event_logger,
+)
+from dbt.common.events.types import (
     CommandCompleted,
     MainReportVersion,
     MainReportArgs,
     MainTrackingUserState,
 )
-from dbt.events.helpers import get_json_string_utcnow
-from dbt.events.types import MainEncounteredError, MainStackTrace
+from dbt.common.events.helpers import get_json_string_utcnow
+from dbt.common.events.types import MainEncounteredError, MainStackTrace
 from dbt.exceptions import Exception as DbtException, DbtProjectError, FailFastError
 from dbt.parser.manifest import ManifestLoader, write_manifest
 from dbt.profiler import profiler

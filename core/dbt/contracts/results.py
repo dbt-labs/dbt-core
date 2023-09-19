@@ -10,10 +10,10 @@ from dbt.contracts.util import (
     schema_version,
 )
 from dbt.exceptions import DbtInternalError
-from dbt.events.functions import fire_event
-from dbt.events.types import TimingInfoCollected
-from dbt.events.contextvars import get_node_info
-from dbt.events.helpers import datetime_to_json_string
+from dbt.common.events.functions import fire_event
+from dbt.common.events.types import TimingInfoCollected
+from dbt.common.events.contextvars import get_node_info
+from dbt.common.events.helpers import datetime_to_json_string
 from dbt.logger import TimingProcessor
 from dbt.utils import lowercase, cast_to_str, cast_to_int
 from dbt.common.dataclass_schema import dbtClassMixin, StrEnum

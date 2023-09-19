@@ -10,7 +10,7 @@ from dbt.exceptions import CompilationError, DbtDatabaseError
 import dbt.flags as flags
 from dbt.config.runtime import RuntimeConfig
 from dbt.adapters.factory import get_adapter, register_adapter, reset_adapters, get_adapter_by_type
-from dbt.events.functions import setup_event_logger, cleanup_event_logger
+from dbt.common.events.functions import setup_event_logger, cleanup_event_logger
 from dbt.tests.util import (
     write_file,
     run_sql_with_adapter,

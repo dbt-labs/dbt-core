@@ -8,8 +8,8 @@ from typing import List, Optional, Generic, TypeVar
 
 from dbt.clients import system
 from dbt.contracts.project import ProjectPackageMetadata
-from dbt.events.functions import fire_event
-from dbt.events.types import DepsSetDownloadDirectory
+from dbt.common.events.functions import fire_event
+from dbt.common.events.types import DepsSetDownloadDirectory
 from dbt.utils import _connection_exception_retry as connection_exception_retry
 
 DOWNLOADS_PATH = None

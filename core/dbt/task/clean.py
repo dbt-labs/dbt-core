@@ -4,8 +4,8 @@ import shutil
 from typing import List
 
 from dbt import deprecations
-from dbt.events.functions import fire_event
-from dbt.events.types import (
+from dbt.common.events.functions import fire_event
+from dbt.common.events.types import (
     CheckCleanPath,
     ConfirmCleanPath,
     ProtectedCleanPath,

@@ -12,7 +12,7 @@ from dbt.common.dataclass_schema import (
     ValidationError,
     StrEnum,
 )
-import dbt.events.types as dbt_event_types
+import dbt.common.events.types as dbt_event_types
 
 
 Port = NewType("Port", int)

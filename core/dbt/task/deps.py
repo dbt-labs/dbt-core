@@ -9,8 +9,8 @@ from dbt.deps.base import downloads_directory
 from dbt.deps.resolver import resolve_packages
 from dbt.deps.registry import RegistryPinnedPackage
 
-from dbt.events.functions import fire_event
-from dbt.events.types import (
+from dbt.common.events.functions import fire_event
+from dbt.common.events.types import (
     DepsNoPackagesFound,
     DepsStartPackageInstall,
     DepsUpdateAvailable,

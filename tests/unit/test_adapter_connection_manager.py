@@ -9,7 +9,7 @@ import psycopg2
 from dbt.adapters.contracts.connection import Connection
 from dbt.adapters.base import BaseConnectionManager
 from dbt.adapters.postgres import PostgresCredentials, PostgresConnectionManager
-from dbt.events import AdapterLogger
+from dbt.common.events import AdapterLogger
 
 
 class BaseConnectionManagerTest(unittest.TestCase):

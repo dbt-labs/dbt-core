@@ -18,8 +18,8 @@ from dbt.adapters.factory import load_plugin, get_include_paths
 
 from dbt.contracts.util import Identifier as ProjectName
 
-from dbt.events.functions import fire_event
-from dbt.events.types import (
+from dbt.common.events.functions import fire_event
+from dbt.common.events.types import (
     StarterProjectPath,
     ConfigFolderDirectory,
     NoSampleProfileFound,

@@ -18,7 +18,7 @@ from dbt.contracts.graph.nodes import (
 from dbt.config.project import VarProvider
 from dbt.context import base, providers, docs, manifest, macros
 from dbt.contracts.files import FileHash
-from dbt.events.functions import reset_metadata_vars
+from dbt.common.events.functions import reset_metadata_vars
 from dbt.node_types import NodeType
 import dbt.exceptions
 from .utils import (

@@ -10,7 +10,7 @@ from dbt.exceptions import (
 )
 from dbt.version import __version__
 
-from dbt.events.functions import get_invocation_id, get_metadata_vars
+from dbt.common.events.functions import get_invocation_id, get_metadata_vars
 from dbt.common.dataclass_schema import dbtClassMixin
 
 from dbt.common.dataclass_schema import (

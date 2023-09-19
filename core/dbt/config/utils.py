@@ -2,8 +2,8 @@ from typing import Any, Dict
 
 
 from dbt.clients import yaml_helper
-from dbt.events.functions import fire_event
-from dbt.events.types import InvalidOptionYAML
+from dbt.common.events.functions import fire_event
+from dbt.common.events.types import InvalidOptionYAML
 from dbt.exceptions import DbtValidationError, OptionNotYamlDictError
 
 

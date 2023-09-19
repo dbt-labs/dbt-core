@@ -1,8 +1,8 @@
 import functools
 from typing import NoReturn
 
-from dbt.events.functions import warn_or_error
-from dbt.events.types import JinjaLogWarning
+from dbt.common.events.functions import warn_or_error
+from dbt.common.events.types import JinjaLogWarning
 
 from dbt.exceptions import (
     DbtRuntimeError,

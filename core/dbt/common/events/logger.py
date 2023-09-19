@@ -10,8 +10,8 @@ from typing import Optional, TextIO, Any, Callable
 from colorama import Style
 
 import dbt.utils
-from dbt.events.base_types import EventLevel, EventMsg
-from dbt.events.format import timestamp_to_datetime_string
+from dbt.common.events.base_types import EventLevel, EventMsg
+from dbt.common.events.format import timestamp_to_datetime_string
 
 # A Filter is a function which takes a BaseEvent and returns True if the event
 # should be logged, False otherwise.
@@ -172,7 +172,7 @@ class _TextLogger(_Logger):
 
 class _JsonLogger(_Logger):
     def create_line(self, msg: EventMsg) -> str:
-        from dbt.events.functions import msg_to_dict
+        from dbt.common.events.functions import msg_to_dict
 
         msg_dict = msg_to_dict(msg)
         raw_log_line = json.dumps(msg_dict, sort_keys=True, cls=dbt.utils.ForgivingJSONEncoder)

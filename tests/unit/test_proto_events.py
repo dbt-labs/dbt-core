@@ -1,4 +1,4 @@
-from dbt.events.types import (
+from dbt.common.events.types import (
     MainReportVersion,
     MainReportArgs,
     RollbackFailed,
@@ -7,9 +7,9 @@ from dbt.events.types import (
     LogStartLine,
     LogTestResult,
 )
-from dbt.events.functions import msg_to_dict, msg_to_json, LOG_VERSION, reset_metadata_vars
-from dbt.events import types_pb2
-from dbt.events.base_types import msg_from_base_event, EventLevel
+from dbt.common.events.functions import msg_to_dict, msg_to_json, LOG_VERSION, reset_metadata_vars
+from dbt.common.events import types_pb2
+from dbt.common.events.base_types import msg_from_base_event, EventLevel
 from dbt.version import installed
 from google.protobuf.json_format import MessageToDict
 from dbt.flags import set_from_args

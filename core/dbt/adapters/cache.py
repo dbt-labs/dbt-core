@@ -14,8 +14,8 @@ from dbt.exceptions import (
     ReferencedLinkNotCachedError,
     TruncatedModelNameCausedCollisionError,
 )
-from dbt.events.functions import fire_event, fire_event_if
-from dbt.events.types import CacheAction, CacheDumpGraph
+from dbt.common.events.functions import fire_event, fire_event_if
+from dbt.common.events.types import CacheAction, CacheDumpGraph
 from dbt.flags import get_flags
 from dbt.utils import lowercase
 

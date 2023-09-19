@@ -54,9 +54,9 @@ from dbt.exceptions import (
     AmbiguousResourceNameRefError,
 )
 from dbt.helper_types import PathSet
-from dbt.events.functions import fire_event
-from dbt.events.types import MergedFromState, UnpinnedRefNewVersionAvailable
-from dbt.events.contextvars import get_node_info
+from dbt.common.events.functions import fire_event
+from dbt.common.events.types import MergedFromState, UnpinnedRefNewVersionAvailable
+from dbt.common.events.contextvars import get_node_info
 from dbt.node_types import NodeType, AccessType
 from dbt.flags import get_flags, MP_CONTEXT
 from dbt import tracking

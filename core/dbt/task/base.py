@@ -20,9 +20,9 @@ from dbt.contracts.results import (
     RunStatus,
     RunningStatus,
 )
-from dbt.events.contextvars import get_node_info
-from dbt.events.functions import fire_event
-from dbt.events.types import (
+from dbt.common.events.contextvars import get_node_info
+from dbt.common.events.functions import fire_event
+from dbt.common.events.types import (
     LogDbtProjectError,
     LogDbtProfileError,
     CatchableExceptionOnRun,

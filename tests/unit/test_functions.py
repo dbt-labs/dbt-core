@@ -2,8 +2,8 @@ from argparse import Namespace
 import pytest
 
 import dbt.flags as flags
-from dbt.events.functions import msg_to_dict, warn_or_error, setup_event_logger
-from dbt.events.types import InfoLevel, NoNodesForSelectionCriteria
+from dbt.common.events.functions import msg_to_dict, warn_or_error, setup_event_logger
+from dbt.common.events.types import InfoLevel, NoNodesForSelectionCriteria
 from dbt.exceptions import EventCompilationError
 
 
@@ -62,7 +62,7 @@ def test_msg_to_dict_handles_exceptions_gracefully():
 
 
 def test_setup_event_logger_specify_max_bytes(mocker):
-    patched_file_handler = mocker.patch("dbt.events.logger.RotatingFileHandler")
+    patched_file_handler = mocker.patch("dbt.common.events.logger.RotatingFileHandler")
     args = Namespace(log_file_max_bytes=1234567)
     flags.set_from_args(args, {})
     setup_event_logger(flags.get_flags())

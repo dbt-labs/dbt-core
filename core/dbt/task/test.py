@@ -2,7 +2,7 @@ from distutils.util import strtobool
 
 from dataclasses import dataclass
 from dbt.utils import _coerce_decimal
-from dbt.events.format import pluralize
+from dbt.common.events.format import pluralize
 from dbt.common.dataclass_schema import dbtClassMixin
 import threading
 from typing import Dict, Any
@@ -17,8 +17,8 @@ from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.results import TestStatus, PrimitiveDict, RunResult
 from dbt.context.providers import generate_runtime_model_context
 from dbt.clients.jinja import MacroGenerator
-from dbt.events.functions import fire_event
-from dbt.events.types import (
+from dbt.common.events.functions import fire_event
+from dbt.common.events.types import (
     LogTestResult,
     LogStartLine,
 )

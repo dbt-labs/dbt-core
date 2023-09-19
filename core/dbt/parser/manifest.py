@@ -20,7 +20,7 @@ from itertools import chain
 import time
 
 from dbt.contracts.graph.semantic_manifest import SemanticManifest
-from dbt.events.base_types import EventLevel
+from dbt.common.events.base_types import EventLevel
 import json
 import pprint
 import msgpack
@@ -41,8 +41,8 @@ from dbt.constants import (
     SEMANTIC_MANIFEST_FILE_NAME,
 )
 from dbt.helper_types import PathSet
-from dbt.events.functions import fire_event, get_invocation_id, warn_or_error
-from dbt.events.types import (
+from dbt.common.events.functions import fire_event, get_invocation_id, warn_or_error
+from dbt.common.events.types import (
     PartialParsingErrorProcessingFile,
     PartialParsingError,
     ParsePerfInfoPath,

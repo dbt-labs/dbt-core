@@ -42,7 +42,7 @@ from dbt.contracts.graph.nodes import (
 )
 from dbt.contracts.graph.metrics import MetricReference, ResolvedMetricReference
 from dbt.contracts.graph.unparsed import NodeVersion
-from dbt.events.functions import get_metadata_vars
+from dbt.common.events.functions import get_metadata_vars
 from dbt.exceptions import (
     CompilationError,
     ConflictingConfigKeysError,
