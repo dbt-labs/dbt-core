@@ -24,14 +24,17 @@ class TestResourceType:
     def test_resource_type_single(self, project):
         result = run_dbt(["-q", "ls", "--resource-types", "model"])
         assert len(result) == 1
+        assert result == ["test.model_one"]
 
-    def test_resource_type_quoted(self):
+    def test_resource_type_quoted(self, project):
         result = run_dbt(["-q", "ls", "--resource-types", "model source"])
         assert len(result) == 2
+        assert result == ["test.model_one", "source:test.my_source.my_table"]
 
-    def test_resource_type_args(self):
+    def test_resource_type_args(self, project):
         result = run_dbt(["-q", "ls", "--resource-type", "model", "--resource-type", "source"])
         assert len(result) == 2
+        assert result == ["test.model_one", "source:test.my_source.my_table"]
 
 
 class TestOutputKeys:
@@ -44,13 +47,13 @@ class TestOutputKeys:
         assert len(result) == 1
         assert result == ['{"name": "model_one"}']
 
-    def test_output_key_quoted(self):
+    def test_output_key_quoted(self, project):
         result = run_dbt(["-q", "ls", "--output", "json", "--output-keys", "name resource_type"])
 
         assert len(result) == 1
         assert result == ['{"name": "model_one", "resource_type": "model"}']
 
-    def test_output_key_args(self):
+    def test_output_key_args(self, project):
         result = run_dbt(
             [
                 "-q",
@@ -85,7 +88,7 @@ class TestSelectExclude:
         assert len(result) == 2
         assert "test.model_one" not in result
 
-    def test_select_exclude_quoted(self):
+    def test_select_exclude_quoted(self, project):
         result = run_dbt(["-q", "ls", "--select", "model_one model_two"])
         assert len(result) == 2
         assert "test.model_three" not in result
@@ -93,7 +96,7 @@ class TestSelectExclude:
         assert len(result) == 1
         assert result == ["test.model_three"]
 
-    def test_select_exclude_args(self):
+    def test_select_exclude_args(self, project):
         result = run_dbt(["-q", "ls", "--select", "model_one", "--select", "model_two"])
         assert len(result) == 2
         assert "test.model_three" not in result
