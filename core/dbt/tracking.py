@@ -19,6 +19,7 @@ from dbt.events.types import (
 from dbt import version as dbt_version
 from dbt import flags
 from snowplow_tracker import Subject, Tracker, Emitter, logger as sp_logger
+from snowplow_tracker import __version__ as snowplow_version
 from snowplow_tracker import SelfDescribingJson
 from datetime import datetime
 
@@ -48,17 +49,20 @@ PARTIAL_PARSER = "iglu:com.dbt/partial_parser/jsonschema/1-0-1"
 RUNNABLE_TIMING = "iglu:com.dbt/runnable/jsonschema/1-0-0"
 DBT_INVOCATION_ENV = "DBT_INVOCATION_ENV"
 
+# workaround in case real snowplow tracker is in the env
+INIT_KW_ARGS = {"buffer_size": 30} if snowplow_version == '0.0.2' else {"batch_size": 30}
+
 
 class TimeoutEmitter(Emitter):
     def __init__(self):
         super().__init__(
             COLLECTOR_URL,
             protocol=COLLECTOR_PROTOCOL,
-            buffer_size=30,
             on_failure=self.handle_failure,
             method="post",
             # don't set this.
             byte_limit=None,
+            **INIT_KW_ARGS,
         )
 
     @staticmethod
@@ -102,11 +106,20 @@ class TimeoutEmitter(Emitter):
 
 
 emitter = TimeoutEmitter()
-tracker = Tracker(
-    emitter,
-    namespace="cf",
-    app_id="dbt",
-)
+
+# workaround in case real snowplow tracker is in the env
+if snowplow_version == '0.0.2':
+    tracker = Tracker(
+        emitter,
+        namespace="cf",
+        app_id="dbt",
+    )
+else:
+    tracker = Tracker(
+        "cf",
+        emitters=emitter,
+        app_id="dbt",
+    )
 
 
 class User:
