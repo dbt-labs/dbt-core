@@ -43,7 +43,7 @@ from dbt.logger import GLOBAL_LOGGER as logger
 
 Simply change it to these two lines with your adapter's database name, and all your existing call sites will now use the new system for v1.0:
 ```python
-from dbt.events import AdapterLogger
+from dbt.common.events import AdapterLogger
 logger = AdapterLogger("<database name>")
 # e.g. AdapterLogger("Snowflake")
 ```
@@ -52,4 +52,4 @@ logger = AdapterLogger("<database name>")
 
 After adding a new message in `types.proto`, either:
 - In the repository root directory: `make proto_types`
-- In the `core/dbt/events` directory: `protoc -I=. --python_out=. types.proto`
+- In the `core/dbt/common/events` directory: `protoc -I=. --python_out=. types.proto`
