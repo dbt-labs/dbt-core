@@ -12,7 +12,7 @@ class Graph:
     and how they interact with the graph.
     """
 
-    def __init__(self, graph):
+    def __init__(self, graph) -> None:
         self.graph = graph
 
     def nodes(self) -> Set[UniqueId]:

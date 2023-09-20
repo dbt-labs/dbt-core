@@ -46,7 +46,7 @@ CMD_DICT = {
 
 
 class RetryTask(ConfiguredTask):
-    def __init__(self, args, config, manifest):
+    def __init__(self, args, config, manifest) -> None:
         super().__init__(args, config, manifest)
 
         state_path = self.args.state or self.config.target_path
@@ -67,7 +67,7 @@ class RetryTask(ConfiguredTask):
 
         self.previous_args = self.previous_state.results.args
         self.previous_command_name = self.previous_args.get("which")
-        self.task_class = TASK_DICT.get(self.previous_command_name)
+        self.task_class = TASK_DICT.get(self.previous_command_name)  # type: ignore
 
     def run(self):
         unique_ids = set(

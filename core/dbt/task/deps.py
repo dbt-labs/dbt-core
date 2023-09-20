@@ -28,7 +28,7 @@ from dbt.config import Project
 
 
 class DepsTask(BaseTask):
-    def __init__(self, args: Any, project: Project):
+    def __init__(self, args: Any, project: Project) -> None:
         # N.B. This is a temporary fix for a bug when using relative paths via
         # --project-dir with deps.  A larger overhaul of our path handling methods
         # is needed to fix this the "right" way.

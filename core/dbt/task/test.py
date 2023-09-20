@@ -183,7 +183,7 @@ class TestRunner(CompileRunner):
 
 
 class TestSelector(ResourceTypeSelector):
-    def __init__(self, graph, manifest, previous_state):
+    def __init__(self, graph, manifest, previous_state) -> None:
         super().__init__(
             graph=graph,
             manifest=manifest,

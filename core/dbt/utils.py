@@ -22,6 +22,7 @@ from dbt.exceptions import (
     DbtInternalError,
     DbtConfigError,
     RecursionError,
+    DuplicateAliasError,
 )
 from dbt.helper_types import WarnErrorOptions
 from dbt import flags
@@ -42,6 +43,7 @@ from typing import (
     Iterable,
     AbstractSet,
     Set,
+    Sequence,
 )
 
 DECIMALS: Tuple[Type[Any], ...]
@@ -236,7 +238,7 @@ def deep_map_render(func: Callable[[Any, Tuple[Union[str, int], ...]], Any], val
 
 
 class AttrDict(dict):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.__dict__ = self
 
@@ -274,9 +276,9 @@ class memoized:
 
     Taken from https://wiki.python.org/moin/PythonDecoratorLibrary#Memoize"""
 
-    def __init__(self, func):
+    def __init__(self, func) -> None:
         self.func = func
-        self.cache = {}
+        self.cache: Dict[Any, Any] = {}
 
     def __call__(self, *args):
         if not isinstance(args, collections.abc.Hashable):
@@ -356,6 +358,59 @@ class ForgivingJSONEncoder(JSONEncoder):
             return str(obj)
 
 
+class Translator:
+    def __init__(self, aliases: Mapping[str, str], recursive: bool = False) -> None:
+        self.aliases = aliases
+        self.recursive = recursive
+
+    def translate_mapping(self, kwargs: Mapping[str, Any]) -> Dict[str, Any]:
+        result: Dict[str, Any] = {}
+
+        for key, value in kwargs.items():
+            canonical_key = self.aliases.get(key, key)
+            if canonical_key in result:
+                raise DuplicateAliasError(kwargs, self.aliases, canonical_key)
+            result[canonical_key] = self.translate_value(value)
+        return result
+
+    def translate_sequence(self, value: Sequence[Any]) -> List[Any]:
+        return [self.translate_value(v) for v in value]
+
+    def translate_value(self, value: Any) -> Any:
+        if self.recursive:
+            if isinstance(value, Mapping):
+                return self.translate_mapping(value)
+            elif isinstance(value, (list, tuple)):
+                return self.translate_sequence(value)
+        return value
+
+    def translate(self, value: Mapping[str, Any]) -> Dict[str, Any]:
+        try:
+            return self.translate_mapping(value)
+        except RuntimeError as exc:
+            if "maximum recursion depth exceeded" in str(exc):
+                raise RecursionError("Cycle detected in a value passed to translate!")
+            raise
+
+
+def translate_aliases(
+    kwargs: Dict[str, Any],
+    aliases: Dict[str, str],
+    recurse: bool = False,
+) -> Dict[str, Any]:
+    """Given a dict of keyword arguments and a dict mapping aliases to their
+    canonical values, canonicalize the keys in the kwargs dict.
+
+    If recurse is True, perform this operation recursively.
+
+    :returns: A dict containing all the values in kwargs referenced by their
+        canonical key.
+    :raises: `AliasError`, if a canonical key is defined more than once.
+    """
+    translator = Translator(aliases, recurse)
+    return translator.translate(kwargs)
+
+
 # Note that this only affects hologram json validation.
 # It has no effect on mashumaro serialization.
 # Q: Can this be removed?
@@ -394,7 +449,7 @@ def lowercase(value: Optional[str]) -> Optional[str]:
 
 
 class classproperty(object):
-    def __init__(self, func):
+    def __init__(self, func) -> None:
         self.func = func
 
     def __get__(self, obj, objtype):

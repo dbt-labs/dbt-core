@@ -72,7 +72,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
 
     TYPE: str = NotImplemented
 
-    def __init__(self, profile: AdapterRequiredConfig):
+    def __init__(self, profile: AdapterRequiredConfig) -> None:
         self.profile = profile
         self.thread_connections: Dict[Hashable, Connection] = {}
         self.lock: RLock = flags.MP_CONTEXT.RLock()

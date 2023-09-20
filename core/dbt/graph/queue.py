@@ -24,7 +24,7 @@ class GraphQueue:
     the same time, as there is an unlocked race!
     """
 
-    def __init__(self, graph: nx.DiGraph, manifest: Manifest, selected: Set[UniqueId]):
+    def __init__(self, graph: nx.DiGraph, manifest: Manifest, selected: Set[UniqueId]) -> None:
         self.graph = graph
         self.manifest = manifest
         self._selected = selected

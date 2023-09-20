@@ -63,7 +63,7 @@ def build_catalog_table(data) -> CatalogTable:
 
 # keys are database name, schema name, table name
 class Catalog(Dict[CatalogKey, CatalogTable]):
-    def __init__(self, columns: List[PrimitiveDict]):
+    def __init__(self, columns: List[PrimitiveDict]) -> None:
         super().__init__()
         for col in columns:
             self.add_column(col)

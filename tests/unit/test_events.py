@@ -1,3 +1,4 @@
+import logging
 import re
 from argparse import Namespace
 from typing import TypeVar
@@ -82,6 +83,12 @@ class TestAdapterLogger:
 
         event = types.JinjaLogDebug(msg=[1, 2, 3])
         assert isinstance(event.msg, str)
+
+    def test_set_adapter_dependency_log_level(self):
+        logger = AdapterLogger("dbt_tests")
+        package_log = logging.getLogger("test_package_log")
+        logger.set_adapter_dependency_log_level("test_package_log", "DEBUG")
+        package_log.debug("debug message")
 
 
 class TestEventCodes:

@@ -38,8 +38,8 @@ class _CachedRelation:
     :attr BaseRelation inner: The underlying dbt relation.
     """
 
-    def __init__(self, inner):
-        self.referenced_by = {}
+    def __init__(self, inner) -> None:
+        self.referenced_by: Dict[_ReferenceKey, _CachedRelation] = {}
         self.inner = inner
 
     def __str__(self) -> str:

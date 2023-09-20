@@ -19,7 +19,7 @@ SQLResult = TypeVar("SQLResult", bound=RemoteCompileResultMixin)
 
 
 class GenericSqlRunner(CompileRunner, Generic[SQLResult]):
-    def __init__(self, config, adapter, node, node_index, num_nodes):
+    def __init__(self, config, adapter, node, node_index, num_nodes) -> None:
         CompileRunner.__init__(self, config, adapter, node, node_index, num_nodes)
 
     def handle_exception(self, e, ctx):

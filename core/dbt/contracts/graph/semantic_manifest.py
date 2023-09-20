@@ -20,7 +20,7 @@ from dbt.exceptions import ParsingError
 
 
 class SemanticManifest:
-    def __init__(self, manifest):
+    def __init__(self, manifest) -> None:
         self.manifest = manifest
 
     def validate(self) -> bool:

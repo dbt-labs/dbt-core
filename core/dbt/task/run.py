@@ -52,7 +52,7 @@ from dbt.node_types import NodeType, RunHookType
 
 
 class Timer:
-    def __init__(self):
+    def __init__(self) -> None:
         self.start = None
         self.end = None
 

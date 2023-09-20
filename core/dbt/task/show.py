@@ -13,7 +13,7 @@ from dbt.task.seed import SeedRunner
 
 
 class ShowRunner(CompileRunner):
-    def __init__(self, config, adapter, node, node_index, num_nodes):
+    def __init__(self, config, adapter, node, node_index, num_nodes) -> None:
         super().__init__(config, adapter, node, node_index, num_nodes)
         self.run_ephemeral_models = True
 
