@@ -366,7 +366,7 @@ class TestFlags:
     def test_from_dict__run(self):
         args_dict = {
             "print": False,
-            "select": ["model_one, model_two"],
+            "select": ["model_one", "model_two"],
         }
         result = self._create_flags_from_dict(Command.RUN, args_dict)
         assert "model_one" in result.select[0]
