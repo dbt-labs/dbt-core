@@ -24,7 +24,7 @@ ENABLE_LEGACY_LOGGER = env_set_truthy("DBT_ENABLE_LEGACY_LOGGER")
 MP_CONTEXT = get_context()
 
 
-# this roughly follows the patten of EVENT_MANAGER in dbt/events/functions.py
+# this roughly follows the patten of EVENT_MANAGER in dbt/common/events/functions.py
 # During de-globlization, we'll need to handle both similarly
 # Match USE_COLORS default with default in dbt.cli.params.use_colors for use in --version
 GLOBAL_FLAGS = Namespace(USE_COLORS=True)  # type: ignore
