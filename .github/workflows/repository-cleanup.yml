@@ -24,5 +24,5 @@ permissions:
 
 jobs:
   cleanup-repo:
-    uses: dbt-labs/actions/.github/workflows/release-cleanup.yml@main
+    uses: dbt-labs/actions/.github/workflows/repository-cleanup.yml@main
     secrets: inherit
