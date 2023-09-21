@@ -5,7 +5,7 @@ with generated_dates as (
     {% if target.type == 'postgres' %}
         {{ date_spine("day", "'2023-09-01'::date", "'2023-09-10'::date") }}
 
-    {% elif target.type == 'bigquery' %}
+    {% elif target.type == 'bigquery' or target.type == 'redshift' %}
         select cast(date_day as date) as date_day
         from ({{ date_spine("day", "'2023-09-01'", "'2023-09-10'") }})
 
@@ -32,7 +32,7 @@ with generated_dates as (
         union all
         select '2023-09-09'::date as expected
 
-    {% elif target.type == 'bigquery' %}
+    {% elif target.type == 'bigquery' or target.type == 'redshift' %}
         select cast('2023-09-01' as date) as expected
         union all
         select cast('2023-09-02' as date) as expected
