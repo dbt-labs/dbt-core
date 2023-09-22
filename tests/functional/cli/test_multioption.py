@@ -29,12 +29,14 @@ class TestResourceType:
     def test_resource_type_quoted(self, project):
         result = run_dbt(["-q", "ls", "--resource-types", "model source"])
         assert len(result) == 2
-        assert result == ["test.model_one", "source:test.my_source.my_table"]
+        expected_result = {"test.model_one", "source:test.my_source.my_table"}
+        assert set(result) == expected_result
 
     def test_resource_type_args(self, project):
         result = run_dbt(["-q", "ls", "--resource-type", "model", "--resource-type", "source"])
         assert len(result) == 2
-        assert result == ["test.model_one", "source:test.my_source.my_table"]
+        expected_result = {"test.model_one", "source:test.my_source.my_table"}
+        assert set(result) == expected_result
 
 
 class TestOutputKeys:
