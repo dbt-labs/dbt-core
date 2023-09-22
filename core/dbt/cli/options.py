@@ -2,6 +2,7 @@ import click
 import inspect
 import typing as t
 from click import Context
+from click.parser import OptionParser, ParsingState
 from dbt.cli.option_types import ChoiceTuple
 
 
@@ -29,11 +30,11 @@ class MultiOption(click.Option):
         else:
             assert isinstance(option_type, ChoiceTuple), msg
 
-    def add_to_parser(self, parser, ctx):
-        def parser_process(value, state):
+    def add_to_parser(self, parser: OptionParser, ctx: Context):
+        def parser_process(value: str, state: ParsingState):
             # method to hook to the parser.process
             done = False
-            value = str.split(value, " ")
+            value_list = str.split(value, " ")
             if self.save_other_options:
                 # grab everything up to the next option
                 while state.rargs and not done:
@@ -41,14 +42,14 @@ class MultiOption(click.Option):
                         if state.rargs[0].startswith(prefix):
                             done = True
                     if not done:
-                        value.append(state.rargs.pop(0))
+                        value_list.append(state.rargs.pop(0))
             else:
                 # grab everything remaining
-                value += state.rargs
+                value_list += state.rargs
                 state.rargs[:] = []
-            value = tuple(value)
+            value_tuple = tuple(value_list)
             # call the actual process
-            self._previous_parser_process(value, state)
+            self._previous_parser_process(value_tuple, state)
 
         retval = super(MultiOption, self).add_to_parser(parser, ctx)
         for name in self.opts:
@@ -56,7 +57,8 @@ class MultiOption(click.Option):
             if our_parser:
                 self._eat_all_parser = our_parser
                 self._previous_parser_process = our_parser.process
-                our_parser.process = parser_process
+                # mypy doesnt like assingment to a method see https://github.com/python/mypy/issues/708
+                our_parser.process = parser_process  # type: ignore
                 break
         return retval
 
