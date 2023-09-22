@@ -48,8 +48,8 @@ class Graph:
             filter_edge=partial(self.filter_edges_by_type, edge_type=edge_type_to_exclude),
         )
 
-    def filter_edges_by_type(self, node_1, node_2, edge_type):
-        return self.graph[node_1][node_2].get("edge_type", edge_type)
+    def filter_edges_by_type(self, first_node, second_node, edge_type):
+        return self.graph[first_node][second_node].get("edge_type", edge_type)
 
     def select_childrens_parents(self, selected: Set[UniqueId]) -> Set[UniqueId]:
         ancestors_for = self.select_children(selected) | selected
