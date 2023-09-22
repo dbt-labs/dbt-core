@@ -6,20 +6,35 @@ model_one_sql = """
 select 1 as fun
 """
 
-source_sql = """
+schema_sql = """
 sources:
   - name: my_source
     description: "My source"
     schema: test_schema
     tables:
       - name: my_table
+      - name: my_other_table
+
+exposures:
+  - name: weekly_jaffle_metrics
+    label: By the Week
+    type: dashboard
+    maturity: high
+    url: https://bi.tool/dashboards/1
+    description: >
+      Did someone say "exponential growth"?
+    depends_on:
+      - ref('model_one')
+    owner:
+      name: dbt Labs
+      email: data@jaffleshop.com
 """
 
 
 class TestResourceType:
     @pytest.fixture(scope="class")
     def models(self):
-        return {"schema.yml": source_sql, "model_one.sql": model_one_sql}
+        return {"schema.yml": schema_sql, "model_one.sql": model_one_sql}
 
     def test_resource_type_single(self, project):
         result = run_dbt(["-q", "ls", "--resource-types", "model"])
@@ -28,14 +43,34 @@ class TestResourceType:
 
     def test_resource_type_quoted(self, project):
         result = run_dbt(["-q", "ls", "--resource-types", "model source"])
-        assert len(result) == 2
-        expected_result = {"test.model_one", "source:test.my_source.my_table"}
+        assert len(result) == 3
+        expected_result = {
+            "test.model_one",
+            "source:test.my_source.my_table",
+            "source:test.my_source.my_other_table",
+        }
         assert set(result) == expected_result
 
     def test_resource_type_args(self, project):
-        result = run_dbt(["-q", "ls", "--resource-type", "model", "--resource-type", "source"])
-        assert len(result) == 2
-        expected_result = {"test.model_one", "source:test.my_source.my_table"}
+        result = run_dbt(
+            [
+                "-q",
+                "ls",
+                "--resource-type",
+                "model",
+                "--resource-type",
+                "source",
+                "--resource-type",
+                "exposure",
+            ]
+        )
+        assert len(result) == 4
+        expected_result = {
+            "test.model_one",
+            "source:test.my_source.my_table",
+            "source:test.my_source.my_other_table",
+            "exposure:test.weekly_jaffle_metrics",
+        }
         assert set(result) == expected_result
 
 
