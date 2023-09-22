@@ -56,7 +56,7 @@ class MultiOption(click.Option):
         for name in self.opts:
             our_parser = parser._long_opt.get(name) or parser._short_opt.get(name)
             if our_parser:
-                self._eat_all_parser = our_parser
+                self._eat_all_parser = our_parser  # type: ignore[assignment]
                 self._previous_parser_process = our_parser.process
                 # mypy doesnt like assingment to a method see https://github.com/python/mypy/issues/708
                 our_parser.process = parser_process  # type: ignore[method-assign]
