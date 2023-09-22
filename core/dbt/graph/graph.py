@@ -133,4 +133,3 @@ class Graph:
 
     def get_dependent_nodes(self, node: UniqueId):
         return nx.descendants(self.graph, node)
-        return nx.descendants(self.graph, node)
