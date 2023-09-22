@@ -45,7 +45,7 @@ class Graph:
     def exclude_edge_type(self, edge_type_to_exclude):
         return nx.subgraph_view(
             self.graph,
-            filter_edge=partial(self.filter_edges_by_type, edge_type=edge_type_to_exclude)
+            filter_edge=partial(self.filter_edges_by_type, edge_type=edge_type_to_exclude),
         )
 
     def filter_edges_by_type(self, node_1, node_2, edge_type):
