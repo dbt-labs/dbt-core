@@ -14,8 +14,9 @@ class MultiOption(click.Option):
         nargs = kwargs.pop("nargs", -1)
         assert nargs == -1, "nargs, if set, must be -1 not {}".format(nargs)
         super(MultiOption, self).__init__(*args, **kwargs)
-        self._previous_parser_process = None
-        self._eat_all_parser = None
+        # this makes mypy happy, setting these to None causes mypy failures
+        self._previous_parser_process = lambda *args, **kwargs: None
+        self._eat_all_parser = lambda *args, **kwargs: None
 
         # validate that multiple=True
         multiple = kwargs.pop("multiple", None)
@@ -55,9 +56,9 @@ class MultiOption(click.Option):
         for name in self.opts:
             our_parser = parser._long_opt.get(name) or parser._short_opt.get(name)
             if our_parser:
-                self._eat_all_parser = our_parser
-                self._previous_parser_process = our_parser.process
                 # mypy doesnt like assingment to a method see https://github.com/python/mypy/issues/708
+                self._eat_all_parser = our_parser  # type: ignore
+                self._previous_parser_process = our_parser.process  # type: ignore
                 our_parser.process = parser_process  # type: ignore
                 break
         return retval
