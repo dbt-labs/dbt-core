@@ -597,6 +597,8 @@ class UnparsedMetricInputMeasure(dbtClassMixin):
     name: str
     filter: Optional[str] = None
     alias: Optional[str] = None
+    join_to_timespine: bool = False
+    fill_nulls_with: Optional[int] = None
 
 
 @dataclass

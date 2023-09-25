@@ -1342,6 +1342,8 @@ class MetricInputMeasure(dbtClassMixin):
     name: str
     filter: Optional[WhereFilter] = None
     alias: Optional[str] = None
+    join_to_timespine: bool = False
+    fill_nulls_with: Optional[int] = None
 
     def measure_reference(self) -> MeasureReference:
         return MeasureReference(element_name=self.name)
