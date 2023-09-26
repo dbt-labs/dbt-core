@@ -767,7 +767,7 @@ class MethodManager:
         self,
         manifest: Manifest,
         previous_state: Optional[PreviousState],
-    ):
+    ) -> None:
         self.manifest = manifest
         self.previous_state = previous_state
 

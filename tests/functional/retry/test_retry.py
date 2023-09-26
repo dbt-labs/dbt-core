@@ -9,6 +9,8 @@ from tests.functional.retry.fixtures import (
     schema_yml,
     models__second_model,
     macros__alter_timezone_sql,
+    simple_model,
+    simple_schema,
 )
 
 
@@ -225,3 +227,47 @@ class TestFailFast:
 
         results = run_dbt(["retry"])
         assert {r.node.unique_id: r.status for r in results.results} == {}
+
+
+class TestRetryResourceType:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "null_model.sql": simple_model,
+            "schema.yml": simple_schema,
+        }
+
+    def test_resource_type(self, project):
+        # test multiple options in single string
+        results = run_dbt(["build", "--select", "null_model", "--resource-type", "test model"])
+        assert len(results) == 1
+
+        # nothing to do
+        results = run_dbt(["retry"])
+        assert len(results) == 0
+
+        # test multiple options in multiple args
+        results = run_dbt(
+            [
+                "build",
+                "--select",
+                "null_model",
+                "--resource-type",
+                "test",
+                "--resource-type",
+                "model",
+            ]
+        )
+        assert len(results) == 1
+
+        # nothing to do
+        results = run_dbt(["retry"])
+        assert len(results) == 0
+
+        # test single all option
+        results = run_dbt(["build", "--select", "null_model", "--resource-type", "all"])
+        assert len(results) == 1
+
+        # nothing to do
+        results = run_dbt(["retry"])
+        assert len(results) == 0

@@ -5,7 +5,7 @@ import traceback
 from abc import ABCMeta, abstractmethod
 from contextlib import nullcontext
 from datetime import datetime
-from typing import Type, Union, Dict, Any, Optional
+from typing import Any, Dict, List, Optional, Type, Union
 
 import dbt.exceptions
 from dbt import tracking
@@ -19,6 +19,7 @@ from dbt.contracts.results import (
     collect_timing_info,
     RunStatus,
     RunningStatus,
+    TimingInfo,
 )
 from dbt.events.contextvars import get_node_info
 from dbt.events.functions import fire_event
@@ -71,7 +72,7 @@ def read_profiles(profiles_dir=None):
 class BaseTask(metaclass=ABCMeta):
     ConfigType: Union[Type[NoneConfig], Type[Project]] = NoneConfig
 
-    def __init__(self, args, config, project=None):
+    def __init__(self, args, config, project=None) -> None:
         self.args = args
         self.config = config
         self.project = config if isinstance(config, Project) else project
@@ -156,7 +157,7 @@ def move_to_nearest_project_dir(project_dir: Optional[str]) -> str:
 class ConfiguredTask(BaseTask):
     ConfigType = RuntimeConfig
 
-    def __init__(self, args, config, manifest: Optional[Manifest] = None):
+    def __init__(self, args, config, manifest: Optional[Manifest] = None) -> None:
         super().__init__(args, config)
         self.graph: Optional[Graph] = None
         self.manifest = manifest
@@ -187,8 +188,8 @@ class ExecutionContext:
     timing information and the newest (compiled vs executed) form of the node.
     """
 
-    def __init__(self, node):
-        self.timing = []
+    def __init__(self, node) -> None:
+        self.timing: List[TimingInfo] = []
         self.node = node
 
 

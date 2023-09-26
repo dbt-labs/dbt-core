@@ -1172,6 +1172,16 @@ class ManifestLoader:
                 config.project_name,
             )
             _process_docs_for_metrics(ctx, metric)
+        for semantic_model in self.manifest.semantic_models.values():
+            if semantic_model.created_at < self.started_at:
+                continue
+            ctx = generate_runtime_docs_context(
+                config,
+                semantic_model,
+                self.manifest,
+                config.project_name,
+            )
+            _process_docs_for_semantic_model(ctx, semantic_model)
 
     # Loops through all nodes and exposures, for each element in
     # 'sources' array finds the source node and updates the
@@ -1404,6 +1414,25 @@ def _process_docs_for_exposure(context: Dict[str, Any], exposure: Exposure) -> N
 
 def _process_docs_for_metrics(context: Dict[str, Any], metric: Metric) -> None:
     metric.description = get_rendered(metric.description, context)
+
+
+def _process_docs_for_semantic_model(
+    context: Dict[str, Any], semantic_model: SemanticModel
+) -> None:
+    if semantic_model.description:
+        semantic_model.description = get_rendered(semantic_model.description, context)
+
+    for dimension in semantic_model.dimensions:
+        if dimension.description:
+            dimension.description = get_rendered(dimension.description, context)
+
+    for measure in semantic_model.measures:
+        if measure.description:
+            measure.description = get_rendered(measure.description, context)
+
+    for entity in semantic_model.entities:
+        if entity.description:
+            entity.description = get_rendered(entity.description, context)
 
 
 def _process_refs(

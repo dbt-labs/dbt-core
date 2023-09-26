@@ -225,7 +225,7 @@ class BaseAdapter(metaclass=AdapterMeta):
 
     CATALOG_BY_RELATION_SUPPORT = False
 
-    def __init__(self, config):
+    def __init__(self, config) -> None:
         self.config = config
         self.cache = RelationsCache()
         self.connections = self.ConnectionManager(config)
