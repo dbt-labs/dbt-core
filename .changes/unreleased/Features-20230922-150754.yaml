@@ -1,0 +1,6 @@
+kind: Features
+body: Support `fill_nulls_with` and `join_to_timespine` for metric nodes
+time: 2023-09-22T15:07:54.981752-07:00
+custom:
+  Author: QMalcolm
+  Issue: "8593"
