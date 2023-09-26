@@ -49,7 +49,7 @@ class Graph:
         )
 
     def filter_edges_by_type(self, first_node, second_node, edge_type):
-        return self.graph[first_node][second_node].get("edge_type", edge_type)
+        return self.graph.get_edge_data(first_node, second_node).get("edge_type") != edge_type
 
     def select_childrens_parents(self, selected: Set[UniqueId]) -> Set[UniqueId]:
         ancestors_for = self.select_children(selected) | selected
