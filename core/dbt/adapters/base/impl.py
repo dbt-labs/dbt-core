@@ -1140,7 +1140,8 @@ class BaseAdapter(metaclass=AdapterMeta):
 
         with executor(self.config) as tpe:
             futures: List[Future[agate.Table]] = []
-            if self.CATALOG_BY_RELATION_SUPPORT:
+            relation_count = len(self._get_catalog_relations(manifest))
+            if relation_count <= 100 and self.CATALOG_BY_RELATION_SUPPORT:
                 relations_by_schema = self._get_catalog_relations_by_info_schema(manifest)
                 for info_schema in relations_by_schema:
                     name = ".".join([str(info_schema.database), "information_schema"])
