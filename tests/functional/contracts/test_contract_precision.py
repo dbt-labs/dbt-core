@@ -32,7 +32,7 @@ models:
 """
 
 
-class BaseModelContractNumericNoPrecision:
+class TestModelContractNumericNoPrecision:
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -49,7 +49,7 @@ class BaseModelContractNumericNoPrecision:
         assert expected_msg in logs
 
 
-class BaseModelContractNumericPrecision:
+class TestModelContractNumericPrecision:
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -61,11 +61,3 @@ class BaseModelContractNumericPrecision:
         expected_msg = "Detected columns with numeric type and unspecified precision/scale, this can lead to unintended rounding: ['non_integer']"
         _, logs = run_dbt_and_capture(["run"], expect_pass=True)
         assert expected_msg not in logs
-
-
-class TestPostgresModelContractNumericNoPrecision(BaseModelContractNumericNoPrecision):
-    pass
-
-
-class TestPostgresModelContractNumericPrecision(BaseModelContractNumericPrecision):
-    pass
