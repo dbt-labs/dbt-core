@@ -48,7 +48,7 @@
       {%- set col = columns[i] -%}
       {%- if col['data_type'] is not defined -%}
         {%- do col_err.append(col['name']) -%}
-      {#-- If this column's type is just 'numeric' missing precision/scale, raise a warning --#}
+      {#-- If this column's type is just 'numeric' then it is missing precision/scale, raise a warning --#}
       {#- elif api.Column.create(col['name'], col['data_type'].strip()).is_numeric() -#}
       {%- elif col['data_type'].strip().lower() in ('numeric', 'decimal', 'number') -%}
         {%- do col_naked_numeric.append(col['name']) -%}
