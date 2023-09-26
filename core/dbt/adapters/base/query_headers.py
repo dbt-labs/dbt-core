@@ -11,7 +11,7 @@ from dbt.exceptions import DbtRuntimeError
 
 
 class NodeWrapper:
-    def __init__(self, node):
+    def __init__(self, node) -> None:
         self._inner_node = node
 
     def __getattr__(self, name):
@@ -57,7 +57,7 @@ QueryStringFunc = Callable[[str, Optional[NodeWrapper]], str]
 
 
 class MacroQueryStringSetter:
-    def __init__(self, config: AdapterRequiredConfig, manifest: Manifest):
+    def __init__(self, config: AdapterRequiredConfig, manifest: Manifest) -> None:
         self.manifest = manifest
         self.config = config
 

@@ -95,7 +95,6 @@ def _get_stdout_config(
     level: EventLevel,
     log_cache_events: bool,
 ) -> LoggerConfig:
-
     return LoggerConfig(
         name="stdout_log",
         level=level,
@@ -127,6 +126,7 @@ def _get_logfile_config(
     level: EventLevel,
     log_file_max_bytes: int,
 ) -> LoggerConfig:
+
     return LoggerConfig(
         name="file_log",
         line_format=line_format,
@@ -170,7 +170,7 @@ def env_scrubber(msg: str) -> str:
     return scrub_secrets(msg, env_secrets())
 
 
-def cleanup_event_logger():
+def cleanup_event_logger() -> None:
     # Reset to a no-op manager to release streams associated with logs. This is
     # especially important for tests, since pytest replaces the stdout stream
     # during test runs, and closes the stream after the test is over.
@@ -195,12 +195,12 @@ _CAPTURE_STREAM: Optional[TextIO] = None
 
 
 # used for integration tests
-def capture_stdout_logs(stream: TextIO):
+def capture_stdout_logs(stream: TextIO) -> None:
     global _CAPTURE_STREAM
     _CAPTURE_STREAM = stream
 
 
-def stop_capture_stdout_logs():
+def stop_capture_stdout_logs() -> None:
     global _CAPTURE_STREAM
     _CAPTURE_STREAM = None
 
@@ -234,7 +234,7 @@ def msg_to_dict(msg: EventMsg) -> dict:
     return msg_dict
 
 
-def warn_or_error(event, node=None):
+def warn_or_error(event, node=None) -> None:
     flags = get_flags()
     if flags.WARN_ERROR or flags.WARN_ERROR_OPTIONS.includes(type(event).__name__):
 
@@ -296,6 +296,6 @@ def set_invocation_id() -> None:
     EVENT_MANAGER.invocation_id = str(uuid.uuid4())
 
 
-def ctx_set_event_manager(event_manager: IEventManager):
+def ctx_set_event_manager(event_manager: IEventManager) -> None:
     global EVENT_MANAGER
     EVENT_MANAGER = event_manager

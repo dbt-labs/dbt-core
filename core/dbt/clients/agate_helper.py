@@ -165,7 +165,7 @@ NullableAgateType = Union[agate.data_types.DataType, _NullMarker]
 
 
 class ColumnTypeBuilder(Dict[str, NullableAgateType]):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
 
     def __setitem__(self, key, value):

@@ -1,6 +1,5 @@
 import json
 
-from dbt.ui import line_wrap_message, warning_tag, red, green, yellow
 from dbt.constants import MAXIMUM_SEED_SIZE_NAME, PIN_PACKAGE_URL
 from dbt.events.base_types import (
     DynamicLevel,
@@ -11,8 +10,8 @@ from dbt.events.base_types import (
     EventLevel,
 )
 from dbt.events.format import format_fancy_output_line, pluralize, timestamp_to_datetime_string
-
 from dbt.node_types import NodeType
+from dbt.ui import line_wrap_message, warning_tag, red, green, yellow
 
 
 # The classes in this file represent the data necessary to describe a
@@ -53,31 +52,31 @@ def format_adapter_message(name, base_msg, args) -> str:
 
 
 class MainReportVersion(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "A001"
 
-    def message(self):
+    def message(self) -> str:
         return f"Running with dbt{self.version}"
 
 
 class MainReportArgs(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "A002"
 
-    def message(self):
+    def message(self) -> str:
         return f"running dbt with arguments {str(self.args)}"
 
 
 class MainTrackingUserState(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "A003"
 
-    def message(self):
+    def message(self) -> str:
         return f"Tracking: {self.user_state}"
 
 
 class MergedFromState(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "A004"
 
     def message(self) -> str:
@@ -85,7 +84,7 @@ class MergedFromState(DebugLevel):
 
 
 class MissingProfileTarget(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "A005"
 
     def message(self) -> str:
@@ -96,7 +95,7 @@ class MissingProfileTarget(InfoLevel):
 
 
 class InvalidOptionYAML(ErrorLevel):
-    def code(self):
+    def code(self) -> str:
         return "A008"
 
     def message(self) -> str:
@@ -104,7 +103,7 @@ class InvalidOptionYAML(ErrorLevel):
 
 
 class LogDbtProjectError(ErrorLevel):
-    def code(self):
+    def code(self) -> str:
         return "A009"
 
     def message(self) -> str:
@@ -118,7 +117,7 @@ class LogDbtProjectError(ErrorLevel):
 
 
 class LogDbtProfileError(ErrorLevel):
-    def code(self):
+    def code(self) -> str:
         return "A011"
 
     def message(self) -> str:
@@ -139,7 +138,7 @@ https://docs.getdbt.com/docs/configure-your-profile
 
 
 class StarterProjectPath(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "A017"
 
     def message(self) -> str:
@@ -147,7 +146,7 @@ class StarterProjectPath(DebugLevel):
 
 
 class ConfigFolderDirectory(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "A018"
 
     def message(self) -> str:
@@ -155,7 +154,7 @@ class ConfigFolderDirectory(InfoLevel):
 
 
 class NoSampleProfileFound(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "A019"
 
     def message(self) -> str:
@@ -163,7 +162,7 @@ class NoSampleProfileFound(InfoLevel):
 
 
 class ProfileWrittenWithSample(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "A020"
 
     def message(self) -> str:
@@ -175,7 +174,7 @@ class ProfileWrittenWithSample(InfoLevel):
 
 
 class ProfileWrittenWithTargetTemplateYAML(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "A021"
 
     def message(self) -> str:
@@ -187,7 +186,7 @@ class ProfileWrittenWithTargetTemplateYAML(InfoLevel):
 
 
 class ProfileWrittenWithProjectTemplateYAML(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "A022"
 
     def message(self) -> str:
@@ -199,7 +198,7 @@ class ProfileWrittenWithProjectTemplateYAML(InfoLevel):
 
 
 class SettingUpProfile(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "A023"
 
     def message(self) -> str:
@@ -207,7 +206,7 @@ class SettingUpProfile(InfoLevel):
 
 
 class InvalidProfileTemplateYAML(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "A024"
 
     def message(self) -> str:
@@ -215,7 +214,7 @@ class InvalidProfileTemplateYAML(InfoLevel):
 
 
 class ProjectNameAlreadyExists(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "A025"
 
     def message(self) -> str:
@@ -223,7 +222,7 @@ class ProjectNameAlreadyExists(InfoLevel):
 
 
 class ProjectCreated(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "A026"
 
     def message(self) -> str:
@@ -251,10 +250,10 @@ Happy modeling!
 
 
 class PackageRedirectDeprecation(WarnLevel):
-    def code(self):
+    def code(self) -> str:
         return "D001"
 
-    def message(self):
+    def message(self) -> str:
         description = (
             f"The `{self.old_name}` package is deprecated in favor of `{self.new_name}`. Please "
             f"update your `packages.yml` configuration to use `{self.new_name}` instead."
@@ -263,10 +262,10 @@ class PackageRedirectDeprecation(WarnLevel):
 
 
 class PackageInstallPathDeprecation(WarnLevel):
-    def code(self):
+    def code(self) -> str:
         return "D002"
 
-    def message(self):
+    def message(self) -> str:
         description = """\
         The default package install path has changed from `dbt_modules` to `dbt_packages`.
         Please update `clean-targets` in `dbt_project.yml` and check `.gitignore` as well.
@@ -276,10 +275,10 @@ class PackageInstallPathDeprecation(WarnLevel):
 
 
 class ConfigSourcePathDeprecation(WarnLevel):
-    def code(self):
+    def code(self) -> str:
         return "D003"
 
-    def message(self):
+    def message(self) -> str:
         description = (
             f"The `{self.deprecated_path}` config has been renamed to `{self.exp_path}`. "
             "Please update your `dbt_project.yml` configuration to reflect this change."
@@ -288,10 +287,10 @@ class ConfigSourcePathDeprecation(WarnLevel):
 
 
 class ConfigDataPathDeprecation(WarnLevel):
-    def code(self):
+    def code(self) -> str:
         return "D004"
 
-    def message(self):
+    def message(self) -> str:
         description = (
             f"The `{self.deprecated_path}` config has been renamed to `{self.exp_path}`. "
             "Please update your `dbt_project.yml` configuration to reflect this change."
@@ -300,10 +299,10 @@ class ConfigDataPathDeprecation(WarnLevel):
 
 
 class AdapterDeprecationWarning(WarnLevel):
-    def code(self):
+    def code(self) -> str:
         return "D005"
 
-    def message(self):
+    def message(self) -> str:
         description = (
             f"The adapter function `adapter.{self.old_name}` is deprecated and will be removed in "
             f"a future release of dbt. Please use `adapter.{self.new_name}` instead. "
@@ -314,10 +313,10 @@ class AdapterDeprecationWarning(WarnLevel):
 
 
 class MetricAttributesRenamed(WarnLevel):
-    def code(self):
+    def code(self) -> str:
         return "D006"
 
-    def message(self):
+    def message(self) -> str:
         description = (
             "dbt-core v1.3 renamed attributes for metrics:"
             "\n  'sql'              -> 'expression'"
@@ -331,10 +330,10 @@ class MetricAttributesRenamed(WarnLevel):
 
 
 class ExposureNameDeprecation(WarnLevel):
-    def code(self):
+    def code(self) -> str:
         return "D007"
 
-    def message(self):
+    def message(self) -> str:
         description = (
             "Starting in v1.3, the 'name' of an exposure should contain only letters, "
             "numbers, and underscores. Exposures support a new property, 'label', which may "
@@ -346,10 +345,10 @@ class ExposureNameDeprecation(WarnLevel):
 
 
 class InternalDeprecation(WarnLevel):
-    def code(self):
+    def code(self) -> str:
         return "D008"
 
-    def message(self):
+    def message(self) -> str:
         extra_reason = ""
         if self.reason:
             extra_reason = f"\n{self.reason}"
@@ -361,10 +360,10 @@ class InternalDeprecation(WarnLevel):
 
 
 class EnvironmentVariableRenamed(WarnLevel):
-    def code(self):
+    def code(self) -> str:
         return "D009"
 
-    def message(self):
+    def message(self) -> str:
         description = (
             f"The environment variable `{self.old_name}` has been renamed as `{self.new_name}`.\n"
             f"If `{self.old_name}` is currently set, its value will be used instead of `{self.new_name}`.\n"
@@ -375,10 +374,10 @@ class EnvironmentVariableRenamed(WarnLevel):
 
 
 class ConfigLogPathDeprecation(WarnLevel):
-    def code(self):
+    def code(self) -> str:
         return "D010"
 
-    def message(self):
+    def message(self) -> str:
         output = "logs"
         cli_flag = "--log-path"
         env_var = "DBT_LOG_PATH"
@@ -392,10 +391,10 @@ class ConfigLogPathDeprecation(WarnLevel):
 
 
 class ConfigTargetPathDeprecation(WarnLevel):
-    def code(self):
+    def code(self) -> str:
         return "D011"
 
-    def message(self):
+    def message(self) -> str:
         output = "artifacts"
         cli_flag = "--target-path"
         env_var = "DBT_TARGET_PATH"
@@ -409,10 +408,10 @@ class ConfigTargetPathDeprecation(WarnLevel):
 
 
 class CollectFreshnessReturnSignature(WarnLevel):
-    def code(self):
+    def code(self) -> str:
         return "D012"
 
-    def message(self):
+    def message(self) -> str:
         description = (
             "The 'collect_freshness' macro signature has changed to return the full "
             "query result, rather than just a table of values. See the v1.5 migration guide "
@@ -427,39 +426,39 @@ class CollectFreshnessReturnSignature(WarnLevel):
 
 
 class AdapterEventDebug(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "E001"
 
-    def message(self):
+    def message(self) -> str:
         return format_adapter_message(self.name, self.base_msg, self.args)
 
 
 class AdapterEventInfo(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "E002"
 
-    def message(self):
+    def message(self) -> str:
         return format_adapter_message(self.name, self.base_msg, self.args)
 
 
 class AdapterEventWarning(WarnLevel):
-    def code(self):
+    def code(self) -> str:
         return "E003"
 
-    def message(self):
+    def message(self) -> str:
         return format_adapter_message(self.name, self.base_msg, self.args)
 
 
 class AdapterEventError(ErrorLevel):
-    def code(self):
+    def code(self) -> str:
         return "E004"
 
-    def message(self):
+    def message(self) -> str:
         return format_adapter_message(self.name, self.base_msg, self.args)
 
 
 class NewConnection(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "E005"
 
     def message(self) -> str:
@@ -467,7 +466,7 @@ class NewConnection(DebugLevel):
 
 
 class ConnectionReused(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "E006"
 
     def message(self) -> str:
@@ -475,7 +474,7 @@ class ConnectionReused(DebugLevel):
 
 
 class ConnectionLeftOpenInCleanup(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "E007"
 
     def message(self) -> str:
@@ -483,7 +482,7 @@ class ConnectionLeftOpenInCleanup(DebugLevel):
 
 
 class ConnectionClosedInCleanup(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "E008"
 
     def message(self) -> str:
@@ -491,7 +490,7 @@ class ConnectionClosedInCleanup(DebugLevel):
 
 
 class RollbackFailed(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "E009"
 
     def message(self) -> str:
@@ -499,7 +498,7 @@ class RollbackFailed(DebugLevel):
 
 
 class ConnectionClosed(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "E010"
 
     def message(self) -> str:
@@ -507,7 +506,7 @@ class ConnectionClosed(DebugLevel):
 
 
 class ConnectionLeftOpen(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "E011"
 
     def message(self) -> str:
@@ -515,7 +514,7 @@ class ConnectionLeftOpen(DebugLevel):
 
 
 class Rollback(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "E012"
 
     def message(self) -> str:
@@ -523,7 +522,7 @@ class Rollback(DebugLevel):
 
 
 class CacheMiss(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "E013"
 
     def message(self) -> str:
@@ -534,7 +533,7 @@ class CacheMiss(DebugLevel):
 
 
 class ListRelations(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "E014"
 
     def message(self) -> str:
@@ -543,7 +542,7 @@ class ListRelations(DebugLevel):
 
 
 class ConnectionUsed(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "E015"
 
     def message(self) -> str:
@@ -551,7 +550,7 @@ class ConnectionUsed(DebugLevel):
 
 
 class SQLQuery(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "E016"
 
     def message(self) -> str:
@@ -559,7 +558,7 @@ class SQLQuery(DebugLevel):
 
 
 class SQLQueryStatus(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "E017"
 
     def message(self) -> str:
@@ -567,7 +566,7 @@ class SQLQueryStatus(DebugLevel):
 
 
 class SQLCommit(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "E018"
 
     def message(self) -> str:
@@ -575,7 +574,7 @@ class SQLCommit(DebugLevel):
 
 
 class ColTypeChange(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "E019"
 
     def message(self) -> str:
@@ -583,7 +582,7 @@ class ColTypeChange(DebugLevel):
 
 
 class SchemaCreation(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "E020"
 
     def message(self) -> str:
@@ -591,7 +590,7 @@ class SchemaCreation(DebugLevel):
 
 
 class SchemaDrop(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "E021"
 
     def message(self) -> str:
@@ -599,13 +598,13 @@ class SchemaDrop(DebugLevel):
 
 
 class CacheAction(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "E022"
 
-    def format_ref_key(self, ref_key):
+    def format_ref_key(self, ref_key) -> str:
         return f"(database={ref_key.database}, schema={ref_key.schema}, identifier={ref_key.identifier})"
 
-    def message(self):
+    def message(self) -> str:
         ref_key = self.format_ref_key(self.ref_key)
         ref_key_2 = self.format_ref_key(self.ref_key_2)
         ref_key_3 = self.format_ref_key(self.ref_key_3)
@@ -645,7 +644,7 @@ class CacheAction(DebugLevel):
 
 
 class CacheDumpGraph(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "E031"
 
     def message(self) -> str:
@@ -656,7 +655,7 @@ class CacheDumpGraph(DebugLevel):
 
 
 class AdapterRegistered(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "E034"
 
     def message(self) -> str:
@@ -664,7 +663,7 @@ class AdapterRegistered(InfoLevel):
 
 
 class AdapterImportError(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "E035"
 
     def message(self) -> str:
@@ -672,15 +671,15 @@ class AdapterImportError(InfoLevel):
 
 
 class PluginLoadError(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "E036"
 
-    def message(self):
+    def message(self) -> str:
         return f"{self.exc_info}"
 
 
 class NewConnectionOpening(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "E037"
 
     def message(self) -> str:
@@ -688,7 +687,7 @@ class NewConnectionOpening(DebugLevel):
 
 
 class CodeExecution(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "E038"
 
     def message(self) -> str:
@@ -696,7 +695,7 @@ class CodeExecution(DebugLevel):
 
 
 class CodeExecutionStatus(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "E039"
 
     def message(self) -> str:
@@ -704,7 +703,7 @@ class CodeExecutionStatus(DebugLevel):
 
 
 class CatalogGenerationError(WarnLevel):
-    def code(self):
+    def code(self) -> str:
         return "E040"
 
     def message(self) -> str:
@@ -712,7 +711,7 @@ class CatalogGenerationError(WarnLevel):
 
 
 class WriteCatalogFailure(ErrorLevel):
-    def code(self):
+    def code(self) -> str:
         return "E041"
 
     def message(self) -> str:
@@ -723,7 +722,7 @@ class WriteCatalogFailure(ErrorLevel):
 
 
 class CatalogWritten(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "E042"
 
     def message(self) -> str:
@@ -731,7 +730,7 @@ class CatalogWritten(InfoLevel):
 
 
 class CannotGenerateDocs(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "E043"
 
     def message(self) -> str:
@@ -739,7 +738,7 @@ class CannotGenerateDocs(InfoLevel):
 
 
 class BuildingCatalog(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "E044"
 
     def message(self) -> str:
@@ -747,7 +746,7 @@ class BuildingCatalog(InfoLevel):
 
 
 class DatabaseErrorRunningHook(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "E045"
 
     def message(self) -> str:
@@ -755,7 +754,7 @@ class DatabaseErrorRunningHook(InfoLevel):
 
 
 class HooksRunning(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "E046"
 
     def message(self) -> str:
@@ -764,7 +763,7 @@ class HooksRunning(InfoLevel):
 
 
 class FinishedRunningStats(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "E047"
 
     def message(self) -> str:
@@ -772,7 +771,7 @@ class FinishedRunningStats(InfoLevel):
 
 
 class ConstraintNotEnforced(WarnLevel):
-    def code(self):
+    def code(self) -> str:
         return "E048"
 
     def message(self) -> str:
@@ -786,7 +785,7 @@ class ConstraintNotEnforced(WarnLevel):
 
 
 class ConstraintNotSupported(WarnLevel):
-    def code(self):
+    def code(self) -> str:
         return "E049"
 
     def message(self) -> str:
@@ -803,7 +802,7 @@ class ConstraintNotSupported(WarnLevel):
 
 
 class InputFileDiffError(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "I001"
 
     def message(self) -> str:
@@ -814,7 +813,7 @@ class InputFileDiffError(DebugLevel):
 
 
 class InvalidValueForField(WarnLevel):
-    def code(self):
+    def code(self) -> str:
         return "I008"
 
     def message(self) -> str:
@@ -822,7 +821,7 @@ class InvalidValueForField(WarnLevel):
 
 
 class ValidationWarning(WarnLevel):
-    def code(self):
+    def code(self) -> str:
         return "I009"
 
     def message(self) -> str:
@@ -830,7 +829,7 @@ class ValidationWarning(WarnLevel):
 
 
 class ParsePerfInfoPath(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "I010"
 
     def message(self) -> str:
@@ -847,7 +846,7 @@ class ParsePerfInfoPath(InfoLevel):
 
 
 class PartialParsingErrorProcessingFile(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "I014"
 
     def message(self) -> str:
@@ -858,7 +857,7 @@ class PartialParsingErrorProcessingFile(DebugLevel):
 
 
 class PartialParsingError(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "I016"
 
     def message(self) -> str:
@@ -866,7 +865,7 @@ class PartialParsingError(DebugLevel):
 
 
 class PartialParsingSkipParsing(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "I017"
 
     def message(self) -> str:
@@ -877,7 +876,7 @@ class PartialParsingSkipParsing(DebugLevel):
 
 
 class UnableToPartialParse(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "I024"
 
     def message(self) -> str:
@@ -885,7 +884,7 @@ class UnableToPartialParse(InfoLevel):
 
 
 class StateCheckVarsHash(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "I025"
 
     def message(self) -> str:
@@ -896,7 +895,7 @@ class StateCheckVarsHash(DebugLevel):
 
 
 class PartialParsingNotEnabled(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "I028"
 
     def message(self) -> str:
@@ -904,7 +903,7 @@ class PartialParsingNotEnabled(DebugLevel):
 
 
 class ParsedFileLoadFailed(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "I029"
 
     def message(self) -> str:
@@ -915,7 +914,7 @@ class ParsedFileLoadFailed(DebugLevel):
 
 
 class PartialParsingEnabled(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "I040"
 
     def message(self) -> str:
@@ -928,7 +927,7 @@ class PartialParsingEnabled(DebugLevel):
 
 
 class PartialParsingFile(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "I041"
 
     def message(self) -> str:
@@ -939,7 +938,7 @@ class PartialParsingFile(DebugLevel):
 
 
 class InvalidDisabledTargetInTestNode(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "I050"
 
     def message(self) -> str:
@@ -958,7 +957,7 @@ class InvalidDisabledTargetInTestNode(DebugLevel):
 
 
 class UnusedResourceConfigPath(WarnLevel):
-    def code(self):
+    def code(self) -> str:
         return "I051"
 
     def message(self) -> str:
@@ -972,7 +971,7 @@ class UnusedResourceConfigPath(WarnLevel):
 
 
 class SeedIncreased(WarnLevel):
-    def code(self):
+    def code(self) -> str:
         return "I052"
 
     def message(self) -> str:
@@ -985,7 +984,7 @@ class SeedIncreased(WarnLevel):
 
 
 class SeedExceedsLimitSamePath(WarnLevel):
-    def code(self):
+    def code(self) -> str:
         return "I053"
 
     def message(self) -> str:
@@ -998,7 +997,7 @@ class SeedExceedsLimitSamePath(WarnLevel):
 
 
 class SeedExceedsLimitAndPathChanged(WarnLevel):
-    def code(self):
+    def code(self) -> str:
         return "I054"
 
     def message(self) -> str:
@@ -1011,7 +1010,7 @@ class SeedExceedsLimitAndPathChanged(WarnLevel):
 
 
 class SeedExceedsLimitChecksumChanged(WarnLevel):
-    def code(self):
+    def code(self) -> str:
         return "I055"
 
     def message(self) -> str:
@@ -1024,7 +1023,7 @@ class SeedExceedsLimitChecksumChanged(WarnLevel):
 
 
 class UnusedTables(WarnLevel):
-    def code(self):
+    def code(self) -> str:
         return "I056"
 
     def message(self) -> str:
@@ -1037,7 +1036,7 @@ class UnusedTables(WarnLevel):
 
 
 class WrongResourceSchemaFile(WarnLevel):
-    def code(self):
+    def code(self) -> str:
         return "I057"
 
     def message(self) -> str:
@@ -1054,7 +1053,7 @@ class WrongResourceSchemaFile(WarnLevel):
 
 
 class NoNodeForYamlKey(WarnLevel):
-    def code(self):
+    def code(self) -> str:
         return "I058"
 
     def message(self) -> str:
@@ -1067,7 +1066,7 @@ class NoNodeForYamlKey(WarnLevel):
 
 
 class MacroNotFoundForPatch(WarnLevel):
-    def code(self):
+    def code(self) -> str:
         return "I059"
 
     def message(self) -> str:
@@ -1076,13 +1075,13 @@ class MacroNotFoundForPatch(WarnLevel):
 
 
 class NodeNotFoundOrDisabled(WarnLevel):
-    def code(self):
+    def code(self) -> str:
         return "I060"
 
     def message(self) -> str:
         # this is duplicated logic from exceptions.get_not_found_or_disabled_msg
-        # when we convert exceptions to be stuctured maybe it can be combined?
-        # convverting the bool to a string since None is also valid
+        # when we convert exceptions to be structured maybe it can be combined?
+        # converting the bool to a string since None is also valid
         if self.disabled == "None":
             reason = "was not found or is disabled"
         elif self.disabled == "True":
@@ -1105,7 +1104,7 @@ class NodeNotFoundOrDisabled(WarnLevel):
 
 
 class JinjaLogWarning(WarnLevel):
-    def code(self):
+    def code(self) -> str:
         return "I061"
 
     def message(self) -> str:
@@ -1113,7 +1112,7 @@ class JinjaLogWarning(WarnLevel):
 
 
 class JinjaLogInfo(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "I062"
 
     def message(self) -> str:
@@ -1122,7 +1121,7 @@ class JinjaLogInfo(InfoLevel):
 
 
 class JinjaLogDebug(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "I063"
 
     def message(self) -> str:
@@ -1131,7 +1130,7 @@ class JinjaLogDebug(DebugLevel):
 
 
 class UnpinnedRefNewVersionAvailable(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "I064"
 
     def message(self) -> str:
@@ -1148,7 +1147,7 @@ class UnpinnedRefNewVersionAvailable(InfoLevel):
 
 
 class DeprecatedModel(WarnLevel):
-    def code(self):
+    def code(self) -> str:
         return "I065"
 
     def message(self) -> str:
@@ -1161,7 +1160,7 @@ class DeprecatedModel(WarnLevel):
 
 
 class UpcomingReferenceDeprecation(WarnLevel):
-    def code(self):
+    def code(self) -> str:
         return "I066"
 
     def message(self) -> str:
@@ -1183,7 +1182,7 @@ class UpcomingReferenceDeprecation(WarnLevel):
 
 
 class DeprecatedReference(WarnLevel):
-    def code(self):
+    def code(self) -> str:
         return "I067"
 
     def message(self) -> str:
@@ -1205,7 +1204,7 @@ class DeprecatedReference(WarnLevel):
 
 
 class UnsupportedConstraintMaterialization(WarnLevel):
-    def code(self):
+    def code(self) -> str:
         return "I068"
 
     def message(self) -> str:
@@ -1218,7 +1217,7 @@ class UnsupportedConstraintMaterialization(WarnLevel):
 
 
 class ParseInlineNodeError(ErrorLevel):
-    def code(self):
+    def code(self) -> str:
         return "I069"
 
     def message(self) -> str:
@@ -1226,7 +1225,7 @@ class ParseInlineNodeError(ErrorLevel):
 
 
 class SemanticValidationFailure(WarnLevel):
-    def code(self):
+    def code(self) -> str:
         return "I070"
 
     def message(self) -> str:
@@ -1234,7 +1233,7 @@ class SemanticValidationFailure(WarnLevel):
 
 
 class UnversionedBreakingChange(WarnLevel):
-    def code(self):
+    def code(self) -> str:
         return "I071"
 
     def message(self) -> str:
@@ -1247,13 +1246,24 @@ class UnversionedBreakingChange(WarnLevel):
         )
 
 
+class WarnStateTargetEqual(WarnLevel):
+    def code(self):
+        return "I072"
+
+    def message(self) -> str:
+        return yellow(
+            f"Warning: The state and target directories are the same: '{self.state_path}'. "
+            f"This could lead to missing changes due to overwritten state including non-idempotent retries."
+        )
+
+
 # =======================================================
 # M - Deps generation
 # =======================================================
 
 
 class GitSparseCheckoutSubdirectory(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "M001"
 
     def message(self) -> str:
@@ -1261,7 +1271,7 @@ class GitSparseCheckoutSubdirectory(DebugLevel):
 
 
 class GitProgressCheckoutRevision(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "M002"
 
     def message(self) -> str:
@@ -1269,7 +1279,7 @@ class GitProgressCheckoutRevision(DebugLevel):
 
 
 class GitProgressUpdatingExistingDependency(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "M003"
 
     def message(self) -> str:
@@ -1277,7 +1287,7 @@ class GitProgressUpdatingExistingDependency(DebugLevel):
 
 
 class GitProgressPullingNewDependency(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "M004"
 
     def message(self) -> str:
@@ -1285,7 +1295,7 @@ class GitProgressPullingNewDependency(DebugLevel):
 
 
 class GitNothingToDo(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "M005"
 
     def message(self) -> str:
@@ -1293,7 +1303,7 @@ class GitNothingToDo(DebugLevel):
 
 
 class GitProgressUpdatedCheckoutRange(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "M006"
 
     def message(self) -> str:
@@ -1301,7 +1311,7 @@ class GitProgressUpdatedCheckoutRange(DebugLevel):
 
 
 class GitProgressCheckedOutAt(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "M007"
 
     def message(self) -> str:
@@ -1309,7 +1319,7 @@ class GitProgressCheckedOutAt(DebugLevel):
 
 
 class RegistryProgressGETRequest(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "M008"
 
     def message(self) -> str:
@@ -1317,7 +1327,7 @@ class RegistryProgressGETRequest(DebugLevel):
 
 
 class RegistryProgressGETResponse(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "M009"
 
     def message(self) -> str:
@@ -1325,7 +1335,7 @@ class RegistryProgressGETResponse(DebugLevel):
 
 
 class SelectorReportInvalidSelector(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "M010"
 
     def message(self) -> str:
@@ -1336,7 +1346,7 @@ class SelectorReportInvalidSelector(InfoLevel):
 
 
 class DepsNoPackagesFound(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "M013"
 
     def message(self) -> str:
@@ -1344,7 +1354,7 @@ class DepsNoPackagesFound(InfoLevel):
 
 
 class DepsStartPackageInstall(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "M014"
 
     def message(self) -> str:
@@ -1352,7 +1362,7 @@ class DepsStartPackageInstall(InfoLevel):
 
 
 class DepsInstallInfo(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "M015"
 
     def message(self) -> str:
@@ -1360,7 +1370,7 @@ class DepsInstallInfo(InfoLevel):
 
 
 class DepsUpdateAvailable(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "M016"
 
     def message(self) -> str:
@@ -1368,7 +1378,7 @@ class DepsUpdateAvailable(InfoLevel):
 
 
 class DepsUpToDate(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "M017"
 
     def message(self) -> str:
@@ -1376,7 +1386,7 @@ class DepsUpToDate(InfoLevel):
 
 
 class DepsListSubdirectory(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "M018"
 
     def message(self) -> str:
@@ -1384,7 +1394,7 @@ class DepsListSubdirectory(InfoLevel):
 
 
 class DepsNotifyUpdatesAvailable(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "M019"
 
     def message(self) -> str:
@@ -1393,7 +1403,7 @@ class DepsNotifyUpdatesAvailable(InfoLevel):
 
 
 class RetryExternalCall(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "M020"
 
     def message(self) -> str:
@@ -1401,7 +1411,7 @@ class RetryExternalCall(DebugLevel):
 
 
 class RecordRetryException(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "M021"
 
     def message(self) -> str:
@@ -1409,7 +1419,7 @@ class RecordRetryException(DebugLevel):
 
 
 class RegistryIndexProgressGETRequest(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "M022"
 
     def message(self) -> str:
@@ -1417,7 +1427,7 @@ class RegistryIndexProgressGETRequest(DebugLevel):
 
 
 class RegistryIndexProgressGETResponse(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "M023"
 
     def message(self) -> str:
@@ -1425,7 +1435,7 @@ class RegistryIndexProgressGETResponse(DebugLevel):
 
 
 class RegistryResponseUnexpectedType(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "M024"
 
     def message(self) -> str:
@@ -1433,7 +1443,7 @@ class RegistryResponseUnexpectedType(DebugLevel):
 
 
 class RegistryResponseMissingTopKeys(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "M025"
 
     def message(self) -> str:
@@ -1442,7 +1452,7 @@ class RegistryResponseMissingTopKeys(DebugLevel):
 
 
 class RegistryResponseMissingNestedKeys(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "M026"
 
     def message(self) -> str:
@@ -1451,7 +1461,7 @@ class RegistryResponseMissingNestedKeys(DebugLevel):
 
 
 class RegistryResponseExtraNestedKeys(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "M027"
 
     def message(self) -> str:
@@ -1460,7 +1470,7 @@ class RegistryResponseExtraNestedKeys(DebugLevel):
 
 
 class DepsSetDownloadDirectory(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "M028"
 
     def message(self) -> str:
@@ -1468,7 +1478,7 @@ class DepsSetDownloadDirectory(DebugLevel):
 
 
 class DepsUnpinned(WarnLevel):
-    def code(self):
+    def code(self) -> str:
         return "M029"
 
     def message(self) -> str:
@@ -1487,7 +1497,7 @@ class DepsUnpinned(WarnLevel):
 
 
 class NoNodesForSelectionCriteria(WarnLevel):
-    def code(self):
+    def code(self) -> str:
         return "M030"
 
     def message(self) -> str:
@@ -1500,7 +1510,7 @@ class NoNodesForSelectionCriteria(WarnLevel):
 
 
 class RunningOperationCaughtError(ErrorLevel):
-    def code(self):
+    def code(self) -> str:
         return "Q001"
 
     def message(self) -> str:
@@ -1508,7 +1518,7 @@ class RunningOperationCaughtError(ErrorLevel):
 
 
 class CompileComplete(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "Q002"
 
     def message(self) -> str:
@@ -1516,7 +1526,7 @@ class CompileComplete(InfoLevel):
 
 
 class FreshnessCheckComplete(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "Q003"
 
     def message(self) -> str:
@@ -1524,7 +1534,7 @@ class FreshnessCheckComplete(InfoLevel):
 
 
 class SeedHeader(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "Q004"
 
     def message(self) -> str:
@@ -1532,7 +1542,7 @@ class SeedHeader(InfoLevel):
 
 
 class SQLRunnerException(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "Q006"
 
     def message(self) -> str:
@@ -1540,7 +1550,7 @@ class SQLRunnerException(DebugLevel):
 
 
 class LogTestResult(DynamicLevel):
-    def code(self):
+    def code(self) -> str:
         return "Q007"
 
     def message(self) -> str:
@@ -1585,7 +1595,7 @@ class LogTestResult(DynamicLevel):
 
 
 class LogStartLine(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "Q011"
 
     def message(self) -> str:
@@ -1594,7 +1604,7 @@ class LogStartLine(InfoLevel):
 
 
 class LogModelResult(DynamicLevel):
-    def code(self):
+    def code(self) -> str:
         return "Q012"
 
     def message(self) -> str:
@@ -1619,7 +1629,7 @@ class LogModelResult(DynamicLevel):
 
 
 class LogSnapshotResult(DynamicLevel):
-    def code(self):
+    def code(self) -> str:
         return "Q015"
 
     def message(self) -> str:
@@ -1641,7 +1651,7 @@ class LogSnapshotResult(DynamicLevel):
 
 
 class LogSeedResult(DynamicLevel):
-    def code(self):
+    def code(self) -> str:
         return "Q016"
 
     def message(self) -> str:
@@ -1665,7 +1675,7 @@ class LogSeedResult(DynamicLevel):
 
 
 class LogFreshnessResult(DynamicLevel):
-    def code(self):
+    def code(self) -> str:
         return "Q018"
 
     def message(self) -> str:
@@ -1710,7 +1720,7 @@ class LogFreshnessResult(DynamicLevel):
 
 
 class LogCancelLine(ErrorLevel):
-    def code(self):
+    def code(self) -> str:
         return "Q022"
 
     def message(self) -> str:
@@ -1719,7 +1729,7 @@ class LogCancelLine(ErrorLevel):
 
 
 class DefaultSelector(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "Q023"
 
     def message(self) -> str:
@@ -1727,7 +1737,7 @@ class DefaultSelector(InfoLevel):
 
 
 class NodeStart(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "Q024"
 
     def message(self) -> str:
@@ -1735,7 +1745,7 @@ class NodeStart(DebugLevel):
 
 
 class NodeFinished(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "Q025"
 
     def message(self) -> str:
@@ -1743,7 +1753,7 @@ class NodeFinished(DebugLevel):
 
 
 class QueryCancelationUnsupported(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "Q026"
 
     def message(self) -> str:
@@ -1756,7 +1766,7 @@ class QueryCancelationUnsupported(InfoLevel):
 
 
 class ConcurrencyLine(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "Q027"
 
     def message(self) -> str:
@@ -1764,7 +1774,7 @@ class ConcurrencyLine(InfoLevel):
 
 
 class WritingInjectedSQLForNode(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "Q029"
 
     def message(self) -> str:
@@ -1772,7 +1782,7 @@ class WritingInjectedSQLForNode(DebugLevel):
 
 
 class NodeCompiling(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "Q030"
 
     def message(self) -> str:
@@ -1780,7 +1790,7 @@ class NodeCompiling(DebugLevel):
 
 
 class NodeExecuting(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "Q031"
 
     def message(self) -> str:
@@ -1788,7 +1798,7 @@ class NodeExecuting(DebugLevel):
 
 
 class LogHookStartLine(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "Q032"
 
     def message(self) -> str:
@@ -1799,7 +1809,7 @@ class LogHookStartLine(InfoLevel):
 
 
 class LogHookEndLine(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "Q033"
 
     def message(self) -> str:
@@ -1815,7 +1825,7 @@ class LogHookEndLine(InfoLevel):
 
 
 class SkippingDetails(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "Q034"
 
     def message(self) -> str:
@@ -1829,7 +1839,7 @@ class SkippingDetails(InfoLevel):
 
 
 class NothingToDo(WarnLevel):
-    def code(self):
+    def code(self) -> str:
         return "Q035"
 
     def message(self) -> str:
@@ -1837,7 +1847,7 @@ class NothingToDo(WarnLevel):
 
 
 class RunningOperationUncaughtError(ErrorLevel):
-    def code(self):
+    def code(self) -> str:
         return "Q036"
 
     def message(self) -> str:
@@ -1845,7 +1855,7 @@ class RunningOperationUncaughtError(ErrorLevel):
 
 
 class EndRunResult(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "Q037"
 
     def message(self) -> str:
@@ -1853,7 +1863,7 @@ class EndRunResult(DebugLevel):
 
 
 class NoNodesSelected(WarnLevel):
-    def code(self):
+    def code(self) -> str:
         return "Q038"
 
     def message(self) -> str:
@@ -1861,7 +1871,7 @@ class NoNodesSelected(WarnLevel):
 
 
 class CommandCompleted(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "Q039"
 
     def message(self) -> str:
@@ -1871,7 +1881,7 @@ class CommandCompleted(DebugLevel):
 
 
 class ShowNode(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "Q041"
 
     def message(self) -> str:
@@ -1890,7 +1900,7 @@ class ShowNode(InfoLevel):
 
 
 class CompiledNode(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "Q042"
 
     def message(self) -> str:
@@ -1914,7 +1924,7 @@ class CompiledNode(InfoLevel):
 
 
 class CatchableExceptionOnRun(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "W002"
 
     def message(self) -> str:
@@ -1922,7 +1932,7 @@ class CatchableExceptionOnRun(DebugLevel):
 
 
 class InternalErrorOnRun(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "W003"
 
     def message(self) -> str:
@@ -1936,7 +1946,7 @@ the error persists, open an issue at https://github.com/dbt-labs/dbt-core
 
 
 class GenericExceptionOnRun(ErrorLevel):
-    def code(self):
+    def code(self) -> str:
         return "W004"
 
     def message(self) -> str:
@@ -1948,7 +1958,7 @@ class GenericExceptionOnRun(ErrorLevel):
 
 
 class NodeConnectionReleaseError(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "W005"
 
     def message(self) -> str:
@@ -1956,7 +1966,7 @@ class NodeConnectionReleaseError(DebugLevel):
 
 
 class FoundStats(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "W006"
 
     def message(self) -> str:
@@ -1969,7 +1979,7 @@ class FoundStats(InfoLevel):
 
 
 class MainKeyboardInterrupt(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "Z001"
 
     def message(self) -> str:
@@ -1977,7 +1987,7 @@ class MainKeyboardInterrupt(InfoLevel):
 
 
 class MainEncounteredError(ErrorLevel):
-    def code(self):
+    def code(self) -> str:
         return "Z002"
 
     def message(self) -> str:
@@ -1985,7 +1995,7 @@ class MainEncounteredError(ErrorLevel):
 
 
 class MainStackTrace(ErrorLevel):
-    def code(self):
+    def code(self) -> str:
         return "Z003"
 
     def message(self) -> str:
@@ -1996,7 +2006,7 @@ class MainStackTrace(ErrorLevel):
 
 
 class SystemCouldNotWrite(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "Z005"
 
     def message(self) -> str:
@@ -2007,7 +2017,7 @@ class SystemCouldNotWrite(DebugLevel):
 
 
 class SystemExecutingCmd(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "Z006"
 
     def message(self) -> str:
@@ -2015,7 +2025,7 @@ class SystemExecutingCmd(DebugLevel):
 
 
 class SystemStdOut(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "Z007"
 
     def message(self) -> str:
@@ -2023,7 +2033,7 @@ class SystemStdOut(DebugLevel):
 
 
 class SystemStdErr(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "Z008"
 
     def message(self) -> str:
@@ -2031,7 +2041,7 @@ class SystemStdErr(DebugLevel):
 
 
 class SystemReportReturnCode(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "Z009"
 
     def message(self) -> str:
@@ -2039,7 +2049,7 @@ class SystemReportReturnCode(DebugLevel):
 
 
 class TimingInfoCollected(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "Z010"
 
     def message(self) -> str:
@@ -2053,7 +2063,7 @@ class TimingInfoCollected(DebugLevel):
 
 
 class LogDebugStackTrace(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "Z011"
 
     def message(self) -> str:
@@ -2065,7 +2075,7 @@ class LogDebugStackTrace(DebugLevel):
 
 
 class CheckCleanPath(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "Z012"
 
     def message(self) -> str:
@@ -2073,7 +2083,7 @@ class CheckCleanPath(InfoLevel):
 
 
 class ConfirmCleanPath(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "Z013"
 
     def message(self) -> str:
@@ -2081,7 +2091,7 @@ class ConfirmCleanPath(InfoLevel):
 
 
 class ProtectedCleanPath(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "Z014"
 
     def message(self) -> str:
@@ -2089,7 +2099,7 @@ class ProtectedCleanPath(InfoLevel):
 
 
 class FinishedCleanPaths(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "Z015"
 
     def message(self) -> str:
@@ -2097,7 +2107,7 @@ class FinishedCleanPaths(InfoLevel):
 
 
 class OpenCommand(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "Z016"
 
     def message(self) -> str:
@@ -2116,7 +2126,7 @@ class OpenCommand(InfoLevel):
 
 
 class Formatting(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "Z017"
 
     def message(self) -> str:
@@ -2124,7 +2134,7 @@ class Formatting(InfoLevel):
 
 
 class RunResultWarning(WarnLevel):
-    def code(self):
+    def code(self) -> str:
         return "Z021"
 
     def message(self) -> str:
@@ -2133,7 +2143,7 @@ class RunResultWarning(WarnLevel):
 
 
 class RunResultFailure(ErrorLevel):
-    def code(self):
+    def code(self) -> str:
         return "Z022"
 
     def message(self) -> str:
@@ -2142,7 +2152,7 @@ class RunResultFailure(ErrorLevel):
 
 
 class StatsLine(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "Z023"
 
     def message(self) -> str:
@@ -2151,7 +2161,7 @@ class StatsLine(InfoLevel):
 
 
 class RunResultError(ErrorLevel):
-    def code(self):
+    def code(self) -> str:
         return "Z024"
 
     def message(self) -> str:
@@ -2160,7 +2170,7 @@ class RunResultError(ErrorLevel):
 
 
 class RunResultErrorNoMessage(ErrorLevel):
-    def code(self):
+    def code(self) -> str:
         return "Z025"
 
     def message(self) -> str:
@@ -2168,7 +2178,7 @@ class RunResultErrorNoMessage(ErrorLevel):
 
 
 class SQLCompiledPath(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "Z026"
 
     def message(self) -> str:
@@ -2176,7 +2186,7 @@ class SQLCompiledPath(InfoLevel):
 
 
 class CheckNodeTestFailure(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "Z027"
 
     def message(self) -> str:
@@ -2189,7 +2199,7 @@ class CheckNodeTestFailure(InfoLevel):
 
 
 class EndOfRunSummary(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "Z030"
 
     def message(self) -> str:
@@ -2210,7 +2220,7 @@ class EndOfRunSummary(InfoLevel):
 
 
 class LogSkipBecauseError(ErrorLevel):
-    def code(self):
+    def code(self) -> str:
         return "Z034"
 
     def message(self) -> str:
@@ -2224,7 +2234,7 @@ class LogSkipBecauseError(ErrorLevel):
 
 
 class EnsureGitInstalled(ErrorLevel):
-    def code(self):
+    def code(self) -> str:
         return "Z036"
 
     def message(self) -> str:
@@ -2236,7 +2246,7 @@ class EnsureGitInstalled(ErrorLevel):
 
 
 class DepsCreatingLocalSymlink(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "Z037"
 
     def message(self) -> str:
@@ -2244,7 +2254,7 @@ class DepsCreatingLocalSymlink(DebugLevel):
 
 
 class DepsSymlinkNotAvailable(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "Z038"
 
     def message(self) -> str:
@@ -2252,7 +2262,7 @@ class DepsSymlinkNotAvailable(DebugLevel):
 
 
 class DisableTracking(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "Z039"
 
     def message(self) -> str:
@@ -2264,7 +2274,7 @@ class DisableTracking(DebugLevel):
 
 
 class SendingEvent(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "Z040"
 
     def message(self) -> str:
@@ -2272,7 +2282,7 @@ class SendingEvent(DebugLevel):
 
 
 class SendEventFailure(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "Z041"
 
     def message(self) -> str:
@@ -2280,7 +2290,7 @@ class SendEventFailure(DebugLevel):
 
 
 class FlushEvents(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "Z042"
 
     def message(self) -> str:
@@ -2288,7 +2298,7 @@ class FlushEvents(DebugLevel):
 
 
 class FlushEventsFailure(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "Z043"
 
     def message(self) -> str:
@@ -2296,7 +2306,7 @@ class FlushEventsFailure(DebugLevel):
 
 
 class TrackingInitializeFailure(DebugLevel):
-    def code(self):
+    def code(self) -> str:
         return "Z044"
 
     def message(self) -> str:
@@ -2307,7 +2317,7 @@ class TrackingInitializeFailure(DebugLevel):
 
 
 class RunResultWarningMessage(WarnLevel):
-    def code(self):
+    def code(self) -> str:
         return "Z046"
 
     def message(self) -> str:
@@ -2316,7 +2326,7 @@ class RunResultWarningMessage(WarnLevel):
 
 
 class DebugCmdOut(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "Z047"
 
     def message(self) -> str:
@@ -2324,7 +2334,7 @@ class DebugCmdOut(InfoLevel):
 
 
 class DebugCmdResult(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "Z048"
 
     def message(self) -> str:
@@ -2332,7 +2342,7 @@ class DebugCmdResult(InfoLevel):
 
 
 class ListCmdOut(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "Z049"
 
     def message(self) -> str:
@@ -2344,7 +2354,7 @@ class ListCmdOut(InfoLevel):
 
 
 class Note(InfoLevel):
-    def code(self):
+    def code(self) -> str:
         return "Z050"
 
     def message(self) -> str:

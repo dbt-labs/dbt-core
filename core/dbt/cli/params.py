@@ -315,7 +315,7 @@ printer_width = click.option(
 profile = click.option(
     "--profile",
     envvar=None,
-    help="Which profile to load. Overrides setting in dbt_project.yml.",
+    help="Which existing profile to load. Overrides setting in dbt_project.yml.",
 )
 
 profiles_dir = click.option(
@@ -368,6 +368,7 @@ resource_type = click.option(
     type=ChoiceTuple(
         [
             "metric",
+            "semantic_model",
             "source",
             "analysis",
             "model",

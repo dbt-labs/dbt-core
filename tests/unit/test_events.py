@@ -1,6 +1,9 @@
-import pytest
+import logging
 import re
+from argparse import Namespace
 from typing import TypeVar
+
+import pytest
 
 from dbt.contracts.results import TimingInfo, RunResult, RunStatus
 from dbt.events import AdapterLogger, types
@@ -19,8 +22,6 @@ from dbt.events.functions import msg_to_dict, msg_to_json, ctx_set_event_manager
 from dbt.events.helpers import get_json_string_utcnow
 from dbt.events.types import RunResultError
 from dbt.flags import set_from_args
-from argparse import Namespace
-
 from dbt.task.printer import print_run_result_error
 
 set_from_args(Namespace(WARN_ERROR=False), None)
@@ -82,6 +83,12 @@ class TestAdapterLogger:
 
         event = types.JinjaLogDebug(msg=[1, 2, 3])
         assert isinstance(event.msg, str)
+
+    def test_set_adapter_dependency_log_level(self):
+        logger = AdapterLogger("dbt_tests")
+        package_log = logging.getLogger("test_package_log")
+        logger.set_adapter_dependency_log_level("test_package_log", "DEBUG")
+        package_log.debug("debug message")
 
 
 class TestEventCodes:
@@ -264,6 +271,7 @@ sample_values = [
         enforced_model_constraint_removed=[],
         materialization_changed=[],
     ),
+    types.WarnStateTargetEqual(state_path=""),
     # M - Deps generation ======================
     types.GitSparseCheckoutSubdirectory(subdir=""),
     types.GitProgressCheckoutRevision(revision=""),

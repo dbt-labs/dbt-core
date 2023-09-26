@@ -5,7 +5,7 @@ from concurrent.futures import as_completed
 from datetime import datetime
 from multiprocessing.dummy import Pool as ThreadPool
 from pathlib import Path
-from typing import Optional, Dict, List, Set, Tuple, Iterable, AbstractSet
+from typing import AbstractSet, Optional, Dict, List, Set, Tuple, Iterable
 
 import dbt.exceptions
 import dbt.tracking

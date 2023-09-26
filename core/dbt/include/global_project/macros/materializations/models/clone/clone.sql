@@ -33,7 +33,12 @@
 
       -- as a general rule, data platforms that can clone tables can also do atomic 'create or replace'
       {% call statement('main') %}
-          {{ create_or_replace_clone(target_relation, defer_relation) }}
+          {% if target_relation and defer_relation and target_relation == defer_relation %}
+              {{ log("Target relation and defer relation are the same, skipping clone for relation: " ~ target_relation) }}
+          {% else %}
+              {{ create_or_replace_clone(target_relation, defer_relation) }}
+          {% endif %}
+
       {% endcall %}
 
       {% set should_revoke = should_revoke(existing_relation, full_refresh_mode=True) %}
