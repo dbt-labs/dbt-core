@@ -46,7 +46,16 @@ models__ephemeral_sql = """
 
 {{ config(materialized='ephemeral') }}
 
-select 1 as id
+select
+  1 as id,
+  {{ dbt.date_trunc('day', dbt.current_timestamp()) }} as created_at
+
+"""
+
+models__metric_flow = """
+
+select
+  {{ dbt.date_trunc('day', dbt.current_timestamp()) }} as date_day
 
 """
 
@@ -103,6 +112,38 @@ select 4 as id
 
 """
 
+semantic_models__sm_yml = """
+semantic_models:
+  - name: my_sm
+    model: ref('outer')
+    defaults:
+      agg_time_dimension: created_at
+    entities:
+      - name: my_entity
+        type: primary
+        expr: id
+    dimensions:
+      - name: created_at
+        type: time
+        type_params:
+          time_granularity: day
+    measures:
+      - name: total_outer_count
+        agg: count
+        expr: 1
+
+"""
+
+metrics__m_yml = """
+metrics:
+  - name: total_outer
+    type: simple
+    description: The total count of outer
+    label: Total Outer
+    type_params:
+      measure: total_outer_count
+"""
+
 
 @pytest.fixture(scope="class")
 def snapshots():
@@ -122,6 +163,9 @@ def models():
         "incremental.sql": models__incremental_sql,
         "docs.md": models__docs_md,
         "outer.sql": models__outer_sql,
+        "metricflow_time_spine.sql": models__metric_flow,
+        "sm.yml": semantic_models__sm_yml,
+        "m.yml": metrics__m_yml,
         "sub": {"inner.sql": models__sub__inner_sql},
     }
 
@@ -139,6 +183,16 @@ def seeds():
 @pytest.fixture(scope="class")
 def analyses():
     return {"a.sql": analyses__a_sql}
+
+
+@pytest.fixture(scope="class")
+def semantic_models():
+    return {"sm.yml": semantic_models__sm_yml}
+
+
+@pytest.fixture(scope="class")
+def metrics():
+    return {"m.yml": metrics__m_yml}
 
 
 @pytest.fixture(scope="class")

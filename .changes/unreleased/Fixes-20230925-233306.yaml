@@ -1,0 +1,6 @@
+kind: Fixes
+body: semantic models in graph selection
+time: 2023-09-25T23:33:06.754344+01:00
+custom:
+  Author: dave-connors-3 michelleark
+  Issue: "8589"
