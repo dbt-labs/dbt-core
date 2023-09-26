@@ -63,9 +63,9 @@ class BaseModelContractNumericPrecision:
         assert expected_msg not in logs
 
 
-class TestModelContractNumericNoPrecisionPostgres(BaseModelContractNumericNoPrecision):
+class TestPostgresModelContractNumericNoPrecision(BaseModelContractNumericNoPrecision):
     pass
 
 
-class TestModelContractNumericPrecisionPostgres(BaseModelContractNumericPrecision):
+class TestPostgresModelContractNumericPrecision(BaseModelContractNumericPrecision):
     pass
