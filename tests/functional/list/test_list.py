@@ -306,7 +306,7 @@ class TestList:
                         "packages": [],
                         "incremental_strategy": None,
                         "docs": {"node_color": None, "show": True},
-                        "contract": {"enforced": False},
+                        "contract": {"enforced": False, "alias_types": True},
                         "access": "protected",
                     },
                     "original_file_path": normalize("models/metricflow_time_spine.sql"),
