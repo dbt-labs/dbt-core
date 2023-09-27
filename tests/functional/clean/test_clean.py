@@ -46,10 +46,11 @@ class TestCleanPathOutsideProjectWithFlag:
         return "clean-targets: ['/tmp/foo']"
 
     def test_clean_path_outside_project(self, project):
-        run_dbt(["clean", "--enable-clean-outside-project"])
+        # Doesn't fail because flag is set
+        run_dbt(["clean", "--no-clean-project-files-only"])
 
         with pytest.raises(
             DbtRuntimeError,
             match="dbt will not clean the following directories outside the project",
         ):
-            run_dbt(["clean", "--disable-clean-outside-project"])
+            run_dbt(["clean", "--clean-project-files-only"])
