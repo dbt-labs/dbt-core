@@ -134,6 +134,9 @@ semantic_models:
     config:
       enabled: true
       group: some_group
+      meta:
+        my_meta: 'testing'
+        my_other_meta: 'testing more'
     dimensions:
       - name: favorite_color
         type: categorical
@@ -184,6 +187,7 @@ semantic_models:
     defaults:
       agg_time_dimension: created_at
 """
+
 
 schema_yml = """models:
   - name: fct_revenue

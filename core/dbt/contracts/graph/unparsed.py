@@ -712,6 +712,7 @@ class UnparsedSemanticModel(dbtClassMixin):
     name: str
     model: str  # looks like "ref(...)"
     config: Dict[str, Any] = field(default_factory=dict)
+    meta: Dict[str, Any] = field(default_factory=dict)
     description: Optional[str] = None
     label: Optional[str] = None
     defaults: Optional[Defaults] = None
