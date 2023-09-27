@@ -38,3 +38,18 @@ class TestCleanPathOutsideProjectAbsolute:
             match="dbt will not clean the following directories outside the project",
         ):
             run_dbt(["clean"])
+
+
+class TestCleanPathOutsideProjectWithFlag:
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return "clean-targets: ['/tmp/foo']"
+
+    def test_clean_path_outside_project(self, project):
+        run_dbt(["clean", "--enable-clean-outside-project"])
+
+        with pytest.raises(
+            DbtRuntimeError,
+            match="dbt will not clean the following directories outside the project",
+        ):
+            run_dbt(["clean", "--disable-clean-outside-project"])

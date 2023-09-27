@@ -37,7 +37,7 @@ class CleanTask(BaseTask):
         paths_outside_project = set(
             path for path in clean_paths if project_dir not in path.absolute().parents
         )
-        if paths_outside_project:
+        if paths_outside_project and not self.args.enable_clean_outside_project:
             raise DbtRuntimeError(
                 f"dbt will not clean the following directories outside the project: {[str(p) for p in paths_outside_project]}"
             )

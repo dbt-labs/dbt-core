@@ -422,6 +422,13 @@ send_anonymous_usage_stats = click.option(
     default=True,
 )
 
+clean_outside_project = click.option(
+    "--enable-clean-outside-project/--disable-clean-outside-project",
+    envvar="DBT_CLEAN_OUTSIDE_PROJECT",
+    help="If enabled, dbt clean will delete all paths specified in clean-paths, even if they're outside the dbt project.",
+    default=False,
+)
+
 show = click.option(
     "--show",
     envvar=None,
