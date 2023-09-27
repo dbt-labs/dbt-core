@@ -1502,6 +1502,7 @@ class SemanticModel(GraphNode):
     model: str
     node_relation: Optional[NodeRelation]
     description: Optional[str] = None
+    label: Optional[str] = None
     defaults: Optional[Defaults] = None
     entities: Sequence[Entity] = field(default_factory=list)
     measures: Sequence[Measure] = field(default_factory=list)
