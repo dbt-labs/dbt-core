@@ -9,12 +9,14 @@ from dbt.cli.exceptions import (
 from dbt.cli.flags import Flags
 from dbt.config import RuntimeConfig
 from dbt.config.runtime import load_project, load_profile, UnsetProfile
+from dbt.events.base_types import EventLevel
 from dbt.events.functions import fire_event, LOG_VERSION, set_invocation_id, setup_event_logger
 from dbt.events.types import (
     CommandCompleted,
     MainReportVersion,
     MainReportArgs,
     MainTrackingUserState,
+    ResourceReport,
 )
 from dbt.events.helpers import get_json_string_utcnow
 from dbt.events.types import MainEncounteredError, MainStackTrace
@@ -99,16 +101,25 @@ def postflight(func):
         finally:
             rusage = resource.getrusage(resource.RUSAGE_SELF)
             fire_event(
-                CommandCompleted(
-                    command=ctx.command_path,
-                    success=success,
-                    completed_at=get_json_string_utcnow(),
-                    elapsed=time.perf_counter() - start_func,
+                ResourceReport(
+                    command_name=ctx.command.name,
+                    command_success=success,
+                    command_wall_clock_time=time.perf_counter() - start_func,
                     process_user_time=rusage.ru_utime,
                     process_kernel_time=rusage.ru_stime,
                     process_mem_max_rss=rusage.ru_maxrss,
                     process_in_blocks=rusage.ru_inblock,
                     process_out_blocks=rusage.ru_oublock,
+                ),
+                EventLevel.INFO if ctx.obj["flags"].SHOW_RESOURCE_REPORT else None,
+            )
+
+            fire_event(
+                CommandCompleted(
+                    command=ctx.command_path,
+                    success=success,
+                    completed_at=get_json_string_utcnow(),
+                    elapsed=time.perf_counter() - start_func,
                 )
             )
 

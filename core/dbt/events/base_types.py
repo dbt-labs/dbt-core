@@ -100,9 +100,12 @@ class BaseEvent:
             self.pb_msg, preserving_proto_field_name=True, including_default_value_fields=True
         )
 
-    def to_json(self):
+    def to_json(self) -> str:
         return MessageToJson(
-            self.pb_msg, preserving_proto_field_name=True, including_default_valud_fields=True
+            self.pb_msg,
+            preserving_proto_field_name=True,
+            including_default_value_fields=True,
+            indent=None,
         )
 
     def level_tag(self) -> EventLevel:
