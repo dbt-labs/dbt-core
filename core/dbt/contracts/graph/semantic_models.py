@@ -66,6 +66,7 @@ class Dimension(dbtClassMixin):
     name: str
     type: DimensionType
     description: Optional[str] = None
+    label: Optional[str] = None
     is_partition: bool = False
     type_params: Optional[DimensionTypeParams] = None
     expr: Optional[str] = None
@@ -100,6 +101,7 @@ class Entity(dbtClassMixin):
     name: str
     type: EntityType
     description: Optional[str] = None
+    label: Optional[str] = None
     role: Optional[str] = None
     expr: Optional[str] = None
 
@@ -136,6 +138,7 @@ class Measure(dbtClassMixin):
     name: str
     agg: AggregationType
     description: Optional[str] = None
+    label: Optional[str] = None
     create_metric: bool = False
     expr: Optional[str] = None
     agg_params: Optional[MeasureAggregationParameters] = None
