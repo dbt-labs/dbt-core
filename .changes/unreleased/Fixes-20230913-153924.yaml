@@ -1,0 +1,6 @@
+kind: Fixes
+body: 'update dbt show to include limit in DWH query '
+time: 2023-09-13T15:39:24.591805+01:00
+custom:
+  Author: michelleark
+  Issue: 8496, 8417
