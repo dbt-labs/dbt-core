@@ -304,7 +304,6 @@ class TestList:
                         "incremental_strategy": None,
                         "docs": {"node_color": None, "show": True},
                         "contract": {"enforced": False},
-                        "access": "protected",
                     },
                     "original_file_path": normalize("models/metricflow_time_spine.sql"),
                     "unique_id": "model.test.metricflow_time_spine",

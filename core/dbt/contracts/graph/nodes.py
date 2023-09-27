@@ -1629,9 +1629,6 @@ class SemanticModel(GraphNode):
     def same_primary_entity(self, old: "SemanticModel") -> bool:
         return self.primary_entity == old.primary_entity
 
-    def same_group(self, old: "SemanticModel") -> bool:
-        return self.group == old.group
-
     def same_contents(self, old: Optional["SemanticModel"]) -> bool:
         # existing when it didn't before is a change!
         # metadata/tags changes are not "changes"
@@ -1648,7 +1645,6 @@ class SemanticModel(GraphNode):
             and self.same_measures(old)
             and self.same_config(old)
             and self.same_primary_entity(old)
-            and self.same_group(old)
             and True
         )
 
