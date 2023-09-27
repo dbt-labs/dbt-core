@@ -1,0 +1,6 @@
+kind: Fixes
+body: Support doc blocks in nested semantic model YAML
+time: 2023-09-26T00:15:27.328363+01:00
+custom:
+  Author: aranke
+  Issue: "8509"

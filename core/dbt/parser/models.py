@@ -33,9 +33,9 @@ dbt_function_full_names = set(["dbt.ref", "dbt.source", "dbt.config", "dbt.confi
 
 
 class PythonValidationVisitor(ast.NodeVisitor):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
-        self.dbt_errors = []
+        self.dbt_errors: List[str] = []
         self.num_model_def = 0
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:

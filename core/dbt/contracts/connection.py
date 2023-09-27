@@ -104,7 +104,7 @@ class LazyHandle:
     connection, updating the handle on the Connection.
     """
 
-    def __init__(self, opener: Callable[[Connection], Connection]):
+    def __init__(self, opener: Callable[[Connection], Connection]) -> None:
         self.opener = opener
 
     def resolve(self, connection: Connection) -> Connection:

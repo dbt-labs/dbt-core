@@ -92,7 +92,7 @@ class JsonFormatter(LogMessageFormatter):
 
 
 class FormatterMixin:
-    def __init__(self, format_string):
+    def __init__(self, format_string) -> None:
         self._text_format_string = format_string
         self.formatter_class = logbook.StringFormatter
         # triggers a formatter update via logbook.StreamHandler
@@ -197,7 +197,7 @@ class TextOnly(logbook.Processor):
 
 
 class TimingProcessor(logbook.Processor):
-    def __init__(self, timing_info: Optional[dbtClassMixin] = None):
+    def __init__(self, timing_info: Optional[dbtClassMixin] = None) -> None:
         self.timing_info = timing_info
         super().__init__()
 
@@ -207,7 +207,7 @@ class TimingProcessor(logbook.Processor):
 
 
 class DbtProcessState(logbook.Processor):
-    def __init__(self, value: str):
+    def __init__(self, value: str) -> None:
         self.value = value
         super().__init__()
 
@@ -218,7 +218,7 @@ class DbtProcessState(logbook.Processor):
 
 
 class DbtModelState(logbook.Processor):
-    def __init__(self, state: Dict[str, str]):
+    def __init__(self, state: Dict[str, str]) -> None:
         self.state = state
         super().__init__()
 
@@ -232,7 +232,7 @@ class DbtStatusMessage(logbook.Processor):
 
 
 class UniqueID(logbook.Processor):
-    def __init__(self, unique_id: str):
+    def __init__(self, unique_id: str) -> None:
         self.unique_id = unique_id
         super().__init__()
 
@@ -241,7 +241,7 @@ class UniqueID(logbook.Processor):
 
 
 class NodeCount(logbook.Processor):
-    def __init__(self, node_count: int):
+    def __init__(self, node_count: int) -> None:
         self.node_count = node_count
         super().__init__()
 
@@ -250,7 +250,7 @@ class NodeCount(logbook.Processor):
 
 
 class NodeMetadata(logbook.Processor):
-    def __init__(self, node, index):
+    def __init__(self, node, index) -> None:
         self.node = node
         self.index = index
         super().__init__()
@@ -301,7 +301,7 @@ class HookMetadata(NodeMetadata):
 
 
 class TimestampNamed(logbook.Processor):
-    def __init__(self, name: str):
+    def __init__(self, name: str) -> None:
         self.name = name
         super().__init__()
 
@@ -348,7 +348,7 @@ DebugWarnings().__enter__()
 
 
 class LogManager(logbook.NestedSetup):
-    def __init__(self, stdout=sys.stdout, stderr=sys.stderr):
+    def __init__(self, stdout=sys.stdout, stderr=sys.stderr) -> None:
         self.stdout = stdout
         self.stderr = stderr
         self._null_handler = logbook.NullHandler()

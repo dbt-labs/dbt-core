@@ -1,0 +1,6 @@
+kind: Fixes
+body: Support global flags passed in after subcommands
+time: 2023-09-19T14:05:14.600303+01:00
+custom:
+  Author: aranke
+  Issue: "6497"

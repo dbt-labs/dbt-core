@@ -46,7 +46,7 @@ class ListTask(GraphRunnableTask):
         )
     )
 
-    def __init__(self, args, config, manifest):
+    def __init__(self, args, config, manifest) -> None:
         super().__init__(args, config, manifest)
         if self.args.models:
             if self.args.select:

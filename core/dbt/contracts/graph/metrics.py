@@ -9,7 +9,7 @@ BASE_METRICS = [MetricType.SIMPLE, MetricType.CUMULATIVE]
 
 
 class MetricReference(object):
-    def __init__(self, metric_name, package_name=None):
+    def __init__(self, metric_name, package_name=None) -> None:
         self.metric_name = metric_name
         self.package_name = package_name
 

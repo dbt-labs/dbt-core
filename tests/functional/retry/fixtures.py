@@ -45,3 +45,16 @@ macros__alter_timezone_sql = """
 {% do log("Timezone set to: " + timezone, info=True) %}
 {% endmacro %}
 """
+
+simple_model = """
+select null as id
+"""
+
+simple_schema = """
+models:
+  - name: some_model
+    columns:
+      - name: id
+        tests:
+          - not_null
+"""

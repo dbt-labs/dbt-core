@@ -1,0 +1,30 @@
+# **what?**
+# Cleanup branches left over from automation and testing.  Also cleanup
+# draft releases from release testing.
+
+# **why?**
+# The automations are leaving behind branches and releases that clutter
+# the repository.  Sometimes we need them to debug processes so we don't
+# want them immediately deleted.  Running on Saturday to avoid running
+# at the same time as an actual release to prevent breaking a release
+# mid-release.
+
+# **when?**
+# Mainly on a schedule of 12:00 Saturday.
+# Manual trigger can also run on demand
+
+name: Repository Cleanup
+
+on:
+  schedule:
+    - cron: '0 12 * * SAT' # At 12:00 on Saturday - details in `why` above
+
+  workflow_dispatch: # for manual triggering
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup-repo:
+    uses: dbt-labs/actions/.github/workflows/repository-cleanup.yml@main
+    secrets: inherit
