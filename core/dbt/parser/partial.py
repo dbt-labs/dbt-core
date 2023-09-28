@@ -68,7 +68,9 @@ special_override_macros = [
 # to preserve an unchanged file object in case we need to drop back to a
 # a full parse (such as for certain macro changes)
 class PartialParsing:
-    def __init__(self, saved_manifest: Manifest, new_files: MutableMapping[str, AnySourceFile]):
+    def __init__(
+        self, saved_manifest: Manifest, new_files: MutableMapping[str, AnySourceFile]
+    ) -> None:
         self.saved_manifest = saved_manifest
         self.new_files = new_files
         self.project_parser_files: Dict = {}

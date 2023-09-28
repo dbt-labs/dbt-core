@@ -20,13 +20,18 @@ def md5sum(s: str):
 
 
 class GitPackageMixin:
-    def __init__(self, git: str) -> None:
+    def __init__(
+        self,
+        git: str,
+        subdirectory: Optional[str] = None,
+    ) -> None:
         super().__init__()
         self.git = git
+        self.subdirectory = subdirectory
 
     @property
     def name(self):
-        return self.git
+        return f"{self.git}/{self.subdirectory}" if self.subdirectory else self.git
 
     def source_type(self) -> str:
         return "git"
@@ -40,11 +45,11 @@ class GitPinnedPackage(GitPackageMixin, PinnedPackage):
         warn_unpinned: bool = True,
         subdirectory: Optional[str] = None,
     ) -> None:
-        super().__init__(git)
+        super().__init__(git, subdirectory)
         self.revision = revision
         self.warn_unpinned = warn_unpinned
         self.subdirectory = subdirectory
-        self._checkout_name = md5sum(self.git)
+        self._checkout_name = md5sum(self.name)
 
     def get_version(self):
         return self.revision
@@ -106,7 +111,7 @@ class GitUnpinnedPackage(GitPackageMixin, UnpinnedPackage[GitPinnedPackage]):
         warn_unpinned: bool = True,
         subdirectory: Optional[str] = None,
     ) -> None:
-        super().__init__(git)
+        super().__init__(git, subdirectory)
         self.revisions = revisions
         self.warn_unpinned = warn_unpinned
         self.subdirectory = subdirectory
@@ -129,7 +134,14 @@ class GitUnpinnedPackage(GitPackageMixin, UnpinnedPackage[GitPinnedPackage]):
             other = self.git[:-4]
         else:
             other = self.git + ".git"
-        return [self.git, other]
+
+        if self.subdirectory:
+            git_name = f"{self.git}/{self.subdirectory}"
+            other = f"{other}/{self.subdirectory}"
+        else:
+            git_name = self.git
+
+        return [git_name, other]
 
     def incorporate(self, other: "GitUnpinnedPackage") -> "GitUnpinnedPackage":
         warn_unpinned = self.warn_unpinned and other.warn_unpinned
@@ -146,7 +158,7 @@ class GitUnpinnedPackage(GitPackageMixin, UnpinnedPackage[GitPinnedPackage]):
         if len(requested) == 0:
             requested = {"HEAD"}
         elif len(requested) > 1:
-            raise MultipleVersionGitDepsError(self.git, requested)
+            raise MultipleVersionGitDepsError(self.name, requested)
 
         return GitPinnedPackage(
             git=self.git,

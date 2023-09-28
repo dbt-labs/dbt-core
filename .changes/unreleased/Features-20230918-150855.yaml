@@ -1,0 +1,6 @@
+kind: Fixes
+body: Support quoted parameter list for MultiOption CLI options.
+time: 2023-09-18T15:08:55.625412-05:00
+custom:
+  Author: emmyoop
+  Issue: "8598"

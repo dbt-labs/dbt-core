@@ -90,7 +90,7 @@ class AdapterProtocol(  # type: ignore[misc]
     ConnectionManager: Type[ConnectionManager_T]
     connections: ConnectionManager_T
 
-    def __init__(self, config: AdapterRequiredConfig):
+    def __init__(self, config: AdapterRequiredConfig) -> None:
         ...
 
     @classmethod

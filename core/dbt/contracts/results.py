@@ -59,7 +59,7 @@ class TimingInfo(dbtClassMixin):
 
 # This is a context manager
 class collect_timing_info:
-    def __init__(self, name: str, callback: Callable[[TimingInfo], None]):
+    def __init__(self, name: str, callback: Callable[[TimingInfo], None]) -> None:
         self.timing_info = TimingInfo(name=name)
         self.callback = callback
 

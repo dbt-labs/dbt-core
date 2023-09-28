@@ -368,6 +368,7 @@ resource_type = click.option(
     type=ChoiceTuple(
         [
             "metric",
+            "semantic_model",
             "source",
             "analysis",
             "model",
@@ -419,6 +420,13 @@ send_anonymous_usage_stats = click.option(
     "--send-anonymous-usage-stats/--no-send-anonymous-usage-stats",
     envvar="DBT_SEND_ANONYMOUS_USAGE_STATS",
     help="Send anonymous usage stats to dbt Labs.",
+    default=True,
+)
+
+clean_project_files_only = click.option(
+    "--clean-project-files-only / --no-clean-project-files-only",
+    envvar="DBT_CLEAN_PROJECT_FILES_ONLY",
+    help="If disabled, dbt clean will delete all paths specified in clean-paths, even if they're outside the dbt project.",
     default=True,
 )
 

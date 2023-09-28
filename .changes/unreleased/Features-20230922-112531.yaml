@@ -1,0 +1,6 @@
+kind: Features
+body: Adding `date_spine` macro (and supporting macros) from dbt-utils to dbt-core
+time: 2023-09-22T11:25:31.383445-07:00
+custom:
+  Author: QMalcolm
+  Issue: "8172"

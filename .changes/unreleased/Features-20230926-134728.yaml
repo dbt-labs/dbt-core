@@ -1,0 +1,6 @@
+kind: Features
+body: Raise a warning when a contracted model has a numeric field without scale defined
+time: 2023-09-26T13:47:28.645383-05:00
+custom:
+  Author: emmyoop
+  Issue: "8183"

@@ -37,7 +37,7 @@ from {{ ref('sample_model') }}
 
 models__sql_header = """
 {% call set_sql_header(config) %}
-set session time zone 'Asia/Kolkata';
+set session time zone '{{ var("timezone", "Europe/Paris") }}';
 {%- endcall %}
 select current_setting('timezone') as timezone
 """

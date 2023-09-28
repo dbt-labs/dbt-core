@@ -26,7 +26,7 @@ class dbtPlugin:
     Its interface is **not** stable and will likely change between dbt-core versions.
     """
 
-    def __init__(self, project_name: str):
+    def __init__(self, project_name: str) -> None:
         self.project_name = project_name
         try:
             self.initialize()
@@ -67,7 +67,7 @@ class PluginManager:
     PLUGIN_MODULE_PREFIX = "dbt_"
     PLUGIN_ATTR_NAME = "plugins"
 
-    def __init__(self, plugins: List[dbtPlugin]):
+    def __init__(self, plugins: List[dbtPlugin]) -> None:
         self._plugins = plugins
         self._valid_hook_names = set()
         # default hook implementations from dbtPlugin
