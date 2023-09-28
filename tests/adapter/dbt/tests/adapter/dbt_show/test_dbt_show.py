@@ -50,7 +50,6 @@ class BaseShowSqlHeader:
         }
 
     def test_sql_header(self, project):
-        run_dbt(["build", "--vars", "timezone: Asia/Kolkata"])
         run_dbt(["show", "--select", "sql_header", "--vars", "timezone: Asia/Kolkata"])
 
 
