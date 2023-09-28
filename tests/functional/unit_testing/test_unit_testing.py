@@ -178,6 +178,7 @@ class TestUnitTests:
         with pytest.raises(DuplicateResourceNameError):
             run_dbt(["unit-test", "--select", "my_model"])
 
+
 test_my_model_csv_yml = """
 unit:
   - model: my_model
@@ -257,6 +258,7 @@ unit:
         config:
            tags: test_this
 """
+
 
 class TestUnitTestsWithInlineCSV:
     @pytest.fixture(scope="class")

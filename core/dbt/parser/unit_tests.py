@@ -131,10 +131,12 @@ class UnitTestManifestLoader:
             # TODO: package_name?
             input_name = f"{test_case.model}__{test_case.name}__{original_input_node.name}"
             input_unique_id = f"model.{package_name}.{input_name}"
+            rows: List[Dict[str, Any]]
             if given.format == "csv":
                 rows = self._build_rows_from_csv(given.rows)
-            else:
-                rows = given.rows
+            else:  # format == "dict"
+                # Should always be a dictionary.
+                rows = given.rows  # type:ignore
 
             input_node = ModelNode(
                 raw_code=self._build_raw_code(rows, original_input_node_columns),
@@ -155,7 +157,7 @@ class UnitTestManifestLoader:
             # Add unique ids of input_nodes to depends_on
             unit_test_node.depends_on.nodes.append(input_node.unique_id)
 
-    def _build_rows_from_csv(self, csv_string):
+    def _build_rows_from_csv(self, csv_string) -> List[Dict[str, Any]]:
         dummy_file = StringIO(csv_string)
         reader = csv.DictReader(dummy_file)
         rows = []
