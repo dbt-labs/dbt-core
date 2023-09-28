@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from typing import Optional, Set, List, Any
 
 from dbt.adapters.base.meta import available
-from dbt.adapters.base.impl import AdapterConfig, ConstraintSupport
+from dbt.adapters.base.impl import AdapterConfig, AdapterFeature, ConstraintSupport
 from dbt.adapters.sql import SQLAdapter
 from dbt.adapters.postgres import PostgresConnectionManager
 from dbt.adapters.postgres.column import PostgresColumn
@@ -75,6 +75,8 @@ class PostgresAdapter(SQLAdapter):
 
     CATALOG_BY_RELATION_SUPPORT = True
 
+    SUPPORTED_FEATURES: Set[AdapterFeature] = frozenset(AdapterFeature.CatalogByRelations)
+
     @classmethod
     def date_function(cls):
         return "now()"
@@ -145,3 +147,6 @@ class PostgresAdapter(SQLAdapter):
 
     def debug_query(self):
         self.execute("select 1 as id")
+
+    def has_feature(self, feature: AdapterFeature) -> bool:
+        return feature in self.SUPPORTED_FEATURES

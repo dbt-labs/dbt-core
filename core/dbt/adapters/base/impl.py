@@ -162,6 +162,14 @@ class PythonJobHelper:
         raise NotImplementedError("PythonJobHelper submit function is not implemented yet")
 
 
+class AdapterFeature(str, Enum):
+    """Enumeration of optional adapter features which can be probed using BaseAdapter.has_feature()"""
+
+    CatalogByRelations = "GetCatalogByRelations"
+    """Flags support for retrieving catalog information using a list of relations, rather than always retrieving all
+    the relations in a schema """
+
+
 class BaseAdapter(metaclass=AdapterMeta):
     """The BaseAdapter provides an abstract base class for adapters.
 
@@ -222,8 +230,6 @@ class BaseAdapter(metaclass=AdapterMeta):
         ConstraintType.primary_key: ConstraintSupport.NOT_ENFORCED,
         ConstraintType.foreign_key: ConstraintSupport.ENFORCED,
     }
-
-    CATALOG_BY_RELATION_SUPPORT = False
 
     def __init__(self, config) -> None:
         self.config = config
@@ -1141,7 +1147,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         with executor(self.config) as tpe:
             futures: List[Future[agate.Table]] = []
             relation_count = len(self._get_catalog_relations(manifest))
-            if relation_count <= 100 and self.CATALOG_BY_RELATION_SUPPORT:
+            if relation_count <= 100 and self.has_feature(AdapterFeature.CatalogByRelations):
                 relations_by_schema = self._get_catalog_relations_by_info_schema(manifest)
                 for info_schema in relations_by_schema:
                     name = ".".join([str(info_schema.database), "information_schema"])
@@ -1494,6 +1500,12 @@ class BaseAdapter(metaclass=AdapterMeta):
             return f"{constraint_prefix}{constraint.expression}"
         else:
             return None
+
+    def has_feature(self, feature: AdapterFeature) -> bool:
+        # The base adapter implementation does not implement any optional
+        # features, so always return false. Adapters which wish to provide
+        # optional features will have to override this function.
+        return False
 
 
 COLUMNS_EQUAL_SQL = """
