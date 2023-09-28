@@ -1,3 +1,5 @@
+from shutil import copytree, move
+
 import pytest
 
 from dbt.contracts.results import RunStatus, TestStatus
@@ -271,3 +273,21 @@ class TestRetryResourceType:
         # nothing to do
         results = run_dbt(["retry"])
         assert len(results) == 0
+
+
+class TestRetryOverridePath:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "sample_model.sql": models__sample_model,
+        }
+
+    def test_retry(self, project):
+        project_root = project.project_root
+        proj_location_1 = project_root / "proj_location_1"
+        proj_location_2 = project_root / "proj_location_2"
+
+        copytree(project_root, proj_location_1)
+        run_dbt(["run", "--project-dir", "proj_location_1"], expect_pass=False)
+        move(proj_location_1, proj_location_2)
+        run_dbt(["retry", "--project-dir", "proj_location_2"], expect_pass=False)
