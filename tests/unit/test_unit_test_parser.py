@@ -7,6 +7,7 @@ from .utils import MockNode
 from .test_parser import SchemaParserTest, assertEqualNodes
 
 from unittest import mock
+from dbt.contracts.graph.unparsed import OutputFixture
 
 
 UNIT_TEST_MODEL_NOT_FOUND_SOURCE = """
@@ -16,7 +17,9 @@ unit:
         - name: test_my_model_doesnt_exist
           description: "unit test description"
           given: []
-          expect: []
+          expect:
+            rows:
+              - {a: 1}
 """
 
 
@@ -27,7 +30,9 @@ unit:
         - name: test_my_model
           description: "unit test description"
           given: []
-          expect: []
+          expect:
+            rows:
+              - {a: 1}
 """
 
 
@@ -38,7 +43,9 @@ unit:
         - name: test_my_model_versioned
           description: "unit test description"
           given: []
-          expect: []
+          expect:
+            rows:
+              - {a: 1}
 """
 
 
@@ -54,7 +61,9 @@ unit:
               meta_jinja_key: '{{ 1 + 1 }}'
           description: "unit test description"
           given: []
-          expect: []
+          expect:
+            rows:
+              - {a: 1}
 """
 
 
@@ -65,11 +74,15 @@ unit:
         - name: test_my_model
           description: "unit test description"
           given: []
-          expect: []
+          expect:
+            rows:
+              - {a: 1}
         - name: test_my_model2
           description: "unit test description"
           given: []
-          expect: []
+          expect:
+            rows:
+              - {a: 1}
 """
 
 
@@ -116,7 +129,7 @@ class UnitTestParserTest(SchemaParserTest):
             original_file_path=block.path.original_file_path,
             unique_id="unit.snowplow.my_model.test_my_model",
             given=[],
-            expect=[],
+            expect=OutputFixture(rows=[{"a": 1}]),
             description="unit test description",
             overrides=None,
             depends_on=DependsOn(nodes=["model.snowplow.my_model"]),

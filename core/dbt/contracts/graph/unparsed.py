@@ -736,10 +736,22 @@ def normalize_date(d: Optional[datetime.date]) -> Optional[datetime.datetime]:
     return dt
 
 
+class UnitTestFormat(StrEnum):
+    CSV = "csv"
+    Dict = "dict"
+
+
 @dataclass
 class InputFixture(dbtClassMixin):
     input: str
-    rows: List[Dict[str, Any]] = field(default_factory=list)
+    rows: Union[str, List[Dict[str, Any]]] = ""
+    format: UnitTestFormat = UnitTestFormat.Dict
+
+
+@dataclass
+class OutputFixture(dbtClassMixin):
+    rows: Union[str, List[Dict[str, Any]]] = ""
+    format: UnitTestFormat = UnitTestFormat.Dict
 
 
 @dataclass
@@ -753,7 +765,7 @@ class UnitTestOverrides(dbtClassMixin):
 class UnparsedUnitTestDefinition(dbtClassMixin):
     name: str
     given: Sequence[InputFixture]
-    expect: List[Dict[str, Any]]
+    expect: OutputFixture
     description: str = ""
     overrides: Optional[UnitTestOverrides] = None
     config: Dict[str, Any] = field(default_factory=dict)

@@ -527,6 +527,11 @@ class ModelConfig(NodeConfig):
 
 
 @dataclass
+class UnitTestNodeConfig(NodeConfig):
+    expected_rows: List[Dict[str, Any]] = field(default_factory=list)
+
+
+@dataclass
 class SeedConfig(NodeConfig):
     materialized: str = "seed"
     delimiter: str = ","
