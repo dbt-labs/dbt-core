@@ -116,7 +116,9 @@ def postflight(func):
                         process_in_blocks=rusage.ru_inblock,
                         process_out_blocks=rusage.ru_oublock,
                     ),
-                    EventLevel.INFO if ctx.obj["flags"].SHOW_RESOURCE_REPORT else None,
+                    EventLevel.INFO
+                    if "flags" in ctx.obj and ctx.obj["flags"].SHOW_RESOURCE_REPORT
+                    else None,
                 )
 
             fire_event(
