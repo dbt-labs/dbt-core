@@ -165,7 +165,7 @@ class PythonJobHelper:
 class AdapterFeature(str, Enum):
     """Enumeration of optional adapter features which can be probed using BaseAdapter.has_feature()"""
 
-    CatalogByRelations = "GetCatalogByRelations"
+    CatalogByRelations = "CatalogByRelations"
     """Flags support for retrieving catalog information using a list of relations, rather than always retrieving all
     the relations in a schema """
 
@@ -1501,7 +1501,8 @@ class BaseAdapter(metaclass=AdapterMeta):
         else:
             return None
 
-    def has_feature(self, feature: AdapterFeature) -> bool:
+    @classmethod
+    def has_feature(cls, feature: AdapterFeature) -> bool:
         # The base adapter implementation does not implement any optional
         # features, so always return false. Adapters which wish to provide
         # optional features will have to override this function.

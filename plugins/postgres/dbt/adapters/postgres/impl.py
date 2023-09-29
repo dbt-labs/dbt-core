@@ -75,7 +75,7 @@ class PostgresAdapter(SQLAdapter):
 
     CATALOG_BY_RELATION_SUPPORT = True
 
-    SUPPORTED_FEATURES: Set[AdapterFeature] = frozenset(AdapterFeature.CatalogByRelations)
+    SUPPORTED_FEATURES: Set[AdapterFeature] = frozenset([AdapterFeature.CatalogByRelations])
 
     @classmethod
     def date_function(cls):
@@ -148,5 +148,6 @@ class PostgresAdapter(SQLAdapter):
     def debug_query(self):
         self.execute("select 1 as id")
 
-    def has_feature(self, feature: AdapterFeature) -> bool:
-        return feature in self.SUPPORTED_FEATURES
+    @classmethod
+    def has_feature(cls, feature: AdapterFeature) -> bool:
+        return feature in cls.SUPPORTED_FEATURES

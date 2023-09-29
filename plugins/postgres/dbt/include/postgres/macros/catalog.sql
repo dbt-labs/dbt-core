@@ -29,7 +29,17 @@
     join pg_catalog.pg_attribute col on col.attrelid = tbl.oid
     left outer join pg_catalog.pg_description tbl_desc on (tbl_desc.objoid = tbl.oid and tbl_desc.objsubid = 0)
     left outer join pg_catalog.pg_description col_desc on (col_desc.objoid = tbl.oid and col_desc.objsubid = col.attnum)
-    {{ postgres__get_catalog_where_clause(relations) }}
+    where (
+      {%- for relation in relations -%}
+        {%- if relation.identifier -%}
+          (upper(sch.nspname) = upper('{{ relation.schema }}') and
+           upper(tbl.relname) = upper('{{ relation.identifier }}'))
+        {%- else-%}
+          upper(sch.nspname) = upper('{{ relation.schema }}')
+        {%- endif -%}
+        {%- if not loop.last %} or {% endif -%}
+      {%- endfor -%}
+    )
       and not pg_is_other_temp_schema(sch.oid) -- not a temporary schema belonging to another session
       and tbl.relpersistence in ('p', 'u') -- [p]ermanent table or [u]nlogged table. Exclude [t]emporary tables
       and tbl.relkind in ('r', 'v', 'f', 'p') -- o[r]dinary table, [v]iew, [f]oreign table, [p]artitioned table. Other values are [i]ndex, [S]equence, [c]omposite type, [t]OAST table, [m]aterialized view
@@ -53,19 +63,4 @@
     {%- set dummy = relations.append({'schema': schema}) -%}
   {%- endfor -%}
   {{ return(postgres__get_catalog_relations(information_schema, relations)) }}
-{%- endmacro %}
-
-
-{% macro postgres__get_catalog_where_clause(relations) %}
-    where (
-      {%- for relation in relations -%}
-        {%- if relation.identifier -%}
-          (upper(sch.nspname) = upper('{{ relation.schema }}') and
-           upper(tbl.relname) = upper('{{ relation.identifier }}'))
-        {%- else-%}
-          upper(sch.nspname) = upper('{{ relation.schema }}')
-        {%- endif -%}
-        {%- if not loop.last %} or {% endif -%}
-      {%- endfor -%}
-    )
 {%- endmacro %}
