@@ -103,7 +103,6 @@ Devils in the details; toggle away.
 <summary>When compiling happens for a given node varies by command.</summary>
 
     - For example, if one model’s templated SQL depends on an introspective query that expects another model to have already been materialized, this can lead to errors.
-    - `dbt compile` has not historically supported `--defer`, but this was added in v1.3 (with [one known bug](https://github.com/dbt-labs/dbt-core/issues/6124)).
 - In `dbt run`, models are operated on in DAG order, where operating on one model means compiling it and then running its materialization. This way, if a downstream model’s compiled SQL will depend on an introspective query against the materialized results of an upstream model, we wait to compile it until the upstream model has completely finishing running.
 
 </details>
