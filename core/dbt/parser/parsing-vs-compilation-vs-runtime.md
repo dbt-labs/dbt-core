@@ -102,7 +102,7 @@ Devils in the details; toggle away.
 <details>
 <summary>When compiling happens for a given node varies by command.</summary>
 
-    - For example, if one model’s templated SQL depends on an introspective query that expects another model to have already been materialized, this can lead to errors.
+- For example, if one model’s templated SQL depends on an introspective query that expects another model to have already been materialized, this can lead to errors.
 - In `dbt run`, models are operated on in DAG order, where operating on one model means compiling it and then running its materialization. This way, if a downstream model’s compiled SQL will depend on an introspective query against the materialized results of an upstream model, we wait to compile it until the upstream model has completely finishing running.
 
 </details>
@@ -144,6 +144,6 @@ Keeping these pieces of logic separate is one of the most important & opinionate
 ### Two potential optimizations
 
 1. [**"Partial parsing."**](https://docs.getdbt.com/reference/parsing#partial-parsing) dbt saves the mostly-done Manifest from last time, in a file called `target/partial_parse.msgpack`. dbt **just** reads the files that have changed (based on file system metadata), and makes partial updates to that mostly-done Manifest. Of course, if a user has updated configuration that could be relevant globally (e.g. `dbt_project.yml`, `--vars`), we have to opt for a full re-parse — better safe (slow & correct) than sorry (fast & incorrect).
-2. Reusing manifests: https://docs.getdbt.com/reference/programmatic-invocations#reusing-objects. Note that this is taking "full control," and there are failure modes (example: [dbt-core#7945](https://github.com/dbt-labs/dbt-core/issues/7945)).
+2. [**"Reusing manifests."**](https://docs.getdbt.com/reference/programmatic-invocations#reusing-objects) Note that this is taking "full control," and there are failure modes (example: [dbt-core#7945](https://github.com/dbt-labs/dbt-core/issues/7945)).
 
 </details>
