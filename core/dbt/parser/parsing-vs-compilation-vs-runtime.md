@@ -86,7 +86,7 @@ Devils in the details; toggle away.
 <details>
 <summary>If your model’s code uses a dynamic query to template code, this requires a database connection.</summary>
 
-- At this point, `[execute](https://docs.getdbt.com/reference/dbt-jinja-functions/execute)` is set to `True`.
+- At this point, [`execute`](https://docs.getdbt.com/reference/dbt-jinja-functions/execute) is set to `True`.
 - e.g. `dbt_utils.get_column_values`, `dbt_utils.star`
 - Jinja-SQL supports this sort of dynamic templating. Python does not; there are other imperative ways to do this, using DataFrame methods / the Python interpreter at runtime.
 
