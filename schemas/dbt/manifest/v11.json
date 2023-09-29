@@ -4610,6 +4610,21 @@
             }
           ],
           "default": null
+        },
+        "join_to_timespine": {
+          "type": "boolean",
+          "default": false
+        },
+        "fill_nulls_with": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "additionalProperties": false,
@@ -5137,6 +5152,17 @@
           ],
           "default": null
         },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "role": {
           "anyOf": [
             {
@@ -5247,6 +5273,17 @@
           ]
         },
         "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "label": {
           "anyOf": [
             {
               "type": "string"
@@ -5381,6 +5418,17 @@
           ],
           "default": null
         },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "is_partition": {
           "type": "boolean",
           "default": false
@@ -5449,6 +5497,12 @@
             }
           ],
           "default": null
+        },
+        "meta": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          }
         }
       },
       "additionalProperties": true
@@ -5521,6 +5575,17 @@
           ],
           "default": null
         },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "defaults": {
           "anyOf": [
             {
@@ -5575,6 +5640,12 @@
         },
         "config": {
           "$ref": "#/$defs/SemanticModelConfig"
+        },
+        "meta": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          }
         },
         "unrendered_config": {
           "type": "object",
