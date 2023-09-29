@@ -27,7 +27,7 @@ As a user, you write models as SQL + YAML. dbt wants to understand each model as
     - Plus, certain configurations have implications for **node selection**, which supports selecting models using the `tag:` and `config:` methods.
 - Parsing also resolves the configuration for that model, based on configs set in `dbt_project.yml`, and macros like `generate_schema_name`. (These are "special" macros, whose results are saved at parse time!)
 - The way dbt parses models depends on the language that model is written in.
-    - Python models are statically analyzed using the Python AST. [This is pretty fast.](https://www.notion.so/f113894b4cb7412e83b7f9fdb3a24cdb?pvs=21)
+    - Python models are statically analyzed using the Python AST.
     - Simple Jinja-SQL models (using just `ref()`, `source()`, &/or `config()` with literal inputs) are also [statically analyzed](https://docs.getdbt.com/reference/parsing#static-parser), using [a thing we built](https://github.com/dbt-labs/dbt-extractor). This is **very** fast (~0.3 ms).
     - More complex Jinja-SQL models are parsed by actually rendering the Jinja, and "capturing" any instances of `ref()`, `source()`, &/or `config()`. This is kinda slow, but it’s more capable than our static parser. Those macros can receive `set` variables, or call other macros in turn, and we can still capture the right results because **we’re actually using real Jinja to render it.**
         - We capture any other macros called in `depends_on.macros`. This enables us to do clever things later on, such as select models downstream of changed macros (`state:modified.macros`).
