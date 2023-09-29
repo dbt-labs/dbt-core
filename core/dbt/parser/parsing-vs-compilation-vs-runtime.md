@@ -16,7 +16,7 @@ To keep it really simple, let’s say this happens in two steps: "Parsing" and "
 
 ### Parsing
 
-As a user, you write models as SQL + YAML. dbt wants to understand that model as a Python object, defined by an internal data structure. It also wants to know its dependencies and configuration (= its place in the DAG). dbt reads your code **for that one model,** and attempts to construct that object, raising a **validation** error if it can’t.
+As a user, you write models as SQL + YAML. dbt wants to understand each model as a Python object, defined by an internal data structure. It also wants to know its dependencies and configuration (= its place in the DAG). dbt reads your code **for that one model,** and attempts to construct that object, raising a **validation** error if it can’t.
 
 <details>
 <summary>(Toggle for many more details.)</summary>
