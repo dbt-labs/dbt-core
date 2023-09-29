@@ -117,7 +117,7 @@ The outcome of compiling a model is updating its Manifest entry in two important
 
 A model’s `compiled_code` is passed into the materialization macro, and the materialization macro is executed. That materialization macro will also call user-provided pre- and post-hooks, and other built-in macros that return the appropriate DDL + DML statements (`create`, `alter`, `merge`, etc.)
 
-(It’s set to a context variable named [`sql`](https://github.com/dbt-labs/dbt-core/blob/16f529e1d4e067bdbb6a659a622bead442f24b4e/core/dbt/context/providers.py#L1314-L1323), which you’ll see in some materializations — and we should really change that to just `model['compiled_code']`.)
+(For legacy reasons, `compiled_code` is also available as a context variable named [`sql`](https://github.com/dbt-labs/dbt-core/blob/16f529e1d4e067bdbb6a659a622bead442f24b4e/core/dbt/context/providers.py#L1314-L1323). You'll see it referenced as `sql` in some materializations. Going forward, `model['compiled_code']` is a better way to access this.)
 
 ## Why does it matter?
 
@@ -138,12 +138,12 @@ Keeping these pieces of logic separate is one of the most important & opinionate
 ### Notes on parsing
 
 - **dbt has not yet connected to a database.** Every step performed thus far has required only project files, configuration, and `dbt-core`. You can perform parsing without an Internet connection.
-- There is a command called `parse`, which does **just** "parsing" + "resolving," as a way to measure parsing performance in large projects. That command *could* write `manifest.json` once it's done; it doesn't, today, for no particular reason. (We're thinking about changing this.)
+- There is a command called `parse`, which does **just** "parsing" + "resolving," as a way to measure parsing performance in large projects. That command is the fastest way to write `manifest.json` (since v1.5).
 - In large projects, the parsing step can also be quite slow: reading lots of files, doing lots of dataclass validation, creating lots of links between lots of nodes. (See below for details on two potential optimizations.)
 
 ### Two potential optimizations
 
 1. [**"Partial parsing."**](https://docs.getdbt.com/reference/parsing#partial-parsing) dbt saves the mostly-done Manifest from last time, in a file called `target/partial_parse.msgpack`. dbt **just** reads the files that have changed (based on file system metadata), and makes partial updates to that mostly-done Manifest. Of course, if a user has updated configuration that could be relevant globally (e.g. `dbt_project.yml`, `--vars`), we have to opt for a full re-parse — better safe (slow & correct) than sorry (fast & incorrect).
-2. **A dbt Server.** Both the new `dbt-server` and the old `dbt-rpc` server have mechanisms to separate parsing from execution. They save a Manifest for reuse between commands. When files change, they trigger a re-parse and re-construction of the Manifest behind the scenes. This way, you don’t have to wait for re-parsing (even partial parsing) when you actually submit a command; it’s ready for you. The new approach, taken by `dbt-server` + Runtime, is much more resilient and less brittle than the previous approach in `dbt-rpc`.
+2. Reusing manifests: https://docs.getdbt.com/reference/programmatic-invocations#reusing-objects. Note that this is taking "full control," and there are failure modes (example: [dbt-core#7945](https://github.com/dbt-labs/dbt-core/issues/7945)).
 
 </details>
