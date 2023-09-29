@@ -51,7 +51,7 @@ RUN_MODEL_SPEC = "iglu:com.dbt/run_model/jsonschema/1-0-3"
 PLUGIN_GET_NODES = "iglu:com.dbt/plugin_get_nodes/jsonschema/1-0-0"
 
 # workaround in case real snowplow tracker is in the env
-INIT_KW_ARGS = {"buffer_size": 30} if snowplow_version == '0.0.2' else {"batch_size": 30}
+INIT_KW_ARGS = {"buffer_size": 30} if snowplow_version == "0.0.2" else {"batch_size": 30}
 
 
 class TimeoutEmitter(Emitter):
@@ -109,7 +109,7 @@ class TimeoutEmitter(Emitter):
 emitter = TimeoutEmitter()
 
 # workaround in case real snowplow tracker is in the env
-if snowplow_version == '0.0.2':
+if snowplow_version == "0.0.2":
     tracker = Tracker(
         emitter,
         namespace="cf",
