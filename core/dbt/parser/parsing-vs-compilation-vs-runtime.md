@@ -23,7 +23,7 @@ As a user, you write models as SQL + YAML. dbt wants to understand each model as
 
 - (Because your SQL and YAML live in separate files, this is actually two steps. But for things like `sources`, `exposures`, `metrics`, `tests`, it’s a single pass.)
 - dbt needs to capture and store two vital pieces of information: **dependencies** and **configuration**.
-    - We need to know the shape of the DAG. That includes which models are disabled, in addition to which models will be depending on which other models.
+    - We need to know the shape of the DAG. This includes which models are disabled. It also includes dependency relationships between models.
     - Plus, certain configurations have implications for **node selection**, which supports selecting models using the `tag:` and `config:` methods.
 - Parsing also resolves the configuration for that model, based on configs set in `dbt_project.yml`, and macros like `generate_schema_name`. (These are "special" macros, whose results are saved at parse time!)
 - The way dbt parses models depends on the language that model is written in.
