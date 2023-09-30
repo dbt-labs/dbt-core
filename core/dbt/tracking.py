@@ -120,7 +120,7 @@ else:
         "cf",
         emitters=emitter,
         app_id="dbt",
-    )
+    ) # type: ignore
 
 
 class User:
