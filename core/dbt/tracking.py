@@ -19,7 +19,7 @@ from dbt.events.types import (
 from dbt import version as dbt_version
 from dbt import flags
 from snowplow_tracker import Subject, Tracker, Emitter, logger as sp_logger
-from snowplow_tracker import __version__ as snowplow_version
+from snowplow_tracker import __version__ as snowplow_version # type: ignore
 from snowplow_tracker import SelfDescribingJson
 from datetime import datetime
 
@@ -119,7 +119,7 @@ else:
         "cf",
         emitters=emitter,
         app_id="dbt",
-    )
+    ) # type: ignore
 
 
 class User:
