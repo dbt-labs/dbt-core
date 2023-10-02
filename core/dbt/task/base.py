@@ -5,6 +5,7 @@ import traceback
 from abc import ABCMeta, abstractmethod
 from contextlib import nullcontext
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Type, Union
 
 import dbt.exceptions
@@ -12,6 +13,7 @@ from dbt import tracking
 from dbt.adapters.factory import get_adapter
 from dbt.config import RuntimeConfig, Project
 from dbt.config.profile import read_profile
+from dbt.constants import DBT_PROJECT_FILE_NAME
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.results import (
     NodeStatus,
@@ -45,7 +47,7 @@ from dbt.exceptions import (
 from dbt.flags import get_flags
 from dbt.graph import Graph
 from dbt.logger import log_manager
-from .printer import print_run_result_error
+from dbt.task.printer import print_run_result_error
 
 
 class NoneConfig:
@@ -117,35 +119,32 @@ class BaseTask(metaclass=ABCMeta):
         return True
 
 
-def get_nearest_project_dir(project_dir: Optional[str]) -> str:
+def get_nearest_project_dir(project_dir: Optional[str]) -> Path:
     # If the user provides an explicit project directory, use that
     # but don't look at parent directories.
     if project_dir:
-        project_file = os.path.join(project_dir, "dbt_project.yml")
-        if os.path.exists(project_file):
-            return project_dir
+        cur_dir = Path(project_dir)
+        project_file = Path(project_dir) / DBT_PROJECT_FILE_NAME
+        if project_file.is_file():
+            return cur_dir
         else:
             raise dbt.exceptions.DbtRuntimeError(
                 "fatal: Invalid --project-dir flag. Not a dbt project. "
                 "Missing dbt_project.yml file"
             )
 
-    root_path = os.path.abspath(os.sep)
-    cwd = os.getcwd()
-
-    while cwd != root_path:
-        project_file = os.path.join(cwd, "dbt_project.yml")
-        if os.path.exists(project_file):
-            return cwd
-        cwd = os.path.dirname(cwd)
-
-    raise dbt.exceptions.DbtRuntimeError(
-        "fatal: Not a dbt project (or any of the parent directories). "
-        "Missing dbt_project.yml file"
-    )
+    cur_dir = Path.cwd()
+    project_file = cur_dir / DBT_PROJECT_FILE_NAME
+    if project_file.is_file():
+        return cur_dir
+    else:
+        raise dbt.exceptions.DbtRuntimeError(
+            "fatal: Not a dbt project (or any of the parent directories). "
+            "Missing dbt_project.yml file"
+        )
 
 
-def move_to_nearest_project_dir(project_dir: Optional[str]) -> str:
+def move_to_nearest_project_dir(project_dir: Optional[str]) -> Path:
     nearest_project_dir = get_nearest_project_dir(project_dir)
     os.chdir(nearest_project_dir)
     return nearest_project_dir

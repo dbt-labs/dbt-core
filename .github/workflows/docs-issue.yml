@@ -27,7 +27,14 @@ permissions:
 
 jobs:
   open_issues:
-    if: contains( github.event.pull_request.labels.*.name, 'user docs') && github.event.pull_request.merged == true
+    # we only want to run this when the PR has been merged or the label in the labeled event is `user docs`.  Otherwise it runs the
+    # risk of duplicaton of issues being created due to merge and label both triggering this workflow to run and neither having
+    # generating the comment before the other runs.  This lives here instead of the shared workflow because this is where we
+    # decide if it should run or not.
+    if: |
+      (github.event.pull_request.merged == true) &&
+      ((github.event.action == 'closed' && contains( github.event.pull_request.labels.*.name, 'user docs')) ||
+      (github.event.action == 'labeled' && github.event.label.name == 'user docs'))
     uses: dbt-labs/actions/.github/workflows/open-issue-in-repo.yml@main
     with:
         issue_repository: "dbt-labs/docs.getdbt.com"
