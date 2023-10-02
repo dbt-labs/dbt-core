@@ -244,7 +244,7 @@ class GenerateTask(CompileTask):
             with adapter.connection_named("generate_catalog"):
                 fire_event(BuildingCatalog())
                 # This generates the catalog as an agate.Table
-                catalog_table, exceptions = adapter.get_catalog(self.manifest)
+                catalog_table, exceptions = adapter.get_catalog(self.manifest, selected_nodes)
 
         catalog_data: List[PrimitiveDict] = [
             dict(zip(catalog_table.column_names, map(dbt.utils._coerce_decimal, row)))
