@@ -137,7 +137,6 @@ class BaseContextConfigGenerator(Generic[T]):
         patch_config_dict: Optional[Dict[str, Any]] = None,
     ) -> BaseConfig:
         own_config = self.get_node_project(project_name)
-
         result = self.initial_result(resource_type=resource_type, base=base)
 
         project_configs = self._project_configs(own_config, fqn, resource_type)

@@ -219,7 +219,6 @@ class ConfiguredParser(
             name = block.name
         if block.path.relative_path.endswith(".py"):
             language = ModelLanguage.python
-            config.add_config_call({"materialized": "table"})
         else:
             # this is not ideal but we have a lot of tests to adjust if don't do it
             language = ModelLanguage.sql
@@ -300,6 +299,22 @@ class ConfiguredParser(
 
         self._update_node_relation_name(parsed_node)
 
+    def normalize_model_node(sellf, parsed_node: IntermediateNode) -> None:
+        """This normalize the config for a model node.
+
+        The default materialization for a model is a view, but it's not
+        supported by python models. This function changes the default view to
+        table for python models.
+        """
+        if not parsed_node.resource_type == NodeType.Model:
+            return None
+
+        if not parsed_node.language == ModelLanguage.python:
+            return None
+
+        if parsed_node.config.materialized == "view":
+            parsed_node.config.materialized = "table"
+
     def update_parsed_node_config(
         self,
         parsed_node: IntermediateNode,
@@ -316,6 +331,7 @@ class ConfiguredParser(
         # and calls calculate_node_config to combine dbt_project configs and
         # config calls from SQL files, plus patch configs (from schema files)
         config_dict = config.build_config_dict(patch_config_dict=patch_config_dict)
+        self.normalize_model_node(parsed_node)
 
         # Set tags on node provided in config blocks. Tags are additive, so even if
         # config has been built before, we don't have to reset tags in the parsed_node.
