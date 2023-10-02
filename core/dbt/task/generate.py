@@ -24,6 +24,8 @@ from dbt.contracts.results import (
     CatalogArtifact,
 )
 from dbt.exceptions import DbtInternalError, AmbiguousCatalogMatchError
+from dbt.graph import ResourceTypeSelector
+from dbt.node_types import NodeType
 from dbt.include.global_project import DOCS_INDEX_FILE_PATH
 from dbt.events.functions import fire_event
 from dbt.events.types import (
@@ -268,6 +270,16 @@ class GenerateTask(CompileTask):
             fire_event(WriteCatalogFailure(num_exceptions=len(exceptions)))
         fire_event(CatalogWritten(path=os.path.abspath(path)))
         return results
+
+    def get_node_selector(self) -> ResourceTypeSelector:
+        if self.manifest is None or self.graph is None:
+            raise DbtInternalError("manifest and graph must be set to perform node selection")
+        return ResourceTypeSelector(
+            graph=self.graph,
+            manifest=self.manifest,
+            previous_state=self.previous_state,
+            resource_types=NodeType.executable(),
+        )
 
     def get_catalog_results(
         self,
