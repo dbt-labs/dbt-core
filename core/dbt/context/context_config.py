@@ -138,8 +138,6 @@ class BaseContextConfigGenerator(Generic[T]):
     ) -> BaseConfig:
         own_config = self.get_node_project(project_name)
         result = self.initial_result(resource_type=resource_type, base=base)
-        if "_dbt_node_type_configs" in config_call_dict:
-            result = self._update_from_config(result, config_call_dict["_dbt_node_type_configs"])
 
         project_configs = self._project_configs(own_config, fqn, resource_type)
         for fqn_config in project_configs:
@@ -153,9 +151,6 @@ class BaseContextConfigGenerator(Generic[T]):
 
         # config_calls are created in the 'experimental' model parser and
         # the ParseConfigObject (via add_config_call)
-        config_call_dict = {
-            k: config_call_dict[k] for k in config_call_dict.keys() - {"_dbt_node_type_configs"}
-        }
         result = self._update_from_config(result, config_call_dict)
 
         if own_config.project_name != self._active_project.project_name:
@@ -188,7 +183,6 @@ class ContextConfigGenerator(BaseContextConfigGenerator[C]):
 
     def initial_result(self, resource_type: NodeType, base: bool) -> C:
         # defaults, own_config, config calls, active_config (if != own_config)
-        # aqui vai puxar o node config com default view
         config_cls = get_config_for(resource_type, base=base)
         # Calculate the defaults. We don't want to validate the defaults,
         # because it might be invalid in the case of required config members
