@@ -1,0 +1,6 @@
+kind: Features
+body: Add new ResourceReport event to record memory/cpu/io metrics
+time: 2023-09-19T10:21:48.772635-04:00
+custom:
+  Author: peterallenwebb
+  Issue: "8342"

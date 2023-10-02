@@ -1,0 +1,6 @@
+kind: Features
+body: Added support for retrieving partial catalog information from a schema
+time: 2023-09-29T15:47:43.612438-04:00
+custom:
+  Author: peterallenwebb
+  Issue: "8521"

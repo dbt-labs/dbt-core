@@ -2349,13 +2349,21 @@ class ListCmdOut(InfoLevel):
         return self.msg
 
 
-# The Note event provides a way to log messages which aren't likely to be useful as more structured events.
-# For console formatting text like empty lines and separator bars, use the Formatting event instead.
-
-
 class Note(InfoLevel):
+    """The Note event provides a way to log messages which aren't likely to be
+    useful as more structured events. For console formatting text like empty
+    lines and separator bars, use the Formatting event instead."""
+
     def code(self) -> str:
         return "Z050"
 
     def message(self) -> str:
         return self.msg
+
+
+class ResourceReport(DebugLevel):
+    def code(self) -> str:
+        return "Z051"
+
+    def message(self) -> str:
+        return f"Resource report: {self.to_json()}"

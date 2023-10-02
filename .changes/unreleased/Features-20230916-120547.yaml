@@ -1,0 +1,6 @@
+kind: Features
+body: resolve packages with same git repo and unique subdirectory
+time: 2023-09-16T12:05:47.353417149-04:00
+custom:
+  Author: philippeboyd
+  Issue: "5374"

@@ -1,0 +1,6 @@
+kind: Fixes
+body: avoid double-rendering sql_header in dbt show
+time: 2023-09-28T18:48:56.419428+01:00
+custom:
+  Author: michelleark
+  Issue: "8739"

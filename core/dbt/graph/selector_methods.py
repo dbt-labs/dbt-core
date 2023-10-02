@@ -252,7 +252,9 @@ class TagSelectorMethod(SelectorMethod):
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
         """yields nodes from included that have the specified tag"""
         for node, real_node in self.all_nodes(included_nodes):
-            if any(fnmatch(tag, selector) for tag in real_node.tags):
+            if hasattr(real_node, "tags") and any(
+                fnmatch(tag, selector) for tag in real_node.tags
+            ):
                 yield node
 
 
