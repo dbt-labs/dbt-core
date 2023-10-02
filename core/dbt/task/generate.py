@@ -220,6 +220,10 @@ class GenerateTask(CompileTask):
             DOCS_INDEX_FILE_PATH, os.path.join(self.config.project_target_path, "index.html")
         )
 
+        # Get the list of nodes that have been selected
+        assert self.job_queue is not None
+        selected_nodes: Set = self.job_queue.get_selected_nodes()
+
         for asset_path in self.config.asset_paths:
             to_asset_path = os.path.join(self.config.project_target_path, asset_path)
 
@@ -239,6 +243,7 @@ class GenerateTask(CompileTask):
             adapter = get_adapter(self.config)
             with adapter.connection_named("generate_catalog"):
                 fire_event(BuildingCatalog())
+                # This generates the catalog as an agate.Table
                 catalog_table, exceptions = adapter.get_catalog(self.manifest)
 
         catalog_data: List[PrimitiveDict] = [
