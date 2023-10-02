@@ -67,7 +67,7 @@ class UnitTestManifestLoader:
             else:
                 raise ParsingError("Wrong format for expected rows")
         else:  # test_case.expect.format == "csv":
-            # create an agate table
+            # build a dictionary from the csv string
             if isinstance(test_case.expect.rows, str):
                 expected_rows = self._build_rows_from_csv(test_case.expect.rows)
             else:
