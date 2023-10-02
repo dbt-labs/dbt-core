@@ -16,7 +16,7 @@ from dbt.contracts.graph.nodes import (
     DependsOn,
     UnitTestConfig,
 )
-from dbt.contracts.graph.unparsed import UnparsedUnitTestSuite
+from dbt.contracts.graph.unparsed import UnparsedUnitTestSuite, UnitTestFormat
 from dbt.exceptions import ParsingError
 from dbt.graph import UniqueId
 from dbt.node_types import NodeType
@@ -61,12 +61,12 @@ class UnitTestManifestLoader:
         # for selection.
         # Note: no depends_on, that's added later using input nodes
         name = f"{test_case.model}__{test_case.name}"
-        if test_case.expect.format == "dict":
+        if test_case.expect.format == UnitTestFormat.Dict:
             if isinstance(test_case.expect.rows, List):
                 expected_rows = test_case.expect.rows
             else:
                 raise ParsingError("Wrong format for expected rows")
-        else:  # test_case.expect.format == "csv":
+        else:  # test_case.expect.format == UnitTestFormat.CSV:
             # build a dictionary from the csv string
             if isinstance(test_case.expect.rows, str):
                 expected_rows = self._build_rows_from_csv(test_case.expect.rows)
@@ -132,7 +132,7 @@ class UnitTestManifestLoader:
             input_name = f"{test_case.model}__{test_case.name}__{original_input_node.name}"
             input_unique_id = f"model.{package_name}.{input_name}"
             rows: List[Dict[str, Any]]
-            if given.format == "csv":
+            if given.format == UnitTestFormat.CSV:
                 rows = self._build_rows_from_csv(given.rows)
             else:  # format == "dict"
                 # Should always be a dictionary.
@@ -218,13 +218,17 @@ class UnitTestParser(YamlReader):
 
                 for input in test.given:
                     if (input.format == "dict" and not isinstance(input.rows, list)) or (
-                        input.format == "csv" and not isinstance(input.rows, str)
+                        input.format == UnitTestFormat.CSV and not isinstance(input.rows, str)
                     ):
                         raise ParsingError(
                             f"Input rows in invalid format for unit test {test.name}"
                         )
-                if (test.expect.format == "dict" and not isinstance(test.expect.rows, list)) or (
-                    test.expect.format == "csv" and not isinstance(test.expect.rows, str)
+                if (
+                    test.expect.format == UnitTestFormat.Dict
+                    and not isinstance(test.expect.rows, list)
+                ) or (
+                    test.expect.format == UnitTestFormat.CSV
+                    and not isinstance(test.expect.rows, str)
                 ):
                     raise ParsingError(
                         f"Expected rows in invalid format for unit test {test.name}"
