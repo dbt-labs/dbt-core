@@ -3,6 +3,7 @@ name,shirt
 alvin,red
 simon,blue
 theodore,green
+dave,
 """.strip()
 
 
@@ -97,4 +98,31 @@ TEST__NONE_FALSE = """
 select *
 from {{ ref('chipmunks') }}
 where shirt = 'green'
+"""
+
+
+SCHEMA_YML = """
+version: 2
+
+models:
+-   name: chipmunks
+    columns:
+    -   name: str
+        tests:
+        -   unique:
+            store_failures: true
+        -   not_null:
+            store_failures_as: view
+        -   accepted_values:
+            store_failures: false
+            store_failures_as: table
+            values:
+            -   alvin
+            -   simon
+            -   theodore
+    -   shirt: str
+        tests:
+        -   not_null:
+            store_failures: true
+            store_failures_as: view
 """

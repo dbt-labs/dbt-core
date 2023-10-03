@@ -7,6 +7,7 @@ from dbt.tests.util import run_dbt, check_relation_types
 
 from dbt.tests.adapter.store_test_failures_tests._files import (
     MODEL__CHIPMUNKS,
+    SCHEMA_YML,
     SEED__CHIPMUNKS,
     TEST__NONE_FALSE,
     TEST__TABLE_FALSE,
@@ -233,6 +234,43 @@ class StoreTestFailuresAsProjectLevelView(StoreTestFailuresAsBase):
             TestResult("results_false", TestStatus.Fail, "view"),
             TestResult("results_unset", TestStatus.Fail, "view"),
             TestResult("results_turn_off", TestStatus.Fail, None),
+        }
+
+        # run the tests
+        results = run_dbt(["test"], expect_pass=False)
+
+        # show that the statuses are what we expect
+        actual = {(result.node.name, result.status) for result in results}
+        expected = {(result.name, result.status) for result in expected_results}
+        assert actual == expected
+
+        # show that the results are persisted in the correct database objects
+        check_relation_types(
+            project.adapter, {result.name: result.type for result in expected_results}
+        )
+
+
+class StoreTestFailuresAsGeneric(StoreTestFailuresAsBase):
+    """
+    This tests that `store_failures_as` works with generic tests.
+    Test Scenarios:
+
+    - If `store_failures_as = "view"` is used with the `not_null` test in the model, then store the failures in a view.
+    """
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            f"{self.model_table}.sql": MODEL__CHIPMUNKS,
+            "schema.yml": SCHEMA_YML,
+        }
+
+    def test_tests_run_successfully_and_are_stored_as_expected(self, project):
+        expected_results = {
+            TestResult("name__unique", TestStatus.Pass, "table"),
+            TestResult("name__not_null", TestStatus.Pass, "view"),
+            TestResult("name__accepted_values", TestStatus.Fail, "table"),
+            TestResult("shirt__not_null", TestStatus.Fail, "view"),
         }
 
         # run the tests
