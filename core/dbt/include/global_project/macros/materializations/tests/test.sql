@@ -7,7 +7,10 @@
     {% set identifier = model['alias'] %}
     {% set old_relation = adapter.get_relation(database=database, schema=schema, identifier=identifier) %}
 
-    {% set store_failures_as = config.get('store_failures_as') %}
+    {% set store_failures_as = config.get('store_failures_as', 'table') %}
+    -- if `--store-failures` is invoked via command line and `store_failures_as` is not set,
+    -- config.get('store_failures_as', 'table') returns None, not 'table'
+    {% if store_failures_as == none %}{% set store_failures_as = 'table' %}{% endif %}
     {% set target_relation = api.Relation.create(
         identifier=identifier, schema=schema, database=database, type=store_failures_as) -%} %}
 
