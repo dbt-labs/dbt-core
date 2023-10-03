@@ -1,5 +1,4 @@
 from collections import namedtuple
-from typing import Dict
 
 import pytest
 
@@ -7,16 +6,26 @@ from dbt.contracts.results import TestStatus
 from dbt.tests.util import run_dbt, check_relation_types
 
 from dbt.tests.adapter.store_test_failures_tests._files import (
-    SEED__CHIPMUNKS,
     MODEL__CHIPMUNKS,
-    TEST__FAIL_AS_VIEW,
-    TEST__PASS_AS_VIEW,
-    TEST__FAIL_AS_TABLE,
-    TEST__PASS_AS_TABLE,
+    SEED__CHIPMUNKS,
+    TEST__NONE_FALSE,
+    TEST__TABLE_FALSE,
+    TEST__TABLE_TRUE,
+    TEST__TABLE_UNSET,
+    TEST__UNSET_FALSE,
+    TEST__UNSET_TRUE,
+    TEST__UNSET_UNSET,
+    TEST__VIEW_FALSE,
+    TEST__VIEW_TRUE,
+    TEST__VIEW_UNSET,
+    TEST__VIEW_UNSET_PASS,
 )
 
 
-class StoreTestFailures:
+TestResult = namedtuple("TestResult", ["name", "status", "type"])
+
+
+class StoreTestFailuresAsBase:
     seed_table: str = "chipmunks_stage"
     model_table: str = "chipmunks"
     audit_schema_suffix: str = "dbt_test__audit"
@@ -57,15 +66,6 @@ class StoreTestFailures:
     def models(self):
         return {f"{self.model_table}.sql": MODEL__CHIPMUNKS}
 
-    @pytest.fixture(scope="class")
-    def tests(self):
-        return {
-            "fail_as_view.sql": TEST__FAIL_AS_VIEW,
-            "pass_as_view.sql": TEST__PASS_AS_VIEW,
-            "fail_as_table.sql": TEST__FAIL_AS_TABLE,
-            "pass_as_table.sql": TEST__PASS_AS_TABLE,
-        }
-
     def row_count(self, project, relation_name: str) -> int:
         """
         Return the row count for the relation.
@@ -78,44 +78,62 @@ class StoreTestFailures:
             the row count as an integer
         """
         sql = f"select count(*) from {self.audit_schema}.{relation_name}"
-        return project.run_sql(sql, fetch="one")[0]
+        try:
+            return project.run_sql(sql, fetch="one")[0]
+        # this is the error we catch and re-raise in BaseAdapter
+        except BaseException:
+            return 0
 
-    def insert_record(self, project, record: Dict[str, str]):
-        field_names, field_values = [], []
-        for field_name, field_value in record.items():
-            field_names.append(field_name)
-            field_values.append(f"'{field_value}'")
-        field_name_clause = ", ".join(field_names)
-        field_value_clause = ", ".join(field_values)
 
-        sql = f"""
-        insert into {project.test_schema}.{self.model_table} ({field_name_clause})
-        values ({field_value_clause})
-        """
-        project.run_sql(sql)
+class StoreTestFailuresAsInteractions(StoreTestFailuresAsBase):
+    """
+    These scenarios test interactions between `store_failures` and `store_failures_as` at the model level.
+    Granularity (e.g. setting one at the project level and another at the model level) is not considered.
 
-    def delete_record(self, project, record: Dict[str, str]):
-        where_clause = " and ".join(
-            [f"{field_name} = '{field_value}'" for field_name, field_value in record.items()]
-        )
-        sql = f"""
-        delete from {project.test_schema}.{self.model_table}
-        where {where_clause}
-        """
-        project.run_sql(sql)
+    Test Scenarios:
 
-    def test_tests_run_successfully_and_are_stored_as_expected(self, project):
-        # set up the expected results
-        TestResult = namedtuple("TestResult", ["name", "status", "type", "row_count"])
-        expected_results = {
-            TestResult("pass_as_view", TestStatus.Pass, "view", 0),
-            TestResult("fail_as_view", TestStatus.Fail, "view", 1),
-            TestResult("pass_as_table", TestStatus.Pass, "table", 0),
-            TestResult("fail_as_table", TestStatus.Fail, "table", 1),
+    - If `store_failures_as = "view"` and `store_failures = True`, then store the failures in a view.
+    - If `store_failures_as = "view"` and `store_failures = False`, then store the failures in a view.
+    - If `store_failures_as = "view"` and `store_failures` is not set, then store the failures in a view.
+    - If `store_failures_as = "table"` and `store_failures = True`, then store the failures in a table.
+    - If `store_failures_as = "table"` and `store_failures = False`, then store the failures in a table.
+    - If `store_failures_as = "table"` and `store_failures` is not set, then store the failures in a table.
+    - If `store_failures_as` is not set and `store_failures = True`, then store the failures in a table.
+    - If `store_failures_as` is not set and `store_failures = False`, then do not store the failures.
+    - If `store_failures_as` is not set and `store_failures` is not set, then do not store the failures.
+    """
+
+    @pytest.fixture(scope="class")
+    def tests(self):
+        return {
+            "view_unset_pass.sql": TEST__VIEW_UNSET_PASS,  # control
+            "view_true.sql": TEST__VIEW_TRUE,
+            "view_false.sql": TEST__VIEW_FALSE,
+            "view_unset.sql": TEST__VIEW_UNSET,
+            "table_true.sql": TEST__TABLE_TRUE,
+            "table_false.sql": TEST__TABLE_FALSE,
+            "table_unset.sql": TEST__TABLE_UNSET,
+            "unset_true.sql": TEST__UNSET_TRUE,
+            "unset_false.sql": TEST__UNSET_FALSE,
+            "unset_unset.sql": TEST__UNSET_UNSET,
         }
 
-        # run the tests once
-        results = run_dbt(["test", "--store-failures"], expect_pass=False)
+    def test_tests_run_successfully_and_are_stored_as_expected(self, project):
+        expected_results = {
+            TestResult("view_unset_pass", TestStatus.Pass, "view"),  # control
+            TestResult("view_true", TestStatus.Fail, "view"),
+            TestResult("view_false", TestStatus.Fail, "view"),
+            TestResult("view_unset", TestStatus.Fail, "view"),
+            TestResult("table_true", TestStatus.Fail, "table"),
+            TestResult("table_false", TestStatus.Fail, "table"),
+            TestResult("table_unset", TestStatus.Fail, "table"),
+            TestResult("unset_true", TestStatus.Fail, "table"),
+            TestResult("unset_false", TestStatus.Fail, None),
+            TestResult("unset_unset", TestStatus.Fail, None),
+        }
+
+        # run the tests
+        results = run_dbt(["test"], expect_pass=False)
 
         # show that the statuses are what we expect
         actual = {(result.node.name, result.status) for result in results}
@@ -127,28 +145,105 @@ class StoreTestFailures:
             project.adapter, {result.name: result.type for result in expected_results}
         )
 
-        # show that only the failed records show up
-        actual = {
-            (result.name, self.row_count(project, result.name)) for result in expected_results
+
+class StoreTestFailuresAsProjectLevelOff(StoreTestFailuresAsBase):
+    """
+    These scenarios test that `store_failures_as` at the model level takes precedence over `store_failures`
+    at the project level.
+
+    Test Scenarios:
+
+    - If `store_failures = False` in the project and `store_failures_as = "view"` in the model,
+    then store the failures in a view.
+    - If `store_failures = False` in the project and `store_failures_as = "table"` in the model,
+    then store the failures in a table.
+    - If `store_failures = False` in the project and `store_failures_as` is not set,
+    then do not store the failures.
+    """
+
+    @pytest.fixture(scope="class")
+    def tests(self):
+        return {
+            "results_view.sql": TEST__VIEW_UNSET,
+            "results_table.sql": TEST__TABLE_UNSET,
+            "results_unset.sql": TEST__UNSET_UNSET,
         }
-        expected = {(result.name, result.row_count) for result in expected_results}
+
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {"tests": {"store_failures": False}}
+
+    def test_tests_run_successfully_and_are_stored_as_expected(self, project):
+        expected_results = {
+            TestResult("results_view", TestStatus.Fail, "view"),
+            TestResult("results_table", TestStatus.Fail, "table"),
+            TestResult("results_unset", TestStatus.Fail, None),
+        }
+
+        # run the tests
+        results = run_dbt(["test"], expect_pass=False)
+
+        # show that the statuses are what we expect
+        actual = {(result.node.name, result.status) for result in results}
+        expected = {(result.name, result.status) for result in expected_results}
         assert actual == expected
 
-        # insert a new record in the model that fails the "pass" tests
-        # show that the view updates, but not the table
-        self.insert_record(project, {"name": "dave", "shirt": "grape"})
-        expected_results.remove(TestResult("pass_as_view", TestStatus.Pass, "view", 0))
-        expected_results.add(TestResult("pass_as_view", TestStatus.Pass, "view", 1))
+        # show that the results are persisted in the correct database objects
+        check_relation_types(
+            project.adapter, {result.name: result.type for result in expected_results}
+        )
 
-        # delete the original record from the model that failed the "fail" tests
-        # show that the view updates, but not the table
-        self.delete_record(project, {"name": "theodore", "shirt": "green"})
-        expected_results.remove(TestResult("fail_as_view", TestStatus.Fail, "view", 1))
-        expected_results.add(TestResult("fail_as_view", TestStatus.Fail, "view", 0))
 
-        # show that the views update without needing to run dbt, but the tables do not update
-        actual = {
-            (result.name, self.row_count(project, result.name)) for result in expected_results
+class StoreTestFailuresAsProjectLevelView(StoreTestFailuresAsBase):
+    """
+    These scenarios test that `store_failures_as` at the project level takes precedence over `store_failures`
+    at the model level.
+
+    Additionally, the fourth scenario demonstrates how to turn off `store_failures` at the model level
+    when `store_failures_as` is used at the project level.
+
+    Test Scenarios:
+
+    - If `store_failures_as = "view"` in the project and `store_failures = False` in the model,
+    then store the failures in a view.
+    - If `store_failures_as = "view"` in the project and `store_failures = True` in the model,
+    then store the failures in a view.
+    - If `store_failures_as = "view"` in the project and `store_failures` is not set,
+    then store the failures in a view.
+    - If `store_failures_as = "view"` in the project and `store_failures = False` in the model
+    and `store_failures_as = None` in the model, then do not store the failures.
+    """
+
+    @pytest.fixture(scope="class")
+    def tests(self):
+        return {
+            "results_true.sql": TEST__VIEW_TRUE,
+            "results_false.sql": TEST__VIEW_FALSE,
+            "results_unset.sql": TEST__VIEW_UNSET,
+            "results_turn_off.sql": TEST__NONE_FALSE,
         }
-        expected = {(result.name, result.row_count) for result in expected_results}
+
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {"tests": {"store_failures_as": "view"}}
+
+    def test_tests_run_successfully_and_are_stored_as_expected(self, project):
+        expected_results = {
+            TestResult("results_true", TestStatus.Fail, "view"),
+            TestResult("results_false", TestStatus.Fail, "view"),
+            TestResult("results_unset", TestStatus.Fail, "view"),
+            TestResult("results_turn_off", TestStatus.Fail, None),
+        }
+
+        # run the tests
+        results = run_dbt(["test"], expect_pass=False)
+
+        # show that the statuses are what we expect
+        actual = {(result.node.name, result.status) for result in results}
+        expected = {(result.name, result.status) for result in expected_results}
         assert actual == expected
+
+        # show that the results are persisted in the correct database objects
+        check_relation_types(
+            project.adapter, {result.name: result.type for result in expected_results}
+        )

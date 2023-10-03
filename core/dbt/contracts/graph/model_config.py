@@ -554,12 +554,29 @@ class TestConfig(NodeAndTestConfig):
     # Annotated is used by mashumaro for jsonschema generation
     severity: Annotated[Severity, Pattern(SEVERITY_PATTERN)] = Severity("ERROR")
     store_failures: Optional[bool] = None
-    store_failures_as: Optional[str] = "table"
+    store_failures_as: Optional[str] = None
     where: Optional[str] = None
     limit: Optional[int] = None
     fail_calc: str = "count(*)"
     warn_if: str = "!= 0"
     error_if: str = "!= 0"
+
+    def __post_init__(self):
+        """
+        The presence of a setting for `store_failures_as` overrides any existing setting for `store_failures`,
+        regardless of level of granularity. If `store_failures_as` is not set, then `store_failures` takes effect.
+        At the time of implementation, `store_failures = True` would always create a table; the user could not
+        configure this. Hence, if `store_failures = True` and `store_failures_as` is not specified, then it
+        should be set to "table" to mimic the existing functionality.
+
+        The intention of this block is to behave as if `store_failures_as` is the only setting,
+        but still allow for backwards compatibility for `store_failures`.
+        See https://github.com/dbt-labs/dbt-core/issues/6914 for more information.
+        """
+        if self.store_failures_as:
+            self.store_failures = True
+        elif self.store_failures:
+            self.store_failures_as = "table"
 
     @classmethod
     def same_contents(cls, unrendered: Dict[str, Any], other: Dict[str, Any]) -> bool:

@@ -132,7 +132,7 @@ def get_rendered_tst_config(**updates):
         "tags": [],
         "severity": "ERROR",
         "store_failures": None,
-        "store_failures_as": "table",
+        "store_failures_as": None,
         "warn_if": "!= 0",
         "error_if": "!= 0",
         "fail_calc": "count(*)",
