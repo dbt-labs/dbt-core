@@ -105,24 +105,24 @@ SCHEMA_YML = """
 version: 2
 
 models:
--   name: chipmunks
+  - name: chipmunks
     columns:
-    -   name: str
+      - name: name
         tests:
-        -   unique:
-            store_failures: true
-        -   not_null:
-            store_failures_as: view
-        -   accepted_values:
-            store_failures: false
-            store_failures_as: table
-            values:
-            -   alvin
-            -   simon
-            -   theodore
-    -   shirt: str
+          - unique:
+              store_failures: true
+          - not_null:
+              store_failures_as: view
+          - accepted_values:
+              store_failures: false
+              store_failures_as: table
+              values:
+                - alvin
+                - simon
+                - theodore
+      - name: shirt
         tests:
-        -   not_null:
-            store_failures: true
-            store_failures_as: view
+          - not_null:
+              store_failures: true
+              store_failures_as: view
 """

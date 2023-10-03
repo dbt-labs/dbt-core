@@ -267,10 +267,12 @@ class StoreTestFailuresAsGeneric(StoreTestFailuresAsBase):
 
     def test_tests_run_successfully_and_are_stored_as_expected(self, project):
         expected_results = {
-            TestResult("name__unique", TestStatus.Pass, "table"),
-            TestResult("name__not_null", TestStatus.Pass, "view"),
-            TestResult("name__accepted_values", TestStatus.Fail, "table"),
-            TestResult("shirt__not_null", TestStatus.Fail, "view"),
+            TestResult("unique_chipmunks_name", TestStatus.Pass, "table"),
+            TestResult("not_null_chipmunks_name", TestStatus.Pass, "view"),
+            TestResult(
+                "accepted_values_chipmunks_name__alvin__simon__theodore", TestStatus.Fail, "table"
+            ),
+            TestResult("not_null_chipmunks_shirt", TestStatus.Fail, "view"),
         }
 
         # run the tests
