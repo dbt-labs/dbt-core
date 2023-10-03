@@ -1295,6 +1295,21 @@ def test_select_semantic_model(manifest):
     assert search_manifest_using_method(manifest, method, "*omer") == {"customer"}
 
 
+def test_select_semantic_model_by_tag(manifest):
+    semantic_model = make_semantic_model(
+        "pkg",
+        "customer",
+        model="customers",
+        path="_semantic_models.yml",
+    )
+    manifest.semantic_models[semantic_model.unique_id] = semantic_model
+    methods = MethodManager(manifest, None)
+    method = methods.get_method("tag", [])
+    assert isinstance(method, TagSelectorMethod)
+    assert method.arguments == []
+    search_manifest_using_method(manifest, method, "any_tag")
+
+
 @pytest.fixture
 def previous_state(manifest):
     writable = copy.deepcopy(manifest).writable_manifest()

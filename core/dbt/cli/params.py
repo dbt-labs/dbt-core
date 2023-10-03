@@ -614,3 +614,10 @@ write_json = click.option(
     help="Whether or not to write the manifest.json and run_results.json files to the target directory",
     default=True,
 )
+
+show_resource_report = click.option(
+    "--show-resource-report/--no-show-resource-report",
+    default=False,
+    envvar="DBT_SHOW_RESOURCE_REPORT",
+    hidden=True,
+)

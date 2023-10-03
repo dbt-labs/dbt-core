@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix tag selection for projects with semantic models
+time: 2023-09-29T17:53:42.960596+02:00
+custom:
+  Author: jtcohen6
+  Issue: "8749"
