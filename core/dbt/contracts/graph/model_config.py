@@ -14,7 +14,7 @@ from dbt.contracts.graph.utils import validate_color
 from dbt.contracts.util import Replaceable, list_str
 from dbt.exceptions import DbtInternalError, CompilationError
 from dbt import hooks
-from dbt.node_types import NodeType
+from dbt.node_types import NodeType, ModelLanguage
 from mashumaro.jsonschema.annotations import Pattern
 
 
@@ -519,6 +519,11 @@ class NodeConfig(NodeAndTestConfig):
 
 
 @dataclass
+class PythonNodeConfig(NodeConfig):
+    materialized: str = "table"
+
+
+@dataclass
 class SeedConfig(NodeConfig):
     materialized: str = "seed"
     delimiter: str = ","
@@ -658,9 +663,17 @@ BASE_RESOURCE_TYPES: Dict[NodeType, Type[BaseConfig]] = RESOURCE_TYPES.copy()
 BASE_RESOURCE_TYPES.update({NodeType.Snapshot: EmptySnapshotConfig})
 
 
-def get_config_for(resource_type: NodeType, base=False) -> Type[BaseConfig]:
+def get_config_for(
+    resource_type: NodeType, base=False, language: Optional[ModelLanguage] = None
+) -> Type[BaseConfig]:
     if base:
         lookup = BASE_RESOURCE_TYPES
     else:
         lookup = RESOURCE_TYPES
-    return lookup.get(resource_type, NodeConfig)
+
+    resource = lookup.get(resource_type, NodeConfig)
+
+    if language == "python" and (resource == NodeConfig):
+        resource = PythonNodeConfig
+
+    return resource

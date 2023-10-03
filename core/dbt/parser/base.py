@@ -279,7 +279,6 @@ class ConfiguredParser(
     def update_parsed_node_relation_names(
         self, parsed_node: IntermediateNode, config_dict: Dict[str, Any]
     ) -> None:
-
         # These call the RelationUpdate callable to go through generate_name macros
         self._update_node_database(parsed_node, config_dict.get("database"))
         self._update_node_schema(parsed_node, config_dict.get("schema"))
@@ -293,22 +292,6 @@ class ConfiguredParser(
                 parsed_node.schema = config_dict["target_schema"]
 
         self._update_node_relation_name(parsed_node)
-
-    def normalize_model_node(sellf, parsed_node: IntermediateNode) -> None:
-        """This normalize the config for a model node.
-
-        The default materialization for a model is a view, but it's not
-        supported by python models. This function changes the default view to
-        table for python models.
-        """
-        if not parsed_node.resource_type == NodeType.Model:
-            return None
-
-        if not parsed_node.language == ModelLanguage.python:
-            return None
-
-        if parsed_node.config.materialized == "view":
-            parsed_node.config.materialized = "table"
 
     def update_parsed_node_config(
         self,
@@ -325,8 +308,9 @@ class ConfiguredParser(
         # build_config_dict takes the config_call_dict in the ContextConfig object
         # and calls calculate_node_config to combine dbt_project configs and
         # config calls from SQL files, plus patch configs (from schema files)
-        config_dict = config.build_config_dict(patch_config_dict=patch_config_dict)
-        self.normalize_model_node(parsed_node)
+        config_dict = config.build_config_dict(
+            patch_config_dict=patch_config_dict, language=parsed_node.language
+        )
 
         # Set tags on node provided in config blocks. Tags are additive, so even if
         # config has been built before, we don't have to reset tags in the parsed_node.
