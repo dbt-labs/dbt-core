@@ -862,10 +862,15 @@ class ProviderContext(ManifestContext):
     def load_agate_table(self) -> agate.Table:
         if not isinstance(self.model, SeedNode):
             raise LoadAgateTableNotSeedError(self.model.resource_type, node=self.model)
-        assert self.model.root_path
-        path = os.path.join(
-            self.config.project_root, self.model.root_path, self.model.original_file_path
+
+        # include package_path for seeds defined in packages
+        package_path = (
+            os.path.join(self.config.packages_install_path, self.model.package_name)
+            if self.model.package_name != self.config.project_name
+            else "."
         )
+        path = os.path.join(self.config.project_root, package_path, self.model.original_file_path)
+
         column_types = self.model.config.column_types
         delimiter = self.model.config.delimiter
         try:
