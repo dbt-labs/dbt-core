@@ -1,5 +1,7 @@
 import datetime
 import re
+import csv
+from io import StringIO
 
 from dbt import deprecations
 from dbt.node_types import NodeType
@@ -741,15 +743,38 @@ class UnitTestFormat(StrEnum):
     Dict = "dict"
 
 
+class UnitTestFixture:
+    @property
+    def format(self) -> UnitTestFormat:
+        return UnitTestFormat.Dict
+
+    @property
+    def rows(self) -> Union[str, List[Dict[str, Any]]]:
+        return []
+
+    def get_rows(self) -> List[Dict[str, Any]]:
+        if self.format == UnitTestFormat.Dict:
+            assert isinstance(self.rows, List)
+            return self.rows
+        elif self.format == UnitTestFormat.CSV:
+            assert isinstance(self.rows, str)
+            dummy_file = StringIO(self.rows)
+            reader = csv.DictReader(dummy_file)
+            rows = []
+            for row in reader:
+                rows.append(row)
+            return rows
+
+
 @dataclass
-class InputFixture(dbtClassMixin):
+class UnitTestInputFixture(dbtClassMixin, UnitTestFixture):
     input: str
     rows: Union[str, List[Dict[str, Any]]] = ""
     format: UnitTestFormat = UnitTestFormat.Dict
 
 
 @dataclass
-class OutputFixture(dbtClassMixin):
+class UnitTestOutputFixture(dbtClassMixin, UnitTestFixture):
     rows: Union[str, List[Dict[str, Any]]] = ""
     format: UnitTestFormat = UnitTestFormat.Dict
 
@@ -764,8 +789,8 @@ class UnitTestOverrides(dbtClassMixin):
 @dataclass
 class UnparsedUnitTestDefinition(dbtClassMixin):
     name: str
-    given: Sequence[InputFixture]
-    expect: OutputFixture
+    given: Sequence[UnitTestInputFixture]
+    expect: UnitTestOutputFixture
     description: str = ""
     overrides: Optional[UnitTestOverrides] = None
     config: Dict[str, Any] = field(default_factory=dict)

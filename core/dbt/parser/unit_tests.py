@@ -1,6 +1,4 @@
 from typing import List, Set, Dict, Any
-import csv
-from io import StringIO
 
 from dbt.config import RuntimeConfig
 from dbt.context.context_config import ContextConfig
@@ -61,17 +59,6 @@ class UnitTestManifestLoader:
         # for selection.
         # Note: no depends_on, that's added later using input nodes
         name = f"{test_case.model}__{test_case.name}"
-        if test_case.expect.format == UnitTestFormat.Dict:
-            if isinstance(test_case.expect.rows, List):
-                expected_rows = test_case.expect.rows
-            else:
-                raise ParsingError("Wrong format for expected rows")
-        else:  # test_case.expect.format == UnitTestFormat.CSV:
-            # build a dictionary from the csv string
-            if isinstance(test_case.expect.rows, str):
-                expected_rows = self._build_rows_from_csv(test_case.expect.rows)
-            else:
-                raise ParsingError("Wrong format for expected rows")
         unit_test_node = UnitTestNode(
             name=name,
             resource_type=NodeType.Unit,
@@ -79,7 +66,9 @@ class UnitTestManifestLoader:
             path=get_pseudo_test_path(name, test_case.original_file_path),
             original_file_path=test_case.original_file_path,
             unique_id=test_case.unique_id,
-            config=UnitTestNodeConfig(materialized="unit", expected_rows=expected_rows),
+            config=UnitTestNodeConfig(
+                materialized="unit", expected_rows=test_case.expect.get_rows()
+            ),
             raw_code=actual_node.raw_code,
             database=actual_node.database,
             schema=actual_node.schema,
@@ -131,15 +120,8 @@ class UnitTestManifestLoader:
             # TODO: package_name?
             input_name = f"{test_case.model}__{test_case.name}__{original_input_node.name}"
             input_unique_id = f"model.{package_name}.{input_name}"
-            rows: List[Dict[str, Any]]
-            if given.format == UnitTestFormat.CSV:
-                rows = self._build_rows_from_csv(given.rows)
-            else:  # format == "dict"
-                # Should always be a dictionary.
-                rows = given.rows  # type:ignore
-
             input_node = ModelNode(
-                raw_code=self._build_raw_code(rows, original_input_node_columns),
+                raw_code=self._build_raw_code(given.get_rows(), original_input_node_columns),
                 resource_type=NodeType.Model,
                 package_name=package_name,
                 path=original_input_node.path,
@@ -156,14 +138,6 @@ class UnitTestManifestLoader:
             self.unit_test_manifest.nodes[input_node.unique_id] = input_node
             # Add unique ids of input_nodes to depends_on
             unit_test_node.depends_on.nodes.append(input_node.unique_id)
-
-    def _build_rows_from_csv(self, csv_string) -> List[Dict[str, Any]]:
-        dummy_file = StringIO(csv_string)
-        reader = csv.DictReader(dummy_file)
-        rows = []
-        for row in reader:
-            rows.append(row)
-        return rows
 
     def _build_raw_code(self, rows, column_name_to_data_types) -> str:
         return ("{{{{ get_fixture_sql({rows}, {column_name_to_data_types}) }}}}").format(

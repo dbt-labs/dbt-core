@@ -35,8 +35,8 @@ from dbt.contracts.graph.unparsed import (
     UnparsedSourceTableDefinition,
     UnparsedColumn,
     UnitTestOverrides,
-    InputFixture,
-    OutputFixture,
+    UnitTestInputFixture,
+    UnitTestOutputFixture,
 )
 from dbt.contracts.graph.node_args import ModelNodeArgs
 from dbt.contracts.util import Replaceable, AdditionalPropertiesMixin
@@ -1071,8 +1071,8 @@ class UnitTestNode(CompiledNode):
 @dataclass
 class UnitTestDefinition(GraphNode):
     model: str
-    given: Sequence[InputFixture]
-    expect: OutputFixture
+    given: Sequence[UnitTestInputFixture]
+    expect: UnitTestOutputFixture
     description: str = ""
     overrides: Optional[UnitTestOverrides] = None
     depends_on: DependsOn = field(default_factory=DependsOn)
