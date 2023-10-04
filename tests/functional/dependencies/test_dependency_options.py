@@ -39,7 +39,7 @@ class TestDepsOptions(object):
   version: 0.4.7
 - package: dbt-labs/dbt_utils
   version: 1.1.1
-sha1_hash: aa75fb5fbd81cfa88ca4b8275736dc157826edea
+sha1_hash: 0592fbd3e387012e8f7c12ed04688689858f5196
 """
         )
 
@@ -56,12 +56,14 @@ sha1_hash: aa75fb5fbd81cfa88ca4b8275736dc157826edea
   version: 0.4.7
 - package: dbt-labs/dbt_utils
   version: 1.1.1
-sha1_hash: aa75fb5fbd81cfa88ca4b8275736dc157826edea
+sha1_hash: 0592fbd3e387012e8f7c12ed04688689858f5196
 """
         )
 
     def test_deps_add(self, clean_start):
-        run_dbt(["deps", "--add", "--package", "dbt-labs/audit_helper", "--version", "0.9.0"])
+        run_dbt(
+            ["deps", "--add", "--package", "dbt-labs/audit_helper", "--package-version", "0.9.0"]
+        )
         with open("packages.yml") as fp:
             contents = fp.read()
         assert (
@@ -83,7 +85,7 @@ sha1_hash: aa75fb5fbd81cfa88ca4b8275736dc157826edea
                 "--add",
                 "--package",
                 "dbt-labs/audit_helper",
-                "--version",
+                "--package-version",
                 "0.9.0",
                 "--dry-run",
             ]

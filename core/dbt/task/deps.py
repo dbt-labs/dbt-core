@@ -150,13 +150,13 @@ class DepsTask(BaseTask):
         if not system.path_exists(packages_yml_filepath):
             raise dbt.exceptions.DbtRuntimeError("No packages definition file.")
 
-        if not self.args.version and self.args.source != "local":
+        if not self.args.package_version and self.args.source != "local":
             raise dbt.exceptions.DbtRuntimeError(
                 f"Version is required to add a package when source is {self.args.source}"
             )
 
         new_package_entry = _create_packages_yml_entry(
-            self.args.package, self.args.version, self.args.source
+            self.args.package, self.args.package_version, self.args.source
         )
 
         with open(packages_yml_filepath, "r") as user_yml_obj:
@@ -175,7 +175,7 @@ class DepsTask(BaseTask):
                 fire_event(
                     DepsAddPackage(
                         package_name=self.args.package,
-                        version=self.args.version,
+                        version=self.args.package_version,
                         packages_filepath=packages_yml_filepath,
                     )
                 )

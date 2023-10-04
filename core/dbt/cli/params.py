@@ -274,7 +274,7 @@ package = click.option(
 )
 
 package_version = click.option(
-    "--version", envvar=None, help="Version of the package to install.", type=click.STRING
+    "--package-version", envvar=None, help="Version of the package to install.", type=click.STRING
 )
 
 partial_parse = click.option(

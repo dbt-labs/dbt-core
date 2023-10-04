@@ -445,7 +445,7 @@ def debug(ctx, **kwargs):
 
 
 # dbt deps
-@cli.group(invoke_without_command=True)
+@cli.command("deps")
 @click.pass_context
 @global_flags
 @p.profile
