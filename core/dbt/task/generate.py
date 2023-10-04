@@ -221,8 +221,9 @@ class GenerateTask(CompileTask):
         )
 
         # Get the list of nodes that have been selected
-        assert self.job_queue is not None
-        selected_nodes: Set = self.job_queue.get_selected_nodes()
+        selected_nodes = None
+        if self.job_queue is not None:
+            selected_nodes = self.job_queue.get_selected_nodes()
 
         for asset_path in self.config.asset_paths:
             to_asset_path = os.path.join(self.config.project_target_path, asset_path)
