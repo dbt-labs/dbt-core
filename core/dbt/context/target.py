@@ -9,7 +9,7 @@ class TargetContext(BaseContext):
         super().__init__(cli_vars=cli_vars)
         self.target_dict = target_dict
 
-    @contextproperty
+    @contextproperty()
     def target(self) -> Dict[str, Any]:
         """`target` contains information about your connection to the warehouse
         (specified in profiles.yml). Some configs are shared between all

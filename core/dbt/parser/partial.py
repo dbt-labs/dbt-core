@@ -68,7 +68,9 @@ special_override_macros = [
 # to preserve an unchanged file object in case we need to drop back to a
 # a full parse (such as for certain macro changes)
 class PartialParsing:
-    def __init__(self, saved_manifest: Manifest, new_files: MutableMapping[str, AnySourceFile]):
+    def __init__(
+        self, saved_manifest: Manifest, new_files: MutableMapping[str, AnySourceFile]
+    ) -> None:
         self.saved_manifest = saved_manifest
         self.new_files = new_files
         self.project_parser_files: Dict = {}
@@ -892,6 +894,14 @@ class PartialParsing:
                 if semantic_model.name == semantic_model_name:
                     self.saved_manifest.semantic_models.pop(unique_id)
                     schema_file.semantic_models.remove(unique_id)
+            elif unique_id in self.saved_manifest.disabled:
+                self.delete_disabled(unique_id, schema_file.file_id)
+
+        metrics = schema_file.generated_metrics.copy()
+        for unique_id in metrics:
+            if unique_id in self.saved_manifest.metrics:
+                self.saved_manifest.metrics.pop(unique_id)
+                schema_file.generated_metrics.remove(unique_id)
             elif unique_id in self.saved_manifest.disabled:
                 self.delete_disabled(unique_id, schema_file.file_id)
 

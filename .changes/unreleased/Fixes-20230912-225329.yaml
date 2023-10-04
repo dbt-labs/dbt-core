@@ -1,0 +1,6 @@
+kind: Fixes
+body: Warn when --state == --target
+time: 2023-09-12T22:53:29.869746+01:00
+custom:
+  Author: aranke
+  Issue: "8160"

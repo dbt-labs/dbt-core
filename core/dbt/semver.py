@@ -107,7 +107,7 @@ class VersionSpecifier(VersionSpecification):
     def __str__(self):
         return self.to_version_string()
 
-    def to_range(self):
+    def to_range(self) -> "VersionRange":
         range_start: VersionSpecifier = UnboundedVersionSpecifier()
         range_end: VersionSpecifier = UnboundedVersionSpecifier()
 
@@ -353,7 +353,7 @@ class VersionRange:
 
 
 class UnboundedVersionSpecifier(VersionSpecifier):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         super().__init__(
             matcher=Matchers.EXACT, major=None, minor=None, patch=None, prerelease=None, build=None
         )

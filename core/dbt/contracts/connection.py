@@ -16,24 +16,19 @@ from dbt.utils import translate_aliases, md5
 from dbt.events.functions import fire_event
 from dbt.events.types import NewConnectionOpening
 from dbt.events.contextvars import get_node_info
-from typing_extensions import Protocol
+from typing_extensions import Protocol, Annotated
 from dbt.dataclass_schema import (
     dbtClassMixin,
     StrEnum,
     ExtensibleDbtClassMixin,
-    HyphenatedDbtClassMixin,
     ValidatedStringMixin,
-    register_pattern,
 )
 from dbt.contracts.util import Replaceable
+from mashumaro.jsonschema.annotations import Pattern
 
 
 class Identifier(ValidatedStringMixin):
     ValidationRegex = r"^[A-Za-z_][A-Za-z0-9_]+$"
-
-
-# we need register_pattern for jsonschema validation
-register_pattern(Identifier, r"^[A-Za-z_][A-Za-z0-9_]+$")
 
 
 @dataclass
@@ -55,7 +50,8 @@ class ConnectionState(StrEnum):
 
 @dataclass(init=False)
 class Connection(ExtensibleDbtClassMixin, Replaceable):
-    type: Identifier
+    # Annotated is used by mashumaro for jsonschema generation
+    type: Annotated[Identifier, Pattern(r"^[A-Za-z_][A-Za-z0-9_]+$")]
     name: Optional[str] = None
     state: ConnectionState = ConnectionState.INIT
     transaction_open: bool = False
@@ -108,7 +104,7 @@ class LazyHandle:
     connection, updating the handle on the Connection.
     """
 
-    def __init__(self, opener: Callable[[Connection], Connection]):
+    def __init__(self, opener: Callable[[Connection], Connection]) -> None:
         self.opener = opener
 
     def resolve(self, connection: Connection) -> Connection:
@@ -161,6 +157,7 @@ class Credentials(ExtensibleDbtClassMixin, Replaceable, metaclass=abc.ABCMeta):
     @classmethod
     def __pre_deserialize__(cls, data):
         data = super().__pre_deserialize__(data)
+        # Need to fixup dbname => database, pass => password
         data = cls.translate_aliases(data)
         return data
 
@@ -220,10 +217,10 @@ DEFAULT_QUERY_COMMENT = """
 
 
 @dataclass
-class QueryComment(HyphenatedDbtClassMixin):
+class QueryComment(dbtClassMixin):
     comment: str = DEFAULT_QUERY_COMMENT
     append: bool = False
-    job_label: bool = False
+    job_label: bool = field(default=False, metadata={"alias": "job-label"})
 
 
 class AdapterRequiredConfig(HasCredentials, Protocol):

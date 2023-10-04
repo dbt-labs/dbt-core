@@ -43,6 +43,26 @@ seeds:
 
 """
 
+local_dep_schema_yml = """
+models:
+  - name: table_model
+    config:
+      alias: table_model_local_dep
+    columns:
+      - name: id
+        tests:
+          - unique
+"""
+
+local_dep_versions_schema_yml = """
+models:
+  - name: table_model
+    config:
+      alias: table_model_local_dep
+    versions:
+      - v: 1
+"""
+
 
 class TestDuplicateModelEnabled:
     @pytest.fixture(scope="class")
@@ -140,6 +160,72 @@ class TestDuplicateModelDisabledAcrossPackages:
         model_id = "model.test.table_model"
         assert local_dep_model_id in manifest.nodes
         assert model_id in manifest.disabled
+
+
+class TestDuplicateModelNameWithTestAcrossPackages:
+    @pytest.fixture(scope="class", autouse=True)
+    def setUp(self, project_root):
+        local_dependency_files = {
+            "dbt_project.yml": dbt_project_yml,
+            "models": {"table_model.sql": enabled_model_sql, "schema.yml": local_dep_schema_yml},
+        }
+        write_project_files(project_root, "local_dependency", local_dependency_files)
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"table_model.sql": enabled_model_sql}
+
+    @pytest.fixture(scope="class")
+    def packages(self):
+        return {"packages": [{"local": "local_dependency"}]}
+
+    def test_duplicate_model_name_with_test_across_packages(self, project):
+        run_dbt(["deps"])
+        manifest = run_dbt(["parse"])
+        assert len(manifest.nodes) == 3
+
+        # model nodes with duplicate names exist
+        local_dep_model_node_id = "model.local_dep.table_model"
+        root_model_node_id = "model.test.table_model"
+        assert local_dep_model_node_id in manifest.nodes
+        assert root_model_node_id in manifest.nodes
+
+        # test node exists and is attached to correct node
+        test_node_id = "test.local_dep.unique_table_model_id.1da9e464d9"
+        assert test_node_id in manifest.nodes
+        assert manifest.nodes[test_node_id].attached_node == local_dep_model_node_id
+
+
+class TestDuplicateModelNameWithVersionAcrossPackages:
+    @pytest.fixture(scope="class", autouse=True)
+    def setUp(self, project_root):
+        local_dependency_files = {
+            "dbt_project.yml": dbt_project_yml,
+            "models": {
+                "table_model.sql": enabled_model_sql,
+                "schema.yml": local_dep_versions_schema_yml,
+            },
+        }
+        write_project_files(project_root, "local_dependency", local_dependency_files)
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"table_model.sql": enabled_model_sql}
+
+    @pytest.fixture(scope="class")
+    def packages(self):
+        return {"packages": [{"local": "local_dependency"}]}
+
+    def test_duplicate_model_name_with_test_across_packages(self, project):
+        run_dbt(["deps"])
+        manifest = run_dbt(["parse"])
+        assert len(manifest.nodes) == 2
+
+        # model nodes with duplicate names exist
+        local_dep_model_node_id = "model.local_dep.table_model.v1"
+        root_model_node_id = "model.test.table_model"
+        assert local_dep_model_node_id in manifest.nodes
+        assert root_model_node_id in manifest.nodes
 
 
 class TestModelTestOverlap:

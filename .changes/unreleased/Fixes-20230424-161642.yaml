@@ -1,0 +1,7 @@
+kind: Fixes
+body: If --profile specified with dbt-init, create the project with the specified
+  profile
+time: 2023-04-24T16:16:42.994547-04:00
+custom:
+  Author: ezraerb
+  Issue: "6154"

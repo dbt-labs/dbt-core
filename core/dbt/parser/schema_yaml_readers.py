@@ -55,7 +55,7 @@ from typing import List, Optional, Union
 
 
 class ExposureParser(YamlReader):
-    def __init__(self, schema_parser: SchemaParser, yaml: YamlBlock):
+    def __init__(self, schema_parser: SchemaParser, yaml: YamlBlock) -> None:
         super().__init__(schema_parser, yaml, NodeType.Exposure.pluralize())
         self.schema_parser = schema_parser
         self.yaml = yaml
@@ -158,7 +158,7 @@ class ExposureParser(YamlReader):
 
 
 class MetricParser(YamlReader):
-    def __init__(self, schema_parser: SchemaParser, yaml: YamlBlock):
+    def __init__(self, schema_parser: SchemaParser, yaml: YamlBlock) -> None:
         super().__init__(schema_parser, yaml, NodeType.Metric.pluralize())
         self.schema_parser = schema_parser
         self.yaml = yaml
@@ -178,6 +178,8 @@ class MetricParser(YamlReader):
                 name=unparsed_input_measure.name,
                 filter=filter,
                 alias=unparsed_input_measure.alias,
+                join_to_timespine=unparsed_input_measure.join_to_timespine,
+                fill_nulls_with=unparsed_input_measure.fill_nulls_with,
             )
 
     def _get_optional_input_measure(
@@ -303,7 +305,7 @@ class MetricParser(YamlReader):
             # input_measures=?,
         )
 
-    def parse_metric(self, unparsed: UnparsedMetric):
+    def parse_metric(self, unparsed: UnparsedMetric, generated: bool = False):
         package_name = self.project.project_name
         unique_id = f"{NodeType.Metric}.{package_name}.{unparsed.name}"
         path = self.yaml.path.relative_path
@@ -358,7 +360,7 @@ class MetricParser(YamlReader):
 
         # if the metric is disabled we do not want it included in the manifest, only in the disabled dict
         if parsed.config.enabled:
-            self.manifest.add_metric(self.yaml.file, parsed)
+            self.manifest.add_metric(self.yaml.file, parsed, generated)
         else:
             self.manifest.add_disabled(self.yaml.file, parsed)
 
@@ -398,7 +400,7 @@ class MetricParser(YamlReader):
 
 
 class GroupParser(YamlReader):
-    def __init__(self, schema_parser: SchemaParser, yaml: YamlBlock):
+    def __init__(self, schema_parser: SchemaParser, yaml: YamlBlock) -> None:
         super().__init__(schema_parser, yaml, NodeType.Group.pluralize())
         self.schema_parser = schema_parser
         self.yaml = yaml
@@ -432,7 +434,7 @@ class GroupParser(YamlReader):
 
 
 class SemanticModelParser(YamlReader):
-    def __init__(self, schema_parser: SchemaParser, yaml: YamlBlock):
+    def __init__(self, schema_parser: SchemaParser, yaml: YamlBlock) -> None:
         super().__init__(schema_parser, yaml, "semantic_models")
         self.schema_parser = schema_parser
         self.yaml = yaml
@@ -456,6 +458,7 @@ class SemanticModelParser(YamlReader):
                     name=unparsed.name,
                     type=DimensionType(unparsed.type),
                     description=unparsed.description,
+                    label=unparsed.label,
                     is_partition=unparsed.is_partition,
                     type_params=self._get_dimension_type_params(unparsed=unparsed.type_params),
                     expr=unparsed.expr,
@@ -472,6 +475,7 @@ class SemanticModelParser(YamlReader):
                     name=unparsed.name,
                     type=EntityType(unparsed.type),
                     description=unparsed.description,
+                    label=unparsed.label,
                     role=unparsed.role,
                     expr=unparsed.expr,
                 )
@@ -499,6 +503,7 @@ class SemanticModelParser(YamlReader):
                     name=unparsed.name,
                     agg=AggregationType(unparsed.agg),
                     description=unparsed.description,
+                    label=unparsed.label,
                     expr=str(unparsed.expr) if unparsed.expr is not None else None,
                     agg_params=unparsed.agg_params,
                     non_additive_dimension=self._get_non_additive_dimension(
@@ -509,6 +514,44 @@ class SemanticModelParser(YamlReader):
             )
         return measures
 
+    def _create_metric(self, measure: UnparsedMeasure, enabled: bool) -> None:
+        unparsed_metric = UnparsedMetric(
+            name=measure.name,
+            label=measure.name,
+            type="simple",
+            type_params=UnparsedMetricTypeParams(measure=measure.name, expr=measure.name),
+            description=measure.description or f"Metric created from measure {measure.name}",
+            config={"enabled": enabled},
+        )
+
+        parser = MetricParser(self.schema_parser, yaml=self.yaml)
+        parser.parse_metric(unparsed=unparsed_metric, generated=True)
+
+    def _generate_semantic_model_config(
+        self, target: UnparsedSemanticModel, fqn: List[str], package_name: str, rendered: bool
+    ):
+        generator: BaseContextConfigGenerator
+        if rendered:
+            generator = ContextConfigGenerator(self.root_project)
+        else:
+            generator = UnrenderedConfigGenerator(self.root_project)
+
+        # configs with precendence set
+        precedence_configs = dict()
+        # first apply semantic model configs
+        precedence_configs.update(target.config)
+
+        config = generator.calculate_node_config(
+            config_call_dict={},
+            fqn=fqn,
+            resource_type=NodeType.SemanticModel,
+            project_name=package_name,
+            base=False,
+            patch_config_dict=precedence_configs,
+        )
+
+        return config
+
     def parse_semantic_model(self, unparsed: UnparsedSemanticModel):
         package_name = self.project.project_name
         unique_id = f"{NodeType.SemanticModel}.{package_name}.{unparsed.name}"
@@ -517,8 +560,25 @@ class SemanticModelParser(YamlReader):
         fqn = self.schema_parser.get_fqn_prefix(path)
         fqn.append(unparsed.name)
 
+        config = self._generate_semantic_model_config(
+            target=unparsed,
+            fqn=fqn,
+            package_name=package_name,
+            rendered=True,
+        )
+
+        config = config.finalize_and_validate()
+
+        unrendered_config = self._generate_semantic_model_config(
+            target=unparsed,
+            fqn=fqn,
+            package_name=package_name,
+            rendered=False,
+        )
+
         parsed = SemanticModel(
             description=unparsed.description,
+            label=unparsed.label,
             fqn=fqn,
             model=unparsed.model,
             name=unparsed.name,
@@ -533,7 +593,16 @@ class SemanticModelParser(YamlReader):
             dimensions=self._get_dimensions(unparsed.dimensions),
             defaults=unparsed.defaults,
             primary_entity=unparsed.primary_entity,
+            config=config,
+            unrendered_config=unrendered_config,
+            group=config.group,
+            meta=unparsed.meta,
         )
+
+        # If we have meta in the config, copy to node level, for backwards
+        # compatibility with earlier node-only config.
+        if "meta" in config and config["meta"]:
+            parsed.meta = config["meta"]
 
         ctx = generate_parse_semantic_models(
             parsed,
@@ -544,11 +613,20 @@ class SemanticModelParser(YamlReader):
 
         if parsed.model is not None:
             model_ref = "{{ " + parsed.model + " }}"
-            # This sets the "refs" in the SemanticModel from the MetricRefResolver in context/providers.py
+            # This sets the "refs" in the SemanticModel from the SemanticModelRefResolver in context/providers.py
             get_rendered(model_ref, ctx, parsed)
 
-        # No ability to disable a semantic model at this time
-        self.manifest.add_semantic_model(self.yaml.file, parsed)
+        # if the semantic model is disabled we do not want it included in the manifest,
+        # only in the disabled dict
+        if parsed.config.enabled:
+            self.manifest.add_semantic_model(self.yaml.file, parsed)
+        else:
+            self.manifest.add_disabled(self.yaml.file, parsed)
+
+        # Create a metric for each measure with `create_metric = True`
+        for measure in unparsed.measures:
+            if measure.create_metric is True:
+                self._create_metric(measure=measure, enabled=parsed.config.enabled)
 
     def parse(self):
         for data in self.get_key_dicts():

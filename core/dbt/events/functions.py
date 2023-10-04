@@ -1,7 +1,8 @@
 from dbt.constants import METADATA_ENV_PREFIX
 from dbt.events.base_types import BaseEvent, EventLevel, EventMsg
-from dbt.events.eventmgr import EventManager, LoggerConfig, LineFormat, NoFilter, IEventManager
-from dbt.events.helpers import env_secrets, scrub_secrets
+from dbt.events.eventmgr import EventManager, IEventManager
+from dbt.events.logger import LoggerConfig, NoFilter, LineFormat
+from dbt.exceptions import scrub_secrets, env_secrets
 from dbt.events.types import Note
 from dbt.flags import get_flags, ENABLE_LEGACY_LOGGER
 from dbt.logger import GLOBAL_LOGGER, make_log_dir_if_missing
@@ -94,7 +95,6 @@ def _get_stdout_config(
     level: EventLevel,
     log_cache_events: bool,
 ) -> LoggerConfig:
-
     return LoggerConfig(
         name="stdout_log",
         level=level,
@@ -106,6 +106,7 @@ def _get_stdout_config(
             log_cache_events,
             line_format,
         ),
+        invocation_id=EVENT_MANAGER.invocation_id,
         output_stream=sys.stdout,
     )
 
@@ -125,6 +126,7 @@ def _get_logfile_config(
     level: EventLevel,
     log_file_max_bytes: int,
 ) -> LoggerConfig:
+
     return LoggerConfig(
         name="file_log",
         line_format=line_format,
@@ -132,6 +134,7 @@ def _get_logfile_config(
         level=level,  # File log is *always* debug level
         scrubber=env_scrubber,
         filter=partial(_logfile_filter, bool(get_flags().LOG_CACHE_EVENTS), line_format),
+        invocation_id=EVENT_MANAGER.invocation_id,
         output_file_name=log_path,
         output_file_max_bytes=log_file_max_bytes,
     )
@@ -167,7 +170,7 @@ def env_scrubber(msg: str) -> str:
     return scrub_secrets(msg, env_secrets())
 
 
-def cleanup_event_logger():
+def cleanup_event_logger() -> None:
     # Reset to a no-op manager to release streams associated with logs. This is
     # especially important for tests, since pytest replaces the stdout stream
     # during test runs, and closes the stream after the test is over.
@@ -192,12 +195,12 @@ _CAPTURE_STREAM: Optional[TextIO] = None
 
 
 # used for integration tests
-def capture_stdout_logs(stream: TextIO):
+def capture_stdout_logs(stream: TextIO) -> None:
     global _CAPTURE_STREAM
     _CAPTURE_STREAM = stream
 
 
-def stop_capture_stdout_logs():
+def stop_capture_stdout_logs() -> None:
     global _CAPTURE_STREAM
     _CAPTURE_STREAM = None
 
@@ -231,7 +234,7 @@ def msg_to_dict(msg: EventMsg) -> dict:
     return msg_dict
 
 
-def warn_or_error(event, node=None):
+def warn_or_error(event, node=None) -> None:
     flags = get_flags()
     if flags.WARN_ERROR or flags.WARN_ERROR_OPTIONS.includes(type(event).__name__):
 
@@ -293,6 +296,6 @@ def set_invocation_id() -> None:
     EVENT_MANAGER.invocation_id = str(uuid.uuid4())
 
 
-def ctx_set_event_manager(event_manager: IEventManager):
+def ctx_set_event_manager(event_manager: IEventManager) -> None:
     global EVENT_MANAGER
     EVENT_MANAGER = event_manager

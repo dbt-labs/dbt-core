@@ -1,6 +1,7 @@
 from typing import Set, Iterable, Iterator, Optional, NewType
 from itertools import product
 import networkx as nx  # type: ignore
+from functools import partial
 
 from dbt.exceptions import DbtInternalError
 
@@ -12,7 +13,7 @@ class Graph:
     and how they interact with the graph.
     """
 
-    def __init__(self, graph):
+    def __init__(self, graph) -> None:
         self.graph = graph
 
     def nodes(self) -> Set[UniqueId]:
@@ -42,15 +43,13 @@ class Graph:
         return {child for _, child in nx.bfs_edges(filtered_graph, node, depth_limit=max_depth)}
 
     def exclude_edge_type(self, edge_type_to_exclude):
-        return nx.restricted_view(
+        return nx.subgraph_view(
             self.graph,
-            nodes=[],
-            edges=(
-                (a, b)
-                for a, b in self.graph.edges
-                if self.graph[a][b].get("edge_type") == edge_type_to_exclude
-            ),
+            filter_edge=partial(self.filter_edges_by_type, edge_type=edge_type_to_exclude),
         )
+
+    def filter_edges_by_type(self, first_node, second_node, edge_type):
+        return self.graph.get_edge_data(first_node, second_node).get("edge_type") != edge_type
 
     def select_childrens_parents(self, selected: Set[UniqueId]) -> Set[UniqueId]:
         ancestors_for = self.select_children(selected) | selected

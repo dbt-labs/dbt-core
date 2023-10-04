@@ -1,0 +1,6 @@
+kind: Features
+body: 'Allow specification of `create_metric: true` on measures'
+time: 2023-08-03T15:18:24.351003-07:00
+custom:
+  Author: QMalcolm
+  Issue: "8125"

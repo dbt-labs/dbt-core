@@ -42,7 +42,7 @@ class SchemaYamlRenderer(BaseRenderer):
 
         if (
             len(keypath) >= 3
-            and keypath[0] == "columns"
+            and keypath[0] in ("columns", "dimensions", "measures", "entities")
             and keypath[2] in ("tests", "description")
         ):
             return True

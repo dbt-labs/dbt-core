@@ -23,7 +23,7 @@ from dbt.dataclass_schema import dbtClassMixin, StrEnum, ExtensibleDbtClassMixin
 from dataclasses import dataclass, field
 from datetime import timedelta
 from pathlib import Path
-from typing import Optional, List, Union, Dict, Any, Sequence
+from typing import Optional, List, Union, Dict, Any, Sequence, Literal
 
 
 @dataclass
@@ -49,31 +49,18 @@ class HasCode(dbtClassMixin):
 
 @dataclass
 class UnparsedMacro(UnparsedBaseNode, HasCode):
-    resource_type: NodeType = field(metadata={"restrict": [NodeType.Macro]})
+    resource_type: Literal[NodeType.Macro]
 
 
 @dataclass
 class UnparsedGenericTest(UnparsedBaseNode, HasCode):
-    resource_type: NodeType = field(metadata={"restrict": [NodeType.Macro]})
+    resource_type: Literal[NodeType.Macro]
 
 
 @dataclass
 class UnparsedNode(UnparsedBaseNode, HasCode):
     name: str
-    resource_type: NodeType = field(
-        metadata={
-            "restrict": [
-                NodeType.Model,
-                NodeType.Analysis,
-                NodeType.Test,
-                NodeType.Snapshot,
-                NodeType.Operation,
-                NodeType.Seed,
-                NodeType.RPCCall,
-                NodeType.SqlOperation,
-            ]
-        }
-    )
+    resource_type: NodeType
 
     @property
     def search_name(self):
@@ -82,7 +69,7 @@ class UnparsedNode(UnparsedBaseNode, HasCode):
 
 @dataclass
 class UnparsedRunHook(UnparsedNode):
-    resource_type: NodeType = field(metadata={"restrict": [NodeType.Operation]})
+    resource_type: Literal[NodeType.Operation]
     index: Optional[int] = None
 
 
@@ -163,14 +150,9 @@ class UnparsedVersion(dbtClassMixin):
 
     def __lt__(self, other):
         try:
-            v = type(other.v)(self.v)
-            return v < other.v
+            return float(self.v) < float(other.v)
         except ValueError:
-            try:
-                other_v = type(self.v)(other.v)
-                return self.v < other_v
-            except ValueError:
-                return str(self.v) < str(other.v)
+            return str(self.v) < str(other.v)
 
     @property
     def include_exclude(self) -> dbt.helper_types.IncludeExclude:
@@ -220,7 +202,7 @@ class UnparsedModelUpdate(UnparsedNodeUpdate):
     versions: Sequence[UnparsedVersion] = field(default_factory=list)
     deprecation_date: Optional[datetime.datetime] = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.latest_version:
             version_values = [version.v for version in self.versions]
             if self.latest_version not in version_values:
@@ -228,7 +210,7 @@ class UnparsedModelUpdate(UnparsedNodeUpdate):
                     f"latest_version: {self.latest_version} is not one of model '{self.name}' versions: {version_values} "
                 )
 
-        seen_versions: set[str] = set()
+        seen_versions = set()
         for version in self.versions:
             if str(version.v) in seen_versions:
                 raise ParsingError(
@@ -602,6 +584,8 @@ class UnparsedMetricInputMeasure(dbtClassMixin):
     name: str
     filter: Optional[str] = None
     alias: Optional[str] = None
+    join_to_timespine: bool = False
+    fill_nulls_with: Optional[int] = None
 
 
 @dataclass
@@ -681,6 +665,7 @@ class UnparsedEntity(dbtClassMixin):
     name: str
     type: str  # EntityType enum
     description: Optional[str] = None
+    label: Optional[str] = None
     role: Optional[str] = None
     expr: Optional[str] = None
 
@@ -689,7 +674,7 @@ class UnparsedEntity(dbtClassMixin):
 class UnparsedNonAdditiveDimension(dbtClassMixin):
     name: str
     window_choice: str  # AggregationType enum
-    window_groupings: List[str]
+    window_groupings: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -697,10 +682,12 @@ class UnparsedMeasure(dbtClassMixin):
     name: str
     agg: str  # actually an enum
     description: Optional[str] = None
+    label: Optional[str] = None
     expr: Optional[Union[str, bool, int]] = None
     agg_params: Optional[MeasureAggregationParameters] = None
     non_additive_dimension: Optional[UnparsedNonAdditiveDimension] = None
     agg_time_dimension: Optional[str] = None
+    create_metric: bool = False
 
 
 @dataclass
@@ -714,6 +701,7 @@ class UnparsedDimension(dbtClassMixin):
     name: str
     type: str  # actually an enum
     description: Optional[str] = None
+    label: Optional[str] = None
     is_partition: bool = False
     type_params: Optional[UnparsedDimensionTypeParams] = None
     expr: Optional[str] = None
@@ -723,7 +711,10 @@ class UnparsedDimension(dbtClassMixin):
 class UnparsedSemanticModel(dbtClassMixin):
     name: str
     model: str  # looks like "ref(...)"
+    config: Dict[str, Any] = field(default_factory=dict)
+    meta: Dict[str, Any] = field(default_factory=dict)
     description: Optional[str] = None
+    label: Optional[str] = None
     defaults: Optional[Defaults] = None
     entities: List[UnparsedEntity] = field(default_factory=list)
     measures: List[UnparsedMeasure] = field(default_factory=list)

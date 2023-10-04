@@ -57,7 +57,7 @@ def args_to_context(args: List[str]) -> Context:
     from dbt.cli.main import cli
 
     cli_ctx = cli.make_context(cli.name, args)
-    # Split args if they're a comma seperated string.
+    # Split args if they're a comma separated string.
     if len(args) == 1 and "," in args[0]:
         args = args[0].split(",")
     sub_command_name, sub_command, args = cli.resolve_command(cli_ctx, args)
@@ -339,6 +339,10 @@ def command_params(command: CliCommand, args_dict: Dict[str, Any]) -> CommandPar
                 res.insert(0, x)
 
         spinal_cased = k.replace("_", "-")
+
+        # MultiOption flags come back as lists, but we want to pass them as space separated strings
+        if isinstance(v, list):
+            v = " ".join(v)
 
         if k == "macro" and command == CliCommand.RUN_OPERATION:
             add_fn(v)

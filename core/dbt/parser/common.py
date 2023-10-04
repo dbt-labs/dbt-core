@@ -177,10 +177,10 @@ class GenericTestBlock(TestBlock[Testable], Generic[Testable]):
 class ParserRef:
     """A helper object to hold parse-time references."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.column_info: Dict[str, ColumnInfo] = {}
 
-    def _add(self, column: HasColumnProps):
+    def _add(self, column: HasColumnProps) -> None:
         tags: List[str] = []
         tags.extend(getattr(column, "tags", ()))
         quote: Optional[bool]

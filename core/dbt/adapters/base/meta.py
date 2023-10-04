@@ -93,7 +93,7 @@ class AdapterMeta(abc.ABCMeta):
     _available_: FrozenSet[str]
     _parse_replacements_: Dict[str, Callable]
 
-    def __new__(mcls, name, bases, namespace, **kwargs):
+    def __new__(mcls, name, bases, namespace, **kwargs) -> "AdapterMeta":
         # mypy does not like the `**kwargs`. But `ABCMeta` itself takes
         # `**kwargs` in its argspec here (and passes them to `type.__new__`.
         # I'm not sure there is any benefit to it after poking around a bit,

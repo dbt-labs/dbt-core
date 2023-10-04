@@ -1,5 +1,5 @@
 import pytest
-from hologram import ValidationError
+from dbt.dataclass_schema import ValidationError
 from dbt.tests.util import run_dbt, get_manifest
 
 from dbt.exceptions import CompilationError, ParsingError

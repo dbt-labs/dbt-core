@@ -9,6 +9,7 @@ PIN_PACKAGE_URL = (
     "https://docs.getdbt.com/docs/package-management#section-specifying-package-versions"
 )
 
+DBT_PROJECT_FILE_NAME = "dbt_project.yml"
 PACKAGES_FILE_NAME = "packages.yml"
 DEPENDENCIES_FILE_NAME = "dependencies.yml"
 PACKAGE_LOCK_FILE_NAME = "package-lock.yml"

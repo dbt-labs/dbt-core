@@ -1,6 +1,9 @@
-import pytest
+import logging
 import re
+from argparse import Namespace
 from typing import TypeVar
+
+import pytest
 
 from dbt.contracts.results import TimingInfo, RunResult, RunStatus
 from dbt.events import AdapterLogger, types
@@ -19,8 +22,6 @@ from dbt.events.functions import msg_to_dict, msg_to_json, ctx_set_event_manager
 from dbt.events.helpers import get_json_string_utcnow
 from dbt.events.types import RunResultError
 from dbt.flags import set_from_args
-from argparse import Namespace
-
 from dbt.task.printer import print_run_result_error
 
 set_from_args(Namespace(WARN_ERROR=False), None)
@@ -82,6 +83,12 @@ class TestAdapterLogger:
 
         event = types.JinjaLogDebug(msg=[1, 2, 3])
         assert isinstance(event.msg, str)
+
+    def test_set_adapter_dependency_log_level(self):
+        logger = AdapterLogger("dbt_tests")
+        package_log = logging.getLogger("test_package_log")
+        logger.set_adapter_dependency_log_level("test_package_log", "DEBUG")
+        package_log.debug("debug message")
 
 
 class TestEventCodes:
@@ -252,6 +259,19 @@ sample_values = [
     ),
     types.UnsupportedConstraintMaterialization(materialized=""),
     types.ParseInlineNodeError(exc=""),
+    types.SemanticValidationFailure(msg=""),
+    types.UnversionedBreakingChange(
+        breaking_changes=[],
+        model_name="",
+        model_file_path="",
+        contract_enforced_disabled=True,
+        columns_removed=[],
+        column_type_changes=[],
+        enforced_column_constraint_removed=[],
+        enforced_model_constraint_removed=[],
+        materialization_changed=[],
+    ),
+    types.WarnStateTargetEqual(state_path=""),
     # M - Deps generation ======================
     types.GitSparseCheckoutSubdirectory(subdir=""),
     types.GitProgressCheckoutRevision(revision=""),
@@ -362,7 +382,10 @@ sample_values = [
     types.DepsUnpinned(revision="", git=""),
     types.NoNodesForSelectionCriteria(spec_raw=""),
     types.CommandCompleted(
-        command="", success=True, elapsed=0.1, completed_at=get_json_string_utcnow()
+        command="",
+        success=True,
+        elapsed=0.1,
+        completed_at=get_json_string_utcnow(),
     ),
     types.ShowNode(node_name="", preview="", is_inline=True, unique_id="model.test.my_model"),
     types.CompiledNode(node_name="", compiled="", is_inline=True, unique_id="model.test.my_model"),
@@ -412,6 +435,7 @@ sample_values = [
     types.DebugCmdResult(),
     types.ListCmdOut(),
     types.Note(msg="This is a note."),
+    types.ResourceReport(),
 ]
 
 

@@ -44,7 +44,7 @@ class NodeSelector(MethodManager):
         manifest: Manifest,
         previous_state: Optional[PreviousState] = None,
         include_empty_nodes: bool = False,
-    ):
+    ) -> None:
         super().__init__(manifest, previous_state)
         self.full_graph = graph
         self.include_empty_nodes = include_empty_nodes
@@ -169,7 +169,8 @@ class NodeSelector(MethodManager):
             metric = self.manifest.metrics[unique_id]
             return metric.config.enabled
         elif unique_id in self.manifest.semantic_models:
-            return True
+            semantic_model = self.manifest.semantic_models[unique_id]
+            return semantic_model.config.enabled
         node = self.manifest.nodes[unique_id]
 
         if self.include_empty_nodes:
@@ -324,7 +325,7 @@ class ResourceTypeSelector(NodeSelector):
         previous_state: Optional[PreviousState],
         resource_types: List[NodeType],
         include_empty_nodes: bool = False,
-    ):
+    ) -> None:
         super().__init__(
             graph=graph,
             manifest=manifest,

@@ -1,0 +1,6 @@
+kind: Fixes
+body: Lower bound of `8.0.2` for `click`
+time: 2023-09-20T16:56:35.484024-06:00
+custom:
+  Author: dylan-murray dbeatty10
+  Issue: "8683"
