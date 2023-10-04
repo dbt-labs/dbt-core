@@ -14,7 +14,11 @@ from dbt.contracts.graph.nodes import (
     DependsOn,
     UnitTestConfig,
 )
-from dbt.contracts.graph.unparsed import UnparsedUnitTestSuite, UnitTestFormat
+from dbt.contracts.graph.unparsed import (
+    UnparsedUnitTestSuite,
+    UnitTestInputFixture,
+    UnitTestOutputFixture,
+)
 from dbt.exceptions import ParsingError
 from dbt.graph import UniqueId
 from dbt.node_types import NodeType
@@ -192,23 +196,8 @@ class UnitTestParser(YamlReader):
 
                 # Check that format and type of rows matches for each given input
                 for input in test.given:
-                    if (input.format == "dict" and not isinstance(input.rows, list)) or (
-                        input.format == UnitTestFormat.CSV and not isinstance(input.rows, str)
-                    ):
-                        raise ParsingError(
-                            f"Input rows in invalid format for unit test {test.name}"
-                        )
-                # Check that format type of rows matches for expect
-                if (
-                    test.expect.format == UnitTestFormat.Dict
-                    and not isinstance(test.expect.rows, list)
-                ) or (
-                    test.expect.format == UnitTestFormat.CSV
-                    and not isinstance(test.expect.rows, str)
-                ):
-                    raise ParsingError(
-                        f"Expected rows in invalid format for unit test {test.name}"
-                    )
+                    UnitTestInputFixture.validate_fixture(input, "input", test.name)
+                UnitTestOutputFixture.validate_fixture(test.expect, "expected", test.name)
 
                 unit_test_definition = UnitTestDefinition(
                     name=test.name,

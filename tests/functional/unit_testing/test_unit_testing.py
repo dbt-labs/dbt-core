@@ -1,6 +1,6 @@
 import pytest
 from dbt.tests.util import run_dbt, write_file, get_manifest, get_artifact
-from dbt.exceptions import DuplicateResourceNameError, YamlParseDictError
+from dbt.exceptions import DuplicateResourceNameError, YamlParseDictError, ParsingError
 
 my_model_sql = """
 SELECT
@@ -274,6 +274,21 @@ datetime_test_invalid_format = """
             - {date_a: "2020-01-01"}
 """
 
+datetime_test_invalid_format2 = """
+      - name: test_my_model_datetime
+        given:
+          - input: ref('my_model_a')
+            format: csv
+            rows:
+              - {id: 1, date_a: "2020-01-01"}
+          - input: ref('my_model_b')
+            rows:
+              - {id: 1}
+        expect:
+          rows:
+            - {date_a: "2020-01-01"}
+"""
+
 
 class TestUnitTestsWithInlineCSV:
     @pytest.fixture(scope="class")
@@ -305,4 +320,14 @@ class TestUnitTestsWithInlineCSV:
             "test_my_model.yml",
         )
         with pytest.raises(YamlParseDictError):
+            results = run_dbt(["unit-test", "--select", "my_model"], expect_pass=False)
+
+        # Check error with format not matching rows
+        write_file(
+            test_my_model_csv_yml + datetime_test_invalid_format2,
+            project.project_root,
+            "models",
+            "test_my_model.yml",
+        )
+        with pytest.raises(ParsingError):
             results = run_dbt(["unit-test", "--select", "my_model"], expect_pass=False)
