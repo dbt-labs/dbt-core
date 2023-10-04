@@ -382,6 +382,10 @@ class SemanticModelConfig(BaseConfig):
         default=None,
         metadata=CompareBehavior.Exclude.meta(),
     )
+    meta: Dict[str, Any] = field(
+        default_factory=dict,
+        metadata=MergeBehavior.Update.meta(),
+    )
 
 
 @dataclass

@@ -204,3 +204,25 @@ class TestConfigsInheritence:
         ).config
 
         assert isinstance(config_test_table, SemanticModelConfig)
+
+
+# test setting meta attributes in semantic model config
+class TestMetaConfig:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "people.sql": models_people_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+            "semantic_models.yml": enabled_semantic_model_people_yml,
+            "people_metrics.yml": models_people_metrics_yml,
+            "groups.yml": groups_yml,
+        }
+
+    def test_meta_config(self, project):
+        run_dbt(["parse"])
+        manifest = get_manifest(project.project_root)
+        sm_id = "semantic_model.test.semantic_people"
+        assert sm_id in manifest.semantic_models
+        sm_node = manifest.semantic_models[sm_id]
+        meta_expected = {"my_meta": "testing", "my_other_meta": "testing more"}
+        assert sm_node.config.meta == meta_expected

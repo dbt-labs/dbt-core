@@ -549,6 +549,7 @@ class SemanticModelParser(YamlReader):
             base=False,
             patch_config_dict=precedence_configs,
         )
+
         return config
 
     def parse_semantic_model(self, unparsed: UnparsedSemanticModel):
