@@ -274,6 +274,7 @@ datetime_test_invalid_format = """
             - {date_a: "2020-01-01"}
 """
 
+
 class TestUnitTestsWithInlineCSV:
     @pytest.fixture(scope="class")
     def models(self):

@@ -190,6 +190,7 @@ class UnitTestParser(YamlReader):
                 unit_test_fqn = [self.project.project_name] + model_name_split + [test.name]
                 unit_test_config = self._build_unit_test_config(unit_test_fqn, test.config)
 
+                # Check that format and type of rows matches for each given input
                 for input in test.given:
                     if (input.format == "dict" and not isinstance(input.rows, list)) or (
                         input.format == UnitTestFormat.CSV and not isinstance(input.rows, str)
@@ -197,6 +198,7 @@ class UnitTestParser(YamlReader):
                         raise ParsingError(
                             f"Input rows in invalid format for unit test {test.name}"
                         )
+                # Check that format type of rows matches for expect
                 if (
                     test.expect.format == UnitTestFormat.Dict
                     and not isinstance(test.expect.rows, list)
