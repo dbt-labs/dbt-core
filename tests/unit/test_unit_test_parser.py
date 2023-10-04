@@ -7,7 +7,7 @@ from .utils import MockNode
 from .test_parser import SchemaParserTest, assertEqualNodes
 
 from unittest import mock
-from dbt.contracts.graph.unparsed import OutputFixture
+from dbt.contracts.graph.unparsed import UnitTestOutputFixture
 
 
 UNIT_TEST_MODEL_NOT_FOUND_SOURCE = """
@@ -129,7 +129,7 @@ class UnitTestParserTest(SchemaParserTest):
             original_file_path=block.path.original_file_path,
             unique_id="unit.snowplow.my_model.test_my_model",
             given=[],
-            expect=OutputFixture(rows=[{"a": 1}]),
+            expect=UnitTestOutputFixture(rows=[{"a": 1}]),
             description="unit test description",
             overrides=None,
             depends_on=DependsOn(nodes=["model.snowplow.my_model"]),
