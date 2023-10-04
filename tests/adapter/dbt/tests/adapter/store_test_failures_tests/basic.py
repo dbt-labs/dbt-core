@@ -1,4 +1,5 @@
 from collections import namedtuple
+from typing import Set
 
 import pytest
 
@@ -67,23 +68,32 @@ class StoreTestFailuresAsBase:
     def models(self):
         return {f"{self.model_table}.sql": MODEL__CHIPMUNKS}
 
-    def row_count(self, project, relation_name: str) -> int:
+    def run_and_assert(
+        self, project, expected_results: Set[TestResult], expect_pass: bool = False
+    ) -> None:
         """
-        Return the row count for the relation.
+        Run `dbt test` and assert the results are the expected results
 
         Args:
-            project: the project fixture
-            relation_name: the name of the relation
+            project: the `project` fixture; needed since we invoke `run_dbt`
+            expected_results: the expected results of the tests as instances of TestResult
+            expect_pass: passed directly into `run_dbt`; this is only needed if all expected results are tests that pass
 
         Returns:
             the row count as an integer
         """
-        sql = f"select count(*) from {self.audit_schema}.{relation_name}"
-        try:
-            return project.run_sql(sql, fetch="one")[0]
-        # this is the error we catch and re-raise in BaseAdapter
-        except BaseException:
-            return 0
+        # run the tests
+        results = run_dbt(["test"], expect_pass=expect_pass)
+
+        # show that the statuses are what we expect
+        actual = {(result.node.name, result.status) for result in results}
+        expected = {(result.name, result.status) for result in expected_results}
+        assert actual == expected
+
+        # show that the results are persisted in the correct database objects
+        check_relation_types(
+            project.adapter, {result.name: result.type for result in expected_results}
+        )
 
 
 class StoreTestFailuresAsInteractions(StoreTestFailuresAsBase):
@@ -132,19 +142,7 @@ class StoreTestFailuresAsInteractions(StoreTestFailuresAsBase):
             TestResult("unset_false", TestStatus.Fail, None),
             TestResult("unset_unset", TestStatus.Fail, None),
         }
-
-        # run the tests
-        results = run_dbt(["test"], expect_pass=False)
-
-        # show that the statuses are what we expect
-        actual = {(result.node.name, result.status) for result in results}
-        expected = {(result.name, result.status) for result in expected_results}
-        assert actual == expected
-
-        # show that the results are persisted in the correct database objects
-        check_relation_types(
-            project.adapter, {result.name: result.type for result in expected_results}
-        )
+        self.run_and_assert(project, expected_results)
 
 
 class StoreTestFailuresAsProjectLevelOff(StoreTestFailuresAsBase):
@@ -180,19 +178,7 @@ class StoreTestFailuresAsProjectLevelOff(StoreTestFailuresAsBase):
             TestResult("results_table", TestStatus.Fail, "table"),
             TestResult("results_unset", TestStatus.Fail, None),
         }
-
-        # run the tests
-        results = run_dbt(["test"], expect_pass=False)
-
-        # show that the statuses are what we expect
-        actual = {(result.node.name, result.status) for result in results}
-        expected = {(result.name, result.status) for result in expected_results}
-        assert actual == expected
-
-        # show that the results are persisted in the correct database objects
-        check_relation_types(
-            project.adapter, {result.name: result.type for result in expected_results}
-        )
+        self.run_and_assert(project, expected_results)
 
 
 class StoreTestFailuresAsProjectLevelView(StoreTestFailuresAsBase):
@@ -235,19 +221,7 @@ class StoreTestFailuresAsProjectLevelView(StoreTestFailuresAsBase):
             TestResult("results_unset", TestStatus.Fail, "view"),
             TestResult("results_turn_off", TestStatus.Fail, None),
         }
-
-        # run the tests
-        results = run_dbt(["test"], expect_pass=False)
-
-        # show that the statuses are what we expect
-        actual = {(result.node.name, result.status) for result in results}
-        expected = {(result.name, result.status) for result in expected_results}
-        assert actual == expected
-
-        # show that the results are persisted in the correct database objects
-        check_relation_types(
-            project.adapter, {result.name: result.type for result in expected_results}
-        )
+        self.run_and_assert(project, expected_results)
 
 
 class StoreTestFailuresAsGeneric(StoreTestFailuresAsBase):
@@ -267,23 +241,13 @@ class StoreTestFailuresAsGeneric(StoreTestFailuresAsBase):
 
     def test_tests_run_successfully_and_are_stored_as_expected(self, project):
         expected_results = {
-            TestResult("unique_chipmunks_name", TestStatus.Pass, "table"),
+            # `store_failures` unset, `store_failures_as = "view"`
             TestResult("not_null_chipmunks_name", TestStatus.Pass, "view"),
+            # `store_failures = False`, `store_failures_as = "table"`
             TestResult(
                 "accepted_values_chipmunks_name__alvin__simon__theodore", TestStatus.Fail, "table"
             ),
+            # `store_failures = True`, `store_failures_as = "view"`
             TestResult("not_null_chipmunks_shirt", TestStatus.Fail, "view"),
         }
-
-        # run the tests
-        results = run_dbt(["test"], expect_pass=False)
-
-        # show that the statuses are what we expect
-        actual = {(result.node.name, result.status) for result in results}
-        expected = {(result.name, result.status) for result in expected_results}
-        assert actual == expected
-
-        # show that the results are persisted in the correct database objects
-        check_relation_types(
-            project.adapter, {result.name: result.type for result in expected_results}
-        )
+        self.run_and_assert(project, expected_results)
