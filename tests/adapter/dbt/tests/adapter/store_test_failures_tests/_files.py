@@ -109,8 +109,6 @@ models:
     columns:
       - name: name
         tests:
-          - unique:
-              store_failures: true
           - not_null:
               store_failures_as: view
           - accepted_values:
