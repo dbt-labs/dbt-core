@@ -60,3 +60,13 @@
     {% set dt = modules.datetime.datetime.now() %}
     {% do return(dt.strftime("%Y%m%d%H%M%S%f")) %}
 {% endmacro %}
+
+
+{% macro date(year, month, day) %}
+    {{ return(modules.datetime.date(year, month, day)) }}
+{% endmacro %}
+
+
+{% macro datetime(year, month, day, hour=0, minute=0, second=0, millisecond=0, tzinfo=modules.pytz.timezone('UTC')) %}
+    {{ return(modules.datetime.datetime(year, month, day, hour, minute, second, millisecond, tzinfo)) }}
+{% endmacro %}

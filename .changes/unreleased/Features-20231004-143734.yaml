@@ -1,0 +1,6 @@
+kind: Features
+body: Add `date()` and `datetime()` macros to reduce boilerplate
+time: 2023-10-04T14:37:34.419966-04:00
+custom:
+  Author: gregology
+  Issue: "8770"
