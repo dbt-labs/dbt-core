@@ -34,10 +34,16 @@ class SchemaYamlRenderer(BaseRenderer):
         Return True if it's tests or description - those aren't rendered now
         because they're rendered later in parse_generic_tests or process_docs.
         """
+        # top level descriptions and tests
         if len(keypath) >= 1 and keypath[0] in ("tests", "description"):
             return True
 
+        # columns descriptions and tests
         if len(keypath) == 2 and keypath[1] in ("tests", "description"):
+            return True
+
+        # versions
+        if len(keypath) == 5 and keypath[4] == "description":
             return True
 
         if (

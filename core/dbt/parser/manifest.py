@@ -917,10 +917,11 @@ class ManifestLoader:
                 continue
             _process_metrics_for_node(self.manifest, current_project, exposure)
 
-    # nodes: node and column descriptions
+    # nodes: node and column descriptions, version columns descriptions
     # sources: source and table descriptions, column descriptions
     # macros: macro argument descriptions
     # exposures: exposure descriptions
+    # metrics: metric descriptions
     def process_docs(self, config: RuntimeConfig):
         for node in self.manifest.nodes.values():
             if node.created_at < self.started_at:

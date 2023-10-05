@@ -540,7 +540,7 @@ class SchemaParser(SimpleParser[GenericTestBlock, GenericTestNode]):
                 for test in block.target.get_tests_for_version(version.v):
                     self.parse_test(block, test, None, version.v)
 
-    def parse_file(self, block: FileBlock, dct: Dict = None) -> None:
+    def parse_file(self, block: FileBlock, dct: Optional[Dict] = None) -> None:
         assert isinstance(block.file, SchemaSourceFile)
 
         # If partially parsing, dct should be from pp_dict, otherwise

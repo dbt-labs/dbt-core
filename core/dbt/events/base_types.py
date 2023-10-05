@@ -1,6 +1,7 @@
 from enum import Enum
 import os
 import threading
+from typing import Optional
 from dbt.events import types_pb2
 import sys
 from google.protobuf.json_format import ParseDict, MessageToDict, MessageToJson
@@ -126,7 +127,7 @@ class EventMsg(Protocol):
     data: Message
 
 
-def msg_from_base_event(event: BaseEvent, level: EventLevel = None):
+def msg_from_base_event(event: BaseEvent, level: Optional[EventLevel] = None):
 
     msg_class_name = f"{type(event).__name__}Msg"
     msg_cls = getattr(types_pb2, msg_class_name)

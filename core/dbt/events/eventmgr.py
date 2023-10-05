@@ -186,7 +186,7 @@ class EventManager:
         self.callbacks: List[Callable[[EventMsg], None]] = []
         self.invocation_id: str = str(uuid4())
 
-    def fire_event(self, e: BaseEvent, level: EventLevel = None) -> None:
+    def fire_event(self, e: BaseEvent, level: Optional[EventLevel] = None) -> None:
         msg = msg_from_base_event(e, level=level)
 
         if os.environ.get("DBT_TEST_BINARY_SERIALIZATION"):
