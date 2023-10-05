@@ -459,11 +459,11 @@ class SchemaSearchMap(Dict[InformationSchema, Set[Optional[str]]]):
         self[key].add(schema)
 
     def search(self) -> Iterator[Tuple[InformationSchema, Optional[str]]]:
-        for information_schema_name, schemas in self.items():
+        for information_schema, schemas in self.items():
             for schema in schemas:
-                yield information_schema_name, schema
+                yield information_schema, schema
 
-    def flatten(self, allow_multiple_databases: bool = False):
+    def flatten(self, allow_multiple_databases: bool = False) -> "SchemaSearchMap":
         new = self.__class__()
 
         # make sure we don't have multiple databases if allow_multiple_databases is set to False

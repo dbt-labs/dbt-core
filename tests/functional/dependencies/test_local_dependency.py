@@ -8,13 +8,13 @@ import yaml
 
 from pathlib import Path
 from unittest import mock
-from contextlib import contextmanager
 
 import dbt.semver
 import dbt.config
 import dbt.exceptions
 
 from dbt.tests.util import check_relations_equal, run_dbt, run_dbt_and_capture
+from tests.functional.utils import up_one
 
 models__dep_source = """
 {# If our dependency source didn't exist, this would be an errror #}
@@ -81,16 +81,6 @@ macros__macro_override_schema_sql = """
 
 {%- endmacro %}
 """
-
-
-@contextmanager
-def up_one():
-    current_path = Path.cwd()
-    os.chdir("../")
-    try:
-        yield
-    finally:
-        os.chdir(current_path)
 
 
 class BaseDependencyTest(object):

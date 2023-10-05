@@ -169,6 +169,7 @@ def global_flags(func):
 @p.warn_error
 @p.warn_error_options
 @p.log_format
+@p.show_resource_report
 def cli(ctx, **kwargs):
     """An ELT tool for managing your SQL transformations and data models.
     For more documentation on these commands, visit: docs.getdbt.com
@@ -224,6 +225,7 @@ def build(ctx, **kwargs):
 @cli.command("clean")
 @click.pass_context
 @global_flags
+@p.clean_project_files_only
 @p.profile
 @p.profiles_dir
 @p.project_dir

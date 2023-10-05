@@ -1,3 +1,16 @@
+{% macro get_catalog_relations(information_schema, relations) -%}
+  {{ return(adapter.dispatch('get_catalog_relations', 'dbt')(information_schema, relations)) }}
+{%- endmacro %}
+
+{% macro default__get_catalog_relations(information_schema, relations) -%}
+  {% set typename = adapter.type() %}
+  {% set msg -%}
+    get_catalog_relations not implemented for {{ typename }}
+  {%- endset %}
+
+  {{ exceptions.raise_compiler_error(msg) }}
+{%- endmacro %}
+
 {% macro get_catalog(information_schema, schemas) -%}
   {{ return(adapter.dispatch('get_catalog', 'dbt')(information_schema, schemas)) }}
 {%- endmacro %}

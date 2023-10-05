@@ -423,6 +423,13 @@ send_anonymous_usage_stats = click.option(
     default=True,
 )
 
+clean_project_files_only = click.option(
+    "--clean-project-files-only / --no-clean-project-files-only",
+    envvar="DBT_CLEAN_PROJECT_FILES_ONLY",
+    help="If disabled, dbt clean will delete all paths specified in clean-paths, even if they're outside the dbt project.",
+    default=True,
+)
+
 show = click.option(
     "--show",
     envvar=None,
@@ -606,4 +613,11 @@ write_json = click.option(
     envvar="DBT_WRITE_JSON",
     help="Whether or not to write the manifest.json and run_results.json files to the target directory",
     default=True,
+)
+
+show_resource_report = click.option(
+    "--show-resource-report/--no-show-resource-report",
+    default=False,
+    envvar="DBT_SHOW_RESOURCE_REPORT",
+    hidden=True,
 )

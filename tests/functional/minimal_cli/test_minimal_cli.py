@@ -3,6 +3,7 @@ from click.testing import CliRunner
 
 from dbt.cli.main import cli
 from tests.functional.minimal_cli.fixtures import BaseConfigProject
+from tests.functional.utils import up_one
 
 
 class TestMinimalCli(BaseConfigProject):
@@ -17,6 +18,13 @@ class TestMinimalCli(BaseConfigProject):
         assert "target" in result.output
         assert "dbt_packages" in result.output
         assert "logs" in result.output
+
+    def test_clean_one_level_up(self, runner, project):
+        with up_one():
+            result = runner.invoke(cli, ["clean"])
+            assert result.exit_code == 2
+            assert "Runtime Error" in result.output
+            assert "No dbt_project.yml" in result.output
 
     def test_deps(self, runner, project):
         result = runner.invoke(cli, ["deps"])

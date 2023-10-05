@@ -1,0 +1,6 @@
+kind: Fixes
+body: Disallow cleaning paths outside current working directory
+time: 2023-09-12T15:30:02.089967+01:00
+custom:
+  Author: aranke
+  Issue: "8318"

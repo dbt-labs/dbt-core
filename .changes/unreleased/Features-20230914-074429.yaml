@@ -4,4 +4,4 @@ body: Add support for optional label in semantic_models, measures, dimensions an
 time: 2023-09-14T07:44:29.828199-05:00
 custom:
   Author: emmyoop
-  Issue: "8595"
+  Issue: 8595 8755

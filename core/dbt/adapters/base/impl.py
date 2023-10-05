@@ -74,6 +74,7 @@ from dbt.adapters.cache import RelationsCache, _make_ref_key_dict
 from dbt import deprecations
 
 GET_CATALOG_MACRO_NAME = "get_catalog"
+GET_CATALOG_RELATIONS_MACRO_NAME = "get_catalog_relations"
 FRESHNESS_MACRO_NAME = "collect_freshness"
 
 
@@ -159,6 +160,14 @@ class PythonJobHelper:
 
     def submit(self, compiled_code: str) -> Any:
         raise NotImplementedError("PythonJobHelper submit function is not implemented yet")
+
+
+class AdapterFeature(str, Enum):
+    """Enumeration of optional adapter features which can be probed using BaseAdapter.has_feature()"""
+
+    CatalogByRelations = "CatalogByRelations"
+    """Flags support for retrieving catalog information using a list of relations, rather than always retrieving all
+    the relations in a schema """
 
 
 class BaseAdapter(metaclass=AdapterMeta):
@@ -415,6 +424,29 @@ class BaseAdapter(metaclass=AdapterMeta):
         lowercase strings.
         """
         info_schema_name_map = SchemaSearchMap()
+        relations = self._get_catalog_relations(manifest)
+        for relation in relations:
+            info_schema_name_map.add(relation)
+        # result is a map whose keys are information_schema Relations without
+        # identifiers that have appropriate database prefixes, and whose values
+        # are sets of lowercase schema names that are valid members of those
+        # databases
+        return info_schema_name_map
+
+    def _get_catalog_relations_by_info_schema(
+        self, manifest: Manifest
+    ) -> Dict[InformationSchema, List[BaseRelation]]:
+        relations = self._get_catalog_relations(manifest)
+        relations_by_info_schema: Dict[InformationSchema, List[BaseRelation]] = dict()
+        for relation in relations:
+            info_schema = relation.information_schema_only()
+            if info_schema not in relations_by_info_schema:
+                relations_by_info_schema[info_schema] = []
+            relations_by_info_schema[info_schema].append(relation)
+
+        return relations_by_info_schema
+
+    def _get_catalog_relations(self, manifest: Manifest) -> List[BaseRelation]:
         nodes: Iterator[ResultNode] = chain(
             [
                 node
@@ -423,14 +455,9 @@ class BaseAdapter(metaclass=AdapterMeta):
             ],
             manifest.sources.values(),
         )
-        for node in nodes:
-            relation = self.Relation.create_from(self.config, node)
-            info_schema_name_map.add(relation)
-        # result is a map whose keys are information_schema Relations without
-        # identifiers that have appropriate database prefixes, and whose values
-        # are sets of lowercase schema names that are valid members of those
-        # databases
-        return info_schema_name_map
+
+        relations = [self.Relation.create_from(self.config, n) for n in nodes]
+        return relations
 
     def _relations_cache_for_schemas(
         self, manifest: Manifest, cache_schemas: Optional[Set[BaseRelation]] = None
@@ -1093,20 +1120,57 @@ class BaseAdapter(metaclass=AdapterMeta):
         results = self._catalog_filter_table(table, manifest)  # type: ignore[arg-type]
         return results
 
+    def _get_one_catalog_by_relations(
+        self,
+        information_schema: InformationSchema,
+        relations: List[BaseRelation],
+        manifest: Manifest,
+    ) -> agate.Table:
+
+        kwargs = {
+            "information_schema": information_schema,
+            "relations": relations,
+        }
+        table = self.execute_macro(
+            GET_CATALOG_RELATIONS_MACRO_NAME,
+            kwargs=kwargs,
+            # pass in the full manifest, so we get any local project
+            # overrides
+            manifest=manifest,
+        )
+
+        results = self._catalog_filter_table(table, manifest)  # type: ignore[arg-type]
+        return results
+
     def get_catalog(self, manifest: Manifest) -> Tuple[agate.Table, List[Exception]]:
-        schema_map = self._get_catalog_schemas(manifest)
 
         with executor(self.config) as tpe:
             futures: List[Future[agate.Table]] = []
-            for info, schemas in schema_map.items():
-                if len(schemas) == 0:
-                    continue
-                name = ".".join([str(info.database), "information_schema"])
-
-                fut = tpe.submit_connected(
-                    self, name, self._get_one_catalog, info, schemas, manifest
-                )
-                futures.append(fut)
+            relation_count = len(self._get_catalog_relations(manifest))
+            if relation_count <= 100 and self.has_feature(AdapterFeature.CatalogByRelations):
+                relations_by_schema = self._get_catalog_relations_by_info_schema(manifest)
+                for info_schema in relations_by_schema:
+                    name = ".".join([str(info_schema.database), "information_schema"])
+                    relations = relations_by_schema[info_schema]
+                    fut = tpe.submit_connected(
+                        self,
+                        name,
+                        self._get_one_catalog_by_relations,
+                        info_schema,
+                        relations,
+                        manifest,
+                    )
+                    futures.append(fut)
+            else:
+                schema_map: SchemaSearchMap = self._get_catalog_schemas(manifest)
+                for info, schemas in schema_map.items():
+                    if len(schemas) == 0:
+                        continue
+                    name = ".".join([str(info.database), "information_schema"])
+                    fut = tpe.submit_connected(
+                        self, name, self._get_one_catalog, info, schemas, manifest
+                    )
+                    futures.append(fut)
 
             catalogs, exceptions = catch_as_completed(futures)
 
@@ -1436,6 +1500,13 @@ class BaseAdapter(metaclass=AdapterMeta):
             return f"{constraint_prefix}{constraint.expression}"
         else:
             return None
+
+    @classmethod
+    def has_feature(cls, feature: AdapterFeature) -> bool:
+        # The base adapter implementation does not implement any optional
+        # features, so always return false. Adapters which wish to provide
+        # optional features will have to override this function.
+        return False
 
 
 COLUMNS_EQUAL_SQL = """
