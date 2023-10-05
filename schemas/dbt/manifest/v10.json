@@ -232,7 +232,7 @@
         "generated_at": {
           "type": "string",
           "format": "date-time",
-          "default": "2023-10-04T12:51:08.278576Z"
+          "default": "2023-10-05T00:33:14.410024Z"
         },
         "invocation_id": {
           "oneOf": [
@@ -243,7 +243,7 @@
               "type": "null"
             }
           ],
-          "default": "91c3fe8c-af16-45af-addf-bad2baaac57b"
+          "default": "603e2fae-9c7d-4d17-8530-7d28c9875263"
         },
         "env": {
           "type": "object",
@@ -474,7 +474,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1696423868.282719
+          "default": 1696465994.411958
         },
         "config_call_dict": {
           "type": "object",
@@ -1187,7 +1187,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1696423868.286342
+          "default": 1696465994.413604
         },
         "config_call_dict": {
           "type": "object",
@@ -1575,7 +1575,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1696423868.2879858
+          "default": 1696465994.414359
         },
         "config_call_dict": {
           "type": "object",
@@ -1851,7 +1851,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1696423868.2906518
+          "default": 1696465994.4150689
         },
         "config_call_dict": {
           "type": "object",
@@ -2273,7 +2273,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1696423868.293976
+          "default": 1696465994.416128
         },
         "config_call_dict": {
           "type": "object",
@@ -2539,7 +2539,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1696423868.29565
+          "default": 1696465994.41679
         },
         "config_call_dict": {
           "type": "object",
@@ -2797,7 +2797,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1696423868.2974122
+          "default": 1696465994.4175282
         },
         "config_call_dict": {
           "type": "object",
@@ -3092,7 +3092,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1696423868.3007638
+          "default": 1696465994.418854
         },
         "config_call_dict": {
           "type": "object",
@@ -3599,7 +3599,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1696423868.3035781
+          "default": 1696465994.420199
         },
         "config_call_dict": {
           "type": "object",
@@ -4020,7 +4020,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1696423868.3070972
+          "default": 1696465994.421661
         }
       },
       "additionalProperties": false,
@@ -4120,138 +4120,6 @@
       "additionalProperties": false,
       "description": "FreshnessThreshold(warn_after: Union[dbt.contracts.graph.unparsed.Time, NoneType] = <factory>, error_after: Union[dbt.contracts.graph.unparsed.Time, NoneType] = <factory>, filter: Union[str, NoneType] = None)"
     },
-    "FreshnessMetadata": {
-      "type": "object",
-      "required": [],
-      "properties": {
-        "dbt_schema_version": {
-          "type": "string",
-          "default": "https://schemas.getdbt.com/dbt/sources/v3.json"
-        },
-        "dbt_version": {
-          "type": "string",
-          "default": "1.6.5"
-        },
-        "generated_at": {
-          "type": "string",
-          "format": "date-time",
-          "default": "2023-10-04T12:51:08.273991Z"
-        },
-        "invocation_id": {
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": "91c3fe8c-af16-45af-addf-bad2baaac57b"
-        },
-        "env": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "string"
-          },
-          "default": {}
-        }
-      },
-      "additionalProperties": false,
-      "description": "FreshnessMetadata(dbt_schema_version: str = <factory>, dbt_version: str = '1.6.5', generated_at: datetime.datetime = <factory>, invocation_id: Union[str, NoneType] = <factory>, env: Dict[str, str] = <factory>)"
-    },
-    "SourceFreshnessRuntimeError": {
-      "type": "object",
-      "required": [
-        "unique_id",
-        "status"
-      ],
-      "properties": {
-        "unique_id": {
-          "type": "string"
-        },
-        "error": {
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "status": {
-          "type": "string",
-          "enum": [
-            "runtime error"
-          ]
-        }
-      },
-      "additionalProperties": false,
-      "description": "SourceFreshnessRuntimeError(unique_id: str, error: Union[str, int, NoneType], status: dbt.contracts.results.FreshnessErrorEnum)"
-    },
-    "SourceFreshnessOutput": {
-      "type": "object",
-      "required": [
-        "unique_id",
-        "max_loaded_at",
-        "snapshotted_at",
-        "max_loaded_at_time_ago_in_s",
-        "status",
-        "criteria",
-        "adapter_response",
-        "timing",
-        "thread_id",
-        "execution_time"
-      ],
-      "properties": {
-        "unique_id": {
-          "type": "string"
-        },
-        "max_loaded_at": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "snapshotted_at": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "max_loaded_at_time_ago_in_s": {
-          "type": "number"
-        },
-        "status": {
-          "type": "string",
-          "enum": [
-            "pass",
-            "warn",
-            "error",
-            "runtime error"
-          ]
-        },
-        "criteria": {
-          "$ref": "#/definitions/FreshnessThreshold"
-        },
-        "adapter_response": {
-          "type": "object"
-        },
-        "timing": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/TimingInfo"
-          }
-        },
-        "thread_id": {
-          "type": "string"
-        },
-        "execution_time": {
-          "type": "number"
-        }
-      },
-      "additionalProperties": false,
-      "description": "SourceFreshnessOutput(unique_id: str, max_loaded_at: datetime.datetime, snapshotted_at: datetime.datetime, max_loaded_at_time_ago_in_s: float, status: dbt.contracts.results.FreshnessStatus, criteria: dbt.contracts.graph.unparsed.FreshnessThreshold, adapter_response: Dict[str, Any], timing: List[dbt.contracts.results.TimingInfo], thread_id: str, execution_time: float)"
-    },
     "Time": {
       "type": "object",
       "required": [],
@@ -4284,41 +4152,6 @@
       },
       "additionalProperties": false,
       "description": "Time(count: Union[int, NoneType] = None, period: Union[dbt.contracts.graph.unparsed.TimePeriod, NoneType] = None)"
-    },
-    "TimingInfo": {
-      "type": "object",
-      "required": [
-        "name"
-      ],
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "started_at": {
-          "oneOf": [
-            {
-              "type": "string",
-              "format": "date-time"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "completed_at": {
-          "oneOf": [
-            {
-              "type": "string",
-              "format": "date-time"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "additionalProperties": false,
-      "description": "TimingInfo(name: str, started_at: Union[datetime.datetime, NoneType] = None, completed_at: Union[datetime.datetime, NoneType] = None)"
     },
     "ExternalTable": {
       "type": "object",
@@ -4499,7 +4332,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1696423868.3079429
+          "default": 1696465994.421958
         },
         "supported_languages": {
           "oneOf": [
@@ -4739,7 +4572,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1696423868.309657
+          "default": 1696465994.422623
         }
       },
       "additionalProperties": false,
@@ -4924,7 +4757,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1696423868.3126311
+          "default": 1696465994.4238322
         },
         "group": {
           "oneOf": [
@@ -5063,10 +4896,24 @@
               "type": "null"
             }
           ]
+        },
+        "join_to_timespine": {
+          "type": "boolean",
+          "default": false
+        },
+        "fill_nulls_with": {
+          "oneOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false,
-      "description": "MetricInputMeasure(name: str, filter: Union[dbt.contracts.graph.nodes.WhereFilter, NoneType] = None, alias: Union[str, NoneType] = None)"
+      "description": "MetricInputMeasure(name: str, filter: Union[dbt.contracts.graph.nodes.WhereFilter, NoneType] = None, alias: Union[str, NoneType] = None, join_to_timespine: bool = False, fill_nulls_with: Union[int, NoneType] = None)"
     },
     "WhereFilter": {
       "type": "object",
@@ -5413,7 +5260,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1696423868.316482
+          "default": 1696465994.425479
         },
         "config": {
           "$ref": "#/definitions/SemanticModelConfig",
