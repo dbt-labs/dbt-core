@@ -1583,7 +1583,6 @@ class SemanticModel(GraphNode):
     refs: List[RefArgs] = field(default_factory=list)
     created_at: float = field(default_factory=lambda: time.time())
     config: SemanticModelConfig = field(default_factory=SemanticModelConfig)
-    meta: Dict[str, Any] = field(default_factory=dict)
     unrendered_config: Dict[str, Any] = field(default_factory=dict)
     primary_entity: Optional[str] = None
     group: Optional[str] = None

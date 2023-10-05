@@ -225,5 +225,4 @@ class TestMetaConfig:
         assert sm_id in manifest.semantic_models
         sm_node = manifest.semantic_models[sm_id]
         meta_expected = {"my_meta": "testing", "my_other_meta": "testing more"}
-        assert sm_node.meta == meta_expected
         assert sm_node.config.meta == meta_expected

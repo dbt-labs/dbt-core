@@ -596,13 +596,7 @@ class SemanticModelParser(YamlReader):
             config=config,
             unrendered_config=unrendered_config,
             group=config.group,
-            meta=unparsed.meta,
         )
-
-        # If we have meta in the config, copy to node level, for backwards
-        # compatibility with earlier node-only config.
-        if "meta" in config and config["meta"]:
-            parsed.meta = config["meta"]
 
         ctx = generate_parse_semantic_models(
             parsed,
