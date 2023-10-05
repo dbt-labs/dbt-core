@@ -14,11 +14,7 @@ from dbt.contracts.graph.nodes import (
     DependsOn,
     UnitTestConfig,
 )
-from dbt.contracts.graph.unparsed import (
-    UnparsedUnitTestSuite,
-    UnitTestInputFixture,
-    UnitTestOutputFixture,
-)
+from dbt.contracts.graph.unparsed import UnparsedUnitTestSuite
 from dbt.exceptions import ParsingError
 from dbt.graph import UniqueId
 from dbt.node_types import NodeType
@@ -196,8 +192,8 @@ class UnitTestParser(YamlReader):
 
                 # Check that format and type of rows matches for each given input
                 for input in test.given:
-                    UnitTestInputFixture.validate_fixture(input, "input", test.name)
-                UnitTestOutputFixture.validate_fixture(test.expect, "expected", test.name)
+                    input.validate_fixture("input", test.name)
+                test.expect.validate_fixture("expected", test.name)
 
                 unit_test_definition = UnitTestDefinition(
                     name=test.name,

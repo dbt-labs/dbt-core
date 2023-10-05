@@ -765,13 +765,12 @@ class UnitTestFixture:
                 rows.append(row)
             return rows
 
-    @classmethod
-    def validate_fixture(cls, fixture, fixture_type, test_name):
-        if (fixture.format == UnitTestFormat.Dict and not isinstance(fixture.rows, list)) or (
-            fixture.format == UnitTestFormat.CSV and not isinstance(fixture.rows, str)
+    def validate_fixture(self, fixture_type, test_name) -> None:
+        if (self.format == UnitTestFormat.Dict and not isinstance(self.rows, list)) or (
+            self.format == UnitTestFormat.CSV and not isinstance(self.rows, str)
         ):
             raise ParsingError(
-                f"Unit test {test_name} has {fixture_type} rows which do not match format"
+                f"Unit test {test_name} has {fixture_type} rows which do not match format {self.format}"
             )
 
 
