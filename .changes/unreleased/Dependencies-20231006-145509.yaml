@@ -1,0 +1,6 @@
+kind: "Dependencies"
+body: "Update types-requests requirement from <2.31.0 to <2.32.0"
+time: 2023-10-06T14:55:09.00000Z
+custom:
+  Author: dependabot[bot]
+  PR: 8791
