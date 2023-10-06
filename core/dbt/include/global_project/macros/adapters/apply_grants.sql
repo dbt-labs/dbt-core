@@ -1,7 +1,7 @@
 {# ------- BOOLEAN MACROS --------- #}
 
 {#
-  -- COPY GRANTS
+  -- COPY GRANTS.
   -- When a relational object (view or table) is replaced in this database,
   -- do previous grants carry over to the new object? This may depend on:
   --    whether we use alter-rename-swap versus CREATE OR REPLACE
