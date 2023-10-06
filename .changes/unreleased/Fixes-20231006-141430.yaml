@@ -1,0 +1,7 @@
+kind: Fixes
+body: 'Add quotes to usernames when revoking and granting permissions. Resolves issues
+  #6444 and #8751'
+time: 2023-10-06T14:14:30.472821+01:00
+custom:
+  Author: barton996
+  Issue: 6444 8751
