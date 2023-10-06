@@ -70,7 +70,11 @@
 {% endmacro %}
 
 {%- macro default__get_grant_sql(relation, privilege, grantees) -%}
-    grant {{ privilege }} on {{ relation }} to {{ grantees | join(', ') }}
+    grant {{ privilege }} on {{ relation }} to
+    {% for grantee in grantees %}
+    {{ adapter.quote(grantee) }}
+    {% if not loop.last %},{% endif %}
+    {% endfor %}
 {%- endmacro -%}
 
 
