@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Pin types-requests<2.31.0 in `dev-requirements.txt`
+time: 2023-10-06T09:31:07.591896-05:00
+custom:
+  Author: emmyoop
+  Issue: "8789"
