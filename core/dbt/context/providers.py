@@ -870,6 +870,9 @@ class ProviderContext(ManifestContext):
             else "."
         )
         path = os.path.join(self.config.project_root, package_path, self.model.original_file_path)
+        if not os.path.exists(path):
+            assert self.model.root_path
+            path = os.path.join(self.model.root_path, self.model.original_file_path)
 
         column_types = self.model.config.column_types
         delimiter = self.model.config.delimiter

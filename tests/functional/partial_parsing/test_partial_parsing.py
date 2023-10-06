@@ -884,7 +884,7 @@ class TestPortablePartialParsing:
         rename_dir(project.project_root, new_project_root)
         project.project_root = new_project_root
         # flags.project_dir is set during the project test fixture, and is persisted across run_dbt calls,
-        # so it needs to be reset between
+        # so it needs to be reset between invocations
         flags.set_from_args(Namespace(PROJECT_DIR=new_project_root), None)
 
     @pytest.fixture(scope="class", autouse=True)
