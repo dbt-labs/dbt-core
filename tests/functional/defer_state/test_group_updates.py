@@ -71,15 +71,30 @@ class TestModifiedGroups:
     def test_changed_groups(self, project):
         # save initial state
         run_dbt(["seed"])
-        run_dbt(["compile"])
+        results = run_dbt(["compile"])
+
+        # add sanity checks for first result
+        assert len(results) == 3
+        seed_result = results[0].node
+        assert seed_result.unique_id == "seed.test.seed"
+        model_1_result = results[1].node
+        assert model_1_result.unique_id == "model.test.model_1"
+        assert model_1_result.group == "finance"
+        model_2_result = results[2].node
+        assert model_2_result.unique_id == "model.test.model_2"
+        assert model_2_result.group is None
 
         os.makedirs("state")
         shutil.copyfile("target/manifest.json", "state/manifest.json")
 
-        # update group name everywhere, modify model so it gets picked up
+        # update group name, modify model so it gets picked up
         write_file(modified_model_1_sql, "models", "model_1.sql")
         write_file(modified_schema_yml, "models", "schema.yml")
 
+        # only thing in results should be model_1
         results = run_dbt(["build", "-s", "state:modified", "--defer", "--state", "./state"])
-        breakpoint()
+
         assert len(results) == 1
+        model_1_result = results[0].node
+        assert model_1_result.unique_id == "model.test.model_1"
+        assert model_1_result.group == "accounting"  # new group name!
