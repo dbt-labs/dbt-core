@@ -41,7 +41,7 @@ class dbtPackageDumper(yaml.Dumper):
         return super(dbtPackageDumper, self).increase_indent(flow, False)
 
 
-def _create_sha1_hash(packages: List[Package]):
+def _create_sha1_hash(packages: List[Package]) -> str:
     """Create a SHA1 hash of the packages list,
     this is used to determine if the packages for current execution matches
     the previous lock.
