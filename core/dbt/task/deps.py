@@ -58,7 +58,7 @@ def _create_sha1_hash(packages: List[Package]):
     return sha1("\n".join(package_strs).encode("utf-8")).hexdigest()
 
 
-def _create_packages_yml_entry(package, version, source):
+def _create_packages_yml_entry(package: str, version: Optional[str], source: str) -> dict:
     """Create a formatted entry to add to `packages.yml` or `package-lock.yml` file
 
     Args:
@@ -82,7 +82,7 @@ def _create_packages_yml_entry(package, version, source):
 
     if version:
         if "," in version:
-            version = version.split(",")
+            version = version.split(",")  # type: ignore
 
         packages_yml_entry[version_key] = version
 
