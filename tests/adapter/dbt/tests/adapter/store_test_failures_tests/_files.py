@@ -62,6 +62,30 @@ where shirt = 'green'
 """
 
 
+TEST__EPHEMERAL_TRUE = """
+{{ config(store_failures_as="ephemeral", store_failures=True) }}
+select *
+from {{ ref('chipmunks') }}
+where shirt = 'green'
+"""
+
+
+TEST__EPHEMERAL_FALSE = """
+{{ config(store_failures_as="ephemeral", store_failures=False) }}
+select *
+from {{ ref('chipmunks') }}
+where shirt = 'green'
+"""
+
+
+TEST__EPHEMERAL_UNSET = """
+{{ config(store_failures_as="ephemeral") }}
+select *
+from {{ ref('chipmunks') }}
+where shirt = 'green'
+"""
+
+
 TEST__UNSET_TRUE = """
 {{ config(store_failures=True) }}
 select *
@@ -90,14 +114,6 @@ TEST__VIEW_UNSET_PASS = """
 select *
 from {{ ref('chipmunks') }}
 where shirt = 'purple'
-"""
-
-
-TEST__NONE_FALSE = """
-{{ config(store_failures_as=None, store_failures=False) }}
-select *
-from {{ ref('chipmunks') }}
-where shirt = 'green'
 """
 
 

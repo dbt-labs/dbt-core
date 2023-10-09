@@ -569,14 +569,40 @@ class TestConfig(NodeAndTestConfig):
         configure this. Hence, if `store_failures = True` and `store_failures_as` is not specified, then it
         should be set to "table" to mimic the existing functionality.
 
+        A side effect of this overriding functionality is that `store_failures_as="view"` at the project
+        level cannot be turned off at the model level without setting both `store_failures_as` and
+        `store_failures`. The former would cascade down and override `store_failures=False`. The proposal
+        is to include "ephemeral" as a value for `store_failures_as`, which effectively sets
+        `store_failures=False`.
+
         The intention of this block is to behave as if `store_failures_as` is the only setting,
         but still allow for backwards compatibility for `store_failures`.
         See https://github.com/dbt-labs/dbt-core/issues/6914 for more information.
         """
-        if self.store_failures_as:
-            self.store_failures = True
-        elif self.store_failures:
-            self.store_failures_as = "table"
+
+        # if `store_failures_as` is set, it dictates what `store_failures` gets set to
+        store_failures_map = {
+            "ephemeral": False,
+            "table": True,
+            "view": True,
+        }
+
+        # if `store_failures_as` is not set, it gets set by `store_failures`
+        store_failures_as_map = {
+            True: "table",
+            False: "ephemeral",
+            None: None,
+        }
+
+        if self.store_failures_as in store_failures_map:
+            self.store_failures = store_failures_map[self.store_failures_as]
+        elif self.store_failures_as is None:
+            self.store_failures_as = store_failures_as_map[self.store_failures]
+        else:  # `store_failures_as` is set to an unsupported value
+            raise CompilationError(
+                f"""{self.store_failures_as} is not a valid value for `store_failures_as`. """
+                f"""Accepted values are: {str(list(store_failures_map.keys()))}"""
+            )
 
     @classmethod
     def same_contents(cls, unrendered: Dict[str, Any], other: Dict[str, Any]) -> bool:

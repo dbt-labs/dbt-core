@@ -6,22 +6,7 @@ import pytest
 from dbt.contracts.results import TestStatus
 from dbt.tests.util import run_dbt, check_relation_types
 
-from dbt.tests.adapter.store_test_failures_tests._files import (
-    MODEL__CHIPMUNKS,
-    SCHEMA_YML,
-    SEED__CHIPMUNKS,
-    TEST__NONE_FALSE,
-    TEST__TABLE_FALSE,
-    TEST__TABLE_TRUE,
-    TEST__TABLE_UNSET,
-    TEST__UNSET_FALSE,
-    TEST__UNSET_TRUE,
-    TEST__UNSET_UNSET,
-    TEST__VIEW_FALSE,
-    TEST__VIEW_TRUE,
-    TEST__VIEW_UNSET,
-    TEST__VIEW_UNSET_PASS,
-)
+from dbt.tests.adapter.store_test_failures_tests import _files
 
 
 TestResult = namedtuple("TestResult", ["name", "status", "type"])
@@ -62,11 +47,11 @@ class StoreTestFailuresAsBase:
 
     @pytest.fixture(scope="class")
     def seeds(self):
-        return {f"{self.seed_table}.csv": SEED__CHIPMUNKS}
+        return {f"{self.seed_table}.csv": _files.SEED__CHIPMUNKS}
 
     @pytest.fixture(scope="class")
     def models(self):
-        return {f"{self.model_table}.sql": MODEL__CHIPMUNKS}
+        return {f"{self.model_table}.sql": _files.MODEL__CHIPMUNKS}
 
     def run_and_assert(
         self, project, expected_results: Set[TestResult], expect_pass: bool = False
@@ -109,6 +94,9 @@ class StoreTestFailuresAsInteractions(StoreTestFailuresAsBase):
     - If `store_failures_as = "table"` and `store_failures = True`, then store the failures in a table.
     - If `store_failures_as = "table"` and `store_failures = False`, then store the failures in a table.
     - If `store_failures_as = "table"` and `store_failures` is not set, then store the failures in a table.
+    - If `store_failures_as = "ephemeral"` and `store_failures = True`, then do not store the failures.
+    - If `store_failures_as = "ephemeral"` and `store_failures = False`, then do not store the failures.
+    - If `store_failures_as = "ephemeral"` and `store_failures` is not set, then do not store the failures.
     - If `store_failures_as` is not set and `store_failures = True`, then store the failures in a table.
     - If `store_failures_as` is not set and `store_failures = False`, then do not store the failures.
     - If `store_failures_as` is not set and `store_failures` is not set, then do not store the failures.
@@ -117,16 +105,19 @@ class StoreTestFailuresAsInteractions(StoreTestFailuresAsBase):
     @pytest.fixture(scope="class")
     def tests(self):
         return {
-            "view_unset_pass.sql": TEST__VIEW_UNSET_PASS,  # control
-            "view_true.sql": TEST__VIEW_TRUE,
-            "view_false.sql": TEST__VIEW_FALSE,
-            "view_unset.sql": TEST__VIEW_UNSET,
-            "table_true.sql": TEST__TABLE_TRUE,
-            "table_false.sql": TEST__TABLE_FALSE,
-            "table_unset.sql": TEST__TABLE_UNSET,
-            "unset_true.sql": TEST__UNSET_TRUE,
-            "unset_false.sql": TEST__UNSET_FALSE,
-            "unset_unset.sql": TEST__UNSET_UNSET,
+            "view_unset_pass.sql": _files.TEST__VIEW_UNSET_PASS,  # control
+            "view_true.sql": _files.TEST__VIEW_TRUE,
+            "view_false.sql": _files.TEST__VIEW_FALSE,
+            "view_unset.sql": _files.TEST__VIEW_UNSET,
+            "table_true.sql": _files.TEST__TABLE_TRUE,
+            "table_false.sql": _files.TEST__TABLE_FALSE,
+            "table_unset.sql": _files.TEST__TABLE_UNSET,
+            "ephemeral_true.sql": _files.TEST__EPHEMERAL_TRUE,
+            "ephemeral_false.sql": _files.TEST__EPHEMERAL_FALSE,
+            "ephemeral_unset.sql": _files.TEST__EPHEMERAL_UNSET,
+            "unset_true.sql": _files.TEST__UNSET_TRUE,
+            "unset_false.sql": _files.TEST__UNSET_FALSE,
+            "unset_unset.sql": _files.TEST__UNSET_UNSET,
         }
 
     def test_tests_run_successfully_and_are_stored_as_expected(self, project):
@@ -138,6 +129,9 @@ class StoreTestFailuresAsInteractions(StoreTestFailuresAsBase):
             TestResult("table_true", TestStatus.Fail, "table"),
             TestResult("table_false", TestStatus.Fail, "table"),
             TestResult("table_unset", TestStatus.Fail, "table"),
+            TestResult("ephemeral_true", TestStatus.Fail, None),
+            TestResult("ephemeral_false", TestStatus.Fail, None),
+            TestResult("ephemeral_unset", TestStatus.Fail, None),
             TestResult("unset_true", TestStatus.Fail, "table"),
             TestResult("unset_false", TestStatus.Fail, None),
             TestResult("unset_unset", TestStatus.Fail, None),
@@ -156,6 +150,8 @@ class StoreTestFailuresAsProjectLevelOff(StoreTestFailuresAsBase):
     then store the failures in a view.
     - If `store_failures = False` in the project and `store_failures_as = "table"` in the model,
     then store the failures in a table.
+    - If `store_failures = False` in the project and `store_failures_as = "ephemeral"` in the model,
+    then do not store the failures.
     - If `store_failures = False` in the project and `store_failures_as` is not set,
     then do not store the failures.
     """
@@ -163,9 +159,10 @@ class StoreTestFailuresAsProjectLevelOff(StoreTestFailuresAsBase):
     @pytest.fixture(scope="class")
     def tests(self):
         return {
-            "results_view.sql": TEST__VIEW_UNSET,
-            "results_table.sql": TEST__TABLE_UNSET,
-            "results_unset.sql": TEST__UNSET_UNSET,
+            "results_view.sql": _files.TEST__VIEW_UNSET,
+            "results_table.sql": _files.TEST__TABLE_UNSET,
+            "results_ephemeral.sql": _files.TEST__EPHEMERAL_UNSET,
+            "results_unset.sql": _files.TEST__UNSET_UNSET,
         }
 
     @pytest.fixture(scope="class")
@@ -176,6 +173,7 @@ class StoreTestFailuresAsProjectLevelOff(StoreTestFailuresAsBase):
         expected_results = {
             TestResult("results_view", TestStatus.Fail, "view"),
             TestResult("results_table", TestStatus.Fail, "table"),
+            TestResult("results_ephemeral", TestStatus.Fail, None),
             TestResult("results_unset", TestStatus.Fail, None),
         }
         self.run_and_assert(project, expected_results)
@@ -186,9 +184,6 @@ class StoreTestFailuresAsProjectLevelView(StoreTestFailuresAsBase):
     These scenarios test that `store_failures_as` at the project level takes precedence over `store_failures`
     at the model level.
 
-    Additionally, the fourth scenario demonstrates how to turn off `store_failures` at the model level
-    when `store_failures_as` is used at the project level.
-
     Test Scenarios:
 
     - If `store_failures_as = "view"` in the project and `store_failures = False` in the model,
@@ -197,17 +192,14 @@ class StoreTestFailuresAsProjectLevelView(StoreTestFailuresAsBase):
     then store the failures in a view.
     - If `store_failures_as = "view"` in the project and `store_failures` is not set,
     then store the failures in a view.
-    - If `store_failures_as = "view"` in the project and `store_failures = False` in the model
-    and `store_failures_as = None` in the model, then do not store the failures.
     """
 
     @pytest.fixture(scope="class")
     def tests(self):
         return {
-            "results_true.sql": TEST__VIEW_TRUE,
-            "results_false.sql": TEST__VIEW_FALSE,
-            "results_unset.sql": TEST__VIEW_UNSET,
-            "results_turn_off.sql": TEST__NONE_FALSE,
+            "results_true.sql": _files.TEST__VIEW_TRUE,
+            "results_false.sql": _files.TEST__VIEW_FALSE,
+            "results_unset.sql": _files.TEST__VIEW_UNSET,
         }
 
     @pytest.fixture(scope="class")
@@ -219,7 +211,44 @@ class StoreTestFailuresAsProjectLevelView(StoreTestFailuresAsBase):
             TestResult("results_true", TestStatus.Fail, "view"),
             TestResult("results_false", TestStatus.Fail, "view"),
             TestResult("results_unset", TestStatus.Fail, "view"),
-            TestResult("results_turn_off", TestStatus.Fail, None),
+        }
+        self.run_and_assert(project, expected_results)
+
+
+class StoreTestFailuresAsProjectLevelEphemeral(StoreTestFailuresAsBase):
+    """
+    This scenario tests that `store_failures_as` at the project level takes precedence over `store_failures`
+    at the model level. In particular, setting `store_failures_as = "ephemeral"` at the project level
+    turns off `store_failures` regardless of the setting of `store_failures` anywhere. Turning `store_failures`
+    back on at the model level requires `store_failures_as` to be set at the model level.
+
+    Test Scenarios:
+
+    - If `store_failures_as = "ephemeral"` in the project and `store_failures = True` in the project,
+    then do not store the failures.
+    - If `store_failures_as = "ephemeral"` in the project and `store_failures = True` in the project and the model,
+    then do not store the failures.
+    - If `store_failures_as = "ephemeral"` in the project and `store_failures_as = "view"` in the model,
+    then store the failures in a view.
+    """
+
+    @pytest.fixture(scope="class")
+    def tests(self):
+        return {
+            "results_unset.sql": _files.TEST__UNSET_UNSET,
+            "results_true.sql": _files.TEST__UNSET_TRUE,
+            "results_view.sql": _files.TEST__VIEW_UNSET,
+        }
+
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {"tests": {"store_failures_as": "ephemeral", "store_failures": True}}
+
+    def test_tests_run_successfully_and_are_stored_as_expected(self, project):
+        expected_results = {
+            TestResult("results_unset", TestStatus.Fail, None),
+            TestResult("results_true", TestStatus.Fail, None),
+            TestResult("results_view", TestStatus.Fail, "view"),
         }
         self.run_and_assert(project, expected_results)
 
@@ -235,8 +264,8 @@ class StoreTestFailuresAsGeneric(StoreTestFailuresAsBase):
     @pytest.fixture(scope="class")
     def models(self):
         return {
-            f"{self.model_table}.sql": MODEL__CHIPMUNKS,
-            "schema.yml": SCHEMA_YML,
+            f"{self.model_table}.sql": _files.MODEL__CHIPMUNKS,
+            "schema.yml": _files.SCHEMA_YML,
         }
 
     def test_tests_run_successfully_and_are_stored_as_expected(self, project):
