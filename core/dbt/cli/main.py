@@ -453,8 +453,6 @@ def debug(ctx, **kwargs):
 @p.project_dir
 @p.target
 @p.vars
-@p.package
-@p.package_version
 @p.source
 @p.dry_run
 @p.lock
@@ -472,8 +470,8 @@ def deps(ctx, **kwargs):
       range, dbt-core will try to install the newer version
     Otherwise, deps will use `package-lock.yml` as source of truth to install packages.
 
-    There is a way to add new packages by providing an `--add` flag to deps command
-    which will allow user to specify `--package` and `--package-version`.
+    There is a way to add new packages by providing an `--add-package` flag to deps command
+    which will allow user to specify a package they want to add in the format of packagename@version.
     """
     task = DepsTask(ctx.obj["flags"], ctx.obj["project"])
     results = task.run()

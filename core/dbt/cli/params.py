@@ -2,15 +2,15 @@ from pathlib import Path
 
 import click
 from dbt.cli.options import MultiOption
-from dbt.cli.option_types import YAML, ChoiceTuple, WarnErrorOptionsType
+from dbt.cli.option_types import YAML, ChoiceTuple, WarnErrorOptionsType, Package
 from dbt.cli.resolvers import default_project_dir, default_profiles_dir
 from dbt.version import get_version_information
 
 add_package = click.option(
-    "--add",
-    help="Add a package to current package spec with `--package` and `--package-version`",
+    "--add-package",
+    help="Add a package to current package spec, specify it as package-name@version. Change the source with --source flag.",
     envvar=None,
-    is_flag=True,
+    type=Package(),
 )
 args = click.option(
     "--args",
@@ -86,7 +86,7 @@ deprecated_defer = click.option(
 dry_run = click.option(
     "--dry-run",
     envvar=None,
-    help="Option to run `dbt deps --add` without updating package-lock.yml file.",
+    help="Option to run `dbt deps --add-package` without updating package-lock.yml file.",
     is_flag=True,
 )
 
@@ -268,13 +268,6 @@ output_path = click.option(
     help="Specify the output path for the JSON report. By default, outputs to 'target/sources.json'",
     type=click.Path(file_okay=True, dir_okay=False, writable=True),
     default=None,
-)
-package = click.option(
-    "--package", envvar=None, help="Name of package to add to packages.yml.", type=click.STRING
-)
-
-package_version = click.option(
-    "--package-version", envvar=None, help="Version of the package to install.", type=click.STRING
 )
 
 partial_parse = click.option(
@@ -501,13 +494,6 @@ source = click.option(
     default="hub",
 )
 
-source = click.option(
-    "--source",
-    envvar=None,
-    help="Source to download page from, must be one of hub, git, or local. Defaults to hub.",
-    type=click.Choice(["hub", "git", "local"], case_sensitive=True),
-    default="hub",
-)
 
 state = click.option(
     "--state",
