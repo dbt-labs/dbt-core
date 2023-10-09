@@ -6,6 +6,7 @@ from dbt.tests.adapter.store_test_failures_tests.basic import (
     StoreTestFailuresAsProjectLevelView,
     StoreTestFailuresAsProjectLevelEphemeral,
     StoreTestFailuresAsGeneric,
+    StoreTestFailuresAsExceptions,
 )
 
 
@@ -38,4 +39,8 @@ class TestStoreTestFailuresAsProjectLevelEphemeral(
 
 
 class TestStoreTestFailuresAsGeneric(StoreTestFailuresAsGeneric, PostgresMixin):
+    pass
+
+
+class TestStoreTestFailuresAsExceptions(StoreTestFailuresAsExceptions, PostgresMixin):
     pass

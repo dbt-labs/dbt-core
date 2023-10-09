@@ -11,6 +11,13 @@
     -- if `--store-failures` is invoked via command line and `store_failures_as` is not set,
     -- config.get('store_failures_as', 'table') returns None, not 'table'
     {% if store_failures_as == none %}{% set store_failures_as = 'table' %}{% endif %}
+    {% if store_failures_as not in ['table', 'view'] %}
+        {{ exceptions.raise_compiler_error(
+            "'" ~ store_failures_as ~ "' is not a valid value for `store_failures_as`. "
+            "Accepted values are: ['ephemeral', 'table', 'view']"
+        ) }}
+    {% endif %}
+
     {% set target_relation = api.Relation.create(
         identifier=identifier, schema=schema, database=database, type=store_failures_as) -%} %}
 

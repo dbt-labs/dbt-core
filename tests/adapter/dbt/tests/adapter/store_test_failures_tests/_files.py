@@ -117,6 +117,14 @@ where shirt = 'purple'
 """
 
 
+TEST__ERROR_UNSET = """
+{{ config(store_failures_as="error") }}
+select *
+from {{ ref('chipmunks') }}
+where shirt = 'green'
+"""
+
+
 SCHEMA_YML = """
 version: 2
 

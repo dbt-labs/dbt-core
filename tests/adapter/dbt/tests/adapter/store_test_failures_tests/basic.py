@@ -280,3 +280,26 @@ class StoreTestFailuresAsGeneric(StoreTestFailuresAsBase):
             TestResult("not_null_chipmunks_shirt", TestStatus.Fail, "view"),
         }
         self.run_and_assert(project, expected_results)
+
+
+class StoreTestFailuresAsExceptions(StoreTestFailuresAsBase):
+    """
+    This tests that `store_failures_as` raises exceptions in appropriate scenarios.
+    Test Scenarios:
+
+    - If `store_failures_as = "error"`, a helpful exception is raised.
+    """
+
+    @pytest.fixture(scope="class")
+    def tests(self):
+        return {
+            "store_failures_as_error.sql": _files.TEST__ERROR_UNSET,
+        }
+
+    def test_tests_run_unsuccessfully_and_raise_appropriate_exception(self, project):
+        results = run_dbt(["test"], expect_pass=False)
+        assert len(results) == 1
+        result = results[0]
+        assert "Compilation Error" in result.message
+        assert "'error' is not a valid value" in result.message
+        assert "Accepted values are: ['ephemeral', 'table', 'view']" in result.message

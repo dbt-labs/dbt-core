@@ -575,34 +575,39 @@ class TestConfig(NodeAndTestConfig):
         is to include "ephemeral" as a value for `store_failures_as`, which effectively sets
         `store_failures=False`.
 
+        The exception handling for this is tricky. If we raise an exception here, the entire run fails at
+        parse time. We would rather well-formed models run successfully, leaving only exceptions to be rerun
+        if necessary. Hence, the exception needs to be raised in the test materialization. In order to do so,
+        we need to make sure that we go down the `store_failures = True` route with the invalid setting for
+        `store_failures_as`. This results in the `.get()` defaulted to `True` below, instead of a normal
+        dictionary lookup as is done in the `if` block. Refer to the test materialization for the
+        exception that is raise as a result of an invalid value.
+
         The intention of this block is to behave as if `store_failures_as` is the only setting,
         but still allow for backwards compatibility for `store_failures`.
         See https://github.com/dbt-labs/dbt-core/issues/6914 for more information.
         """
 
-        # if `store_failures_as` is set, it dictates what `store_failures` gets set to
-        store_failures_map = {
-            "ephemeral": False,
-            "table": True,
-            "view": True,
-        }
-
         # if `store_failures_as` is not set, it gets set by `store_failures`
-        store_failures_as_map = {
+        # the settings below mimic existing behavior prior to `store_failures_as`
+        get_store_failures_as_map = {
             True: "table",
             False: "ephemeral",
             None: None,
         }
 
-        if self.store_failures_as in store_failures_map:
-            self.store_failures = store_failures_map[self.store_failures_as]
-        elif self.store_failures_as is None:
-            self.store_failures_as = store_failures_as_map[self.store_failures]
-        else:  # `store_failures_as` is set to an unsupported value
-            raise CompilationError(
-                f"""{self.store_failures_as} is not a valid value for `store_failures_as`. """
-                f"""Accepted values are: {str(list(store_failures_map.keys()))}"""
-            )
+        # if `store_failures_as` is set, it dictates what `store_failures` gets set to
+        # the settings below overrides whatever `store_failures` is set to by the user
+        get_store_failures_map = {
+            "ephemeral": False,
+            "table": True,
+            "view": True,
+        }
+
+        if self.store_failures_as is None:
+            self.store_failures_as = get_store_failures_as_map[self.store_failures]
+        else:
+            self.store_failures = get_store_failures_map.get(self.store_failures_as, True)
 
     @classmethod
     def same_contents(cls, unrendered: Dict[str, Any], other: Dict[str, Any]) -> bool:
