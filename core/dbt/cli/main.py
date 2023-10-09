@@ -473,7 +473,20 @@ def deps(ctx, **kwargs):
     There is a way to add new packages by providing an `--add-package` flag to deps command
     which will allow user to specify a package they want to add in the format of packagename@version.
     """
-    task = DepsTask(ctx.obj["flags"], ctx.obj["project"])
+    flags = ctx.obj["flags"]
+    if flags.ADD_PACKAGE:
+        if not flags.ADD_PACKAGE["version"] and flags.SOURCE != "local":
+            raise BadOptionUsage(
+                message=f"Version is required in --add-package when a package when source is {flags.SOURCE}",
+                option_name="--add-package",
+            )
+    else:
+        if flags.DRY_RUN:
+            raise BadOptionUsage(
+                message="Invalid flag `--dry-run` when not using `--add-package`.",
+                option_name="--dry-run",
+            )
+    task = DepsTask(flags, ctx.obj["project"])
     results = task.run()
     success = task.interpret_results(results)
     return results, success
