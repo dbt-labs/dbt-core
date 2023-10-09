@@ -434,9 +434,8 @@ class BaseAdapter(metaclass=AdapterMeta):
         return info_schema_name_map
 
     def _get_catalog_relations_by_info_schema(
-        self, manifest: Manifest
+        self, relations
     ) -> Dict[InformationSchema, List[BaseRelation]]:
-        relations = self._get_catalog_relations(manifest)
         relations_by_info_schema: Dict[InformationSchema, List[BaseRelation]] = dict()
         for relation in relations:
             info_schema = relation.information_schema_only()
@@ -446,15 +445,30 @@ class BaseAdapter(metaclass=AdapterMeta):
 
         return relations_by_info_schema
 
-    def _get_catalog_relations(self, manifest: Manifest) -> List[BaseRelation]:
-        nodes: Iterator[ResultNode] = chain(
-            [
-                node
-                for node in manifest.nodes.values()
-                if (node.is_relational and not node.is_ephemeral_model)
-            ],
-            manifest.sources.values(),
-        )
+    def _get_catalog_relations(
+        self, manifest: Manifest, selected_nodes: Optional[Set] = None
+    ) -> List[BaseRelation]:
+        nodes: Iterator[ResultNode]
+        if selected_nodes:
+            selected: List[ResultNode] = []
+            for unique_id in selected_nodes:
+                if unique_id in manifest.nodes:
+                    node = manifest.nodes[unique_id]
+                    if node.is_relational and not node.is_ephemeral_model:
+                        selected.append(node)
+                elif unique_id in manifest.sources:
+                    source = manifest.sources[unique_id]
+                    selected.append(source)
+            nodes = iter(selected)
+        else:
+            nodes = chain(
+                [
+                    node
+                    for node in manifest.nodes.values()
+                    if (node.is_relational and not node.is_ephemeral_model)
+                ],
+                manifest.sources.values(),
+            )
 
         relations = [self.Relation.create_from(self.config, n) for n in nodes]
         return relations
@@ -1142,13 +1156,16 @@ class BaseAdapter(metaclass=AdapterMeta):
         results = self._catalog_filter_table(table, manifest)  # type: ignore[arg-type]
         return results
 
-    def get_catalog(self, manifest: Manifest) -> Tuple[agate.Table, List[Exception]]:
+    def get_catalog(
+        self, manifest: Manifest, selected_nodes: Optional[Set] = None
+    ) -> Tuple[agate.Table, List[Exception]]:
 
         with executor(self.config) as tpe:
             futures: List[Future[agate.Table]] = []
-            relation_count = len(self._get_catalog_relations(manifest))
+            catalog_relations = self._get_catalog_relations(manifest, selected_nodes)
+            relation_count = len(catalog_relations)
             if relation_count <= 100 and self.has_feature(AdapterFeature.CatalogByRelations):
-                relations_by_schema = self._get_catalog_relations_by_info_schema(manifest)
+                relations_by_schema = self._get_catalog_relations_by_info_schema(catalog_relations)
                 for info_schema in relations_by_schema:
                     name = ".".join([str(info_schema.database), "information_schema"])
                     relations = relations_by_schema[info_schema]

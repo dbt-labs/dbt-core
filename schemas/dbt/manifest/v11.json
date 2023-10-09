@@ -5641,12 +5641,6 @@
         "config": {
           "$ref": "#/$defs/SemanticModelConfig"
         },
-        "meta": {
-          "type": "object",
-          "propertyNames": {
-            "type": "string"
-          }
-        },
         "unrendered_config": {
           "type": "object",
           "propertyNames": {

@@ -494,6 +494,12 @@ source = click.option(
     default="hub",
 )
 
+static = click.option(
+    "--static",
+    help="Generate an additional static_index.html with manifest and catalog built-in.",
+    default=False,
+    is_flag=True,
+)
 
 state = click.option(
     "--state",
