@@ -857,7 +857,7 @@ class TestExternalModels:
         assert len(manifest.external_node_unique_ids) == 4
 
 
-class TestPortablePartialParsing:
+class TestPortablePartialParsingBase:
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -903,12 +903,16 @@ class TestPortablePartialParsing:
         yield
         self.rename_project_root(project, initial_project_root)
 
+
+class TestPortablePartialParsingUnchangedProject(TestPortablePartialParsingBase):
     def test_pp_renamed_project_dir_unchanged_project_contents(self, project):
         # partial parse same project in new absolute dir location, using partial_parse.msgpack created in previous dir
         run_dbt(["deps"])
         assert len(run_dbt(["--partial-parse", "seed"])) == 1
         assert len(run_dbt(["--partial-parse", "run"])) == 2
 
+
+class TestPortablePartialParsingChangedProject(TestPortablePartialParsingBase):
     def test_pp_renamed_project_dir_changed_project_contents(self, project):
         write_file(model_two_sql, project.project_root, "models", "model_two.sql")
 
