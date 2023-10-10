@@ -1,6 +1,9 @@
 import pickle
 import pytest
 
+from hypothesis import given
+from hypothesis.strategies import builds, lists
+
 from dbt.node_types import NodeType, AccessType
 from dbt.contracts.files import FileHash
 from dbt.contracts.graph.model_config import (
@@ -34,7 +37,10 @@ from dbt.contracts.graph.nodes import (
     HookNode,
     Owner,
     TestMetadata,
+    SemanticModel,
+    RefArgs,
 )
+from dbt.contracts.graph.semantic_models import Dimension, Entity, Measure
 from dbt.contracts.graph.unparsed import (
     ExposureType,
     FreshnessThreshold,
@@ -2354,3 +2360,18 @@ def basic_parsed_metric_object():
         meta={},
         tags=[],
     )
+
+
+@given(
+    builds(
+        SemanticModel,
+        depends_on=builds(DependsOn),
+        dimensions=lists(builds(Dimension)),
+        entities=lists(builds(Entity)),
+        measures=lists(builds(Measure)),
+        refs=lists(builds(RefArgs)),
+    )
+)
+def test_semantic_model_symmetry(semantic_model: SemanticModel):
+    assert semantic_model == SemanticModel.from_dict(semantic_model.to_dict())
+    assert semantic_model == pickle.loads(pickle.dumps(semantic_model))
