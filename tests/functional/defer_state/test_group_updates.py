@@ -2,7 +2,7 @@ import os
 
 import pytest
 
-from dbt.tests.util import run_dbt, write_file, rm_file, copy_file
+from dbt.tests.util import run_dbt, write_file, copy_file
 
 from tests.functional.defer_state.fixtures import (
     seed_csv,
@@ -93,16 +93,12 @@ class TestModifiedGroups:
         write_file(modified_model_1_sql, "models", "model_1.sql")
         write_file(modified_schema_yml, "models", "schema.yml")
 
-        # only thing in results should be model_1
+        # this test is flaky if you don't clean first before the build
         run_dbt(["clean"])
+        # only thing in results should be model_1
         results = run_dbt(["build", "-s", "state:modified", "--defer", "--state", "./state"])
 
         assert len(results) == 1
         model_1_result = results[0].node
         assert model_1_result.unique_id == "model.test.model_1"
         assert model_1_result.group == "accounting"  # new group name!
-
-        # cleanup
-        rm_file("state/manifest.json")
-
-        # TODO: fix so that the error is just ignored.  we don't care about the unmodifed models with group name changes

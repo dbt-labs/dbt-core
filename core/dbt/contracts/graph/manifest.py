@@ -944,7 +944,6 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         )
         group_map = {group.name: [] for group in self.groups.values()}
         for node in groupable_nodes:
-            # breakpoint()
             if node.group is not None:
                 # TODO: should we log something here?  We don't want to count group changes
                 if node.group in group_map:

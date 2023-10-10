@@ -1225,7 +1225,6 @@ class ManifestLoader:
             self.check_valid_group_config_node(semantic_model, group_names)
 
         for node in manifest.nodes.values():
-            # breakpoint()
             self.check_valid_group_config_node(node, group_names)
 
     def check_valid_group_config_node(
