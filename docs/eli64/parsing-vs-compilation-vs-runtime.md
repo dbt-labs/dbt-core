@@ -16,7 +16,9 @@ To keep it really simple, let’s say this happens in two steps: "Parsing" and "
 
 ### Parsing
 
-As a user, you write models as SQL + YAML. dbt wants to understand each model as a Python object, defined by an internal data structure. It also wants to know its dependencies and configuration (= its place in the DAG). dbt reads your code **for that one model,** and attempts to construct that object, raising a **validation** error if it can’t.
+As a user, you write models as SQL (or Python!) + YAML. For sake of simplicity, we'll mostly consider SQL models ("Jinja-SQL") with additional notes for Python models ("dbt-py") as-needed.
+
+dbt wants to understand and define each SQL model as an object in an internal data structure. It also wants to know its dependencies and configuration (= its place in the DAG). dbt reads your code **for that one model,** and attempts to construct that object, raising a **validation** error if it can’t.
 
 <details>
 <summary>(Toggle for many more details.)</summary>
@@ -27,7 +29,7 @@ As a user, you write models as SQL + YAML. dbt wants to understand each model as
     - Plus, certain configurations have implications for **node selection**, which supports selecting models using the `tag:` and `config:` methods.
 - Parsing also resolves the configuration for that model, based on configs set in `dbt_project.yml`, and macros like `generate_schema_name`. (These are "special" macros, whose results are saved at parse time!)
 - The way dbt parses models depends on the language that model is written in.
-    - Python models are statically analyzed using the Python AST.
+    - dbt-py models are statically analyzed using the Python AST.
     - Simple Jinja-SQL models (using just `ref()`, `source()`, &/or `config()` with literal inputs) are also [statically analyzed](https://docs.getdbt.com/reference/parsing#static-parser), using [a thing we built](https://github.com/dbt-labs/dbt-extractor). This is **very** fast (~0.3 ms).
     - More complex Jinja-SQL models are parsed by actually rendering the Jinja, and "capturing" any instances of `ref()`, `source()`, &/or `config()`. This is kinda slow, but it’s more capable than our static parser. Those macros can receive `set` variables, or call other macros in turn, and we can still capture the right results because **we’re actually using real Jinja to render it.**
         - We capture any other macros called in `depends_on.macros`. This enables us to do clever things later on, such as select models downstream of changed macros (`state:modified.macros`).
@@ -79,7 +81,7 @@ Devils in the details; toggle away.
 <summary>The mechanism of "compilation" varies by model language.</summary>
 
 - **Jinja-SQL** wants to compile down to "vanilla" SQL, appropriate for this database, where any calls to `ref('something')` have been replaced with `database.schema.something`.
-- dbt doesn’t directly modify or rewrite user-provided **Python** code at all. Instead, "compilation" looks like code generation: appending more methods that allow calls to `dbt.ref()`, `dbt.source()`, and `dbt.config.get()` to return the correct results at runtime.
+- dbt doesn’t directly modify or rewrite user-provided **dbt-py** code at all. Instead, "compilation" looks like code generation: appending more methods that allow calls to `dbt.ref()`, `dbt.source()`, and `dbt.config.get()` to return the correct results at runtime.
 
 </details>
 
@@ -88,7 +90,7 @@ Devils in the details; toggle away.
 
 - At this point, [`execute`](https://docs.getdbt.com/reference/dbt-jinja-functions/execute) is set to `True`.
 - e.g. `dbt_utils.get_column_values`, `dbt_utils.star`
-- Jinja-SQL supports this sort of dynamic templating. Python does not; there are other imperative ways to do this, using DataFrame methods / the Python interpreter at runtime.
+- Jinja-SQL supports this sort of dynamic templating. dbt-py does not; there are other imperative ways to do this, using DataFrame methods / the Python interpreter at runtime.
 
 </details>
 
@@ -127,7 +129,7 @@ Keeping these pieces of logic separate is one of the most important & opinionate
     - You must declare all dependencies & configurations ahead of time, rather than imperatively redefining them at runtime. You cannot dynamically redefine the DAG on the basis of a query result.
     - This is limiting for some advanced use cases, but it prevents you from solving hard problems in exactly the wrong ways.
 - **The separation of modeling code** ("logical" transformation written in SQL, or DataFrame manipulations) **from materialization code** ("physical" state changes via DDL/DML)**.**
-    - Every model is "just" a `select` statement, or a Python DataFrame. It can be developed, previewed, and tested as such, *without* mutating database state. Those mutations are defined declaratively, with reusable boilerplate ("view" vs. "table" vs. "incremental"), rather than imperatively each time.
+    - Every model is "just" a `select` statement (for Jinja-SQL models), or a Python DataFrame (for dbt-py models). It can be developed, previewed, and tested as such, *without* mutating database state. Those mutations are defined declaratively, with reusable boilerplate ("view" vs. "table" vs. "incremental"), rather than imperatively each time.
 
 
 ## Appendix
