@@ -945,7 +945,12 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         group_map = {group.name: [] for group in self.groups.values()}
         for node in groupable_nodes:
             if node.group is not None:
-                # TODO: should we log something here?  We don't want to count group changes
+                # group updates are not included with state:modified and
+                # by ignoring the groups that aren't in the group map we
+                # can avoid hitting errors for groups that are not getting
+                # updated.  This is a hack but any groups that are not
+                # valid will be caught in
+                # parser.manifest.ManifestLoader.check_valid_group_config_node
                 if node.group in group_map:
                     group_map[node.group].append(node.unique_id)
         self.group_map = group_map
