@@ -1,12 +1,8 @@
 import os
-import shutil
 
 import pytest
 
-from dbt.tests.util import (
-    run_dbt,
-    write_file,
-)
+from dbt.tests.util import run_dbt, write_file, rm_file, copy_file
 
 from tests.functional.defer_state.fixtures import (
     seed_csv,
@@ -88,8 +84,10 @@ class TestModifiedGroups:
         assert model_2_result.unique_id == "model.test.model_2"
         assert model_2_result.group == "finance"
 
+        # copy manifest.json to "state" directory
         os.makedirs("state")
-        shutil.copyfile("target/manifest.json", "state/manifest.json")
+        target_path = os.path.join(project.project_root, "target")
+        copy_file(target_path, "manifest.json", project.project_root, ["state", "manifest.json"])
 
         # update group name, modify model so it gets picked up
         write_file(modified_model_1_sql, "models", "model_1.sql")
@@ -102,5 +100,8 @@ class TestModifiedGroups:
         model_1_result = results[0].node
         assert model_1_result.unique_id == "model.test.model_1"
         assert model_1_result.group == "accounting"  # new group name!
+
+        # cleanup
+        rm_file("state/manifest.json")
 
         # TODO: fix so that the error is just ignored.  we don't care about the unmodifed models with group name changes
