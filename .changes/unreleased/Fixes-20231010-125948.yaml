@@ -1,0 +1,6 @@
+kind: Fixes
+body: Group updates on unmodified nodes are handled gracefully for state:modified
+time: 2023-10-10T12:59:48.390113-05:00
+custom:
+  Author: emmyoop
+  Issue: "8371"
