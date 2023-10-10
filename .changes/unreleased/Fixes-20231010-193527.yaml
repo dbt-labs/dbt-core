@@ -1,0 +1,6 @@
+kind: Fixes
+body: Add quotes to usernames when revoking and granting table permissions
+time: 2023-10-10T19:35:27.223761+01:00
+custom:
+  Author: barton996
+  Issue: 6444 8751
