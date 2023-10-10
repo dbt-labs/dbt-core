@@ -94,6 +94,7 @@ class TestModifiedGroups:
         write_file(modified_schema_yml, "models", "schema.yml")
 
         # only thing in results should be model_1
+        run_dbt(["clean"])
         results = run_dbt(["build", "-s", "state:modified", "--defer", "--state", "./state"])
 
         assert len(results) == 1
