@@ -597,6 +597,8 @@ class UnparsedMetricInputMeasure(dbtClassMixin):
     name: str
     filter: Optional[str] = None
     alias: Optional[str] = None
+    join_to_timespine: bool = False
+    fill_nulls_with: Optional[int] = None
 
 
 @dataclass
@@ -676,6 +678,7 @@ class UnparsedEntity(dbtClassMixin):
     name: str
     type: str  # EntityType enum
     description: Optional[str] = None
+    label: Optional[str] = None
     role: Optional[str] = None
     expr: Optional[str] = None
 
@@ -692,6 +695,7 @@ class UnparsedMeasure(dbtClassMixin):
     name: str
     agg: str  # actually an enum
     description: Optional[str] = None
+    label: Optional[str] = None
     expr: Optional[Union[str, bool, int]] = None
     agg_params: Optional[MeasureAggregationParameters] = None
     non_additive_dimension: Optional[UnparsedNonAdditiveDimension] = None
@@ -709,6 +713,7 @@ class UnparsedDimension(dbtClassMixin):
     name: str
     type: str  # actually an enum
     description: Optional[str] = None
+    label: Optional[str] = None
     is_partition: bool = False
     type_params: Optional[UnparsedDimensionTypeParams] = None
     expr: Optional[str] = None
@@ -719,6 +724,7 @@ class UnparsedSemanticModel(dbtClassMixin):
     name: str
     model: str  # looks like "ref(...)"
     description: Optional[str] = None
+    label: Optional[str] = None
     defaults: Optional[Defaults] = None
     entities: List[UnparsedEntity] = field(default_factory=list)
     measures: List[UnparsedMeasure] = field(default_factory=list)

@@ -178,6 +178,8 @@ class MetricParser(YamlReader):
                 name=unparsed_input_measure.name,
                 filter=filter,
                 alias=unparsed_input_measure.alias,
+                join_to_timespine=unparsed_input_measure.join_to_timespine,
+                fill_nulls_with=unparsed_input_measure.fill_nulls_with,
             )
 
     def _get_optional_input_measure(
@@ -456,6 +458,7 @@ class SemanticModelParser(YamlReader):
                     name=unparsed.name,
                     type=DimensionType(unparsed.type),
                     description=unparsed.description,
+                    label=unparsed.label,
                     is_partition=unparsed.is_partition,
                     type_params=self._get_dimension_type_params(unparsed=unparsed.type_params),
                     expr=unparsed.expr,
@@ -472,6 +475,7 @@ class SemanticModelParser(YamlReader):
                     name=unparsed.name,
                     type=EntityType(unparsed.type),
                     description=unparsed.description,
+                    label=unparsed.label,
                     role=unparsed.role,
                     expr=unparsed.expr,
                 )
@@ -499,6 +503,7 @@ class SemanticModelParser(YamlReader):
                     name=unparsed.name,
                     agg=AggregationType(unparsed.agg),
                     description=unparsed.description,
+                    label=unparsed.label,
                     expr=str(unparsed.expr) if unparsed.expr is not None else None,
                     agg_params=unparsed.agg_params,
                     non_additive_dimension=self._get_non_additive_dimension(
@@ -519,6 +524,7 @@ class SemanticModelParser(YamlReader):
 
         parsed = SemanticModel(
             description=unparsed.description,
+            label=unparsed.label,
             fqn=fqn,
             model=unparsed.model,
             name=unparsed.name,

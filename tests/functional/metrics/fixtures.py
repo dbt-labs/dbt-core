@@ -116,6 +116,8 @@ metrics:
       measure:
         name: years_tenure
         filter: "{{ Dimension('id__loves_dbt') }} is true"
+        join_to_timespine: true
+        fill_nulls_with: 0
 
   - name: collective_window
     label: "Collective window"

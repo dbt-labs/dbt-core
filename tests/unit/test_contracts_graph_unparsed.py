@@ -870,6 +870,7 @@ class TestUnparsedMetric(ContractTestCase):
                 "measure": {
                     "name": "customers",
                     "filter": "is_new = true",
+                    "join_to_timespine": False,
                 },
             },
             "config": {},
