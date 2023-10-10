@@ -1,0 +1,6 @@
+kind: Features
+body: add log file of installed packages via dbt deps
+time: 2023-01-25T16:59:33.786304-05:00
+custom:
+  Author: jusbaldw ChenyuLInx
+  Issue: "6643"

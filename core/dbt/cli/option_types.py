@@ -22,6 +22,26 @@ class YAML(ParamType):
             self.fail(f"String '{value}' is not valid YAML", param, ctx)
 
 
+class Package(ParamType):
+    """The Click STRING type. Converts string into dict with package name and version.
+    Example package:
+        package-name@1.0.0
+        package-name
+    """
+
+    name = "NewPackage"
+
+    def convert(self, value, param, ctx):
+        # assume non-string values are a problem
+        if not isinstance(value, str):
+            self.fail(f"Cannot load Package from type {type(value)}", param, ctx)
+        try:
+            package_name, package_version = value.split("@")
+            return {"name": package_name, "version": package_version}
+        except ValueError:
+            return {"name": value, "version": None}
+
+
 class WarnErrorOptionsType(YAML):
     """The Click WarnErrorOptions type. Converts YAML strings into objects."""
 

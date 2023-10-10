@@ -202,6 +202,7 @@ class OnConfigurationChangeOption(StrEnum):
 @dataclass
 class ContractConfig(dbtClassMixin, Replaceable):
     enforced: bool = False
+    alias_types: bool = True
 
 
 @dataclass

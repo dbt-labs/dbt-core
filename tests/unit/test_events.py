@@ -299,6 +299,10 @@ sample_values = [
     types.RegistryResponseMissingNestedKeys(response=""),
     types.RegistryResponseExtraNestedKeys(response=""),
     types.DepsSetDownloadDirectory(path=""),
+    types.DepsLockUpdating(lock_filepath=""),
+    types.DepsAddPackage(package_name="", version="", packages_filepath=""),
+    types.DepsFoundDuplicatePackage(removed_package={}),
+    types.SemanticValidationFailure(msg=""),
     # Q - Node execution ======================
     types.RunningOperationCaughtError(exc=""),
     types.CompileComplete(),

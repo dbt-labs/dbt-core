@@ -1,13 +1,12 @@
 import pytest
 
 from dbt.tests.util import run_dbt, get_manifest
-import json
 
 
 class TestGenerate:
     @pytest.fixture(scope="class")
     def models(self):
-        return {"my_model.sql": "select 1 as fun"}
+        return {"my_model.sql": "select 1 as fun", "alt_model.sql": "select 1 as notfun"}
 
     def test_manifest_not_compiled(self, project):
         run_dbt(["docs", "generate", "--no-compile"])
@@ -19,9 +18,13 @@ class TestGenerate:
         assert manifest.nodes[model_id].compiled is False
 
     def test_generate_empty_catalog(self, project):
-        run_dbt(["docs", "generate", "--empty-catalog"])
-        with open("./target/catalog.json") as file:
-            catalog = json.load(file)
-        assert catalog["nodes"] == {}, "nodes should be empty"
-        assert catalog["sources"] == {}, "sources should be empty"
-        assert catalog["errors"] is None, "errors should be null"
+        catalog = run_dbt(["docs", "generate", "--empty-catalog"])
+        assert catalog.nodes == {}, "nodes should be empty"
+        assert catalog.sources == {}, "sources should be empty"
+        assert catalog.errors is None, "errors should be null"
+
+    def test_select_limits_catalog(self, project):
+        run_dbt(["run"])
+        catalog = run_dbt(["docs", "generate", "--select", "my_model"])
+        assert len(catalog.nodes) == 1
+        assert "model.test.my_model" in catalog.nodes

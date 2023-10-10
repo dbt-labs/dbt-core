@@ -1,0 +1,6 @@
+kind: Features
+body: Add an option to generate static documentation
+time: 2023-09-11T14:41:26.274655701Z
+custom:
+  Author: mescanne
+  Issue: "8614"
