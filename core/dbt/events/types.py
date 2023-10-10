@@ -1504,6 +1504,30 @@ class NoNodesForSelectionCriteria(WarnLevel):
         return f"The selection criterion '{self.spec_raw}' does not match any nodes"
 
 
+class DepsLockUpdating(InfoLevel):
+    def code(self):
+        return "M031"
+
+    def message(self) -> str:
+        return f"Updating lock file in file path: {self.lock_filepath}"
+
+
+class DepsAddPackage(InfoLevel):
+    def code(self):
+        return "M032"
+
+    def message(self) -> str:
+        return f"Added new package {self.package_name}@{self.version} to {self.packages_filepath}"
+
+
+class DepsFoundDuplicatePackage(InfoLevel):
+    def code(self):
+        return "M033"
+
+    def message(self) -> str:
+        return f"Found duplicate package in packages.yml, removing: {self.removed_package}"
+
+
 # =======================================================
 # Q - Node execution
 # =======================================================
@@ -2349,13 +2373,21 @@ class ListCmdOut(InfoLevel):
         return self.msg
 
 
-# The Note event provides a way to log messages which aren't likely to be useful as more structured events.
-# For console formatting text like empty lines and separator bars, use the Formatting event instead.
-
-
 class Note(InfoLevel):
+    """The Note event provides a way to log messages which aren't likely to be
+    useful as more structured events. For console formatting text like empty
+    lines and separator bars, use the Formatting event instead."""
+
     def code(self) -> str:
         return "Z050"
 
     def message(self) -> str:
         return self.msg
+
+
+class ResourceReport(DebugLevel):
+    def code(self) -> str:
+        return "Z051"
+
+    def message(self) -> str:
+        return f"Resource report: {self.to_json()}"

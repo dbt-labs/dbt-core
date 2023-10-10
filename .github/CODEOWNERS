@@ -13,23 +13,6 @@
 # the core team as a whole will be assigned
 *       @dbt-labs/core-team
 
-### OSS Tooling Guild
-
-/.github/                       @dbt-labs/guild-oss-tooling
-.bumpversion.cfg                @dbt-labs/guild-oss-tooling
-
-.changie.yaml                   @dbt-labs/guild-oss-tooling
-
-pre-commit-config.yaml          @dbt-labs/guild-oss-tooling
-pytest.ini                      @dbt-labs/guild-oss-tooling
-tox.ini                         @dbt-labs/guild-oss-tooling
-
-pyproject.toml                  @dbt-labs/guild-oss-tooling
-requirements.txt                @dbt-labs/guild-oss-tooling
-dev_requirements.txt            @dbt-labs/guild-oss-tooling
-/core/setup.py                  @dbt-labs/guild-oss-tooling
-/core/MANIFEST.in               @dbt-labs/guild-oss-tooling
-
 ### ADAPTERS
 
 # Adapter interface ("base" + "sql" adapter defaults, cache)
@@ -40,7 +23,7 @@ dev_requirements.txt            @dbt-labs/guild-oss-tooling
 
 # Postgres plugin
 /plugins/                       @dbt-labs/core-adapters
-/plugins/postgres/setup.py      @dbt-labs/core-adapters @dbt-labs/guild-oss-tooling
+/plugins/postgres/setup.py      @dbt-labs/core-adapters
 
 # Functional tests for adapter plugins
 /tests/adapter                  @dbt-labs/core-adapters

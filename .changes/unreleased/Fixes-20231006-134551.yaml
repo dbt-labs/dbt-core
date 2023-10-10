@@ -1,0 +1,6 @@
+kind: Fixes
+body: Enable seeds to be handled from stored manifest data
+time: 2023-10-06T13:45:51.925546-04:00
+custom:
+  Author: michelleark
+  Issue: "6875"

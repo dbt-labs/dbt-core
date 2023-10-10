@@ -1,0 +1,6 @@
+kind: Features
+body: Selectors with docs generate limits catalog generation
+time: 2023-10-04T17:01:55.845479-04:00
+custom:
+  Author: gshank
+  Issue: "6014"

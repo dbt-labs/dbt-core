@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from typing import Optional, Set, List, Any
 
 from dbt.adapters.base.meta import available
-from dbt.adapters.base.impl import AdapterConfig, ConstraintSupport
+from dbt.adapters.base.impl import AdapterConfig, AdapterFeature, ConstraintSupport
 from dbt.adapters.sql import SQLAdapter
 from dbt.adapters.postgres import PostgresConnectionManager
 from dbt.adapters.postgres.column import PostgresColumn
@@ -73,6 +73,10 @@ class PostgresAdapter(SQLAdapter):
         ConstraintType.foreign_key: ConstraintSupport.ENFORCED,
     }
 
+    CATALOG_BY_RELATION_SUPPORT = True
+
+    SUPPORTED_FEATURES: Set[AdapterFeature] = frozenset([AdapterFeature.CatalogByRelations])
+
     @classmethod
     def date_function(cls):
         return "now()"
@@ -113,9 +117,9 @@ class PostgresAdapter(SQLAdapter):
 
     def _get_catalog_schemas(self, manifest):
         # postgres only allow one database (the main one)
-        schemas = super()._get_catalog_schemas(manifest)
+        schema_search_map = super()._get_catalog_schemas(manifest)
         try:
-            return schemas.flatten()
+            return schema_search_map.flatten()
         except DbtRuntimeError as exc:
             raise CrossDbReferenceProhibitedError(self.type(), exc.msg)
 
@@ -143,3 +147,7 @@ class PostgresAdapter(SQLAdapter):
 
     def debug_query(self):
         self.execute("select 1 as id")
+
+    @classmethod
+    def has_feature(cls, feature: AdapterFeature) -> bool:
+        return feature in cls.SUPPORTED_FEATURES

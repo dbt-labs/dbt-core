@@ -202,6 +202,7 @@ class OnConfigurationChangeOption(StrEnum):
 @dataclass
 class ContractConfig(dbtClassMixin, Replaceable):
     enforced: bool = False
+    alias_types: bool = True
 
 
 @dataclass
@@ -381,6 +382,10 @@ class SemanticModelConfig(BaseConfig):
     group: Optional[str] = field(
         default=None,
         metadata=CompareBehavior.Exclude.meta(),
+    )
+    meta: Dict[str, Any] = field(
+        default_factory=dict,
+        metadata=MergeBehavior.Update.meta(),
     )
 
 

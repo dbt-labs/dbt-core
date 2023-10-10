@@ -360,7 +360,9 @@ class ConfiguredParser(
 
         # If we have contract in the config, copy to node level
         if "contract" in config_dict and config_dict["contract"]:
-            parsed_node.contract = Contract(enforced=config_dict["contract"]["enforced"])
+            contract_dct = config_dict["contract"]
+            Contract.validate(contract_dct)
+            parsed_node.contract = Contract.from_dict(contract_dct)
 
         # unrendered_config is used to compare the original database/schema/alias
         # values and to handle 'same_config' and 'same_contents' calls

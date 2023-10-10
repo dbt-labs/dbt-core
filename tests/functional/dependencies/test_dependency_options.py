@@ -1,0 +1,106 @@
+import os
+import shutil
+import pytest
+
+from dbt.tests.util import run_dbt
+
+
+class TestDepsOptions(object):
+    # this revision of dbt-integration-project requires dbt-utils.git@0.5.0, which the
+    # package config handling should detect
+    @pytest.fixture(scope="class")
+    def packages(self):
+        return {
+            "packages": [
+                {
+                    "package": "fivetran/fivetran_utils",
+                    "version": "0.4.7",
+                },
+            ]
+        }
+
+    @pytest.fixture
+    def clean_start(self, project):
+        if os.path.exists("dbt_packages"):
+            shutil.rmtree("dbt_packages")
+        if os.path.exists("package-lock.yml"):
+            os.remove("package-lock.yml")
+
+    def test_deps_lock(self, clean_start):
+        run_dbt(["deps", "--lock"])
+        assert not os.path.exists("dbt_packages")
+        assert os.path.exists("package-lock.yml")
+        with open("package-lock.yml") as fp:
+            contents = fp.read()
+        assert (
+            contents
+            == """packages:
+- package: fivetran/fivetran_utils
+  version: 0.4.7
+- package: dbt-labs/dbt_utils
+  version: 1.1.1
+sha1_hash: 0592fbd3e387012e8f7c12ed04688689858f5196
+"""
+        )
+
+    def test_deps_default(self, clean_start):
+        run_dbt(["deps"])
+        assert len(os.listdir("dbt_packages")) == 2
+        assert os.path.exists("package-lock.yml")
+        with open("package-lock.yml") as fp:
+            contents = fp.read()
+        assert (
+            contents
+            == """packages:
+- package: fivetran/fivetran_utils
+  version: 0.4.7
+- package: dbt-labs/dbt_utils
+  version: 1.1.1
+sha1_hash: 0592fbd3e387012e8f7c12ed04688689858f5196
+"""
+        )
+
+    def test_deps_add(self, clean_start):
+        run_dbt(["deps", "--add-package", "dbt-labs/audit_helper@0.9.0"])
+        with open("packages.yml") as fp:
+            contents = fp.read()
+        assert (
+            contents
+            == """packages:
+  - package: fivetran/fivetran_utils
+    version: 0.4.7
+  - package: dbt-labs/audit_helper
+    version: 0.9.0
+"""
+        )
+        assert len(os.listdir("dbt_packages")) == 3
+
+    def test_deps_add_dry_run(self, clean_start):
+        os.rename("packages.yml", "dependencies.yml")
+        run_dbt(
+            [
+                "deps",
+                "--add-package",
+                "dbt-labs/audit_helper@0.9.0",
+                "--dry-run",
+            ]
+        )
+        assert not os.path.exists("dbt_packages")
+        assert not os.path.exists("packages.yml")
+        with open("dependencies.yml") as fp:
+            contents = fp.read()
+        assert (
+            contents
+            == """packages:
+  - package: fivetran/fivetran_utils
+    version: 0.4.7
+  - package: dbt-labs/audit_helper
+    version: 0.9.0
+"""
+        )
+
+    def test_deps_upgrade(self, clean_start, mocker):
+        run_dbt(["deps", "--lock"])
+        patched_lock = mocker.patch("dbt.task.deps.DepsTask.lock")
+        run_dbt(["deps", "--upgrade"])
+        assert patched_lock.call_count == 1

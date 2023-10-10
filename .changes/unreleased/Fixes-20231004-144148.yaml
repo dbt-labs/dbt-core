@@ -1,0 +1,6 @@
+kind: Fixes
+body: Support docs blocks on versioned model column descriptions
+time: 2023-10-04T14:41:48.843486-05:00
+custom:
+  Author: emmyoop
+  Issue: "8540"

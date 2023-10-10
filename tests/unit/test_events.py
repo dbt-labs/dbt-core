@@ -299,6 +299,10 @@ sample_values = [
     types.RegistryResponseMissingNestedKeys(response=""),
     types.RegistryResponseExtraNestedKeys(response=""),
     types.DepsSetDownloadDirectory(path=""),
+    types.DepsLockUpdating(lock_filepath=""),
+    types.DepsAddPackage(package_name="", version="", packages_filepath=""),
+    types.DepsFoundDuplicatePackage(removed_package={}),
+    types.SemanticValidationFailure(msg=""),
     # Q - Node execution ======================
     types.RunningOperationCaughtError(exc=""),
     types.CompileComplete(),
@@ -378,7 +382,10 @@ sample_values = [
     types.DepsUnpinned(revision="", git=""),
     types.NoNodesForSelectionCriteria(spec_raw=""),
     types.CommandCompleted(
-        command="", success=True, elapsed=0.1, completed_at=get_json_string_utcnow()
+        command="",
+        success=True,
+        elapsed=0.1,
+        completed_at=get_json_string_utcnow(),
     ),
     types.ShowNode(node_name="", preview="", is_inline=True, unique_id="model.test.my_model"),
     types.CompiledNode(node_name="", compiled="", is_inline=True, unique_id="model.test.my_model"),
@@ -428,6 +435,7 @@ sample_values = [
     types.DebugCmdResult(),
     types.ListCmdOut(),
     types.Note(msg="This is a note."),
+    types.ResourceReport(),
 ]
 
 

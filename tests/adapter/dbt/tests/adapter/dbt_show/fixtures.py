@@ -1,8 +1,10 @@
 models__sql_header = """
 {% call set_sql_header(config) %}
-set session time zone '{{ var("timezone", "Europe/Paris") }}';
+with _variables as (
+    select 1 as my_variable
+)
 {%- endcall %}
-select current_setting('timezone') as timezone
+select my_variable from _variables
 """
 
 models__ephemeral_model = """
