@@ -37,6 +37,8 @@ models:
     config:
       group: finance
   - name: model_2
+    config:
+      group: finance
 """
 
 
@@ -50,6 +52,8 @@ models:
     config:
       group: accounting
   - name: model_2
+    config:
+      group: accounting
 """
 
 
@@ -82,7 +86,7 @@ class TestModifiedGroups:
         assert model_1_result.group == "finance"
         model_2_result = results[2].node
         assert model_2_result.unique_id == "model.test.model_2"
-        assert model_2_result.group is None
+        assert model_2_result.group == "finance"
 
         os.makedirs("state")
         shutil.copyfile("target/manifest.json", "state/manifest.json")
@@ -98,3 +102,5 @@ class TestModifiedGroups:
         model_1_result = results[0].node
         assert model_1_result.unique_id == "model.test.model_1"
         assert model_1_result.group == "accounting"  # new group name!
+
+        # TODO: fix so that the error is just ignored.  we don't care about the unmodifed models with group name changes
