@@ -1,0 +1,6 @@
+kind: Dependencies
+body: Upgrade dbt-semantic-interfaces dep to 0.3.0
+time: 2023-10-11T02:22:52.231648-07:00
+custom:
+  Author: QMalcolm
+  PR: "8819"
