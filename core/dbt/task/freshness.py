@@ -25,11 +25,11 @@ from dbt.events.types import (
 )
 from dbt.node_types import NodeType
 
-from dbt.graph import ResourceTypeSelector
+from dbt.adapters.capability import Capability
+from dbt.contracts.connection import AdapterResponse
 from dbt.contracts.graph.nodes import SourceDefinition
-from ..adapters.base.impl import Capability
-from ..contracts.connection import AdapterResponse
-from ..events.base_types import EventLevel
+from dbt.events.base_types import EventLevel
+from dbt.graph import ResourceTypeSelector
 
 RESULT_FILE_NAME = "sources.json"
 
