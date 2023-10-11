@@ -272,6 +272,7 @@ sample_values = [
         materialization_changed=[],
     ),
     types.WarnStateTargetEqual(state_path=""),
+    types.FreshnessConfigProblem(msg=""),
     # M - Deps generation ======================
     types.GitSparseCheckoutSubdirectory(subdir=""),
     types.GitProgressCheckoutRevision(revision=""),
