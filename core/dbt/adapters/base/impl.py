@@ -1270,29 +1270,29 @@ class BaseAdapter(metaclass=AdapterMeta):
         adapter_response, table = result.response, result.table  # type: ignore[attr-defined]
 
         try:
-            assert len(table) == 1  # There should be one row since we requested one relation
             row = table[0]
             last_modified_val = get_column_value_uncased("last_modified", row)
             snapshotted_at_val = get_column_value_uncased("snapshotted_at", row)
-
-            if last_modified_val is None:
-                # Interpret missing value as "infinitely long ago"
-                max_loaded_at = datetime(1, 1, 1, 0, 0, 0, tzinfo=pytz.UTC)
-            else:
-                max_loaded_at = _utc(last_modified_val, None, "last_modified")
-
-            snapshotted_at = _utc(snapshotted_at_val, None, "snapshotted_at")
-            age = (snapshotted_at - max_loaded_at).total_seconds()
-
-            freshness: FreshnessResponse = {
-                "max_loaded_at": max_loaded_at,
-                "snapshotted_at": snapshotted_at,
-                "age": age,
-            }
-
-            return adapter_response, freshness
         except Exception:
             raise MacroResultError(GET_RELATION_LAST_MODIFIED_MACRO_NAME, table)
+
+        if last_modified_val is None:
+            # Interpret missing value as "infinitely long ago"
+            max_loaded_at = datetime(1, 1, 1, 0, 0, 0, tzinfo=pytz.UTC)
+        else:
+            max_loaded_at = _utc(last_modified_val, None, "last_modified")
+
+        snapshotted_at = _utc(snapshotted_at_val, None, "snapshotted_at")
+
+        age = (snapshotted_at - max_loaded_at).total_seconds()
+
+        freshness: FreshnessResponse = {
+            "max_loaded_at": max_loaded_at,
+            "snapshotted_at": snapshotted_at,
+            "age": age,
+        }
+
+        return adapter_response, freshness
 
     def pre_model_hook(self, config: Mapping[str, Any]) -> Any:
         """A hook for running some operation before the model materialization
