@@ -65,7 +65,7 @@ def drop_v9_and_prior_metrics(manifest: dict) -> None:
 def upgrade_v10_metric_filters(manifest: dict):
     """Metric filters changed from v10 to v11
 
-    v10 filters from a serialized manaifest looked like:
+    v10 filters from a serialized manifest looked like:
     {..., 'filter': {'where_sql_template': '<filter_value>'}}
     whereas v11 filters look like:
     {..., 'filter': {'where_filters': [{'where_sql_template': '<filter_value>'}, ...]}}
@@ -88,8 +88,8 @@ def upgrade_v10_metric_filters(manifest: dict):
                 "where_filters": [v10_dct_with_opt_filter["filter"]]
             }
 
-    metrics = manifest.get("metrics", [])
-    for metric in metrics:
+    metrics = manifest.get("metrics", {})
+    for metric in metrics.values():
         # handles top level metric filter
         _convert_dct_with_filter(metric)
 
