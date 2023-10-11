@@ -1,0 +1,6 @@
+kind: Fixes
+body: Add connection status into list of statuses for dbt debug
+time: 2023-08-10T18:48:59.221344+01:00
+custom:
+  Author: aranke
+  Issue: "8350"
