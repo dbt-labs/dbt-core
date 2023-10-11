@@ -1,6 +1,4 @@
 import abc
-import dataclasses
-from collections import UserDict
 from concurrent.futures import as_completed, Future
 from contextlib import contextmanager
 from datetime import datetime
@@ -21,9 +19,9 @@ from typing import (
     Type,
     TypedDict,
     Union,
-    TYPE_CHECKING,
 )
 
+from dbt.adapters.capability import Capability, CapabilityDict
 from dbt.contracts.graph.nodes import ColumnLevelConstraint, ConstraintType, ModelLevelConstraint
 
 import agate
@@ -175,58 +173,6 @@ class PythonJobHelper:
         raise NotImplementedError("PythonJobHelper submit function is not implemented yet")
 
 
-class Capability(str, Enum):
-    """Enumeration of optional adapter features which can be probed using BaseAdapter.has_feature()"""
-
-    SchemaMetadataByRelations = "CatalogByRelations"
-    """Indicates efficient support for retrieving schema metadata for a list of relations, rather than always retrieving
-    all the relations in a schema."""
-
-    TableLastModifiedMetadata = "TableLastModifiedMetadata"
-    """Indicates support for determining the time of the last table modification by querying database metadata."""
-
-
-class Support(str, Enum):
-    Unknown = "Unknown"
-    """The adapter has not declared whether this capability is a feature of the underlying DBMS."""
-
-    Unsupported = "Unsupported"
-    """This capability is not possible with the underlying DBMS, so the adapter does not implement related macros."""
-
-    NotImplemented = "NotImplemented"
-    """This capability is available in the underlying DBMS, but support has not yet been implemented in the adapter."""
-
-    Versioned = "Versioned"
-    """Some versions of the DBMS supported by the adapter support this capability and the adapter has implemented any
-    macros needed to use it."""
-
-    Full = "Full"
-    """All versions of the DBMS supported by the adapter support this capability and the adapter has implemented any
-    macros needed to use it."""
-
-
-@dataclasses.dataclass
-class CapabilitySupport:
-    capability: Capability
-    support: Support
-    first_version: Optional[str] = None
-
-    def __bool__(self):
-        return self.support == Support.Versioned or self.support == Support.Full
-
-
-# Make python 3.8 happy with this generic type, remove when we support 3.9+
-if TYPE_CHECKING:
-    CapabilityUserDict = UserDict[Capability, CapabilitySupport]
-else:
-    CapabilityUserDict = UserDict
-
-
-class CapabilityDict(CapabilityUserDict):
-    def __missing__(self, key):
-        return CapabilitySupport(capability=key, support=Support.Unknown)
-
-
 class FreshnessResponse(TypedDict):
     max_loaded_at: datetime
     snapshotted_at: datetime
@@ -293,6 +239,10 @@ class BaseAdapter(metaclass=AdapterMeta):
         ConstraintType.primary_key: ConstraintSupport.NOT_ENFORCED,
         ConstraintType.foreign_key: ConstraintSupport.ENFORCED,
     }
+
+    # This static member variable can be overriden in concrete adapter
+    # implementations to indicate adapter support for optional capabilities.
+    _capabilities = CapabilityDict()
 
     def __init__(self, config) -> None:
         self.config = config
@@ -1620,11 +1570,13 @@ class BaseAdapter(metaclass=AdapterMeta):
         else:
             return None
 
-    def capabilities(self) -> CapabilityDict:
-        return CapabilityDict()
+    @classmethod
+    def capabilities(cls) -> CapabilityDict:
+        return cls._capabilities
 
-    def supports(self, capability: Capability) -> bool:
-        return bool(self.capabilities()[capability])
+    @classmethod
+    def supports(cls, capability: Capability) -> bool:
+        return bool(cls.capabilities()[capability])
 
 
 COLUMNS_EQUAL_SQL = """

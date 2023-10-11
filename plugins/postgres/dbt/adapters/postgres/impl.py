@@ -8,9 +8,8 @@ from dbt.adapters.base.impl import (
     Capability,
     CapabilityDict,
     ConstraintSupport,
-    CapabilitySupport,
-    Support,
 )
+from dbt.adapters.capability import CapabilitySupport, Support
 from dbt.adapters.sql import SQLAdapter
 from dbt.adapters.postgres import PostgresConnectionManager
 from dbt.adapters.postgres.column import PostgresColumn
@@ -83,12 +82,7 @@ class PostgresAdapter(SQLAdapter):
     CATALOG_BY_RELATION_SUPPORT = True
 
     _capabilities: CapabilityDict = CapabilityDict(
-        {
-            Capability.SchemaMetadataByRelations: CapabilitySupport(
-                capability=Capability.SchemaMetadataByRelations,
-                support=Support.Full,
-            )
-        }
+        {Capability.SchemaMetadataByRelations: CapabilitySupport(support=Support.Full)}
     )
 
     @classmethod
@@ -161,6 +155,3 @@ class PostgresAdapter(SQLAdapter):
 
     def debug_query(self):
         self.execute("select 1 as id")
-
-    def capabilities(self) -> CapabilityDict:
-        return self._capabilities
