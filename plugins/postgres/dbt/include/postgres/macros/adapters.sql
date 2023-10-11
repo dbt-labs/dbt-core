@@ -10,7 +10,7 @@
     unlogged
   {%- endif %} table {{ relation }}
   {% set contract_config = config.get('contract') %}
-  {% if contract_config.enforced %}
+  {% if contract_config.enforced and (not temporary) %}
     {{ get_assert_columns_equivalent(sql) }}
     {{ get_table_columns_and_constraints() }} ;
     insert into {{ relation }} (

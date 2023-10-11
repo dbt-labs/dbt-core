@@ -539,3 +539,47 @@ models:
       - name: column_name
         data_type: text
 """
+
+create_table_macro_sql = """
+{% macro create_table_macro() %}
+create table if not exists numbers (n int not null primary key)
+{% endmacro %}
+"""
+
+incremental_foreign_key_schema_yml = """
+version: 2
+
+models:
+  - name: raw_numbers
+    config:
+      contract:
+        enforced: true
+      materialized: table
+    columns:
+        - name: n
+          data_type: integer
+          constraints:
+            - type: primary_key
+            - type: not_null
+  - name: stg_numbers
+    config:
+      contract:
+        enforced: true
+      materialized: incremental
+      on_schema_change: append_new_columns
+      unique_key: n
+    columns:
+      - name: n
+        data_type: integer
+        constraints:
+          - type: foreign_key
+            expression: {schema}.raw_numbers (n)
+"""
+
+incremental_foreign_key_model_raw_numbers_sql = """
+select 1 as n
+"""
+
+incremental_foreign_key_model_stg_numbers_sql = """
+select * from {{ ref('raw_numbers') }}
+"""
