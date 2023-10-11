@@ -239,7 +239,7 @@ class BaseAdapter(metaclass=AdapterMeta):
 
     # This static member variable can be overriden in concrete adapter
     # implementations to indicate adapter support for optional capabilities.
-    _capabilities = CapabilityDict()
+    _capabilities = CapabilityDict({})
 
     def __init__(self, config) -> None:
         self.config = config

@@ -1,7 +1,6 @@
-from collections import UserDict
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional, TYPE_CHECKING
+from typing import Optional, DefaultDict, Mapping
 
 
 class Capability(str, Enum):
@@ -43,13 +42,11 @@ class CapabilitySupport:
         return self.support == Support.Versioned or self.support == Support.Full
 
 
-# Make python 3.8 happy with this generic type, remove when we support 3.9+
-if TYPE_CHECKING:
-    CapabilityUserDict = UserDict[Capability, CapabilitySupport]
-else:
-    CapabilityUserDict = UserDict
+class CapabilityDict(DefaultDict[Capability, CapabilitySupport]):
+    def __init__(self, vals: Mapping[Capability, CapabilitySupport]):
+        super().__init__(self._default)
+        self.update(vals)
 
-
-class CapabilityDict(CapabilityUserDict):
-    def __missing__(self, key):
+    @staticmethod
+    def _default():
         return CapabilitySupport(support=Support.Unknown)
