@@ -19,6 +19,16 @@ from dbt.task.snapshot import SnapshotTask
 from dbt.task.test import TestTask
 
 RETRYABLE_STATUSES = {NodeStatus.Error, NodeStatus.Fail, NodeStatus.Skipped, NodeStatus.RuntimeErr}
+OVERRIDE_PARENT_FLAGS = {
+    "log_path",
+    "output_path",
+    "profiles_dir",
+    "profiles_dir_exists_false",
+    "project_dir",
+    "defer_state",
+    "deprecated_state",
+    "target_path",
+}
 
 TASK_DICT = {
     "build": BuildTask,
@@ -91,7 +101,13 @@ class RetryTask(ConfiguredTask):
             if k in self.previous_args and v(self.previous_args[k]):
                 del self.previous_args[k]
 
-        retry_flags = Flags.from_dict(cli_command, self.previous_args)
+        previous_args = {
+            k: v for k, v in self.previous_args.items() if k not in OVERRIDE_PARENT_FLAGS
+        }
+        current_args = {k: v for k, v in self.args.__dict__.items() if k in OVERRIDE_PARENT_FLAGS}
+        combined_args = {**previous_args, **current_args}
+
+        retry_flags = Flags.from_dict(cli_command, combined_args)
         retry_config = RuntimeConfig.from_args(args=retry_flags)
 
         class TaskWrapper(self.task_class):

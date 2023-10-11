@@ -216,7 +216,11 @@ def simple_metric_input_measure() -> MetricInputMeasure:
 @pytest.fixture(scope="session")
 def complex_metric_input_measure(where_filter) -> MetricInputMeasure:
     return MetricInputMeasure(
-        name="test_complex_metric_input_measure", filter=where_filter, alias="complex_alias"
+        name="test_complex_metric_input_measure",
+        filter=where_filter,
+        alias="complex_alias",
+        join_to_timespine=True,
+        fill_nulls_with=0,
     )
 
 

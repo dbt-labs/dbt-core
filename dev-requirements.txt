@@ -30,7 +30,7 @@ types-mock
 types-protobuf
 types-python-dateutil
 types-pytz
-types-requests
+types-requests < 2.31.0  # types-requests 2.31.0.8 requires urllib3>=2, but we pin urllib3 ~= 1.0 because of openssl requirement for requests
 types-setuptools
 wheel
 mocker

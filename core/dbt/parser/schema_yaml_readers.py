@@ -178,6 +178,8 @@ class MetricParser(YamlReader):
                 name=unparsed_input_measure.name,
                 filter=filter,
                 alias=unparsed_input_measure.alias,
+                join_to_timespine=unparsed_input_measure.join_to_timespine,
+                fill_nulls_with=unparsed_input_measure.fill_nulls_with,
             )
 
     def _get_optional_input_measure(

@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: add a test for ephemeral cte injection
+time: 2023-09-12T23:06:19.938207+01:00
+custom:
+  Author: michelleark
+  Issue: "8376"

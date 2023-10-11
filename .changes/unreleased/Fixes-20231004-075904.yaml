@@ -1,0 +1,6 @@
+kind: Fixes
+body: Regenerate the v10 manifest jsonschema
+time: 2023-10-04T07:59:04.593928-05:00
+custom:
+  Author: emmyoop
+  Issue: "8763"
