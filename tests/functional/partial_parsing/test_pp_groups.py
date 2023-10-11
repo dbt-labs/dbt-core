@@ -146,5 +146,12 @@ class TestAddingModelsToNewGroups:
 
     def test_adding_models_to_new_groups(self, project):
         run_dbt(["compile"])
+        # This tests that the correct patch is added to my_model_c. The bug
+        # was that it was using the old patch, so model_c didn't have the
+        # correct group and access.
         write_file(models_and_groups_yml, project.project_root, "models", "models.yml")
         run_dbt(["compile"])
+        manifest = get_manifest(project.project_root)
+        model_c_node = manifest.nodes["model.test.my_model_c"]
+        assert model_c_node.group == "sales_analytics"
+        assert model_c_node.access == "private"
