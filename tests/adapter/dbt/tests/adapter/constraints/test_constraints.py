@@ -34,6 +34,10 @@ from dbt.tests.adapter.constraints.fixtures import (
     my_model_contract_sql_header_sql,
     my_model_incremental_contract_sql_header_sql,
     model_contract_header_schema_yml,
+    create_table_macro_sql,
+    incremental_foreign_key_schema_yml,
+    incremental_foreign_key_model_raw_numbers_sql,
+    incremental_foreign_key_model_stg_numbers_sql,
 )
 
 
@@ -530,3 +534,31 @@ insert into <model_identifier> (
 
 class TestConstraintQuotedColumn(BaseConstraintQuotedColumn):
     pass
+
+
+class TestIncrementalForeignKeyConstraint:
+    @pytest.fixture(scope="class")
+    def macros(self):
+        return {
+            "create_table.sql": create_table_macro_sql,
+        }
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": incremental_foreign_key_schema_yml,
+            "raw_numbers.sql": incremental_foreign_key_model_raw_numbers_sql,
+            "stg_numbers.sql": incremental_foreign_key_model_stg_numbers_sql,
+        }
+
+    def test_incremental_foreign_key_constraint(self, project):
+        unformatted_constraint_schema_yml = read_file("models", "schema.yml")
+        write_file(
+            unformatted_constraint_schema_yml.format(schema=project.test_schema),
+            "models",
+            "schema.yml",
+        )
+
+        run_dbt(["run", "--select", "raw_numbers"])
+        run_dbt(["run", "--select", "stg_numbers"])
+        run_dbt(["run", "--select", "stg_numbers"])
