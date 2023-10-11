@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Add warning_tag to UnversionedBreakingChange
+time: 2023-10-11T16:37:49.47831+02:00
+custom:
+  Author: jtcohen6
+  Issue: "8827"

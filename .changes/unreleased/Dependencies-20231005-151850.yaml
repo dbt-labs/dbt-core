@@ -1,0 +1,6 @@
+kind: "Dependencies"
+body: "Bump docker/build-push-action from 4 to 5"
+time: 2023-10-05T15:18:50.00000Z
+custom:
+  Author: dependabot[bot]
+  PR: 8783

@@ -5,6 +5,7 @@ docutils
 flake8
 flaky
 freezegun==0.3.12
+hypothesis
 ipdb
 mypy==1.4.1
 pip-tools

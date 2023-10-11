@@ -172,6 +172,10 @@
         "enforced": {
           "type": "boolean",
           "default": false
+        },
+        "alias_types": {
+          "type": "boolean",
+          "default": true
         }
       },
       "additionalProperties": false
@@ -559,6 +563,10 @@
         "enforced": {
           "type": "boolean",
           "default": false
+        },
+        "alias_types": {
+          "type": "boolean",
+          "default": true
         },
         "checksum": {
           "anyOf": [

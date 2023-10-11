@@ -19,6 +19,7 @@ class RelationType(StrEnum):
     CTE = "cte"
     MaterializedView = "materialized_view"
     External = "external"
+    Ephemeral = "ephemeral"
 
 
 class ComponentName(StrEnum):

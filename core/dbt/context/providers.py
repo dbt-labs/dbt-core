@@ -862,8 +862,18 @@ class ProviderContext(ManifestContext):
     def load_agate_table(self) -> agate.Table:
         if not isinstance(self.model, SeedNode):
             raise LoadAgateTableNotSeedError(self.model.resource_type, node=self.model)
-        assert self.model.root_path
-        path = os.path.join(self.model.root_path, self.model.original_file_path)
+
+        # include package_path for seeds defined in packages
+        package_path = (
+            os.path.join(self.config.packages_install_path, self.model.package_name)
+            if self.model.package_name != self.config.project_name
+            else "."
+        )
+        path = os.path.join(self.config.project_root, package_path, self.model.original_file_path)
+        if not os.path.exists(path):
+            assert self.model.root_path
+            path = os.path.join(self.model.root_path, self.model.original_file_path)
+
         column_types = self.model.config.column_types
         delimiter = self.model.config.delimiter
         try:
@@ -1227,12 +1237,24 @@ class ProviderContext(ManifestContext):
 
     @contextproperty("model")
     def ctx_model(self) -> Dict[str, Any]:
-        ret = self.model.to_dict(omit_none=True)
+        model_dct = self.model.to_dict(omit_none=True)
         # Maintain direct use of compiled_sql
         # TODO add depreciation logic[CT-934]
-        if "compiled_code" in ret:
-            ret["compiled_sql"] = ret["compiled_code"]
-        return ret
+        if "compiled_code" in model_dct:
+            model_dct["compiled_sql"] = model_dct["compiled_code"]
+
+        if (
+            hasattr(self.model, "contract")
+            and self.model.contract.alias_types is True
+            and "columns" in model_dct
+        ):
+            for column in model_dct["columns"].values():
+                if "data_type" in column:
+                    orig_data_type = column["data_type"]
+                    # translate data_type to value in Column.TYPE_LABELS
+                    new_data_type = self.adapter.Column.translate_type(orig_data_type)
+                    column["data_type"] = new_data_type
+        return model_dct
 
     @contextproperty()
     def pre_hooks(self) -> Optional[List[Dict[str, Any]]]:

@@ -1,0 +1,6 @@
+kind: Fixes
+body: Override path-like args in dbt retry
+time: 2023-10-10T18:28:01.556443+01:00
+custom:
+  Author: aranke
+  Issue: "8682"

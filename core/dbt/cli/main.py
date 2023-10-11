@@ -454,13 +454,40 @@ def debug(ctx, **kwargs):
 @p.project_dir
 @p.target
 @p.vars
+@p.source
+@p.dry_run
+@p.lock
+@p.upgrade
+@p.add_package
 @requires.postflight
 @requires.preflight
 @requires.unset_profile
 @requires.project
 def deps(ctx, **kwargs):
-    """Pull the most recent version of the dependencies listed in packages.yml"""
-    task = DepsTask(ctx.obj["flags"], ctx.obj["project"])
+    """Install dbt packages specified.
+    In the following case, a new `package-lock.yml` will be generated and the packages are installed:
+    - user updated the packages.yml
+    - user specify the flag --update, which means for packages that are specified as a
+      range, dbt-core will try to install the newer version
+    Otherwise, deps will use `package-lock.yml` as source of truth to install packages.
+
+    There is a way to add new packages by providing an `--add-package` flag to deps command
+    which will allow user to specify a package they want to add in the format of packagename@version.
+    """
+    flags = ctx.obj["flags"]
+    if flags.ADD_PACKAGE:
+        if not flags.ADD_PACKAGE["version"] and flags.SOURCE != "local":
+            raise BadOptionUsage(
+                message=f"Version is required in --add-package when a package when source is {flags.SOURCE}",
+                option_name="--add-package",
+            )
+    else:
+        if flags.DRY_RUN:
+            raise BadOptionUsage(
+                message="Invalid flag `--dry-run` when not using `--add-package`.",
+                option_name="--dry-run",
+            )
+    task = DepsTask(flags, ctx.obj["project"])
     results = task.run()
     success = task.interpret_results(results)
     return results, success
@@ -555,7 +582,6 @@ cli.add_command(ls, "ls")
 def parse(ctx, **kwargs):
     """Parses the project and provides information on performance"""
     # manifest generation and writing happens in @requires.manifest
-
     return ctx.obj["manifest"], True
 
 

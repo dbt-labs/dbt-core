@@ -2,10 +2,16 @@ from pathlib import Path
 
 import click
 from dbt.cli.options import MultiOption
-from dbt.cli.option_types import YAML, ChoiceTuple, WarnErrorOptionsType
+from dbt.cli.option_types import YAML, ChoiceTuple, WarnErrorOptionsType, Package
 from dbt.cli.resolvers import default_project_dir, default_profiles_dir
 from dbt.version import get_version_information
 
+add_package = click.option(
+    "--add-package",
+    help="Add a package to current package spec, specify it as package-name@version. Change the source with --source flag.",
+    envvar=None,
+    type=Package(),
+)
 args = click.option(
     "--args",
     envvar=None,
@@ -77,6 +83,14 @@ deprecated_defer = click.option(
     hidden=True,
 )
 
+dry_run = click.option(
+    "--dry-run",
+    envvar=None,
+    help="Option to run `dbt deps --add-package` without updating package-lock.yml file.",
+    is_flag=True,
+)
+
+
 enable_legacy_logger = click.option(
     "--enable-legacy-logger/--no-enable-legacy-logger",
     envvar="DBT_ENABLE_LEGACY_LOGGER",
@@ -125,6 +139,13 @@ indirect_selection = click.option(
     help="Choose which tests to select that are adjacent to selected resources. Eager is most inclusive, cautious is most exclusive, and buildable is in between. Empty includes no tests at all.",
     type=click.Choice(["eager", "cautious", "buildable", "empty"], case_sensitive=False),
     default="eager",
+)
+
+lock = click.option(
+    "--lock",
+    envvar=None,
+    help="Generate the package-lock.yml file without install the packages.",
+    is_flag=True,
 )
 
 log_cache_events = click.option(
@@ -465,6 +486,14 @@ empty_catalog = click.option(
     is_flag=True,
 )
 
+source = click.option(
+    "--source",
+    envvar=None,
+    help="Source to download page from, must be one of hub, git, or local. Defaults to hub.",
+    type=click.Choice(["hub", "git", "local"], case_sensitive=True),
+    default="hub",
+)
+
 static = click.option(
     "--static",
     help="Generate an additional static_index.html with manifest and catalog built-in.",
@@ -538,6 +567,13 @@ target_path = click.option(
     envvar="DBT_TARGET_PATH",
     help="Configure the 'target-path'. Only applies this setting for the current run. Overrides the 'DBT_TARGET_PATH' if it is set.",
     type=click.Path(),
+)
+
+upgrade = click.option(
+    "--upgrade",
+    envvar=None,
+    help="Upgrade packages to the latest version.",
+    is_flag=True,
 )
 
 debug_connection = click.option(

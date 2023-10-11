@@ -1239,11 +1239,13 @@ class UnversionedBreakingChange(WarnLevel):
     def message(self) -> str:
         reasons = "\n  - ".join(self.breaking_changes)
 
-        return (
+        msg = (
             f"Breaking change to contracted, unversioned model {self.model_name} ({self.model_file_path})"
             "\nWhile comparing to previous project state, dbt detected a breaking change to an unversioned model."
             f"\n  - {reasons}\n"
         )
+
+        return warning_tag(msg)
 
 
 class WarnStateTargetEqual(WarnLevel):
@@ -1510,6 +1512,30 @@ class NoNodesForSelectionCriteria(WarnLevel):
 
     def message(self) -> str:
         return f"The selection criterion '{self.spec_raw}' does not match any nodes"
+
+
+class DepsLockUpdating(InfoLevel):
+    def code(self):
+        return "M031"
+
+    def message(self) -> str:
+        return f"Updating lock file in file path: {self.lock_filepath}"
+
+
+class DepsAddPackage(InfoLevel):
+    def code(self):
+        return "M032"
+
+    def message(self) -> str:
+        return f"Added new package {self.package_name}@{self.version} to {self.packages_filepath}"
+
+
+class DepsFoundDuplicatePackage(InfoLevel):
+    def code(self):
+        return "M033"
+
+    def message(self) -> str:
+        return f"Found duplicate package in packages.yml, removing: {self.removed_package}"
 
 
 # =======================================================

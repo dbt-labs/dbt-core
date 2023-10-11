@@ -202,6 +202,7 @@ class OnConfigurationChangeOption(StrEnum):
 @dataclass
 class ContractConfig(dbtClassMixin, Replaceable):
     enforced: bool = False
+    alias_types: bool = True
 
 
 @dataclass
@@ -216,7 +217,6 @@ T = TypeVar("T", bound="BaseConfig")
 
 @dataclass
 class BaseConfig(AdditionalPropertiesAllowed, Replaceable):
-
     # enable syntax like: config['key']
     def __getitem__(self, key):
         return self.get(key)
@@ -559,11 +559,60 @@ class TestConfig(NodeAndTestConfig):
     # Annotated is used by mashumaro for jsonschema generation
     severity: Annotated[Severity, Pattern(SEVERITY_PATTERN)] = Severity("ERROR")
     store_failures: Optional[bool] = None
+    store_failures_as: Optional[str] = None
     where: Optional[str] = None
     limit: Optional[int] = None
     fail_calc: str = "count(*)"
     warn_if: str = "!= 0"
     error_if: str = "!= 0"
+
+    def __post_init__(self):
+        """
+        The presence of a setting for `store_failures_as` overrides any existing setting for `store_failures`,
+        regardless of level of granularity. If `store_failures_as` is not set, then `store_failures` takes effect.
+        At the time of implementation, `store_failures = True` would always create a table; the user could not
+        configure this. Hence, if `store_failures = True` and `store_failures_as` is not specified, then it
+        should be set to "table" to mimic the existing functionality.
+
+        A side effect of this overriding functionality is that `store_failures_as="view"` at the project
+        level cannot be turned off at the model level without setting both `store_failures_as` and
+        `store_failures`. The former would cascade down and override `store_failures=False`. The proposal
+        is to include "ephemeral" as a value for `store_failures_as`, which effectively sets
+        `store_failures=False`.
+
+        The exception handling for this is tricky. If we raise an exception here, the entire run fails at
+        parse time. We would rather well-formed models run successfully, leaving only exceptions to be rerun
+        if necessary. Hence, the exception needs to be raised in the test materialization. In order to do so,
+        we need to make sure that we go down the `store_failures = True` route with the invalid setting for
+        `store_failures_as`. This results in the `.get()` defaulted to `True` below, instead of a normal
+        dictionary lookup as is done in the `if` block. Refer to the test materialization for the
+        exception that is raise as a result of an invalid value.
+
+        The intention of this block is to behave as if `store_failures_as` is the only setting,
+        but still allow for backwards compatibility for `store_failures`.
+        See https://github.com/dbt-labs/dbt-core/issues/6914 for more information.
+        """
+
+        # if `store_failures_as` is not set, it gets set by `store_failures`
+        # the settings below mimic existing behavior prior to `store_failures_as`
+        get_store_failures_as_map = {
+            True: "table",
+            False: "ephemeral",
+            None: None,
+        }
+
+        # if `store_failures_as` is set, it dictates what `store_failures` gets set to
+        # the settings below overrides whatever `store_failures` is set to by the user
+        get_store_failures_map = {
+            "ephemeral": False,
+            "table": True,
+            "view": True,
+        }
+
+        if self.store_failures_as is None:
+            self.store_failures_as = get_store_failures_as_map[self.store_failures]
+        else:
+            self.store_failures = get_store_failures_map.get(self.store_failures_as, True)
 
     @classmethod
     def same_contents(cls, unrendered: Dict[str, Any], other: Dict[str, Any]) -> bool:
@@ -576,6 +625,7 @@ class TestConfig(NodeAndTestConfig):
             "warn_if",
             "error_if",
             "store_failures",
+            "store_failures_as",
         ]
 
         seen = set()

@@ -7,12 +7,12 @@ from dbt.exceptions import DbtRuntimeError
 
 @dataclass
 class Column:
+    # Note: This is automatically used by contract code
+    # No-op conversions (INTEGER => INT) have been removed.
+    # Any adapter that wants to take advantage of "translate_type"
+    # should create a ClassVar with the appropriate conversions.
     TYPE_LABELS: ClassVar[Dict[str, str]] = {
         "STRING": "TEXT",
-        "TIMESTAMP": "TIMESTAMP",
-        "FLOAT": "FLOAT",
-        "INTEGER": "INT",
-        "BOOLEAN": "BOOLEAN",
     }
     column: str
     dtype: str
