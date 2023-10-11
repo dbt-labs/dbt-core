@@ -46,7 +46,12 @@ from dbt.exceptions import (
 )
 
 from dbt.adapters.protocol import AdapterConfig
-from dbt.clients.agate_helper import empty_table, merge_tables, table_from_rows
+from dbt.clients.agate_helper import (
+    empty_table,
+    get_column_value_uncased,
+    merge_tables,
+    table_from_rows,
+)
 from dbt.clients.jinja import MacroGenerator
 from dbt.contracts.graph.manifest import Manifest, MacroManifest
 from dbt.contracts.graph.nodes import ResultNode
@@ -93,14 +98,6 @@ def _expect_row_value(key: str, row: agate.Row):
             'Got a row without "{}" column, columns: {}'.format(key, row.keys())
         )
     return row[key]
-
-
-def _get_column_value_uncased(key: str, row: agate.Row) -> Any:
-    for col_name, value in row.items():
-        if col_name.casefold() == key.casefold():
-            return value
-
-    raise KeyError
 
 
 def _catalog_filter_schemas(manifest: Manifest) -> Callable[[agate.Row], bool]:
@@ -1275,8 +1272,8 @@ class BaseAdapter(metaclass=AdapterMeta):
         try:
             assert len(table) == 1  # There should be one row since we requested one relation
             row = table[0]
-            last_modified_val = _get_column_value_uncased("last_modified", row)
-            snapshotted_at_val = _get_column_value_uncased("snapshotted_at", row)
+            last_modified_val = get_column_value_uncased("last_modified", row)
+            snapshotted_at_val = get_column_value_uncased("snapshotted_at", row)
 
             if last_modified_val is None:
                 # Interpret missing value as "infinitely long ago"

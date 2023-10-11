@@ -240,3 +240,12 @@ def merge_tables(tables: List[agate.Table]) -> agate.Table:
                 rows.append(agate.Row(data, column_names))
     # _is_fork to tell agate that we already made things into `Row`s.
     return agate.Table(rows, column_names, column_types, _is_fork=True)
+
+
+def get_column_value_uncased(column_name: str, row: agate.Row) -> Any:
+    """Get the value of a column in this row, ignoring the casing of the column name."""
+    for key, value in row.items():
+        if key.casefold() == column_name.casefold():
+            return value
+
+    raise KeyError
