@@ -761,7 +761,7 @@ class PartialParsing:
                 pp_dict[key].append(patch)
             elif found_elem and new_patch:
                 # remove patch and replace with new one
-                pp_dict.remove(found_elem)
+                pp_dict[key].remove(found_elem)
                 pp_dict[key].append(patch)
 
         schema_file.delete_from_env_vars(key, patch["name"])
