@@ -62,10 +62,62 @@ def drop_v9_and_prior_metrics(manifest: dict) -> None:
     manifest["disabled"] = filtered_disabled_entries
 
 
+def upgrade_v10_metric_filters(manifest: dict):
+    """Metric filters changed from v10 to v11
+
+    v10 filters from a serialized manaifest looked like:
+    {..., 'filter': {'where_sql_template': '<filter_value>'}}
+    whereas v11 filters look like:
+    {..., 'filter': {'where_filters': [{'where_sql_template': '<filter_value>'}, ...]}}
+
+    Additionally filters can live in multiple places on metrics:
+    1. metrics.filter
+    2. metrics.type_params.measure.filter
+    3. metrics.type_params.input_measures[x].filter
+    4. metrics.type_params.numerator.filter
+    5. metrics.type_params.denominator.filter
+    6. metrics.type_params.metrics[x].filter
+    """
+
+    def _convert_dct_with_filter(v10_dct_with_opt_filter):
+        if (
+            v10_dct_with_opt_filter is not None
+            and v10_dct_with_opt_filter.get("filter") is not None
+        ):
+            v10_dct_with_opt_filter["filter"] = {
+                "where_filters": [v10_dct_with_opt_filter["filter"]]
+            }
+
+    metrics = manifest.get("metrics", [])
+    for metric in metrics:
+        # handles top level metric filter
+        _convert_dct_with_filter(metric)
+
+        type_params = metric.get("type_params")
+        if type_params is not None:
+            _convert_dct_with_filter(type_params.get("measure"))
+            _convert_dct_with_filter(type_params.get("numerator"))
+            _convert_dct_with_filter(type_params.get("denominator"))
+
+            # handles metric.type_params.input_measures[x].filter
+            input_measures = type_params.get("input_measures")
+            if input_measures is not None:
+                for input_measure in input_measures:
+                    _convert_dct_with_filter(input_measure)
+
+            # handles metric.type_params.metrics[x].filter
+            metrics = type_params.get("metrics")
+            if metrics is not None:
+                for metric in metrics:
+                    _convert_dct_with_filter(metric)
+
+
 def upgrade_manifest_json(manifest: dict, manifest_schema_version: int) -> dict:
     # this should remain 9 while the check in `upgrade_schema_version` may change
     if manifest_schema_version <= 9:
         drop_v9_and_prior_metrics(manifest=manifest)
+    elif manifest_schema_version == 10:
+        upgrade_v10_metric_filters(manifest=manifest)
 
     for node_content in manifest.get("nodes", {}).values():
         upgrade_node_content(node_content)
