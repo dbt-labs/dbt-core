@@ -197,6 +197,10 @@ def rm_dir(directory_path):
         raise FileNotFoundError(f"{directory_path} does not exist.")
 
 
+def rename_dir(src_directory_path, dest_directory_path):
+    os.rename(src_directory_path, dest_directory_path)
+
+
 # Get an artifact (usually from the target directory) such as
 # manifest.json or catalog.json to use in a test
 def get_artifact(*paths):
