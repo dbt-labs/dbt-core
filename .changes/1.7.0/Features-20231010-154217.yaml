@@ -1,6 +1,0 @@
-kind: Features
-body: Add support semantic layer SavedQuery node type
-time: 2023-10-10T15:42:17.796231-07:00
-custom:
-  Author: QMalcolm
-  Issue: "8594"

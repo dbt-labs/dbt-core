@@ -1,6 +1,0 @@
-kind: Features
-body: Allow freshness to be determined via DBMS metadata for supported adapters
-time: 2023-10-08T13:43:29.884766-04:00
-custom:
-  Author: peterallenwebb
-  Issue: "8704"

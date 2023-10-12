@@ -1,6 +1,0 @@
-kind: Features
-body: Use translate_type on data_type in model.columns in templates by default, remove no op `TYPE_LABELS`
-time: 2023-09-07T16:18:31.428161-04:00
-custom:
-  Author: gshank
-  Issue: "8007"

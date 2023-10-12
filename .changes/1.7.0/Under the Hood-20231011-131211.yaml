@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: Update v10 manifest schema to match 1.6 for testing schema compatibility
-time: 2023-10-11T13:12:11.617914-05:00
-custom:
-  Author: emmyoop
-  Issue: "8835"
