@@ -28,3 +28,8 @@ class TestGenerate:
         catalog = run_dbt(["docs", "generate", "--select", "my_model"])
         assert len(catalog.nodes) == 1
         assert "model.test.my_model" in catalog.nodes
+
+    def test_select_limits_no_match(self, project):
+        run_dbt(["run"])
+        catalog = run_dbt(["docs", "generate", "--select", "my_missing_model"])
+        assert len(catalog.nodes) == 0

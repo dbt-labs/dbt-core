@@ -1,7 +1,7 @@
 import os
 import shutil
 from datetime import datetime
-from typing import Dict, List, Any, Optional, Tuple, Set
+from typing import Dict, List, Any, Optional, Tuple, Set, Iterable
 import agate
 
 from dbt.dataclass_schema import ValidationError
@@ -223,11 +223,6 @@ class GenerateTask(CompileTask):
             DOCS_INDEX_FILE_PATH, os.path.join(self.config.project_target_path, "index.html")
         )
 
-        # Get the list of nodes that have been selected
-        selected_nodes = None
-        if self.job_queue is not None:
-            selected_nodes = self.job_queue.get_selected_nodes()
-
         for asset_path in self.config.asset_paths:
             to_asset_path = os.path.join(self.config.project_target_path, asset_path)
 
@@ -247,8 +242,18 @@ class GenerateTask(CompileTask):
             adapter = get_adapter(self.config)
             with adapter.connection_named("generate_catalog"):
                 fire_event(BuildingCatalog())
+                # Get a list of relations we need from the catalog
+                relations = None
+                if self.job_queue is not None:
+                    selected_node_ids = self.job_queue.get_selected_nodes()
+                    selected_nodes = self._get_nodes_from_ids(self.manifest, selected_node_ids)
+                    relations = {
+                        adapter.Relation.create_from(adapter.config, node_id)
+                        for node_id in selected_nodes
+                    }
+
                 # This generates the catalog as an agate.Table
-                catalog_table, exceptions = adapter.get_catalog(self.manifest, selected_nodes)
+                catalog_table, exceptions = adapter.get_filtered_catalog(self.manifest, relations)
 
         catalog_data: List[PrimitiveDict] = [
             dict(zip(catalog_table.column_names, map(dbt.utils._coerce_decimal, row)))
@@ -297,6 +302,19 @@ class GenerateTask(CompileTask):
             fire_event(WriteCatalogFailure(num_exceptions=len(exceptions)))
         fire_event(CatalogWritten(path=os.path.abspath(catalog_path)))
         return results
+
+    @staticmethod
+    def _get_nodes_from_ids(manifest: Manifest, node_ids: Iterable[str]) -> List[ResultNode]:
+        selected: List[ResultNode] = []
+        for unique_id in node_ids:
+            if unique_id in manifest.nodes:
+                node = manifest.nodes[unique_id]
+                if node.is_relational and not node.is_ephemeral_model:
+                    selected.append(node)
+            elif unique_id in manifest.sources:
+                source = manifest.sources[unique_id]
+                selected.append(source)
+        return selected
 
     def get_node_selector(self) -> ResourceTypeSelector:
         if self.manifest is None or self.graph is None:
