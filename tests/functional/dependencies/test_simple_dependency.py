@@ -238,6 +238,25 @@ class TestRekeyedDependencyWithSubduplicates(object):
         assert len(os.listdir("dbt_packages")) == 2
 
 
+class TestTarballNestedDependencies(object):
+    # this version of dbt_expectations has a dependency on dbt_date, which the
+    # package config handling should detect
+    @pytest.fixture(scope="class")
+    def packages(self):
+        return {
+            "packages": [
+                {
+                    "tarball": "https://github.com/calogica/dbt-expectations/archive/refs/tags/0.9.0.tar.gz",
+                    "name": "dbt_expectations",
+                },
+            ]
+        }
+
+    def test_simple_dependency_deps(self, project):
+        run_dbt(["deps"])
+        assert set(os.listdir("dbt_packages")) == set(["dbt_expectations", "dbt_date"])
+
+
 class DependencyBranchBase(object):
     @pytest.fixture(scope="class", autouse=True)
     def setUp(self, project):
