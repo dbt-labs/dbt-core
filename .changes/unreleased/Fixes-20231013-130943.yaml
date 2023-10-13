@@ -1,0 +1,6 @@
+kind: Fixes
+body: resolve nested dependencies for packages installed using tarball method
+time: 2023-10-13T13:09:43.188308-04:00
+custom:
+  Author: adamlopez
+  Issue: "8621"
