@@ -33,6 +33,7 @@ class NodeType(StrEnum):
     Exposure = "exposure"
     Metric = "metric"
     Group = "group"
+    SavedQuery = "saved_query"
     SemanticModel = "semantic_model"
 
     @classmethod
@@ -79,6 +80,8 @@ class NodeType(StrEnum):
     def pluralize(self) -> str:
         if self is self.Analysis:
             return "analyses"
+        elif self is self.SavedQuery:
+            return "saved_queries"
         return f"{self}s"
 
 

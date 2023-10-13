@@ -11,7 +11,6 @@ from tests.functional.show.fixtures import (
     models__second_model,
     models__ephemeral_model,
     schema_yml,
-    models__sql_header,
     private_model_yml,
 )
 
@@ -25,7 +24,6 @@ class ShowBase:
             "sample_number_model_with_nulls.sql": models__sample_number_model_with_nulls,
             "second_model.sql": models__second_model,
             "ephemeral_model.sql": models__ephemeral_model,
-            "sql_header.sql": models__sql_header,
         }
 
     @pytest.fixture(scope="class")
@@ -82,13 +80,15 @@ class TestShowNumeric(ShowBase):
         (_, log_output) = run_dbt_and_capture(
             ["show", "--select", "sample_number_model", "--output", "json"]
         )
+        # json log output needs the escapes removed for string matching
+        log_output = log_output.replace("\\", "")
         assert "Previewing node 'sample_number_model'" not in log_output
-        assert "1.0" not in log_output
-        assert "1" in log_output
-        assert "3.0" in log_output
-        assert "4.3" in log_output
-        assert "5" in log_output
-        assert "5.0" not in log_output
+        assert '"float_to_int_field": 1.0' not in log_output
+        assert '"float_to_int_field": 1' in log_output
+        assert '"float_field": 3.0' in log_output
+        assert '"float_with_dec_field": 4.3' in log_output
+        assert '"int_field": 5' in log_output
+        assert '"int_field": 5.0' not in log_output
 
 
 class TestShowNumericNulls(ShowBase):
@@ -97,13 +97,15 @@ class TestShowNumericNulls(ShowBase):
         (_, log_output) = run_dbt_and_capture(
             ["show", "--select", "sample_number_model_with_nulls", "--output", "json"]
         )
+        # json log output needs the escapes removed for string matching
+        log_output = log_output.replace("\\", "")
         assert "Previewing node 'sample_number_model_with_nulls'" not in log_output
-        assert "1.0" not in log_output
-        assert "1" in log_output
-        assert "3.0" in log_output
-        assert "4.3" in log_output
-        assert "5" in log_output
-        assert "5.0" not in log_output
+        assert '"float_to_int_field": 1.0' not in log_output
+        assert '"float_to_int_field": 1' in log_output
+        assert '"float_field": 3.0' in log_output
+        assert '"float_with_dec_field": 4.3' in log_output
+        assert '"int_field": 5' in log_output
+        assert '"int_field": 5.0' not in log_output
 
 
 class TestShowInline(ShowBase):
@@ -143,33 +145,10 @@ class TestShowSecondEphemeral(ShowBase):
         assert "col_hundo" in log_output
 
 
-class TestShowLimit(ShowBase):
-    @pytest.mark.parametrize(
-        "args,expected",
-        [
-            ([], 5),  # default limit
-            (["--limit", 3], 3),  # fetch 3 rows
-            (["--limit", -1], 7),  # fetch all rows
-        ],
-    )
-    def test_limit(self, project, args, expected):
-        run_dbt(["build"])
-        dbt_args = ["show", "--inline", models__second_ephemeral_model, *args]
-        results = run_dbt(dbt_args)
-        assert len(results.results[0].agate_table) == expected
-
-
 class TestShowSeed(ShowBase):
     def test_seed(self, project):
         (_, log_output) = run_dbt_and_capture(["show", "--select", "sample_seed"])
         assert "Previewing node 'sample_seed'" in log_output
-
-
-class TestShowSqlHeader(ShowBase):
-    def test_sql_header(self, project):
-        run_dbt(["build"])
-        (_, log_output) = run_dbt_and_capture(["show", "--select", "sql_header"])
-        assert "Asia/Kolkata" in log_output
 
 
 class TestShowModelVersions:

@@ -1,4 +1,4 @@
-from dbt.parser.schemas import YamlReader, SchemaParser
+from dbt.parser.schemas import YamlReader, SchemaParser, ParseResult
 from dbt.parser.common import YamlBlock
 from dbt.node_types import NodeType
 from dbt.contracts.graph.unparsed import (
@@ -13,6 +13,7 @@ from dbt.contracts.graph.unparsed import (
     UnparsedMetricInputMeasure,
     UnparsedMetricTypeParams,
     UnparsedNonAdditiveDimension,
+    UnparsedSavedQuery,
     UnparsedSemanticModel,
 )
 from dbt.contracts.graph.nodes import (
@@ -24,7 +25,9 @@ from dbt.contracts.graph.nodes import (
     MetricTimeWindow,
     MetricTypeParams,
     SemanticModel,
+    SavedQuery,
     WhereFilter,
+    WhereFilterIntersection,
 )
 from dbt.contracts.graph.semantic_models import (
     Dimension,
@@ -54,8 +57,19 @@ from dbt_semantic_interfaces.type_enums import (
 from typing import List, Optional, Union
 
 
+def parse_where_filter(
+    where: Optional[Union[List[str], str]]
+) -> Optional[WhereFilterIntersection]:
+    if where is None:
+        return None
+    elif isinstance(where, str):
+        return WhereFilterIntersection([WhereFilter(where)])
+    else:
+        return WhereFilterIntersection([WhereFilter(where_str) for where_str in where])
+
+
 class ExposureParser(YamlReader):
-    def __init__(self, schema_parser: SchemaParser, yaml: YamlBlock):
+    def __init__(self, schema_parser: SchemaParser, yaml: YamlBlock) -> None:
         super().__init__(schema_parser, yaml, NodeType.Exposure.pluralize())
         self.schema_parser = schema_parser
         self.yaml = yaml
@@ -158,7 +172,7 @@ class ExposureParser(YamlReader):
 
 
 class MetricParser(YamlReader):
-    def __init__(self, schema_parser: SchemaParser, yaml: YamlBlock):
+    def __init__(self, schema_parser: SchemaParser, yaml: YamlBlock) -> None:
         super().__init__(schema_parser, yaml, NodeType.Metric.pluralize())
         self.schema_parser = schema_parser
         self.yaml = yaml
@@ -170,14 +184,12 @@ class MetricParser(YamlReader):
         if isinstance(unparsed_input_measure, str):
             return MetricInputMeasure(name=unparsed_input_measure)
         else:
-            filter: Optional[WhereFilter] = None
-            if unparsed_input_measure.filter is not None:
-                filter = WhereFilter(where_sql_template=unparsed_input_measure.filter)
-
             return MetricInputMeasure(
                 name=unparsed_input_measure.name,
-                filter=filter,
+                filter=parse_where_filter(unparsed_input_measure.filter),
                 alias=unparsed_input_measure.alias,
+                join_to_timespine=unparsed_input_measure.join_to_timespine,
+                fill_nulls_with=unparsed_input_measure.fill_nulls_with,
             )
 
     def _get_optional_input_measure(
@@ -252,13 +264,9 @@ class MetricParser(YamlReader):
             if unparsed.offset_to_grain is not None:
                 offset_to_grain = TimeGranularity(unparsed.offset_to_grain)
 
-            filter: Optional[WhereFilter] = None
-            if unparsed.filter is not None:
-                filter = WhereFilter(where_sql_template=unparsed.filter)
-
             return MetricInput(
                 name=unparsed.name,
-                filter=filter,
+                filter=parse_where_filter(unparsed.filter),
                 alias=unparsed.alias,
                 offset_window=self._get_time_window(unparsed.offset_window),
                 offset_to_grain=offset_to_grain,
@@ -332,10 +340,6 @@ class MetricParser(YamlReader):
                 f"Calculated a {type(config)} for a metric, but expected a MetricConfig"
             )
 
-        filter: Optional[WhereFilter] = None
-        if unparsed.filter is not None:
-            filter = WhereFilter(where_sql_template=unparsed.filter)
-
         parsed = Metric(
             resource_type=NodeType.Metric,
             package_name=package_name,
@@ -348,7 +352,7 @@ class MetricParser(YamlReader):
             label=unparsed.label,
             type=MetricType(unparsed.type),
             type_params=self._get_metric_type_params(unparsed.type_params),
-            filter=filter,
+            filter=parse_where_filter(unparsed.filter),
             meta=unparsed.meta,
             tags=unparsed.tags,
             config=config,
@@ -398,7 +402,7 @@ class MetricParser(YamlReader):
 
 
 class GroupParser(YamlReader):
-    def __init__(self, schema_parser: SchemaParser, yaml: YamlBlock):
+    def __init__(self, schema_parser: SchemaParser, yaml: YamlBlock) -> None:
         super().__init__(schema_parser, yaml, NodeType.Group.pluralize())
         self.schema_parser = schema_parser
         self.yaml = yaml
@@ -432,7 +436,7 @@ class GroupParser(YamlReader):
 
 
 class SemanticModelParser(YamlReader):
-    def __init__(self, schema_parser: SchemaParser, yaml: YamlBlock):
+    def __init__(self, schema_parser: SchemaParser, yaml: YamlBlock) -> None:
         super().__init__(schema_parser, yaml, "semantic_models")
         self.schema_parser = schema_parser
         self.yaml = yaml
@@ -456,6 +460,7 @@ class SemanticModelParser(YamlReader):
                     name=unparsed.name,
                     type=DimensionType(unparsed.type),
                     description=unparsed.description,
+                    label=unparsed.label,
                     is_partition=unparsed.is_partition,
                     type_params=self._get_dimension_type_params(unparsed=unparsed.type_params),
                     expr=unparsed.expr,
@@ -472,6 +477,7 @@ class SemanticModelParser(YamlReader):
                     name=unparsed.name,
                     type=EntityType(unparsed.type),
                     description=unparsed.description,
+                    label=unparsed.label,
                     role=unparsed.role,
                     expr=unparsed.expr,
                 )
@@ -499,6 +505,7 @@ class SemanticModelParser(YamlReader):
                     name=unparsed.name,
                     agg=AggregationType(unparsed.agg),
                     description=unparsed.description,
+                    label=unparsed.label,
                     expr=str(unparsed.expr) if unparsed.expr is not None else None,
                     agg_params=unparsed.agg_params,
                     non_additive_dimension=self._get_non_additive_dimension(
@@ -544,6 +551,7 @@ class SemanticModelParser(YamlReader):
             base=False,
             patch_config_dict=precedence_configs,
         )
+
         return config
 
     def parse_semantic_model(self, unparsed: UnparsedSemanticModel):
@@ -572,6 +580,7 @@ class SemanticModelParser(YamlReader):
 
         parsed = SemanticModel(
             description=unparsed.description,
+            label=unparsed.label,
             fqn=fqn,
             model=unparsed.model,
             name=unparsed.name,
@@ -624,3 +633,97 @@ class SemanticModelParser(YamlReader):
                 raise YamlParseDictError(self.yaml.path, self.key, data, exc)
 
             self.parse_semantic_model(unparsed)
+
+
+class SavedQueryParser(YamlReader):
+    def __init__(self, schema_parser: SchemaParser, yaml: YamlBlock) -> None:
+        super().__init__(schema_parser, yaml, "saved_queries")
+        self.schema_parser = schema_parser
+        self.yaml = yaml
+
+    def _generate_saved_query_config(
+        self, target: UnparsedSavedQuery, fqn: List[str], package_name: str, rendered: bool
+    ):
+        generator: BaseContextConfigGenerator
+        if rendered:
+            generator = ContextConfigGenerator(self.root_project)
+        else:
+            generator = UnrenderedConfigGenerator(self.root_project)
+
+        # configs with precendence set
+        precedence_configs = dict()
+        # first apply semantic model configs
+        precedence_configs.update(target.config)
+
+        config = generator.calculate_node_config(
+            config_call_dict={},
+            fqn=fqn,
+            resource_type=NodeType.SavedQuery,
+            project_name=package_name,
+            base=False,
+            patch_config_dict=precedence_configs,
+        )
+
+        return config
+
+    def parse_saved_query(self, unparsed: UnparsedSavedQuery) -> None:
+        package_name = self.project.project_name
+        unique_id = f"{NodeType.SavedQuery}.{package_name}.{unparsed.name}"
+        path = self.yaml.path.relative_path
+
+        fqn = self.schema_parser.get_fqn_prefix(path)
+        fqn.append(unparsed.name)
+
+        config = self._generate_saved_query_config(
+            target=unparsed,
+            fqn=fqn,
+            package_name=package_name,
+            rendered=True,
+        )
+
+        config = config.finalize_and_validate()
+
+        unrendered_config = self._generate_saved_query_config(
+            target=unparsed,
+            fqn=fqn,
+            package_name=package_name,
+            rendered=False,
+        )
+
+        parsed = SavedQuery(
+            description=unparsed.description,
+            label=unparsed.label,
+            fqn=fqn,
+            group_bys=unparsed.group_bys,
+            metrics=unparsed.metrics,
+            name=unparsed.name,
+            original_file_path=self.yaml.path.original_file_path,
+            package_name=package_name,
+            path=path,
+            resource_type=NodeType.SavedQuery,
+            unique_id=unique_id,
+            where=parse_where_filter(unparsed.where),
+            config=config,
+            unrendered_config=unrendered_config,
+            group=config.group,
+        )
+
+        # Only add thes saved query if it's enabled, otherwise we track it with other diabled nodes
+        if parsed.config.enabled:
+            self.manifest.add_saved_query(self.yaml.file, parsed)
+        else:
+            self.manifest.add_disabled(self.yaml.file, parsed)
+
+    def parse(self) -> ParseResult:
+        for data in self.get_key_dicts():
+            try:
+                UnparsedSavedQuery.validate(data)
+                unparsed = UnparsedSavedQuery.from_dict(data)
+            except (ValidationError, JSONValidationError) as exc:
+                raise YamlParseDictError(self.yaml.path, self.key, data, exc)
+
+            self.parse_saved_query(unparsed)
+
+        # The supertype (YamlReader) requires `parse` to return a ParseResult, so
+        # we return an empty one because we don't have one to actually return.
+        return ParseResult()

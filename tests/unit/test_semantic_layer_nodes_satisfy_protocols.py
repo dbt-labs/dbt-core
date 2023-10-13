@@ -8,6 +8,7 @@ from dbt.contracts.graph.nodes import (
     MetricTimeWindow,
     MetricTypeParams,
     NodeRelation,
+    SavedQuery,
     SemanticModel,
     WhereFilter,
 )
@@ -30,6 +31,7 @@ from dbt_semantic_interfaces.protocols import (
     measure as MeasureProtocols,
     metadata as MetadataProtocols,
     metric as MetricProtocols,
+    saved_query as SavedQueryProtocols,
     semantic_model as SemanticModelProtocols,
     WhereFilter as WhereFilterProtocol,
 )
@@ -40,6 +42,8 @@ from dbt_semantic_interfaces.type_enums import (
     MetricType,
     TimeGranularity,
 )
+from hypothesis import given
+from hypothesis.strategies import builds, none, text
 from typing import Protocol, runtime_checkable
 
 
@@ -136,6 +140,11 @@ class RuntimeCheckableMetricTimeWindow(MetricProtocols.MetricTimeWindow, Protoco
     pass
 
 
+@runtime_checkable
+class RuntimeCheckableSavedQuery(SavedQueryProtocols.SavedQuery, Protocol):
+    pass
+
+
 @pytest.fixture(scope="session")
 def file_slice() -> FileSlice:
     return FileSlice(
@@ -216,7 +225,11 @@ def simple_metric_input_measure() -> MetricInputMeasure:
 @pytest.fixture(scope="session")
 def complex_metric_input_measure(where_filter) -> MetricInputMeasure:
     return MetricInputMeasure(
-        name="test_complex_metric_input_measure", filter=where_filter, alias="complex_alias"
+        name="test_complex_metric_input_measure",
+        filter=where_filter,
+        alias="complex_alias",
+        join_to_timespine=True,
+        fill_nulls_with=0,
     )
 
 
@@ -312,6 +325,7 @@ def test_semantic_model_node_satisfies_protocol_optionals_specified(
             schema_name="test_schema_name",
         ),
         description="test_description",
+        label="test label",
         defaults=semantic_model_defaults,
         metadata=source_file_metadata,
         primary_entity="test_primary_entity",
@@ -334,6 +348,7 @@ def test_dimension_satisfies_protocol_optionals_specified(
         name="test_dimension",
         type=DimensionType.TIME,
         description="test_description",
+        label="test_label",
         type_params=dimension_type_params,
         expr="1",
         metadata=source_file_metadata,
@@ -353,6 +368,7 @@ def test_entity_satisfies_protocol_optionals_specified():
     entity = Entity(
         name="test_entity",
         description="a test entity",
+        label="A test entity",
         type=EntityType.PRIMARY,
         expr="id",
         role="a_role",
@@ -374,6 +390,7 @@ def test_measure_satisfies_protocol_optionals_specified(
     measure = Measure(
         name="test_measure",
         description="a test measure",
+        label="A test measure",
         agg="sum",
         create_metric=True,
         expr="amount",
@@ -452,3 +469,15 @@ def test_metric_type_params_satisfies_protocol(complex_metric_type_params):
 
 def test_non_additive_dimension_satisfies_protocol(non_additive_dimension):
     assert isinstance(non_additive_dimension, RuntimeCheckableNonAdditiveDimension)
+
+
+@given(
+    builds(
+        SavedQuery,
+        description=text() | none(),
+        label=text() | none(),
+        metadata=builds(SourceFileMetadata) | none(),
+    )
+)
+def test_saved_query_satisfies_protocol(saved_query: SavedQuery):
+    assert isinstance(saved_query, SavedQuery)

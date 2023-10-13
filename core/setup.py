@@ -25,7 +25,7 @@ with open(os.path.join(this_directory, "README.md")) as f:
 
 
 package_name = "dbt-core"
-package_version = "1.7.0b2"
+package_version = "1.8.0a1"
 description = """With dbt, data analysts and engineers can build analytics \
 the way engineers build applications."""
 
@@ -59,7 +59,7 @@ setup(
         # ----
         # dbt-core uses these packages in standard ways. Pin to the major version, and check compatibility
         # with major versions in each new minor version of dbt-core.
-        "click<9",
+        "click>=8.0.2,<9",
         "networkx>=2.3,<4",
         # ----
         # These packages are major-version-0. Keep upper bounds on upcoming minor versions (which could have breaking changes)
@@ -74,7 +74,7 @@ setup(
         "dbt-extractor~=0.5.0",
         "minimal-snowplow-tracker~=0.0.2",
         # DSI is under active development, so we're pinning to specific dev versions for now.
-        "dbt-semantic-interfaces~=0.2.0",
+        "dbt-semantic-interfaces~=0.3.0",
         # ----
         # Expect compatibility with all new versions of these packages, so lower bounds only.
         "jsonschema>=3.0",

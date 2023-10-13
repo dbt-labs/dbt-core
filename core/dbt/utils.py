@@ -239,7 +239,7 @@ def deep_map_render(func: Callable[[Any, Tuple[Union[str, int], ...]], Any], val
 
 
 class AttrDict(dict):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.__dict__ = self
 
@@ -284,9 +284,9 @@ class memoized:
 
     Taken from https://wiki.python.org/moin/PythonDecoratorLibrary#Memoize"""
 
-    def __init__(self, func):
+    def __init__(self, func) -> None:
         self.func = func
-        self.cache = {}
+        self.cache: Dict[Any, Any] = {}
 
     def __call__(self, *args):
         if not isinstance(args, collections.abc.Hashable):
@@ -367,7 +367,7 @@ class ForgivingJSONEncoder(JSONEncoder):
 
 
 class Translator:
-    def __init__(self, aliases: Mapping[str, str], recursive: bool = False):
+    def __init__(self, aliases: Mapping[str, str], recursive: bool = False) -> None:
         self.aliases = aliases
         self.recursive = recursive
 
@@ -457,7 +457,7 @@ def lowercase(value: Optional[str]) -> Optional[str]:
 
 
 class classproperty(object):
-    def __init__(self, func):
+    def __init__(self, func) -> None:
         self.func = func
 
     def __get__(self, obj, objtype):

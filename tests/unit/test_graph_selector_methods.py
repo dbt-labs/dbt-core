@@ -17,7 +17,10 @@ from dbt.contracts.graph.nodes import (
     MetricTypeParams,
     MetricInputMeasure,
     Group,
+    NodeRelation,
+    SavedQuery,
     SeedNode,
+    SemanticModel,
     SingularTestNode,
     GenericTestNode,
     SourceDefinition,
@@ -47,6 +50,8 @@ from dbt.graph.selector_methods import (
     ExposureSelectorMethod,
     MetricSelectorMethod,
     VersionSelectorMethod,
+    SavedQuerySelectorMethod,
+    SemanticModelSelectorMethod,
 )
 import dbt.exceptions
 import dbt.contracts.graph.nodes
@@ -427,6 +432,52 @@ def make_group(pkg, name, path=None):
     )
 
 
+def make_semantic_model(pkg: str, name: str, path=None, model=None):
+    if path is None:
+        path = "schema.yml"
+
+    if model is None:
+        model = name
+
+    node_relation = NodeRelation(
+        alias=model,
+        schema_name="dbt",
+    )
+
+    return SemanticModel(
+        name=name,
+        resource_type=NodeType.SemanticModel,
+        model=model,
+        node_relation=node_relation,
+        package_name=pkg,
+        path=path,
+        description="Customer entity",
+        primary_entity="customer",
+        unique_id=f"semantic_model.{pkg}.{name}",
+        original_file_path=path,
+        fqn=[pkg, "semantic_models", name],
+    )
+
+
+def make_saved_query(pkg: str, name: str, metric: str, path=None):
+    if path is None:
+        path = "schema.yml"
+
+    return SavedQuery(
+        name=name,
+        resource_type=NodeType.SavedQuery,
+        package_name=pkg,
+        path=path,
+        description="Test Saved Query",
+        metrics=[metric],
+        group_bys=[],
+        where=None,
+        unique_id=f"saved_query.{pkg}.{name}",
+        original_file_path=path,
+        fqn=[pkg, "saved_queries", name],
+    )
+
+
 @pytest.fixture
 def macro_test_unique():
     return make_macro(
@@ -798,6 +849,7 @@ def manifest(
         nodes={n.unique_id: n for n in nodes},
         sources={s.unique_id: s for s in sources},
         macros={m.unique_id: m for m in macros},
+        semantic_models={},
         docs={},
         files={},
         exposures={},
@@ -815,7 +867,9 @@ def search_manifest_using_method(manifest, method, selection):
         set(manifest.nodes)
         | set(manifest.sources)
         | set(manifest.exposures)
-        | set(manifest.metrics),
+        | set(manifest.metrics)
+        | set(manifest.semantic_models)
+        | set(manifest.saved_queries),
         selection,
     )
     results = {manifest.expect(uid).search_name for uid in selected}
@@ -1245,6 +1299,72 @@ def test_select_metric(manifest):
     assert search_manifest_using_method(manifest, method, "my_metric") == {"my_metric"}
     assert not search_manifest_using_method(manifest, method, "not_my_metric")
     assert search_manifest_using_method(manifest, method, "*_metric") == {"my_metric"}
+
+
+def test_select_semantic_model(manifest):
+    semantic_model = make_semantic_model(
+        "pkg",
+        "customer",
+        model="customers",
+        path="_semantic_models.yml",
+    )
+    manifest.semantic_models[semantic_model.unique_id] = semantic_model
+    methods = MethodManager(manifest, None)
+    method = methods.get_method("semantic_model", [])
+    assert isinstance(method, SemanticModelSelectorMethod)
+    assert search_manifest_using_method(manifest, method, "customer") == {"customer"}
+    assert not search_manifest_using_method(manifest, method, "not_customer")
+    assert search_manifest_using_method(manifest, method, "*omer") == {"customer"}
+
+
+def test_select_semantic_model_by_tag(manifest):
+    semantic_model = make_semantic_model(
+        "pkg",
+        "customer",
+        model="customers",
+        path="_semantic_models.yml",
+    )
+    manifest.semantic_models[semantic_model.unique_id] = semantic_model
+    methods = MethodManager(manifest, None)
+    method = methods.get_method("tag", [])
+    assert isinstance(method, TagSelectorMethod)
+    assert method.arguments == []
+    search_manifest_using_method(manifest, method, "any_tag")
+
+
+def test_select_saved_query(manifest: Manifest) -> None:
+    metric = make_metric("test", "my_metric")
+    saved_query = make_saved_query(
+        "pkg",
+        "test_saved_query",
+        "my_metric",
+    )
+    manifest.metrics[metric.unique_id] = metric
+    manifest.saved_queries[saved_query.unique_id] = saved_query
+    methods = MethodManager(manifest, None)
+    method = methods.get_method("saved_query", [])
+    assert isinstance(method, SavedQuerySelectorMethod)
+    assert search_manifest_using_method(manifest, method, "test_saved_query") == {
+        "test_saved_query"
+    }
+    assert not search_manifest_using_method(manifest, method, "not_test_saved_query")
+    assert search_manifest_using_method(manifest, method, "*uery") == {"test_saved_query"}
+
+
+def test_select_saved_query_by_tag(manifest: Manifest) -> None:
+    metric = make_metric("test", "my_metric")
+    saved_query = make_saved_query(
+        "pkg",
+        "test_saved_query",
+        "my_metric",
+    )
+    manifest.metrics[metric.unique_id] = metric
+    manifest.saved_queries[saved_query.unique_id] = saved_query
+    methods = MethodManager(manifest, None)
+    method = methods.get_method("tag", [])
+    assert isinstance(method, TagSelectorMethod)
+    assert method.arguments == []
+    search_manifest_using_method(manifest, method, "any_tag")
 
 
 @pytest.fixture

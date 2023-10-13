@@ -6,7 +6,13 @@
 
 {%- macro default__get_create_sql(relation, sql) -%}
 
-    {%- if relation.is_materialized_view -%}
+    {%- if relation.is_view -%}
+        {{ get_create_view_as_sql(relation, sql) }}
+
+    {%- elif relation.is_table -%}
+        {{ get_create_table_as_sql(False, relation, sql) }}
+
+    {%- elif relation.is_materialized_view -%}
         {{ get_create_materialized_view_as_sql(relation, sql) }}
 
     {%- else -%}

@@ -161,8 +161,16 @@ semantic_models:
       agg_time_dimension: created_at
 
 metrics:
-  - name: my_metric
-    label: Count records
+  - name: blue_customers_post_2010
+    label: Blue Customers since 2010
+    type: simple
+    filter: "{{ TimeDimension('id__created_at', 'day') }} > '2010-01-01'"
+    type_params:
+      measure:
+        name: customers
+        filter: "{{ Dimension('id__favorite_color') }} = 'blue'"
+  - name: customers
+    label: Customers Metric
     type: simple
     type_params:
       measure: customers
@@ -170,9 +178,29 @@ metrics:
     label: Count records
     config:
         enabled: False
+    filter: "{{ Dimension('id__favorite_color') }} = 'blue'"
     type: simple
     type_params:
       measure: customers
+  - name: ratio_of_blue_customers_to_red_customers
+    label: Very Important Customer Color Ratio
+    type: ratio
+    type_params:
+      numerator:
+        name: customers
+        filter: "{{ Dimension('id__favorite_color')}} = 'blue'"
+      denominator:
+        name: customers
+        filter: "{{ Dimension('id__favorite_color')}} = 'red'"
+  - name: doubled_blue_customers
+    type: derived
+    label: Inflated blue customer numbers
+    type_params:
+      expr: 'customers * 2'
+      metrics:
+        - name: customers
+          filter: "{{ Dimension('id__favorite_color')}} = 'blue'"
+
 
 sources:
   - name: my_source
@@ -290,7 +318,7 @@ class TestPreviousVersionState:
         assert len(manifest.nodes) == 8
         assert len(manifest.sources) == 1
         assert len(manifest.exposures) == 1
-        assert len(manifest.metrics) == 1
+        assert len(manifest.metrics) == 4
         # disabled model, snapshot, seed, singular test, generic test, analysis, source, exposure, metric
         assert len(manifest.disabled) == 9
         assert "macro.test.do_nothing" in manifest.macros
@@ -348,8 +376,10 @@ class TestPreviousVersionState:
 
     def test_backwards_compatible_versions(self, project):
         # manifest schema version 4 and greater should always be forward compatible
-        for schema_version in range(4, self.CURRENT_EXPECTED_MANIFEST_VERSION):
+        for schema_version in range(4, 10):
             self.compare_previous_state(project, schema_version, True, 1)
+        for schema_version in range(10, self.CURRENT_EXPECTED_MANIFEST_VERSION):
+            self.compare_previous_state(project, schema_version, True, 0)
 
     def test_nonbackwards_compatible_versions(self, project):
         # schema versions 1, 2, 3 are all not forward compatible

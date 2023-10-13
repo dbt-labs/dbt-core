@@ -1287,6 +1287,28 @@ message UnversionedBreakingChangeMsg {
     UnversionedBreakingChange data = 2;
 }
 
+// I072
+message WarnStateTargetEqual {
+    string state_path = 1;
+}
+
+message WarnStateTargetEqualMsg {
+    EventInfo info = 1;
+    WarnStateTargetEqual data = 2;
+}
+
+// I073
+message FreshnessConfigProblem {
+    string msg = 1;
+}
+
+message FreshnessConfigProblemMsg {
+    EventInfo info = 1;
+    FreshnessConfigProblem data = 2;
+}
+
+
+
 
 // M - Deps generation
 
@@ -1575,6 +1597,48 @@ message NoNodesForSelectionCriteria {
 message NoNodesForSelectionCriteriaMsg {
     EventInfo info = 1;
     NoNodesForSelectionCriteria data = 2;
+}
+
+// M031
+message DepsLockUpdating{
+    string lock_filepath = 1;
+}
+
+message DepsLockUpdatingMsg{
+    EventInfo info = 1;
+    DepsLockUpdating data = 2;
+}
+
+// M032
+message DepsAddPackage{
+    string package_name = 1;
+    string version = 2;
+    string packages_filepath = 3;
+}
+
+message DepsAddPackageMsg{
+    EventInfo info = 1;
+    DepsAddPackage data = 2;
+}
+
+//M033
+message DepsFoundDuplicatePackage{
+    map<string, string> removed_package = 1;
+}
+
+message DepsFoundDuplicatePackageMsg{
+    EventInfo info = 1;
+    DepsFoundDuplicatePackage data = 2;
+}
+
+//M034
+message DepsVersionMissing{
+    string source = 1;
+}
+
+message DepsVersionMissingMsg{
+    EventInfo info = 1;
+    DepsVersionMissing data = 2;
 }
 
 // Q - Node execution
@@ -2447,4 +2511,25 @@ message Note {
 message NoteMsg {
     EventInfo info = 1;
     Note data = 2;
+}
+
+// Z051
+message ResourceReport {
+    string command_name = 2;
+    bool command_success = 3;
+    float command_wall_clock_time = 4;
+    // The process_* metrics reflect the resource consumption of the process as
+    // a whole when the command completes. When dbt is being used as a library,
+    // these will reflect the resource consumption of the host process as a whole,
+    // rather than the resources used exclusively by the command.
+    float process_user_time = 5;
+    float process_kernel_time = 6;
+    int64 process_mem_max_rss = 7;
+    int64 process_in_blocks = 8;
+    int64 process_out_blocks = 9;
+}
+
+message ResourceReportMsg {
+    EventInfo info = 1;
+    ResourceReport data = 2;
 }

@@ -5,6 +5,7 @@ from typing import Dict, List, Any, Optional, Tuple, Set
 import agate
 
 from dbt.dataclass_schema import ValidationError
+from dbt.clients.system import load_file_contents
 
 from .compile import CompileTask
 
@@ -24,6 +25,8 @@ from dbt.contracts.results import (
     CatalogArtifact,
 )
 from dbt.exceptions import DbtInternalError, AmbiguousCatalogMatchError
+from dbt.graph import ResourceTypeSelector
+from dbt.node_types import NodeType
 from dbt.include.global_project import DOCS_INDEX_FILE_PATH
 from dbt.events.functions import fire_event
 from dbt.events.types import (
@@ -36,7 +39,9 @@ from dbt.parser.manifest import write_manifest
 import dbt.utils
 import dbt.compilation
 import dbt.exceptions
-
+from dbt.constants import (
+    MANIFEST_FILE_NAME,
+)
 
 CATALOG_FILENAME = "catalog.json"
 
@@ -63,7 +68,7 @@ def build_catalog_table(data) -> CatalogTable:
 
 # keys are database name, schema name, table name
 class Catalog(Dict[CatalogKey, CatalogTable]):
-    def __init__(self, columns: List[PrimitiveDict]):
+    def __init__(self, columns: List[PrimitiveDict]) -> None:
         super().__init__()
         for col in columns:
             self.add_column(col)
@@ -218,6 +223,11 @@ class GenerateTask(CompileTask):
             DOCS_INDEX_FILE_PATH, os.path.join(self.config.project_target_path, "index.html")
         )
 
+        # Get the list of nodes that have been selected
+        selected_nodes = None
+        if self.job_queue is not None:
+            selected_nodes = self.job_queue.get_selected_nodes()
+
         for asset_path in self.config.asset_paths:
             to_asset_path = os.path.join(self.config.project_target_path, asset_path)
 
@@ -237,7 +247,8 @@ class GenerateTask(CompileTask):
             adapter = get_adapter(self.config)
             with adapter.connection_named("generate_catalog"):
                 fire_event(BuildingCatalog())
-                catalog_table, exceptions = adapter.get_catalog(self.manifest)
+                # This generates the catalog as an agate.Table
+                catalog_table, exceptions = adapter.get_catalog(self.manifest, selected_nodes)
 
         catalog_data: List[PrimitiveDict] = [
             dict(zip(catalog_table.column_names, map(dbt.utils._coerce_decimal, row)))
@@ -259,15 +270,43 @@ class GenerateTask(CompileTask):
             errors=errors,
         )
 
-        path = os.path.join(self.config.project_target_path, CATALOG_FILENAME)
-        results.write(path)
+        catalog_path = os.path.join(self.config.project_target_path, CATALOG_FILENAME)
+        results.write(catalog_path)
         if self.args.compile:
             write_manifest(self.manifest, self.config.project_target_path)
 
+        if self.args.static:
+
+            # Read manifest.json and catalog.json
+            read_manifest_data = load_file_contents(
+                os.path.join(self.config.project_target_path, MANIFEST_FILE_NAME)
+            )
+            read_catalog_data = load_file_contents(catalog_path)
+
+            # Create new static index file contents
+            index_data = load_file_contents(DOCS_INDEX_FILE_PATH)
+            index_data = index_data.replace('"MANIFEST.JSON INLINE DATA"', read_manifest_data)
+            index_data = index_data.replace('"CATALOG.JSON INLINE DATA"', read_catalog_data)
+
+            # Write out the new index file
+            static_index_path = os.path.join(self.config.project_target_path, "static_index.html")
+            with open(static_index_path, "wb") as static_index_file:
+                static_index_file.write(bytes(index_data, "utf8"))
+
         if exceptions:
             fire_event(WriteCatalogFailure(num_exceptions=len(exceptions)))
-        fire_event(CatalogWritten(path=os.path.abspath(path)))
+        fire_event(CatalogWritten(path=os.path.abspath(catalog_path)))
         return results
+
+    def get_node_selector(self) -> ResourceTypeSelector:
+        if self.manifest is None or self.graph is None:
+            raise DbtInternalError("manifest and graph must be set to perform node selection")
+        return ResourceTypeSelector(
+            graph=self.graph,
+            manifest=self.manifest,
+            previous_state=self.previous_state,
+            resource_types=NodeType.executable(),
+        )
 
     def get_catalog_results(
         self,

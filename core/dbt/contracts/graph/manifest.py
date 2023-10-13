@@ -37,6 +37,7 @@ from dbt.contracts.graph.nodes import (
     ModelNode,
     DeferRelation,
     ResultNode,
+    SavedQuery,
     SemanticModel,
     SourceDefinition,
     UnpatchedSourceDefinition,
@@ -88,7 +89,7 @@ def find_unique_id_for_package(storage, key, package: Optional[PackageName]):
 
 
 class DocLookup(dbtClassMixin):
-    def __init__(self, manifest: "Manifest"):
+    def __init__(self, manifest: "Manifest") -> None:
         self.storage: Dict[str, Dict[PackageName, UniqueID]] = {}
         self.populate(manifest)
 
@@ -119,7 +120,7 @@ class DocLookup(dbtClassMixin):
 
 
 class SourceLookup(dbtClassMixin):
-    def __init__(self, manifest: "Manifest"):
+    def __init__(self, manifest: "Manifest") -> None:
         self.storage: Dict[str, Dict[PackageName, UniqueID]] = {}
         self.populate(manifest)
 
@@ -156,7 +157,7 @@ class RefableLookup(dbtClassMixin):
     _lookup_types: ClassVar[set] = set(NodeType.refable())
     _versioned_types: ClassVar[set] = set(NodeType.versioned())
 
-    def __init__(self, manifest: "Manifest"):
+    def __init__(self, manifest: "Manifest") -> None:
         self.storage: Dict[str, Dict[PackageName, UniqueID]] = {}
         self.populate(manifest)
 
@@ -267,7 +268,7 @@ class RefableLookup(dbtClassMixin):
 
 
 class MetricLookup(dbtClassMixin):
-    def __init__(self, manifest: "Manifest"):
+    def __init__(self, manifest: "Manifest") -> None:
         self.storage: Dict[str, Dict[PackageName, UniqueID]] = {}
         self.populate(manifest)
 
@@ -299,6 +300,41 @@ class MetricLookup(dbtClassMixin):
         return manifest.metrics[unique_id]
 
 
+class SavedQueryLookup(dbtClassMixin):
+    """Lookup utility for finding SavedQuery nodes"""
+
+    def __init__(self, manifest: "Manifest") -> None:
+        self.storage: Dict[str, Dict[PackageName, UniqueID]] = {}
+        self.populate(manifest)
+
+    def get_unique_id(self, search_name, package: Optional[PackageName]):
+        return find_unique_id_for_package(self.storage, search_name, package)
+
+    def find(self, search_name, package: Optional[PackageName], manifest: "Manifest"):
+        unique_id = self.get_unique_id(search_name, package)
+        if unique_id is not None:
+            return self.perform_lookup(unique_id, manifest)
+        return None
+
+    def add_saved_query(self, saved_query: SavedQuery):
+        if saved_query.search_name not in self.storage:
+            self.storage[saved_query.search_name] = {}
+
+        self.storage[saved_query.search_name][saved_query.package_name] = saved_query.unique_id
+
+    def populate(self, manifest):
+        for saved_query in manifest.saved_queries.values():
+            if hasattr(saved_query, "name"):
+                self.add_saved_query(saved_query)
+
+    def perform_lookup(self, unique_id: UniqueID, manifest: "Manifest") -> SavedQuery:
+        if unique_id not in manifest.saved_queries:
+            raise dbt.exceptions.DbtInternalError(
+                f"SavedQUery {unique_id} found in cache but not found in manifest"
+            )
+        return manifest.saved_queries[unique_id]
+
+
 class SemanticModelByMeasureLookup(dbtClassMixin):
     """Lookup utility for finding SemanticModel by measure
 
@@ -306,7 +342,7 @@ class SemanticModelByMeasureLookup(dbtClassMixin):
     the semantic models in a manifest.
     """
 
-    def __init__(self, manifest: "Manifest"):
+    def __init__(self, manifest: "Manifest") -> None:
         self.storage: DefaultDict[str, Dict[PackageName, UniqueID]] = defaultdict(dict)
         self.populate(manifest)
 
@@ -355,7 +391,7 @@ class SemanticModelByMeasureLookup(dbtClassMixin):
 
 # This handles both models/seeds/snapshots and sources/metrics/exposures/semantic_models
 class DisabledLookup(dbtClassMixin):
-    def __init__(self, manifest: "Manifest"):
+    def __init__(self, manifest: "Manifest") -> None:
         self.storage: Dict[str, Dict[PackageName, List[Any]]] = {}
         self.populate(manifest)
 
@@ -609,6 +645,9 @@ class Disabled(Generic[D]):
 MaybeMetricNode = Optional[Union[Metric, Disabled[Metric]]]
 
 
+MaybeSavedQueryNode = Optional[Union[SavedQuery, Disabled[SavedQuery]]]
+
+
 MaybeDocumentation = Optional[Documentation]
 
 
@@ -753,6 +792,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     disabled: MutableMapping[str, List[GraphMemberNode]] = field(default_factory=dict)
     env_vars: MutableMapping[str, str] = field(default_factory=dict)
     semantic_models: MutableMapping[str, SemanticModel] = field(default_factory=dict)
+    saved_queries: MutableMapping[str, SavedQuery] = field(default_factory=dict)
 
     _doc_lookup: Optional[DocLookup] = field(
         default=None, metadata={"serialize": lambda x: None, "deserialize": lambda x: None}
@@ -764,6 +804,9 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         default=None, metadata={"serialize": lambda x: None, "deserialize": lambda x: None}
     )
     _metric_lookup: Optional[MetricLookup] = field(
+        default=None, metadata={"serialize": lambda x: None, "deserialize": lambda x: None}
+    )
+    _saved_query_lookup: Optional[SavedQueryLookup] = field(
         default=None, metadata={"serialize": lambda x: None, "deserialize": lambda x: None}
     )
     _semantic_model_by_measure_lookup: Optional[SemanticModelByMeasureLookup] = field(
@@ -809,6 +852,9 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             "sources": {k: v.to_dict(omit_none=False) for k, v in self.sources.items()},
             "semantic_models": {
                 k: v.to_dict(omit_none=False) for k, v in self.semantic_models.items()
+            },
+            "saved_queries": {
+                k: v.to_dict(omit_none=False) for k, v in self.saved_queries.items()
             },
         }
 
@@ -871,6 +917,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             self.sources.values(),
             self.metrics.values(),
             self.semantic_models.values(),
+            self.saved_queries.values(),
         )
         for resource in all_resources:
             resource_type_plural = resource.resource_type.pluralize()
@@ -906,6 +953,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             files={k: _deepcopy(v) for k, v in self.files.items()},
             state_check=_deepcopy(self.state_check),
             semantic_models={k: _deepcopy(v) for k, v in self.semantic_models.items()},
+            saved_queries={k: _deepcopy(v) for k, v in self.saved_queries.items()},
         )
         copy.build_flat_graph()
         return copy
@@ -918,6 +966,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
                 self.exposures.values(),
                 self.metrics.values(),
                 self.semantic_models.values(),
+                self.saved_queries.values(),
             )
         )
         forward_edges, backward_edges = build_node_edges(edge_members)
@@ -938,6 +987,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         groupable_nodes = list(
             chain(
                 self.nodes.values(),
+                self.saved_queries.values(),
                 self.semantic_models.values(),
                 self.metrics.values(),
             )
@@ -945,7 +995,14 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         group_map = {group.name: [] for group in self.groups.values()}
         for node in groupable_nodes:
             if node.group is not None:
-                group_map[node.group].append(node.unique_id)
+                # group updates are not included with state:modified and
+                # by ignoring the groups that aren't in the group map we
+                # can avoid hitting errors for groups that are not getting
+                # updated.  This is a hack but any groups that are not
+                # valid will be caught in
+                # parser.manifest.ManifestLoader.check_valid_group_config_node
+                if node.group in group_map:
+                    group_map[node.group].append(node.unique_id)
         self.group_map = group_map
 
     def writable_manifest(self) -> "WritableManifest":
@@ -966,6 +1023,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             parent_map=self.parent_map,
             group_map=self.group_map,
             semantic_models=self.semantic_models,
+            saved_queries=self.saved_queries,
         )
 
     def write(self, path):
@@ -984,6 +1042,8 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             return self.metrics[unique_id]
         elif unique_id in self.semantic_models:
             return self.semantic_models[unique_id]
+        elif unique_id in self.saved_queries:
+            return self.saved_queries[unique_id]
         else:
             # something terrible has happened
             raise dbt.exceptions.DbtInternalError(
@@ -1019,6 +1079,13 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         if self._metric_lookup is None:
             self._metric_lookup = MetricLookup(self)
         return self._metric_lookup
+
+    @property
+    def saved_query_lookup(self) -> SavedQueryLookup:
+        """Retuns a SavedQueryLookup, instantiating it first if necessary."""
+        if self._saved_query_lookup is None:
+            self._saved_query_lookup = SavedQueryLookup(self)
+        return self._saved_query_lookup
 
     @property
     def semantic_model_by_measure_lookup(self) -> SemanticModelByMeasureLookup:
@@ -1151,6 +1218,35 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
                 disabled = self.disabled_lookup.find(f"{target_metric_name}", pkg)
         if disabled:
             return Disabled(disabled[0])
+        return None
+
+    def resolve_saved_query(
+        self,
+        target_saved_query_name: str,
+        target_saved_query_package: Optional[str],
+        current_project: str,
+        node_package: str,
+    ) -> MaybeSavedQueryNode:
+        """Tries to find the SavedQuery by name within the available project and packages.
+
+        Will return the first enabled SavedQuery matching the name found while iterating over
+        the scoped packages. If no enabled SavedQuery node match is found, returns the last
+        disabled SavedQuery node. Otherwise it returns None.
+        """
+        disabled: Optional[List[SavedQuery]] = None
+        candidates = _packages_to_search(current_project, node_package, target_saved_query_package)
+        for pkg in candidates:
+            saved_query = self.saved_query_lookup.find(target_saved_query_name, pkg, self)
+
+            if saved_query is not None and saved_query.config.enabled:
+                return saved_query
+
+            # it's possible that the node is disabled
+            if disabled is None:
+                disabled = self.disabled_lookup.find(f"{target_saved_query_name}", pkg)
+        if disabled:
+            return Disabled(disabled[0])
+
         return None
 
     def resolve_semantic_model_for_measure(
@@ -1371,6 +1467,8 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
                 source_file.add_test(node.unique_id, test_from)
             if isinstance(node, Metric):
                 source_file.metrics.append(node.unique_id)
+            if isinstance(node, SavedQuery):
+                source_file.saved_queries.append(node.unique_id)
             if isinstance(node, SemanticModel):
                 source_file.semantic_models.append(node.unique_id)
             if isinstance(node, Exposure):
@@ -1387,6 +1485,11 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         _check_duplicates(semantic_model, self.semantic_models)
         self.semantic_models[semantic_model.unique_id] = semantic_model
         source_file.semantic_models.append(semantic_model.unique_id)
+
+    def add_saved_query(self, source_file: SchemaSourceFile, saved_query: SavedQuery) -> None:
+        _check_duplicates(saved_query, self.saved_queries)
+        self.saved_queries[saved_query.unique_id] = saved_query
+        source_file.saved_queries.append(saved_query.unique_id)
 
     # end of methods formerly in ParseResult
 
@@ -1415,6 +1518,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             self.disabled,
             self.env_vars,
             self.semantic_models,
+            self.saved_queries,
             self._doc_lookup,
             self._source_lookup,
             self._ref_lookup,
@@ -1427,12 +1531,12 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
 
 
 class MacroManifest(MacroMethods):
-    def __init__(self, macros):
+    def __init__(self, macros) -> None:
         self.macros = macros
         self.metadata = ManifestMetadata()
         # This is returned by the 'graph' context property
         # in the ProviderContext class.
-        self.flat_graph = {}
+        self.flat_graph: Dict[str, Any] = {}
 
 
 AnyManifest = Union[Manifest, MacroManifest]
@@ -1484,6 +1588,9 @@ class WritableManifest(ArtifactMixin):
         metadata=dict(
             description="A mapping from group names to their nodes",
         )
+    )
+    saved_queries: Mapping[UniqueID, SavedQuery] = field(
+        metadata=dict(description=("The saved queries defined in the dbt project"))
     )
     semantic_models: Mapping[UniqueID, SemanticModel] = field(
         metadata=dict(description=("The semantic models defined in the dbt project"))

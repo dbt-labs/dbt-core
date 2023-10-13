@@ -1,9 +1,10 @@
 from datetime import datetime
 from dataclasses import dataclass
-from typing import Optional, Set, List, Any
+from typing import Any, Optional, Set, List
 
 from dbt.adapters.base.meta import available
 from dbt.adapters.base.impl import AdapterConfig, ConstraintSupport
+from dbt.adapters.capability import CapabilitySupport, Support, CapabilityDict, Capability
 from dbt.adapters.sql import SQLAdapter
 from dbt.adapters.postgres import PostgresConnectionManager
 from dbt.adapters.postgres.column import PostgresColumn
@@ -73,6 +74,12 @@ class PostgresAdapter(SQLAdapter):
         ConstraintType.foreign_key: ConstraintSupport.ENFORCED,
     }
 
+    CATALOG_BY_RELATION_SUPPORT = True
+
+    _capabilities: CapabilityDict = CapabilityDict(
+        {Capability.SchemaMetadataByRelations: CapabilitySupport(support=Support.Full)}
+    )
+
     @classmethod
     def date_function(cls):
         return "now()"
@@ -113,9 +120,9 @@ class PostgresAdapter(SQLAdapter):
 
     def _get_catalog_schemas(self, manifest):
         # postgres only allow one database (the main one)
-        schemas = super()._get_catalog_schemas(manifest)
+        schema_search_map = super()._get_catalog_schemas(manifest)
         try:
-            return schemas.flatten()
+            return schema_search_map.flatten()
         except DbtRuntimeError as exc:
             raise CrossDbReferenceProhibitedError(self.type(), exc.msg)
 

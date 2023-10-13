@@ -44,13 +44,13 @@ def _pluralize(string: Union[str, NodeType]) -> str:
         return convert.pluralize()
 
 
-def pluralize(count, string: Union[str, NodeType]):
+def pluralize(count, string: Union[str, NodeType]) -> str:
     pluralized: str = str(string)
     if count != 1:
         pluralized = _pluralize(string)
     return f"{count} {pluralized}"
 
 
-def timestamp_to_datetime_string(ts):
+def timestamp_to_datetime_string(ts) -> str:
     timestamp_dt = datetime.fromtimestamp(ts.seconds + ts.nanos / 1e9)
     return timestamp_dt.strftime("%H:%M:%S.%f")

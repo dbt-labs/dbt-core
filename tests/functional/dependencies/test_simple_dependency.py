@@ -123,6 +123,7 @@ class TestSimpleDependencyWithDependenciesFile(SimpleDependencyBase):
 
     def test_dependency_with_dependencies_file(self, run_deps, project):
         # Tests that "packages" defined in a dependencies.yml file works
+        run_dbt(["deps"])
         results = run_dbt()
         assert len(results) == 4
 

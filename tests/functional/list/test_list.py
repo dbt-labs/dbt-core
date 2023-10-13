@@ -12,6 +12,8 @@ from tests.functional.list.fixtures import (  # noqa: F401
     macros,
     seeds,
     analyses,
+    semantic_models,
+    metrics,
     project_files,
 )
 
@@ -96,7 +98,7 @@ class TestList:
                     "packages": [],
                     "incremental_strategy": None,
                     "docs": {"node_color": None, "show": True},
-                    "contract": {"enforced": False},
+                    "contract": {"enforced": False, "alias_types": True},
                 },
                 "unique_id": "snapshot.test.my_snapshot",
                 "original_file_path": normalize("snapshots/snapshot.sql"),
@@ -138,7 +140,7 @@ class TestList:
                     "packages": [],
                     "incremental_strategy": None,
                     "docs": {"node_color": None, "show": True},
-                    "contract": {"enforced": False},
+                    "contract": {"enforced": False, "alias_types": True},
                 },
                 "unique_id": "analysis.test.a",
                 "original_file_path": normalize("analyses/a.sql"),
@@ -151,13 +153,22 @@ class TestList:
 
     def expect_model_output(self):
         expectations = {
-            "name": ("ephemeral", "incremental", "inner", "outer"),
-            "selector": ("test.ephemeral", "test.incremental", "test.sub.inner", "test.outer"),
+            "name": ("ephemeral", "incremental", "inner", "metricflow_time_spine", "outer"),
+            "selector": (
+                "test.ephemeral",
+                "test.incremental",
+                "test.sub.inner",
+                "test.metricflow_time_spine",
+                "test.outer",
+            ),
             "json": (
                 {
                     "name": "ephemeral",
                     "package_name": "test",
-                    "depends_on": {"nodes": [], "macros": []},
+                    "depends_on": {
+                        "nodes": [],
+                        "macros": ["macro.dbt.current_timestamp", "macro.dbt.date_trunc"],
+                    },
                     "tags": [],
                     "config": {
                         "enabled": True,
@@ -181,7 +192,8 @@ class TestList:
                         "packages": [],
                         "incremental_strategy": None,
                         "docs": {"node_color": None, "show": True},
-                        "contract": {"enforced": False},
+                        "contract": {"enforced": False, "alias_types": True},
+                        "access": "protected",
                     },
                     "original_file_path": normalize("models/ephemeral.sql"),
                     "unique_id": "model.test.ephemeral",
@@ -218,7 +230,8 @@ class TestList:
                         "packages": [],
                         "incremental_strategy": "delete+insert",
                         "docs": {"node_color": None, "show": True},
-                        "contract": {"enforced": False},
+                        "contract": {"enforced": False, "alias_types": True},
+                        "access": "protected",
                     },
                     "original_file_path": normalize("models/incremental.sql"),
                     "unique_id": "model.test.incremental",
@@ -255,11 +268,50 @@ class TestList:
                         "packages": [],
                         "incremental_strategy": None,
                         "docs": {"node_color": None, "show": True},
-                        "contract": {"enforced": False},
+                        "contract": {"enforced": False, "alias_types": True},
+                        "access": "protected",
                     },
                     "original_file_path": normalize("models/sub/inner.sql"),
                     "unique_id": "model.test.inner",
                     "alias": "inner",
+                    "resource_type": "model",
+                },
+                {
+                    "name": "metricflow_time_spine",
+                    "package_name": "test",
+                    "depends_on": {
+                        "nodes": [],
+                        "macros": ["macro.dbt.current_timestamp", "macro.dbt.date_trunc"],
+                    },
+                    "tags": [],
+                    "config": {
+                        "enabled": True,
+                        "group": None,
+                        "materialized": "view",
+                        "post-hook": [],
+                        "tags": [],
+                        "pre-hook": [],
+                        "quoting": {},
+                        "column_types": {},
+                        "persist_docs": {},
+                        "full_refresh": None,
+                        "unique_key": None,
+                        "on_schema_change": "ignore",
+                        "on_configuration_change": "apply",
+                        "database": None,
+                        "schema": None,
+                        "alias": None,
+                        "meta": {},
+                        "grants": {},
+                        "packages": [],
+                        "incremental_strategy": None,
+                        "docs": {"node_color": None, "show": True},
+                        "contract": {"enforced": False, "alias_types": True},
+                        "access": "protected",
+                    },
+                    "original_file_path": normalize("models/metricflow_time_spine.sql"),
+                    "unique_id": "model.test.metricflow_time_spine",
+                    "alias": "metricflow_time_spine",
                     "resource_type": "model",
                 },
                 {
@@ -292,7 +344,8 @@ class TestList:
                         "packages": [],
                         "incremental_strategy": None,
                         "docs": {"node_color": None, "show": True},
-                        "contract": {"enforced": False},
+                        "contract": {"enforced": False, "alias_types": True},
+                        "access": "protected",
                     },
                     "original_file_path": normalize("models/outer.sql"),
                     "unique_id": "model.test.outer",
@@ -304,6 +357,7 @@ class TestList:
                 self.dir("models/ephemeral.sql"),
                 self.dir("models/incremental.sql"),
                 self.dir("models/sub/inner.sql"),
+                self.dir("models/metricflow_time_spine.sql"),
                 self.dir("models/outer.sql"),
             ),
         }
@@ -340,6 +394,7 @@ class TestList:
                         "packages": [],
                         "incremental_strategy": None,
                         "docs": {"node_color": None, "show": True},
+                        "access": "protected",
                     },
                     "unique_id": "model.test.ephemeral",
                     "original_file_path": normalize("models/ephemeral.sql"),
@@ -407,7 +462,7 @@ class TestList:
                     "packages": [],
                     "incremental_strategy": None,
                     "docs": {"node_color": None, "show": True},
-                    "contract": {"enforced": False},
+                    "contract": {"enforced": False, "alias_types": True},
                 },
                 "depends_on": {"macros": []},
                 "unique_id": "seed.test.seed",
@@ -438,6 +493,7 @@ class TestList:
                         "materialized": "test",
                         "severity": "ERROR",
                         "store_failures": None,
+                        "store_failures_as": None,
                         "warn_if": "!= 0",
                         "error_if": "!= 0",
                         "fail_calc": "count(*)",
@@ -465,6 +521,7 @@ class TestList:
                         "materialized": "test",
                         "severity": "ERROR",
                         "store_failures": None,
+                        "store_failures_as": None,
                         "warn_if": "!= 0",
                         "error_if": "!= 0",
                         "fail_calc": "count(*)",
@@ -495,6 +552,7 @@ class TestList:
                         "materialized": "test",
                         "severity": "ERROR",
                         "store_failures": None,
+                        "store_failures_as": None,
                         "warn_if": "!= 0",
                         "error_if": "!= 0",
                         "fail_calc": "count(*)",
@@ -534,7 +592,10 @@ class TestList:
             "source:test.my_source.my_table",
             "test.not_null_outer_id",
             "test.unique_outer_id",
+            "test.metricflow_time_spine",
             "test.t",
+            "semantic_model:test.my_sm",
+            "metric:test.total_outer",
         }
         # analyses have their type inserted into their fqn like tests
         expected_all = expected_default | {"test.analysis.a"}
@@ -559,11 +620,22 @@ class TestList:
         results = self.run_dbt_ls(["--resource-type", "test", "--select", "+inner"])
         assert set(results) == {"test.not_null_outer_id", "test.unique_outer_id"}
 
+        results = self.run_dbt_ls(["--resource-type", "semantic_model"])
+        assert set(results) == {"semantic_model:test.my_sm"}
+
+        results = self.run_dbt_ls(["--resource-type", "metric"])
+        assert set(results) == {"metric:test.total_outer"}
+
         results = self.run_dbt_ls(["--resource-type", "model", "--select", "outer+"])
         assert set(results) == {"test.outer", "test.sub.inner"}
 
         results = self.run_dbt_ls(["--resource-type", "model", "--exclude", "inner"])
-        assert set(results) == {"test.ephemeral", "test.outer", "test.incremental"}
+        assert set(results) == {
+            "test.ephemeral",
+            "test.outer",
+            "test.metricflow_time_spine",
+            "test.incremental",
+        }
 
         results = self.run_dbt_ls(["--select", "config.incremental_strategy:delete+insert"])
         assert set(results) == {"test.incremental"}
@@ -581,6 +653,7 @@ class TestList:
             "test.not_null_outer_id",
             "test.outer",
             "test.sub.inner",
+            "test.metricflow_time_spine",
             "test.t",
             "test.unique_outer_id",
         }
@@ -593,6 +666,7 @@ class TestList:
             "test.incremental",
             "test.not_null_outer_id",
             "test.outer",
+            "test.metricflow_time_spine",
             "test.sub.inner",
             "test.t",
         }

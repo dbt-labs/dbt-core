@@ -178,8 +178,7 @@ class TestRunDeferState(BaseDeferState):
                 "otherschema",
             ]
         )
-        assert other_schema not in catalog.nodes["seed.test.seed"].metadata.schema
-        assert unique_schema in catalog.nodes["seed.test.seed"].metadata.schema
+        assert "seed.test.seed" not in catalog.nodes
 
         # with state it should work though
         results = run_dbt(

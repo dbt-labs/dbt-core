@@ -83,7 +83,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push MAJOR.MINOR.PATCH tag
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v5
         with:
           file: docker/Dockerfile
           push: True
@@ -94,7 +94,7 @@ jobs:
             ghcr.io/dbt-labs/${{ github.event.inputs.package }}:${{ github.event.inputs.version_number }}
 
       - name: Build and push MINOR.latest tag
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v5
         if: ${{ needs.get_version_meta.outputs.minor_latest == 'True' }}
         with:
           file: docker/Dockerfile
@@ -106,7 +106,7 @@ jobs:
             ghcr.io/dbt-labs/${{ github.event.inputs.package }}:${{ needs.get_version_meta.outputs.major }}.${{ needs.get_version_meta.outputs.minor }}.latest
 
       - name: Build and push latest tag
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v5
         if: ${{ needs.get_version_meta.outputs.latest == 'True' }}
         with:
           file: docker/Dockerfile

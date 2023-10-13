@@ -4,6 +4,7 @@ import pytest
 from datetime import datetime, timedelta
 
 import dbt.version
+from dbt.cli.main import dbtRunner
 from tests.functional.sources.common_source_setup import BaseSourcesTest
 from tests.functional.sources.fixtures import (
     error_models_schema_yml,
@@ -11,6 +12,7 @@ from tests.functional.sources.fixtures import (
     filtered_models_schema_yml,
     override_freshness_models_schema_yml,
     collect_freshness_macro_override_previous_return_signature,
+    freshness_via_metadata_schema_yml,
 )
 from dbt.tests.util import AnyStringWith, AnyFloat
 from dbt import deprecations
@@ -375,3 +377,25 @@ class TestSourceFreshnessMacroOverride(SuccessfulSourceFreshnessTest):
         )
         expected = {"collect-freshness-return-signature"}
         assert expected == deprecations.active_deprecations
+
+
+class TestMetadataFreshnessFails:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"schema.yml": freshness_via_metadata_schema_yml}
+
+    def test_metadata_freshness_fails(self, project):
+        """Since the default test adapter (postgres) does not support metadata
+        based source freshness checks, trying to use that mechanism should
+        result in a parse-time warning."""
+        got_warning = False
+
+        def warning_probe(e):
+            nonlocal got_warning
+            if e.info.name == "FreshnessConfigProblem" and e.info.level == "warn":
+                got_warning = True
+
+        runner = dbtRunner(callbacks=[warning_probe])
+        runner.invoke(["parse"])
+
+        assert got_warning

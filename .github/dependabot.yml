@@ -28,3 +28,10 @@ updates:
     schedule:
       interval: "weekly"
     rebase-strategy: "disabled"
+
+  # github dependencies
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    rebase-strategy: "disabled"

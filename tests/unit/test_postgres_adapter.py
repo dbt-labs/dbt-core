@@ -322,8 +322,8 @@ class TestPostgresAdapter(unittest.TestCase):
         )
 
     @mock.patch.object(PostgresAdapter, "execute_macro")
-    @mock.patch.object(PostgresAdapter, "_get_catalog_schemas")
-    def test_get_catalog_various_schemas(self, mock_get_schemas, mock_execute):
+    @mock.patch.object(PostgresAdapter, "_get_catalog_relations_by_info_schema")
+    def test_get_catalog_various_schemas(self, mock_get_relations, mock_execute):
         column_names = ["table_database", "table_schema", "table_name"]
         rows = [
             ("dbt", "foo", "bar"),
@@ -334,9 +334,13 @@ class TestPostgresAdapter(unittest.TestCase):
         ]
         mock_execute.return_value = agate.Table(rows=rows, column_names=column_names)
 
-        mock_get_schemas.return_value.items.return_value = [
-            (mock.MagicMock(database="dbt"), {"foo", "FOO", "quux"})
-        ]
+        mock_get_relations.return_value = {
+            mock.MagicMock(database="dbt"): [
+                mock.MagicMock(schema="foo"),
+                mock.MagicMock(schema="FOO"),
+                mock.MagicMock(schema="quux"),
+            ]
+        }
 
         mock_manifest = mock.MagicMock()
         mock_manifest.get_used_schemas.return_value = {("dbt", "foo"), ("dbt", "quux")}

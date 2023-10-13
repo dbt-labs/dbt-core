@@ -94,6 +94,7 @@ from dbt.contracts.graph.nodes import (
     Macro,
     Exposure,
     Metric,
+    SavedQuery,
     SeedNode,
     SemanticModel,
     ManifestNode,
@@ -528,6 +529,7 @@ class ManifestLoader:
             self.process_refs(self.root_project.project_name, self.root_project.dependencies)
             self.process_docs(self.root_project)
             self.process_metrics(self.root_project)
+            self.process_saved_queries(self.root_project)
             self.check_valid_group_config()
             self.check_valid_access_property()
 
@@ -1105,6 +1107,15 @@ class ManifestLoader:
                 continue
             _process_metrics_for_node(self.manifest, current_project, exposure)
 
+    def process_saved_queries(self, config: RuntimeConfig):
+        """Processes SavedQuery nodes to populate their `depends_on`."""
+        current_project = config.project_name
+        for saved_query in self.manifest.saved_queries.values():
+            # TODO:
+            # 1. process `where` of SavedQuery for `depends_on`s
+            # 2. process `group_bys` of SavedQuery for `depends_on``
+            _process_metrics_for_node(self.manifest, current_project, saved_query)
+
     def update_semantic_model(self, semantic_model) -> None:
         # This has to be done at the end of parsing because the referenced model
         # might have alias/schema/database fields that are updated by yaml config.
@@ -1117,10 +1128,12 @@ class ManifestLoader:
                 database=refd_node.database,
             )
 
-    # nodes: node and column descriptions
+    # nodes: node and column descriptions, version columns descriptions
     # sources: source and table descriptions, column descriptions
     # macros: macro argument descriptions
     # exposures: exposure descriptions
+    # metrics: metric descriptions
+    # semantic_models: semantic model descriptions
     def process_docs(self, config: RuntimeConfig):
         for node in self.manifest.nodes.values():
             if node.created_at < self.started_at:
@@ -1172,6 +1185,23 @@ class ManifestLoader:
                 config.project_name,
             )
             _process_docs_for_metrics(ctx, metric)
+        for semantic_model in self.manifest.semantic_models.values():
+            if semantic_model.created_at < self.started_at:
+                continue
+            ctx = generate_runtime_docs_context(
+                config,
+                semantic_model,
+                self.manifest,
+                config.project_name,
+            )
+            _process_docs_for_semantic_model(ctx, semantic_model)
+        for saved_query in self.manifest.saved_queries.values():
+            if saved_query.created_at < self.started_at:
+                continue
+            ctx = generate_runtime_docs_context(
+                config, saved_query, self.manifest, config.project_name
+            )
+            _process_docs_for_saved_query(ctx, saved_query)
 
     # Loops through all nodes and exposures, for each element in
     # 'sources' array finds the source node and updates the
@@ -1224,12 +1254,15 @@ class ManifestLoader:
         for semantic_model in manifest.semantic_models.values():
             self.check_valid_group_config_node(semantic_model, group_names)
 
+        for saved_query in manifest.saved_queries.values():
+            self.check_valid_group_config_node(saved_query, group_names)
+
         for node in manifest.nodes.values():
             self.check_valid_group_config_node(node, group_names)
 
     def check_valid_group_config_node(
         self,
-        groupable_node: Union[Metric, SemanticModel, ManifestNode],
+        groupable_node: Union[Metric, SavedQuery, SemanticModel, ManifestNode],
         valid_group_names: Set[str],
     ):
         groupable_node_group = groupable_node.group
@@ -1406,6 +1439,30 @@ def _process_docs_for_metrics(context: Dict[str, Any], metric: Metric) -> None:
     metric.description = get_rendered(metric.description, context)
 
 
+def _process_docs_for_semantic_model(
+    context: Dict[str, Any], semantic_model: SemanticModel
+) -> None:
+    if semantic_model.description:
+        semantic_model.description = get_rendered(semantic_model.description, context)
+
+    for dimension in semantic_model.dimensions:
+        if dimension.description:
+            dimension.description = get_rendered(dimension.description, context)
+
+    for measure in semantic_model.measures:
+        if measure.description:
+            measure.description = get_rendered(measure.description, context)
+
+    for entity in semantic_model.entities:
+        if entity.description:
+            entity.description = get_rendered(entity.description, context)
+
+
+def _process_docs_for_saved_query(context: Dict[str, Any], saved_query: SavedQuery) -> None:
+    if saved_query.description:
+        saved_query.description = get_rendered(saved_query.description, context)
+
+
 def _process_refs(
     manifest: Manifest, current_project: str, node, dependencies: Optional[Mapping[str, Project]]
 ) -> None:
@@ -1548,14 +1605,19 @@ def _process_metric_node(
 def _process_metrics_for_node(
     manifest: Manifest,
     current_project: str,
-    node: Union[ManifestNode, Metric, Exposure],
+    node: Union[ManifestNode, Metric, Exposure, SavedQuery],
 ):
     """Given a manifest and a node in that manifest, process its metrics"""
 
+    metrics: List[List[str]]
     if isinstance(node, SeedNode):
         return
+    elif isinstance(node, SavedQuery):
+        metrics = [[metric] for metric in node.metrics]
+    else:
+        metrics = node.metrics
 
-    for metric in node.metrics:
+    for metric in metrics:
         target_metric: Optional[Union[Disabled, Metric]] = None
         target_metric_name: str
         target_metric_package: Optional[str] = None

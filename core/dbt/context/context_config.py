@@ -47,6 +47,8 @@ class UnrenderedConfig(ConfigSource):
             model_configs = unrendered.get("metrics")
         elif resource_type == NodeType.SemanticModel:
             model_configs = unrendered.get("semantic_models")
+        elif resource_type == NodeType.SavedQuery:
+            model_configs = unrendered.get("saved_queries")
         elif resource_type == NodeType.Exposure:
             model_configs = unrendered.get("exposures")
         else:
@@ -74,6 +76,8 @@ class RenderedConfig(ConfigSource):
             model_configs = self.project.metrics
         elif resource_type == NodeType.SemanticModel:
             model_configs = self.project.semantic_models
+        elif resource_type == NodeType.SavedQuery:
+            model_configs = self.project.saved_queries
         elif resource_type == NodeType.Exposure:
             model_configs = self.project.exposures
         else:

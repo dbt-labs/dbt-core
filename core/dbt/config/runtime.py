@@ -168,6 +168,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             tests=project.tests,
             metrics=project.metrics,
             semantic_models=project.semantic_models,
+            saved_queries=project.saved_queries,
             exposures=project.exposures,
             vars=project.vars,
             config_version=project.config_version,
@@ -325,6 +326,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             "tests": self._get_config_paths(self.tests),
             "metrics": self._get_config_paths(self.metrics),
             "semantic_models": self._get_config_paths(self.semantic_models),
+            "saved_queries": self._get_config_paths(self.saved_queries),
             "exposures": self._get_config_paths(self.exposures),
         }
 
@@ -407,7 +409,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
 
 
 class UnsetCredentials(Credentials):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__("", "")
 
     @property
