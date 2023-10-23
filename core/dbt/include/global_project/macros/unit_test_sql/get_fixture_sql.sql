@@ -3,15 +3,15 @@
 {% set default_row = {} %}
 
 {%- if not column_name_to_data_types -%}
-{%- set columns_in_relation = adapter.get_columns_in_relation(this) -%}
-{%- set column_name_to_data_types = {} -%}
-{%- for column in columns_in_relation -%}
-{%- do column_name_to_data_types.update({column.name: column.dtype}) -%}
-{%- endfor -%}
+{%-   set columns_in_relation = adapter.get_columns_in_relation(this) -%}
+{%-   set column_name_to_data_types = {} -%}
+{%-   for column in columns_in_relation -%}
+{%-     do column_name_to_data_types.update({column.name: column.dtype}) -%}
+{%-   endfor -%}
 {%- endif -%}
 
 {%- if not column_name_to_data_types -%}
-    {{ exceptions.raise_compiler_error("columns not available for" ~ model.name) }}
+    {{ exceptions.raise_compiler_error("columns not available for " ~ model.name) }}
 {%- endif -%}
 
 {%- for column_name, column_type in column_name_to_data_types.items() -%}
@@ -19,16 +19,15 @@
 {%- endfor -%}
 
 {%- for row in rows -%}
-{%- do format_row(row, column_name_to_data_types) -%}
-
-{%- set default_row_copy = default_row.copy() -%}
-{%- do default_row_copy.update(row) -%}
+{%-   do format_row(row, column_name_to_data_types) -%}
+{%-   set default_row_copy = default_row.copy() -%}
+{%-   do default_row_copy.update(row) -%}
 select
-{%- for column_name, column_value in default_row_copy.items() %} {{ column_value }} AS {{ column_name }}{% if not loop.last -%}, {%- endif %}
-{%- endfor %}
-{%- if not loop.last %}
+{%-   for column_name, column_value in default_row_copy.items() %} {{ column_value }} AS {{ column_name }}{% if not loop.last -%}, {%- endif %}
+{%-   endfor %}
+{%-   if not loop.last %}
 union all
-{% endif %}
+{%    endif %}
 {%- endfor -%}
 
 {%- if (rows | length) == 0 -%}
