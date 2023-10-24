@@ -12,11 +12,9 @@
   {% set contract_config = config.get('contract') %}
   {% if contract_config.enforced %}
     {{ get_assert_columns_equivalent(sql) }}
-    {%- if temporary -%}
-      {{ temporary_table_columns_and_constraints() }} ;
-    {% else -%}
+  {% endif -%}
+  {% if contract_config.enforced and (not temporary) -%}
       {{ get_table_columns_and_constraints() }} ;
-    {% endif -%}
     insert into {{ relation }} (
       {{ adapter.dispatch('get_column_names', 'dbt')() }}
     )
@@ -28,25 +26,6 @@
     {{ sql }}
   );
 {%- endmacro %}
-
--- when it's a tmp table we need to skip foreign key contraints
-{% macro temporary_table_columns_and_constraints() %}
-  {# loop through user_provided_columns to create DDL with data types and constraints #}
-    {%- set raw_column_constraints = adapter.render_raw_columns_constraints(raw_columns=model['columns']) -%}
-    {%- set raw_model_constraints = adapter.render_raw_model_constraints(raw_constraints=model['constraints']) -%}
-    (
-    {% for c in raw_column_constraints -%}
-      {%- if c != 'foreign_key' -%}
-        {{ c }}{{ "," if not loop.last or raw_model_constraints }}
-      {%- endif -%}
-    {% endfor %}
-    {% for c in raw_model_constraints -%}
-      {% if c != 'foreign_key' -%}
-        {{ c }}{{ "," if not loop.last }}
-      {% endif -%}
-    {% endfor -%}
-    )
-{% endmacro %}
 
 {% macro postgres__get_create_index_sql(relation, index_dict) -%}
   {%- set index_config = adapter.parse_index(index_dict) -%}
