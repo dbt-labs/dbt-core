@@ -1,6 +1,5 @@
 import pytest
 from dbt.tests.util import run_dbt, write_file
-from dbt.exceptions import CompilationError
 
 
 my_model_sql = """
@@ -37,9 +36,9 @@ class TestIncrementalModelContractEnforcement:
         assert len(results) == 1
         # now update the column type in the model to break the contract
         write_file(my_model_int_sql, project.project_root, "models", "my_model.sql")
-        breakpoint()
 
-        with pytest.raises(
-            CompilationError, match="This model has an enforced contract that failed."
-        ):
-            run_dbt()
+        expected_msg = "This model has an enforced contract that failed."
+        results = run_dbt(expect_pass=False)
+        assert len(results) == 1
+        msg = results[0].message
+        assert expected_msg in msg
