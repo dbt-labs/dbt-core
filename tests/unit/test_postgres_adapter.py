@@ -3,6 +3,8 @@ import decimal
 import unittest
 from unittest import mock
 
+from dbt.adapters.base import BaseRelation
+from dbt.contracts.relation import Path
 from dbt.task.debug import DebugTask
 
 from dbt.adapters.base.query_headers import MacroQueryStringSetter
@@ -322,7 +324,7 @@ class TestPostgresAdapter(unittest.TestCase):
         )
 
     @mock.patch.object(PostgresAdapter, "execute_macro")
-    @mock.patch.object(PostgresAdapter, "_get_catalog_relations_by_info_schema")
+    @mock.patch.object(PostgresAdapter, "_get_catalog_relations")
     def test_get_catalog_various_schemas(self, mock_get_relations, mock_execute):
         column_names = ["table_database", "table_schema", "table_name"]
         rows = [
@@ -334,13 +336,13 @@ class TestPostgresAdapter(unittest.TestCase):
         ]
         mock_execute.return_value = agate.Table(rows=rows, column_names=column_names)
 
-        mock_get_relations.return_value = {
-            mock.MagicMock(database="dbt"): [
-                mock.MagicMock(schema="foo"),
-                mock.MagicMock(schema="FOO"),
-                mock.MagicMock(schema="quux"),
-            ]
-        }
+        mock_get_relations.return_value = [
+            BaseRelation(path=Path(database="dbt", schema="foo", identifier="bar")),
+            BaseRelation(path=Path(database="dbt", schema="FOO", identifier="baz")),
+            BaseRelation(path=Path(database="dbt", schema=None, identifier="bar")),
+            BaseRelation(path=Path(database="dbt", schema="quux", identifier="bar")),
+            BaseRelation(path=Path(database="dbt", schema="skip", identifier="bar")),
+        ]
 
         mock_manifest = mock.MagicMock()
         mock_manifest.get_used_schemas.return_value = {("dbt", "foo"), ("dbt", "quux")}
