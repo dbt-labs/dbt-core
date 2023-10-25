@@ -11,7 +11,7 @@ from dbt.adapters.contracts.connection import Connection, ConnectionState, Adapt
 from dbt.common.events.functions import fire_event
 from dbt.common.events.types import ConnectionUsed, SQLQuery, SQLCommit, SQLQueryStatus
 from dbt.common.events.contextvars import get_node_info
-from dbt.utils import cast_to_str
+from dbt.common.utils import cast_to_str
 
 
 class SQLConnectionManager(BaseConnectionManager):

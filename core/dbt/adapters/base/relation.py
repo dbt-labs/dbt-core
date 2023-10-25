@@ -17,7 +17,8 @@ from dbt.exceptions import (
     MultipleDatabasesNotAllowedError,
 )
 from dbt.node_types import NodeType
-from dbt.utils import filter_null_values, deep_merge, classproperty
+from dbt.common.utils import filter_null_values, deep_merge
+from dbt.adapters.utils import classproperty
 
 import dbt.exceptions
 
@@ -246,7 +247,7 @@ class BaseRelation(FakeAPIObject, Hashable):
         if quote_policy is None:
             quote_policy = {}
 
-        quote_policy = dbt.utils.merge(config.quoting, quote_policy)
+        quote_policy = dbt.common.utils.merge(config.quoting, quote_policy)
 
         return cls.create(
             database=node.database,

@@ -53,3 +53,16 @@ def translate_aliases(
     """
     translator = Translator(aliases, recurse)
     return translator.translate(kwargs)
+
+
+# some types need to make constants available to the jinja context as
+# attributes, and regular properties only work with objects. maybe this should
+# be handled by the RelationProxy?
+
+
+class classproperty(object):
+    def __init__(self, func) -> None:
+        self.func = func
+
+    def __get__(self, obj, objtype):
+        return self.func(objtype)

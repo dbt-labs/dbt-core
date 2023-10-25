@@ -72,8 +72,8 @@ from dbt.exceptions import (
 from dbt.config import IsFQNResource
 from dbt.node_types import NodeType, ModelLanguage
 
-from dbt.utils import merge, AttrDict, MultiDict, args_to_dict, cast_to_str
-
+from dbt.utils import MultiDict, args_to_dict
+from dbt.common.utils import merge, AttrDict, cast_to_str
 from dbt import selected_resources
 
 import agate

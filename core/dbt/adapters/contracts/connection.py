@@ -24,7 +24,7 @@ from dbt.common.dataclass_schema import (
     ValidatedStringMixin,
 )
 from dbt.common.contracts.util import Replaceable
-from dbt.common.util import md5
+from dbt.common.utils import md5
 
 # TODO: dbt.common.events dependency
 from dbt.common.events.functions import fire_event

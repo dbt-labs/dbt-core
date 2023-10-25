@@ -10,7 +10,7 @@ from dbt.context.secret import SecretContext, SECRET_PLACEHOLDER
 from dbt.context.base import BaseContext
 from dbt.adapters.contracts.connection import HasCredentials
 from dbt.exceptions import DbtProjectError, CompilationError, RecursionError
-from dbt.utils import deep_map_render
+from dbt.common.utils import deep_map_render
 
 
 Keypath = Tuple[Union[str, int], ...]

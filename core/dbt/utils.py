@@ -1,6 +1,4 @@
 import collections
-import concurrent.futures
-import copy
 import datetime
 import decimal
 import functools
@@ -13,30 +11,23 @@ from tarfile import ReadError
 import time
 from pathlib import PosixPath, WindowsPath
 
-from contextlib import contextmanager
-
-from dbt.common.util import md5
+from dbt.common.utils import md5
 from dbt.common.events.types import RetryExternalCall, RecordRetryException
 from dbt.exceptions import (
     ConnectionError,
     DbtInternalError,
-    DbtConfigError,
     RecursionError,
     DuplicateAliasError,
 )
 from dbt.helper_types import WarnErrorOptions
 from dbt import flags
 from enum import Enum
-from typing_extensions import Protocol
 from typing import (
     Tuple,
     Type,
     Any,
     Optional,
-    TypeVar,
     Dict,
-    Union,
-    Callable,
     List,
     Iterator,
     Mapping,
@@ -127,122 +118,6 @@ def split_path(path):
     return path.split(os.sep)
 
 
-def merge(*args):
-    if len(args) == 0:
-        return None
-
-    if len(args) == 1:
-        return args[0]
-
-    lst = list(args)
-    last = lst.pop(len(lst) - 1)
-
-    return _merge(merge(*lst), last)
-
-
-def _merge(a, b):
-    to_return = a.copy()
-    to_return.update(b)
-    return to_return
-
-
-# http://stackoverflow.com/questions/20656135/python-deep-merge-dictionary-data
-def deep_merge(*args):
-    """
-    >>> dbt.utils.deep_merge({'a': 1, 'b': 2, 'c': 3}, {'a': 2}, {'a': 3, 'b': 1})  # noqa
-    {'a': 3, 'b': 1, 'c': 3}
-    """
-    if len(args) == 0:
-        return None
-
-    if len(args) == 1:
-        return copy.deepcopy(args[0])
-
-    lst = list(args)
-    last = copy.deepcopy(lst.pop(len(lst) - 1))
-
-    return _deep_merge(deep_merge(*lst), last)
-
-
-def _deep_merge(destination, source):
-    if isinstance(source, dict):
-        for key, value in source.items():
-            deep_merge_item(destination, key, value)
-        return destination
-
-
-def deep_merge_item(destination, key, value):
-    if isinstance(value, dict):
-        node = destination.setdefault(key, {})
-        destination[key] = deep_merge(node, value)
-    elif isinstance(value, tuple) or isinstance(value, list):
-        if key in destination:
-            destination[key] = list(value) + list(destination[key])
-        else:
-            destination[key] = value
-    else:
-        destination[key] = value
-
-
-def _deep_map_render(
-    func: Callable[[Any, Tuple[Union[str, int], ...]], Any],
-    value: Any,
-    keypath: Tuple[Union[str, int], ...],
-) -> Any:
-    atomic_types: Tuple[Type[Any], ...] = (int, float, str, type(None), bool, datetime.date)
-
-    ret: Any
-
-    if isinstance(value, list):
-        ret = [_deep_map_render(func, v, (keypath + (idx,))) for idx, v in enumerate(value)]
-    elif isinstance(value, dict):
-        ret = {k: _deep_map_render(func, v, (keypath + (str(k),))) for k, v in value.items()}
-    elif isinstance(value, atomic_types):
-        ret = func(value, keypath)
-    else:
-        container_types: Tuple[Type[Any], ...] = (list, dict)
-        ok_types = container_types + atomic_types
-        raise DbtConfigError(
-            "in _deep_map_render, expected one of {!r}, got {!r}".format(ok_types, type(value))
-        )
-
-    return ret
-
-
-def deep_map_render(func: Callable[[Any, Tuple[Union[str, int], ...]], Any], value: Any) -> Any:
-    """This function renders a nested dictionary derived from a yaml
-    file. It is used to render dbt_project.yml, profiles.yml, and
-    schema files.
-
-    It maps the function func() onto each non-container value in 'value'
-    recursively, returning a new value. As long as func does not manipulate
-    the value, then deep_map_render will also not manipulate it.
-
-    value should be a value returned by `yaml.safe_load` or `json.load` - the
-    only expected types are list, dict, native python number, str, NoneType,
-    and bool.
-
-    func() will be called on numbers, strings, Nones, and booleans. Its first
-    parameter will be the value, and the second will be its keypath, an
-    iterable over the __getitem__ keys needed to get to it.
-
-    :raises: If there are cycles in the value, raises a
-        dbt.exceptions.RecursionException
-    """
-    try:
-        return _deep_map_render(func, value, ())
-    except RuntimeError as exc:
-        if "maximum recursion depth exceeded" in str(exc):
-            raise RecursionError("Cycle detected in deep_map_render")
-        raise
-
-
-class AttrDict(dict):
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-        self.__dict__ = self
-
-
 def get_pseudo_test_path(node_name, source_path):
     "schema tests all come from schema.yml files. fake a source sql file"
     source_path_parts = split_path(source_path)
@@ -298,14 +173,6 @@ class memoized:
     def __get__(self, obj, objtype):
         """Support instance methods."""
         return functools.partial(self.__call__, obj)
-
-
-K_T = TypeVar("K_T")
-V_T = TypeVar("V_T")
-
-
-def filter_null_values(input: Dict[K_T, Optional[V_T]]) -> Dict[K_T, V_T]:
-    return {k: v for k, v in input.items() if v is not None}
 
 
 def add_ephemeral_model_prefix(s: str) -> str:
@@ -441,83 +308,6 @@ def lowercase(value: Optional[str]) -> Optional[str]:
         return None
     else:
         return value.lower()
-
-
-# some types need to make constants available to the jinja context as
-# attributes, and regular properties only work with objects. maybe this should
-# be handled by the RelationProxy?
-
-
-class classproperty(object):
-    def __init__(self, func) -> None:
-        self.func = func
-
-    def __get__(self, obj, objtype):
-        return self.func(objtype)
-
-
-class ConnectingExecutor(concurrent.futures.Executor):
-    def submit_connected(self, adapter, conn_name, func, *args, **kwargs):
-        def connected(conn_name, func, *args, **kwargs):
-            with self.connection_named(adapter, conn_name):
-                return func(*args, **kwargs)
-
-        return self.submit(connected, conn_name, func, *args, **kwargs)
-
-
-# a little concurrent.futures.Executor for single-threaded mode
-class SingleThreadedExecutor(ConnectingExecutor):
-    def submit(*args, **kwargs):
-        # this basic pattern comes from concurrent.futures.Executor itself,
-        # but without handling the `fn=` form.
-        if len(args) >= 2:
-            self, fn, *args = args
-        elif not args:
-            raise TypeError(
-                "descriptor 'submit' of 'SingleThreadedExecutor' object needs an argument"
-            )
-        else:
-            raise TypeError(
-                "submit expected at least 1 positional argument, got %d" % (len(args) - 1)
-            )
-        fut = concurrent.futures.Future()
-        try:
-            result = fn(*args, **kwargs)
-        except Exception as exc:
-            fut.set_exception(exc)
-        else:
-            fut.set_result(result)
-        return fut
-
-    @contextmanager
-    def connection_named(self, adapter, name):
-        yield
-
-
-class MultiThreadedExecutor(
-    ConnectingExecutor,
-    concurrent.futures.ThreadPoolExecutor,
-):
-    @contextmanager
-    def connection_named(self, adapter, name):
-        with adapter.connection_named(name):
-            yield
-
-
-class ThreadedArgs(Protocol):
-    single_threaded: bool
-
-
-class HasThreadingConfig(Protocol):
-    args: ThreadedArgs
-    threads: Optional[int]
-
-
-def executor(config: HasThreadingConfig) -> ConnectingExecutor:
-    if config.args.single_threaded:
-        return SingleThreadedExecutor()
-    else:
-        return MultiThreadedExecutor(max_workers=config.threads)
 
 
 def fqn_search(root: Dict[str, Any], fqn: List[str]) -> Iterator[Dict[str, Any]]:
@@ -660,27 +450,3 @@ def args_to_dict(args):
 
         dict_args[key] = var_args[key]
     return dict_args
-
-
-# This is useful for proto generated classes in particular, since
-# the default for protobuf for strings is the empty string, so
-# Optional[str] types don't work for generated Python classes.
-def cast_to_str(string: Optional[str]) -> str:
-    if string is None:
-        return ""
-    else:
-        return string
-
-
-def cast_to_int(integer: Optional[int]) -> int:
-    if integer is None:
-        return 0
-    else:
-        return integer
-
-
-def cast_dict_to_dict_of_strings(dct):
-    new_dct = {}
-    for k, v in dct.items():
-        new_dct[str(k)] = str(v)
-    return new_dct

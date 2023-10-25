@@ -63,7 +63,8 @@ from dbt.parser.common import (
     ParserRef,
     trimmed,
 )
-from dbt.utils import coerce_dict_str, deep_merge
+from dbt.utils import coerce_dict_str
+from dbt.common.utils import deep_merge
 
 
 schema_file_keys = (

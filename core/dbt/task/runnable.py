@@ -558,7 +558,7 @@ class GraphRunnableTask(ConfiguredTask):
         list_futures = []
         create_futures = []
 
-        with dbt.utils.executor(self.config) as tpe:
+        with dbt.common.utils.executor(self.config) as tpe:
             for req in required_databases:
                 if req.database is None:
                     name = "list_schemas"

@@ -1513,7 +1513,7 @@ def _process_refs(
                 unique_id=node.unique_id,
                 ref_unique_id=target_model.unique_id,
                 access=AccessType.Private,
-                scope=dbt.utils.cast_to_str(target_model.group),
+                scope=dbt.common.utils.cast_to_str(target_model.group),
             )
         elif manifest.is_invalid_protected_ref(node, target_model, dependencies):
             raise dbt.exceptions.DbtReferenceError(

@@ -50,7 +50,7 @@ from dbt.common.events.types import (
 )
 from dbt.common.events.contextvars import get_node_info
 from dbt import flags
-from dbt.utils import cast_to_str
+from dbt.common.utils import cast_to_str
 
 SleepTime = Union[int, float]  # As taken by time.sleep.
 AdapterHandle = Any  # Adapter connection handle objects can be any class.

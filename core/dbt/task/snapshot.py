@@ -7,7 +7,7 @@ from dbt.common.events.types import LogSnapshotResult
 from dbt.graph import ResourceTypeSelector
 from dbt.node_types import NodeType
 from dbt.contracts.results import NodeStatus
-from dbt.utils import cast_dict_to_dict_of_strings
+from dbt.common.utils import cast_dict_to_dict_of_strings
 
 
 class SnapshotRunner(ModelRunner):

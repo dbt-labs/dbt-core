@@ -30,7 +30,7 @@ from dbt.exceptions import Exception as DbtException, DbtProjectError, FailFastE
 from dbt.parser.manifest import ManifestLoader, write_manifest
 from dbt.profiler import profiler
 from dbt.tracking import active_user, initialize_from_flags, track_run
-from dbt.utils import cast_dict_to_dict_of_strings
+from dbt.common.utils import cast_dict_to_dict_of_strings
 from dbt.plugins import set_up_plugin_manager, get_plugin_manager
 
 from click import Context

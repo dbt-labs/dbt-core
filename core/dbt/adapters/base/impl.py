@@ -65,7 +65,7 @@ from dbt.common.events.types import (
     ConstraintNotSupported,
     ConstraintNotEnforced,
 )
-from dbt.utils import filter_null_values, executor, cast_to_str, AttrDict
+from dbt.common.utils import filter_null_values, executor, cast_to_str, AttrDict
 
 from dbt.adapters.base.connections import Connection, AdapterResponse, BaseConnectionManager
 from dbt.adapters.base.meta import AdapterMeta, available
