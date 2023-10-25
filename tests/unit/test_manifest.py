@@ -1246,25 +1246,24 @@ FindMaterializationSpec = namedtuple("FindMaterializationSpec", "macros,adapter_
 
 def _materialization_parameter_sets():
     # inject the plugins used for materialization parameter tests
-    with mock.patch("dbt.adapters.base.plugin.project_name_from_path") as get_name:
-        get_name.return_value = "foo"
-        FooPlugin = AdapterPlugin(
-            adapter=mock.MagicMock(),
-            credentials=mock.MagicMock(),
-            include_path="/path/to/root/plugin",
-        )
-        FooPlugin.adapter.type.return_value = "foo"
-        inject_plugin(FooPlugin)
+    FooPlugin = AdapterPlugin(
+        adapter=mock.MagicMock(),
+        credentials=mock.MagicMock(),
+        include_path="/path/to/root/plugin",
+        project_name="foo",
+    )
+    FooPlugin.adapter.type.return_value = "foo"
+    inject_plugin(FooPlugin)
 
-        get_name.return_value = "bar"
-        BarPlugin = AdapterPlugin(
-            adapter=mock.MagicMock(),
-            credentials=mock.MagicMock(),
-            include_path="/path/to/root/plugin",
-            dependencies=["foo"],
-        )
-        BarPlugin.adapter.type.return_value = "bar"
-        inject_plugin(BarPlugin)
+    BarPlugin = AdapterPlugin(
+        adapter=mock.MagicMock(),
+        credentials=mock.MagicMock(),
+        include_path="/path/to/root/plugin",
+        dependencies=["foo"],
+        project_name="bar",
+    )
+    BarPlugin.adapter.type.return_value = "bar"
+    inject_plugin(BarPlugin)
 
     sets = [
         FindMaterializationSpec(macros=[], adapter_type="foo", expected=None),
