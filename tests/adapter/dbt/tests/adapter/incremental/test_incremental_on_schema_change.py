@@ -102,9 +102,9 @@ class BaseIncrementalOnSchemaChange(BaseIncrementalOnSchemaChangeSetup):
         self.run_incremental_append_new_columns_remove_one(project)
 
     def test_run_incremental_sync_all_columns(self, project):
-        # self.run_incremental_sync_all_columns(project)
+        self.run_incremental_sync_all_columns(project)
         self.run_incremental_sync_all_quoted_columns(project)
-        # self.run_incremental_sync_remove_only(project)
+        self.run_incremental_sync_remove_only(project)
 
     def test_run_incremental_fail_on_schema_change(self, project):
         select = "model_a incremental_fail"
