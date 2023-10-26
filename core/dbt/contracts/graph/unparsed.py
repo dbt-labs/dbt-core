@@ -727,7 +727,7 @@ class UnparsedSavedQuery(dbtClassMixin):
     description: Optional[str] = None
     label: Optional[str] = None
     metrics: List[str] = field(default_factory=list)
-    group_bys: List[str] = field(default_factory=list)
+    group_by: List[str] = field(default_factory=list)
     where: Optional[Union[str, List[str]]] = None
     config: Dict[str, Any] = field(default_factory=dict)
 

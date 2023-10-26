@@ -694,7 +694,7 @@ class SavedQueryParser(YamlReader):
             description=unparsed.description,
             label=unparsed.label,
             fqn=fqn,
-            group_bys=unparsed.group_bys,
+            group_by=unparsed.group_by,
             metrics=unparsed.metrics,
             name=unparsed.name,
             original_file_path=self.yaml.path.original_file_path,

@@ -11,7 +11,7 @@ saved_queries:
     label: Test Saved Query
     metrics:
         - simple_metric
-    group_bys:
+    group_by:
         - "Dimension('user__ds')"
     where:
         - "{{ Dimension('user__ds', 'DAY') }} <= now()"

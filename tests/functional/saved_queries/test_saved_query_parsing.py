@@ -36,7 +36,7 @@ class TestSavedQueryParsing:
         saved_query = manifest.saved_queries["saved_query.test.test_saved_query"]
         assert saved_query.name == "test_saved_query"
         assert len(saved_query.metrics) == 1
-        assert len(saved_query.group_bys) == 1
+        assert len(saved_query.group_by) == 1
         assert len(saved_query.where.where_filters) == 2
         assert len(saved_query.depends_on.nodes) == 1
         assert saved_query.description == "My SavedQuery Description"
