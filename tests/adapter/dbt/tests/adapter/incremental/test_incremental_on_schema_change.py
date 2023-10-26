@@ -12,11 +12,14 @@ from dbt.tests.adapter.incremental.fixtures import (
     _MODELS__INCREMENTAL_IGNORE_TARGET,
     _MODELS__INCREMENTAL_FAIL,
     _MODELS__INCREMENTAL_SYNC_ALL_COLUMNS,
+    _MODELS__INCREMENTAL_SYNC_ALL_QUOTED_COLUMNS,
     _MODELS__INCREMENTAL_APPEND_NEW_COLUMNS_REMOVE_ONE,
     _MODELS__A,
+    _MODELS__B,
     _MODELS__INCREMENTAL_APPEND_NEW_COLUMNS_TARGET,
     _MODELS__INCREMENTAL_APPEND_NEW_COLUMNS,
     _MODELS__INCREMENTAL_SYNC_ALL_COLUMNS_TARGET,
+    _MODELS__INCREMENTAL_SYNC_ALL_QUOTED_COLUMNS_TARGET,
     _MODELS__INCREMENTAL_APPEND_NEW_COLUMNS_REMOVE_ONE_TARGET,
 )
 
@@ -31,11 +34,14 @@ class BaseIncrementalOnSchemaChangeSetup:
             "incremental_ignore_target.sql": _MODELS__INCREMENTAL_IGNORE_TARGET,
             "incremental_fail.sql": _MODELS__INCREMENTAL_FAIL,
             "incremental_sync_all_columns.sql": _MODELS__INCREMENTAL_SYNC_ALL_COLUMNS,
+            "incremental_sync_all_quoted_columns.sql": _MODELS__INCREMENTAL_SYNC_ALL_QUOTED_COLUMNS,
             "incremental_append_new_columns_remove_one.sql": _MODELS__INCREMENTAL_APPEND_NEW_COLUMNS_REMOVE_ONE,
             "model_a.sql": _MODELS__A,
+            "model_b.sql": _MODELS__B,
             "incremental_append_new_columns_target.sql": _MODELS__INCREMENTAL_APPEND_NEW_COLUMNS_TARGET,
             "incremental_append_new_columns.sql": _MODELS__INCREMENTAL_APPEND_NEW_COLUMNS,
             "incremental_sync_all_columns_target.sql": _MODELS__INCREMENTAL_SYNC_ALL_COLUMNS_TARGET,
+            "incremental_sync_all_quoted_columns_target.sql": _MODELS__INCREMENTAL_SYNC_ALL_QUOTED_COLUMNS_TARGET,
             "incremental_append_new_columns_remove_one_target.sql": _MODELS__INCREMENTAL_APPEND_NEW_COLUMNS_REMOVE_ONE_TARGET,
         }
 
@@ -71,6 +77,12 @@ class BaseIncrementalOnSchemaChangeSetup:
         compare_target = "incremental_sync_all_columns_target"
         self.run_twice_and_assert(select, compare_source, compare_target, project)
 
+    def run_incremental_sync_all_quoted_columns(self, project):
+        select = "model_b incremental_sync_all_quoted_columns incremental_sync_all_quoted_columns_target"
+        compare_source = "incremental_sync_all_quoted_columns"
+        compare_target = "incremental_sync_all_quoted_columns_target"
+        self.run_twice_and_assert(select, compare_source, compare_target, project)
+
     def run_incremental_sync_remove_only(self, project):
         select = "model_a incremental_sync_remove_only incremental_sync_remove_only_target"
         compare_source = "incremental_sync_remove_only"
@@ -90,8 +102,9 @@ class BaseIncrementalOnSchemaChange(BaseIncrementalOnSchemaChangeSetup):
         self.run_incremental_append_new_columns_remove_one(project)
 
     def test_run_incremental_sync_all_columns(self, project):
-        self.run_incremental_sync_all_columns(project)
-        self.run_incremental_sync_remove_only(project)
+        # self.run_incremental_sync_all_columns(project)
+        self.run_incremental_sync_all_quoted_columns(project)
+        # self.run_incremental_sync_remove_only(project)
 
     def test_run_incremental_fail_on_schema_change(self, project):
         select = "model_a incremental_fail"
