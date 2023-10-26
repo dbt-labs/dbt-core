@@ -26,9 +26,8 @@ from dbt.contracts.graph.nodes import (
     MetricTypeParams,
     SemanticModel,
     SavedQuery,
-    WhereFilter,
-    WhereFilterIntersection,
 )
+from dbt.contracts.graph.semantic_layer_common import WhereFilter, WhereFilterIntersection
 from dbt.contracts.graph.semantic_models import (
     Dimension,
     DimensionTypeParams,

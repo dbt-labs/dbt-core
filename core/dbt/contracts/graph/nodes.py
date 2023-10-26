@@ -37,6 +37,7 @@ from dbt.contracts.graph.unparsed import (
     UnparsedColumn,
 )
 from dbt.contracts.graph.node_args import ModelNodeArgs
+from dbt.contracts.graph.semantic_layer_common import WhereFilterIntersection
 from dbt.contracts.util import Replaceable, AdditionalPropertiesMixin
 from dbt.events.functions import warn_or_error
 from dbt.exceptions import ParsingError, ContractBreakingChangeError
@@ -50,7 +51,6 @@ from dbt.events.types import (
 from dbt.events.contextvars import set_log_contextvars
 from dbt.flags import get_flags
 from dbt.node_types import ModelLanguage, NodeType, AccessType
-from dbt_semantic_interfaces.call_parameter_sets import FilterCallParameterSets
 from dbt_semantic_interfaces.references import (
     EntityReference,
     MeasureReference,
@@ -60,7 +60,6 @@ from dbt_semantic_interfaces.references import (
 )
 from dbt_semantic_interfaces.references import MetricReference as DSIMetricReference
 from dbt_semantic_interfaces.type_enums import MetricType, TimeGranularity
-from dbt_semantic_interfaces.parsing.where_filter.where_filter_parser import WhereFilterParser
 
 from .model_config import (
     NodeConfig,
@@ -1398,24 +1397,6 @@ class Exposure(GraphNode):
 # ====================================
 # Metric node
 # ====================================
-
-
-@dataclass
-class WhereFilter(dbtClassMixin):
-    where_sql_template: str
-
-    @property
-    def call_parameter_sets(self) -> FilterCallParameterSets:
-        return WhereFilterParser.parse_call_parameter_sets(self.where_sql_template)
-
-
-@dataclass
-class WhereFilterIntersection(dbtClassMixin):
-    where_filters: List[WhereFilter]
-
-    @property
-    def filter_expression_parameter_sets(self) -> Sequence[Tuple[str, FilterCallParameterSets]]:
-        raise NotImplementedError
 
 
 @dataclass
