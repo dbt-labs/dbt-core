@@ -12,6 +12,7 @@ from dbt.dataclass_schema import dbtClassMixin, ExtensibleDbtClassMixin
 
 from dbt.clients.system import write_file
 from dbt.contracts.files import FileHash
+from dbt.contracts.graph.saved_queries import Export
 from dbt.contracts.graph.semantic_models import (
     Defaults,
     Dimension,
@@ -1748,6 +1749,7 @@ class SavedQueryMandatory(GraphNode):
     metrics: List[str]
     group_by: List[str]
     where: Optional[WhereFilterIntersection]
+    exports: List[Export]
 
 
 @dataclass

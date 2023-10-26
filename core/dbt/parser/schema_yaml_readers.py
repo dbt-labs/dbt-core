@@ -703,6 +703,7 @@ class SavedQueryParser(YamlReader):
             resource_type=NodeType.SavedQuery,
             unique_id=unique_id,
             where=parse_where_filter(unparsed.where),
+            exports=unparsed.exports,
             config=config,
             unrendered_config=unrendered_config,
             group=config.group,

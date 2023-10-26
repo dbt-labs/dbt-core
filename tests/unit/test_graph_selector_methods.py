@@ -472,6 +472,7 @@ def make_saved_query(pkg: str, name: str, metric: str, path=None):
         metrics=[metric],
         group_by=[],
         where=None,
+        exports=[],
         unique_id=f"saved_query.{pkg}.{name}",
         original_file_path=path,
         fqn=[pkg, "saved_queries", name],

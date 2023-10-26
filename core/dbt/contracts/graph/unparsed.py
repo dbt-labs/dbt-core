@@ -3,6 +3,7 @@ import re
 
 from dbt import deprecations
 from dbt.node_types import NodeType
+from dbt.contracts.graph.saved_queries import Export
 from dbt.contracts.graph.semantic_models import (
     Defaults,
     DimensionValidityParams,
@@ -729,6 +730,7 @@ class UnparsedSavedQuery(dbtClassMixin):
     metrics: List[str] = field(default_factory=list)
     group_by: List[str] = field(default_factory=list)
     where: Optional[Union[str, List[str]]] = None
+    exports: List[Export] = field(default_factory=list)
     config: Dict[str, Any] = field(default_factory=dict)
 
 

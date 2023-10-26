@@ -16,4 +16,10 @@ saved_queries:
     where:
         - "{{ Dimension('user__ds', 'DAY') }} <= now()"
         - "{{ Dimension('user__ds', 'DAY') }} >= '2023-01-01'"
+    exports:
+        - name: my_export
+          config:
+            alias: my_export_alias
+            export_as: table
+            schema_name: my_export_schema_name
 """
