@@ -3,11 +3,13 @@ import pytest
 from dbt.contracts.graph.manifest import Manifest
 from dbt.exceptions import CompilationError
 from dbt.tests.util import run_dbt
+from dbt.tests.util import write_file
 from tests.functional.semantic_models.fixtures import (
     models_people_sql,
     simple_metricflow_time_spine_sql,
     semantic_model_people_yml,
     models_people_metrics_yml,
+    semantic_model_people_diff_name_yml,
     semantic_model_people_yml_with_docs,
     semantic_model_descriptions,
 )
@@ -71,3 +73,27 @@ class TestSemanticModelUnknownModel:
         with pytest.raises(CompilationError) as excinfo:
             run_dbt(["parse"])
         assert "depends on a node named 'people' which was not found" in str(excinfo.value)
+
+
+class TestSemanticModelPartialParsing:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "people.sql": models_people_sql,
+            "metricflow_time_spine.sql": simple_metricflow_time_spine_sql,
+            "semantic_models.yml": semantic_model_people_yml,
+            "people_metrics.yml": models_people_metrics_yml,
+        }
+
+    def test_semantic_model_deleted_partial_parsing(self, project):
+        # First, use the default saved_queries.yml to define our saved_query, and
+        # run the dbt parse command
+        run_dbt(["parse"])
+        # Next, modify the default semantic_models.yml to remove the saved query.
+        write_file(
+            semantic_model_people_diff_name_yml,
+            project.project_root,
+            "models",
+            "semantic_models.yml",
+        )
+        run_dbt(["compile"])
