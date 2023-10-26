@@ -1,8 +1,12 @@
+import dataclasses
+
 import agate
 import decimal
 import unittest
 from unittest import mock
 
+from dbt.adapters.base import BaseRelation
+from dbt.contracts.relation import Path
 from dbt.task.debug import DebugTask
 
 from dbt.adapters.base.query_headers import MacroQueryStringSetter
@@ -322,34 +326,45 @@ class TestPostgresAdapter(unittest.TestCase):
         )
 
     @mock.patch.object(PostgresAdapter, "execute_macro")
-    @mock.patch.object(PostgresAdapter, "_get_catalog_relations_by_info_schema")
+    @mock.patch.object(PostgresAdapter, "_get_catalog_relations")
     def test_get_catalog_various_schemas(self, mock_get_relations, mock_execute):
+        self.catalog_test(mock_get_relations, mock_execute, False)
+
+    @mock.patch.object(PostgresAdapter, "execute_macro")
+    @mock.patch.object(PostgresAdapter, "_get_catalog_relations")
+    def test_get_filtered_catalog(self, mock_get_relations, mock_execute):
+        self.catalog_test(mock_get_relations, mock_execute, True)
+
+    def catalog_test(self, mock_get_relations, mock_execute, filtered=False):
         column_names = ["table_database", "table_schema", "table_name"]
-        rows = [
-            ("dbt", "foo", "bar"),
-            ("dbt", "FOO", "baz"),
-            ("dbt", None, "bar"),
-            ("dbt", "quux", "bar"),
-            ("dbt", "skip", "bar"),
+        relations = [
+            BaseRelation(path=Path(database="dbt", schema="foo", identifier="bar")),
+            BaseRelation(path=Path(database="dbt", schema="FOO", identifier="baz")),
+            BaseRelation(path=Path(database="dbt", schema=None, identifier="bar")),
+            BaseRelation(path=Path(database="dbt", schema="quux", identifier="bar")),
+            BaseRelation(path=Path(database="dbt", schema="skip", identifier="bar")),
         ]
+        rows = list(map(lambda x: dataclasses.astuple(x.path), relations))
         mock_execute.return_value = agate.Table(rows=rows, column_names=column_names)
 
-        mock_get_relations.return_value = {
-            mock.MagicMock(database="dbt"): [
-                mock.MagicMock(schema="foo"),
-                mock.MagicMock(schema="FOO"),
-                mock.MagicMock(schema="quux"),
-            ]
-        }
+        mock_get_relations.return_value = relations
 
         mock_manifest = mock.MagicMock()
         mock_manifest.get_used_schemas.return_value = {("dbt", "foo"), ("dbt", "quux")}
 
-        catalog, exceptions = self.adapter.get_catalog(mock_manifest)
-        self.assertEqual(
-            set(map(tuple, catalog)),
-            {("dbt", "foo", "bar"), ("dbt", "FOO", "baz"), ("dbt", "quux", "bar")},
-        )
+        if filtered:
+            catalog, exceptions = self.adapter.get_filtered_catalog(
+                mock_manifest, set([relations[0], relations[3]])
+            )
+        else:
+            catalog, exceptions = self.adapter.get_catalog(mock_manifest)
+
+        tupled_catalog = set(map(tuple, catalog))
+        if filtered:
+            self.assertEqual(tupled_catalog, {rows[0], rows[3]})
+        else:
+            self.assertEqual(tupled_catalog, {rows[0], rows[1], rows[3]})
+
         self.assertEqual(exceptions, [])
 
 
