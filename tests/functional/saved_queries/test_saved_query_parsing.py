@@ -29,7 +29,6 @@ class TestSavedQueryParsing:
     def test_semantic_model_parsing(self, project):
         runner = dbtTestRunner()
         result = runner.invoke(["parse", "--no-partial-parse"])
-        result.result
         assert result.success
         assert isinstance(result.result, Manifest)
         manifest = result.result
