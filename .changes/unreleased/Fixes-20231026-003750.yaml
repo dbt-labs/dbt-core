@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix bug where incremental column changes did not quote columns.
+time: 2023-10-26T00:37:50.705609-04:00
+custom:
+  Author: DTchebotarev
+  Issue: "4423"
