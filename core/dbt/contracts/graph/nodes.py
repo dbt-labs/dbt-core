@@ -12,7 +12,7 @@ from dbt.dataclass_schema import dbtClassMixin, ExtensibleDbtClassMixin
 
 from dbt.clients.system import write_file
 from dbt.contracts.files import FileHash
-from dbt.contracts.graph.saved_queries import Export
+from dbt.contracts.graph.saved_queries import Export, QueryParams
 from dbt.contracts.graph.semantic_models import (
     Defaults,
     Dimension,
@@ -1727,9 +1727,7 @@ class SemanticModel(GraphNode):
 
 @dataclass
 class SavedQueryMandatory(GraphNode):
-    metrics: List[str]
-    group_by: List[str]
-    where: Optional[WhereFilterIntersection]
+    query_params: QueryParams
     exports: List[Export]
 
 
@@ -1746,20 +1744,24 @@ class SavedQuery(NodeInfoMixin, SavedQueryMandatory):
     refs: List[RefArgs] = field(default_factory=list)
 
     @property
+    def metrics(self) -> List[str]:
+        return self.query_params.metrics
+
+    @property
     def depends_on_nodes(self):
         return self.depends_on.nodes
 
     def same_metrics(self, old: "SavedQuery") -> bool:
-        return self.metrics == old.metrics
+        return self.query_params.metrics == old.query_params.metrics
 
     def same_group_by(self, old: "SavedQuery") -> bool:
-        return self.group_by == old.group_by
+        return self.query_params.group_by == old.query_params.group_by
 
     def same_description(self, old: "SavedQuery") -> bool:
         return self.description == old.description
 
     def same_where(self, old: "SavedQuery") -> bool:
-        return self.where == old.where
+        return self.query_params.where == old.query_params.where
 
     def same_label(self, old: "SavedQuery") -> bool:
         return self.label == old.label

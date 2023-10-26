@@ -723,13 +723,18 @@ class UnparsedSemanticModel(dbtClassMixin):
 
 
 @dataclass
-class UnparsedSavedQuery(dbtClassMixin):
-    name: str
-    description: Optional[str] = None
-    label: Optional[str] = None
+class UnparsedQueryParams(dbtClassMixin):
     metrics: List[str] = field(default_factory=list)
     group_by: List[str] = field(default_factory=list)
     where: Optional[Union[str, List[str]]] = None
+
+
+@dataclass
+class UnparsedSavedQuery(dbtClassMixin):
+    name: str
+    query_params: UnparsedQueryParams
+    description: Optional[str] = None
+    label: Optional[str] = None
     exports: List[Export] = field(default_factory=list)
     config: Dict[str, Any] = field(default_factory=dict)
 

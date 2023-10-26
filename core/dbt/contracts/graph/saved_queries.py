@@ -1,7 +1,8 @@
 from dataclasses import dataclass
+from dbt.contracts.graph.semantic_layer_common import WhereFilterIntersection
 from dbt.dataclass_schema import dbtClassMixin
 from dbt_semantic_interfaces.type_enums.export_destination_type import ExportDestinationType
-from typing import Optional
+from typing import List, Optional
 
 
 @dataclass
@@ -19,3 +20,12 @@ class Export(dbtClassMixin):
 
     name: str
     config: ExportConfig
+
+
+@dataclass
+class QueryParams(dbtClassMixin):
+    """The query parameters for the saved query"""
+
+    metrics: List[str]
+    group_by: List[str]
+    where: Optional[WhereFilterIntersection]

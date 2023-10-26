@@ -13,6 +13,7 @@ from dbt.contracts.graph.unparsed import (
     UnparsedMetricInputMeasure,
     UnparsedMetricTypeParams,
     UnparsedNonAdditiveDimension,
+    UnparsedQueryParams,
     UnparsedSavedQuery,
     UnparsedSemanticModel,
 )
@@ -27,6 +28,7 @@ from dbt.contracts.graph.nodes import (
     SemanticModel,
     SavedQuery,
 )
+from dbt.contracts.graph.saved_queries import QueryParams
 from dbt.contracts.graph.semantic_layer_common import WhereFilter, WhereFilterIntersection
 from dbt.contracts.graph.semantic_models import (
     Dimension,
@@ -665,6 +667,13 @@ class SavedQueryParser(YamlReader):
 
         return config
 
+    def _get_query_params(self, unparsed: UnparsedQueryParams) -> QueryParams:
+        return QueryParams(
+            group_by=unparsed.group_by,
+            metrics=unparsed.metrics,
+            where=parse_where_filter(unparsed.where),
+        )
+
     def parse_saved_query(self, unparsed: UnparsedSavedQuery) -> None:
         package_name = self.project.project_name
         unique_id = f"{NodeType.SavedQuery}.{package_name}.{unparsed.name}"
@@ -693,15 +702,13 @@ class SavedQueryParser(YamlReader):
             description=unparsed.description,
             label=unparsed.label,
             fqn=fqn,
-            group_by=unparsed.group_by,
-            metrics=unparsed.metrics,
             name=unparsed.name,
             original_file_path=self.yaml.path.original_file_path,
             package_name=package_name,
             path=path,
             resource_type=NodeType.SavedQuery,
             unique_id=unique_id,
-            where=parse_where_filter(unparsed.where),
+            query_params=self._get_query_params(unparsed.query_params),
             exports=unparsed.exports,
             config=config,
             unrendered_config=unrendered_config,

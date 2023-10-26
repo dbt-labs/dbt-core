@@ -9,13 +9,14 @@ saved_queries:
   - name: test_saved_query
     description: "{{ doc('saved_query_description') }}"
     label: Test Saved Query
-    metrics:
-        - simple_metric
-    group_by:
-        - "Dimension('user__ds')"
-    where:
-        - "{{ Dimension('user__ds', 'DAY') }} <= now()"
-        - "{{ Dimension('user__ds', 'DAY') }} >= '2023-01-01'"
+    query_params:
+        metrics:
+            - simple_metric
+        group_by:
+            - "Dimension('user__ds')"
+        where:
+            - "{{ Dimension('user__ds', 'DAY') }} <= now()"
+            - "{{ Dimension('user__ds', 'DAY') }} >= '2023-01-01'"
     exports:
         - name: my_export
           config:
