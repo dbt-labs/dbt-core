@@ -1179,9 +1179,9 @@ class BaseAdapter(metaclass=AdapterMeta):
             }
 
             def in_map(row: agate.Row):
-                d = _expect_row_value("table_database", row)
-                s = _expect_row_value("table_schema", row)
-                i = _expect_row_value("table_name", row)
+                d = _expect_row_value("table_database", row).casefold()
+                s = _expect_row_value("table_schema", row).casefold()
+                i = _expect_row_value("table_name", row).casefold()
                 return (d, s, i) in relation_map
 
             catalogs = catalogs.where(in_map)
