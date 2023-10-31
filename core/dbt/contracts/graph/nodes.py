@@ -1744,10 +1744,14 @@ class SemanticModel(GraphNode):
 
 
 @dataclass
-class SavedQuery(GraphNode):
+class SavedQueryMandatory(GraphNode):
     metrics: List[str]
     group_bys: List[str]
     where: Optional[WhereFilterIntersection]
+
+
+@dataclass
+class SavedQuery(NodeInfoMixin, SavedQueryMandatory):
     description: Optional[str] = None
     label: Optional[str] = None
     metadata: Optional[SourceFileMetadata] = None
