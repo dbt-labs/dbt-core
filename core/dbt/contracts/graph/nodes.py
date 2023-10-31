@@ -1772,6 +1772,17 @@ class SavedQuery(NodeInfoMixin, SavedQueryMandatory):
     def same_group(self, old: "SavedQuery") -> bool:
         return self.group == old.group
 
+    def same_exports(self, old: "SavedQuery") -> bool:
+        if len(self.exports) != len(old.exports):
+            return False
+
+        # exports should be in the same order, so we zip them for easy iteration
+        for (old_export, new_export) in zip(old.exports, self.exports):
+            if not new_export.same_contents(old_export):
+                return False
+
+        return True
+
     def same_contents(self, old: Optional["SavedQuery"]) -> bool:
         # existing when it didn't before is a change!
         # metadata/tags changes are not "changes"
