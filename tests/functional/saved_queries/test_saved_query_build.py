@@ -9,7 +9,7 @@ from tests.functional.semantic_models.fixtures import (
 )
 
 
-class TestSavedQueryParsing:
+class TestSavedQueryBuildNoOp:
     @pytest.fixture(scope="class")
     def models(self):
         return {
