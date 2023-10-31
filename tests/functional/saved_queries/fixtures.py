@@ -22,5 +22,5 @@ saved_queries:
           config:
             alias: my_export_alias
             export_as: table
-            schema_name: my_export_schema_name
+            schema: my_export_schema_name
 """
