@@ -34,7 +34,7 @@ SELECT
 """
 
 test_my_model_yml = """
-unit:
+unit-tests:
   - model: my_model
     tests:
       - name: test_my_model
@@ -180,7 +180,7 @@ class TestUnitTests:
 
 
 test_my_model_csv_yml = """
-unit:
+unit-tests:
   - model: my_model
     tests:
       - name: test_my_model

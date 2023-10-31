@@ -193,20 +193,19 @@ class UnitTestManifestLoader:
 
 class UnitTestParser(YamlReader):
     def __init__(self, schema_parser: SchemaParser, yaml: YamlBlock) -> None:
-        super().__init__(schema_parser, yaml, "unit")
+        super().__init__(schema_parser, yaml, "unit_tests")
         self.schema_parser = schema_parser
         self.yaml = yaml
 
     def parse(self) -> ParseResult:
+        breakpoint()
         for data in self.get_key_dicts():
             unit_test_suite = self._get_unit_test_suite(data)
             model_name_split = unit_test_suite.model.split()
             tested_model_node = self._find_tested_model_node(unit_test_suite)
 
             for test in unit_test_suite.tests:
-                unit_test_case_unique_id = (
-                    f"unit.{self.project.project_name}.{unit_test_suite.model}.{test.name}"
-                )
+                unit_test_case_unique_id = f"{NodeType.Unit}.{self.project.project_name}.{unit_test_suite.model}.{test.name}"
                 unit_test_fqn = [self.project.project_name] + model_name_split + [test.name]
                 unit_test_config = self._build_unit_test_config(unit_test_fqn, test.config)
 

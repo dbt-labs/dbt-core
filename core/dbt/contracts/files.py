@@ -287,6 +287,7 @@ class SchemaSourceFile(BaseSourceFile):
 
     # this is only used in tests (unit + functional)
     def get_tests(self, yaml_key, name):
+        breakpoint()
         if yaml_key in self.tests:
             if name in self.tests[yaml_key]:
                 return self.tests[yaml_key][name]

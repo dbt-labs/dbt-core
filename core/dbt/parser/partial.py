@@ -98,6 +98,7 @@ class PartialParsing:
     # Compare the previously saved manifest files and the just-loaded manifest
     # files to see if anything changed
     def build_file_diff(self):
+        breakpoint()
         saved_file_ids = set(self.saved_files.keys())
         new_file_ids = set(self.new_files.keys())
         deleted_all_files = saved_file_ids.difference(new_file_ids)
@@ -582,6 +583,7 @@ class PartialParsing:
     # Schema files -----------------------
     # Changed schema files
     def change_schema_file(self, file_id):
+        breakpoint()
         saved_schema_file = self.saved_files[file_id]
         new_schema_file = deepcopy(self.new_files[file_id])
         saved_yaml_dict = saved_schema_file.dict_from_yaml
@@ -681,7 +683,8 @@ class PartialParsing:
         handle_change("metrics", self.delete_schema_metric)
         handle_change("groups", self.delete_schema_group)
         handle_change("semantic_models", self.delete_schema_semantic_model)
-        handle_change("unit", self.delete_schema_unit_test)
+        breakpoint()
+        handle_change("unit_tests", self.delete_schema_unit_test)
         handle_change("saved_queries", self.delete_schema_saved_query)
 
     def _handle_element_change(
@@ -711,7 +714,8 @@ class PartialParsing:
     # Take a "section" of the schema file yaml dictionary from saved and new schema files
     # and determine which parts have changed
     def get_diff_for(self, key, saved_yaml_dict, new_yaml_dict):
-        dict_name = "model" if key == "unit" else "name"
+        # breakpoint()
+        dict_name = "model" if key == "unit_tests" else "name"
         if key in saved_yaml_dict or key in new_yaml_dict:
             saved_elements = saved_yaml_dict[key] if key in saved_yaml_dict else []
             new_elements = new_yaml_dict[key] if key in new_yaml_dict else []
@@ -754,7 +758,7 @@ class PartialParsing:
     # flag indicates that we're processing a schema file, so if a matching
     # patch has already been scheduled, replace it.
     def merge_patch(self, schema_file, key, patch, new_patch=False):
-        elem_name = "model" if key == "unit" else "name"
+        elem_name = "model" if key == "unit_tests" else "name"
         if schema_file.pp_dict is None:
             schema_file.pp_dict = {}
         pp_dict = schema_file.pp_dict
