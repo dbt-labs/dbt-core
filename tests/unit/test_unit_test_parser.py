@@ -12,77 +12,73 @@ from dbt.contracts.graph.unparsed import UnitTestOutputFixture
 
 UNIT_TEST_MODEL_NOT_FOUND_SOURCE = """
 unit:
-    - model: my_model_doesnt_exist
-      tests:
-        - name: test_my_model_doesnt_exist
-          description: "unit test description"
-          given: []
-          expect:
-            rows:
-              - {a: 1}
+    - name: test_my_model_doesnt_exist
+      model: my_model_doesnt_exist
+      description: "unit test description"
+      given: []
+      expect:
+        rows:
+          - {a: 1}
 """
 
 
 UNIT_TEST_SOURCE = """
 unit:
-    - model: my_model
-      tests:
-        - name: test_my_model
-          description: "unit test description"
-          given: []
-          expect:
-            rows:
-              - {a: 1}
+    - name: test_my_model
+      model: my_model
+      description: "unit test description"
+      given: []
+      expect:
+        rows:
+          - {a: 1}
 """
 
 
 UNIT_TEST_VERSIONED_MODEL_SOURCE = """
 unit:
-    - model: my_model_versioned.v1
-      tests:
-        - name: test_my_model_versioned
-          description: "unit test description"
-          given: []
-          expect:
-            rows:
-              - {a: 1}
+    - name: test_my_model_versioned
+      model: my_model_versioned.v1
+      description: "unit test description"
+      given: []
+      expect:
+        rows:
+          - {a: 1}
 """
 
 
 UNIT_TEST_CONFIG_SOURCE = """
 unit:
-    - model: my_model
-      tests:
-        - name: test_my_model
-          config:
-            tags: "schema_tag"
-            meta:
-              meta_key: meta_value
-              meta_jinja_key: '{{ 1 + 1 }}'
-          description: "unit test description"
-          given: []
-          expect:
-            rows:
-              - {a: 1}
+    - name: test_my_model
+      model: my_model
+      config:
+        tags: "schema_tag"
+        meta:
+          meta_key: meta_value
+          meta_jinja_key: '{{ 1 + 1 }}'
+      description: "unit test description"
+      given: []
+      expect:
+        rows:
+          - {a: 1}
 """
 
 
 UNIT_TEST_MULTIPLE_SOURCE = """
 unit:
-    - model: my_model
-      tests:
-        - name: test_my_model
-          description: "unit test description"
-          given: []
-          expect:
-            rows:
-              - {a: 1}
-        - name: test_my_model2
-          description: "unit test description"
-          given: []
-          expect:
-            rows:
-              - {a: 1}
+    - name: test_my_model
+      model: my_model
+      description: "unit test description"
+      given: []
+      expect:
+        rows:
+          - {a: 1}
+    - name: test_my_model2
+      model: my_model
+      description: "unit test description"
+      given: []
+      expect:
+        rows:
+          - {a: 1}
 """
 
 
