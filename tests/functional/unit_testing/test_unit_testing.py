@@ -151,6 +151,7 @@ class TestUnitTests:
 
         # Partial parsing... remove test
         write_file(test_my_model_yml, project.project_root, "models", "test_my_model.yml")
+        breakpoint()
         results = run_dbt(["unit-test", "--select", "my_model"], expect_pass=False)
         assert len(results) == 4
 
@@ -171,7 +172,6 @@ class TestUnitTests:
         unit_test_manifest = get_artifact(
             project.project_root, "target", "unit_test_manifest.json"
         )
-        breakpoint()
         assert len(unit_test_manifest["nodes"]) == 15
 
         # Check for duplicate unit test name

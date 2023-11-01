@@ -178,6 +178,7 @@ class PartialParsing:
         # Need to process schema files next, because the dictionaries
         # need to be in place for handling SQL file changes
         for file_id in self.file_diff["changed_schema_files"]:
+            breakpoint()
             self.processing_file = file_id
             self.change_schema_file(file_id)
         for file_id in self.file_diff["deleted_schema_files"]:
@@ -595,6 +596,7 @@ class PartialParsing:
         saved_schema_file.checksum = new_schema_file.checksum
         saved_schema_file.dfy = new_schema_file.dfy
         # schedule parsing
+        breakpoint()
         self.add_to_pp_files(saved_schema_file)
         # schema_file pp_dict should have been generated already
         fire_event(PartialParsingFile(operation="updated", file_id=file_id))
