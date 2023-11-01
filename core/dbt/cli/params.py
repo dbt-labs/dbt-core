@@ -407,6 +407,14 @@ resource_type = click.option(
     default=(),
 )
 
+include_saved_query = click.option(
+    "--include-saved-query/--no-include-saved-query",
+    envvar="DBT_INCLUDE_SAVED_QUERY",
+    help="Include saved queries in the list of resources to be selected for build command",
+    is_flag=True,
+    hidden=True,
+)
+
 model_decls = ("-m", "--models", "--model")
 select_decls = ("-s", "--select")
 select_attrs = {
