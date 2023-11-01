@@ -1065,13 +1065,10 @@ class GenericTestNode(TestShouldStoreFailures, CompiledNode, HasTestMetadata):
 @dataclass
 class UnitTestNode(CompiledNode):
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Unit]})
-    tested_node: Optional[ModelNode] = None
+    tested_node_unique_id: Optional[str] = None
+    this_input_node_unique_id: Optional[str] = None
     overrides: Optional[UnitTestOverrides] = None
     config: UnitTestNodeConfig = field(default_factory=UnitTestNodeConfig)
-
-    @property
-    def this_model_fixture_unique_id(self):
-        return f"model.{self.tested_node.package_name}.{self.name}__{self.tested_node.name}"
 
 
 @dataclass

@@ -75,7 +75,7 @@ class UnitTestManifestLoader:
             alias=name,
             fqn=test_case.unique_id.split("."),
             checksum=FileHash.empty(),
-            tested_node=tested_node,
+            tested_node_unique_id=tested_node.unique_id,
             overrides=test_case.overrides,
         )
 
@@ -138,6 +138,10 @@ class UnitTestManifestLoader:
                 checksum=FileHash.empty(),
             )
             self.unit_test_manifest.nodes[input_node.unique_id] = input_node
+
+            # Populate this_input_node_unique_id if input fixture represents node being tested
+            if original_input_node == tested_node:
+                unit_test_node.this_input_node_unique_id = input_node.unique_id
 
             # Add unique ids of input_nodes to depends_on
             unit_test_node.depends_on.nodes.append(input_node.unique_id)
