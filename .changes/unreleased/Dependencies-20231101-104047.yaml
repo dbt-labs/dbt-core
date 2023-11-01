@@ -1,0 +1,6 @@
+kind: Dependencies
+body: Remove Werkzeug dependency
+time: 2023-11-01T10:40:47.050929948-04:00
+custom:
+  Author: b-ryan
+  PR: 8964 8965
