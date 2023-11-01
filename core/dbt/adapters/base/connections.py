@@ -6,6 +6,7 @@ import traceback
 
 # multiprocessing.RLock is a function returning this type
 from multiprocessing.synchronize import RLock
+from multiprocessing.context import SpawnContext
 from threading import get_ident
 from typing import (
     Any,
@@ -49,7 +50,6 @@ from dbt.common.events.types import (
     RollbackFailed,
 )
 from dbt.common.events.contextvars import get_node_info
-from dbt import flags
 from dbt.common.utils import cast_to_str
 
 SleepTime = Union[int, float]  # As taken by time.sleep.
@@ -72,10 +72,10 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
 
     TYPE: str = NotImplemented
 
-    def __init__(self, profile: AdapterRequiredConfig) -> None:
+    def __init__(self, profile: AdapterRequiredConfig, mp_context: SpawnContext) -> None:
         self.profile = profile
         self.thread_connections: Dict[Hashable, Connection] = {}
-        self.lock: RLock = flags.MP_CONTEXT.RLock()
+        self.lock: RLock = mp_context.RLock()
         self.query_header: Optional[MacroQueryStringSetter] = None
 
     def set_query_header(self, manifest: Manifest) -> None:

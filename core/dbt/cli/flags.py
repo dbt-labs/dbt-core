@@ -2,7 +2,6 @@ import os
 import sys
 from dataclasses import dataclass
 from importlib import import_module
-from multiprocessing import get_context
 from pprint import pformat as pf
 from typing import Any, Callable, Dict, List, Optional, Set, Union
 
@@ -224,7 +223,6 @@ class Flags:
 
         # Set hard coded flags.
         object.__setattr__(self, "WHICH", invoked_subcommand_name or ctx.info_name)
-        object.__setattr__(self, "MP_CONTEXT", get_context("spawn"))
 
         # Apply the lead/follow relationship between some parameters.
         self._override_if_set("USE_COLORS", "USE_COLORS_FILE", params_assigned_from_default)

@@ -59,7 +59,8 @@ from dbt.common.events.functions import fire_event
 from dbt.common.events.types import MergedFromState, UnpinnedRefNewVersionAvailable
 from dbt.common.events.contextvars import get_node_info
 from dbt.node_types import NodeType, AccessType
-from dbt.flags import get_flags, MP_CONTEXT
+from dbt.flags import get_flags
+from dbt.mp_context import get_mp_context
 from dbt import tracking
 import dbt.utils
 
@@ -823,7 +824,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         metadata={"serialize": lambda x: None, "deserialize": lambda x: None},
     )
     _lock: Lock = field(
-        default_factory=MP_CONTEXT.Lock,
+        default_factory=get_mp_context().Lock,
         metadata={"serialize": lambda x: None, "deserialize": lambda x: None},
     )
 
@@ -835,7 +836,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
 
     @classmethod
     def __post_deserialize__(cls, obj):
-        obj._lock = MP_CONTEXT.Lock()
+        obj._lock = get_mp_context().Lock()
         return obj
 
     def build_flat_graph(self):

@@ -1,4 +1,3 @@
-from multiprocessing import get_context
 from pathlib import Path
 from typing import List, Optional
 
@@ -33,10 +32,6 @@ class TestFlags:
     def test_which(self, run_context):
         flags = Flags(run_context)
         assert flags.WHICH == "run"
-
-    def test_mp_context(self, run_context):
-        flags = Flags(run_context)
-        assert flags.MP_CONTEXT == get_context("spawn")
 
     @pytest.mark.parametrize("param", cli.params)
     def test_cli_group_flags_from_params(self, run_context, param):

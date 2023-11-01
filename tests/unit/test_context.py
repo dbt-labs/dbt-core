@@ -118,8 +118,9 @@ class TestVar(unittest.TestCase):
 class TestParseWrapper(unittest.TestCase):
     def setUp(self):
         self.mock_config = mock.MagicMock()
+        self.mock_mp_context = mock.MagicMock()
         adapter_class = adapter_factory()
-        self.mock_adapter = adapter_class(self.mock_config)
+        self.mock_adapter = adapter_class(self.mock_config, self.mock_mp_context)
         self.namespace = mock.MagicMock()
         self.wrapper = providers.ParseDatabaseWrapper(self.mock_adapter, self.namespace)
         self.responder = self.mock_adapter.responder
@@ -137,13 +138,14 @@ class TestParseWrapper(unittest.TestCase):
 class TestRuntimeWrapper(unittest.TestCase):
     def setUp(self):
         self.mock_config = mock.MagicMock()
+        self.mock_mp_context = mock.MagicMock()
         self.mock_config.quoting = {
             "database": True,
             "schema": True,
             "identifier": True,
         }
         adapter_class = adapter_factory()
-        self.mock_adapter = adapter_class(self.mock_config)
+        self.mock_adapter = adapter_class(self.mock_config, self.mock_mp_context)
         self.namespace = mock.MagicMock()
         self.wrapper = providers.RuntimeDatabaseWrapper(self.mock_adapter, self.namespace)
         self.responder = self.mock_adapter.responder

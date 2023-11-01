@@ -2,6 +2,7 @@ import dataclasses
 
 import agate
 import decimal
+from multiprocessing import get_context
 import unittest
 from unittest import mock
 
@@ -59,12 +60,13 @@ class TestPostgresAdapter(unittest.TestCase):
         }
 
         self.config = config_from_parts_or_dicts(project_cfg, profile_cfg)
+        self.mp_context = get_context("spawn")
         self._adapter = None
 
     @property
     def adapter(self):
         if self._adapter is None:
-            self._adapter = PostgresAdapter(self.config)
+            self._adapter = PostgresAdapter(self.config, self.mp_context)
             inject_adapter(self._adapter, PostgresPlugin)
         return self._adapter
 
@@ -399,6 +401,7 @@ class TestConnectingPostgresAdapter(unittest.TestCase):
         }
 
         self.config = config_from_parts_or_dicts(project_cfg, profile_cfg)
+        self.mp_context = get_context("spawn")
 
         self.handle = mock.MagicMock(spec=psycopg2_extensions.connection)
         self.cursor = self.handle.cursor.return_value
@@ -423,7 +426,7 @@ class TestConnectingPostgresAdapter(unittest.TestCase):
         self.mock_state_check.side_effect = _mock_state_check
 
         self.psycopg2.connect.return_value = self.handle
-        self.adapter = PostgresAdapter(self.config)
+        self.adapter = PostgresAdapter(self.config, self.mp_context)
         self.adapter._macro_manifest_lazy = load_internal_manifest_macros(self.config)
         self.adapter.connections.query_header = MacroQueryStringSetter(
             self.config, self.adapter._macro_manifest_lazy
@@ -548,8 +551,9 @@ class TestConnectingPostgresAdapter(unittest.TestCase):
             "config-version": 2,
         }
         self.config = config_from_parts_or_dicts(project_cfg, profile_cfg)
+        self.mp_context = get_context("spawn")
         self.adapter.cleanup_connections()
-        self._adapter = PostgresAdapter(self.config)
+        self._adapter = PostgresAdapter(self.config, self.mp_context)
         self.adapter.verify_database("postgres")
 
 

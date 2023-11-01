@@ -14,6 +14,7 @@ from dbt.exceptions import DbtInternalError, DbtRuntimeError
 from dbt.include.global_project import PACKAGE_PATH as GLOBAL_PROJECT_PATH
 from dbt.include.global_project import PROJECT_NAME as GLOBAL_PROJECT_NAME
 from dbt.semver import VersionSpecifier
+from dbt.mp_context import get_mp_context
 
 Adapter = AdapterProtocol
 
@@ -102,7 +103,7 @@ class AdapterContainer:
                 # this shouldn't really happen...
                 return
 
-            adapter: Adapter = adapter_type(config)  # type: ignore
+            adapter: Adapter = adapter_type(config, get_mp_context())  # type: ignore
             self.adapters[adapter_name] = adapter
 
     def lookup_adapter(self, adapter_name: str) -> Adapter:

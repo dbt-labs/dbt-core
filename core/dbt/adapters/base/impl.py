@@ -20,6 +20,7 @@ from typing import (
     TypedDict,
     Union,
 )
+from multiprocessing.context import SpawnContext
 
 from dbt.adapters.capability import Capability, CapabilityDict
 from dbt.contracts.graph.nodes import ColumnLevelConstraint, ConstraintType, ModelLevelConstraint
@@ -241,10 +242,10 @@ class BaseAdapter(metaclass=AdapterMeta):
     # implementations to indicate adapter support for optional capabilities.
     _capabilities = CapabilityDict({})
 
-    def __init__(self, config) -> None:
+    def __init__(self, config, mp_context: SpawnContext) -> None:
         self.config = config
         self.cache = RelationsCache(log_cache_events=config.log_cache_events)
-        self.connections = self.ConnectionManager(config)
+        self.connections = self.ConnectionManager(config, mp_context)
         self._macro_manifest_lazy: Optional[MacroManifest] = None
 
     ###
