@@ -35,78 +35,83 @@ SELECT
 
 test_my_model_yml = """
 unit:
-  - model: my_model
-    tests:
-      - name: test_my_model
-        given:
-          - input: ref('my_model_a')
-            rows:
-              - {id: 1, a: 1}
-          - input: ref('my_model_b')
-            rows:
-              - {id: 1, b: 2}
-              - {id: 2, b: 2}
-        expect:
-          rows:
-            - {c: 2}
+  - name: test_my_model
+    model: my_model
+    given:
+      - input: ref('my_model_a')
+        rows:
+          - {id: 1, a: 1}
+      - input: ref('my_model_b')
+        rows:
+          - {id: 1, b: 2}
+          - {id: 2, b: 2}
+    expect:
+      rows:
+        - {c: 2}
 
-      - name: test_my_model_empty
-        given:
-          - input: ref('my_model_a')
-            rows: []
-          - input: ref('my_model_b')
-            rows:
-              - {id: 1, b: 2}
-              - {id: 2, b: 2}
-        expect:
-          rows: []
-      - name: test_my_model_overrides
-        given:
-          - input: ref('my_model_a')
-            rows:
-              - {id: 1, a: 1}
-          - input: ref('my_model_b')
-            rows:
-              - {id: 1, b: 2}
-              - {id: 2, b: 2}
-        overrides:
-          macros:
-            type_numeric: override
-            invocation_id: 123
-          vars:
-            my_test: var_override
-          env_vars:
-            MY_TEST: env_var_override
-        expect:
-          rows:
-            - {macro_call: override, var_call: var_override, env_var_call: env_var_override, invocation_id: 123}
-      - name: test_my_model_string_concat
-        given:
-          - input: ref('my_model_a')
-            rows:
-              - {id: 1, string_a: a}
-          - input: ref('my_model_b')
-            rows:
-              - {id: 1, string_b: b}
-        expect:
-          rows:
-            - {string_c: ab}
-        config:
-           tags: test_this
+  - name: test_my_model_empty
+    model: my_model
+    given:
+      - input: ref('my_model_a')
+        rows: []
+      - input: ref('my_model_b')
+        rows:
+          - {id: 1, b: 2}
+          - {id: 2, b: 2}
+    expect:
+      rows: []
+
+  - name: test_my_model_overrides
+    model: my_model
+    given:
+      - input: ref('my_model_a')
+        rows:
+          - {id: 1, a: 1}
+      - input: ref('my_model_b')
+        rows:
+          - {id: 1, b: 2}
+          - {id: 2, b: 2}
+    overrides:
+      macros:
+        type_numeric: override
+        invocation_id: 123
+      vars:
+        my_test: var_override
+      env_vars:
+        MY_TEST: env_var_override
+    expect:
+      rows:
+        - {macro_call: override, var_call: var_override, env_var_call: env_var_override, invocation_id: 123}
+
+  - name: test_my_model_string_concat
+    model: my_model
+    given:
+      - input: ref('my_model_a')
+        rows:
+          - {id: 1, string_a: a}
+      - input: ref('my_model_b')
+        rows:
+          - {id: 1, string_b: b}
+    expect:
+      rows:
+        - {string_c: ab}
+    config:
+        tags: test_this
 """
 
 datetime_test = """
-      - name: test_my_model_datetime
-        given:
-          - input: ref('my_model_a')
-            rows:
-              - {id: 1, date_a: "2020-01-01"}
-          - input: ref('my_model_b')
-            rows:
-              - {id: 1}
-        expect:
-          rows:
-            - {date_a: "2020-01-01"}
+  - name: test_my_model_datetime
+    model: my_model
+    given:
+      - input: ref('my_model_a')
+        rows:
+          - {id: 1, date_a: "2020-01-01"}
+      - input: ref('my_model_b')
+        rows:
+          - {id: 1}
+    expect:
+      rows:
+        - {date_a: "2020-01-01"}
 """
 
 
@@ -166,6 +171,7 @@ class TestUnitTests:
         unit_test_manifest = get_artifact(
             project.project_root, "target", "unit_test_manifest.json"
         )
+        breakpoint()
         assert len(unit_test_manifest["nodes"]) == 15
 
         # Check for duplicate unit test name

@@ -385,6 +385,7 @@ class ManifestLoader:
                 # project_parser_files.
                 try:
                     project_parser_files = self.partial_parser.get_parsing_files()
+                    # breakpoint()
                     self.partially_parsing = True
                     self.manifest = self.saved_manifest
                 except Exception as exc:

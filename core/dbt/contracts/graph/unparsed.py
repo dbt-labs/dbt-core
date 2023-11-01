@@ -830,16 +830,11 @@ class UnitTestOverrides(dbtClassMixin):
 
 
 @dataclass
-class UnparsedUnitTestDefinition(dbtClassMixin):
+class UnparsedUnitTest(dbtClassMixin):
     name: str
+    model: str  # name of the model being unit tested
     given: Sequence[UnitTestInputFixture]
     expect: UnitTestOutputFixture
     description: str = ""
     overrides: Optional[UnitTestOverrides] = None
     config: Dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass
-class UnparsedUnitTestSuite(dbtClassMixin):
-    model: str  # name of the model being unit tested
-    tests: Sequence[UnparsedUnitTestDefinition]

@@ -13,7 +13,7 @@ from dbt.contracts.graph.nodes import (
     DependsOn,
     UnitTestConfig,
 )
-from dbt.contracts.graph.unparsed import UnparsedUnitTestSuite
+from dbt.contracts.graph.unparsed import UnparsedUnitTest
 from dbt.exceptions import ParsingError, InvalidUnitTestGivenInput
 from dbt.graph import UniqueId
 from dbt.node_types import NodeType
@@ -199,52 +199,52 @@ class UnitTestParser(YamlReader):
 
     def parse(self) -> ParseResult:
         for data in self.get_key_dicts():
-            unit_test_suite = self._get_unit_test_suite(data)
-            model_name_split = unit_test_suite.model.split()
-            tested_model_node = self._find_tested_model_node(unit_test_suite)
+            # breakpoint()
+            unit_test = self._get_unit_test(data)
+            model_name_split = unit_test.model.split()
+            tested_model_node = self._find_tested_model_node(unit_test)
 
-            for test in unit_test_suite.tests:
-                unit_test_case_unique_id = (
-                    f"unit.{self.project.project_name}.{unit_test_suite.model}.{test.name}"
-                )
-                unit_test_fqn = [self.project.project_name] + model_name_split + [test.name]
-                unit_test_config = self._build_unit_test_config(unit_test_fqn, test.config)
+            unit_test_case_unique_id = (
+                f"{NodeType.Unit}.{self.project.project_name}.{unit_test.model}.{unit_test.name}"
+            )
+            unit_test_fqn = [self.project.project_name] + model_name_split + [unit_test.name]
+            unit_test_config = self._build_unit_test_config(unit_test_fqn, unit_test.config)
 
-                # Check that format and type of rows matches for each given input
-                for input in test.given:
-                    input.validate_fixture("input", test.name)
-                test.expect.validate_fixture("expected", test.name)
+            # Check that format and type of rows matches for each given input
+            for input in unit_test.given:
+                input.validate_fixture("input", unit_test.name)
+            unit_test.expect.validate_fixture("expected", unit_test.name)
 
-                unit_test_definition = UnitTestDefinition(
-                    name=test.name,
-                    model=unit_test_suite.model,
-                    resource_type=NodeType.Unit,
-                    package_name=self.project.project_name,
-                    path=self.yaml.path.relative_path,
-                    original_file_path=self.yaml.path.original_file_path,
-                    unique_id=unit_test_case_unique_id,
-                    given=test.given,
-                    expect=test.expect,
-                    description=test.description,
-                    overrides=test.overrides,
-                    depends_on=DependsOn(nodes=[tested_model_node.unique_id]),
-                    fqn=unit_test_fqn,
-                    config=unit_test_config,
-                )
-                self.manifest.add_unit_test(self.yaml.file, unit_test_definition)
+            unit_test_definition = UnitTestDefinition(
+                name=unit_test.name,
+                model=unit_test.model,
+                resource_type=NodeType.Unit,
+                package_name=self.project.project_name,
+                path=self.yaml.path.relative_path,
+                original_file_path=self.yaml.path.original_file_path,
+                unique_id=unit_test_case_unique_id,
+                given=unit_test.given,
+                expect=unit_test.expect,
+                description=unit_test.description,
+                overrides=unit_test.overrides,
+                depends_on=DependsOn(nodes=[tested_model_node.unique_id]),
+                fqn=unit_test_fqn,
+                config=unit_test_config,
+            )
+            self.manifest.add_unit_test(self.yaml.file, unit_test_definition)
 
         return ParseResult()
 
-    def _get_unit_test_suite(self, data: Dict[str, Any]) -> UnparsedUnitTestSuite:
+    def _get_unit_test(self, data: Dict[str, Any]) -> UnparsedUnitTest:
         try:
-            UnparsedUnitTestSuite.validate(data)
-            return UnparsedUnitTestSuite.from_dict(data)
+            UnparsedUnitTest.validate(data)
+            return UnparsedUnitTest.from_dict(data)
         except (ValidationError, JSONValidationError) as exc:
             raise YamlParseDictError(self.yaml.path, self.key, data, exc)
 
-    def _find_tested_model_node(self, unit_test_suite: UnparsedUnitTestSuite) -> ModelNode:
+    def _find_tested_model_node(self, unit_test: UnparsedUnitTest) -> ModelNode:
         package_name = self.project.project_name
-        model_name_split = unit_test_suite.model.split()
+        model_name_split = unit_test.model.split()
         model_name = model_name_split[0]
         model_version = model_name_split[1] if len(model_name_split) == 2 else None
 
@@ -253,7 +253,7 @@ class UnitTestParser(YamlReader):
         )
         if not tested_node:
             raise ParsingError(
-                f"Unable to find model '{package_name}.{unit_test_suite.model}' for unit tests in {self.yaml.path.original_file_path}"
+                f"Unable to find model '{package_name}.{unit_test.model}' for unit tests in {self.yaml.path.original_file_path}"
             )
 
         return tested_node

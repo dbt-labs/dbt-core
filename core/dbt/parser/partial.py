@@ -595,6 +595,7 @@ class PartialParsing:
         saved_schema_file.checksum = new_schema_file.checksum
         saved_schema_file.dfy = new_schema_file.dfy
         # schedule parsing
+        # breakpoint()
         self.add_to_pp_files(saved_schema_file)
         # schema_file pp_dict should have been generated already
         fire_event(PartialParsingFile(operation="updated", file_id=file_id))
@@ -711,7 +712,7 @@ class PartialParsing:
     # Take a "section" of the schema file yaml dictionary from saved and new schema files
     # and determine which parts have changed
     def get_diff_for(self, key, saved_yaml_dict, new_yaml_dict):
-        dict_name = "model" if key == "unit" else "name"
+        dict_name = "name"
         if key in saved_yaml_dict or key in new_yaml_dict:
             saved_elements = saved_yaml_dict[key] if key in saved_yaml_dict else []
             new_elements = new_yaml_dict[key] if key in new_yaml_dict else []
@@ -754,7 +755,7 @@ class PartialParsing:
     # flag indicates that we're processing a schema file, so if a matching
     # patch has already been scheduled, replace it.
     def merge_patch(self, schema_file, key, patch, new_patch=False):
-        elem_name = "model" if key == "unit" else "name"
+        elem_name = "name"
         if schema_file.pp_dict is None:
             schema_file.pp_dict = {}
         pp_dict = schema_file.pp_dict

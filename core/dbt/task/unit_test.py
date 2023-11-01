@@ -67,7 +67,8 @@ class UnitTestRunner(CompileRunner):
         self.print_start_line()
 
     def execute_unit_test(self, node: UnitTestNode, manifest: Manifest) -> UnitTestResultData:
-        # generate_runtime_unit_test_context not strictly needed - this is to run the 'unit' materialization, not compile the node.compield_code
+        # generate_runtime_unit_test_context not strictly needed - this is to run the 'unit'
+        # materialization, not compile the node.compiled_code
         context = generate_runtime_model_context(node, self.config, manifest)
 
         materialization_macro = manifest.find_materialization_macro_by_name(
