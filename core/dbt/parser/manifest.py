@@ -1113,7 +1113,7 @@ class ManifestLoader:
         for saved_query in self.manifest.saved_queries.values():
             # TODO:
             # 1. process `where` of SavedQuery for `depends_on`s
-            # 2. process `group_bys` of SavedQuery for `depends_on``
+            # 2. process `group_by` of SavedQuery for `depends_on``
             _process_metrics_for_node(self.manifest, current_project, saved_query)
 
     def update_semantic_model(self, semantic_model) -> None:

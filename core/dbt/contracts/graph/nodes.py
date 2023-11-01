@@ -12,6 +12,7 @@ from dbt.dataclass_schema import dbtClassMixin, ExtensibleDbtClassMixin
 
 from dbt.clients.system import write_file
 from dbt.contracts.files import FileHash
+from dbt.contracts.graph.saved_queries import Export, QueryParams
 from dbt.contracts.graph.semantic_models import (
     Defaults,
     Dimension,
@@ -36,6 +37,7 @@ from dbt.contracts.graph.unparsed import (
     UnparsedColumn,
 )
 from dbt.contracts.graph.node_args import ModelNodeArgs
+from dbt.contracts.graph.semantic_layer_common import WhereFilterIntersection
 from dbt.contracts.util import Replaceable, AdditionalPropertiesMixin
 from dbt.events.functions import warn_or_error
 from dbt.exceptions import ParsingError, ContractBreakingChangeError
@@ -49,7 +51,6 @@ from dbt.events.types import (
 from dbt.events.contextvars import set_log_contextvars
 from dbt.flags import get_flags
 from dbt.node_types import ModelLanguage, NodeType, AccessType
-from dbt_semantic_interfaces.call_parameter_sets import FilterCallParameterSets
 from dbt_semantic_interfaces.references import (
     EntityReference,
     MeasureReference,
@@ -59,7 +60,6 @@ from dbt_semantic_interfaces.references import (
 )
 from dbt_semantic_interfaces.references import MetricReference as DSIMetricReference
 from dbt_semantic_interfaces.type_enums import MetricType, TimeGranularity
-from dbt_semantic_interfaces.parsing.where_filter.where_filter_parser import WhereFilterParser
 
 from .model_config import (
     NodeConfig,
@@ -1400,24 +1400,6 @@ class Exposure(GraphNode):
 
 
 @dataclass
-class WhereFilter(dbtClassMixin):
-    where_sql_template: str
-
-    @property
-    def call_parameter_sets(self) -> FilterCallParameterSets:
-        return WhereFilterParser.parse_call_parameter_sets(self.where_sql_template)
-
-
-@dataclass
-class WhereFilterIntersection(dbtClassMixin):
-    where_filters: List[WhereFilter]
-
-    @property
-    def filter_expression_parameter_sets(self) -> Sequence[Tuple[str, FilterCallParameterSets]]:
-        raise NotImplementedError
-
-
-@dataclass
 class MetricInputMeasure(dbtClassMixin):
     name: str
     filter: Optional[WhereFilterIntersection] = None
@@ -1745,9 +1727,8 @@ class SemanticModel(GraphNode):
 
 @dataclass
 class SavedQueryMandatory(GraphNode):
-    metrics: List[str]
-    group_bys: List[str]
-    where: Optional[WhereFilterIntersection]
+    query_params: QueryParams
+    exports: List[Export]
 
 
 @dataclass
@@ -1763,20 +1744,24 @@ class SavedQuery(NodeInfoMixin, SavedQueryMandatory):
     refs: List[RefArgs] = field(default_factory=list)
 
     @property
+    def metrics(self) -> List[str]:
+        return self.query_params.metrics
+
+    @property
     def depends_on_nodes(self):
         return self.depends_on.nodes
 
     def same_metrics(self, old: "SavedQuery") -> bool:
-        return self.metrics == old.metrics
+        return self.query_params.metrics == old.query_params.metrics
 
-    def same_group_bys(self, old: "SavedQuery") -> bool:
-        return self.group_bys == old.group_bys
+    def same_group_by(self, old: "SavedQuery") -> bool:
+        return self.query_params.group_by == old.query_params.group_by
 
     def same_description(self, old: "SavedQuery") -> bool:
         return self.description == old.description
 
     def same_where(self, old: "SavedQuery") -> bool:
-        return self.where == old.where
+        return self.query_params.where == old.query_params.where
 
     def same_label(self, old: "SavedQuery") -> bool:
         return self.label == old.label
@@ -1787,6 +1772,17 @@ class SavedQuery(NodeInfoMixin, SavedQueryMandatory):
     def same_group(self, old: "SavedQuery") -> bool:
         return self.group == old.group
 
+    def same_exports(self, old: "SavedQuery") -> bool:
+        if len(self.exports) != len(old.exports):
+            return False
+
+        # exports should be in the same order, so we zip them for easy iteration
+        for (old_export, new_export) in zip(old.exports, self.exports):
+            if not new_export.same_contents(old_export):
+                return False
+
+        return True
+
     def same_contents(self, old: Optional["SavedQuery"]) -> bool:
         # existing when it didn't before is a change!
         # metadata/tags changes are not "changes"
@@ -1795,7 +1791,7 @@ class SavedQuery(NodeInfoMixin, SavedQueryMandatory):
 
         return (
             self.same_metrics(old)
-            and self.same_group_bys(old)
+            and self.same_group_by(old)
             and self.same_description(old)
             and self.same_where(old)
             and self.same_label(old)

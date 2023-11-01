@@ -79,7 +79,7 @@ class SchemaYamlRenderer(BaseRenderer):
             elif self._is_norender_key(keypath[0:]):
                 return False
         elif self.key == "saved_queries":
-            if keypath[0] == "where":
+            if keypath[0] == "query_params" and len(keypath) > 1 and keypath[1] == "where":
                 return False
             elif self._is_norender_key(keypath[0:]):
                 return False
