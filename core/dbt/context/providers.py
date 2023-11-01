@@ -1543,10 +1543,10 @@ class UnitTestContext(ModelContext):
 
     @contextproperty()
     def this(self) -> Optional[str]:
-        if self.model.this:
-            # TODO: RuntimeRefResolver.set_cte also passes None as second argument.
-            self.model.set_cte(self.model.this.unique_id, None)  # type: ignore
-            return self.adapter.Relation.add_ephemeral_prefix(self.model.this.name)
+        if self.model.this_model_fixture_unique_id in self.manifest.nodes:
+            this_node = self.manifest.expect(self.model.this_model_fixture_unique_id)
+            self.model.set_cte(self.model.this_model_fixture_unique_id, None)  # type: ignore
+            return self.adapter.Relation.add_ephemeral_prefix(this_node.name)
         return None
 
 

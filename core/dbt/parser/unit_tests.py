@@ -48,11 +48,11 @@ class UnitTestManifestLoader:
     def parse_unit_test_case(self, test_case: UnitTestDefinition):
         package_name = self.root_project.project_name
 
-        # Create unit test node based on the "actual" tested node
-        actual_node = self.manifest.ref_lookup.perform_lookup(
+        # Create unit test node based on the node being tested
+        tested_node = self.manifest.ref_lookup.perform_lookup(
             f"model.{package_name}.{test_case.model}", self.manifest
         )
-        assert isinstance(actual_node, ModelNode)
+        assert isinstance(tested_node, ModelNode)
 
         # Create UnitTestNode based on model being tested. Since selection has
         # already been done, we don't have to care about fields that are necessary
@@ -69,13 +69,13 @@ class UnitTestManifestLoader:
             config=UnitTestNodeConfig(
                 materialized="unit", expected_rows=test_case.expect.get_rows()
             ),
-            raw_code=actual_node.raw_code,
-            database=actual_node.database,
-            schema=actual_node.schema,
+            raw_code=tested_node.raw_code,
+            database=tested_node.database,
+            schema=tested_node.schema,
             alias=name,
             fqn=test_case.unique_id.split("."),
             checksum=FileHash.empty(),
-            attached_node=actual_node.unique_id,
+            tested_node=tested_node,
             overrides=test_case.overrides,
         )
 
@@ -106,7 +106,7 @@ class UnitTestManifestLoader:
         # input models substituting for the same input ref'd model.
         for given in test_case.given:
             # extract the original_input_node from the ref in the "input" key of the given list
-            original_input_node = self._get_original_input_node(given.input, actual_node)
+            original_input_node = self._get_original_input_node(given.input, tested_node)
 
             original_input_node_columns = None
             if (
@@ -138,10 +138,6 @@ class UnitTestManifestLoader:
                 checksum=FileHash.empty(),
             )
             self.unit_test_manifest.nodes[input_node.unique_id] = input_node
-
-            # Store input_node on unit_test_node for ease of access in UnitTestContext.this
-            if original_input_node == actual_node:
-                unit_test_node.this = input_node
 
             # Add unique ids of input_nodes to depends_on
             unit_test_node.depends_on.nodes.append(input_node.unique_id)
