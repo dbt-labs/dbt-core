@@ -178,7 +178,6 @@ class PartialParsing:
         # Need to process schema files next, because the dictionaries
         # need to be in place for handling SQL file changes
         for file_id in self.file_diff["changed_schema_files"]:
-            breakpoint()
             self.processing_file = file_id
             self.change_schema_file(file_id)
         for file_id in self.file_diff["deleted_schema_files"]:
@@ -596,7 +595,6 @@ class PartialParsing:
         saved_schema_file.checksum = new_schema_file.checksum
         saved_schema_file.dfy = new_schema_file.dfy
         # schedule parsing
-        breakpoint()
         self.add_to_pp_files(saved_schema_file)
         # schema_file pp_dict should have been generated already
         fire_event(PartialParsingFile(operation="updated", file_id=file_id))
@@ -610,7 +608,7 @@ class PartialParsing:
         self.saved_manifest.files.pop(file_id)
 
     # For each key in a schema file dictionary, process the changed, deleted, and added
-    # elemnts for the key lists
+    # elements for the key lists
     def handle_schema_file_changes(self, schema_file, saved_yaml_dict, new_yaml_dict):
         # loop through comparing previous dict_from_yaml with current dict_from_yaml
         # Need to do the deleted/added/changed thing, just like the files lists
@@ -944,12 +942,12 @@ class PartialParsing:
                 self.delete_disabled(unique_id, schema_file.file_id)
 
     def delete_schema_unit_test(self, schema_file, unit_test_dict):
-        unit_test_model_name = unit_test_dict["model"]
+        unit_test_name = unit_test_dict["name"]
         unit_tests = schema_file.unit_tests.copy()
         for unique_id in unit_tests:
             if unique_id in self.saved_manifest.unit_tests:
                 unit_test = self.saved_manifest.unit_tests[unique_id]
-                if unit_test.model == unit_test_model_name:
+                if unit_test.name == unit_test_name:
                     self.saved_manifest.unit_tests.pop(unique_id)
                     schema_file.unit_tests.remove(unique_id)
             # No disabled unit tests yet
