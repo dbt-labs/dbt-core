@@ -159,7 +159,6 @@ class SchemaParser(SimpleParser[YamlBlock, ModelNode]):
         # If partially parsing, dct should be from pp_dict, otherwise
         # dict_from_yaml
         if dct:
-            # breakpoint()
             # contains the FileBlock and the data (dictionary)
             yaml_block = YamlBlock.from_file_block(block, dct)
 

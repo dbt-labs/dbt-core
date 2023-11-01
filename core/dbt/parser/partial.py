@@ -595,7 +595,6 @@ class PartialParsing:
         saved_schema_file.checksum = new_schema_file.checksum
         saved_schema_file.dfy = new_schema_file.dfy
         # schedule parsing
-        # breakpoint()
         self.add_to_pp_files(saved_schema_file)
         # schema_file pp_dict should have been generated already
         fire_event(PartialParsingFile(operation="updated", file_id=file_id))
