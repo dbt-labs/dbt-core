@@ -204,4 +204,7 @@ class PostgresConnectionManager(SQLConnectionManager):
 
     @classmethod
     def data_type_code_to_name(cls, type_code: int) -> str:
-        return string_types[type_code].name
+        if type_code in string_types:
+            return string_types[type_code].name
+        else:
+            return f"unknown type_code {type_code}"

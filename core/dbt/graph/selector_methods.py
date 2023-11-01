@@ -193,6 +193,7 @@ class SelectorMethod(metaclass=abc.ABCMeta):
             self.exposure_nodes(included_nodes),
             self.metric_nodes(included_nodes),
             self.semantic_model_nodes(included_nodes),
+            self.saved_query_nodes(included_nodes),
         )
 
     def groupable_nodes(
