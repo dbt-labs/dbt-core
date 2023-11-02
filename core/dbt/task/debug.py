@@ -23,7 +23,7 @@ from dbt.config.renderer import DbtProjectYamlRenderer, ProfileRenderer
 from dbt.contracts.results import RunStatus
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.links import ProfileConfigDocs
-from dbt.ui import green, red
+from dbt.common.ui import green, red
 from dbt.common.events.format import pluralize
 from dbt.version import get_installed_version
 

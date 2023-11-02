@@ -1,8 +1,22 @@
 import builtins
 from typing import List, Any
+import os
 
+from dbt.common.constants import SECRET_ENV_PREFIX
 from dbt.common.dataclass_schema import ValidationError
-from dbt.common.utils.exceptions import scrub_secrets, env_secrets
+
+
+def env_secrets() -> List[str]:
+    return [v for k, v in os.environ.items() if k.startswith(SECRET_ENV_PREFIX) and v.strip()]
+
+
+def scrub_secrets(msg: str, secrets: List[str]) -> str:
+    scrubbed = str(msg)
+
+    for secret in secrets:
+        scrubbed = scrubbed.replace(secret, "*****")
+
+    return scrubbed
 
 
 class DbtInternalError(Exception):

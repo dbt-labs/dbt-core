@@ -1,5 +1,5 @@
 import dbt.version
-from dbt.ui import green, red, yellow
+from dbt.common.ui import green, red, yellow
 
 
 class TestGetVersionInformation:

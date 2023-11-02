@@ -9,7 +9,8 @@ from dbt.context.target import TargetContext
 from dbt.context.secret import SecretContext, SECRET_PLACEHOLDER
 from dbt.context.base import BaseContext
 from dbt.adapters.contracts.connection import HasCredentials
-from dbt.exceptions import DbtProjectError, CompilationError, RecursionError
+from dbt.exceptions import DbtProjectError
+from dbt.common.exceptions import CompilationError, RecursionError
 from dbt.common.utils import deep_map_render
 
 

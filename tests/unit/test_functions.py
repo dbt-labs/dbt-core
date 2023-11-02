@@ -4,7 +4,7 @@ import pytest
 import dbt.flags as flags
 from dbt.common.events.functions import msg_to_dict, warn_or_error, setup_event_logger
 from dbt.common.events.types import InfoLevel, NoNodesForSelectionCriteria
-from dbt.exceptions import EventCompilationError
+from dbt.common.exceptions import EventCompilationError
 
 
 @pytest.mark.parametrize(

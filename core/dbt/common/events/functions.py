@@ -5,7 +5,7 @@ from dbt.common.utils import ForgivingJSONEncoder
 from dbt.common.events.base_types import BaseEvent, EventLevel, EventMsg
 from dbt.common.events.eventmgr import EventManager, IEventManager
 from dbt.common.events.logger import LoggerConfig, LineFormat
-from dbt.common.utils.exceptions import scrub_secrets, env_secrets
+from dbt.common.exceptions import scrub_secrets, env_secrets
 from dbt.common.events.types import Note
 from functools import partial
 import json
@@ -24,7 +24,7 @@ _METADATA_ENV_PREFIX = "DBT_ENV_CUSTOM_ENV_"
 # could still use class or method flags, but we'd have to get
 # the type class from the msg and then get the information from the class.
 nofile_codes = ["Z012", "Z013", "Z014", "Z015"]
-WARN_ERROR_OPTIONS = WarnErrorOptions(include=WarnErrorOptions.INCLUDE_ALL, exclude=[])
+WARN_ERROR_OPTIONS = WarnErrorOptions(include=[], exclude=[])
 WARN_ERROR = False
 
 

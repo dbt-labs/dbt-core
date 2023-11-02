@@ -10,7 +10,7 @@ import requests
 import dbt.exceptions
 import dbt.semver
 
-from dbt.ui import green, red, yellow
+from dbt.common.ui import green, red, yellow
 
 PYPI_VERSION_URL = "https://pypi.org/pypi/dbt-core/json"
 

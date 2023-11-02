@@ -12,10 +12,10 @@ from dbt.common.exceptions import (
     DbtConfigError,
 )
 from dbt.node_types import NodeType, AccessType
-from dbt.ui import line_wrap_message
+from dbt.common.ui import line_wrap_message
 
 from dbt.common.dataclass_schema import ValidationError
-from dbt.common.utils.exceptions import env_secrets, scrub_secrets
+from dbt.common.exceptions import env_secrets, scrub_secrets
 
 
 class MacroReturn(builtins.BaseException):

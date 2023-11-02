@@ -56,6 +56,7 @@ def set_from_args(args: Namespace, user_config):
         args_param_value = convert_config(arg_name, args_param_value)
         object.__setattr__(flags, arg_name.upper(), args_param_value)
         object.__setattr__(flags, arg_name.lower(), args_param_value)
+    flags.set_common_global_flags()
     GLOBAL_FLAGS = flags  # type: ignore
 
 

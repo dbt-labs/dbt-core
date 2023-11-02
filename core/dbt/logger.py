@@ -1,5 +1,5 @@
 import dbt.flags
-import dbt.ui
+import dbt.common.ui
 
 import json
 import logging
@@ -531,6 +531,6 @@ def timestamped_line(msg: str) -> str:
 
 def print_timestamped_line(msg: str, use_color: Optional[str] = None):
     if use_color is not None:
-        msg = dbt.ui.color(msg, use_color)
+        msg = dbt.common.ui.color(msg, use_color)
 
     GLOBAL_LOGGER.info(timestamped_line(msg))

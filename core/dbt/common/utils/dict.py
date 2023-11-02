@@ -93,7 +93,7 @@ def _deep_map_render(
     else:
         container_types: Tuple[Type[Any], ...] = (list, dict)
         ok_types = container_types + atomic_types
-        raise dbt.common.exceptions.DbtConfigError(
+        raise DbtConfigError(
             "in _deep_map_render, expected one of {!r}, got {!r}".format(ok_types, type(value))
         )
 

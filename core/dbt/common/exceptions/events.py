@@ -1,5 +1,4 @@
-from dbt.common.exceptions import CompilationError
-from dbt.common.utils.exceptions import scrub_secrets, env_secrets
+from dbt.common.exceptions import CompilationError, scrub_secrets, env_secrets
 
 
 # event level exception

@@ -7,6 +7,7 @@ import json
 from typing import Iterable, List, Dict, Union, Optional, Any
 
 from dbt.common.exceptions import DbtRuntimeError
+from dbt.common.utils import ForgivingJSONEncoder
 
 BOM = BOM_UTF8.decode("utf-8")  # '\ufeff'
 
@@ -123,7 +124,7 @@ def table_from_data_flat(data, column_names: Iterable[str]) -> agate.Table:
             value = _row[col_name]
             if isinstance(value, (dict, list, tuple)):
                 # Represent container types as json strings
-                value = json.dumps(value, cls=dbt.common.utils.JSONEncoder)
+                value = json.dumps(value, cls=ForgivingJSONEncoder)
                 text_only_columns.add(col_name)
             elif isinstance(value, str):
                 text_only_columns.add(col_name)

@@ -13,12 +13,11 @@ from pathlib import PosixPath, WindowsPath
 
 from dbt.common.utils import md5
 from dbt.common.events.types import RetryExternalCall, RecordRetryException
-from dbt.exceptions import (
-    ConnectionError,
+from dbt.common.exceptions import (
     DbtInternalError,
     RecursionError,
-    DuplicateAliasError,
 )
+from dbt.exceptions import ConnectionError, DuplicateAliasError
 from dbt.common.helper_types import WarnErrorOptions
 from dbt import flags
 from enum import Enum
