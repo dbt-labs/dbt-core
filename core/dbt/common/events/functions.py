@@ -11,7 +11,7 @@ from functools import partial
 import json
 import os
 import sys
-from typing import Callable, Dict, List, Optional, TextIO
+from typing import Callable, Dict, List, Optional, TextIO, Union
 import uuid
 from google.protobuf.json_format import MessageToDict
 
@@ -28,7 +28,9 @@ WARN_ERROR_OPTIONS = WarnErrorOptions(include=WarnErrorOptions.INCLUDE_ALL, excl
 WARN_ERROR = False
 
 
-def make_log_dir_if_missing(log_path: Path) -> None:
+def make_log_dir_if_missing(log_path: Union[Path, str]) -> None:
+    if isinstance(log_path, str):
+        log_path = Path(log_path)
     log_path.mkdir(parents=True, exist_ok=True)
 
 
