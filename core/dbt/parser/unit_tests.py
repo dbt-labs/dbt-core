@@ -198,7 +198,6 @@ class UnitTestParser(YamlReader):
         self.yaml = yaml
 
     def parse(self) -> ParseResult:
-        breakpoint()
         for data in self.get_key_dicts():
             unit_test_suite = self._get_unit_test_suite(data)
             model_name_split = unit_test_suite.model.split()

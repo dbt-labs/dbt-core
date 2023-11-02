@@ -299,7 +299,6 @@ class YamlReader(metaclass=ABCMeta):
     # get the list of dicts pointed to by the key in the yaml config,
     # ensure that the dicts have string keys
     def get_key_dicts(self) -> Iterable[Dict[str, Any]]:
-        breakpoint()
         data = self.yaml.data.get(self.key, [])
         if not isinstance(data, list):
             raise ParsingError(
