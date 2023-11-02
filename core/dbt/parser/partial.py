@@ -711,7 +711,6 @@ class PartialParsing:
     # Take a "section" of the schema file yaml dictionary from saved and new schema files
     # and determine which parts have changed
     def get_diff_for(self, key, saved_yaml_dict, new_yaml_dict):
-        dict_name = "name"
         if key in saved_yaml_dict or key in new_yaml_dict:
             saved_elements = saved_yaml_dict[key] if key in saved_yaml_dict else []
             new_elements = new_yaml_dict[key] if key in new_yaml_dict else []
@@ -722,9 +721,9 @@ class PartialParsing:
         new_elements_by_name = {}
         # sources have two part names?
         for element in saved_elements:
-            saved_elements_by_name[element[dict_name]] = element
+            saved_elements_by_name[element["name"]] = element
         for element in new_elements:
-            new_elements_by_name[element[dict_name]] = element
+            new_elements_by_name[element["name"]] = element
 
         # now determine which elements, by name, are added, deleted or changed
         saved_element_names = set(saved_elements_by_name.keys())
@@ -754,7 +753,6 @@ class PartialParsing:
     # flag indicates that we're processing a schema file, so if a matching
     # patch has already been scheduled, replace it.
     def merge_patch(self, schema_file, key, patch, new_patch=False):
-        elem_name = "name"
         if schema_file.pp_dict is None:
             schema_file.pp_dict = {}
         pp_dict = schema_file.pp_dict
@@ -764,7 +762,7 @@ class PartialParsing:
             # check that this patch hasn't already been saved
             found_elem = None
             for elem in pp_dict[key]:
-                if elem["name"] == patch[elem_name]:
+                if elem["name"] == patch["name"]:
                     found_elem = elem
             if not found_elem:
                 pp_dict[key].append(patch)
@@ -773,7 +771,7 @@ class PartialParsing:
                 pp_dict[key].remove(found_elem)
                 pp_dict[key].append(patch)
 
-        schema_file.delete_from_env_vars(key, patch[elem_name])
+        schema_file.delete_from_env_vars(key, patch["name"])
         self.add_to_pp_files(schema_file)
 
     # For model, seed, snapshot, analysis schema dictionary keys,
