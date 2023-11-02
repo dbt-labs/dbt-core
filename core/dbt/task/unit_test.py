@@ -1,8 +1,10 @@
+import agate
 from dataclasses import dataclass
 from dbt.dataclass_schema import dbtClassMixin
+import daff
 import threading
+import re
 from typing import Dict, Any, Optional
-import io
 
 from .compile import CompileRunner
 from .run import RunTask
@@ -24,6 +26,7 @@ from dbt.exceptions import (
 )
 from dbt.node_types import NodeType
 from dbt.parser.unit_tests import UnitTestManifestLoader
+from dbt.ui import green, red
 
 
 @dataclass
@@ -34,6 +37,8 @@ class UnitTestResultData(dbtClassMixin):
 
 
 class UnitTestRunner(CompileRunner):
+    _ANSI_ESCAPE = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+
     def describe_node(self):
         return f"{self.node.resource_type} {self.node.name}"
 
@@ -93,15 +98,17 @@ class UnitTestRunner(CompileRunner):
         result = context["load_result"]("main")
         adapter_response = result["response"].to_dict(omit_none=True)
         table = result["table"]
-        actual = self._get_unit_test_table(table, "actual")
-        expected = self._get_unit_test_table(table, "expected")
-        should_error = actual.rows != expected.rows
-        diff = None
-        if should_error:
-            actual_output = self._agate_table_to_str(actual)
-            expected_output = self._agate_table_to_str(expected)
+        actual = self._get_unit_test_agate_table(table, "actual")
+        expected = self._get_unit_test_agate_table(table, "expected")
 
-            diff = f"\n\nActual:\n{actual_output}\n\nExpected:\n{expected_output}\n"
+        # generate diff, if exists
+        diff, should_error = None, False
+        daff_diff = self._get_daff_diff(expected, actual)
+        if daff_diff.hasDifference():
+            rendered_diff = self._render_daff_diff(daff_diff)
+            diff = f"\n\n{red('expected')} differs from {green('actual')}:\n\n{rendered_diff}\n"
+            should_error = True
+
         return UnitTestResultData(
             diff=diff,
             should_error=should_error,
@@ -134,7 +141,7 @@ class UnitTestRunner(CompileRunner):
     def after_execute(self, result):
         self.print_result_line(result)
 
-    def _get_unit_test_table(self, result_table, actual_or_expected: str):
+    def _get_unit_test_agate_table(self, result_table, actual_or_expected: str) -> agate.Table:
         unit_test_table = result_table.where(
             lambda row: row["actual_or_expected"] == actual_or_expected
         )
@@ -142,14 +149,39 @@ class UnitTestRunner(CompileRunner):
         columns.remove("actual_or_expected")
         return unit_test_table.select(columns)
 
-    def _agate_table_to_str(self, table) -> str:
-        # Hack to get Agate table output as string
-        output = io.StringIO()
-        if self.config.args.output == "json":
-            table.to_json(path=output)
-        else:
-            table.print_table(output=output, max_rows=None)
-        return output.getvalue().strip()
+    def _get_daff_diff(
+        self, expected: agate.Table, actual: agate.Table, ordered: bool = False
+    ) -> daff.TableDiff:
+        expected_data = [[col.name for col in expected.columns]]
+        for expected_row in expected.rows:
+            expected_data.append(list(expected_row.values()))
+
+        actual_data = [[col.name for col in actual.columns]]
+        for actual_row in actual.rows:
+            actual_data.append(list(actual_row.values()))
+
+        table1 = daff.PythonTableView(expected_data)
+        table2 = daff.PythonTableView(actual_data)
+
+        alignment = daff.Coopy.compareTables(table1, table2).align()
+        result = daff.PythonTableView([])
+
+        flags = daff.CompareFlags()
+        flags.ordered = ordered
+
+        diff = daff.TableDiff(alignment, flags)
+        diff.hilite(result)
+        return diff
+
+    def _render_daff_diff(self, daff_diff: daff.TableDiff) -> str:
+        result = daff.PythonTableView([])
+        daff_diff.hilite(result)
+        rendered = daff.TerminalDiffRender().render(result)
+        # strip colors if necessary
+        if not self.config.args.use_colors:
+            rendered = self._ANSI_ESCAPE.sub("", rendered)
+
+        return rendered
 
 
 class UnitTestSelector(ResourceTypeSelector):
