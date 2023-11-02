@@ -15,7 +15,7 @@ from dbt.contracts.results import (
     SourceFreshnessResult,
     FreshnessStatus,
 )
-from dbt.exceptions import DbtRuntimeError, DbtInternalError
+from dbt.common.exceptions import DbtRuntimeError, DbtInternalError
 from dbt.common.events.functions import fire_event
 from dbt.common.events.types import (
     FreshnessCheckComplete,

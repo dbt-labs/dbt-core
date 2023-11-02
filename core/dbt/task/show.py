@@ -8,7 +8,7 @@ from dbt.contracts.results import RunResult, RunStatus
 from dbt.common.events.base_types import EventLevel
 from dbt.common.events.functions import fire_event
 from dbt.common.events.types import ShowNode, Note
-from dbt.exceptions import DbtRuntimeError
+from dbt.common.exceptions import DbtRuntimeError
 from dbt.task.compile import CompileTask, CompileRunner
 from dbt.task.seed import SeedRunner
 

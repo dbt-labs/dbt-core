@@ -2,7 +2,7 @@ import copy
 import datetime
 from typing import Dict, Optional, TypeVar, Callable, Any, Tuple, Union, Type
 
-from dbt.exceptions import DbtConfigError, RecursionError
+from dbt.common.exceptions import DbtConfigError, RecursionError
 
 K_T = TypeVar("K_T")
 V_T = TypeVar("V_T")
@@ -40,7 +40,7 @@ def _merge(a, b):
 # http://stackoverflow.com/questions/20656135/python-deep-merge-dictionary-data
 def deep_merge(*args):
     """
-    >>> dbt.utils.deep_merge({'a': 1, 'b': 2, 'c': 3}, {'a': 2}, {'a': 3, 'b': 1})  # noqa
+    >>> dbt.common.utils.deep_merge({'a': 1, 'b': 2, 'c': 3}, {'a': 2}, {'a': 3, 'b': 1})  # noqa
     {'a': 3, 'b': 1, 'c': 3}
     """
     if len(args) == 0:
@@ -93,7 +93,7 @@ def _deep_map_render(
     else:
         container_types: Tuple[Type[Any], ...] = (list, dict)
         ok_types = container_types + atomic_types
-        raise DbtConfigError(
+        raise dbt.common.exceptions.DbtConfigError(
             "in _deep_map_render, expected one of {!r}, got {!r}".format(ok_types, type(value))
         )
 

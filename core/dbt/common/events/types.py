@@ -14,8 +14,9 @@ from dbt.common.events.format import (
     pluralize,
     timestamp_to_datetime_string,
 )
-from dbt.node_types import NodeType
-from dbt.ui import line_wrap_message, warning_tag, red, green, yellow
+
+# from dbt.node_types import NodeType
+from dbt.common.ui import line_wrap_message, warning_tag, red, green, yellow
 
 
 # The classes in this file represent the data necessary to describe a
@@ -1594,7 +1595,9 @@ class LogTestResult(DynamicLevel):
     def message(self) -> str:
         if self.status == "error":
             info = "ERROR"
-            status = red(info)
+            status = red(
+                info,
+            )
         elif self.status == "pass":
             info = "PASS"
             status = green(info)
@@ -1867,7 +1870,8 @@ class SkippingDetails(InfoLevel):
         return "Q034"
 
     def message(self) -> str:
-        if self.resource_type in NodeType.refable():
+        # ToDo: move to core or figure out NodeType
+        if self.resource_type in ["model", "seed", "snapshot"]:
             msg = f"SKIP relation {self.schema}.{self.node_name}"
         else:
             msg = f"SKIP {self.resource_type} {self.node_name}"

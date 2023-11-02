@@ -54,7 +54,7 @@ from dbt.exceptions import (
     DuplicateMaterializationNameError,
     AmbiguousResourceNameRefError,
 )
-from dbt.helper_types import PathSet
+from dbt.common.helper_types import PathSet
 from dbt.common.events.functions import fire_event
 from dbt.common.events.types import MergedFromState, UnpinnedRefNewVersionAvailable
 from dbt.common.events.contextvars import get_node_info

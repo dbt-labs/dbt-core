@@ -32,7 +32,7 @@ from dbt.exceptions import (
     DbtRuntimeError,
 )
 from dbt.graph import SelectionSpec
-from dbt.helper_types import NoValue
+from dbt.common.helper_types import NoValue
 from dbt.semver import VersionSpecifier, versions_compatible
 from dbt.version import get_installed_version
 from dbt.utils import MultiDict, md5

@@ -16,7 +16,7 @@ from dbt.common.events.types import (
     RunningOperationUncaughtError,
     LogDebugStackTrace,
 )
-from dbt.exceptions import DbtInternalError
+from dbt.common.exceptions import DbtInternalError
 from dbt.node_types import NodeType
 from dbt.task.base import ConfiguredTask
 

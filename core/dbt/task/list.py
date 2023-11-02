@@ -14,7 +14,7 @@ from dbt.common.events.types import (
     NoNodesSelected,
     ListCmdOut,
 )
-from dbt.exceptions import DbtRuntimeError, DbtInternalError
+from dbt.common.exceptions import DbtRuntimeError, DbtInternalError
 from dbt.common.events.contextvars import task_contextvars
 
 

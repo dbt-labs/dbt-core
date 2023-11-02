@@ -9,7 +9,7 @@ from dbt.adapters.sql import SQLConnectionManager
 from dbt.adapters.contracts.connection import AdapterResponse
 from dbt.common.events import AdapterLogger
 
-from dbt.helper_types import Port
+from dbt.common.helper_types import Port
 from dataclasses import dataclass
 from typing import Optional
 from typing_extensions import Annotated

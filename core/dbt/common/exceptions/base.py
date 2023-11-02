@@ -157,3 +157,26 @@ class CompilationError(DbtRuntimeError):
                 f"remove the {type_name} entry for {name} in one of these files:\n"
                 f" - {path_1!s}\n{path_2!s}"
             )
+
+
+class RecursionError(DbtRuntimeError):
+    pass
+
+
+class DbtConfigError(DbtRuntimeError):
+    CODE = 10007
+    MESSAGE = "DBT Configuration Error"
+
+    # ToDo: Can we remove project?
+    def __init__(self, msg: str, project=None, result_type="invalid_project", path=None) -> None:
+        self.project = project
+        super().__init__(msg)
+        self.result_type = result_type
+        self.path = path
+
+    def __str__(self, prefix="! ") -> str:
+        msg = super().__str__(prefix)
+        if self.path is None:
+            return msg
+        else:
+            return f"{msg}\n\nError encountered in {self.path}"

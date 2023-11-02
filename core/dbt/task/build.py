@@ -7,7 +7,7 @@ from .test import TestRunner as test_runner
 
 from dbt.adapters.factory import get_adapter
 from dbt.contracts.results import NodeStatus
-from dbt.exceptions import DbtInternalError
+from dbt.common.exceptions import DbtInternalError
 from dbt.graph import ResourceTypeSelector
 from dbt.node_types import NodeType
 from dbt.task.test import TestSelector

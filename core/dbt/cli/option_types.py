@@ -3,7 +3,7 @@ from click import ParamType, Choice
 from dbt.config.utils import parse_cli_yaml_string
 from dbt.exceptions import ValidationError, DbtValidationError, OptionNotYamlDictError
 
-from dbt.helper_types import WarnErrorOptions
+from dbt.common.helper_types import WarnErrorOptions
 
 
 class YAML(ParamType):

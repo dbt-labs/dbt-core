@@ -17,7 +17,8 @@ from dbt.contracts.graph.nodes import (
 from dbt.parser.search import FileBlock
 from typing import List, Dict, Any, TypeVar, Generic, Union, Optional
 from dataclasses import dataclass
-from dbt.exceptions import DbtInternalError, ParsingError
+from dbt.common.exceptions import DbtInternalError
+from dbt.exceptions import ParsingError
 
 
 def trimmed(inp: str) -> str:

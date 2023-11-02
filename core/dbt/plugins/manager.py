@@ -3,7 +3,7 @@ import pkgutil
 from typing import Dict, List, Callable
 
 from dbt.contracts.graph.manifest import Manifest
-from dbt.exceptions import DbtRuntimeError
+from dbt.common.exceptions import DbtRuntimeError
 from dbt.plugins.contracts import PluginArtifacts
 from dbt.plugins.manifest import PluginNodes
 import dbt.tracking

@@ -10,11 +10,12 @@ from click.core import Command as ClickCommand, Group, ParameterSource
 from dbt.cli.exceptions import DbtUsageException
 from dbt.cli.resolvers import default_log_path, default_project_dir
 from dbt.cli.types import Command as CliCommand
+from dbt.common import ui
 from dbt.config.profile import read_user_config
 from dbt.contracts.project import UserConfig
-from dbt.exceptions import DbtInternalError
+from dbt.common.exceptions import DbtInternalError
 from dbt.deprecations import renamed_env_var
-from dbt.helper_types import WarnErrorOptions
+from dbt.common.helper_types import WarnErrorOptions
 
 if os.name != "nt":
     # https://bugs.python.org/issue41567
@@ -252,6 +253,10 @@ class Flags:
         )
         for param in params:
             object.__setattr__(self, param.lower(), getattr(self, param))
+        if getattr(self, "PRINTER_WIDTH", None) is not None:
+            ui.PRINTER_WIDTH = getattr(self, "PRINTER_WIDTH")
+        if getattr(self, "USE_COLOR", None) is not None:
+            ui.USE_COLOR = getattr(self, "USE_COLOR")
 
     def __str__(self) -> str:
         return str(pf(self.__dict__))

@@ -9,9 +9,9 @@ from typing import Optional, TextIO, Any, Callable
 
 from colorama import Style
 
-import dbt.utils
 from dbt.common.events.base_types import EventLevel, EventMsg
 from dbt.common.events.format import timestamp_to_datetime_string
+from dbt.common.utils import ForgivingJSONEncoder
 
 # A Filter is a function which takes a BaseEvent and returns True if the event
 # should be logged, False otherwise.
@@ -175,6 +175,6 @@ class _JsonLogger(_Logger):
         from dbt.common.events.functions import msg_to_dict
 
         msg_dict = msg_to_dict(msg)
-        raw_log_line = json.dumps(msg_dict, sort_keys=True, cls=dbt.utils.ForgivingJSONEncoder)
+        raw_log_line = json.dumps(msg_dict, sort_keys=True, cls=ForgivingJSONEncoder)
         line = self.scrubber(raw_log_line)  # type: ignore
         return line

@@ -6,7 +6,7 @@ from .printer import (
 )
 
 from dbt.contracts.results import RunStatus
-from dbt.exceptions import DbtInternalError
+from dbt.common.exceptions import DbtInternalError
 from dbt.graph import ResourceTypeSelector
 from dbt.logger import TextOnly
 from dbt.common.events.functions import fire_event

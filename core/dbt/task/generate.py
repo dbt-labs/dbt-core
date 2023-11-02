@@ -24,7 +24,8 @@ from dbt.contracts.results import (
     ColumnMetadata,
     CatalogArtifact,
 )
-from dbt.exceptions import DbtInternalError, AmbiguousCatalogMatchError
+from dbt.common.exceptions import DbtInternalError
+from dbt.exceptions import AmbiguousCatalogMatchError
 from dbt.graph import ResourceTypeSelector
 from dbt.node_types import NodeType
 from dbt.include.global_project import DOCS_INDEX_FILE_PATH

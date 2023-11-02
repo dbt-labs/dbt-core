@@ -40,7 +40,7 @@ from dbt.constants import (
     PARTIAL_PARSE_FILE_NAME,
     SEMANTIC_MANIFEST_FILE_NAME,
 )
-from dbt.helper_types import PathSet
+from dbt.common.helper_types import PathSet
 from dbt.common.events.functions import fire_event, get_invocation_id, warn_or_error
 from dbt.common.events.types import (
     PartialParsingErrorProcessingFile,

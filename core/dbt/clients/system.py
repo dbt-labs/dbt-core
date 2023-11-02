@@ -23,7 +23,7 @@ from dbt.common.events.types import (
     SystemStdErr,
     SystemReportReturnCode,
 )
-from dbt.exceptions import DbtInternalError
+from dbt.common.exceptions import DbtInternalError
 from dbt.utils import _connection_exception_retry as connection_exception_retry
 from pathspec import PathSpec  # type: ignore
 

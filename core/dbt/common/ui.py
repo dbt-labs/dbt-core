@@ -3,8 +3,6 @@ from typing import Dict
 
 import colorama
 
-from dbt.flags import get_flags
-
 COLORS: Dict[str, str] = {
     "red": colorama.Fore.RED,
     "green": colorama.Fore.GREEN,
@@ -19,18 +17,19 @@ COLOR_FG_YELLOW = COLORS["yellow"]
 COLOR_RESET_ALL = COLORS["reset_all"]
 
 
+USE_COLOR = True
+PRINTER_WIDTH = 80
+
+
 def color(text: str, color_code: str) -> str:
-    if get_flags().USE_COLORS:
+    if USE_COLOR:
         return "{}{}{}".format(color_code, text, COLOR_RESET_ALL)
     else:
         return text
 
 
 def printer_width() -> int:
-    flags = get_flags()
-    if flags.PRINTER_WIDTH:
-        return flags.PRINTER_WIDTH
-    return 80
+    return PRINTER_WIDTH
 
 
 def green(text: str) -> str:

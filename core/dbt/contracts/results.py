@@ -9,7 +9,7 @@ from dbt.contracts.util import (
     Replaceable,
     schema_version,
 )
-from dbt.exceptions import DbtInternalError
+from dbt.common.exceptions import DbtInternalError
 from dbt.common.events.functions import fire_event
 from dbt.common.events.types import TimingInfoCollected
 from dbt.common.events.contextvars import get_node_info

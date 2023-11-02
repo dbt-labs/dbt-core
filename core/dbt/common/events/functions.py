@@ -1,11 +1,12 @@
-from dbt.constants import METADATA_ENV_PREFIX
+from pathlib import Path
+
+from dbt.common.helper_types import WarnErrorOptions
+from dbt.common.utils import ForgivingJSONEncoder
 from dbt.common.events.base_types import BaseEvent, EventLevel, EventMsg
 from dbt.common.events.eventmgr import EventManager, IEventManager
-from dbt.common.events.logger import LoggerConfig, NoFilter, LineFormat
-from dbt.exceptions import scrub_secrets, env_secrets
+from dbt.common.events.logger import LoggerConfig, LineFormat
+from dbt.common.utils.exceptions import scrub_secrets, env_secrets
 from dbt.common.events.types import Note
-from dbt.flags import get_flags, ENABLE_LEGACY_LOGGER
-from dbt.logger import GLOBAL_LOGGER, make_log_dir_if_missing
 from functools import partial
 import json
 import os
@@ -14,17 +15,21 @@ from typing import Callable, Dict, List, Optional, TextIO
 import uuid
 from google.protobuf.json_format import MessageToDict
 
-import dbt.utils
-
 LOG_VERSION = 3
 metadata_vars: Optional[Dict[str, str]] = None
-
+_METADATA_ENV_PREFIX = "DBT_ENV_CUSTOM_ENV_"
 # These are the logging events issued by the "clean" command,
 # where we can't count on having a log directory. We've removed
 # the "class" flags on the events in types.py. If necessary we
 # could still use class or method flags, but we'd have to get
 # the type class from the msg and then get the information from the class.
 nofile_codes = ["Z012", "Z013", "Z014", "Z015"]
+WARN_ERROR_OPTIONS = WarnErrorOptions(include=WarnErrorOptions.INCLUDE_ALL, exclude=[])
+WARN_ERROR = False
+
+
+def make_log_dir_if_missing(log_path: Path) -> None:
+    log_path.mkdir(parents=True, exist_ok=True)
 
 
 def setup_event_logger(flags, callbacks: List[Callable[[EventMsg], None]] = []) -> None:
@@ -32,50 +37,43 @@ def setup_event_logger(flags, callbacks: List[Callable[[EventMsg], None]] = []) 
     make_log_dir_if_missing(flags.LOG_PATH)
     EVENT_MANAGER.callbacks = callbacks.copy()
 
-    if ENABLE_LEGACY_LOGGER:
-        EVENT_MANAGER.add_logger(
-            _get_logbook_log_config(
-                flags.DEBUG, flags.USE_COLORS, flags.LOG_CACHE_EVENTS, flags.QUIET
-            )
+    if flags.LOG_LEVEL != "none":
+        line_format = _line_format_from_str(flags.LOG_FORMAT, LineFormat.PlainText)
+        log_level = (
+            EventLevel.ERROR
+            if flags.QUIET
+            else EventLevel.DEBUG
+            if flags.DEBUG
+            else EventLevel(flags.LOG_LEVEL)
         )
-    else:
-        if flags.LOG_LEVEL != "none":
-            line_format = _line_format_from_str(flags.LOG_FORMAT, LineFormat.PlainText)
-            log_level = (
-                EventLevel.ERROR
-                if flags.QUIET
-                else EventLevel.DEBUG
-                if flags.DEBUG
-                else EventLevel(flags.LOG_LEVEL)
-            )
-            console_config = _get_stdout_config(
-                line_format,
-                flags.USE_COLORS,
-                log_level,
-                flags.LOG_CACHE_EVENTS,
-            )
+        console_config = _get_stdout_config(
+            line_format,
+            flags.USE_COLORS,
+            log_level,
+            flags.LOG_CACHE_EVENTS,
+        )
+        EVENT_MANAGER.add_logger(console_config)
+
+        if _CAPTURE_STREAM:
+            # Create second stdout logger to support test which want to know what's
+            # being sent to stdout.
+            console_config.output_stream = _CAPTURE_STREAM
             EVENT_MANAGER.add_logger(console_config)
 
-            if _CAPTURE_STREAM:
-                # Create second stdout logger to support test which want to know what's
-                # being sent to stdout.
-                console_config.output_stream = _CAPTURE_STREAM
-                EVENT_MANAGER.add_logger(console_config)
-
-        if flags.LOG_LEVEL_FILE != "none":
-            # create and add the file logger to the event manager
-            log_file = os.path.join(flags.LOG_PATH, "dbt.log")
-            log_file_format = _line_format_from_str(flags.LOG_FORMAT_FILE, LineFormat.DebugText)
-            log_level_file = EventLevel.DEBUG if flags.DEBUG else EventLevel(flags.LOG_LEVEL_FILE)
-            EVENT_MANAGER.add_logger(
-                _get_logfile_config(
-                    log_file,
-                    flags.USE_COLORS_FILE,
-                    log_file_format,
-                    log_level_file,
-                    flags.LOG_FILE_MAX_BYTES,
-                )
+    if flags.LOG_LEVEL_FILE != "none":
+        # create and add the file logger to the event manager
+        log_file = os.path.join(flags.LOG_PATH, "dbt.log")
+        log_file_format = _line_format_from_str(flags.LOG_FORMAT_FILE, LineFormat.DebugText)
+        log_level_file = EventLevel.DEBUG if flags.DEBUG else EventLevel(flags.LOG_LEVEL_FILE)
+        EVENT_MANAGER.add_logger(
+            _get_logfile_config(
+                log_file,
+                flags.USE_COLORS_FILE,
+                log_file_format,
+                log_level_file,
+                flags.LOG_FILE_MAX_BYTES,
             )
+        )
 
 
 def _line_format_from_str(format_str: str, default: LineFormat) -> LineFormat:
@@ -125,15 +123,15 @@ def _get_logfile_config(
     line_format: LineFormat,
     level: EventLevel,
     log_file_max_bytes: int,
+    log_cache_events: bool = False,
 ) -> LoggerConfig:
-
     return LoggerConfig(
         name="file_log",
         line_format=line_format,
         use_colors=use_colors,
         level=level,  # File log is *always* debug level
         scrubber=env_scrubber,
-        filter=partial(_logfile_filter, bool(get_flags().LOG_CACHE_EVENTS), line_format),
+        filter=partial(_logfile_filter, log_cache_events, line_format),
         invocation_id=EVENT_MANAGER.invocation_id,
         output_file_name=log_path,
         output_file_max_bytes=log_file_max_bytes,
@@ -144,26 +142,6 @@ def _logfile_filter(log_cache_events: bool, line_format: LineFormat, msg: EventM
     return msg.info.code not in nofile_codes and not (
         msg.info.name in ["CacheAction", "CacheDumpGraph"] and not log_cache_events
     )
-
-
-def _get_logbook_log_config(
-    debug: bool, use_colors: bool, log_cache_events: bool, quiet: bool
-) -> LoggerConfig:
-    config = _get_stdout_config(
-        LineFormat.PlainText,
-        use_colors,
-        EventLevel.ERROR if quiet else EventLevel.DEBUG if debug else EventLevel.INFO,
-        log_cache_events,
-    )
-    config.name = "logbook_log"
-    config.filter = (
-        NoFilter
-        if log_cache_events
-        else lambda e: e.info.name not in ["CacheAction", "CacheDumpGraph"]
-    )
-    config.logger = GLOBAL_LOGGER
-    config.output_stream = None
-    return config
 
 
 def env_scrubber(msg: str) -> str:
@@ -182,11 +160,7 @@ def cleanup_event_logger() -> None:
 # currently fire before logs can be configured by setup_event_logger(), we
 # create a default configuration with default settings and no file output.
 EVENT_MANAGER: IEventManager = EventManager()
-EVENT_MANAGER.add_logger(
-    _get_logbook_log_config(False, True, False, False)  # type: ignore
-    if ENABLE_LEGACY_LOGGER
-    else _get_stdout_config(LineFormat.PlainText, True, EventLevel.INFO, False)
-)
+EVENT_MANAGER.add_logger(_get_stdout_config(LineFormat.PlainText, True, EventLevel.INFO, False))
 
 # This global, and the following two functions for capturing stdout logs are
 # an unpleasant hack we intend to remove as part of API-ification. The GitHub
@@ -209,7 +183,7 @@ def stop_capture_stdout_logs() -> None:
 # the message may contain secrets which must be scrubbed at the usage site.
 def msg_to_json(msg: EventMsg) -> str:
     msg_dict = msg_to_dict(msg)
-    raw_log_line = json.dumps(msg_dict, sort_keys=True, cls=dbt.utils.ForgivingJSONEncoder)
+    raw_log_line = json.dumps(msg_dict, sort_keys=True, cls=ForgivingJSONEncoder)
     return raw_log_line
 
 
@@ -235,11 +209,10 @@ def msg_to_dict(msg: EventMsg) -> dict:
 
 
 def warn_or_error(event, node=None) -> None:
-    flags = get_flags()
-    if flags.WARN_ERROR or flags.WARN_ERROR_OPTIONS.includes(type(event).__name__):
+    if WARN_ERROR or WARN_ERROR_OPTIONS.includes(type(event).__name__):
 
         # TODO: resolve this circular import when at top
-        from dbt.exceptions import EventCompilationError
+        from dbt.common.exceptions import EventCompilationError
 
         raise EventCompilationError(event.message(), node)
     else:
@@ -274,9 +247,9 @@ def get_metadata_vars() -> Dict[str, str]:
     global metadata_vars
     if not metadata_vars:
         metadata_vars = {
-            k[len(METADATA_ENV_PREFIX) :]: v
+            k[len(_METADATA_ENV_PREFIX) :]: v
             for k, v in os.environ.items()
-            if k.startswith(METADATA_ENV_PREFIX)
+            if k.startswith(_METADATA_ENV_PREFIX)
         }
     return metadata_vars
 

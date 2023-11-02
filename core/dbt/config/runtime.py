@@ -32,7 +32,7 @@ from dbt.exceptions import (
     DbtRuntimeError,
     UninstalledPackagesFoundError,
 )
-from dbt.helper_types import DictDefaultEmptyStr, FQNPath, PathSet
+from dbt.common.helper_types import DictDefaultEmptyStr, FQNPath, PathSet
 from .profile import Profile
 from .project import Project
 from .renderer import DbtProjectYamlRenderer, ProfileRenderer

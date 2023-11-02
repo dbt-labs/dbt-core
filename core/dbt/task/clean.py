@@ -8,7 +8,7 @@ from dbt.common.events.types import (
     ConfirmCleanPath,
     FinishedCleanPaths,
 )
-from dbt.exceptions import DbtRuntimeError
+from dbt.common.exceptions import DbtRuntimeError
 from dbt.task.base import (
     BaseTask,
     move_to_nearest_project_dir,

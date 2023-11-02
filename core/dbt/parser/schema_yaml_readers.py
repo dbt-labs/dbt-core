@@ -39,7 +39,8 @@ from dbt.contracts.graph.semantic_models import (
     Measure,
     NonAdditiveDimension,
 )
-from dbt.exceptions import DbtInternalError, YamlParseDictError, JSONValidationError
+from dbt.common.exceptions import DbtInternalError
+from dbt.exceptions import YamlParseDictError, JSONValidationError
 from dbt.context.providers import generate_parse_exposure, generate_parse_semantic_models
 
 from dbt.contracts.graph.model_config import MetricConfig, ExposureConfig

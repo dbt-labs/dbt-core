@@ -1,7 +1,4 @@
-from dbt.common.utils.encoding import (
-    md5,
-    JSONEncoder,
-)
+from dbt.common.utils.encoding import md5, JSONEncoder, ForgivingJSONEncoder
 
 from dbt.common.utils.casting import (
     cast_to_str,

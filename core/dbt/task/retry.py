@@ -5,7 +5,7 @@ from dbt.cli.types import Command as CliCommand
 from dbt.config import RuntimeConfig
 from dbt.contracts.results import NodeStatus
 from dbt.contracts.state import PreviousState
-from dbt.exceptions import DbtRuntimeError
+from dbt.common.exceptions import DbtRuntimeError
 from dbt.graph import GraphQueue
 from dbt.task.base import ConfiguredTask
 from dbt.task.build import BuildTask

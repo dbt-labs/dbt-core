@@ -5,7 +5,12 @@ import io
 import agate
 from typing import Any, Dict, List, Mapping, Optional, Union
 
-from dbt.common.exceptions import DbtRuntimeError, CompilationError, DbtInternalError
+from dbt.common.exceptions import (
+    DbtRuntimeError,
+    CompilationError,
+    DbtInternalError,
+    DbtConfigError,
+)
 from dbt.node_types import NodeType, AccessType
 from dbt.ui import line_wrap_message
 
@@ -78,10 +83,6 @@ class ContractBreakingChangeError(DbtRuntimeError):
             "Consider making an additive (non-breaking) change instead, if possible.\n"
             "Otherwise, create a new model version: https://docs.getdbt.com/docs/collaborate/govern/model-versions"
         )
-
-
-class RecursionError(DbtRuntimeError):
-    pass
 
 
 class DbtValidationError(DbtRuntimeError):
@@ -166,24 +167,6 @@ class AliasError(DbtValidationError):
 class DependencyError(Exception):
     CODE = 10006
     MESSAGE = "Dependency Error"
-
-
-class DbtConfigError(DbtRuntimeError):
-    CODE = 10007
-    MESSAGE = "DBT Configuration Error"
-
-    def __init__(self, msg: str, project=None, result_type="invalid_project", path=None) -> None:
-        self.project = project
-        super().__init__(msg)
-        self.result_type = result_type
-        self.path = path
-
-    def __str__(self, prefix="! ") -> str:
-        msg = super().__str__(prefix)
-        if self.path is None:
-            return msg
-        else:
-            return f"{msg}\n\nError encountered in {self.path}"
 
 
 class FailFastError(DbtRuntimeError):
@@ -308,14 +291,6 @@ class ConnectionError(Exception):
     """
 
     pass
-
-
-# event level exception
-class EventCompilationError(CompilationError):
-    def __init__(self, msg: str, node) -> None:
-        self.msg = scrub_secrets(msg, env_secrets())
-        self.node = node
-        super().__init__(msg=self.msg)
 
 
 # compilation level exceptions

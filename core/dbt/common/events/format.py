@@ -1,5 +1,7 @@
-from dbt import ui
-from dbt.node_types import NodeType
+from dbt.common import ui
+
+# ToDo Figure out how to import NodeType
+# from dbt.node_types import NodeType
 from typing import Optional, Union
 from datetime import datetime
 
@@ -35,19 +37,19 @@ def format_fancy_output_line(
     return output
 
 
-def _pluralize(string: Union[str, NodeType]) -> str:
-    try:
-        convert = NodeType(string)
-    except ValueError:
-        return f"{string}s"
-    else:
-        return convert.pluralize()
+# def _pluralize(string: Union[str, NodeType]) -> str:
+#     try:
+#         convert = NodeType(string)
+#     except ValueError:
+#         return f"{string}s"
+#     else:
+#         return convert.pluralize()
 
 
-def pluralize(count, string: Union[str, NodeType]) -> str:
+def pluralize(count, string: Union[str]) -> str:
     pluralized: str = str(string)
-    if count != 1:
-        pluralized = _pluralize(string)
+    # if count != 1:
+    #     pluralized = _pluralize(string)
     return f"{count} {pluralized}"
 
 

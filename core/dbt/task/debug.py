@@ -218,7 +218,7 @@ class DebugTask(BaseTask):
                     # https://github.com/dbt-labs/dbt-core/issues/6259
                     getattr(self.args, "threads", None),
                 )
-            except dbt.exceptions.DbtConfigError as exc:
+            except dbt.common.exceptions.DbtConfigError as exc:
                 profile_errors.append(str(exc))
             else:
                 if len(profile_names) == 1:
@@ -263,7 +263,7 @@ class DebugTask(BaseTask):
 
         try:
             return [Profile.pick_profile_name(args_profile, project_profile)], ""
-        except dbt.exceptions.DbtConfigError:
+        except dbt.common.exceptions.DbtConfigError:
             pass
         # try to guess
 
@@ -345,7 +345,7 @@ class DebugTask(BaseTask):
                 renderer,
                 verify_version=self.args.VERSION_CHECK,
             )
-        except dbt.exceptions.DbtConfigError as exc:
+        except dbt.common.exceptions.DbtConfigError as exc:
             return SubtaskStatus(
                 log_msg=red("ERROR invalid"),
                 run_status=RunStatus.Error,

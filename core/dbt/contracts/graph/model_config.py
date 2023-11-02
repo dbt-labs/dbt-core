@@ -12,7 +12,7 @@ from dbt.common.dataclass_schema import (
 from dbt.contracts.graph.unparsed import AdditionalPropertiesAllowed, Docs
 from dbt.contracts.graph.utils import validate_color
 from dbt.contracts.util import Replaceable, list_str
-from dbt.exceptions import DbtInternalError, CompilationError
+from dbt.common.exceptions import DbtInternalError, CompilationError
 from dbt import hooks
 from dbt.node_types import NodeType, AccessType
 from mashumaro.jsonschema.annotations import Pattern
