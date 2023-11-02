@@ -19,6 +19,18 @@ def scrub_secrets(msg: str, secrets: List[str]) -> str:
     return scrubbed
 
 
+class Exception(builtins.Exception):
+    CODE = -32000
+    MESSAGE = "Server Error"
+
+    def data(self):
+        # if overriding, make sure the result is json-serializable.
+        return {
+            "type": self.__class__.__name__,
+            "message": str(self),
+        }
+
+
 class DbtInternalError(Exception):
     def __init__(self, msg: str):
         self.stack: List = []

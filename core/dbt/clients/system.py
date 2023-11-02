@@ -13,7 +13,7 @@ import tarfile
 from pathlib import Path
 from typing import Any, Callable, Dict, List, NoReturn, Optional, Tuple, Type, Union
 
-import dbt.exceptions
+import dbt.common.exceptions
 import requests
 from dbt.common.events.functions import fire_event
 from dbt.common.events.types import (
@@ -385,7 +385,7 @@ def _handle_posix_error(exc: OSError, cwd: str, cmd: List[str]) -> NoReturn:
 
 
 def _handle_windows_error(exc: OSError, cwd: str, cmd: List[str]) -> NoReturn:
-    cls: Type[dbt.exceptions.Exception] = dbt.exceptions.CommandError
+    cls: Type[dbt.common.exceptions.Exception] = dbt.exceptions.CommandError
     if exc.errno == errno.ENOENT:
         message = (
             "Could not find command, ensure it is in the user's PATH "

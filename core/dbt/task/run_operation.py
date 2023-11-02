@@ -5,7 +5,7 @@ from datetime import datetime
 
 import agate
 
-import dbt.exceptions
+import dbt.common.exceptions
 from dbt.adapters.factory import get_adapter
 from dbt.contracts.files import FileHash
 from dbt.contracts.graph.nodes import HookNode
@@ -56,7 +56,7 @@ class RunOperationTask(ConfiguredTask):
 
         try:
             self._run_unsafe(package_name, macro_name)
-        except dbt.exceptions.Exception as exc:
+        except dbt.common.exceptions.Exception as exc:
             fire_event(RunningOperationCaughtError(exc=str(exc)))
             fire_event(LogDebugStackTrace(exc_info=traceback.format_exc()))
             success = False

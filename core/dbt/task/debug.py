@@ -17,6 +17,7 @@ from dbt.common.events.types import (
 )
 import dbt.clients.system
 import dbt.exceptions
+import dbt.common.exceptions
 from dbt.adapters.factory import get_adapter, register_adapter
 from dbt.config import PartialProject, Project, Profile
 from dbt.config.renderer import DbtProjectYamlRenderer, ProfileRenderer
@@ -81,7 +82,7 @@ class DebugTask(BaseTask):
         self.profile_path = os.path.join(self.profiles_dir, "profiles.yml")
         try:
             self.project_dir = get_nearest_project_dir(self.args.project_dir)
-        except dbt.exceptions.Exception:
+        except dbt.common.exceptions.Exception:
             # we probably couldn't find a project directory. Set project dir
             # to whatever was given, or default to the current directory.
             if args.project_dir:
@@ -126,7 +127,7 @@ class DebugTask(BaseTask):
         fire_event(DebugCmdOut(msg="Using dbt_project.yml file at {}".format(self.project_path)))
         if load_profile_status.run_status == RunStatus.Success:
             if self.profile is None:
-                raise dbt.exceptions.DbtInternalError(
+                raise dbt.common.exceptions.DbtInternalError(
                     "Profile should not be None if loading profile completed"
                 )
             else:

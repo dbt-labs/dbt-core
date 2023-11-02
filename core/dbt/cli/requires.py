@@ -26,7 +26,8 @@ from dbt.common.events.types import (
 )
 from dbt.common.events.helpers import get_json_string_utcnow
 from dbt.common.events.types import MainEncounteredError, MainStackTrace
-from dbt.exceptions import Exception as DbtException, DbtProjectError, FailFastError
+from dbt.common.exceptions import Exception as DbtException
+from dbt.exceptions import DbtProjectError, FailFastError
 from dbt.parser.manifest import ManifestLoader, write_manifest
 from dbt.profiler import profiler
 from dbt.tracking import active_user, initialize_from_flags, track_run

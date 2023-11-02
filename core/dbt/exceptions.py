@@ -29,18 +29,6 @@ class MacroReturn(builtins.BaseException):
         self.value = value
 
 
-class Exception(builtins.Exception):
-    CODE = -32000
-    MESSAGE = "Server Error"
-
-    def data(self):
-        # if overriding, make sure the result is json-serializable.
-        return {
-            "type": self.__class__.__name__,
-            "message": str(self),
-        }
-
-
 class DbtDatabaseError(DbtRuntimeError):
     CODE = 10003
     MESSAGE = "Database Error"
