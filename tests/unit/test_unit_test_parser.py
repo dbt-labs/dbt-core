@@ -123,7 +123,7 @@ class UnitTestParserTest(SchemaParserTest):
             package_name="snowplow",
             path=block.path.relative_path,
             original_file_path=block.path.original_file_path,
-            unique_id="unit.snowplow.my_model.test_my_model",
+            unique_id="unit_test.snowplow.my_model.test_my_model",
             given=[],
             expect=UnitTestOutputFixture(rows=[{"a": 1}]),
             description="unit test description",
@@ -143,7 +143,7 @@ class UnitTestParserTest(SchemaParserTest):
         UnitTestParser(self.parser, block).parse()
 
         self.assert_has_manifest_lengths(self.parser.manifest, nodes=1, unit_tests=1)
-        unit_test = self.parser.manifest.unit_tests["unit.snowplow.my_model.test_my_model"]
+        unit_test = self.parser.manifest.unit_tests["unit_test.snowplow.my_model.test_my_model"]
         self.assertEqual(sorted(unit_test.config.tags), sorted(["schema_tag", "project_tag"]))
         self.assertEqual(unit_test.config.meta, {"meta_key": "meta_value", "meta_jinja_key": "2"})
 
@@ -164,7 +164,7 @@ class UnitTestParserTest(SchemaParserTest):
 
         self.assert_has_manifest_lengths(self.parser.manifest, nodes=2, unit_tests=1)
         unit_test = self.parser.manifest.unit_tests[
-            "unit.snowplow.my_model_versioned.v1.test_my_model_versioned"
+            "unit_test.snowplow.my_model_versioned.v1.test_my_model_versioned"
         ]
         self.assertEqual(len(unit_test.depends_on.nodes), 1)
         self.assertEqual(unit_test.depends_on.nodes[0], "model.snowplow.my_model_versioned.v1")

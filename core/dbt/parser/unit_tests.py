@@ -204,8 +204,7 @@ class UnitTestParser(YamlReader):
             tested_model_node = self._find_tested_model_node(unit_test)
 
             unit_test_case_unique_id = (
-                # TODO: why is this unit instead of {NodeType.Unit} like other nodes? ({NodeType.Unit} = unit_test)
-                f"unit.{self.project.project_name}.{unit_test.model}.{unit_test.name}"
+                f"{NodeType.Unit}.{self.project.project_name}.{unit_test.model}.{unit_test.name}"
             )
             unit_test_fqn = [self.project.project_name] + model_name_split + [unit_test.name]
             unit_test_config = self._build_unit_test_config(unit_test_fqn, unit_test.config)

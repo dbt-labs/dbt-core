@@ -1,6 +1,6 @@
 import pytest
 from dbt.tests.util import run_dbt, write_file, get_manifest, get_artifact
-from dbt.exceptions import YamlParseDictError, ParsingError
+from dbt.exceptions import DuplicateResourceNameError, ParsingError, YamlParseDictError
 
 my_model_sql = """
 SELECT
@@ -175,15 +175,16 @@ class TestUnitTests:
         assert len(unit_test_manifest["nodes"]) == 15
 
         # Check for duplicate unit test name
-        # TODO: putting this aside for now until we determine if it should pass or not
-        # write_file(
-        #     test_my_model_yml + datetime_test + datetime_test,
-        #     project.project_root,
-        #     "models",
-        #     "test_my_model.yml",
-        # )
-        # with pytest.raises(DuplicateResourceNameError):
-        #     run_dbt(["unit-test", "--select", "my_model"])
+        # this doesn't currently pass with partial parsing because of the root problem
+        # described in https://github.com/dbt-labs/dbt-core/issues/8982
+        write_file(
+            test_my_model_yml + datetime_test + datetime_test,
+            project.project_root,
+            "models",
+            "test_my_model.yml",
+        )
+        with pytest.raises(DuplicateResourceNameError):
+            run_dbt(["run", "--no-partial-parse", "--select", "my_model"])
 
 
 test_my_model_csv_yml = """
