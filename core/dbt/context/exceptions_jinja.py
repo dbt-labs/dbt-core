@@ -4,9 +4,9 @@ from typing import NoReturn
 from dbt.common.events.functions import warn_or_error
 from dbt.common.events.types import JinjaLogWarning
 
+from dbt.common.exceptions import DbtRuntimeError
+from dbt.adapters.exceptions import MissingConfigError
 from dbt.exceptions import (
-    DbtRuntimeError,
-    MissingConfigError,
     MissingMaterializationError,
     MissingRelationError,
     AmbiguousAliasError,

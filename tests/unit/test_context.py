@@ -91,7 +91,7 @@ class TestVar(unittest.TestCase):
         var = providers.RuntimeVar(self.context, self.config, self.model)
 
         self.assertEqual(var("foo", "bar"), "bar")
-        with self.assertRaises(dbt.exceptions.CompilationError):
+        with self.assertRaises(dbt.common.exceptions.CompilationError):
             var("foo")
 
     def test_parser_var_default_something(self):
@@ -459,7 +459,7 @@ def test_macro_namespace_duplicates(config_postgres, manifest_fx):
     mn.add_macros(manifest_fx.macros.values(), {})
 
     # same pkg, same name: error
-    with pytest.raises(dbt.exceptions.CompilationError):
+    with pytest.raises(dbt.common.exceptions.CompilationError):
         mn.add_macro(mock_macro("macro_a", "root"), {})
 
     # different pkg, same name: no error

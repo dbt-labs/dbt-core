@@ -39,5 +39,5 @@ class TestMissingDocsBlocks:
 
     def test_missing_doc_ref(self, project):
         # The run should fail since we could not find the docs reference.
-        with pytest.raises(dbt.exceptions.CompilationError):
+        with pytest.raises(dbt.common.exceptions.CompilationError):
             run_dbt()

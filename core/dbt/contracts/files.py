@@ -160,6 +160,10 @@ class BaseSourceFile(dbtClassMixin, SerializableType):
             return None
         return f"{self.project_name}://{self.path.original_file_path}"
 
+    @property
+    def original_file_path(self):
+        return self.path.original_file_path
+
     def _serialize(self):
         dct = self.to_dict()
         return dct

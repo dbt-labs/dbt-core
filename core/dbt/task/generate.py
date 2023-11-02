@@ -87,7 +87,7 @@ class Catalog(Dict[CatalogKey, CatalogTable]):
                 str(data["table_name"]),
             )
         except KeyError as exc:
-            raise dbt.exceptions.CompilationError(
+            raise dbt.common.exceptions.CompilationError(
                 "Catalog information missing required key {} (got {})".format(exc, data)
             )
         table: CatalogTable

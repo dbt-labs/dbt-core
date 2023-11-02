@@ -7,7 +7,7 @@ from dbt.context.manifest import generate_query_header_context
 from dbt.adapters.contracts.connection import AdapterRequiredConfig, QueryComment
 from dbt.contracts.graph.nodes import ResultNode
 from dbt.contracts.graph.manifest import Manifest
-from dbt.exceptions import DbtRuntimeError
+from dbt.common.exceptions import DbtRuntimeError
 
 
 class NodeWrapper:

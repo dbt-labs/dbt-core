@@ -986,7 +986,7 @@ class TestConfiguredTask(BaseFileTest):
 
     def test_configured_task_dir_change_with_bad_path(self):
         self.args.project_dir = "bad_path"
-        with self.assertRaises(dbt.exceptions.DbtRuntimeError):
+        with self.assertRaises(dbt.common.exceptions.DbtRuntimeError):
             InheritsFromConfiguredTask.from_args(self.args)
 
 

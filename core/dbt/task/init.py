@@ -11,7 +11,7 @@ import click
 import dbt.config
 import dbt.clients.system
 from dbt.config.profile import read_profile
-from dbt.exceptions import DbtRuntimeError
+from dbt.common.exceptions import DbtRuntimeError
 from dbt.flags import get_flags
 from dbt.version import _get_adapter_plugin_names
 from dbt.adapters.factory import load_plugin, get_include_paths
@@ -300,7 +300,7 @@ class InitTask(BaseTask):
         try:
             move_to_nearest_project_dir(self.args.project_dir)
             in_project = True
-        except dbt.exceptions.DbtRuntimeError:
+        except dbt.common.exceptions.DbtRuntimeError:
             in_project = False
 
         if in_project:

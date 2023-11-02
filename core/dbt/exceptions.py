@@ -5,12 +5,12 @@ import io
 import agate
 from typing import Any, Dict, List, Mapping, Optional, Union
 
+from dbt.common.exceptions import DbtRuntimeError, CompilationError, DbtInternalError
 from dbt.node_types import NodeType, AccessType
 from dbt.ui import line_wrap_message
 
-import dbt.common.dataclass_schema
 from dbt.common.dataclass_schema import ValidationError
-from dbt.common.exceptions import env_secrets, scrub_secrets
+from dbt.common.utils.exceptions import env_secrets, scrub_secrets
 
 
 class MacroReturn(builtins.BaseException):
@@ -36,140 +36,6 @@ class Exception(builtins.Exception):
         }
 
 
-class DbtInternalError(Exception):
-    def __init__(self, msg: str) -> None:
-        self.stack: List = []
-        self.msg = scrub_secrets(msg, env_secrets())
-
-    @property
-    def type(self):
-        return "Internal"
-
-    def process_stack(self):
-        lines = []
-        stack = self.stack
-        first = True
-
-        if len(stack) > 1:
-            lines.append("")
-
-            for item in stack:
-                msg = "called by"
-
-                if first:
-                    msg = "in"
-                    first = False
-
-                lines.append(f"> {msg}")
-
-        return lines
-
-    def __str__(self):
-        if hasattr(self.msg, "split"):
-            split_msg = self.msg.split("\n")
-        else:
-            split_msg = str(self.msg).split("\n")
-
-        lines = ["{}".format(self.type + " Error")] + split_msg
-
-        lines += self.process_stack()
-
-        return lines[0] + "\n" + "\n".join(["  " + line for line in lines[1:]])
-
-
-class DbtRuntimeError(RuntimeError, Exception):
-    CODE = 10001
-    MESSAGE = "Runtime error"
-
-    def __init__(self, msg: str, node=None) -> None:
-        self.stack: List = []
-        self.node = node
-        self.msg = scrub_secrets(msg, env_secrets())
-
-    def add_node(self, node=None):
-        if node is not None and node is not self.node:
-            if self.node is not None:
-                self.stack.append(self.node)
-            self.node = node
-
-    @property
-    def type(self):
-        return "Runtime"
-
-    def node_to_string(self, node):
-        if node is None:
-            return "<Unknown>"
-        if not hasattr(node, "name"):
-            # we probably failed to parse a block, so we can't know the name
-            return f"{node.resource_type} ({node.original_file_path})"
-
-        if hasattr(node, "contents"):
-            # handle FileBlocks. They aren't really nodes but we want to render
-            # out the path we know at least. This indicates an error during
-            # block parsing.
-            return f"{node.path.original_file_path}"
-        return f"{node.resource_type} {node.name} ({node.original_file_path})"
-
-    def process_stack(self):
-        lines = []
-        stack = self.stack + [self.node]
-        first = True
-
-        if len(stack) > 1:
-            lines.append("")
-
-            for item in stack:
-                msg = "called by"
-
-                if first:
-                    msg = "in"
-                    first = False
-
-                lines.append(f"> {msg} {self.node_to_string(item)}")
-
-        return lines
-
-    def validator_error_message(self, exc: builtins.Exception):
-        """Given a dbt.dataclass_schema.ValidationError (which is basically a
-        jsonschema.ValidationError), return the relevant parts as a string
-        """
-        if not isinstance(exc, dbt.common.dataclass_schema.ValidationError):
-            return str(exc)
-        path = "[%s]" % "][".join(map(repr, exc.relative_path))
-        return f"at path {path}: {exc.message}"
-
-    def __str__(self, prefix: str = "! "):
-        node_string = ""
-
-        if self.node is not None:
-            node_string = f" in {self.node_to_string(self.node)}"
-
-        if hasattr(self.msg, "split"):
-            split_msg = self.msg.split("\n")
-        else:
-            split_msg = str(self.msg).split("\n")
-
-        lines = ["{}{}".format(self.type + " Error", node_string)] + split_msg
-
-        lines += self.process_stack()
-
-        return lines[0] + "\n" + "\n".join(["  " + line for line in lines[1:]])
-
-    def data(self):
-        result = Exception.data(self)
-        if self.node is None:
-            return result
-
-        result.update(
-            {
-                "raw_code": self.node.raw_code,
-                # the node isn't always compiled, but if it is, include that!
-                "compiled_code": getattr(self.node, "compiled_code", None),
-            }
-        )
-        return result
-
-
 class DbtDatabaseError(DbtRuntimeError):
     CODE = 10003
     MESSAGE = "Database Error"
@@ -185,26 +51,6 @@ class DbtDatabaseError(DbtRuntimeError):
     @property
     def type(self):
         return "Database"
-
-
-class CompilationError(DbtRuntimeError):
-    CODE = 10004
-    MESSAGE = "Compilation Error"
-
-    @property
-    def type(self):
-        return "Compilation"
-
-    def _fix_dupe_msg(self, path_1: str, path_2: str, name: str, type_name: str) -> str:
-        if path_1 == path_2:
-            return (
-                f"remove one of the {type_name} entries for {name} in this file:\n - {path_1!s}\n"
-            )
-        else:
-            return (
-                f"remove the {type_name} entry for {name} in one of these files:\n"
-                f" - {path_1!s}\n{path_2!s}"
-            )
 
 
 class ContractBreakingChangeError(DbtRuntimeError):
@@ -972,7 +818,7 @@ class DocTargetNotFoundError(CompilationError):
     def get_message(self) -> str:
         target_package_string = ""
         if self.target_doc_package is not None:
-            target_package_string = f"in package '{self. target_doc_package}' "
+            target_package_string = f"in package '{self.target_doc_package}' "
         msg = f"Documentation for '{self.node.unique_id}' depends on doc '{self.target_doc_name}' {target_package_string} which was not found"
         return msg
 
@@ -1282,7 +1128,6 @@ class TestNameNotStringError(ParsingError):
         super().__init__(msg=self.get_message())
 
     def get_message(self) -> str:
-
         msg = f"test name must be a str, got {type(self.test_name)} (value {self.test_name})"
         return msg
 
@@ -1293,7 +1138,6 @@ class TestArgsNotDictError(ParsingError):
         super().__init__(msg=self.get_message())
 
     def get_message(self) -> str:
-
         msg = f"test arguments must be a dict, got {type(self.test_args)} (value {self.test_args})"
         return msg
 
@@ -1304,7 +1148,6 @@ class TestDefinitionDictLengthError(ParsingError):
         super().__init__(msg=self.get_message())
 
     def get_message(self) -> str:
-
         msg = (
             "test definition dictionary must have exactly one key, got"
             f" {self.test} instead ({len(self.test)} keys)"
@@ -1613,7 +1456,6 @@ class ApproximateMatchError(CompilationError):
         super().__init__(msg=self.get_message())
 
     def get_message(self) -> str:
-
         msg = (
             "When searching for a relation, dbt found an approximate match. "
             "Instead of guessing \nwhich relation to use, dbt will move on. "
@@ -1916,16 +1758,6 @@ class MacroNotFoundError(CompilationError):
         super().__init__(msg=msg)
 
 
-class MissingConfigError(CompilationError):
-    def __init__(self, unique_id: str, name: str):
-        self.unique_id = unique_id
-        self.name = name
-        msg = (
-            f"Model '{self.unique_id}' does not define a required config parameter '{self.name}'."
-        )
-        super().__init__(msg=msg)
-
-
 class MissingMaterializationError(CompilationError):
     def __init__(self, materialization, adapter_type):
         self.materialization = materialization
@@ -1933,7 +1765,6 @@ class MissingMaterializationError(CompilationError):
         super().__init__(msg=self.get_message())
 
     def get_message(self) -> str:
-
         valid_types = "'default'"
 
         if self.adapter_type != "default":

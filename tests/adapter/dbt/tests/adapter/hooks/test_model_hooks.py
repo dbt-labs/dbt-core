@@ -2,7 +2,8 @@ import pytest
 
 from pathlib import Path
 
-from dbt.exceptions import CompilationError, ParsingError
+from dbt.common.exceptions import CompilationError
+from dbt.exceptions import ParsingError
 
 from dbt.tests.util import (
     run_dbt,

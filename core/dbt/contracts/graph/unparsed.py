@@ -16,7 +16,8 @@ from dbt.contracts.util import (
 
 # trigger the PathEncoder
 import dbt.helper_types  # noqa:F401
-from dbt.exceptions import CompilationError, ParsingError, DbtInternalError
+from dbt.exceptions import ParsingError
+from dbt.common.exceptions import DbtInternalError, CompilationError
 from dbt.common.dataclass_schema import (
     dbtClassMixin,
     StrEnum,

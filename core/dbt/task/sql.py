@@ -25,7 +25,7 @@ class GenericSqlRunner(CompileRunner, Generic[SQLResult]):
     def handle_exception(self, e, ctx):
         fire_event(SQLRunnerException(exc=str(e), exc_info=traceback.format_exc()))
         if isinstance(e, dbt.exceptions.Exception):
-            if isinstance(e, dbt.exceptions.DbtRuntimeError):
+            if isinstance(e, dbt.common.exceptions.DbtRuntimeError):
                 e.add_node(ctx.node)
             return e
 

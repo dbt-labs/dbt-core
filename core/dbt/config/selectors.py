@@ -12,7 +12,8 @@ from dbt.clients.system import (
     resolve_path_from_base,
 )
 from dbt.contracts.selection import SelectorFile
-from dbt.exceptions import DbtSelectorsError, DbtRuntimeError
+from dbt.exceptions import DbtSelectorsError
+from dbt.common.exceptions import DbtRuntimeError
 from dbt.graph import parse_from_selectors_definition, SelectionSpec
 from dbt.graph.selector_spec import SelectionCriteria
 

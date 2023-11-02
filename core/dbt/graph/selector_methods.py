@@ -23,7 +23,7 @@ from dbt.contracts.graph.nodes import (
 )
 from dbt.contracts.graph.unparsed import UnparsedVersion
 from dbt.contracts.state import PreviousState
-from dbt.exceptions import (
+from dbt.common.exceptions import (
     DbtInternalError,
     DbtRuntimeError,
 )

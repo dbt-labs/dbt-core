@@ -9,7 +9,8 @@ from typing_extensions import Protocol
 from dbt.common.dataclass_schema import dbtClassMixin, StrEnum
 
 from dbt.contracts.util import Replaceable
-from dbt.exceptions import CompilationError, DataclassNotDictError
+from dbt.common.exceptions import CompilationError
+from dbt.exceptions import DataclassNotDictError
 from dbt.common.utils import deep_merge
 
 

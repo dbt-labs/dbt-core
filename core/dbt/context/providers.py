@@ -43,12 +43,13 @@ from dbt.contracts.graph.nodes import (
 from dbt.contracts.graph.metrics import MetricReference, ResolvedMetricReference
 from dbt.contracts.graph.unparsed import NodeVersion
 from dbt.common.events.functions import get_metadata_vars
+from dbt.common.exceptions import DbtInternalError, DbtRuntimeError
+from dbt.adapters.exceptions import MissingConfigError
 from dbt.exceptions import (
     CompilationError,
     ConflictingConfigKeysError,
     SecretEnvVarLocationError,
     EnvVarMissingError,
-    DbtInternalError,
     InlineModelConfigError,
     NumberSourceArgsError,
     PersistDocsValueTypeError,
@@ -58,13 +59,11 @@ from dbt.exceptions import (
     MacroResultAlreadyLoadedError,
     MacrosSourcesUnWriteableError,
     MetricArgsError,
-    MissingConfigError,
     OperationsCannotRefEphemeralNodesError,
     PackageNotInDepsError,
     ParsingError,
     RefBadContextError,
     RefArgsError,
-    DbtRuntimeError,
     TargetNotFoundError,
     DbtValidationError,
     DbtReferenceError,

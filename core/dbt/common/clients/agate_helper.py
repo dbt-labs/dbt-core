@@ -7,7 +7,7 @@ import json
 import dbt.utils
 from typing import Iterable, List, Dict, Union, Optional, Any
 
-from dbt.exceptions import DbtRuntimeError
+from dbt.common.exceptions import DbtRuntimeError
 
 BOM = BOM_UTF8.decode("utf-8")  # '\ufeff'
 

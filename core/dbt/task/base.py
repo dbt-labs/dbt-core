@@ -38,11 +38,9 @@ from dbt.common.events.types import (
     NodeCompiling,
     NodeExecuting,
 )
+from dbt.common.exceptions import DbtRuntimeError, DbtInternalError, CompilationError
 from dbt.exceptions import (
     NotImplementedError,
-    CompilationError,
-    DbtRuntimeError,
-    DbtInternalError,
 )
 from dbt.flags import get_flags
 from dbt.graph import Graph
@@ -103,12 +101,12 @@ class BaseTask(metaclass=ABCMeta):
             fire_event(LogDbtProjectError(exc=str(exc)))
 
             tracking.track_invalid_invocation(args=args, result_type=exc.result_type)
-            raise dbt.exceptions.DbtRuntimeError("Could not run dbt") from exc
+            raise dbt.common.exceptions.DbtRuntimeError("Could not run dbt") from exc
         except dbt.exceptions.DbtProfileError as exc:
             all_profile_names = list(read_profiles(get_flags().PROFILES_DIR).keys())
             fire_event(LogDbtProfileError(exc=str(exc), profiles=all_profile_names))
             tracking.track_invalid_invocation(args=args, result_type=exc.result_type)
-            raise dbt.exceptions.DbtRuntimeError("Could not run dbt") from exc
+            raise dbt.common.exceptions.DbtRuntimeError("Could not run dbt") from exc
         return cls(args, config, *pargs, **kwargs)
 
     @abstractmethod
@@ -128,7 +126,7 @@ def get_nearest_project_dir(project_dir: Optional[str]) -> Path:
         if project_file.is_file():
             return cur_dir
         else:
-            raise dbt.exceptions.DbtRuntimeError(
+            raise dbt.common.exceptions.DbtRuntimeError(
                 "fatal: Invalid --project-dir flag. Not a dbt project. "
                 "Missing dbt_project.yml file"
             )
@@ -138,7 +136,7 @@ def get_nearest_project_dir(project_dir: Optional[str]) -> Path:
     if project_file.is_file():
         return cur_dir
     else:
-        raise dbt.exceptions.DbtRuntimeError(
+        raise dbt.common.exceptions.DbtRuntimeError(
             "fatal: Not a dbt project (or any of the parent directories). "
             "Missing dbt_project.yml file"
         )
