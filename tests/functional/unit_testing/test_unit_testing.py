@@ -151,7 +151,6 @@ class TestUnitTests:
 
         # Partial parsing... remove test
         write_file(test_my_model_yml, project.project_root, "models", "test_my_model.yml")
-        # breakpoint()
         results = run_dbt(["unit-test", "--select", "my_model"], expect_pass=False)
         assert len(results) == 4
 
