@@ -697,7 +697,7 @@ class Project:
                 "snapshots": self.snapshots,
                 "sources": self.sources,
                 "tests": self.tests,
-                "unit_tests": self.unit_tests,
+                "unit-tests": self.unit_tests,
                 "metrics": self.metrics,
                 "semantic-models": self.semantic_models,
                 "saved-queries": self.saved_queries,

@@ -681,7 +681,7 @@ class PartialParsing:
         handle_change("metrics", self.delete_schema_metric)
         handle_change("groups", self.delete_schema_group)
         handle_change("semantic_models", self.delete_schema_semantic_model)
-        handle_change("unit", self.delete_schema_unit_test)
+        handle_change("unit_tests", self.delete_schema_unit_test)
         handle_change("saved_queries", self.delete_schema_saved_query)
 
     def _handle_element_change(

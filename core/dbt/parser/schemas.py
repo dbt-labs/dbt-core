@@ -231,7 +231,7 @@ class SchemaParser(SimpleParser[YamlBlock, ModelNode]):
                 semantic_model_parser = SemanticModelParser(self, yaml_block)
                 semantic_model_parser.parse()
 
-            if "unit" in dct:
+            if "unit_tests" in dct:
                 from dbt.parser.unit_tests import UnitTestParser
 
                 unit_test_parser = UnitTestParser(self, yaml_block)
@@ -262,12 +262,13 @@ class ParseResult:
 
 
 # abstract base class (ABCMeta)
-# Four subclasses: MetricParser, ExposureParser, GroupParser, SourceParser, PatchParser
+# Many subclasses: MetricParser, ExposureParser, GroupParser, SourceParser,
+# PatchParser, SemanticModelParser, SavedQueryParser, UnitTestParser
 class YamlReader(metaclass=ABCMeta):
     def __init__(self, schema_parser: SchemaParser, yaml: YamlBlock, key: str) -> None:
         self.schema_parser = schema_parser
         # key: models, seeds, snapshots, sources, macros,
-        # analyses, exposures
+        # analyses, exposures, unit_tests
         self.key = key
         self.yaml = yaml
         self.schema_yaml_vars = SchemaYamlVars()

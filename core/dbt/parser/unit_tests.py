@@ -193,7 +193,7 @@ class UnitTestManifestLoader:
 
 class UnitTestParser(YamlReader):
     def __init__(self, schema_parser: SchemaParser, yaml: YamlBlock) -> None:
-        super().__init__(schema_parser, yaml, "unit")
+        super().__init__(schema_parser, yaml, "unit_tests")
         self.schema_parser = schema_parser
         self.yaml = yaml
 
@@ -202,7 +202,6 @@ class UnitTestParser(YamlReader):
             unit_test = self._get_unit_test(data)
             model_name_split = unit_test.model.split()
             tested_model_node = self._find_tested_model_node(unit_test)
-
             unit_test_case_unique_id = (
                 f"{NodeType.Unit}.{self.project.project_name}.{unit_test.model}.{unit_test.name}"
             )

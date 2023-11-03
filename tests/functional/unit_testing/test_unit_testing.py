@@ -34,7 +34,7 @@ SELECT
 """
 
 test_my_model_yml = """
-unit:
+unit_tests:
   - name: test_my_model
     model: my_model
     given:
@@ -188,7 +188,7 @@ class TestUnitTests:
 
 
 test_my_model_csv_yml = """
-unit:
+unit_tests:
   - name: test_my_model
     model: my_model
     given:
@@ -367,7 +367,7 @@ where event_time > (select max(event_time) from {{ this }})
 """
 
 test_my_model_incremental_yml = """
-unit:
+unit_tests:
   - name: incremental_false
     model: my_incremental_model
     overrides:

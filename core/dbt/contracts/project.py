@@ -256,6 +256,7 @@ class Project(dbtClassMixin, Replaceable):
             "semantic_models": "semantic-models",
             "saved_queries": "saved-queries",
             "dbt_cloud": "dbt-cloud",
+            "unit_tests": "unit-tests",
         }
 
     @classmethod

@@ -11,7 +11,7 @@ from dbt.contracts.graph.unparsed import UnitTestOutputFixture
 
 
 UNIT_TEST_MODEL_NOT_FOUND_SOURCE = """
-unit:
+unit_tests:
     - name: test_my_model_doesnt_exist
       model: my_model_doesnt_exist
       description: "unit test description"
@@ -23,7 +23,7 @@ unit:
 
 
 UNIT_TEST_SOURCE = """
-unit:
+unit_tests:
     - name: test_my_model
       model: my_model
       description: "unit test description"
@@ -35,7 +35,7 @@ unit:
 
 
 UNIT_TEST_VERSIONED_MODEL_SOURCE = """
-unit:
+unit_tests:
     - name: test_my_model_versioned
       model: my_model_versioned.v1
       description: "unit test description"
@@ -47,7 +47,7 @@ unit:
 
 
 UNIT_TEST_CONFIG_SOURCE = """
-unit:
+unit_tests:
     - name: test_my_model
       model: my_model
       config:
@@ -64,7 +64,7 @@ unit:
 
 
 UNIT_TEST_MULTIPLE_SOURCE = """
-unit:
+unit_tests:
     - name: test_my_model
       model: my_model
       description: "unit test description"
@@ -101,7 +101,7 @@ class UnitTestParserTest(SchemaParserTest):
         )
 
     def file_block_for(self, data, filename):
-        return super().file_block_for(data, filename, "unit")
+        return super().file_block_for(data, filename, "unit_tests")
 
     def test_basic_model_not_found(self):
         block = self.yaml_block_for(UNIT_TEST_MODEL_NOT_FOUND_SOURCE, "test_my_model.yml")
