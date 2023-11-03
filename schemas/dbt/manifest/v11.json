@@ -10,7 +10,7 @@
         },
         "dbt_version": {
           "type": "string",
-          "default": "1.7.0b2"
+          "default": "1.8.0a1"
         },
         "generated_at": {
           "type": "string"
@@ -920,6 +920,17 @@
           "anyOf": [
             {
               "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "store_failures_as": {
+          "anyOf": [
+            {
+              "type": "string"
             },
             {
               "type": "null"
@@ -5093,6 +5104,95 @@
         "owner"
       ]
     },
+    "QueryParams": {
+      "type": "object",
+      "title": "QueryParams",
+      "properties": {
+        "metrics": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "group_by": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "where": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WhereFilterIntersection"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "metrics",
+        "group_by",
+        "where"
+      ]
+    },
+    "ExportConfig": {
+      "type": "object",
+      "title": "ExportConfig",
+      "properties": {
+        "export_as": {
+          "enum": [
+            "table",
+            "view"
+          ]
+        },
+        "schema_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "alias": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "export_as"
+      ]
+    },
+    "Export": {
+      "type": "object",
+      "title": "Export",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "config": {
+          "$ref": "#/$defs/ExportConfig"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "config"
+      ]
+    },
     "SavedQueryConfig": {
       "type": "object",
       "title": "SavedQueryConfig",
@@ -5172,27 +5272,14 @@
             "type": "string"
           }
         },
-        "metrics": {
+        "query_params": {
+          "$ref": "#/$defs/QueryParams"
+        },
+        "exports": {
           "type": "array",
           "items": {
-            "type": "string"
+            "$ref": "#/$defs/Export"
           }
-        },
-        "group_bys": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "where": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/WhereFilterIntersection"
-            },
-            {
-              "type": "null"
-            }
-          ]
         },
         "description": {
           "anyOf": [
@@ -5269,9 +5356,8 @@
         "original_file_path",
         "unique_id",
         "fqn",
-        "metrics",
-        "group_bys",
-        "where"
+        "query_params",
+        "exports"
       ]
     },
     "NodeRelation": {
