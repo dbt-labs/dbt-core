@@ -24,8 +24,8 @@ from dbt.exceptions import (
     CompilationError,
     DbtInternalError,
     DbtRuntimeError,
-    DbtValidationError,
 )
+from ..common.exceptions import DbtValidationError
 from ..adapters.exceptions import MissingMaterializationError
 from dbt.common.events.functions import fire_event, get_invocation_id
 from dbt.common.events.types import (

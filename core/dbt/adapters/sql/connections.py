@@ -5,8 +5,7 @@ from typing import List, Optional, Tuple, Any, Iterable, Dict
 import agate
 
 import dbt.common.clients.agate_helper
-import dbt.common.exceptions.base
-import dbt.exceptions
+import dbt.common.exceptions
 from dbt.adapters.base import BaseConnectionManager
 from dbt.adapters.contracts.connection import Connection, ConnectionState, AdapterResponse
 from dbt.common.events.functions import fire_event
@@ -159,7 +158,7 @@ class SQLConnectionManager(BaseConnectionManager):
     def begin(self):
         connection = self.get_thread_connection()
         if connection.transaction_open is True:
-            raise dbt.exceptions.DbtInternalError(
+            raise dbt.common.exceptions.DbtInternalError(
                 'Tried to begin a new transaction on connection "{}", but '
                 "it already had one open!".format(connection.name)
             )
@@ -172,7 +171,7 @@ class SQLConnectionManager(BaseConnectionManager):
     def commit(self):
         connection = self.get_thread_connection()
         if connection.transaction_open is False:
-            raise dbt.exceptions.DbtInternalError(
+            raise dbt.common.exceptions.DbtInternalError(
                 'Tried to commit transaction on connection "{}", but '
                 "it does not have one open!".format(connection.name)
             )

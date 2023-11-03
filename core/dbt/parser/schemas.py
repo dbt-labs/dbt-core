@@ -38,12 +38,12 @@ from dbt.exceptions import (
     JSONValidationError,
     DbtInternalError,
     ParsingError,
-    DbtValidationError,
     YamlLoadError,
     YamlParseDictError,
     YamlParseListError,
     InvalidAccessTypeError,
 )
+from dbt.common.exceptions import DbtValidationError
 from dbt.common.events.functions import warn_or_error
 from dbt.common.events.types import (
     MacroNotFoundForPatch,

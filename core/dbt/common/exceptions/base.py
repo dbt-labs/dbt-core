@@ -226,3 +226,36 @@ class SemverError(Exception):
 
 class VersionsNotCompatibleError(SemverError):
     pass
+
+
+class DbtValidationError(DbtRuntimeError):
+    CODE = 10005
+    MESSAGE = "Validation Error"
+
+
+class DbtDatabaseError(DbtRuntimeError):
+    CODE = 10003
+    MESSAGE = "Database Error"
+
+    def process_stack(self):
+        lines = []
+
+        if hasattr(self.node, "build_path") and self.node.build_path:
+            lines.append(f"compiled Code at {self.node.build_path}")
+
+        return lines + DbtRuntimeError.process_stack(self)
+
+    @property
+    def type(self):
+        return "Database"
+
+
+class UnexpectedNullError(DbtDatabaseError):
+    def __init__(self, field_name: str, source):
+        self.field_name = field_name
+        self.source = source
+        msg = (
+            f"Expected a non-null value when querying field '{self.field_name}' of table "
+            f" {self.source} but received value 'null' instead"
+        )
+        super().__init__(msg)

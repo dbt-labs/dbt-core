@@ -1,7 +1,8 @@
 from click import ParamType, Choice
 
 from dbt.config.utils import parse_cli_yaml_string
-from dbt.exceptions import ValidationError, DbtValidationError, OptionNotYamlDictError
+from dbt.exceptions import ValidationError, OptionNotYamlDictError
+from dbt.common.exceptions import DbtValidationError
 
 from dbt.common.helper_types import WarnErrorOptions
 

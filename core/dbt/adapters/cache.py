@@ -7,12 +7,12 @@ from dbt.adapters.reference_keys import (
     _make_ref_key_dict,
     _ReferenceKey,
 )
-from dbt.exceptions import (
-    DependentLinkNotCachedError,
+from dbt.common.exceptions.cache import (
     NewNameAlreadyInCacheError,
-    NoneRelationFoundError,
     ReferencedLinkNotCachedError,
+    DependentLinkNotCachedError,
     TruncatedModelNameCausedCollisionError,
+    NoneRelationFoundError,
 )
 from dbt.common.events.functions import fire_event, fire_event_if
 from dbt.common.events.types import CacheAction, CacheDumpGraph

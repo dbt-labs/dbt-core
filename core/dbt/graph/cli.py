@@ -8,8 +8,7 @@ from dbt.clients.yaml_helper import yaml, Loader, Dumper  # noqa: F401
 from typing import Dict, List, Optional, Tuple, Any, Union
 
 from dbt.contracts.selection import SelectorDefinition, SelectorFile
-from dbt.common.exceptions import DbtInternalError
-from dbt.exceptions import DbtValidationError
+from dbt.common.exceptions import DbtInternalError, DbtValidationError
 
 from .selector_spec import (
     SelectionUnion,

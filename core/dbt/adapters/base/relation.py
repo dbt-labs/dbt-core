@@ -17,7 +17,7 @@ from dbt.node_types import NodeType
 from dbt.common.utils import filter_null_values, deep_merge
 from dbt.adapters.utils import classproperty
 
-import dbt.exceptions
+import dbt.common.exceptions
 
 
 Self = TypeVar("Self", bound="BaseRelation")

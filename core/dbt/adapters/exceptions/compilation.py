@@ -1,8 +1,7 @@
 from typing import List, Mapping, Any
 
-from dbt.common.exceptions import CompilationError
+from dbt.common.exceptions import CompilationError, DbtDatabaseError
 from dbt.common.ui import line_wrap_message
-from dbt.exceptions import DbtDatabaseError
 
 
 class MissingConfigError(CompilationError):
@@ -214,3 +213,43 @@ class UnexpectedNonTimestampError(DbtDatabaseError):
             f"{self.source} but received value of type '{self.type_name}' instead"
         )
         super().__init__(msg)
+
+
+class RenameToNoneAttemptedError(CompilationError):
+    def __init__(self, src_name: str, dst_name: str, name: str):
+        self.src_name = src_name
+        self.dst_name = dst_name
+        self.name = name
+        self.msg = f"Attempted to rename {self.src_name} to {self.dst_name} for {self.name}"
+        super().__init__(msg=self.msg)
+
+
+class QuoteConfigTypeError(CompilationError):
+    def __init__(self, quote_config: Any):
+        self.quote_config = quote_config
+        super().__init__(msg=self.get_message())
+
+    def get_message(self) -> str:
+        msg = (
+            'The seed configuration value of "quote_columns" has an '
+            f"invalid type {type(self.quote_config)}"
+        )
+        return msg
+
+
+class RelationWrongTypeError(CompilationError):
+    def __init__(self, relation, expected_type, model=None):
+        self.relation = relation
+        self.expected_type = expected_type
+        self.model = model
+        super().__init__(msg=self.get_message())
+
+    def get_message(self) -> str:
+        msg = (
+            f"Trying to create {self.expected_type} {self.relation}, "
+            f"but it currently exists as a {self.relation.type}. Either "
+            f"drop {self.relation} manually, or run dbt with "
+            "`--full-refresh` and dbt will drop it for you."
+        )
+
+        return msg

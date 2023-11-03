@@ -27,18 +27,16 @@ from dbt.clients._jinja_blocks import BlockIterator, BlockData, BlockTag
 from dbt.contracts.graph.nodes import GenericTestNode
 
 from dbt.exceptions import (
-    CaughtMacroError,
     CaughtMacroErrorWithNodeError,
     CompilationError,
     DbtInternalError,
     MaterializationArgError,
     JinjaRenderingError,
-    MacroReturn,
     MaterializtionMacroNotUsedError,
     NoSupportedLanguagesFoundError,
     UndefinedCompilationError,
-    UndefinedMacroError,
 )
+from dbt.common.exceptions.macros import MacroReturn, UndefinedMacroError, CaughtMacroError
 from dbt.flags import get_flags
 from dbt.node_types import ModelLanguage
 

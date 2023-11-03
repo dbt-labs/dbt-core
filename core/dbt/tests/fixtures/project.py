@@ -7,8 +7,7 @@ from datetime import datetime
 import warnings
 import yaml
 
-from dbt.common.exceptions import CompilationError
-from dbt.exceptions import DbtDatabaseError
+from dbt.common.exceptions import CompilationError, DbtDatabaseError
 import dbt.flags as flags
 from dbt.config.runtime import RuntimeConfig
 from dbt.adapters.factory import get_adapter, register_adapter, reset_adapters, get_adapter_by_type

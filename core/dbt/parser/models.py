@@ -25,8 +25,8 @@ from dbt.exceptions import (
     ParsingError,
     PythonLiteralEvalError,
     PythonParsingError,
-    UndefinedMacroError,
 )
+from dbt.common.exceptions.macros import UndefinedMacroError
 
 dbt_function_key_words = set(["ref", "source", "config", "get"])
 dbt_function_full_names = set(["dbt.ref", "dbt.source", "dbt.config", "dbt.config.get"])

@@ -28,15 +28,6 @@ from dbt.contracts.graph.nodes import ColumnLevelConstraint, ConstraintType, Mod
 import agate
 import pytz
 
-from dbt.exceptions import (
-    DbtValidationError,
-    MacroArgTypeError,
-    MacroResultError,
-    QuoteConfigTypeError,
-    RenameToNoneAttemptedError,
-    UnexpectedNullError,
-)
-
 from dbt.adapters.exceptions import (
     SnapshotTargetIncompleteError,
     SnapshotTargetNotSnapshotTableError,
@@ -44,12 +35,18 @@ from dbt.adapters.exceptions import (
     NullRelationCacheAttemptedError,
     RelationReturnedMultipleResultsError,
     UnexpectedNonTimestampError,
+    RenameToNoneAttemptedError,
+    QuoteConfigTypeError,
 )
 
 from dbt.common.exceptions import (
     NotImplementedError,
     DbtInternalError,
     DbtRuntimeError,
+    DbtValidationError,
+    UnexpectedNullError,
+    MacroArgTypeError,
+    MacroResultError,
 )
 
 from dbt.adapters.protocol import AdapterConfig
