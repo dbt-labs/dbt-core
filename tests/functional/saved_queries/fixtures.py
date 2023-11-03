@@ -24,3 +24,25 @@ saved_queries:
             export_as: table
             schema: my_export_schema_name
 """
+
+saved_query_with_extra_config_attributes_yml = """
+version: 2
+
+saved_queries:
+  - name: test_saved_query
+    description: "{{ doc('saved_query_description') }}"
+    label: Test Saved Query
+    query_params:
+        metrics:
+            - simple_metric
+        group_by:
+            - "Dimension('user__ds')"
+        where:
+            - "{{ Dimension('user__ds', 'DAY') }} <= now()"
+            - "{{ Dimension('user__ds', 'DAY') }} >= '2023-01-01'"
+    exports:
+        - name: my_export
+          config:
+            my_random_config: 'I have this for some reason'
+            export_as: table
+"""

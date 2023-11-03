@@ -1,3 +1,4 @@
+from copy import deepcopy
 from dbt.parser.schemas import YamlReader, SchemaParser, ParseResult
 from dbt.parser.common import YamlBlock
 from dbt.node_types import NodeType
@@ -6,7 +7,6 @@ from dbt.contracts.graph.unparsed import (
     UnparsedDimensionTypeParams,
     UnparsedEntity,
     UnparsedExport,
-    UnparsedExportConfig,
     UnparsedExposure,
     UnparsedGroup,
     UnparsedMeasure,
@@ -57,7 +57,7 @@ from dbt_semantic_interfaces.type_enums import (
     MetricType,
     TimeGranularity,
 )
-from typing import List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 
 def parse_where_filter(
@@ -669,12 +669,11 @@ class SavedQueryParser(YamlReader):
 
         return config
 
-    def _get_export_config(self, unparsed: UnparsedExportConfig) -> ExportConfig:
-        return ExportConfig(
-            export_as=unparsed.export_as,
-            schema_name=unparsed.schema,
-            alias=unparsed.alias,
-        )
+    def _get_export_config(self, unparsed: Dict[str, Any]) -> ExportConfig:
+        parsed = deepcopy(unparsed)
+        if parsed.get("schema") is not parsed.get("schema_name") is None:
+            parsed["schema_name"] = parsed["schema"]
+        return ExportConfig.from_dict(parsed)
 
     def _get_export(self, unparsed: UnparsedExport) -> Export:
         return Export(name=unparsed.name, config=self._get_export_config(unparsed.config))
