@@ -2,7 +2,8 @@ from dataclasses import dataclass
 import re
 from typing import List
 
-from dbt.exceptions import VersionsNotCompatibleError
+import dbt.common.exceptions.base
+from dbt.common.exceptions import VersionsNotCompatibleError
 import dbt.utils
 
 from dbt.common.dataclass_schema import dbtClassMixin, StrEnum
@@ -96,7 +97,7 @@ class VersionSpecifier(VersionSpecification):
         match = _VERSION_REGEX.match(version_string)
 
         if not match:
-            raise dbt.exceptions.SemverError(
+            raise dbt.common.exceptions.base.SemverError(
                 f'"{version_string}" is not a valid semantic version.'
             )
 

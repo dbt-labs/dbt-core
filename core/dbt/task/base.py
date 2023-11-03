@@ -8,6 +8,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Type, Union
 
+import dbt.common.exceptions.base
 import dbt.exceptions
 from dbt import tracking
 from dbt.adapters.factory import get_adapter
@@ -38,8 +39,10 @@ from dbt.common.events.types import (
     NodeCompiling,
     NodeExecuting,
 )
-from dbt.common.exceptions import DbtRuntimeError, DbtInternalError, CompilationError
-from dbt.exceptions import (
+from dbt.common.exceptions import (
+    DbtRuntimeError,
+    DbtInternalError,
+    CompilationError,
     NotImplementedError,
 )
 from dbt.flags import get_flags
@@ -111,7 +114,7 @@ class BaseTask(metaclass=ABCMeta):
 
     @abstractmethod
     def run(self):
-        raise dbt.exceptions.NotImplementedError("Not Implemented")
+        raise dbt.common.exceptions.base.NotImplementedError("Not Implemented")
 
     def interpret_results(self, results):
         return True

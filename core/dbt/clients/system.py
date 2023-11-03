@@ -385,7 +385,7 @@ def _handle_posix_error(exc: OSError, cwd: str, cmd: List[str]) -> NoReturn:
 
 
 def _handle_windows_error(exc: OSError, cwd: str, cmd: List[str]) -> NoReturn:
-    cls: Type[dbt.common.exceptions.Exception] = dbt.exceptions.CommandError
+    cls: Type[dbt.common.exceptions.DbtBaseException] = dbt.exceptions.CommandError
     if exc.errno == errno.ENOENT:
         message = (
             "Could not find command, ensure it is in the user's PATH "

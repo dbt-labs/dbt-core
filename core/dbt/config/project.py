@@ -26,11 +26,11 @@ from dbt.clients.yaml_helper import load_yaml_text
 from dbt.adapters.contracts.connection import QueryComment
 from dbt.exceptions import (
     DbtProjectError,
-    SemverError,
     ProjectContractBrokenError,
     ProjectContractError,
     DbtRuntimeError,
 )
+from ..common.exceptions import SemverError
 from dbt.graph import SelectionSpec
 from dbt.common.helper_types import NoValue
 from dbt.semver import VersionSpecifier, versions_compatible

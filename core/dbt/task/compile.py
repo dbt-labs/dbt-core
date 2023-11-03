@@ -9,7 +9,7 @@ from dbt.common.events.types import CompiledNode, Note, ParseInlineNodeError
 from dbt.common.exceptions import (
     CompilationError,
     DbtInternalError,
-    Exception as DbtException,
+    DbtBaseException as DbtException,
 )
 
 from dbt.graph import ResourceTypeSelector

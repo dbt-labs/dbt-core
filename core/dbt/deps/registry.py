@@ -13,8 +13,8 @@ from dbt.exceptions import (
     DependencyError,
     PackageNotFoundError,
     PackageVersionNotFoundError,
-    VersionsNotCompatibleError,
 )
+from dbt.common.exceptions import VersionsNotCompatibleError
 
 
 class RegistryPackageMixin:

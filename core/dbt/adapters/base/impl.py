@@ -29,21 +29,27 @@ import agate
 import pytz
 
 from dbt.exceptions import (
-    DbtInternalError,
-    DbtRuntimeError,
     DbtValidationError,
     MacroArgTypeError,
     MacroResultError,
-    NotImplementedError,
-    NullRelationCacheAttemptedError,
-    NullRelationDropAttemptedError,
     QuoteConfigTypeError,
-    RelationReturnedMultipleResultsError,
     RenameToNoneAttemptedError,
+    UnexpectedNullError,
+)
+
+from dbt.adapters.exceptions import (
     SnapshotTargetIncompleteError,
     SnapshotTargetNotSnapshotTableError,
+    NullRelationDropAttemptedError,
+    NullRelationCacheAttemptedError,
+    RelationReturnedMultipleResultsError,
     UnexpectedNonTimestampError,
-    UnexpectedNullError,
+)
+
+from dbt.common.exceptions import (
+    NotImplementedError,
+    DbtInternalError,
+    DbtRuntimeError,
 )
 
 from dbt.adapters.protocol import AdapterConfig

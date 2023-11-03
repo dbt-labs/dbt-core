@@ -2,7 +2,7 @@ import agate
 from typing import Any, Optional, Tuple, Type, List
 
 from dbt.adapters.contracts.connection import Connection, AdapterResponse
-from dbt.exceptions import RelationTypeNullError
+from dbt.adapters.exceptions import RelationTypeNullError
 from dbt.adapters.base import BaseAdapter, available
 from dbt.adapters.cache import _make_ref_key_dict
 from dbt.adapters.sql import SQLConnectionManager

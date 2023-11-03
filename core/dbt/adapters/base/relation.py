@@ -11,11 +11,8 @@ from dbt.contracts.relation import (
     Policy,
     Path,
 )
-from dbt.exceptions import (
-    ApproximateMatchError,
-    DbtInternalError,
-    MultipleDatabasesNotAllowedError,
-)
+from dbt.common.exceptions import DbtInternalError
+from dbt.adapters.exceptions import MultipleDatabasesNotAllowedError, ApproximateMatchError
 from dbt.node_types import NodeType
 from dbt.common.utils import filter_null_values, deep_merge
 from dbt.adapters.utils import classproperty

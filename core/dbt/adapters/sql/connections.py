@@ -5,6 +5,7 @@ from typing import List, Optional, Tuple, Any, Iterable, Dict
 import agate
 
 import dbt.common.clients.agate_helper
+import dbt.common.exceptions.base
 import dbt.exceptions
 from dbt.adapters.base import BaseConnectionManager
 from dbt.adapters.contracts.connection import Connection, ConnectionState, AdapterResponse
@@ -27,7 +28,9 @@ class SQLConnectionManager(BaseConnectionManager):
     @abc.abstractmethod
     def cancel(self, connection: Connection):
         """Cancel the given connection."""
-        raise dbt.exceptions.NotImplementedError("`cancel` is not implemented for this adapter!")
+        raise dbt.common.exceptions.base.NotImplementedError(
+            "`cancel` is not implemented for this adapter!"
+        )
 
     def cancel_open(self) -> List[str]:
         names = []
@@ -93,7 +96,7 @@ class SQLConnectionManager(BaseConnectionManager):
     @abc.abstractmethod
     def get_response(cls, cursor: Any) -> AdapterResponse:
         """Get the status of the cursor."""
-        raise dbt.exceptions.NotImplementedError(
+        raise dbt.common.exceptions.base.NotImplementedError(
             "`get_response` is not implemented for this adapter!"
         )
 

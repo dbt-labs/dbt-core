@@ -1,5 +1,5 @@
 import builtins
-from typing import List, Any
+from typing import List, Any, Optional
 import os
 
 from dbt.common.constants import SECRET_ENV_PREFIX
@@ -19,7 +19,7 @@ def scrub_secrets(msg: str, secrets: List[str]) -> str:
     return scrubbed
 
 
-class Exception(builtins.Exception):
+class DbtBaseException(Exception):
     CODE = -32000
     MESSAGE = "Server Error"
 
@@ -31,7 +31,7 @@ class Exception(builtins.Exception):
         }
 
 
-class DbtInternalError(Exception):
+class DbtInternalError(DbtBaseException):
     def __init__(self, msg: str):
         self.stack: List = []
         self.msg = scrub_secrets(msg, env_secrets())
@@ -72,7 +72,7 @@ class DbtInternalError(Exception):
         return lines[0] + "\n" + "\n".join(["  " + line for line in lines[1:]])
 
 
-class DbtRuntimeError(RuntimeError, Exception):
+class DbtRuntimeError(RuntimeError, DbtBaseException):
     CODE = 10001
     MESSAGE = "Runtime error"
 
@@ -151,7 +151,7 @@ class DbtRuntimeError(RuntimeError, Exception):
         return lines[0] + "\n" + "\n".join(["  " + line for line in lines[1:]])
 
     def data(self):
-        result = Exception.data(self)
+        result = DbtBaseException.data(self)
         if self.node is None:
             return result
 
@@ -206,3 +206,23 @@ class DbtConfigError(DbtRuntimeError):
             return msg
         else:
             return f"{msg}\n\nError encountered in {self.path}"
+
+
+class NotImplementedError(DbtBaseException):
+    def __init__(self, msg: str) -> None:
+        self.msg = msg
+        self.formatted_msg = f"ERROR: {self.msg}"
+        super().__init__(self.formatted_msg)
+
+
+class SemverError(Exception):
+    def __init__(self, msg: Optional[str] = None) -> None:
+        self.msg = msg
+        if msg is not None:
+            super().__init__(msg)
+        else:
+            super().__init__()
+
+
+class VersionsNotCompatibleError(SemverError):
+    pass

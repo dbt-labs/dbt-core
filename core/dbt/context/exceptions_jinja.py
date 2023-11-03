@@ -4,10 +4,13 @@ from typing import NoReturn
 from dbt.common.events.functions import warn_or_error
 from dbt.common.events.types import JinjaLogWarning
 
-from dbt.common.exceptions import DbtRuntimeError
-from dbt.adapters.exceptions import MissingConfigError
-from dbt.exceptions import (
+from dbt.common.exceptions import DbtRuntimeError, NotImplementedError
+from dbt.adapters.exceptions import (
+    MissingConfigError,
+    ColumnTypeMissingError,
     MissingMaterializationError,
+)
+from dbt.exceptions import (
     MissingRelationError,
     AmbiguousAliasError,
     AmbiguousCatalogMatchError,
@@ -20,10 +23,8 @@ from dbt.exceptions import (
     DuplicatePatchPathError,
     DuplicateResourceNameError,
     PropertyYMLError,
-    NotImplementedError,
     RelationWrongTypeError,
     ContractError,
-    ColumnTypeMissingError,
     FailFastError,
     scrub_secrets,
     env_secrets,

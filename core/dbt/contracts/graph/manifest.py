@@ -50,10 +50,9 @@ from dbt.common.dataclass_schema import dbtClassMixin
 from dbt.exceptions import (
     CompilationError,
     DuplicateResourceNameError,
-    DuplicateMacroInPackageError,
-    DuplicateMaterializationNameError,
     AmbiguousResourceNameRefError,
 )
+from dbt.adapters.exceptions import DuplicateMacroInPackageError, DuplicateMaterializationNameError
 from dbt.common.helper_types import PathSet
 from dbt.common.events.functions import fire_event
 from dbt.common.events.types import MergedFromState, UnpinnedRefNewVersionAvailable

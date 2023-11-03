@@ -25,8 +25,8 @@ from dbt.common.events.types import (
 from dbt.exceptions import (
     DbtInternalError,
     BooleanError,
-    MissingMaterializationError,
 )
+from ..adapters.exceptions import MissingMaterializationError
 from dbt.graph import (
     ResourceTypeSelector,
 )

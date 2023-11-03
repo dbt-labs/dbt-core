@@ -56,7 +56,7 @@ class RunOperationTask(ConfiguredTask):
 
         try:
             self._run_unsafe(package_name, macro_name)
-        except dbt.common.exceptions.Exception as exc:
+        except dbt.common.exceptions.DbtBaseException as exc:
             fire_event(RunningOperationCaughtError(exc=str(exc)))
             fire_event(LogDebugStackTrace(exc_info=traceback.format_exc()))
             success = False

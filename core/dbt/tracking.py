@@ -24,7 +24,8 @@ from dbt.common.events.types import (
     SendingEvent,
     TrackingInitializeFailure,
 )
-from dbt.exceptions import FailedToConnectError, NotImplementedError
+from dbt.adapters.exceptions.connection import FailedToConnectError
+from dbt.common.exceptions import NotImplementedError
 
 sp_logger.setLevel(100)
 

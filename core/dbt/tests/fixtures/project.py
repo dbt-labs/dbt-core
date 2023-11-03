@@ -376,7 +376,7 @@ def project_files(project_root, models, macros, snapshots, properties, seeds, te
 def logs_dir(request, prefix):
     dbt_log_dir = os.path.join(request.config.rootdir, "logs", prefix)
     os.environ["DBT_LOG_PATH"] = str(dbt_log_dir)
-    yield Path(dbt_log_dir)
+    yield str(Path(dbt_log_dir))
     del os.environ["DBT_LOG_PATH"]
 
 

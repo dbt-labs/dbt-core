@@ -23,10 +23,10 @@ from dbt.contracts.results import NodeStatus, RunResult, RunStatus, RunningStatu
 from dbt.exceptions import (
     CompilationError,
     DbtInternalError,
-    MissingMaterializationError,
     DbtRuntimeError,
     DbtValidationError,
 )
+from ..adapters.exceptions import MissingMaterializationError
 from dbt.common.events.functions import fire_event, get_invocation_id
 from dbt.common.events.types import (
     DatabaseErrorRunningHook,

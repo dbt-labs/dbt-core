@@ -646,7 +646,7 @@ warn_error = click.option(
     "--warn-error",
     envvar="DBT_WARN_ERROR",
     help="If dbt would normally warn, instead raise an exception. Examples include --select that selects nothing, deprecations, configurations with no associated models, invalid test configurations, and missing sources/refs in tests.",
-    default=False,
+    default=None,
     is_flag=True,
 )
 

@@ -10,12 +10,13 @@ from dbt.common.exceptions import (
     CompilationError,
     DbtInternalError,
     DbtConfigError,
+    env_secrets,
+    scrub_secrets,
+    NotImplementedError,
 )
 from dbt.node_types import NodeType, AccessType
-from dbt.common.ui import line_wrap_message
 
 from dbt.common.dataclass_schema import ValidationError
-from dbt.common.exceptions import env_secrets, scrub_secrets
 
 
 class MacroReturn(builtins.BaseException):
@@ -182,30 +183,6 @@ class DbtProfileError(DbtConfigError):
     pass
 
 
-class SemverError(Exception):
-    def __init__(self, msg: Optional[str] = None) -> None:
-        self.msg = msg
-        if msg is not None:
-            super().__init__(msg)
-        else:
-            super().__init__()
-
-
-class VersionsNotCompatibleError(SemverError):
-    pass
-
-
-class NotImplementedError(Exception):
-    def __init__(self, msg: str) -> None:
-        self.msg = msg
-        self.formatted_msg = f"ERROR: {self.msg}"
-        super().__init__(self.formatted_msg)
-
-
-class FailedToConnectError(DbtDatabaseError):
-    pass
-
-
 class CommandError(DbtRuntimeError):
     def __init__(self, cwd: str, cmd: List[str], msg: str = "Error running command") -> None:
         cmd_scrubbed = list(scrub_secrets(cmd_txt, env_secrets()) for cmd_txt in cmd)
@@ -251,15 +228,6 @@ class CommandResultError(CommandError):
 
     def __str__(self):
         return f"{self.msg} running: {self.cmd}"
-
-
-class InvalidConnectionError(DbtRuntimeError):
-    def __init__(self, thread_id, known: List) -> None:
-        self.thread_id = thread_id
-        self.known = known
-        super().__init__(
-            msg=f"connection never acquired for thread {self.thread_id}, have {self.known}"
-        )
 
 
 class InvalidSelectorError(DbtRuntimeError):
@@ -1305,54 +1273,12 @@ class MacroResultError(CompilationError):
         return msg
 
 
-class SnapshotTargetNotSnapshotTableError(CompilationError):
-    def __init__(self, missing: List):
-        self.missing = missing
-        super().__init__(msg=self.get_message())
-
-    def get_message(self) -> str:
-        msg = 'Snapshot target is not a snapshot table (missing "{}")'.format(
-            '", "'.join(self.missing)
-        )
-        return msg
-
-
-class SnapshotTargetIncompleteError(CompilationError):
-    def __init__(self, extra: List, missing: List):
-        self.extra = extra
-        self.missing = missing
-        super().__init__(msg=self.get_message())
-
-    def get_message(self) -> str:
-        msg = (
-            'Snapshot target has ("{}") but not ("{}") - is it an '
-            "unmigrated previous version archive?".format(
-                '", "'.join(self.extra), '", "'.join(self.missing)
-            )
-        )
-        return msg
-
-
 class RenameToNoneAttemptedError(CompilationError):
     def __init__(self, src_name: str, dst_name: str, name: str):
         self.src_name = src_name
         self.dst_name = dst_name
         self.name = name
         self.msg = f"Attempted to rename {self.src_name} to {self.dst_name} for {self.name}"
-        super().__init__(msg=self.msg)
-
-
-class NullRelationDropAttemptedError(CompilationError):
-    def __init__(self, name: str):
-        self.name = name
-        self.msg = f"Attempted to drop a null relation for {self.name}"
-        super().__init__(msg=self.msg)
-
-
-class NullRelationCacheAttemptedError(CompilationError):
-    def __init__(self, name: str):
-        self.name = name
-        self.msg = f"Attempted to cache a null relation for {self.name}"
         super().__init__(msg=self.msg)
 
 
@@ -1369,66 +1295,6 @@ class QuoteConfigTypeError(CompilationError):
         return msg
 
 
-class MultipleDatabasesNotAllowedError(CompilationError):
-    def __init__(self, databases):
-        self.databases = databases
-        super().__init__(msg=self.get_message())
-
-    def get_message(self) -> str:
-        msg = str(self.databases)
-        return msg
-
-
-class RelationTypeNullError(CompilationError):
-    def __init__(self, relation):
-        self.relation = relation
-        self.msg = f"Tried to drop relation {self.relation}, but its type is null."
-        super().__init__(msg=self.msg)
-
-
-class MaterializationNotAvailableError(CompilationError):
-    def __init__(self, materialization, adapter_type: str):
-        self.materialization = materialization
-        self.adapter_type = adapter_type
-        super().__init__(msg=self.get_message())
-
-    def get_message(self) -> str:
-        msg = f"Materialization '{self.materialization}' is not available for {self.adapter_type}!"
-        return msg
-
-
-class RelationReturnedMultipleResultsError(CompilationError):
-    def __init__(self, kwargs: Mapping[str, Any], matches: List):
-        self.kwargs = kwargs
-        self.matches = matches
-        super().__init__(msg=self.get_message())
-
-    def get_message(self) -> str:
-        msg = (
-            "get_relation returned more than one relation with the given args. "
-            "Please specify a database or schema to narrow down the result set."
-            f"\n{self.kwargs}\n\n{self.matches}"
-        )
-        return msg
-
-
-class ApproximateMatchError(CompilationError):
-    def __init__(self, target, relation):
-        self.target = target
-        self.relation = relation
-        super().__init__(msg=self.get_message())
-
-    def get_message(self) -> str:
-        msg = (
-            "When searching for a relation, dbt found an approximate match. "
-            "Instead of guessing \nwhich relation to use, dbt will move on. "
-            f"Please delete {self.relation}, or rename it to be less ambiguous."
-            f"\nSearched for: {self.target}\nFound: {self.relation}"
-        )
-
-        return msg
-
-
 class UnexpectedNullError(DbtDatabaseError):
     def __init__(self, field_name: str, source):
         self.field_name = field_name
@@ -1436,18 +1302,6 @@ class UnexpectedNullError(DbtDatabaseError):
         msg = (
             f"Expected a non-null value when querying field '{self.field_name}' of table "
             f" {self.source} but received value 'null' instead"
-        )
-        super().__init__(msg)
-
-
-class UnexpectedNonTimestampError(DbtDatabaseError):
-    def __init__(self, field_name: str, source, dt: Any):
-        self.field_name = field_name
-        self.source = source
-        self.type_name = type(dt).__name__
-        msg = (
-            f"Expected a timestamp value when querying field '{self.field_name}' of table "
-            f"{self.source} but received value of type '{self.type_name}' instead"
         )
         super().__init__(msg)
 
@@ -1635,67 +1489,7 @@ class UnrecognizedCredentialTypeError(CompilationError):
         return msg
 
 
-class DuplicateMacroInPackageError(CompilationError):
-    def __init__(self, macro, macro_mapping: Mapping):
-        self.macro = macro
-        self.macro_mapping = macro_mapping
-        super().__init__(msg=self.get_message())
-
-    def get_message(self) -> str:
-        other_path = self.macro_mapping[self.macro.unique_id].original_file_path
-        # subtract 2 for the "Compilation Error" indent
-        # note that the line wrap eats newlines, so if you want newlines,
-        # this is the result :(
-        msg = line_wrap_message(
-            f"""\
-            dbt found two macros named "{self.macro.name}" in the project
-            "{self.macro.package_name}".
-
-
-            To fix this error, rename or remove one of the following
-            macros:
-
-                - {self.macro.original_file_path}
-
-                - {other_path}
-            """,
-            subtract=2,
-        )
-        return msg
-
-
-class DuplicateMaterializationNameError(CompilationError):
-    def __init__(self, macro, other_macro):
-        self.macro = macro
-        self.other_macro = other_macro
-        super().__init__(msg=self.get_message())
-
-    def get_message(self) -> str:
-        macro_name = self.macro.name
-        macro_package_name = self.macro.package_name
-        other_package_name = self.other_macro.macro.package_name
-
-        msg = (
-            f"Found two materializations with the name {macro_name} (packages "
-            f"{macro_package_name} and {other_package_name}). dbt cannot resolve "
-            "this ambiguity"
-        )
-        return msg
-
-
 # jinja exceptions
-class ColumnTypeMissingError(CompilationError):
-    def __init__(self, column_names: List):
-        self.column_names = column_names
-        super().__init__(msg=self.get_message())
-
-    def get_message(self) -> str:
-        msg = (
-            "Contracted models require data_type to be defined for each column. "
-            "Please ensure that the column name and data_type are defined within "
-            f"the YAML configuration for the {self.column_names} column(s)."
-        )
-        return msg
 
 
 class PatchTargetNotFoundError(CompilationError):
@@ -1709,31 +1503,6 @@ class PatchTargetNotFoundError(CompilationError):
             for p in self.patches.values()
         )
         msg = f"dbt could not find models for the following patches:\n\t{patch_list}"
-        return msg
-
-
-class MacroNotFoundError(CompilationError):
-    def __init__(self, node, target_macro_id: str):
-        self.node = node
-        self.target_macro_id = target_macro_id
-        msg = f"'{self.node.unique_id}' references macro '{self.target_macro_id}' which is not defined!"
-
-        super().__init__(msg=msg)
-
-
-class MissingMaterializationError(CompilationError):
-    def __init__(self, materialization, adapter_type):
-        self.materialization = materialization
-        self.adapter_type = adapter_type
-        super().__init__(msg=self.get_message())
-
-    def get_message(self) -> str:
-        valid_types = "'default'"
-
-        if self.adapter_type != "default":
-            valid_types = f"'default' and '{self.adapter_type}'"
-
-        msg = f"No materialization '{self.materialization}' was found for adapter {self.adapter_type}! (searched types {valid_types})"
         return msg
 
 
