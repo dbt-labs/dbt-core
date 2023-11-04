@@ -1,25 +1,28 @@
-from datetime import datetime
+import time
 from dataclasses import dataclass
-from typing import Any, Optional, Set, List
+from typing import Any, List, Optional, Set
 
-from dbt.adapters.base.meta import available
+import dbt.utils
 from dbt.adapters.base.impl import AdapterConfig, ConstraintSupport
-from dbt.adapters.capability import CapabilitySupport, Support, CapabilityDict, Capability
-from dbt.adapters.sql import SQLAdapter
-from dbt.adapters.postgres import PostgresConnectionManager
+from dbt.adapters.base.meta import available
+from dbt.adapters.capability import (
+    Capability,
+    CapabilityDict,
+    CapabilitySupport,
+    Support,
+)
+from dbt.adapters.postgres import PostgresConnectionManager, PostgresRelation
 from dbt.adapters.postgres.column import PostgresColumn
-from dbt.adapters.postgres import PostgresRelation
-from dbt.dataclass_schema import dbtClassMixin, ValidationError
+from dbt.adapters.sql import SQLAdapter
 from dbt.contracts.graph.nodes import ConstraintType
+from dbt.dataclass_schema import ValidationError, dbtClassMixin
 from dbt.exceptions import (
     CrossDbReferenceProhibitedError,
-    IndexConfigNotDictError,
-    IndexConfigError,
     DbtRuntimeError,
+    IndexConfigError,
+    IndexConfigNotDictError,
     UnexpectedDbReferenceError,
 )
-import dbt.utils
-
 
 GET_RELATIONS_MACRO_NAME = "postgres__get_relations"
 
@@ -29,16 +32,23 @@ class PostgresIndexConfig(dbtClassMixin):
     columns: List[str]
     unique: bool = False
     type: Optional[str] = None
+    name: Optional[str] = None
 
     def render(self, relation):
-        # We append the current timestamp to the index name because otherwise
-        # the index will only be created on every other run. See
-        # https://github.com/dbt-labs/dbt-core/issues/1945#issuecomment-576714925
-        # for an explanation.
-        now = datetime.utcnow().isoformat()
+        """
+        Renders the index name as a string. If the name is not set, generate a md5 hash from the relation
+            and the index config, including the current timestamp. This ensures that the index name is unique.
+            See the following issue for explanation:
+            https://github.com/fishtown-analytics/dbt/issues/1945#issuecomment-576714925
+        However the `name` field enables to include any user defined name in the index config, which is useful for
+            semantics-concerned users.
+        """
+        now = str(round(time.time() * 1000))
         inputs = self.columns + [relation.render(), str(self.unique), str(self.type), now]
         string = "_".join(inputs)
-        return dbt.utils.md5(string)
+        if self.name is None:
+            return dbt.utils.md5(string)
+        return self.name + "_" + now
 
     @classmethod
     def parse(cls, raw_index) -> Optional["PostgresIndexConfig"]:
@@ -105,7 +115,7 @@ class PostgresAdapter(SQLAdapter):
         database = self.config.credentials.database
         table = self.execute_macro(GET_RELATIONS_MACRO_NAME)
 
-        for (dep_schema, dep_name, refed_schema, refed_name) in table:
+        for dep_schema, dep_name, refed_schema, refed_name in table:
             dependent = self.Relation.create(
                 database=database, schema=dep_schema, identifier=dep_name
             )

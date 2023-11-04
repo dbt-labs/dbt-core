@@ -4,7 +4,7 @@ models__incremental_sql = """
     materialized = "incremental",
     indexes=[
       {'columns': ['column_a'], 'type': 'hash'},
-      {'columns': ['column_a', 'column_b'], 'unique': True},
+      {'columns': ['column_a', 'column_b'], 'unique': True, 'name': 'column_a_and_column_b_index'},
     ]
   )
 }}
@@ -29,12 +29,13 @@ models__table_sql = """
       {'columns': ['column_b']},
       {'columns': ['column_a', 'column_b']},
       {'columns': ['column_b', 'column_a'], 'type': 'btree', 'unique': True},
-      {'columns': ['column_a'], 'type': 'hash'}
+      {'columns': ['column_a'], 'type': 'hash'},
+      {'columns': ['column_c'], 'name': 'column_c_index'},
     ]
   )
 }}
 
-select 1 as column_a, 2 as column_b
+select 1 as column_a, 2 as column_b, 3 as column_c
 
 """
 
