@@ -8,6 +8,7 @@ from dbt.contracts.util import (
     VersionedSchema,
     Replaceable,
     schema_version,
+    get_artifact_schema_version,
 )
 from dbt.exceptions import DbtInternalError
 from dbt.events.functions import fire_event
@@ -268,8 +269,34 @@ class RunResultsArtifact(ExecutionResult, ArtifactMixin):
         )
         return cls(metadata=meta, results=processed_results, elapsed_time=elapsed_time, args=args)
 
+    @classmethod
+    def compatible_previous_versions(self):
+        return [
+            ("run-results", 4),
+        ]
+
+    @classmethod
+    def upgrade_schema_version(cls, data):
+        """This overrides the "upgrade_schema_version" call in VersionedSchema (via
+        ArtifactMixin) to modify the dictionary passed in from earlier versions of the run_results."""
+        run_results_schema_version = get_artifact_schema_version(data)
+        if run_results_schema_version <= 5:
+            data = upgrade_run_results_json(data, run_results_schema_version)
+        return cls.from_dict(data)
+
     def write(self, path: str):
         write_json(path, self.to_dict(omit_none=False))
+
+
+def upgrade_run_results_json(run_results: dict, run_results_schema_version: int) -> dict:
+    if run_results_schema_version <= 5:
+        for result in run_results["results"]:
+            result["compiled"] = False
+            result["compiled_code"] = ""
+            result["relation_name"] = ""
+            result["depends_on"] = {}
+
+    return run_results
 
 
 # due to issues with typing.Union collapsing subclasses, this can't subclass
