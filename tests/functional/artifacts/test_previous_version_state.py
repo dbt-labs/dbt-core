@@ -437,7 +437,7 @@ class TestPreviousVersionState:
             manifest_version = get_artifact_schema_version(manifest)
             assert manifest_version == schema_version
 
-    def test_compare_state_current(self, project):    
+    def test_compare_results_current(self, project):
         current_run_results_schema_version = RunResultsArtifact.dbt_schema_version.version
         assert (
             current_run_results_schema_version == self.CURRENT_EXPECTED_RUN_RESULTS_VERSION
