@@ -284,24 +284,16 @@ class RunResultsArtifact(ExecutionResult, ArtifactMixin):
         run_results_schema_version = get_artifact_schema_version(data)
         # If less than the current version (v5), preprocess contents to match latest schema version
         if run_results_schema_version <= 5:
-            data = upgrade_run_results_json(data, run_results_schema_version)
+            # In v5, we added 'compiled' attributes to each result entry
+            # Going forward, dbt expects these to be populated
+            for result in data["results"]:
+                result["compiled"] = False
+                result["compiled_code"] = ""
+                result["relation_name"] = ""
         return cls.from_dict(data)
 
     def write(self, path: str):
         write_json(path, self.to_dict(omit_none=False))
-
-
-def upgrade_run_results_json(run_results: dict, run_results_schema_version: int) -> dict:
-    # In v5, we added 'compiled' attributes to each result entry
-    # Going forward, dbt expects these to be populated
-    if run_results_schema_version <= 5:
-        for result in run_results["results"]:
-            result["compiled"] = False
-            result["compiled_code"] = ""
-            result["relation_name"] = ""
-            result["depends_on"] = {}
-
-    return run_results
 
 
 # due to issues with typing.Union collapsing subclasses, this can't subclass
