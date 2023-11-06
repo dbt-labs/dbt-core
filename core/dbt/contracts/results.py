@@ -282,6 +282,7 @@ class RunResultsArtifact(ExecutionResult, ArtifactMixin):
         """This overrides the "upgrade_schema_version" call in VersionedSchema (via
         ArtifactMixin) to modify the dictionary passed in from earlier versions of the run_results."""
         run_results_schema_version = get_artifact_schema_version(data)
+        # If less than the current version (v5), preprocess contents to match latest schema version
         if run_results_schema_version <= 5:
             data = upgrade_run_results_json(data, run_results_schema_version)
         return cls.from_dict(data)
@@ -291,6 +292,8 @@ class RunResultsArtifact(ExecutionResult, ArtifactMixin):
 
 
 def upgrade_run_results_json(run_results: dict, run_results_schema_version: int) -> dict:
+    # In v5, we added 'compiled' attributes to each result entry
+    # Going forward, dbt expects these to be populated
     if run_results_schema_version <= 5:
         for result in run_results["results"]:
             result["compiled"] = False
