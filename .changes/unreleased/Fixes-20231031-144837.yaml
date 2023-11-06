@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix exception running empty seed file
+time: 2023-10-31T14:48:37.774871-04:00
+custom:
+  Author: gshank
+  Issue: "8895"
