@@ -964,7 +964,6 @@ class BaseAdapter(metaclass=AdapterMeta):
         raise NotImplementedError("`convert_number_type` is not implemented for this adapter!")
 
     @classmethod
-    @abc.abstractmethod
     def convert_integer_type(cls, agate_table: agate.Table, col_idx: int) -> str:
         """Return the type in the database that best maps to the agate.Number
         type for the given agate table and column index.
@@ -973,7 +972,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         :param col_idx: The index into the agate table for the column.
         :return: The name of the type in the database
         """
-        raise NotImplementedError("`convert_integer_type` is not implemented for this adapter!")
+        return "integer"
 
     @classmethod
     @abc.abstractmethod
