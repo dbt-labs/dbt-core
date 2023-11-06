@@ -32,6 +32,8 @@ from typing import (
     Optional,
     Sequence,
     Union,
+    Iterable,
+    Tuple,
 )
 
 from dbt.clients.system import write_json
@@ -270,7 +272,7 @@ class RunResultsArtifact(ExecutionResult, ArtifactMixin):
         return cls(metadata=meta, results=processed_results, elapsed_time=elapsed_time, args=args)
 
     @classmethod
-    def compatible_previous_versions(self):
+    def compatible_previous_versions(cls) -> Iterable[Tuple[str, int]]:
         return [
             ("run-results", 4),
         ]

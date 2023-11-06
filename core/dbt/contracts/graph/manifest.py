@@ -20,6 +20,7 @@ from typing import (
     Generic,
     AbstractSet,
     ClassVar,
+    Iterable,
 )
 from typing_extensions import Protocol
 from uuid import UUID
@@ -1608,7 +1609,7 @@ class WritableManifest(ArtifactMixin):
     )
 
     @classmethod
-    def compatible_previous_versions(self):
+    def compatible_previous_versions(cls) -> Iterable[Tuple[str, int]]:
         return [
             ("manifest", 4),
             ("manifest", 5),
