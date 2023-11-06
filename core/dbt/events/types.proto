@@ -861,6 +861,16 @@ message ConstraintNotSupportedMsg {
     ConstraintNotSupported data = 2;
 }
 
+// E050
+message TypeCodeNotFound {
+    int32 type_code = 1;
+}
+
+message TypeCodeNotFoundMsg {
+    EventInfo info = 1;
+    TypeCodeNotFound data = 2;
+}
+
 // I - Project parsing
 
 // I001

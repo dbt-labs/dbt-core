@@ -1,5 +1,5 @@
 import pytest
-from dbt.tests.util import run_dbt, run_dbt_and_capture
+from dbt.tests.util import run_dbt_and_capture
 
 
 my_numeric_model_sql = """
@@ -44,7 +44,9 @@ class TestModelContractUnrecognizedTypeCode1:
         }
 
     def test_nonstandard_data_type(self, project):
-        run_dbt(["run"], expect_pass=True)
+        expected_debug_msg = "The `type_code` 790 was not recognized"
+        _, logs = run_dbt_and_capture(["--debug", "run"], expect_pass=True)
+        assert expected_debug_msg in logs
 
 
 class TestModelContractUnrecognizedTypeCodeActualMismatch:
@@ -57,8 +59,10 @@ class TestModelContractUnrecognizedTypeCodeActualMismatch:
 
     def test_nonstandard_data_type(self, project):
         expected_msg = "unknown type_code 790 | DECIMAL       | data type mismatch"
-        _, logs = run_dbt_and_capture(["run"], expect_pass=False)
+        expected_debug_msg = "The `type_code` 790 was not recognized"
+        _, logs = run_dbt_and_capture(["--debug", "run"], expect_pass=False)
         assert expected_msg in logs
+        assert expected_debug_msg in logs
 
 
 class TestModelContractUnrecognizedTypeCodeExpectedMismatch:
@@ -71,6 +75,7 @@ class TestModelContractUnrecognizedTypeCodeExpectedMismatch:
 
     def test_nonstandard_data_type(self, project):
         expected_msg = "DECIMAL         | unknown type_code 790 | data type mismatch"
-        _, logs = run_dbt_and_capture(["run"], expect_pass=False)
-        print(logs)
+        expected_debug_msg = "The `type_code` 790 was not recognized"
+        _, logs = run_dbt_and_capture(["--debug", "run"], expect_pass=False)
         assert expected_msg in logs
+        assert expected_debug_msg in logs

@@ -8,9 +8,10 @@ The event module provides types that represent what is happening in dbt in `even
 When events are processed via `fire_event`, nearly everything is logged. Whether or not the user has enabled the debug flag, all debug messages are still logged to the file. However, some events are particularly time consuming to construct because they return a huge amount of data. Today, the only messages in this category are cache events and are only logged if the `--log-cache-events` flag is on. This is important because these messages should not be created unless they are going to be logged, because they cause a noticable performance degredation. These events use a "fire_event_if" functions.
 
 # Adding a New Event
-* Add a new message in types.proto, and a second message with the same name + "Msg". The "Msg" message should have two fields, an "info" field of EventInfo, and a "data" field referring to the message name without "Msg"
-* run the protoc compiler to update types_pb2.py:   make proto_types
-* Add a wrapping class in core/dbt/event/types.py with a Level superclass  plus code and message methods
+* Install the [`protoc`](https://grpc.io/docs/protoc-installation/) protocol buffer compiler
+* Add a new message in core/dbt/events/types.proto, and a second message with the same name + "Msg". The "Msg" message should have two fields, an "info" field of EventInfo, and a "data" field referring to the message name without "Msg"
+* run the protoc compiler to update types_pb2.py:   `make proto_types`
+* Add a wrapping class in core/dbt/events/types.py with a Level mixin superclass (e.g. `DebugLevel`) plus code and message methods
 * Add the class to tests/unit/test_events.py
 
 We have switched from using betterproto to using google protobuf, because of a lack of support for Struct fields in betterproto.
@@ -49,6 +50,9 @@ logger = AdapterLogger("<database name>")
 ```
 
 ## Compiling types.proto
+
+Install the `protoc` protocol buffer compiler:
+- https://grpc.io/docs/protoc-installation/
 
 After adding a new message in `types.proto`, either:
 - In the repository root directory: `make proto_types`

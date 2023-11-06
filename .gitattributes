@@ -4,3 +4,4 @@ core/dbt/docs/build/html/searchindex.js binary
 core/dbt/docs/build/html/index.html binary
 performance/runner/Cargo.lock binary
 core/dbt/events/types_pb2.py binary
+core/dbt/docs/build/html/_static/jquery.js binary

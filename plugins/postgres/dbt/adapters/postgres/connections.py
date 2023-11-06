@@ -8,6 +8,8 @@ from dbt.adapters.base import Credentials
 from dbt.adapters.sql import SQLConnectionManager
 from dbt.contracts.connection import AdapterResponse
 from dbt.events import AdapterLogger
+from dbt.events.functions import fire_event
+from dbt.events.types import TypeCodeNotFound
 
 from dbt.helper_types import Port
 from dataclasses import dataclass
@@ -207,4 +209,5 @@ class PostgresConnectionManager(SQLConnectionManager):
         if type_code in string_types:
             return string_types[type_code].name
         else:
+            fire_event(TypeCodeNotFound(type_code=type_code))
             return f"unknown type_code {type_code}"

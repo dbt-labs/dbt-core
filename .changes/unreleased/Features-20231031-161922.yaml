@@ -1,0 +1,6 @@
+kind: Features
+body: Debug log when `type_code` fails to convert to a `data_type`
+time: 2023-10-31T16:19:22.226267-06:00
+custom:
+  Author: dbeatty10
+  Issue: "8912"

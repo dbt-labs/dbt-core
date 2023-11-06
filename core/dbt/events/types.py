@@ -796,6 +796,15 @@ class ConstraintNotSupported(WarnLevel):
         return line_wrap_message(warning_tag(msg))
 
 
+class TypeCodeNotFound(DebugLevel):
+    def code(self) -> str:
+        return "E050"
+
+    def message(self) -> str:
+        msg = f"The `type_code` {self.type_code} was not recognized, which may affect error messages for enforced contracts that fail as well as `Column.data_type` values returned by `get_column_schema_from_query`"
+        return msg
+
+
 # =======================================================
 # I - Project parsing
 # =======================================================
