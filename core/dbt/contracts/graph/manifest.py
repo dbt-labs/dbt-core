@@ -20,6 +20,7 @@ from typing import (
     Generic,
     AbstractSet,
     ClassVar,
+    Iterable,
 )
 from typing_extensions import Protocol
 from uuid import UUID
@@ -45,7 +46,13 @@ from dbt.contracts.graph.nodes import (
 from dbt.contracts.graph.unparsed import SourcePatch, NodeVersion, UnparsedVersion
 from dbt.contracts.graph.manifest_upgrade import upgrade_manifest_json
 from dbt.contracts.files import SourceFile, SchemaSourceFile, FileHash, AnySourceFile
-from dbt.contracts.util import BaseArtifactMetadata, SourceKey, ArtifactMixin, schema_version
+from dbt.contracts.util import (
+    BaseArtifactMetadata,
+    SourceKey,
+    ArtifactMixin,
+    schema_version,
+    get_artifact_schema_version,
+)
 from dbt.dataclass_schema import dbtClassMixin
 from dbt.exceptions import (
     CompilationError,
@@ -1602,7 +1609,7 @@ class WritableManifest(ArtifactMixin):
     )
 
     @classmethod
-    def compatible_previous_versions(self):
+    def compatible_previous_versions(cls) -> Iterable[Tuple[str, int]]:
         return [
             ("manifest", 4),
             ("manifest", 5),
@@ -1617,7 +1624,7 @@ class WritableManifest(ArtifactMixin):
     def upgrade_schema_version(cls, data):
         """This overrides the "upgrade_schema_version" call in VersionedSchema (via
         ArtifactMixin) to modify the dictionary passed in from earlier versions of the manifest."""
-        manifest_schema_version = get_manifest_schema_version(data)
+        manifest_schema_version = get_artifact_schema_version(data)
         if manifest_schema_version <= 10:
             data = upgrade_manifest_json(data, manifest_schema_version)
         return cls.from_dict(data)
@@ -1629,21 +1636,6 @@ class WritableManifest(ArtifactMixin):
             if "defer_relation" in node:
                 del node["defer_relation"]
         return dct
-
-
-def get_manifest_schema_version(dct: dict) -> int:
-    schema_version = dct.get("metadata", {}).get("dbt_schema_version", None)
-    if not schema_version:
-        raise ValueError("Manifest doesn't have schema version")
-
-    # schema_version is in this format: https://schemas.getdbt.com/dbt/manifest/v10.json
-    # What the code below is doing:
-    # 1. Split on "/" – v10.json
-    # 2. Split on "." – v10
-    # 3. Skip first character – 10
-    # 4. Convert to int
-    # TODO: If this gets more complicated, turn into a regex
-    return int(schema_version.split("/")[-1].split(".")[0][1:])
 
 
 def _check_duplicates(value: BaseNode, src: Mapping[str, BaseNode]):

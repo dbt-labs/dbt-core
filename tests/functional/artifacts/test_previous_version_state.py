@@ -4,7 +4,9 @@ import shutil
 
 import pytest
 
-from dbt.contracts.graph.manifest import WritableManifest, get_manifest_schema_version
+from dbt.contracts.util import get_artifact_schema_version
+from dbt.contracts.graph.manifest import WritableManifest
+from dbt.contracts.results import RunResultsArtifact
 from dbt.exceptions import IncompatibleSchemaError
 from dbt.tests.util import run_dbt, get_manifest
 
@@ -261,6 +263,7 @@ seeds:
 
 class TestPreviousVersionState:
     CURRENT_EXPECTED_MANIFEST_VERSION = 11
+    CURRENT_EXPECTED_RUN_RESULTS_VERSION = 5
 
     @pytest.fixture(scope="class")
     def models(self):
@@ -330,10 +333,24 @@ class TestPreviousVersionState:
         project,
         current_manifest_version,
     ):
-        run_dbt(["list"])
+        run_dbt(["parse"])
         source_path = os.path.join(project.project_root, "target/manifest.json")
         state_path = os.path.join(project.test_data_dir, f"state/v{current_manifest_version}")
         target_path = os.path.join(state_path, "manifest.json")
+        os.makedirs(state_path, exist_ok=True)
+        shutil.copyfile(source_path, target_path)
+
+    # Use this method when generating a new run_results version for the first time.
+    # Once generated, we shouldn't need to re-generate or modify the manifest.
+    def generate_latest_run_results(
+        self,
+        project,
+        current_run_results_version,
+    ):
+        run_dbt(["run"])
+        source_path = os.path.join(project.project_root, "target/run_results.json")
+        state_path = os.path.join(project.test_data_dir, f"results/v{current_run_results_version}")
+        target_path = os.path.join(state_path, "run_results.json")
         os.makedirs(state_path, exist_ok=True)
         shutil.copyfile(source_path, target_path)
 
@@ -365,14 +382,38 @@ class TestPreviousVersionState:
             with pytest.raises(IncompatibleSchemaError):
                 run_dbt(cli_args, expect_pass=expect_pass)
 
+    # The actual test method. Run `dbt retry --state ...`
+    # once for each past run_results version. They all have the same content, but different
+    # schema/structure, only some of which are forward-compatible with the
+    # current WritableManifest class.
+    def compare_previous_results(
+        self,
+        project,
+        compare_run_results_version,
+        expect_pass,
+        num_results,
+    ):
+        state_path = os.path.join(project.test_data_dir, f"results/v{compare_run_results_version}")
+        cli_args = [
+            "retry",
+            "--state",
+            state_path,
+        ]
+        if expect_pass:
+            results = run_dbt(cli_args, expect_pass=expect_pass)
+            assert len(results) == num_results
+        else:
+            with pytest.raises(IncompatibleSchemaError):
+                run_dbt(cli_args, expect_pass=expect_pass)
+
     def test_compare_state_current(self, project):
-        current_schema_version = WritableManifest.dbt_schema_version.version
+        current_manifest_schema_version = WritableManifest.dbt_schema_version.version
         assert (
-            current_schema_version == self.CURRENT_EXPECTED_MANIFEST_VERSION
+            current_manifest_schema_version == self.CURRENT_EXPECTED_MANIFEST_VERSION
         ), "Sounds like you've bumped the manifest version and need to update this test!"
         # If we need a newly generated manifest, uncomment the following line and commit the result
-        # self.generate_latest_manifest(project, current_schema_version)
-        self.compare_previous_state(project, current_schema_version, True, 0)
+        # self.generate_latest_manifest(project, current_manifest_schema_version)
+        self.compare_previous_state(project, current_manifest_schema_version, True, 0)
 
     def test_backwards_compatible_versions(self, project):
         # manifest schema version 4 and greater should always be forward compatible
@@ -393,5 +434,19 @@ class TestPreviousVersionState:
             )
             manifest = json.load(open(manifest_path))
 
-            manifest_version = get_manifest_schema_version(manifest)
+            manifest_version = get_artifact_schema_version(manifest)
             assert manifest_version == schema_version
+
+    def test_compare_results_current(self, project):
+        current_run_results_schema_version = RunResultsArtifact.dbt_schema_version.version
+        assert (
+            current_run_results_schema_version == self.CURRENT_EXPECTED_RUN_RESULTS_VERSION
+        ), "Sounds like you've bumped the run_results version and need to update this test!"
+        # If we need a newly generated run_results, uncomment the following line and commit the result
+        # self.generate_latest_run_results(project, current_run_results_schema_version)
+        self.compare_previous_results(project, current_run_results_schema_version, True, 0)
+
+    def test_backwards_compatible_run_results_versions(self, project):
+        # run_results schema version 4 and greater should always be forward compatible
+        for schema_version in range(4, self.CURRENT_EXPECTED_RUN_RESULTS_VERSION):
+            self.compare_previous_results(project, schema_version, True, 0)
