@@ -163,8 +163,16 @@ semantic_models:
       agg_time_dimension: created_at
 
 metrics:
-  - name: my_metric
-    label: Count records
+  - name: blue_customers_post_2010
+    label: Blue Customers since 2010
+    type: simple
+    filter: "{{ TimeDimension('id__created_at', 'day') }} > '2010-01-01'"
+    type_params:
+      measure:
+        name: customers
+        filter: "{{ Dimension('id__favorite_color') }} = 'blue'"
+  - name: customers
+    label: Customers Metric
     type: simple
     type_params:
       measure: customers
@@ -172,9 +180,29 @@ metrics:
     label: Count records
     config:
         enabled: False
+    filter: "{{ Dimension('id__favorite_color') }} = 'blue'"
     type: simple
     type_params:
       measure: customers
+  - name: ratio_of_blue_customers_to_red_customers
+    label: Very Important Customer Color Ratio
+    type: ratio
+    type_params:
+      numerator:
+        name: customers
+        filter: "{{ Dimension('id__favorite_color')}} = 'blue'"
+      denominator:
+        name: customers
+        filter: "{{ Dimension('id__favorite_color')}} = 'red'"
+  - name: doubled_blue_customers
+    type: derived
+    label: Inflated blue customer numbers
+    type_params:
+      expr: 'customers * 2'
+      metrics:
+        - name: customers
+          filter: "{{ Dimension('id__favorite_color')}} = 'blue'"
+
 
 sources:
   - name: my_source
@@ -293,7 +321,7 @@ class TestPreviousVersionState:
         assert len(manifest.nodes) == 8
         assert len(manifest.sources) == 1
         assert len(manifest.exposures) == 1
-        assert len(manifest.metrics) == 1
+        assert len(manifest.metrics) == 4
         # disabled model, snapshot, seed, singular test, generic test, analysis, source, exposure, metric
         assert len(manifest.disabled) == 9
         assert "macro.test.do_nothing" in manifest.macros
@@ -380,16 +408,11 @@ class TestPreviousVersionState:
 
     def test_compare_state_current(self, project):
         current_manifest_schema_version = WritableManifest.dbt_schema_version.version
-        current_run_results_schema_version = RunResultsArtifact.dbt_schema_version.version
         assert (
             current_manifest_schema_version == self.CURRENT_EXPECTED_MANIFEST_VERSION
         ), "Sounds like you've bumped the manifest version and need to update this test!"
-        assert (
-            current_run_results_schema_version == self.CURRENT_EXPECTED_RUN_RESULTS_VERSION
-        ), "Sounds like you've bumped the run_results version and need to update this test!"
         # If we need a newly generated manifest, uncomment the following line and commit the result
         # self.generate_latest_manifest(project, current_manifest_schema_version)
-        self.generate_latest_run_results(project, current_run_results_schema_version)
         self.compare_previous_state(project, current_manifest_schema_version, True, 0)
 
     def test_backwards_compatible_versions(self, project):
@@ -413,6 +436,15 @@ class TestPreviousVersionState:
 
             manifest_version = get_artifact_schema_version(manifest)
             assert manifest_version == schema_version
+
+    def test_compare_state_current(self, project):    
+        current_run_results_schema_version = RunResultsArtifact.dbt_schema_version.version
+        assert (
+            current_run_results_schema_version == self.CURRENT_EXPECTED_RUN_RESULTS_VERSION
+        ), "Sounds like you've bumped the run_results version and need to update this test!"
+        # If we need a newly generated run_results, uncomment the following line and commit the result
+        # self.generate_latest_run_results(project, current_run_results_schema_version)
+        self.compare_previous_results(project, current_run_results_schema_version, True, 0)
 
     def test_backwards_compatible_run_results_versions(self, project):
         # run_results schema version 4 and greater should always be forward compatible
