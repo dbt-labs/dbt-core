@@ -216,6 +216,43 @@ class TestSimpleDependencyWithDuplicates(object):
         run_dbt(["deps"])
 
 
+class TestSimpleDependencyWithSubdirs(object):
+    # dbt should convert these into a single dependency internally
+    @pytest.fixture(scope="class")
+    def packages(self):
+        return {
+            "packages": [
+                {
+                    "git": "git@github.com:dbt-labs/dbt-multipe-packages.git",
+                    "subdirectory": "dbt-utils-main",
+                    "revision": "v0.1.0",
+                },
+                {
+                    "git": "git@github.com:dbt-labs/dbt-multipe-packages.git",
+                    "subdirectory": "dbt-date-main",
+                    "revision": "v0.1.0",
+                },
+            ]
+        }
+
+    def test_git_with_multiple_subdir(self, project):
+        run_dbt(["deps"])
+        assert os.path.exists("package-lock.yml")
+        expected = """packages:
+- git: git@github.com:dbt-labs/dbt-multipe-packages.git
+  revision: v0.1.0
+  subdirectory: dbt-utils-main
+- git: git@github.com:dbt-labs/dbt-multipe-packages.git
+  revision: v0.1.0
+  subdirectory: dbt-date-main
+sha1_hash: 81aa81388cd7438d752193c2ac8c623342d6b0d8
+"""
+        with open("package-lock.yml") as fp:
+            contents = fp.read()
+        assert contents == expected
+        assert len(os.listdir("dbt_packages")) == 2
+
+
 class TestRekeyedDependencyWithSubduplicates(object):
     # this revision of dbt-integration-project requires dbt-utils.git@0.5.0, which the
     # package config handling should detect

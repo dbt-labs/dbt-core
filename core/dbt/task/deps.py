@@ -79,9 +79,6 @@ def _create_packages_yml_entry(package: str, version: Optional[str], source: str
 
     if source == "git":
         version_key = "revision"
-        # if not package.endswith(".git"):
-        #     packages_yml_entry[package_key] = "/".join(package.split("/")[:-1])
-        #     packages_yml_entry["subdirectory"] = package.split("/")[-1]
 
     if version:
         if "," in version:
