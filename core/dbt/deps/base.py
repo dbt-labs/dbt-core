@@ -85,7 +85,7 @@ class PinnedPackage(BasePackage):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def to_dict(self):
+    def to_dict(self) -> dict[str, str]:
         raise NotImplementedError
 
     def fetch_metadata(self, project, renderer):

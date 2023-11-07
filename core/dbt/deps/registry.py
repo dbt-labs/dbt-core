@@ -40,10 +40,10 @@ class RegistryPinnedPackage(RegistryPackageMixin, PinnedPackage):
     def name(self):
         return self.package
 
-    def to_dict(self):
+    def to_dict(self) -> dict[str, str]:
         return {
             "package": self.package,
-            "version": self.version.split(",") if "," in self.version else self.version,
+            "version": self.version,
         }
 
     def source_type(self):

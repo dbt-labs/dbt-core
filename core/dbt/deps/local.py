@@ -29,7 +29,7 @@ class LocalPinnedPackage(LocalPackageMixin, PinnedPackage):
     def __init__(self, local: str) -> None:
         super().__init__(local)
 
-    def to_dict(self):
+    def to_dict(self) -> dict[str, str]:
         return {
             "local": self.local,
         }
