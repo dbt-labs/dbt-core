@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Dict
 
 from dbt import semver
 from dbt.flags import get_flags
@@ -40,7 +40,7 @@ class RegistryPinnedPackage(RegistryPackageMixin, PinnedPackage):
     def name(self):
         return self.package
 
-    def to_dict(self) -> dict[str, str]:
+    def to_dict(self) -> Dict[str, str]:
         return {
             "package": self.package,
             "version": self.version,
