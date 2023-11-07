@@ -41,7 +41,7 @@ from dbt.exceptions import (
     DbtRuntimeError,
     FailFastError,
 )
-from ..common.exceptions import NotImplementedError
+from dbt.common.exceptions import NotImplementedError
 from dbt.flags import get_flags
 from dbt.graph import GraphQueue, NodeSelector, SelectionSpec, parse_difference, UniqueId
 from dbt.logger import (

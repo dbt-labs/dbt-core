@@ -30,7 +30,7 @@ from dbt.exceptions import (
     ProjectContractError,
     DbtRuntimeError,
 )
-from ..common.exceptions import SemverError
+from dbt.common.exceptions import SemverError
 from dbt.graph import SelectionSpec
 from dbt.common.helper_types import NoValue
 from dbt.semver import VersionSpecifier, versions_compatible

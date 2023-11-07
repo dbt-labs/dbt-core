@@ -4,7 +4,7 @@ import pytest
 
 from dbt.adapters.base.impl import BaseAdapter
 from dbt.exceptions import DbtRuntimeError
-from dbt.adapters.exceptions.connection import InvalidConnectionError
+from dbt.adapters.exceptions import InvalidConnectionError
 
 
 class BaseValidateSqlMethod:

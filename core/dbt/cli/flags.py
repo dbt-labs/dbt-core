@@ -305,6 +305,7 @@ class Flags:
             ui.USE_COLOR = getattr(self, "USE_COLORS")
 
         # Set globals for common.events.functions
+        #
         functions.WARN_ERROR = getattr(self, "WARN_ERROR", False)
         if getattr(self, "WARN_ERROR_OPTIONS", None) is not None:
             functions.WARN_ERROR_OPTIONS = getattr(self, "WARN_ERROR_OPTIONS")

@@ -24,7 +24,7 @@ from typing import (
 
 import agate
 
-import dbt.adapters.exceptions.connection
+import dbt.adapters.exceptions
 import dbt.common.exceptions.base
 from dbt.adapters.contracts.connection import (
     Connection,
@@ -92,7 +92,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         key = self.get_thread_identifier()
         with self.lock:
             if key not in self.thread_connections:
-                raise dbt.adapters.exceptions.connection.InvalidConnectionError(
+                raise dbt.adapters.exceptions.InvalidConnectionError(
                     key, list(self.thread_connections)
                 )
             return self.thread_connections[key]
@@ -230,7 +230,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         """
         timeout = retry_timeout(_attempts) if callable(retry_timeout) else retry_timeout
         if timeout < 0:
-            raise dbt.adapters.exceptions.connection.FailedToConnectError(
+            raise dbt.adapters.exceptions.FailedToConnectError(
                 "retry_timeout cannot be negative or return a negative time."
             )
 
@@ -238,9 +238,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
             # This guard is not perfect others may add to the recursion limit (e.g. built-ins).
             connection.handle = None
             connection.state = ConnectionState.FAIL
-            raise dbt.adapters.exceptions.connection.FailedToConnectError(
-                "retry_limit cannot be negative"
-            )
+            raise dbt.adapters.exceptions.FailedToConnectError("retry_limit cannot be negative")
 
         try:
             connection.handle = connect()
@@ -251,7 +249,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
             if retry_limit <= 0:
                 connection.handle = None
                 connection.state = ConnectionState.FAIL
-                raise dbt.adapters.exceptions.connection.FailedToConnectError(str(e))
+                raise dbt.adapters.exceptions.FailedToConnectError(str(e))
 
             logger.debug(
                 f"Got a retryable error when attempting to open a {cls.TYPE} connection.\n"
@@ -273,7 +271,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         except Exception as e:
             connection.handle = None
             connection.state = ConnectionState.FAIL
-            raise dbt.adapters.exceptions.connection.FailedToConnectError(str(e))
+            raise dbt.adapters.exceptions.FailedToConnectError(str(e))
 
     @abc.abstractmethod
     def cancel_open(self) -> Optional[List[str]]:
