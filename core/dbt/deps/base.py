@@ -84,6 +84,10 @@ class PinnedPackage(BasePackage):
     def nice_version_name(self):
         raise NotImplementedError
 
+    @abc.abstractmethod
+    def to_dict(self):
+        raise NotImplementedError
+
     def fetch_metadata(self, project, renderer):
         if not self._cached_metadata:
             self._cached_metadata = self._fetch_metadata(project, renderer)

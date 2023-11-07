@@ -40,6 +40,12 @@ class RegistryPinnedPackage(RegistryPackageMixin, PinnedPackage):
     def name(self):
         return self.package
 
+    def to_dict(self):
+        return {
+            "package": self.package,
+            "version": self.version.split(",") if "," in self.version else self.version,
+        }
+
     def source_type(self):
         return "hub"
 

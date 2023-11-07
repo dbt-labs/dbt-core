@@ -51,6 +51,15 @@ class GitPinnedPackage(GitPackageMixin, PinnedPackage):
         self.subdirectory = subdirectory
         self._checkout_name = md5sum(self.name)
 
+    def to_dict(self):
+        ret = {
+            "git": self.git,
+            "revision": self.revision,
+        }
+        if self.subdirectory:
+            ret["subdirectory"] = self.subdirectory
+        return ret
+
     def get_version(self):
         return self.revision
 

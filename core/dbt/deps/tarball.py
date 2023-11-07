@@ -26,6 +26,13 @@ class TarballPinnedPackage(TarballPackageMixin, PinnedPackage):
     def name(self):
         return self.package
 
+    def to_dict(self):
+        return {
+            "tarball": self.tarball,
+            "version": self.version,
+            "package": self.package,
+        }
+
     def get_version(self):
         return self.version
 
