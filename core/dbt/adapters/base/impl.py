@@ -44,7 +44,12 @@ from dbt.exceptions import (
 )
 
 from dbt.adapters.protocol import AdapterConfig, ConnectionManagerProtocol
-from dbt.clients.agate_helper import empty_table, merge_tables, table_from_rows
+from dbt.clients.agate_helper import (
+    empty_table,
+    merge_tables,
+    table_from_rows,
+    Integer,
+)
 from dbt.clients.jinja import MacroGenerator
 from dbt.contracts.graph.manifest import Manifest, MacroManifest
 from dbt.contracts.graph.nodes import ResultNode
@@ -918,6 +923,17 @@ class BaseAdapter(metaclass=AdapterMeta):
         raise NotImplementedError("`convert_number_type` is not implemented for this adapter!")
 
     @classmethod
+    def convert_integer_type(cls, agate_table: agate.Table, col_idx: int) -> str:
+        """Return the type in the database that best maps to the agate.Number
+        type for the given agate table and column index.
+
+        :param agate_table: The table
+        :param col_idx: The index into the agate table for the column.
+        :return: The name of the type in the database
+        """
+        return "integer"
+
+    @classmethod
     @abc.abstractmethod
     def convert_boolean_type(cls, agate_table: agate.Table, col_idx: int) -> str:
         """Return the type in the database that best maps to the agate.Boolean
@@ -974,6 +990,7 @@ class BaseAdapter(metaclass=AdapterMeta):
     def convert_agate_type(cls, agate_table: agate.Table, col_idx: int) -> Optional[str]:
         agate_type: Type = agate_table.column_types[col_idx]
         conversions: List[Tuple[Type, Callable[..., str]]] = [
+            (Integer, cls.convert_integer_type),
             (agate.Text, cls.convert_text_type),
             (agate.Number, cls.convert_number_type),
             (agate.Boolean, cls.convert_boolean_type),
