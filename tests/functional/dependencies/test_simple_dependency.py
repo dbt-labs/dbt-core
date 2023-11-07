@@ -223,12 +223,12 @@ class TestSimpleDependencyWithSubdirs(object):
         return {
             "packages": [
                 {
-                    "git": "git@github.com:dbt-labs/dbt-multipe-packages.git",
+                    "git": "https://github.com/dbt-labs/dbt-multipe-packages.git",
                     "subdirectory": "dbt-utils-main",
                     "revision": "v0.1.0",
                 },
                 {
-                    "git": "git@github.com:dbt-labs/dbt-multipe-packages.git",
+                    "git": "https://github.com/dbt-labs/dbt-multipe-packages.git",
                     "subdirectory": "dbt-date-main",
                     "revision": "v0.1.0",
                 },
@@ -239,13 +239,13 @@ class TestSimpleDependencyWithSubdirs(object):
         run_dbt(["deps"])
         assert os.path.exists("package-lock.yml")
         expected = """packages:
-- git: git@github.com:dbt-labs/dbt-multipe-packages.git
+- git: https://github.com/dbt-labs/dbt-multipe-packages.git
   revision: v0.1.0
   subdirectory: dbt-utils-main
-- git: git@github.com:dbt-labs/dbt-multipe-packages.git
+- git: https://github.com/dbt-labs/dbt-multipe-packages.git
   revision: v0.1.0
   subdirectory: dbt-date-main
-sha1_hash: 81aa81388cd7438d752193c2ac8c623342d6b0d8
+sha1_hash: 0b643b06246ca34be82ef09524a30635d37aa3be
 """
         with open("package-lock.yml") as fp:
             contents = fp.read()
