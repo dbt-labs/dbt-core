@@ -229,6 +229,8 @@ class UnitTestParser(YamlReader):
                 fqn=unit_test_fqn,
                 config=unit_test_config,
             )
+            # for calculating state:modified
+            unit_test_definition.build_unit_test_checksum()
             self.manifest.add_unit_test(self.yaml.file, unit_test_definition)
 
         return ParseResult()

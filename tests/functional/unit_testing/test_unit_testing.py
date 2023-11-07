@@ -1,5 +1,13 @@
 import pytest
-from dbt.tests.util import run_dbt, write_file, get_manifest, get_artifact
+import os
+import shutil
+from dbt.tests.util import (
+    run_dbt,
+    write_file,
+    get_manifest,
+    get_artifact,
+    write_config_file,
+)
 from dbt.exceptions import DuplicateResourceNameError, ParsingError, YamlParseDictError
 
 my_model_sql = """
@@ -416,3 +424,68 @@ class TestUnitTestIncrementalModel:
         # Select by model name
         results = run_dbt(["unit-test", "--select", "my_incremental_model"], expect_pass=True)
         assert len(results) == 2
+
+
+class TestUnitTestStateModified:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_model.sql": my_model_sql,
+            "my_model_a.sql": my_model_a_sql,
+            "my_model_b.sql": my_model_b_sql,
+            "test_my_model.yml": test_my_model_yml,
+        }
+
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {"vars": {"my_test": "my_test_var"}}
+
+    def copy_state(self, project_root):
+        state_path = os.path.join(project_root, "state")
+        if not os.path.exists(state_path):
+            os.makedirs(state_path)
+        shutil.copyfile(
+            f"{project_root}/target/manifest.json", f"{project_root}/state/manifest.json"
+        )
+        shutil.copyfile(
+            f"{project_root}/target/run_results.json", f"{project_root}/state/run_results.json"
+        )
+
+    def test_state_modified(self, project):
+        run_dbt(["run"])
+        run_dbt(["unit-test"], expect_pass=False)
+        self.copy_state(project.project_root)
+
+        # no changes
+        results = run_dbt(["unit-test", "--select", "state:modified", "--state", "state"])
+        assert len(results) == 0
+
+        # change unit test definition
+        with_changes = test_my_model_yml.replace("{string_c: ab}", "{string_c: bc}")
+        write_config_file(with_changes, project.project_root, "models", "test_my_model.yml")
+        results = run_dbt(
+            ["unit-test", "--select", "state:modified", "--state", "state"], expect_pass=False
+        )
+        assert len(results) == 1
+
+        # change underlying model logic
+        write_config_file(test_my_model_yml, project.project_root, "models", "test_my_model.yml")
+        write_file(
+            my_model_sql.replace("a+b as c,", "a + b as c,"),
+            project.project_root,
+            "models",
+            "my_model.sql",
+        )
+        results = run_dbt(
+            ["unit-test", "--select", "state:modified", "--state", "state"], expect_pass=False
+        )
+        assert len(results) == 4
+
+    def test_retry(self, project):
+        run_dbt(["run"])
+        run_dbt(["unit-test"], expect_pass=False)
+        self.copy_state(project.project_root)
+
+        # no changes
+        results = run_dbt(["retry"], expect_pass=False)
+        assert len(results) == 1
