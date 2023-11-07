@@ -3,7 +3,7 @@ from contextlib import contextmanager
 import psycopg2
 from psycopg2.extensions import string_types
 
-import dbt.exceptions
+import dbt.common.exceptions
 from dbt.adapters.base import Credentials
 from dbt.adapters.sql import SQLConnectionManager
 from dbt.adapters.contracts.connection import AdapterResponse
@@ -84,19 +84,19 @@ class PostgresConnectionManager(SQLConnectionManager):
                 logger.debug("Failed to release connection!")
                 pass
 
-            raise dbt.exceptions.DbtDatabaseError(str(e).strip()) from e
+            raise dbt.common.exceptions.DbtDatabaseError(str(e).strip()) from e
 
         except Exception as e:
             logger.debug("Error running SQL: {}", sql)
             logger.debug("Rolling back transaction.")
             self.rollback_if_open()
-            if isinstance(e, dbt.exceptions.DbtRuntimeError):
+            if isinstance(e, dbt.common.exceptions.DbtRuntimeError):
                 # during a sql query, an internal to dbt exception was raised.
                 # this sounds a lot like a signal handler and probably has
                 # useful information, so raise it without modification.
                 raise
 
-            raise dbt.exceptions.DbtRuntimeError(e) from e
+            raise dbt.common.exceptions.DbtRuntimeError(e) from e
 
     @classmethod
     def open(cls, connection):

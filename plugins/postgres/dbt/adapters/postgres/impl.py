@@ -15,9 +15,9 @@ from dbt.exceptions import (
     CrossDbReferenceProhibitedError,
     IndexConfigNotDictError,
     IndexConfigError,
-    DbtRuntimeError,
     UnexpectedDbReferenceError,
 )
+from dbt.common.exceptions import DbtRuntimeError
 import dbt.utils
 
 
