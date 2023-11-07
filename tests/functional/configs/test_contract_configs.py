@@ -104,7 +104,33 @@ models:
         tests:
           - unique
       - name: color
-        data_type: text
+        data_type: string
+      - name: date_day
+        data_type: date
+"""
+
+model_schema_alias_types_false_yml = """
+version: 2
+models:
+  - name: my_model
+    config:
+      contract:
+        enforced: true
+        alias_types: false
+    columns:
+      - name: id
+        quote: true
+        data_type: integer
+        description: hello
+        constraints:
+            - type: not_null
+            - type: primary_key
+            - type: check
+              expression: (id > 0)
+        tests:
+          - unique
+      - name: color
+        data_type: string
       - name: date_day
         data_type: date
 """
@@ -251,7 +277,7 @@ class TestModelLevelContractEnabledConfigs:
 
         assert contract_actual_config.enforced is True
 
-        expected_columns = "{'id': ColumnInfo(name='id', description='hello', meta={}, data_type='integer', constraints=[ColumnLevelConstraint(type=<ConstraintType.not_null: 'not_null'>, name=None, expression=None, warn_unenforced=True, warn_unsupported=True), ColumnLevelConstraint(type=<ConstraintType.primary_key: 'primary_key'>, name=None, expression=None, warn_unenforced=True, warn_unsupported=True), ColumnLevelConstraint(type=<ConstraintType.check: 'check'>, name=None, expression='(id > 0)', warn_unenforced=True, warn_unsupported=True)], quote=True, tags=[], _extra={}), 'color': ColumnInfo(name='color', description='', meta={}, data_type='text', constraints=[], quote=None, tags=[], _extra={}), 'date_day': ColumnInfo(name='date_day', description='', meta={}, data_type='date', constraints=[], quote=None, tags=[], _extra={})}"
+        expected_columns = "{'id': ColumnInfo(name='id', description='hello', meta={}, data_type='integer', constraints=[ColumnLevelConstraint(type=<ConstraintType.not_null: 'not_null'>, name=None, expression=None, warn_unenforced=True, warn_unsupported=True), ColumnLevelConstraint(type=<ConstraintType.primary_key: 'primary_key'>, name=None, expression=None, warn_unenforced=True, warn_unsupported=True), ColumnLevelConstraint(type=<ConstraintType.check: 'check'>, name=None, expression='(id > 0)', warn_unenforced=True, warn_unsupported=True)], quote=True, tags=[], _extra={}), 'color': ColumnInfo(name='color', description='', meta={}, data_type='string', constraints=[], quote=None, tags=[], _extra={}), 'date_day': ColumnInfo(name='date_day', description='', meta={}, data_type='date', constraints=[], quote=None, tags=[], _extra={})}"
 
         assert expected_columns == str(my_model_columns)
 
@@ -263,6 +289,15 @@ class TestModelLevelContractEnabledConfigs:
             "select 'blue' as color, 1 as id, cast('2019-01-01' as date) as date_day"
             == cleaned_code
         )
+
+        # set alias_types to false (should fail to compile)
+        write_file(
+            model_schema_alias_types_false_yml,
+            project.project_root,
+            "models",
+            "constraints_schema.yml",
+        )
+        run_dbt(["run"], expect_pass=False)
 
 
 class TestProjectContractEnabledConfigs:

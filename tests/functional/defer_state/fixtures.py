@@ -359,3 +359,66 @@ snapshot_sql = """
 
 {% endsnapshot %}
 """
+
+model_1_sql = """
+select * from {{ ref('seed') }}
+"""
+
+modified_model_1_sql = """
+select * from  {{ ref('seed') }}
+order by 1
+"""
+
+model_2_sql = """
+select id from  {{ ref('model_1') }}
+"""
+
+modified_model_2_sql = """
+select * from  {{ ref('model_1') }}
+order by 1
+"""
+
+
+group_schema_yml = """
+groups:
+  - name: finance
+    owner:
+      email: finance@jaffleshop.com
+
+models:
+  - name: model_1
+    config:
+      group: finance
+  - name: model_2
+    config:
+      group: finance
+"""
+
+
+group_modified_schema_yml = """
+groups:
+  - name: accounting
+    owner:
+      email: finance@jaffleshop.com
+models:
+  - name: model_1
+    config:
+      group: accounting
+  - name: model_2
+    config:
+      group: accounting
+"""
+
+group_modified_fail_schema_yml = """
+groups:
+  - name: finance
+    owner:
+      email: finance@jaffleshop.com
+models:
+  - name: model_1
+    config:
+      group: accounting
+  - name: model_2
+    config:
+      group: finance
+"""

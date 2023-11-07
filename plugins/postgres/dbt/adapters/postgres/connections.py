@@ -12,6 +12,8 @@ from dbt.events import AdapterLogger
 from dbt.helper_types import Port
 from dataclasses import dataclass
 from typing import Optional
+from typing_extensions import Annotated
+from mashumaro.jsonschema.annotations import Maximum, Minimum
 
 
 logger = AdapterLogger("Postgres")
@@ -21,7 +23,8 @@ logger = AdapterLogger("Postgres")
 class PostgresCredentials(Credentials):
     host: str
     user: str
-    port: Port
+    # Annotated is used by mashumaro for jsonschema generation
+    port: Annotated[Port, Minimum(0), Maximum(65535)]
     password: str  # on postgres the password is mandatory
     connect_timeout: int = 10
     role: Optional[str] = None
@@ -201,4 +204,7 @@ class PostgresConnectionManager(SQLConnectionManager):
 
     @classmethod
     def data_type_code_to_name(cls, type_code: int) -> str:
-        return string_types[type_code].name
+        if type_code in string_types:
+            return string_types[type_code].name
+        else:
+            return f"unknown type_code {type_code}"

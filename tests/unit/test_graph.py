@@ -116,16 +116,6 @@ class GraphTest(unittest.TestCase):
 
         self.mock_source_file.side_effect = mock_load_source_file
 
-        @patch("dbt.parser.hooks.HookParser.get_path")
-        def _mock_hook_path(self):
-            path = FilePath(
-                searched_path=".",
-                project_root=os.path.normcase(os.getcwd()),
-                relative_path="dbt_project.yml",
-                modification_time=0.0,
-            )
-            return path
-
     def get_config(self, extra_cfg=None):
         if extra_cfg is None:
             extra_cfg = {}

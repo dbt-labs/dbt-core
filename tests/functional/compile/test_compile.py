@@ -3,7 +3,6 @@ import pathlib
 import pytest
 import re
 
-from dbt.cli.main import dbtRunner
 from dbt.exceptions import DbtRuntimeError, Exception as DbtException
 from dbt.tests.util import run_dbt, run_dbt_and_capture, read_file
 from tests.functional.compile.fixtures import (
@@ -16,6 +15,7 @@ from tests.functional.compile.fixtures import (
     schema_yml,
     model_multiline_jinja,
 )
+from tests.functional.assertions.test_runner import dbtTestRunner
 
 
 def norm_whitespace(string):
@@ -189,11 +189,11 @@ class TestCompile:
         assert '"compiled"' in log_output
 
     def test_compile_inline_not_add_node(self, project):
-        dbt = dbtRunner()
+        dbt = dbtTestRunner()
         parse_result = dbt.invoke(["parse"])
         manifest = parse_result.result
         assert len(manifest.nodes) == 4
-        dbt = dbtRunner(manifest=manifest)
+        dbt = dbtTestRunner(manifest=manifest)
         dbt.invoke(
             ["compile", "--inline", "select * from {{ ref('second_model') }}"],
             populate_cache=False,
@@ -218,7 +218,7 @@ class TestCompile:
         """Ensure that the compile command generates a file named graph_summary.json
         in the target directory, that the file contains valid json, and that the
         json has the high level structure it should."""
-        dbtRunner().invoke(["compile"])
+        dbtTestRunner().invoke(["compile"])
         summary_path = pathlib.Path(project.project_root, "target/graph_summary.json")
         with open(summary_path, "r") as summary_file:
             summary = json.load(summary_file)

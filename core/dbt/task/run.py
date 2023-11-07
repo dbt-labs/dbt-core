@@ -52,7 +52,7 @@ from dbt.node_types import NodeType, RunHookType
 
 
 class Timer:
-    def __init__(self):
+    def __init__(self) -> None:
         self.start = None
         self.end = None
 
@@ -301,18 +301,18 @@ class ModelRunner(CompileRunner):
 
 
 class RunTask(CompileTask):
-    def __init__(self, args, config, manifest):
+    def __init__(self, args, config, manifest) -> None:
         super().__init__(args, config, manifest)
-        self.ran_hooks = []
+        self.ran_hooks: List[HookNode] = []
         self._total_executed = 0
 
     def index_offset(self, value: int) -> int:
         return self._total_executed + value
 
-    def raise_on_first_error(self):
+    def raise_on_first_error(self) -> bool:
         return False
 
-    def get_hook_sql(self, adapter, hook, idx, num_hooks, extra_context):
+    def get_hook_sql(self, adapter, hook, idx, num_hooks, extra_context) -> str:
         compiler = adapter.get_compiler()
         compiled = compiler.compile_node(hook, self.manifest, extra_context)
         statement = compiled.compiled_code
@@ -337,7 +337,7 @@ class RunTask(CompileTask):
         hooks.sort(key=self._hook_keyfunc)
         return hooks
 
-    def run_hooks(self, adapter, hook_type: RunHookType, extra_context):
+    def run_hooks(self, adapter, hook_type: RunHookType, extra_context) -> None:
         ordered_hooks = self.get_hooks_by_type(hook_type)
 
         # on-run-* hooks should run outside of a transaction. This happens
@@ -423,7 +423,7 @@ class RunTask(CompileTask):
                 )
             )
 
-    def print_results_line(self, results, execution_time):
+    def print_results_line(self, results, execution_time) -> None:
         nodes = [r.node for r in results if hasattr(r, "node")] + self.ran_hooks
         stat_line = get_counts(nodes)
 
@@ -440,7 +440,7 @@ class RunTask(CompileTask):
             )
         )
 
-    def before_run(self, adapter, selected_uids: AbstractSet[str]):
+    def before_run(self, adapter, selected_uids: AbstractSet[str]) -> None:
         with adapter.connection_named("master"):
             required_schemas = self.get_model_schemas(adapter, selected_uids)
             self.create_schemas(adapter, required_schemas)
@@ -448,7 +448,7 @@ class RunTask(CompileTask):
             self.defer_to_manifest(adapter, selected_uids)
             self.safe_run_hooks(adapter, RunHookType.Start, {})
 
-    def after_run(self, adapter, results):
+    def after_run(self, adapter, results) -> None:
         # in on-run-end hooks, provide the value 'database_schemas', which is a
         # list of unique (database, schema) pairs that successfully executed
         # models were in. For backwards compatibility, include the old
@@ -484,6 +484,6 @@ class RunTask(CompileTask):
     def get_runner_type(self, _):
         return ModelRunner
 
-    def task_end_messages(self, results):
+    def task_end_messages(self, results) -> None:
         if results:
             print_run_end_messages(results)

@@ -17,9 +17,11 @@ from typing import (
     Set,
     Tuple,
     Type,
+    TypedDict,
     Union,
 )
 
+from dbt.adapters.capability import Capability, CapabilityDict
 from dbt.contracts.graph.nodes import ColumnLevelConstraint, ConstraintType, ModelLevelConstraint
 
 import agate
@@ -43,8 +45,14 @@ from dbt.exceptions import (
     UnexpectedNullError,
 )
 
-from dbt.adapters.protocol import AdapterConfig, ConnectionManagerProtocol
-from dbt.clients.agate_helper import empty_table, merge_tables, table_from_rows
+from dbt.adapters.protocol import AdapterConfig
+from dbt.clients.agate_helper import (
+    empty_table,
+    get_column_value_uncased,
+    merge_tables,
+    table_from_rows,
+    Integer,
+)
 from dbt.clients.jinja import MacroGenerator
 from dbt.contracts.graph.manifest import Manifest, MacroManifest
 from dbt.contracts.graph.nodes import ResultNode
@@ -60,7 +68,7 @@ from dbt.events.types import (
 )
 from dbt.utils import filter_null_values, executor, cast_to_str, AttrDict
 
-from dbt.adapters.base.connections import Connection, AdapterResponse
+from dbt.adapters.base.connections import Connection, AdapterResponse, BaseConnectionManager
 from dbt.adapters.base.meta import AdapterMeta, available
 from dbt.adapters.base.relation import (
     ComponentName,
@@ -74,7 +82,9 @@ from dbt.adapters.cache import RelationsCache, _make_ref_key_dict
 from dbt import deprecations
 
 GET_CATALOG_MACRO_NAME = "get_catalog"
+GET_CATALOG_RELATIONS_MACRO_NAME = "get_catalog_relations"
 FRESHNESS_MACRO_NAME = "collect_freshness"
+GET_RELATION_LAST_MODIFIED_MACRO_NAME = "get_relation_last_modified"
 
 
 class ConstraintSupport(str, Enum):
@@ -109,7 +119,7 @@ def _catalog_filter_schemas(manifest: Manifest) -> Callable[[agate.Row], bool]:
     return test
 
 
-def _utc(dt: Optional[datetime], source: BaseRelation, field_name: str) -> datetime:
+def _utc(dt: Optional[datetime], source: Optional[BaseRelation], field_name: str) -> datetime:
     """If dt has a timezone, return a new datetime that's in UTC. Otherwise,
     assume the datetime is already for UTC and add the timezone.
     """
@@ -161,6 +171,12 @@ class PythonJobHelper:
         raise NotImplementedError("PythonJobHelper submit function is not implemented yet")
 
 
+class FreshnessResponse(TypedDict):
+    max_loaded_at: datetime
+    snapshotted_at: datetime
+    age: float  # age in seconds
+
+
 class BaseAdapter(metaclass=AdapterMeta):
     """The BaseAdapter provides an abstract base class for adapters.
 
@@ -208,7 +224,7 @@ class BaseAdapter(metaclass=AdapterMeta):
 
     Relation: Type[BaseRelation] = BaseRelation
     Column: Type[BaseColumn] = BaseColumn
-    ConnectionManager: Type[ConnectionManagerProtocol]
+    ConnectionManager: Type[BaseConnectionManager]
 
     # A set of clobber config fields accepted by this adapter
     # for use in materializations
@@ -222,7 +238,11 @@ class BaseAdapter(metaclass=AdapterMeta):
         ConstraintType.foreign_key: ConstraintSupport.ENFORCED,
     }
 
-    def __init__(self, config):
+    # This static member variable can be overriden in concrete adapter
+    # implementations to indicate adapter support for optional capabilities.
+    _capabilities = CapabilityDict({})
+
+    def __init__(self, config) -> None:
         self.config = config
         self.cache = RelationsCache()
         self.connections = self.ConnectionManager(config)
@@ -315,14 +335,21 @@ class BaseAdapter(metaclass=AdapterMeta):
 
     @available.parse(lambda *a, **k: ("", empty_table()))
     def get_partitions_metadata(self, table: str) -> Tuple[agate.Table]:
-        """Obtain partitions metadata for a BigQuery partitioned table.
+        """
+        TODO: Can we move this to dbt-bigquery?
+        Obtain partitions metadata for a BigQuery partitioned table.
 
-        :param str table_id: a partitioned table id, in standard SQL format.
+        :param str table: a partitioned table id, in standard SQL format.
         :return: a partition metadata tuple, as described in
             https://cloud.google.com/bigquery/docs/creating-partitioned-tables#getting_partition_metadata_using_meta_tables.
         :rtype: agate.Table
         """
-        return self.connections.get_partitions_metadata(table=table)
+        if hasattr(self.connections, "get_partitions_metadata"):
+            return self.connections.get_partitions_metadata(table=table)
+        else:
+            raise NotImplementedError(
+                "`get_partitions_metadata` is not implemented for this adapter!"
+            )
 
     ###
     # Methods that should never be overridden
@@ -408,7 +435,30 @@ class BaseAdapter(metaclass=AdapterMeta):
         lowercase strings.
         """
         info_schema_name_map = SchemaSearchMap()
-        nodes: Iterator[ResultNode] = chain(
+        relations = self._get_catalog_relations(manifest)
+        for relation in relations:
+            info_schema_name_map.add(relation)
+        # result is a map whose keys are information_schema Relations without
+        # identifiers that have appropriate database prefixes, and whose values
+        # are sets of lowercase schema names that are valid members of those
+        # databases
+        return info_schema_name_map
+
+    def _get_catalog_relations_by_info_schema(
+        self, relations
+    ) -> Dict[InformationSchema, List[BaseRelation]]:
+        relations_by_info_schema: Dict[InformationSchema, List[BaseRelation]] = dict()
+        for relation in relations:
+            info_schema = relation.information_schema_only()
+            if info_schema not in relations_by_info_schema:
+                relations_by_info_schema[info_schema] = []
+            relations_by_info_schema[info_schema].append(relation)
+
+        return relations_by_info_schema
+
+    def _get_catalog_relations(self, manifest: Manifest) -> List[BaseRelation]:
+
+        nodes = chain(
             [
                 node
                 for node in manifest.nodes.values()
@@ -416,14 +466,9 @@ class BaseAdapter(metaclass=AdapterMeta):
             ],
             manifest.sources.values(),
         )
-        for node in nodes:
-            relation = self.Relation.create_from(self.config, node)
-            info_schema_name_map.add(relation)
-        # result is a map whose keys are information_schema Relations without
-        # identifiers that have appropriate database prefixes, and whose values
-        # are sets of lowercase schema names that are valid members of those
-        # databases
-        return info_schema_name_map
+
+        relations = [self.Relation.create_from(self.config, n) for n in nodes]
+        return relations
 
     def _relations_cache_for_schemas(
         self, manifest: Manifest, cache_schemas: Optional[Set[BaseRelation]] = None
@@ -453,9 +498,10 @@ class BaseAdapter(metaclass=AdapterMeta):
         # it's possible that there were no relations in some schemas. We want
         # to insert the schemas we query into the cache's `.schemas` attribute
         # so we can check it later
-        cache_update: Set[Tuple[Optional[str], Optional[str]]] = set()
+        cache_update: Set[Tuple[Optional[str], str]] = set()
         for relation in cache_schemas:
-            cache_update.add((relation.database, relation.schema))
+            if relation.schema:
+                cache_update.add((relation.database, relation.schema))
         self.cache.update_schemas(cache_update)
 
     def set_relations_cache(
@@ -918,6 +964,17 @@ class BaseAdapter(metaclass=AdapterMeta):
         raise NotImplementedError("`convert_number_type` is not implemented for this adapter!")
 
     @classmethod
+    def convert_integer_type(cls, agate_table: agate.Table, col_idx: int) -> str:
+        """Return the type in the database that best maps to the agate.Number
+        type for the given agate table and column index.
+
+        :param agate_table: The table
+        :param col_idx: The index into the agate table for the column.
+        :return: The name of the type in the database
+        """
+        return "integer"
+
+    @classmethod
     @abc.abstractmethod
     def convert_boolean_type(cls, agate_table: agate.Table, col_idx: int) -> str:
         """Return the type in the database that best maps to the agate.Boolean
@@ -974,6 +1031,7 @@ class BaseAdapter(metaclass=AdapterMeta):
     def convert_agate_type(cls, agate_table: agate.Table, col_idx: int) -> Optional[str]:
         agate_type: Type = agate_table.column_types[col_idx]
         conversions: List[Tuple[Type, Callable[..., str]]] = [
+            (Integer, cls.convert_integer_type),
             (agate.Text, cls.convert_text_type),
             (agate.Number, cls.convert_number_type),
             (agate.Boolean, cls.convert_boolean_type),
@@ -1085,24 +1143,107 @@ class BaseAdapter(metaclass=AdapterMeta):
         results = self._catalog_filter_table(table, manifest)  # type: ignore[arg-type]
         return results
 
-    def get_catalog(self, manifest: Manifest) -> Tuple[agate.Table, List[Exception]]:
-        schema_map = self._get_catalog_schemas(manifest)
+    def _get_one_catalog_by_relations(
+        self,
+        information_schema: InformationSchema,
+        relations: List[BaseRelation],
+        manifest: Manifest,
+    ) -> agate.Table:
 
+        kwargs = {
+            "information_schema": information_schema,
+            "relations": relations,
+        }
+        table = self.execute_macro(
+            GET_CATALOG_RELATIONS_MACRO_NAME,
+            kwargs=kwargs,
+            # pass in the full manifest, so we get any local project
+            # overrides
+            manifest=manifest,
+        )
+
+        results = self._catalog_filter_table(table, manifest)  # type: ignore[arg-type]
+        return results
+
+    def get_filtered_catalog(
+        self, manifest: Manifest, relations: Optional[Set[BaseRelation]] = None
+    ):
+        catalogs: agate.Table
+        if (
+            relations is None
+            or len(relations) > 100
+            or not self.supports(Capability.SchemaMetadataByRelations)
+        ):
+            # Do it the traditional way. We get the full catalog.
+            catalogs, exceptions = self.get_catalog(manifest)
+        else:
+            # Do it the new way. We try to save time by selecting information
+            # only for the exact set of relations we are interested in.
+            catalogs, exceptions = self.get_catalog_by_relations(manifest, relations)
+
+        if relations and catalogs:
+            relation_map = {
+                (
+                    r.database.casefold() if r.database else None,
+                    r.schema.casefold() if r.schema else None,
+                    r.identifier.casefold() if r.identifier else None,
+                )
+                for r in relations
+            }
+
+            def in_map(row: agate.Row):
+                d = _expect_row_value("table_database", row)
+                s = _expect_row_value("table_schema", row)
+                i = _expect_row_value("table_name", row)
+                d = d.casefold() if d is not None else None
+                s = s.casefold() if s is not None else None
+                i = i.casefold() if i is not None else None
+                return (d, s, i) in relation_map
+
+            catalogs = catalogs.where(in_map)
+
+        return catalogs, exceptions
+
+    def row_matches_relation(self, row: agate.Row, relations: Set[BaseRelation]):
+        pass
+
+    def get_catalog(self, manifest: Manifest) -> Tuple[agate.Table, List[Exception]]:
         with executor(self.config) as tpe:
             futures: List[Future[agate.Table]] = []
+            schema_map: SchemaSearchMap = self._get_catalog_schemas(manifest)
             for info, schemas in schema_map.items():
                 if len(schemas) == 0:
                     continue
                 name = ".".join([str(info.database), "information_schema"])
-
                 fut = tpe.submit_connected(
                     self, name, self._get_one_catalog, info, schemas, manifest
                 )
                 futures.append(fut)
 
-            catalogs, exceptions = catch_as_completed(futures)
-
+        catalogs, exceptions = catch_as_completed(futures)
         return catalogs, exceptions
+
+    def get_catalog_by_relations(
+        self, manifest: Manifest, relations: Set[BaseRelation]
+    ) -> Tuple[agate.Table, List[Exception]]:
+        with executor(self.config) as tpe:
+            futures: List[Future[agate.Table]] = []
+            relations_by_schema = self._get_catalog_relations_by_info_schema(relations)
+            for info_schema in relations_by_schema:
+                name = ".".join([str(info_schema.database), "information_schema"])
+                relations = set(relations_by_schema[info_schema])
+                fut = tpe.submit_connected(
+                    self,
+                    name,
+                    self._get_one_catalog_by_relations,
+                    info_schema,
+                    relations,
+                    manifest,
+                )
+                futures.append(fut)
+
+            catalogs, exceptions = catch_as_completed(futures)
+            return catalogs, exceptions
 
     def cancel_open_connections(self):
         """Cancel all open connections."""
@@ -1114,7 +1255,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         loaded_at_field: str,
         filter: Optional[str],
         manifest: Optional[Manifest] = None,
-    ) -> Tuple[Optional[AdapterResponse], Dict[str, Any]]:
+    ) -> Tuple[Optional[AdapterResponse], FreshnessResponse]:
         """Calculate the freshness of sources in dbt, and return it"""
         kwargs: Dict[str, Any] = {
             "source": source,
@@ -1149,11 +1290,50 @@ class BaseAdapter(metaclass=AdapterMeta):
 
         snapshotted_at = _utc(table[0][1], source, loaded_at_field)
         age = (snapshotted_at - max_loaded_at).total_seconds()
-        freshness = {
+        freshness: FreshnessResponse = {
             "max_loaded_at": max_loaded_at,
             "snapshotted_at": snapshotted_at,
             "age": age,
         }
+        return adapter_response, freshness
+
+    def calculate_freshness_from_metadata(
+        self,
+        source: BaseRelation,
+        manifest: Optional[Manifest] = None,
+    ) -> Tuple[Optional[AdapterResponse], FreshnessResponse]:
+        kwargs: Dict[str, Any] = {
+            "information_schema": source.information_schema_only(),
+            "relations": [source],
+        }
+        result = self.execute_macro(
+            GET_RELATION_LAST_MODIFIED_MACRO_NAME, kwargs=kwargs, manifest=manifest
+        )
+        adapter_response, table = result.response, result.table  # type: ignore[attr-defined]
+
+        try:
+            row = table[0]
+            last_modified_val = get_column_value_uncased("last_modified", row)
+            snapshotted_at_val = get_column_value_uncased("snapshotted_at", row)
+        except Exception:
+            raise MacroResultError(GET_RELATION_LAST_MODIFIED_MACRO_NAME, table)
+
+        if last_modified_val is None:
+            # Interpret missing value as "infinitely long ago"
+            max_loaded_at = datetime(1, 1, 1, 0, 0, 0, tzinfo=pytz.UTC)
+        else:
+            max_loaded_at = _utc(last_modified_val, None, "last_modified")
+
+        snapshotted_at = _utc(snapshotted_at_val, None, "snapshotted_at")
+
+        age = (snapshotted_at - max_loaded_at).total_seconds()
+
+        freshness: FreshnessResponse = {
+            "max_loaded_at": max_loaded_at,
+            "snapshotted_at": snapshotted_at,
+            "age": age,
+        }
+
         return adapter_response, freshness
 
     def pre_model_hook(self, config: Mapping[str, Any]) -> Any:
@@ -1428,6 +1608,14 @@ class BaseAdapter(metaclass=AdapterMeta):
             return f"{constraint_prefix}{constraint.expression}"
         else:
             return None
+
+    @classmethod
+    def capabilities(cls) -> CapabilityDict:
+        return cls._capabilities
+
+    @classmethod
+    def supports(cls, capability: Capability) -> bool:
+        return bool(cls.capabilities()[capability])
 
 
 COLUMNS_EQUAL_SQL = """

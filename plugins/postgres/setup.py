@@ -41,7 +41,7 @@ def _dbt_psycopg2_name():
 
 
 package_name = "dbt-postgres"
-package_version = "1.7.0a1"
+package_version = "1.8.0a1"
 description = """The postgres adapter plugin for dbt (data build tool)"""
 
 this_directory = os.path.abspath(os.path.dirname(__file__))
@@ -60,14 +60,7 @@ setup(
     author_email="info@dbtlabs.com",
     url="https://github.com/dbt-labs/dbt-core",
     packages=find_namespace_packages(include=["dbt", "dbt.*"]),
-    package_data={
-        "dbt": [
-            "include/postgres/dbt_project.yml",
-            "include/postgres/sample_profiles.yml",
-            "include/postgres/macros/*.sql",
-            "include/postgres/macros/**/*.sql",
-        ]
-    },
+    include_package_data=True,
     install_requires=[
         "dbt-core=={}".format(package_version),
         "{}~=2.8".format(DBT_PSYCOPG2_NAME),

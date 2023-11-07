@@ -33,6 +33,7 @@ class NodeType(StrEnum):
     Exposure = "exposure"
     Metric = "metric"
     Group = "group"
+    SavedQuery = "saved_query"
     SemanticModel = "semantic_model"
 
     @classmethod
@@ -63,22 +64,11 @@ class NodeType(StrEnum):
             cls.Model,
         ]
 
-    @classmethod
-    def documentable(cls) -> List["NodeType"]:
-        return [
-            cls.Model,
-            cls.Seed,
-            cls.Snapshot,
-            cls.Source,
-            cls.Macro,
-            cls.Analysis,
-            cls.Exposure,
-            cls.Metric,
-        ]
-
     def pluralize(self) -> str:
         if self is self.Analysis:
             return "analyses"
+        elif self is self.SavedQuery:
+            return "saved_queries"
         return f"{self}s"
 
 

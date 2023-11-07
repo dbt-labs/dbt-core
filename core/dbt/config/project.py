@@ -16,8 +16,12 @@ import os
 
 from dbt.flags import get_flags
 from dbt import deprecations
-from dbt.constants import DEPENDENCIES_FILE_NAME, PACKAGES_FILE_NAME
-from dbt.clients.system import path_exists, resolve_path_from_base, load_file_contents
+from dbt.constants import (
+    DEPENDENCIES_FILE_NAME,
+    PACKAGES_FILE_NAME,
+    PACKAGE_LOCK_HASH_KEY,
+)
+from dbt.clients.system import path_exists, load_file_contents
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.contracts.connection import QueryComment
 from dbt.exceptions import (
@@ -94,16 +98,17 @@ def _load_yaml(path):
     return load_yaml_text(contents)
 
 
-def package_and_project_data_from_root(project_root):
-    package_filepath = resolve_path_from_base(PACKAGES_FILE_NAME, project_root)
-    dependencies_filepath = resolve_path_from_base(DEPENDENCIES_FILE_NAME, project_root)
+def load_yml_dict(file_path):
+    ret = {}
+    if path_exists(file_path):
+        ret = _load_yaml(file_path) or {}
+    return ret
 
-    packages_yml_dict = {}
-    dependencies_yml_dict = {}
-    if path_exists(package_filepath):
-        packages_yml_dict = _load_yaml(package_filepath) or {}
-    if path_exists(dependencies_filepath):
-        dependencies_yml_dict = _load_yaml(dependencies_filepath) or {}
+
+def package_and_project_data_from_root(project_root):
+
+    packages_yml_dict = load_yml_dict(f"{project_root}/{PACKAGES_FILE_NAME}")
+    dependencies_yml_dict = load_yml_dict(f"{project_root}/{DEPENDENCIES_FILE_NAME}")
 
     if "packages" in packages_yml_dict and "packages" in dependencies_yml_dict:
         msg = "The 'packages' key cannot be specified in both packages.yml and dependencies.yml"
@@ -127,6 +132,8 @@ def package_config_from_data(packages_data: Dict[str, Any]) -> PackageConfig:
     if not packages_data:
         packages_data = {"packages": []}
 
+    if PACKAGE_LOCK_HASH_KEY in packages_data:
+        packages_data.pop(PACKAGE_LOCK_HASH_KEY)
     try:
         PackageConfig.validate(packages_data)
         packages = PackageConfig.from_dict(packages_data)
@@ -426,8 +433,11 @@ class PartialProject(RenderComponents):
         sources: Dict[str, Any]
         tests: Dict[str, Any]
         metrics: Dict[str, Any]
+        semantic_models: Dict[str, Any]
+        saved_queries: Dict[str, Any]
         exposures: Dict[str, Any]
         vars_value: VarProvider
+        dbt_cloud: Dict[str, Any]
 
         dispatch = cfg.dispatch
         models = cfg.models
@@ -436,6 +446,8 @@ class PartialProject(RenderComponents):
         sources = cfg.sources
         tests = cfg.tests
         metrics = cfg.metrics
+        semantic_models = cfg.semantic_models
+        saved_queries = cfg.saved_queries
         exposures = cfg.exposures
         if cfg.vars is None:
             vars_dict: Dict[str, Any] = {}
@@ -459,6 +471,8 @@ class PartialProject(RenderComponents):
             manifest_selectors = SelectorDict.parse_from_selectors_list(
                 rendered.selectors_dict["selectors"]
             )
+        dbt_cloud = cfg.dbt_cloud
+
         project = Project(
             project_name=name,
             version=version,
@@ -492,12 +506,15 @@ class PartialProject(RenderComponents):
             sources=sources,
             tests=tests,
             metrics=metrics,
+            semantic_models=semantic_models,
+            saved_queries=saved_queries,
             exposures=exposures,
             vars=vars_value,
             config_version=cfg.config_version,
             unrendered=unrendered,
             project_env_vars=project_env_vars,
             restrict_access=cfg.restrict_access,
+            dbt_cloud=dbt_cloud,
         )
         # sanity check - this means an internal issue
         project.validate()
@@ -541,6 +558,7 @@ class PartialProject(RenderComponents):
             packages_specified_path,
         ) = package_and_project_data_from_root(project_root)
         selectors_dict = selector_data_from_root(project_root)
+
         return cls.from_dicts(
             project_root=project_root,
             project_dict=project_dict,
@@ -598,6 +616,8 @@ class Project:
     sources: Dict[str, Any]
     tests: Dict[str, Any]
     metrics: Dict[str, Any]
+    semantic_models: Dict[str, Any]
+    saved_queries: Dict[str, Any]
     exposures: Dict[str, Any]
     vars: VarProvider
     dbt_version: List[VersionSpecifier]
@@ -609,6 +629,7 @@ class Project:
     unrendered: RenderComponents
     project_env_vars: Dict[str, Any]
     restrict_access: bool
+    dbt_cloud: Dict[str, Any]
 
     @property
     def all_source_paths(self) -> List[str]:
@@ -673,11 +694,14 @@ class Project:
                 "sources": self.sources,
                 "tests": self.tests,
                 "metrics": self.metrics,
+                "semantic-models": self.semantic_models,
+                "saved-queries": self.saved_queries,
                 "exposures": self.exposures,
                 "vars": self.vars.to_dict(),
                 "require-dbt-version": [v.to_version_string() for v in self.dbt_version],
                 "config-version": self.config_version,
                 "restrict-access": self.restrict_access,
+                "dbt-cloud": self.dbt_cloud,
             }
         )
         if self.query_comment:

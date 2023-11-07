@@ -167,6 +167,8 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             sources=project.sources,
             tests=project.tests,
             metrics=project.metrics,
+            semantic_models=project.semantic_models,
+            saved_queries=project.saved_queries,
             exposures=project.exposures,
             vars=project.vars,
             config_version=project.config_version,
@@ -182,6 +184,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             args=args,
             cli_vars=cli_vars,
             dependencies=dependencies,
+            dbt_cloud=project.dbt_cloud,
         )
 
     # Called by 'load_projects' in this class
@@ -322,6 +325,8 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             "sources": self._get_config_paths(self.sources),
             "tests": self._get_config_paths(self.tests),
             "metrics": self._get_config_paths(self.metrics),
+            "semantic_models": self._get_config_paths(self.semantic_models),
+            "saved_queries": self._get_config_paths(self.saved_queries),
             "exposures": self._get_config_paths(self.exposures),
         }
 
@@ -404,7 +409,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
 
 
 class UnsetCredentials(Credentials):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__("", "")
 
     @property

@@ -231,6 +231,7 @@ class SchemaSourceFile(BaseSourceFile):
     # node patches contain models, seeds, snapshots, analyses
     ndp: List[str] = field(default_factory=list)
     semantic_models: List[str] = field(default_factory=list)
+    saved_queries: List[str] = field(default_factory=list)
     # any macro patches in this file by macro unique_id.
     mcp: Dict[str, str] = field(default_factory=dict)
     # any source patches in this file. The entries are package, name pairs

@@ -119,6 +119,7 @@ sources:
               field: favorite_color
       - name: other_test_table
         identifier: other_table
+        freshness: null
         columns:
           - name: id
             tests:
@@ -454,4 +455,20 @@ collect_freshness_macro_override_previous_return_signature = """
   {% endcall %}
   {{ return(load_result('collect_freshness').table) }}
 {% endmacro %}
+"""
+
+
+freshness_via_metadata_schema_yml = """version: 2
+sources:
+  - name: test_source
+    loader: custom
+    freshness:
+      warn_after: {count: 10, period: hour}
+      error_after: {count: 1, period: day}
+    schema: my_schema
+    quoting:
+      identifier: True
+    tables:
+      - name: test_table
+        identifier: source
 """

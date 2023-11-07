@@ -79,6 +79,7 @@ from dbt.parser.read_files import (
     load_source_file,
     FileDiff,
     ReadFilesFromDiff,
+    ReadFiles,
 )
 from dbt.parser.partial import PartialParsing, special_override_macros
 from dbt.contracts.graph.manifest import (
@@ -93,7 +94,9 @@ from dbt.contracts.graph.nodes import (
     Macro,
     Exposure,
     Metric,
+    SavedQuery,
     SeedNode,
+    SemanticModel,
     ManifestNode,
     ResultNode,
     ModelNode,
@@ -259,7 +262,7 @@ class ManifestLoader:
         # We need to know if we're actually partially parsing. It could
         # have been enabled, but not happening because of some issue.
         self.partially_parsing = False
-        self.partial_parser = None
+        self.partial_parser: Optional[PartialParsing] = None
 
         # This is a saved manifest from a previous run that's used for partial parsing
         self.saved_manifest: Optional[Manifest] = self.read_manifest_for_partial_parse()
@@ -331,7 +334,7 @@ class ManifestLoader:
         return manifest
 
     # This is where the main action happens
-    def load(self):
+    def load(self) -> Manifest:
         start_read_files = time.perf_counter()
 
         # This updates the "files" dictionary in self.manifest, and creates
@@ -340,6 +343,7 @@ class ManifestLoader:
         # of parsers to lists of file strings. The file strings are
         # used to get the SourceFiles from the manifest files.
         saved_files = self.saved_manifest.files if self.saved_manifest else {}
+        file_reader: Optional[ReadFiles] = None
         if self.file_diff:
             # We're getting files from a file diff
             file_reader = ReadFilesFromDiff(
@@ -403,7 +407,7 @@ class ManifestLoader:
                     }
 
                     # get file info for local logs
-                    parse_file_type = None
+                    parse_file_type: str = ""
                     file_id = self.partial_parser.processing_file
                     if file_id:
                         source_file = None
@@ -484,7 +488,7 @@ class ManifestLoader:
             self.manifest.rebuild_disabled_lookup()
 
             # Load yaml files
-            parser_types = [SchemaParser]
+            parser_types = [SchemaParser]  # type: ignore
             for project in self.all_projects.values():
                 if project.project_name not in project_parser_files:
                     continue
@@ -525,6 +529,7 @@ class ManifestLoader:
             self.process_refs(self.root_project.project_name, self.root_project.dependencies)
             self.process_docs(self.root_project)
             self.process_metrics(self.root_project)
+            self.process_saved_queries(self.root_project)
             self.check_valid_group_config()
             self.check_valid_access_property()
 
@@ -557,7 +562,7 @@ class ManifestLoader:
                 )
                 # parent and child maps will be rebuilt by write_manifest
 
-        if not skip_parsing:
+        if not skip_parsing or external_nodes_modified:
             # write out the fully parsed manifest
             self.write_manifest_for_partial_parse()
 
@@ -755,10 +760,13 @@ class ManifestLoader:
     def inject_external_nodes(self) -> bool:
         # Remove previously existing external nodes since we are regenerating them
         manifest_nodes_modified = False
+        # Remove all dependent nodes before removing referencing nodes
         for unique_id in self.manifest.external_node_unique_ids:
-            self.manifest.nodes.pop(unique_id)
             remove_dependent_project_references(self.manifest, unique_id)
             manifest_nodes_modified = True
+        for unique_id in self.manifest.external_node_unique_ids:
+            # remove external nodes from manifest only after dependent project references safely removed
+            self.manifest.nodes.pop(unique_id)
 
         # Inject any newly-available external nodes
         pm = plugins.get_plugin_manager(self.root_project.project_name)
@@ -1062,7 +1070,7 @@ class ManifestLoader:
 
     # Takes references in 'refs' array of nodes and exposures, finds the target
     # node, and updates 'depends_on.nodes' with the unique id
-    def process_refs(self, current_project: str, dependencies: Optional[Dict[str, Project]]):
+    def process_refs(self, current_project: str, dependencies: Optional[Mapping[str, Project]]):
         for node in self.manifest.nodes.values():
             if node.created_at < self.started_at:
                 continue
@@ -1099,6 +1107,15 @@ class ManifestLoader:
                 continue
             _process_metrics_for_node(self.manifest, current_project, exposure)
 
+    def process_saved_queries(self, config: RuntimeConfig):
+        """Processes SavedQuery nodes to populate their `depends_on`."""
+        current_project = config.project_name
+        for saved_query in self.manifest.saved_queries.values():
+            # TODO:
+            # 1. process `where` of SavedQuery for `depends_on`s
+            # 2. process `group_by` of SavedQuery for `depends_on``
+            _process_metrics_for_node(self.manifest, current_project, saved_query)
+
     def update_semantic_model(self, semantic_model) -> None:
         # This has to be done at the end of parsing because the referenced model
         # might have alias/schema/database fields that are updated by yaml config.
@@ -1111,10 +1128,12 @@ class ManifestLoader:
                 database=refd_node.database,
             )
 
-    # nodes: node and column descriptions
+    # nodes: node and column descriptions, version columns descriptions
     # sources: source and table descriptions, column descriptions
     # macros: macro argument descriptions
     # exposures: exposure descriptions
+    # metrics: metric descriptions
+    # semantic_models: semantic model descriptions
     def process_docs(self, config: RuntimeConfig):
         for node in self.manifest.nodes.values():
             if node.created_at < self.started_at:
@@ -1166,6 +1185,23 @@ class ManifestLoader:
                 config.project_name,
             )
             _process_docs_for_metrics(ctx, metric)
+        for semantic_model in self.manifest.semantic_models.values():
+            if semantic_model.created_at < self.started_at:
+                continue
+            ctx = generate_runtime_docs_context(
+                config,
+                semantic_model,
+                self.manifest,
+                config.project_name,
+            )
+            _process_docs_for_semantic_model(ctx, semantic_model)
+        for saved_query in self.manifest.saved_queries.values():
+            if saved_query.created_at < self.started_at:
+                continue
+            ctx = generate_runtime_docs_context(
+                config, saved_query, self.manifest, config.project_name
+            )
+            _process_docs_for_saved_query(ctx, saved_query)
 
     # Loops through all nodes and exposures, for each element in
     # 'sources' array finds the source node and updates the
@@ -1215,11 +1251,19 @@ class ManifestLoader:
         for metric in manifest.metrics.values():
             self.check_valid_group_config_node(metric, group_names)
 
+        for semantic_model in manifest.semantic_models.values():
+            self.check_valid_group_config_node(semantic_model, group_names)
+
+        for saved_query in manifest.saved_queries.values():
+            self.check_valid_group_config_node(saved_query, group_names)
+
         for node in manifest.nodes.values():
             self.check_valid_group_config_node(node, group_names)
 
     def check_valid_group_config_node(
-        self, groupable_node: Union[Metric, ManifestNode], valid_group_names: Set[str]
+        self,
+        groupable_node: Union[Metric, SavedQuery, SemanticModel, ManifestNode],
+        valid_group_names: Set[str],
     ):
         groupable_node_group = groupable_node.group
         if groupable_node_group and groupable_node_group not in valid_group_names:
@@ -1395,6 +1439,30 @@ def _process_docs_for_metrics(context: Dict[str, Any], metric: Metric) -> None:
     metric.description = get_rendered(metric.description, context)
 
 
+def _process_docs_for_semantic_model(
+    context: Dict[str, Any], semantic_model: SemanticModel
+) -> None:
+    if semantic_model.description:
+        semantic_model.description = get_rendered(semantic_model.description, context)
+
+    for dimension in semantic_model.dimensions:
+        if dimension.description:
+            dimension.description = get_rendered(dimension.description, context)
+
+    for measure in semantic_model.measures:
+        if measure.description:
+            measure.description = get_rendered(measure.description, context)
+
+    for entity in semantic_model.entities:
+        if entity.description:
+            entity.description = get_rendered(entity.description, context)
+
+
+def _process_docs_for_saved_query(context: Dict[str, Any], saved_query: SavedQuery) -> None:
+    if saved_query.description:
+        saved_query.description = get_rendered(saved_query.description, context)
+
+
 def _process_refs(
     manifest: Manifest, current_project: str, node, dependencies: Optional[Mapping[str, Project]]
 ) -> None:
@@ -1488,6 +1556,11 @@ def _process_metric_node(
                 f"A semantic model having a measure `{metric.type_params.measure.name}` does not exist but was referenced.",
                 node=metric,
             )
+        if target_semantic_model.config.enabled is False:
+            raise dbt.exceptions.ParsingError(
+                f"The measure `{metric.type_params.measure.name}` is referenced on disabled semantic model `{target_semantic_model.name}`.",
+                node=metric,
+            )
 
         metric.depends_on.add_node(target_semantic_model.unique_id)
 
@@ -1532,14 +1605,19 @@ def _process_metric_node(
 def _process_metrics_for_node(
     manifest: Manifest,
     current_project: str,
-    node: Union[ManifestNode, Metric, Exposure],
+    node: Union[ManifestNode, Metric, Exposure, SavedQuery],
 ):
     """Given a manifest and a node in that manifest, process its metrics"""
 
+    metrics: List[List[str]]
     if isinstance(node, SeedNode):
         return
+    elif isinstance(node, SavedQuery):
+        metrics = [[metric] for metric in node.metrics]
+    else:
+        metrics = node.metrics
 
-    for metric in node.metrics:
+    for metric in metrics:
         target_metric: Optional[Union[Disabled, Metric]] = None
         target_metric_name: str
         target_metric_package: Optional[str] = None

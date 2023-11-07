@@ -55,6 +55,9 @@ def adapter_factory():
         def convert_number_type(self, *args, **kwargs):
             return self.responder.convert_number_type(*args, **kwargs)
 
+        def convert_integer_type(self, *args, **kwargs):
+            return self.responder.convert_integer_type(*args, **kwargs)
+
         def convert_boolean_type(self, *args, **kwargs):
             return self.responder.convert_boolean_type(*args, **kwargs)
 

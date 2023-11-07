@@ -72,7 +72,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
 
     TYPE: str = NotImplemented
 
-    def __init__(self, profile: AdapterRequiredConfig):
+    def __init__(self, profile: AdapterRequiredConfig) -> None:
         self.profile = profile
         self.thread_connections: Dict[Hashable, Connection] = {}
         self.lock: RLock = flags.MP_CONTEXT.RLock()
@@ -400,7 +400,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
 
     @abc.abstractmethod
     def execute(
-        self, sql: str, auto_begin: bool = False, fetch: bool = False
+        self, sql: str, auto_begin: bool = False, fetch: bool = False, limit: Optional[int] = None
     ) -> Tuple[AdapterResponse, agate.Table]:
         """Execute the given SQL.
 
@@ -408,7 +408,28 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         :param bool auto_begin: If set, and dbt is not currently inside a
             transaction, automatically begin one.
         :param bool fetch: If set, fetch results.
+        :param int limit: If set, limits the result set
         :return: A tuple of the query status and results (empty if fetch=False).
         :rtype: Tuple[AdapterResponse, agate.Table]
         """
         raise dbt.exceptions.NotImplementedError("`execute` is not implemented for this adapter!")
+
+    def add_select_query(self, sql: str) -> Tuple[Connection, Any]:
+        """
+        This was added here because base.impl.BaseAdapter.get_column_schema_from_query expects it to be here.
+        That method wouldn't work unless the adapter used sql.impl.SQLAdapter, sql.connections.SQLConnectionManager
+        or defined this method on <Adapter>ConnectionManager before passing it in to <Adapter>Adapter.
+
+        See https://github.com/dbt-labs/dbt-core/issues/8396 for more information.
+        """
+        raise dbt.exceptions.NotImplementedError(
+            "`add_select_query` is not implemented for this adapter!"
+        )
+
+    @classmethod
+    def data_type_code_to_name(cls, type_code: Union[int, str]) -> str:
+        """Get the string representation of the data type from the type_code."""
+        # https://peps.python.org/pep-0249/#type-objects
+        raise dbt.exceptions.NotImplementedError(
+            "`data_type_code_to_name` is not implemented for this adapter!"
+        )

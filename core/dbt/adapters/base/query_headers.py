@@ -11,7 +11,7 @@ from dbt.exceptions import DbtRuntimeError
 
 
 class NodeWrapper:
-    def __init__(self, node):
+    def __init__(self, node) -> None:
         self._inner_node = node
 
     def __getattr__(self, name):
@@ -25,9 +25,9 @@ class _QueryComment(local):
         - a source_name indicating what set the current thread's query comment
     """
 
-    def __init__(self, initial):
+    def __init__(self, initial) -> None:
         self.query_comment: Optional[str] = initial
-        self.append = False
+        self.append: bool = False
 
     def add(self, sql: str) -> str:
         if not self.query_comment:
@@ -57,7 +57,7 @@ QueryStringFunc = Callable[[str, Optional[NodeWrapper]], str]
 
 
 class MacroQueryStringSetter:
-    def __init__(self, config: AdapterRequiredConfig, manifest: Manifest):
+    def __init__(self, config: AdapterRequiredConfig, manifest: Manifest) -> None:
         self.manifest = manifest
         self.config = config
 

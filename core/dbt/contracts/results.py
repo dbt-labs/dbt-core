@@ -1,13 +1,14 @@
 import threading
 
 from dbt.contracts.graph.unparsed import FreshnessThreshold
-from dbt.contracts.graph.nodes import SourceDefinition, ResultNode
+from dbt.contracts.graph.nodes import CompiledNode, SourceDefinition, ResultNode
 from dbt.contracts.util import (
     BaseArtifactMetadata,
     ArtifactMixin,
     VersionedSchema,
     Replaceable,
     schema_version,
+    get_artifact_schema_version,
 )
 from dbt.exceptions import DbtInternalError
 from dbt.events.functions import fire_event
@@ -31,6 +32,8 @@ from typing import (
     Optional,
     Sequence,
     Union,
+    Iterable,
+    Tuple,
 )
 
 from dbt.clients.system import write_json
@@ -59,7 +62,7 @@ class TimingInfo(dbtClassMixin):
 
 # This is a context manager
 class collect_timing_info:
-    def __init__(self, name: str, callback: Callable[[TimingInfo], None]):
+    def __init__(self, name: str, callback: Callable[[TimingInfo], None]) -> None:
         self.timing_info = TimingInfo(name=name)
         self.callback = callback
 
@@ -203,9 +206,15 @@ class RunResultsMetadata(BaseArtifactMetadata):
 @dataclass
 class RunResultOutput(BaseResult):
     unique_id: str
+    compiled: Optional[bool]
+    compiled_code: Optional[str]
+    relation_name: Optional[str]
 
 
 def process_run_result(result: RunResult) -> RunResultOutput:
+
+    compiled = isinstance(result.node, CompiledNode)
+
     return RunResultOutput(
         unique_id=result.node.unique_id,
         status=result.status,
@@ -215,6 +224,9 @@ def process_run_result(result: RunResult) -> RunResultOutput:
         message=result.message,
         adapter_response=result.adapter_response,
         failures=result.failures,
+        compiled=result.node.compiled if compiled else None,  # type:ignore
+        compiled_code=result.node.compiled_code if compiled else None,  # type:ignore
+        relation_name=result.node.relation_name if compiled else None,  # type:ignore
     )
 
 
@@ -237,7 +249,7 @@ class RunExecutionResult(
 
 
 @dataclass
-@schema_version("run-results", 4)
+@schema_version("run-results", 5)
 class RunResultsArtifact(ExecutionResult, ArtifactMixin):
     results: Sequence[RunResultOutput]
     args: Dict[str, Any] = field(default_factory=dict)
@@ -258,6 +270,27 @@ class RunResultsArtifact(ExecutionResult, ArtifactMixin):
             generated_at=generated_at,
         )
         return cls(metadata=meta, results=processed_results, elapsed_time=elapsed_time, args=args)
+
+    @classmethod
+    def compatible_previous_versions(cls) -> Iterable[Tuple[str, int]]:
+        return [
+            ("run-results", 4),
+        ]
+
+    @classmethod
+    def upgrade_schema_version(cls, data):
+        """This overrides the "upgrade_schema_version" call in VersionedSchema (via
+        ArtifactMixin) to modify the dictionary passed in from earlier versions of the run_results."""
+        run_results_schema_version = get_artifact_schema_version(data)
+        # If less than the current version (v5), preprocess contents to match latest schema version
+        if run_results_schema_version <= 5:
+            # In v5, we added 'compiled' attributes to each result entry
+            # Going forward, dbt expects these to be populated
+            for result in data["results"]:
+                result["compiled"] = False
+                result["compiled_code"] = ""
+                result["relation_name"] = ""
+        return cls.from_dict(data)
 
     def write(self, path: str):
         write_json(path, self.to_dict(omit_none=False))

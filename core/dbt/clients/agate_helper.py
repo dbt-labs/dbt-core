@@ -9,8 +9,21 @@ from typing import Iterable, List, Dict, Union, Optional, Any
 
 from dbt.exceptions import DbtRuntimeError
 
-
 BOM = BOM_UTF8.decode("utf-8")  # '\ufeff'
+
+
+class Integer(agate.data_types.DataType):
+    def cast(self, d):
+        # by default agate will cast none as a Number
+        # but we need to cast it as an Integer to preserve
+        # the type when merging and unioning tables
+        if type(d) == int or d is None:
+            return d
+        else:
+            raise agate.exceptions.CastError('Can not parse value "%s" as Integer.' % d)
+
+    def jsonify(self, d):
+        return d
 
 
 class Number(agate.data_types.Number):
@@ -48,6 +61,7 @@ def build_type_tester(
 ) -> agate.TypeTester:
 
     types = [
+        Integer(null_values=("null", "")),
         Number(null_values=("null", "")),
         agate.data_types.Date(null_values=("null", ""), date_format="%Y-%m-%d"),
         agate.data_types.DateTime(null_values=("null", ""), datetime_format="%Y-%m-%d %H:%M:%S"),
@@ -151,7 +165,7 @@ NullableAgateType = Union[agate.data_types.DataType, _NullMarker]
 
 
 class ColumnTypeBuilder(Dict[str, NullableAgateType]):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
 
     def __setitem__(self, key, value):
@@ -166,6 +180,13 @@ class ColumnTypeBuilder(Dict[str, NullableAgateType]):
         elif isinstance(value, _NullMarker):
             # use the existing value
             return
+        # when one table column is Number while another is Integer, force the column to Number on merge
+        elif isinstance(value, Integer) and isinstance(existing_type, agate.data_types.Number):
+            # use the existing value
+            return
+        elif isinstance(existing_type, Integer) and isinstance(value, agate.data_types.Number):
+            # overwrite
+            super().__setitem__(key, value)
         elif not isinstance(value, type(existing_type)):
             # actual type mismatch!
             raise DbtRuntimeError(
@@ -177,8 +198,9 @@ class ColumnTypeBuilder(Dict[str, NullableAgateType]):
         result: Dict[str, agate.data_types.DataType] = {}
         for key, value in self.items():
             if isinstance(value, _NullMarker):
-                # this is what agate would do.
-                result[key] = agate.data_types.Number()
+                # agate would make it a Number but we'll make it Integer so that if this column
+                # gets merged with another Integer column, it won't get forced to a Number
+                result[key] = Integer()
             else:
                 result[key] = value
         return result
@@ -218,3 +240,12 @@ def merge_tables(tables: List[agate.Table]) -> agate.Table:
                 rows.append(agate.Row(data, column_names))
     # _is_fork to tell agate that we already made things into `Row`s.
     return agate.Table(rows, column_names, column_types, _is_fork=True)
+
+
+def get_column_value_uncased(column_name: str, row: agate.Row) -> Any:
+    """Get the value of a column in this row, ignoring the casing of the column name."""
+    for key, value in row.items():
+        if key.casefold() == column_name.casefold():
+            return value
+
+    raise KeyError

@@ -5,7 +5,7 @@ import yaml
 import json
 import warnings
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from contextlib import contextmanager
 from dbt.adapters.factory import Adapter
 
@@ -149,13 +149,23 @@ def get_logging_events(log_output, event_name):
 # Used in test cases to get the manifest from the partial parsing file
 # Note: this uses an internal version of the manifest, and in the future
 # parts of it will not be supported for external use.
-def get_manifest(project_root):
+def get_manifest(project_root) -> Optional[Manifest]:
     path = os.path.join(project_root, "target", "partial_parse.msgpack")
     if os.path.exists(path):
         with open(path, "rb") as fp:
             manifest_mp = fp.read()
         manifest: Manifest = Manifest.from_msgpack(manifest_mp)
         return manifest
+    else:
+        return None
+
+
+# Used in test cases to get the run_results.json file.
+def get_run_results(project_root) -> Any:
+    path = os.path.join(project_root, "target", "run_results.json")
+    if os.path.exists(path):
+        with open(path) as run_result_text:
+            return json.load(run_result_text)
     else:
         return None
 
@@ -212,6 +222,10 @@ def rm_dir(directory_path):
         shutil.rmtree(directory_path)
     except FileNotFoundError:
         raise FileNotFoundError(f"{directory_path} does not exist.")
+
+
+def rename_dir(src_directory_path, dest_directory_path):
+    os.rename(src_directory_path, dest_directory_path)
 
 
 # Get an artifact (usually from the target directory) such as
