@@ -120,6 +120,13 @@ fail_fast = click.option(
     help="Stop execution on first failure.",
 )
 
+no_skip_on_failture = click.option(
+    "--no-skip-on-failture",
+    envvar="DBT_NO_SKIP_ON_FAILTURE",
+    help="If specified, dbt will proceed with downstream models even the dependent model failed.",
+    is_flag=True,
+)
+
 favor_state = click.option(
     "--favor-state/--no-favor-state",
     envvar="DBT_FAVOR_STATE",

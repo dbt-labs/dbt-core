@@ -350,6 +350,7 @@ def args_to_dict(args):
             "debug",
             "full_refresh",
             "fail_fast",
+            "no_skip_on_failture",
             "warn_error",
             "single_threaded",
             "log_cache_events",
