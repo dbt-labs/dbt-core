@@ -83,6 +83,7 @@ setup(
         "pytz>=2015.7",
         "pyyaml>=6.0",
         "typing-extensions>=3.7.4",
+        "pygit2 >= 1.0.0",
         # ----
         # Match snowflake-connector-python, to ensure compatibility in dbt-snowflake
         "cffi>=1.9,<2.0.0",

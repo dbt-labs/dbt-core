@@ -188,6 +188,8 @@ REQUIRED_BASE_KEYS = frozenset(
         "print",
         "diff_of_two_dicts",
         "local_md5",
+        "git_branch",
+        "git_sha",
     }
 )
 
