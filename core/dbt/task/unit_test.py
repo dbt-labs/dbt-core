@@ -7,6 +7,7 @@ import io
 from .compile import CompileRunner
 from .run import RunTask
 
+from dbt.adapters.factory import get_adapter
 from dbt.contracts.graph.nodes import UnitTestNode
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.results import TestStatus, RunResult
@@ -202,7 +203,15 @@ class UnitTestTask(RunTask):
             return ()
 
     def build_unit_test_manifest(self):
-        loader = UnitTestManifestLoader(self.manifest, self.config, self.job_queue._selected)
+        adapter = get_adapter(self.config)
+        loader = UnitTestManifestLoader(
+            self.manifest,
+            self.config,
+            adapter,
+            self.job_queue._selected,
+            self._get_deferred_manifest(),
+            favor_state=bool(self.args.favor_state),
+        )
         return loader.load()
 
     def reset_job_queue_and_manifest(self):

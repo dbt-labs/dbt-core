@@ -4,7 +4,7 @@ from dbt.config import RuntimeConfig
 from dbt.context.context_config import ContextConfig
 from dbt.context.providers import generate_parse_exposure, get_rendered
 from dbt.contracts.files import FileHash
-from dbt.contracts.graph.manifest import Manifest
+from dbt.contracts.graph.manifest import Manifest, WritableManifest
 from dbt.contracts.graph.model_config import UnitTestNodeConfig, ModelConfig
 from dbt.contracts.graph.nodes import (
     ModelNode,
@@ -31,14 +31,25 @@ from dbt_extractor import py_extract_from_source, ExtractionError  # type: ignor
 
 
 class UnitTestManifestLoader:
-    def __init__(self, manifest, root_project, selected) -> None:
+    def __init__(
+        self, manifest, root_project, adapter, selected, defer_manifest, favor_state
+    ) -> None:
         self.manifest: Manifest = manifest
         self.root_project: RuntimeConfig = root_project
         # selected comes from the initial selection against a "regular" manifest
+        self.adapter = adapter
         self.selected: Set[UniqueId] = selected
+        self.defer_manifest: WritableManifest = defer_manifest
+        self.favor_state = favor_state
         self.unit_test_manifest = Manifest(macros=manifest.macros)
 
     def load(self) -> Manifest:
+        if self.defer_manifest:
+            # This is a little bit gross!
+            adapter = self.adapter
+            with adapter.connection_named("master"):
+                self.manifest.merge_from_artifact(adapter, self.defer_manifest, self.selected)
+
         for unique_id in self.selected:
             unit_test_case = self.manifest.unit_tests[unique_id]
             self.parse_unit_test_case(unit_test_case)

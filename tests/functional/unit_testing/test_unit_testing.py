@@ -1,6 +1,7 @@
 import pytest
 import os
 import shutil
+from copy import deepcopy
 from dbt.tests.util import (
     run_dbt,
     write_file,
@@ -426,7 +427,7 @@ class TestUnitTestIncrementalModel:
         assert len(results) == 2
 
 
-class TestUnitTestStateModified:
+class UnitTestState:
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -451,6 +452,8 @@ class TestUnitTestStateModified:
             f"{project_root}/target/run_results.json", f"{project_root}/state/run_results.json"
         )
 
+
+class TestUnitTestStateModified(UnitTestState):
     def test_state_modified(self, project):
         run_dbt(["run"])
         run_dbt(["unit-test"], expect_pass=False)
@@ -481,11 +484,32 @@ class TestUnitTestStateModified:
         )
         assert len(results) == 4
 
-    def test_retry(self, project):
+
+class TestUnitTestRetry(UnitTestState):
+    def test_unit_test_retry(self, project):
         run_dbt(["run"])
         run_dbt(["unit-test"], expect_pass=False)
         self.copy_state(project.project_root)
 
-        # no changes
         results = run_dbt(["retry"], expect_pass=False)
         assert len(results) == 1
+
+
+class TestUnitTestDeferState(UnitTestState):
+    @pytest.fixture(scope="class")
+    def other_schema(self, unique_schema):
+        return unique_schema + "_other"
+
+    @pytest.fixture(scope="class")
+    def profiles_config_update(self, dbt_profile_target, unique_schema, other_schema):
+        outputs = {"default": dbt_profile_target, "otherschema": deepcopy(dbt_profile_target)}
+        outputs["default"]["schema"] = unique_schema
+        outputs["otherschema"]["schema"] = other_schema
+        return {"test": {"outputs": outputs, "target": "default"}}
+
+    def test_unit_test_defer_state(self, project):
+        run_dbt(["run", "--target", "otherschema"])
+        self.copy_state(project.project_root)
+        results = run_dbt(["unit-test", "--defer", "--state", "state"], expect_pass=False)
+        assert len(results) == 4
+        assert sorted([r.status for r in results]) == ["fail", "pass", "pass", "pass"]
