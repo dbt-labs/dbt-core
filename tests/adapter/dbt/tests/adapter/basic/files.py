@@ -12,20 +12,6 @@ id,name,some_date
 10,Nora,1976-03-01T16:51:39
 """.lstrip()
 
-seeds_jp_base_csv = """
-id,名前,ふりがな,部署ｺｰﾄﾞ,イニシャル
-1,比嘉,ひが,10000,H
-2,金城,きんじょう,10000,K
-3,大城,おおしろ,10001,O
-4,宮城,みやぎ,10001,M
-5,新垣,あらかき,10002,A
-6,玉城,たましろ,10002,T
-7,上原,うえはら,10002,U
-8,島袋,しまぶくろ,10003,S
-9,平良,たいら,10003,T
-10,山城,やましろ,10003,Y
-""".lstrip()
-
 
 seeds_added_csv = (
     seeds_base_csv
@@ -75,18 +61,6 @@ models:
      - name: id
        tests:
          - not_null
-     - name: 名前
-       tests:
-         - not_null
-     - name: ふりがな
-       tests:
-         - not_null
-     - name: 部署ｺｰﾄﾞ
-       tests:
-         - not_null
-     - name: イニシャル
-       tests:
-         - not_null
 """
 
 generic_test_view_yml = """
@@ -97,18 +71,6 @@ models:
      - name: id
        tests:
          - not_null
-     - name: 名前
-       tests:
-         - not_null
-     - name: ふりがな
-       tests:
-         - not_null
-     - name: 部署ｺｰﾄﾞ
-       tests:
-         - not_null
-     - name: イニシャル
-       tests:
-         - not_null
 """
 
 generic_test_table_yml = """
@@ -117,18 +79,6 @@ models:
   - name: table_model
     columns:
      - name: id
-       tests:
-         - not_null
-     - name: 名前
-       tests:
-         - not_null
-     - name: ふりがな
-       tests:
-         - not_null
-     - name: 部署ｺｰﾄﾞ
-       tests:
-         - not_null
-     - name: イニシャル
        tests:
          - not_null
 """

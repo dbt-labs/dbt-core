@@ -56,7 +56,7 @@ def synthesize_generic_test_names(
 
         flat_args.extend([str(part) for part in parts])
 
-    clean_flat_args = [re.sub(r"\W+", "_", arg) for arg in flat_args]
+    clean_flat_args = [re.sub("[^0-9a-zA-Z_]+", "_", arg) for arg in flat_args]
     unique = "__".join(clean_flat_args)
 
     # for the file path + alias, the name must be <64 characters
