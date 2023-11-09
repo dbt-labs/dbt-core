@@ -162,6 +162,6 @@ class TestUnitTestsDuplicateCSVFile:
         assert len(results) == 3
 
         # Select by model name
-        expected_error = "Could not find fixture file fake_file for unit test"
+        expected_error = "Found multiple fixture files named test_my_model_basic_fixture.csv at ['one-folder/test_my_model_basic_fixture.csv', 'another-folder/test_my_model_basic_fixture.csv']"
         with pytest.raises(ParsingError, match=expected_error):
             results = run_dbt(["unit-test", "--select", "my_model"], expect_pass=False)

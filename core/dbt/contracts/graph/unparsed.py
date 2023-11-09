@@ -4,6 +4,7 @@ import csv
 from io import StringIO
 
 from dbt import deprecations
+from dbt.clients.system import find_matching
 from dbt.node_types import NodeType
 from dbt.contracts.graph.semantic_models import (
     Defaults,
@@ -815,20 +816,15 @@ class UnitTestFixture:
 
     def get_fixture_path(self, fixture: str, project_root: str, paths: List[str]) -> str:
         fixture_path = f"{fixture}.csv"
-        final_paths = []
-        for path in paths:
-            full_path = Path(project_root, path, fixture_path)
-            # TODO: can they have folders under fixtures?  probably - need to check recursively
-            if full_path.exists():
-                final_paths.append(full_path)
-        if len(final_paths) == 0:
-            raise ParsingError(f"Could not find fixture file {self.fixture} for unit test")
-        elif len(final_paths) > 1:
+        matches = find_matching(project_root, paths, fixture_path)
+        if len(matches) == 0:
+            raise ParsingError(f"Could not find fixture file {fixture} for unit test")
+        elif len(matches) > 1:
             raise ParsingError(
-                f"Found multiple fixture files named {fixture}.csv at [{final_paths}]. Please use a unique name for each fixture file."
+                f"Found multiple fixture files named {fixture}.csv at {[d['relative_path'] for d in matches]}. Please use a unique name for each fixture file."
             )
 
-        return str(final_paths[0])
+        return matches[0]["relative_path"]
 
     def validate_fixture(self, fixture_type, test_name) -> None:
         if self.format == UnitTestFormat.Dict and not isinstance(self.rows, list):
