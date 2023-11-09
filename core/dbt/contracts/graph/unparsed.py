@@ -824,7 +824,7 @@ class UnitTestFixture:
                 f"Found multiple fixture files named {fixture} at {[d['relative_path'] for d in matches]}. Please use a unique name for each fixture file."
             )
 
-        return matches[0]["relative_path"]
+        return matches[0]["absolute_path"]
 
     def validate_fixture(self, fixture_type, test_name) -> None:
         if self.format == UnitTestFormat.Dict and not isinstance(self.rows, list):
