@@ -162,6 +162,8 @@ class TestUnitTestsDuplicateCSVFile:
         assert len(results) == 3
 
         # Select by model name
-        expected_error = "Found multiple fixture files named test_my_model_basic_fixture.csv at ['one-folder/test_my_model_basic_fixture.csv', 'another-folder/test_my_model_basic_fixture.csv']"
-        with pytest.raises(ParsingError, match=expected_error):
+        with pytest.raises(ParsingError) as exc:
             results = run_dbt(["unit-test", "--select", "my_model"], expect_pass=False)
+            expected_error = "Found multiple fixture files named test_my_model_basic_fixture at ['one-folder/test_my_model_basic_fixture.csv', 'another-folder/test_my_model_basic_fixture.csv']"
+            # doing the match inline with the pytest.raises caused a bad character error with the dashes.  So we do it here.
+            assert exc.match(expected_error)

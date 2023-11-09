@@ -821,7 +821,7 @@ class UnitTestFixture:
             raise ParsingError(f"Could not find fixture file {fixture} for unit test")
         elif len(matches) > 1:
             raise ParsingError(
-                f"Found multiple fixture files named {fixture}.csv at {[d['relative_path'] for d in matches]}. Please use a unique name for each fixture file."
+                f"Found multiple fixture files named {fixture} at {[d['relative_path'] for d in matches]}. Please use a unique name for each fixture file."
             )
 
         return matches[0]["relative_path"]
