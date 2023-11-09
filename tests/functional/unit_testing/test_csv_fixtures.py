@@ -129,7 +129,7 @@ class TestUnitTestsMissingCSVFile:
         assert len(results) == 3
 
         # Select by model name
-        expected_error = "Could not find fixture file fake_file for unit test"
+        expected_error = "Could not find fixture file fake_fixture for unit test"
         with pytest.raises(ParsingError, match=expected_error):
             results = run_dbt(["unit-test", "--select", "my_model"], expect_pass=False)
 
