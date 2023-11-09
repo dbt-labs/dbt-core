@@ -791,22 +791,19 @@ class UnitTestFixture:
     def fixture(self) -> Optional[str]:  # TODO: typing
         return None
 
-    def get_rows(self) -> List[Dict[str, Any]]:
+    def get_rows(self, project_root: str, paths: List[str]) -> List[Dict[str, Any]]:
         if self.format == UnitTestFormat.Dict:
             assert isinstance(self.rows, List)
             return self.rows
         elif self.format == UnitTestFormat.CSV:
+            rows = []
             if self.fixture is not None:
-                # resolve name to file Path
-                # read file into row dict
-                breakpoint()
-                assert isinstance(self.rows, str)
-                dummy_file = StringIO(self.rows)
-                reader = csv.DictReader(dummy_file)
-                rows = []
-                for row in reader:
-                    rows.append(row)
-                return rows
+                assert isinstance(self.fixture, str)
+                file_path = self.get_fixture_path(self.fixture, project_root, paths)
+                with open(file_path, newline="") as csvfile:
+                    reader = csv.DictReader(csvfile)
+                    for row in reader:
+                        rows.append(row)
             else:  # using inline csv
                 assert isinstance(self.rows, str)
                 dummy_file = StringIO(self.rows)
@@ -814,7 +811,19 @@ class UnitTestFixture:
                 rows = []
                 for row in reader:
                     rows.append(row)
-                return rows
+            return rows
+
+    def get_fixture_path(self, fixture: str, project_root: str, paths: List[str]) -> str:
+        fixture_path = f"{fixture}.csv"
+        # build path
+        for path in paths:
+            full_path = Path(project_root, path, fixture_path)
+            # TODO: logic to handle non-unique names
+            if full_path.exists():
+                return str(full_path)
+
+        # no matching file was found
+        raise ParsingError(f"Could not find fixture file {self.fixture} for unit test")
 
     def validate_fixture(self, fixture_type, test_name) -> None:
         if self.format == UnitTestFormat.Dict and not isinstance(self.rows, list):

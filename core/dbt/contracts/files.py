@@ -169,7 +169,6 @@ class BaseSourceFile(dbtClassMixin, SerializableType):
         if dct["parse_file_type"] == "schema":
             sf = SchemaSourceFile.from_dict(dct)
         else:
-            breakpoint()
             sf = SourceFile.from_dict(dct)
         return sf
 
