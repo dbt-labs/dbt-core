@@ -1,4 +1,4 @@
-my_model_sql = """
+my_model_vars_sql = """
 SELECT
 a+b as c,
 concat(string_a, string_b) as string_c,
@@ -7,6 +7,16 @@ not_testing, date_a,
 {{ dbt.string_literal(var('my_test')) }} as var_call,
 {{ dbt.string_literal(env_var('MY_TEST', 'default')) }} as env_var_call,
 {{ dbt.string_literal(invocation_id) }} as invocation_id
+FROM {{ ref('my_model_a')}} my_model_a
+JOIN {{ ref('my_model_b' )}} my_model_b
+ON my_model_a.id = my_model_b.id
+"""
+
+my_model_sql = """
+SELECT
+a+b as c,
+concat(string_a, string_b) as string_c,
+not_testing, date_a
 FROM {{ ref('my_model_a')}} my_model_a
 JOIN {{ ref('my_model_b' )}} my_model_b
 ON my_model_a.id = my_model_b.id
@@ -313,33 +323,33 @@ unit_tests:
     given:
       - input: ref('my_model_a')
         format: csv
-        fixture: test_my_model_a_numeric_fixture_csv
+        fixture: test_my_model_a_numeric_fixture
       - input: ref('my_model_b')
         format: csv
         fixture: test_my_model_fixture
     expect:
       format: csv
-      fixture: test_my_model_basic_fixture_csv
+      fixture: test_my_model_basic_fixture
 
   - name: test_my_model_empty
     model: my_model
     given:
       - input: ref('my_model_a')
         format: csv
-        fixture: test_my_model_a_empty_fixture_csv
+        fixture: test_my_model_a_empty_fixture
       - input: ref('my_model_b')
         format: csv
         fixture: test_my_model_fixture
     expect:
       format: csv
-      fixture: test_my_model_a_empty_fixture_csv
+      fixture: test_my_model_a_empty_fixture
 
   - name: test_my_model_overrides
     model: my_model
     given:
       - input: ref('my_model_a')
         format: csv
-        fixture: test_my_model_a_numeric_fixture_csv
+        fixture: test_my_model_a_numeric_fixture
       - input: ref('my_model_b')
         format: csv
         fixture: test_my_model_fixture
@@ -366,7 +376,7 @@ unit_tests:
         fixture: test_my_model_b_fixture
     expect:
       format: csv
-      fixture: test_my_model_concat_fixture_csv
+      fixture: test_my_model_concat_fixture
     config:
       tags: test_this
 """
@@ -423,14 +433,14 @@ unit_tests:
           2,2
     expect:
       format: csv
-      fixture: test_my_model_basic_fixture_csv
+      fixture: test_my_model_basic_fixture
 
   - name: test_my_model_empty
     model: my_model
     given:
       - input: ref('my_model_a')
         format: csv
-        fixture: test_my_model_a_empty_fixture_csv
+        fixture: test_my_model_a_empty_fixture
       - input: ref('my_model_b')
         format: csv
         rows: |
@@ -439,7 +449,7 @@ unit_tests:
           2,2
     expect:
       format: csv
-      fixture: test_my_model_a_empty_fixture_csv
+      fixture: test_my_model_a_empty_fixture
 
   - name: test_my_model_overrides
     model: my_model
@@ -480,4 +490,49 @@ unit_tests:
         ab
     config:
       tags: test_this
+"""
+
+# unit tests with errors
+
+# -- fixture file doesn't exist
+test_my_model_missing_csv_yml = """
+unit_tests:
+  - name: test_missing_csv_file
+    model: my_model
+    given:
+      - input: ref('my_model_a')
+        format: csv
+        rows: |
+          id,a
+          1,1
+      - input: ref('my_model_b')
+        format: csv
+        rows: |
+          id,b
+          1,2
+          2,2
+    expect:
+      format: csv
+      fixture: fake_fixture
+"""
+
+test_my_model_duplicate_csv_yml = """
+unit_tests:
+  - name: test_missing_csv_file
+    model: my_model
+    given:
+      - input: ref('my_model_a')
+        format: csv
+        rows: |
+          id,a
+          1,1
+      - input: ref('my_model_b')
+        format: csv
+        rows: |
+          id,b
+          1,2
+          2,2
+    expect:
+      format: csv
+      fixture: test_my_model_basic_fixture
 """

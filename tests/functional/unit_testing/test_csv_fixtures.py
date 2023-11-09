@@ -17,26 +17,14 @@ from fixtures import (
     test_my_model_a_numeric_fixture_csv,
     test_my_model_a_empty_fixture_csv,
     test_my_model_concat_fixture_csv,
-    datetime_test_invalid_csv_file_values,
     test_my_model_mixed_csv_yml,
+    test_my_model_missing_csv_yml,
+    test_my_model_duplicate_csv_yml,
 )
 
 
-class TestUnitTestsWithInlineCSV:
-    @pytest.fixture(scope="class")
-    def models(self):
-        return {
-            "my_model.sql": my_model_sql,
-            "my_model_a.sql": my_model_a_sql,
-            "my_model_b.sql": my_model_b_sql,
-            "test_my_model.yml": test_my_model_csv_yml + datetime_test,
-        }
-
-    @pytest.fixture(scope="class")
-    def project_config_update(self):
-        return {"vars": {"my_test": "my_test_var"}}
-
-    def test_csv_inline(self, project):
+class BaseTestUnitTests:
+    def test_unit_test(self, project):
         results = run_dbt(["run"])
         assert len(results) == 3
 
@@ -65,7 +53,18 @@ class TestUnitTestsWithInlineCSV:
             results = run_dbt(["unit-test", "--select", "my_model"], expect_pass=False)
 
 
-class TestUnitTestsWithFileCSV:
+class TestUnitTestsWithInlineCSV(BaseTestUnitTests):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_model.sql": my_model_sql,
+            "my_model_a.sql": my_model_a_sql,
+            "my_model_b.sql": my_model_b_sql,
+            "test_my_model.yml": test_my_model_csv_yml + datetime_test,
+        }
+
+
+class TestUnitTestsWithFileCSV(BaseTestUnitTests):
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -73,49 +72,24 @@ class TestUnitTestsWithFileCSV:
             "my_model_a.sql": my_model_a_sql,
             "my_model_b.sql": my_model_b_sql,
             "test_my_model.yml": test_my_model_file_csv_yml + datetime_test,
-            "test_my_model_fixture.csv": test_my_model_fixture_csv,
-            "test_my_model_a_fixture.csv": test_my_model_a_fixture_csv,
-            "test_my_model_b_fixture.csv": test_my_model_b_fixture_csv,
-            "test_my_model_basic_fixture.csv": test_my_model_basic_fixture_csv,
-            "test_my_model_a_numeric_fixture.csv": test_my_model_a_numeric_fixture_csv,
-            "test_my_model_a_empty_fixture.csv": test_my_model_a_empty_fixture_csv,
-            "test_my_model_concat_fixture.csv": test_my_model_concat_fixture_csv,
         }
 
     @pytest.fixture(scope="class")
-    def project_config_update(self):
-        return {"vars": {"my_test": "my_test_var"}}
-
-    def test_csv_file(self, project):
-        results = run_dbt(["run"])
-        assert len(results) == 3
-
-        # Select by model name
-        results = run_dbt(["unit-test", "--select", "my_model"], expect_pass=False)
-        assert len(results) == 5
-
-        # Check error with invalid format key
-        write_file(
-            test_my_model_csv_yml + datetime_test_invalid_format_key,
-            project.project_root,
-            "models",
-            "test_my_model.yml",
-        )
-        with pytest.raises(YamlParseDictError):
-            results = run_dbt(["unit-test", "--select", "my_model"], expect_pass=False)
-
-        # Check error with csv format defined but dict on rows
-        write_file(
-            test_my_model_csv_yml + datetime_test_invalid_csv_file_values,
-            project.project_root,
-            "models",
-            "test_my_model.yml",
-        )
-        with pytest.raises(ParsingError):
-            results = run_dbt(["unit-test", "--select", "my_model"], expect_pass=False)
+    def tests(self):
+        return {
+            "fixtures": {
+                "test_my_model_fixture.csv": test_my_model_fixture_csv,
+                "test_my_model_a_fixture.csv": test_my_model_a_fixture_csv,
+                "test_my_model_b_fixture.csv": test_my_model_b_fixture_csv,
+                "test_my_model_basic_fixture.csv": test_my_model_basic_fixture_csv,
+                "test_my_model_a_numeric_fixture.csv": test_my_model_a_numeric_fixture_csv,
+                "test_my_model_a_empty_fixture.csv": test_my_model_a_empty_fixture_csv,
+                "test_my_model_concat_fixture.csv": test_my_model_concat_fixture_csv,
+            }
+        }
 
 
-class TestUnitTestsWithMixedCSV:
+class TestUnitTestsWithMixedCSV(BaseTestUnitTests):
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -123,43 +97,71 @@ class TestUnitTestsWithMixedCSV:
             "my_model_a.sql": my_model_a_sql,
             "my_model_b.sql": my_model_b_sql,
             "test_my_model.yml": test_my_model_mixed_csv_yml + datetime_test,
-            "test_my_model_fixture.csv": test_my_model_fixture_csv,
-            "test_my_model_a_fixture.csv": test_my_model_a_fixture_csv,
-            "test_my_model_b_fixture.csv": test_my_model_b_fixture_csv,
-            "test_my_model_basic_fixture.csv": test_my_model_basic_fixture_csv,
-            "test_my_model_a_numeric_fixture.csv": test_my_model_a_numeric_fixture_csv,
-            "test_my_model_a_empty_fixture.csv": test_my_model_a_empty_fixture_csv,
-            "test_my_model_concat_fixture.csv": test_my_model_concat_fixture_csv,
         }
 
     @pytest.fixture(scope="class")
-    def project_config_update(self):
-        return {"vars": {"my_test": "my_test_var"}}
+    def tests(self):
+        return {
+            "fixtures": {
+                "test_my_model_fixture.csv": test_my_model_fixture_csv,
+                "test_my_model_a_fixture.csv": test_my_model_a_fixture_csv,
+                "test_my_model_b_fixture.csv": test_my_model_b_fixture_csv,
+                "test_my_model_basic_fixture.csv": test_my_model_basic_fixture_csv,
+                "test_my_model_a_numeric_fixture.csv": test_my_model_a_numeric_fixture_csv,
+                "test_my_model_a_empty_fixture.csv": test_my_model_a_empty_fixture_csv,
+                "test_my_model_concat_fixture.csv": test_my_model_concat_fixture_csv,
+            }
+        }
 
-    def test_mixed(self, project):
+
+class TestUnitTestsMissingCSVFile:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_model.sql": my_model_sql,
+            "my_model_a.sql": my_model_a_sql,
+            "my_model_b.sql": my_model_b_sql,
+            "test_my_model.yml": test_my_model_missing_csv_yml,
+        }
+
+    def test_missing(self, project):
         results = run_dbt(["run"])
         assert len(results) == 3
 
         # Select by model name
-        results = run_dbt(["unit-test", "--select", "my_model"], expect_pass=False)
-        assert len(results) == 5
-
-        # Check error with invalid format key
-        write_file(
-            test_my_model_csv_yml + datetime_test_invalid_format_key,
-            project.project_root,
-            "models",
-            "test_my_model.yml",
-        )
-        with pytest.raises(YamlParseDictError):
+        expected_error = "Could not find fixture file fake_file for unit test"
+        with pytest.raises(ParsingError, match=expected_error):
             results = run_dbt(["unit-test", "--select", "my_model"], expect_pass=False)
 
-        # Check error with csv format defined but dict on rows
-        write_file(
-            test_my_model_csv_yml + datetime_test_invalid_csv_file_values,
-            project.project_root,
-            "models",
-            "test_my_model.yml",
-        )
-        with pytest.raises(ParsingError):
+
+class TestUnitTestsDuplicateCSVFile:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_model.sql": my_model_sql,
+            "my_model_a.sql": my_model_a_sql,
+            "my_model_b.sql": my_model_b_sql,
+            "test_my_model.yml": test_my_model_duplicate_csv_yml,
+        }
+
+    @pytest.fixture(scope="class")
+    def tests(self):
+        return {
+            "fixtures": {
+                "one-folder": {
+                    "test_my_model_basic_fixture.csv": test_my_model_basic_fixture_csv,
+                },
+                "another-folder": {
+                    "test_my_model_basic_fixture.csv": test_my_model_basic_fixture_csv,
+                },
+            }
+        }
+
+    def test_duplicate(self, project):
+        results = run_dbt(["run"])
+        assert len(results) == 3
+
+        # Select by model name
+        expected_error = "Could not find fixture file fake_file for unit test"
+        with pytest.raises(ParsingError, match=expected_error):
             results = run_dbt(["unit-test", "--select", "my_model"], expect_pass=False)

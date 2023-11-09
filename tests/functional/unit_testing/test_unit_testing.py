@@ -2,7 +2,7 @@ import pytest
 from dbt.tests.util import run_dbt, write_file, get_manifest, get_artifact
 from dbt.exceptions import DuplicateResourceNameError
 from fixtures import (
-    my_model_sql,
+    my_model_vars_sql,
     my_model_a_sql,
     my_model_b_sql,
     test_my_model_yml,
@@ -17,7 +17,7 @@ class TestUnitTests:
     @pytest.fixture(scope="class")
     def models(self):
         return {
-            "my_model.sql": my_model_sql,
+            "my_model.sql": my_model_vars_sql,
             "my_model_a.sql": my_model_a_sql,
             "my_model_b.sql": my_model_b_sql,
             "test_my_model.yml": test_my_model_yml + datetime_test,
