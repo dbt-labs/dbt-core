@@ -789,7 +789,7 @@ class UnitTestFixture:
         return None
 
     @property
-    def fixture(self) -> Optional[str]:  # TODO: typing
+    def fixture(self) -> Optional[str]:
         return None
 
     def get_rows(self, project_root: str, paths: List[str]) -> List[Dict[str, Any]]:
@@ -834,9 +834,8 @@ class UnitTestFixture:
         if self.format == UnitTestFormat.CSV and not (
             isinstance(self.rows, str) or isinstance(self.fixture, str)
         ):
-            # TODO: update this message
             raise ParsingError(
-                f"Unit test {test_name} has {fixture_type} rows which do not match format {self.format}"
+                f"Unit test {test_name} has {fixture_type} rows or fixtures which do not match format {self.format}.  Expected string."
             )
 
 

@@ -123,7 +123,6 @@ class UnitTestManifestLoader:
             # TODO: include package_name?
             input_name = f"{unit_test_node.name}__{original_input_node.name}"
             input_unique_id = f"model.{package_name}.{input_name}"
-            # breakpoint()
             input_node = ModelNode(
                 raw_code=self._build_fixture_raw_code(
                     given.get_rows(
