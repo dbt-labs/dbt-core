@@ -1,5 +1,5 @@
 import os
-from typing import List, Optional
+from typing import List, Optional, Dict
 
 from dbt.clients import git, system
 from dbt.config.project import PartialProject, Project
@@ -50,6 +50,15 @@ class GitPinnedPackage(GitPackageMixin, PinnedPackage):
         self.warn_unpinned = warn_unpinned
         self.subdirectory = subdirectory
         self._checkout_name = md5sum(self.name)
+
+    def to_dict(self) -> Dict[str, str]:
+        ret = {
+            "git": self.git,
+            "revision": self.revision,
+        }
+        if self.subdirectory:
+            ret["subdirectory"] = self.subdirectory
+        return ret
 
     def get_version(self):
         return self.revision

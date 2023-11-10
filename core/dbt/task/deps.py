@@ -75,10 +75,10 @@ def _create_packages_yml_entry(package: str, version: Optional[str], source: str
     if source == "hub":
         package_key = "package"
 
+    packages_yml_entry = {package_key: package}
+
     if source == "git":
         version_key = "revision"
-
-    packages_yml_entry = {package_key: package}
 
     if version:
         if "," in version:
@@ -192,10 +192,7 @@ class DepsTask(BaseTask):
         # this loop is to create the package-lock.yml in the same format as original packages.yml
         # package-lock.yml includes both the stated packages in packages.yml along with dependent packages
         for package in resolved_deps:
-            lock_entry = _create_packages_yml_entry(
-                package.name, package.get_version(), package.source_type()
-            )
-            packages_installed["packages"].append(lock_entry)
+            packages_installed["packages"].append(package.to_dict())
         packages_installed[PACKAGE_LOCK_HASH_KEY] = _create_sha1_hash(
             self.project.packages.packages
         )

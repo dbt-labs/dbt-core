@@ -222,7 +222,7 @@ class UnitTestTask(RunTask):
         self.job_queue = self.get_graph_queue()
 
     def before_run(self, adapter, selected_uids: AbstractSet[str]) -> None:
-        # We already did cache population + deferral earlier (above)
+        # We already did cache population + deferral earlier (in reset_job_queue_and_manifest)
         # and we don't need to create any schemas
         pass
 

@@ -1,4 +1,5 @@
 import shutil
+from typing import Dict
 
 from dbt.clients import system
 from dbt.deps.base import PinnedPackage, UnpinnedPackage
@@ -28,6 +29,11 @@ class LocalPackageMixin:
 class LocalPinnedPackage(LocalPackageMixin, PinnedPackage):
     def __init__(self, local: str) -> None:
         super().__init__(local)
+
+    def to_dict(self) -> Dict[str, str]:
+        return {
+            "local": self.local,
+        }
 
     def get_version(self):
         return None

@@ -67,7 +67,10 @@ class UnitTestManifestLoader:
             original_file_path=test_case.original_file_path,
             unique_id=test_case.unique_id,
             config=UnitTestNodeConfig(
-                materialized="unit", expected_rows=test_case.expect.get_rows()
+                materialized="unit",
+                expected_rows=test_case.expect.get_rows(
+                    self.root_project.project_root, self.root_project.fixture_paths
+                ),
             ),
             raw_code=tested_node.raw_code,
             database=tested_node.database,
@@ -122,7 +125,10 @@ class UnitTestManifestLoader:
             input_unique_id = f"model.{package_name}.{input_name}"
             input_node = ModelNode(
                 raw_code=self._build_fixture_raw_code(
-                    given.get_rows(), original_input_node_columns
+                    given.get_rows(
+                        self.root_project.project_root, self.root_project.fixture_paths
+                    ),
+                    original_input_node_columns,
                 ),
                 resource_type=NodeType.Model,
                 package_name=package_name,

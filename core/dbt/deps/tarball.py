@@ -1,3 +1,5 @@
+from typing import Dict
+
 from dbt.contracts.project import RegistryPackageMetadata, TarballPackage
 from dbt.deps.base import PinnedPackage, UnpinnedPackage
 
@@ -25,6 +27,13 @@ class TarballPinnedPackage(TarballPackageMixin, PinnedPackage):
     @property
     def name(self):
         return self.package
+
+    def to_dict(self) -> Dict[str, str]:
+        return {
+            "tarball": self.tarball,
+            "version": self.version,
+            "package": self.package,
+        }
 
     def get_version(self):
         return self.version

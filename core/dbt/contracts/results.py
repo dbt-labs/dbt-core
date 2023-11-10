@@ -8,6 +8,7 @@ from dbt.contracts.util import (
     VersionedSchema,
     Replaceable,
     schema_version,
+    get_artifact_schema_version,
 )
 from dbt.exceptions import DbtInternalError
 from dbt.events.functions import fire_event
@@ -31,6 +32,8 @@ from typing import (
     Optional,
     Sequence,
     Union,
+    Iterable,
+    Tuple,
 )
 
 from dbt.clients.system import write_json
@@ -267,6 +270,27 @@ class RunResultsArtifact(ExecutionResult, ArtifactMixin):
             generated_at=generated_at,
         )
         return cls(metadata=meta, results=processed_results, elapsed_time=elapsed_time, args=args)
+
+    @classmethod
+    def compatible_previous_versions(cls) -> Iterable[Tuple[str, int]]:
+        return [
+            ("run-results", 4),
+        ]
+
+    @classmethod
+    def upgrade_schema_version(cls, data):
+        """This overrides the "upgrade_schema_version" call in VersionedSchema (via
+        ArtifactMixin) to modify the dictionary passed in from earlier versions of the run_results."""
+        run_results_schema_version = get_artifact_schema_version(data)
+        # If less than the current version (v5), preprocess contents to match latest schema version
+        if run_results_schema_version <= 5:
+            # In v5, we added 'compiled' attributes to each result entry
+            # Going forward, dbt expects these to be populated
+            for result in data["results"]:
+                result["compiled"] = False
+                result["compiled_code"] = ""
+                result["relation_name"] = ""
+        return cls.from_dict(data)
 
     def write(self, path: str):
         write_json(path, self.to_dict(omit_none=False))
