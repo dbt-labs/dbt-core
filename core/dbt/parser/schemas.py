@@ -5,6 +5,7 @@ from abc import ABCMeta, abstractmethod
 from typing import Any, Callable, Dict, Generic, Iterable, List, Optional, Type, TypeVar
 from dataclasses import dataclass, field
 
+from dbt.common.constraints import ConstraintType, ModelLevelConstraint
 from dbt.common.dataclass_schema import ValidationError, dbtClassMixin
 
 from dbt.clients.yaml_helper import load_yaml_text
@@ -17,9 +18,7 @@ from dbt.contracts.graph.nodes import (
     ParsedNodePatch,
     ParsedMacroPatch,
     UnpatchedSourceDefinition,
-    ConstraintType,
     ModelNode,
-    ModelLevelConstraint,
 )
 from dbt.contracts.graph.unparsed import (
     HasColumnDocs,
