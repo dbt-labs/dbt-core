@@ -54,9 +54,11 @@ from dbt.common.events.types import (
     NodeNotFoundOrDisabled,
     StateCheckVarsHash,
     Note,
-    DeprecatedModel,
     DeprecatedReference,
     UpcomingReferenceDeprecation,
+)
+from dbt.events.types import (
+    DeprecatedModel,
 )
 from dbt.logger import DbtProcessState
 from dbt.node_types import NodeType, AccessType

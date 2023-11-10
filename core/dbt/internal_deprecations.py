@@ -2,7 +2,7 @@ import functools
 from typing import Optional
 
 from dbt.common.events.functions import warn_or_error
-from dbt.common.events.types import InternalDeprecation
+from dbt.events.types import InternalDeprecation
 
 
 def deprecated(suggested_action: str, version: str, reason: Optional[str]):

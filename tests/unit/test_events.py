@@ -7,6 +7,7 @@ import pytest
 
 from dbt.contracts.results import TimingInfo, RunResult, RunStatus
 from dbt.common.events import AdapterLogger, types
+from dbt.events import types as core_types
 from dbt.common.events.base_types import (
     BaseEvent,
     DebugLevel,
@@ -133,18 +134,18 @@ sample_values = [
     types.ProjectNameAlreadyExists(name=""),
     types.ProjectCreated(project_name=""),
     # D - Deprecations ======================
-    types.PackageRedirectDeprecation(old_name="", new_name=""),
-    types.PackageInstallPathDeprecation(),
-    types.ConfigSourcePathDeprecation(deprecated_path="", exp_path=""),
-    types.ConfigDataPathDeprecation(deprecated_path="", exp_path=""),
-    types.AdapterDeprecationWarning(old_name="", new_name=""),
-    types.MetricAttributesRenamed(metric_name=""),
-    types.ExposureNameDeprecation(exposure=""),
-    types.InternalDeprecation(name="", reason="", suggested_action="", version=""),
-    types.EnvironmentVariableRenamed(old_name="", new_name=""),
-    types.ConfigLogPathDeprecation(deprecated_path=""),
-    types.ConfigTargetPathDeprecation(deprecated_path=""),
-    types.CollectFreshnessReturnSignature(),
+    core_types.PackageRedirectDeprecation(old_name="", new_name=""),
+    core_types.PackageInstallPathDeprecation(),
+    core_types.ConfigSourcePathDeprecation(deprecated_path="", exp_path=""),
+    core_types.ConfigDataPathDeprecation(deprecated_path="", exp_path=""),
+    core_types.AdapterDeprecationWarning(old_name="", new_name=""),
+    core_types.MetricAttributesRenamed(metric_name=""),
+    core_types.ExposureNameDeprecation(exposure=""),
+    core_types.InternalDeprecation(name="", reason="", suggested_action="", version=""),
+    core_types.EnvironmentVariableRenamed(old_name="", new_name=""),
+    core_types.ConfigLogPathDeprecation(deprecated_path=""),
+    core_types.ConfigTargetPathDeprecation(deprecated_path=""),
+    core_types.CollectFreshnessReturnSignature(),
     # E - DB Adapter ======================
     types.AdapterEventDebug(),
     types.AdapterEventInfo(),
@@ -242,7 +243,7 @@ sample_values = [
     types.UnpinnedRefNewVersionAvailable(
         ref_node_name="", ref_node_package="", ref_node_version="", ref_max_version=""
     ),
-    types.DeprecatedModel(model_name="", model_version="", deprecation_date=""),
+    core_types.DeprecatedModel(model_name="", model_version="", deprecation_date=""),
     types.DeprecatedReference(
         model_name="",
         ref_model_name="",

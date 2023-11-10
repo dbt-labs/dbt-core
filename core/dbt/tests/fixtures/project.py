@@ -12,6 +12,7 @@ import dbt.flags as flags
 from dbt.config.runtime import RuntimeConfig
 from dbt.adapters.factory import get_adapter, register_adapter, reset_adapters, get_adapter_by_type
 from dbt.common.events.functions import setup_event_logger, cleanup_event_logger
+from dbt.events import core_types_pb2
 from dbt.tests.util import (
     write_file,
     run_sql_with_adapter,
@@ -266,8 +267,29 @@ def clean_up_logging():
 # into the project in the tests instead of putting them in the fixtures.
 @pytest.fixture(scope="class")
 def adapter(
-    unique_schema, project_root, profiles_root, profiles_yml, dbt_project_yml, clean_up_logging
+    logs_dir,
+    unique_schema,
+    project_root,
+    profiles_root,
+    profiles_yml,
+    dbt_project_yml,
+    clean_up_logging,
 ):
+    log_flags = Namespace(
+        LOG_PATH=logs_dir,
+        LOG_FORMAT="json",
+        LOG_FORMAT_FILE="json",
+        USE_COLORS=False,
+        USE_COLORS_FILE=False,
+        LOG_LEVEL="info",
+        LOG_LEVEL_FILE="debug",
+        DEBUG=False,
+        LOG_CACHE_EVENTS=False,
+        QUIET=False,
+        LOG_FILE_MAX_BYTES=1000000,
+    )
+    setup_event_logger(log_flags, event_modules=[core_types_pb2])
+
     # The profiles.yml and dbt_project.yml should already be written out
     args = Namespace(
         profiles_dir=str(profiles_root),
@@ -492,20 +514,6 @@ def project(
     # Logbook warnings are ignored so we don't have to fork logbook to support python 3.10.
     # This _only_ works for tests in `tests/` that use the project fixture.
     warnings.filterwarnings("ignore", category=DeprecationWarning, module="logbook")
-    log_flags = Namespace(
-        LOG_PATH=logs_dir,
-        LOG_FORMAT="json",
-        LOG_FORMAT_FILE="json",
-        USE_COLORS=False,
-        USE_COLORS_FILE=False,
-        LOG_LEVEL="info",
-        LOG_LEVEL_FILE="debug",
-        DEBUG=False,
-        LOG_CACHE_EVENTS=False,
-        QUIET=False,
-        LOG_FILE_MAX_BYTES=1000000,
-    )
-    setup_event_logger(log_flags)
     orig_cwd = os.getcwd()
     os.chdir(project_root)
     # Return whatever is needed later in tests but can only come from fixtures, so we can keep
