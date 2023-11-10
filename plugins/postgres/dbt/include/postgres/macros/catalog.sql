@@ -15,6 +15,7 @@
         tbl.relname as table_name,
         case tbl.relkind
             when 'v' then 'VIEW'
+            when 'm' then 'MATERIALIZED VIEW'
             else 'BASE TABLE'
         end as table_type,
         tbl_desc.description as table_comment,
@@ -42,7 +43,7 @@
     )
       and not pg_is_other_temp_schema(sch.oid) -- not a temporary schema belonging to another session
       and tbl.relpersistence in ('p', 'u') -- [p]ermanent table or [u]nlogged table. Exclude [t]emporary tables
-      and tbl.relkind in ('r', 'v', 'f', 'p') -- o[r]dinary table, [v]iew, [f]oreign table, [p]artitioned table. Other values are [i]ndex, [S]equence, [c]omposite type, [t]OAST table, [m]aterialized view
+      and tbl.relkind in ('r', 'v', 'f', 'p', 'm') -- o[r]dinary table, [v]iew, [f]oreign table, [p]artitioned table, [m]aterialized view. Other values are [i]ndex, [S]equence, [c]omposite type, [t]OAST table
       and col.attnum > 0 -- negative numbers are used for system columns such as oid
       and not col.attisdropped -- column as not been dropped
 

@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from typing import Dict
 
 from dbt.clients import system
 from dbt.config.project import PartialProject
@@ -32,6 +33,13 @@ class TarballPinnedPackage(TarballPackageMixin, PinnedPackage):
     @property
     def name(self):
         return self.package
+
+    def to_dict(self) -> Dict[str, str]:
+        return {
+            "tarball": self.tarball,
+            "version": self.version,
+            "package": self.package,
+        }
 
     def get_version(self):
         return self.version

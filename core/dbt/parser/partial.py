@@ -922,6 +922,9 @@ class PartialParsing:
             if unique_id in self.saved_manifest.semantic_models:
                 semantic_model = self.saved_manifest.semantic_models[unique_id]
                 if semantic_model.name == semantic_model_name:
+                    # Need to find everything that referenced this semantic model and schedule for parsing
+                    if unique_id in self.saved_manifest.child_map:
+                        self.schedule_nodes_for_parsing(self.saved_manifest.child_map[unique_id])
                     self.saved_manifest.semantic_models.pop(unique_id)
                     schema_file.semantic_models.remove(unique_id)
             elif unique_id in self.saved_manifest.disabled:

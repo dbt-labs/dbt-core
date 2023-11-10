@@ -86,6 +86,39 @@ semantic_models:
       agg_time_dimension: created_at
 """
 
+semantic_model_people_diff_name_yml = """
+version: 2
+
+semantic_models:
+  - name: semantic_people_diff_name
+    label: "Semantic People"
+    model: ref('people')
+    dimensions:
+      - name: favorite_color
+        label: "Favorite Color"
+        type: categorical
+      - name: created_at
+        label: "Created At"
+        type: TIME
+        type_params:
+          time_granularity: day
+    measures:
+      - name: years_tenure
+        label: "Years Tenure"
+        agg: SUM
+        expr: tenure
+      - name: people
+        label: "People"
+        agg: count
+        expr: id
+    entities:
+      - name: id
+        label: "Primary ID"
+        type: primary
+    defaults:
+      agg_time_dimension: created_at
+"""
+
 semantic_model_descriptions = """
 {% docs semantic_model_description %} foo {% enddocs %}
 {% docs dimension_description %} bar {% enddocs %}

@@ -19,6 +19,7 @@ import dbt.helper_types  # noqa:F401
 from dbt.exceptions import CompilationError, ParsingError, DbtInternalError
 
 from dbt.dataclass_schema import dbtClassMixin, StrEnum, ExtensibleDbtClassMixin, ValidationError
+from dbt_semantic_interfaces.type_enums.export_destination_type import ExportDestinationType
 
 from dataclasses import dataclass, field
 from datetime import timedelta
@@ -722,13 +723,36 @@ class UnparsedSemanticModel(dbtClassMixin):
 
 
 @dataclass
+class UnparsedQueryParams(dbtClassMixin):
+    metrics: List[str] = field(default_factory=list)
+    group_by: List[str] = field(default_factory=list)
+    where: Optional[Union[str, List[str]]] = None
+
+
+@dataclass
+class UnparsedExportConfig(dbtClassMixin):
+    """Nested configuration attributes for exports."""
+
+    export_as: ExportDestinationType
+    schema: Optional[str] = None
+    alias: Optional[str] = None
+
+
+@dataclass
+class UnparsedExport(dbtClassMixin):
+    """Configuration for writing query results to a table."""
+
+    name: str
+    config: UnparsedExportConfig
+
+
+@dataclass
 class UnparsedSavedQuery(dbtClassMixin):
     name: str
+    query_params: UnparsedQueryParams
     description: Optional[str] = None
     label: Optional[str] = None
-    metrics: List[str] = field(default_factory=list)
-    group_bys: List[str] = field(default_factory=list)
-    where: Optional[Union[str, List[str]]] = None
+    exports: List[UnparsedExport] = field(default_factory=list)
     config: Dict[str, Any] = field(default_factory=dict)
 
 

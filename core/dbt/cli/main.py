@@ -186,6 +186,7 @@ def cli(ctx, **kwargs):
 @p.favor_state
 @p.deprecated_favor_state
 @p.full_refresh
+@p.include_saved_query
 @p.indirect_selection
 @p.profile
 @p.profiles_dir

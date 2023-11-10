@@ -153,6 +153,8 @@ class GraphRunnableTask(ConfiguredTask):
                 self._flattened_nodes.append(self.manifest.nodes[uid])
             elif uid in self.manifest.sources:
                 self._flattened_nodes.append(self.manifest.sources[uid])
+            elif uid in self.manifest.saved_queries:
+                self._flattened_nodes.append(self.manifest.saved_queries[uid])
             else:
                 raise DbtInternalError(
                     f"Node selection returned {uid}, expected a node or a source"
@@ -369,7 +371,7 @@ class GraphRunnableTask(ConfiguredTask):
             print_run_result_error(failure.result)
             # ensure information about all nodes is propagated to run results when failing fast
             return self.node_results
-        except KeyboardInterrupt:
+        except (KeyboardInterrupt, SystemExit):
             run_result = self.get_result(
                 results=self.node_results,
                 elapsed_time=time.time() - self.started_at,

@@ -10,8 +10,8 @@ from dbt.contracts.graph.nodes import (
     NodeRelation,
     SavedQuery,
     SemanticModel,
-    WhereFilter,
 )
+from dbt.contracts.graph.semantic_layer_common import WhereFilter
 from dbt.contracts.graph.semantic_models import (
     Dimension,
     DimensionTypeParams,

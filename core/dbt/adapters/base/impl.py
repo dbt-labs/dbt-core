@@ -51,6 +51,7 @@ from dbt.clients.agate_helper import (
     get_column_value_uncased,
     merge_tables,
     table_from_rows,
+    Integer,
 )
 from dbt.clients.jinja import MacroGenerator
 from dbt.contracts.graph.manifest import Manifest, MacroManifest
@@ -455,30 +456,16 @@ class BaseAdapter(metaclass=AdapterMeta):
 
         return relations_by_info_schema
 
-    def _get_catalog_relations(
-        self, manifest: Manifest, selected_nodes: Optional[Set] = None
-    ) -> List[BaseRelation]:
-        nodes: Iterator[ResultNode]
-        if selected_nodes:
-            selected: List[ResultNode] = []
-            for unique_id in selected_nodes:
-                if unique_id in manifest.nodes:
-                    node = manifest.nodes[unique_id]
-                    if node.is_relational and not node.is_ephemeral_model:
-                        selected.append(node)
-                elif unique_id in manifest.sources:
-                    source = manifest.sources[unique_id]
-                    selected.append(source)
-            nodes = iter(selected)
-        else:
-            nodes = chain(
-                [
-                    node
-                    for node in manifest.nodes.values()
-                    if (node.is_relational and not node.is_ephemeral_model)
-                ],
-                manifest.sources.values(),
-            )
+    def _get_catalog_relations(self, manifest: Manifest) -> List[BaseRelation]:
+
+        nodes = chain(
+            [
+                node
+                for node in manifest.nodes.values()
+                if (node.is_relational and not node.is_ephemeral_model)
+            ],
+            manifest.sources.values(),
+        )
 
         relations = [self.Relation.create_from(self.config, n) for n in nodes]
         return relations
@@ -977,6 +964,17 @@ class BaseAdapter(metaclass=AdapterMeta):
         raise NotImplementedError("`convert_number_type` is not implemented for this adapter!")
 
     @classmethod
+    def convert_integer_type(cls, agate_table: agate.Table, col_idx: int) -> str:
+        """Return the type in the database that best maps to the agate.Number
+        type for the given agate table and column index.
+
+        :param agate_table: The table
+        :param col_idx: The index into the agate table for the column.
+        :return: The name of the type in the database
+        """
+        return "integer"
+
+    @classmethod
     @abc.abstractmethod
     def convert_boolean_type(cls, agate_table: agate.Table, col_idx: int) -> str:
         """Return the type in the database that best maps to the agate.Boolean
@@ -1033,6 +1031,7 @@ class BaseAdapter(metaclass=AdapterMeta):
     def convert_agate_type(cls, agate_table: agate.Table, col_idx: int) -> Optional[str]:
         agate_type: Type = agate_table.column_types[col_idx]
         conversions: List[Tuple[Type, Callable[..., str]]] = [
+            (Integer, cls.convert_integer_type),
             (agate.Text, cls.convert_text_type),
             (agate.Number, cls.convert_number_type),
             (agate.Boolean, cls.convert_boolean_type),
@@ -1166,42 +1165,85 @@ class BaseAdapter(metaclass=AdapterMeta):
         results = self._catalog_filter_table(table, manifest)  # type: ignore[arg-type]
         return results
 
-    def get_catalog(
-        self, manifest: Manifest, selected_nodes: Optional[Set] = None
-    ) -> Tuple[agate.Table, List[Exception]]:
+    def get_filtered_catalog(
+        self, manifest: Manifest, relations: Optional[Set[BaseRelation]] = None
+    ):
+        catalogs: agate.Table
+        if (
+            relations is None
+            or len(relations) > 100
+            or not self.supports(Capability.SchemaMetadataByRelations)
+        ):
+            # Do it the traditional way. We get the full catalog.
+            catalogs, exceptions = self.get_catalog(manifest)
+        else:
+            # Do it the new way. We try to save time by selecting information
+            # only for the exact set of relations we are interested in.
+            catalogs, exceptions = self.get_catalog_by_relations(manifest, relations)
 
-        with executor(self.config) as tpe:
-            futures: List[Future[agate.Table]] = []
-            catalog_relations = self._get_catalog_relations(manifest, selected_nodes)
-            relation_count = len(catalog_relations)
-            if relation_count <= 100 and self.supports(Capability.SchemaMetadataByRelations):
-                relations_by_schema = self._get_catalog_relations_by_info_schema(catalog_relations)
-                for info_schema in relations_by_schema:
-                    name = ".".join([str(info_schema.database), "information_schema"])
-                    relations = relations_by_schema[info_schema]
-                    fut = tpe.submit_connected(
-                        self,
-                        name,
-                        self._get_one_catalog_by_relations,
-                        info_schema,
-                        relations,
-                        manifest,
-                    )
-                    futures.append(fut)
-            else:
-                schema_map: SchemaSearchMap = self._get_catalog_schemas(manifest)
-                for info, schemas in schema_map.items():
-                    if len(schemas) == 0:
-                        continue
-                    name = ".".join([str(info.database), "information_schema"])
-                    fut = tpe.submit_connected(
-                        self, name, self._get_one_catalog, info, schemas, manifest
-                    )
-                    futures.append(fut)
+        if relations and catalogs:
+            relation_map = {
+                (
+                    r.database.casefold() if r.database else None,
+                    r.schema.casefold() if r.schema else None,
+                    r.identifier.casefold() if r.identifier else None,
+                )
+                for r in relations
+            }
 
-            catalogs, exceptions = catch_as_completed(futures)
+            def in_map(row: agate.Row):
+                d = _expect_row_value("table_database", row)
+                s = _expect_row_value("table_schema", row)
+                i = _expect_row_value("table_name", row)
+                d = d.casefold() if d is not None else None
+                s = s.casefold() if s is not None else None
+                i = i.casefold() if i is not None else None
+                return (d, s, i) in relation_map
+
+            catalogs = catalogs.where(in_map)
 
         return catalogs, exceptions
+
+    def row_matches_relation(self, row: agate.Row, relations: Set[BaseRelation]):
+        pass
+
+    def get_catalog(self, manifest: Manifest) -> Tuple[agate.Table, List[Exception]]:
+        with executor(self.config) as tpe:
+            futures: List[Future[agate.Table]] = []
+            schema_map: SchemaSearchMap = self._get_catalog_schemas(manifest)
+            for info, schemas in schema_map.items():
+                if len(schemas) == 0:
+                    continue
+                name = ".".join([str(info.database), "information_schema"])
+                fut = tpe.submit_connected(
+                    self, name, self._get_one_catalog, info, schemas, manifest
+                )
+                futures.append(fut)
+
+        catalogs, exceptions = catch_as_completed(futures)
+        return catalogs, exceptions
+
+    def get_catalog_by_relations(
+        self, manifest: Manifest, relations: Set[BaseRelation]
+    ) -> Tuple[agate.Table, List[Exception]]:
+        with executor(self.config) as tpe:
+            futures: List[Future[agate.Table]] = []
+            relations_by_schema = self._get_catalog_relations_by_info_schema(relations)
+            for info_schema in relations_by_schema:
+                name = ".".join([str(info_schema.database), "information_schema"])
+                relations = set(relations_by_schema[info_schema])
+                fut = tpe.submit_connected(
+                    self,
+                    name,
+                    self._get_one_catalog_by_relations,
+                    info_schema,
+                    relations,
+                    manifest,
+                )
+                futures.append(fut)
+
+            catalogs, exceptions = catch_as_completed(futures)
+            return catalogs, exceptions
 
     def cancel_open_connections(self):
         """Cancel all open connections."""
