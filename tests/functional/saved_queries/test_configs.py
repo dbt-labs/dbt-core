@@ -2,6 +2,7 @@ import pytest
 
 from dbt.contracts.graph.manifest import Manifest
 from dbt.tests.util import update_config_file
+from dbt_semantic_interfaces.type_enums.export_destination_type import ExportDestinationType
 from tests.functional.assertions.test_runner import dbtTestRunner
 from tests.functional.configs.fixtures import BaseConfigProject
 from tests.functional.saved_queries.fixtures import (
@@ -24,6 +25,8 @@ class TestSavedQueryConfigs(BaseConfigProject):
                 "test": {
                     "test_saved_query": {
                         "+enabled": True,
+                        "+export_as": ExportDestinationType.VIEW.value,
+                        "+schema": "my_default_export_schema",
                     }
                 },
             },
@@ -50,6 +53,9 @@ class TestSavedQueryConfigs(BaseConfigProject):
         assert result.success
         assert isinstance(result.result, Manifest)
         assert len(result.result.saved_queries) == 1
+        saved_query = result.result.saved_queries["saved_query.test.test_saved_query"]
+        assert saved_query.config.export_as == ExportDestinationType.VIEW
+        assert saved_query.config.schema == "my_default_export_schema"
 
         # disable the saved_query via project config and rerun
         config_patch = {"saved-queries": {"test": {"test_saved_query": {"+enabled": False}}}}
