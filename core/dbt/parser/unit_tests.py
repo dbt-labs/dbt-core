@@ -201,22 +201,22 @@ class UnitTestManifestLoader:
                 raise InvalidUnitTestGivenInput(input=input)
 
             if statically_parsed["refs"]:
-                for ref in statically_parsed["refs"]:
-                    name = ref.get("name")
-                    package = ref.get("package")
-                    version = ref.get("version")
-                    # TODO: disabled lookup, versioned lookup, public models
-                    original_input_node = self.manifest.ref_lookup.find(
-                        name, package, version, self.manifest
-                    )
+                ref = list(statically_parsed["refs"])[0]
+                name = ref.get("name")
+                package = ref.get("package")
+                version = ref.get("version")
+                # TODO: disabled lookup, versioned lookup, public models
+                original_input_node = self.manifest.ref_lookup.find(
+                    name, package, version, self.manifest
+                )
             elif statically_parsed["sources"]:
-                for source in statically_parsed["sources"]:
-                    input_source_name, input_name = source
-                    original_input_node = self.manifest.source_lookup.find(
-                        f"{input_source_name}.{input_name}",
-                        self.root_project.project_name,
-                        self.manifest,
-                    )
+                source = list(statically_parsed["sources"])[0]
+                input_source_name, input_name = source
+                original_input_node = self.manifest.source_lookup.find(
+                    f"{input_source_name}.{input_name}",
+                    self.root_project.project_name,
+                    self.manifest,
+                )
             else:
                 raise InvalidUnitTestGivenInput(input=input)
 
