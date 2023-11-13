@@ -670,11 +670,11 @@ class SavedQueryParser(YamlReader):
         return config
 
     def _get_export_config(
-        self, unparsed: Dict[str, Any], saved_query_config: SavedQueryConfig
+        self, unparsed_export_config: Dict[str, Any], saved_query_config: SavedQueryConfig
     ) -> ExportConfig:
         # Combine the two dictionaries using dictionary unpacking
         # the second dictionary is the one whose keys take priority
-        combined = {**saved_query_config.__dict__, **unparsed}
+        combined = {**saved_query_config.__dict__, **unparsed_export_config}
         # `schema` is the user facing attribute, but for DSI protocol purposes we track it as `schema_name`
         if combined.get("schema") is not None and combined.get("schema_name") is None:
             combined["schema_name"] = combined["schema"]
