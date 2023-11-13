@@ -14,10 +14,9 @@ from fixtures import (
     my_model_b_sql,
     test_my_model_simple_fixture_yml,
     test_my_model_fixture_csv,
-    test_my_model_b_fixture_csv,
 )
 
-    
+
 class UnitTestState:
     @pytest.fixture(scope="class")
     def models(self):
@@ -71,7 +70,9 @@ class TestUnitTestStateModified(UnitTestState):
         assert len(results) == 1
 
         # change underlying model logic
-        write_config_file(test_my_model_simple_fixture_yml, project.project_root, "models", "test_my_model.yml")
+        write_config_file(
+            test_my_model_simple_fixture_yml, project.project_root, "models", "test_my_model.yml"
+        )
         write_file(
             my_model_vars_sql.replace("a+b as c,", "a + b as c,"),
             project.project_root,
