@@ -96,8 +96,6 @@ class PackageConfig(dbtClassMixin, Replaceable):
     def validate(cls, data):
         for package in data.get("packages", data):
             if isinstance(package, dict) and package.get("package"):
-                if "tarball" in package:
-                    continue
                 if not package["version"]:
                     raise ValidationError(
                         f"{package['package']} is missing the version. When installing from the Hub "
