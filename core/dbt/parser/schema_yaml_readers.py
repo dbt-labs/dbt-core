@@ -676,7 +676,7 @@ class SavedQueryParser(YamlReader):
         # the second dictionary is the one whose keys take priority
         combined = {**saved_query_config.__dict__, **unparsed}
         # `schema` is the user facing attribute, but for DSI protocol purposes we track it as `schema_name`
-        if combined.get("schema") is not combined.get("schema_name") is None:
+        if combined.get("schema") is not None and combined.get("schema_name") is None:
             combined["schema_name"] = combined["schema"]
 
         return ExportConfig.from_dict(combined)
