@@ -261,6 +261,21 @@ class ArtifactMixin(VersionedSchema, Writable, Readable):
             raise DbtInternalError("Cannot call from_dict with no schema version!")
 
 
+def get_artifact_schema_version(dct: dict) -> int:
+    schema_version = dct.get("metadata", {}).get("dbt_schema_version", None)
+    if not schema_version:
+        raise ValueError("Artifact is missing schema version")
+
+    # schema_version is in this format: https://schemas.getdbt.com/dbt/manifest/v10.json
+    # What the code below is doing:
+    # 1. Split on "/" – v10.json
+    # 2. Split on "." – v10
+    # 3. Skip first character – 10
+    # 4. Convert to int
+    # TODO: If this gets more complicated, turn into a regex
+    return int(schema_version.split("/")[-1].split(".")[0][1:])
+
+
 class Identifier(ValidatedStringMixin):
     """Our definition of a valid Identifier is the same as what's valid for an unquoted database table name.
 

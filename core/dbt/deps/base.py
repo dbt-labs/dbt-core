@@ -4,7 +4,7 @@ import functools
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
-from typing import List, Optional, Generic, TypeVar
+from typing import List, Optional, Generic, TypeVar, Dict
 
 from dbt.clients import system
 from dbt.contracts.project import ProjectPackageMetadata
@@ -82,6 +82,10 @@ class PinnedPackage(BasePackage):
 
     @abc.abstractmethod
     def nice_version_name(self):
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def to_dict(self) -> Dict[str, str]:
         raise NotImplementedError
 
     def fetch_metadata(self, project, renderer):

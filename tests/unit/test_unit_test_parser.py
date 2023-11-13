@@ -11,78 +11,74 @@ from dbt.contracts.graph.unparsed import UnitTestOutputFixture
 
 
 UNIT_TEST_MODEL_NOT_FOUND_SOURCE = """
-unit:
-    - model: my_model_doesnt_exist
-      tests:
-        - name: test_my_model_doesnt_exist
-          description: "unit test description"
-          given: []
-          expect:
-            rows:
-              - {a: 1}
+unit_tests:
+    - name: test_my_model_doesnt_exist
+      model: my_model_doesnt_exist
+      description: "unit test description"
+      given: []
+      expect:
+        rows:
+          - {a: 1}
 """
 
 
 UNIT_TEST_SOURCE = """
-unit:
-    - model: my_model
-      tests:
-        - name: test_my_model
-          description: "unit test description"
-          given: []
-          expect:
-            rows:
-              - {a: 1}
+unit_tests:
+    - name: test_my_model
+      model: my_model
+      description: "unit test description"
+      given: []
+      expect:
+        rows:
+          - {a: 1}
 """
 
 
 UNIT_TEST_VERSIONED_MODEL_SOURCE = """
-unit:
-    - model: my_model_versioned.v1
-      tests:
-        - name: test_my_model_versioned
-          description: "unit test description"
-          given: []
-          expect:
-            rows:
-              - {a: 1}
+unit_tests:
+    - name: test_my_model_versioned
+      model: my_model_versioned.v1
+      description: "unit test description"
+      given: []
+      expect:
+        rows:
+          - {a: 1}
 """
 
 
 UNIT_TEST_CONFIG_SOURCE = """
-unit:
-    - model: my_model
-      tests:
-        - name: test_my_model
-          config:
-            tags: "schema_tag"
-            meta:
-              meta_key: meta_value
-              meta_jinja_key: '{{ 1 + 1 }}'
-          description: "unit test description"
-          given: []
-          expect:
-            rows:
-              - {a: 1}
+unit_tests:
+    - name: test_my_model
+      model: my_model
+      config:
+        tags: "schema_tag"
+        meta:
+          meta_key: meta_value
+          meta_jinja_key: '{{ 1 + 1 }}'
+      description: "unit test description"
+      given: []
+      expect:
+        rows:
+          - {a: 1}
 """
 
 
 UNIT_TEST_MULTIPLE_SOURCE = """
-unit:
-    - model: my_model
-      tests:
-        - name: test_my_model
-          description: "unit test description"
-          given: []
-          expect:
-            rows:
-              - {a: 1}
-        - name: test_my_model2
-          description: "unit test description"
-          given: []
-          expect:
-            rows:
-              - {a: 1}
+unit_tests:
+    - name: test_my_model
+      model: my_model
+      description: "unit test description"
+      given: []
+      expect:
+        rows:
+          - {a: 1}
+    - name: test_my_model2
+      model: my_model
+      description: "unit test description"
+      given: []
+      expect:
+        rows:
+          - {a: 1}
 """
 
 
@@ -105,7 +101,7 @@ class UnitTestParserTest(SchemaParserTest):
         )
 
     def file_block_for(self, data, filename):
-        return super().file_block_for(data, filename, "unit")
+        return super().file_block_for(data, filename, "unit_tests")
 
     def test_basic_model_not_found(self):
         block = self.yaml_block_for(UNIT_TEST_MODEL_NOT_FOUND_SOURCE, "test_my_model.yml")
@@ -127,7 +123,7 @@ class UnitTestParserTest(SchemaParserTest):
             package_name="snowplow",
             path=block.path.relative_path,
             original_file_path=block.path.original_file_path,
-            unique_id="unit.snowplow.my_model.test_my_model",
+            unique_id="unit_test.snowplow.my_model.test_my_model",
             given=[],
             expect=UnitTestOutputFixture(rows=[{"a": 1}]),
             description="unit test description",
@@ -147,7 +143,7 @@ class UnitTestParserTest(SchemaParserTest):
         UnitTestParser(self.parser, block).parse()
 
         self.assert_has_manifest_lengths(self.parser.manifest, nodes=1, unit_tests=1)
-        unit_test = self.parser.manifest.unit_tests["unit.snowplow.my_model.test_my_model"]
+        unit_test = self.parser.manifest.unit_tests["unit_test.snowplow.my_model.test_my_model"]
         self.assertEqual(sorted(unit_test.config.tags), sorted(["schema_tag", "project_tag"]))
         self.assertEqual(unit_test.config.meta, {"meta_key": "meta_value", "meta_jinja_key": "2"})
 
@@ -168,7 +164,7 @@ class UnitTestParserTest(SchemaParserTest):
 
         self.assert_has_manifest_lengths(self.parser.manifest, nodes=2, unit_tests=1)
         unit_test = self.parser.manifest.unit_tests[
-            "unit.snowplow.my_model_versioned.v1.test_my_model_versioned"
+            "unit_test.snowplow.my_model_versioned.v1.test_my_model_versioned"
         ]
         self.assertEqual(len(unit_test.depends_on.nodes), 1)
         self.assertEqual(unit_test.depends_on.nodes[0], "model.snowplow.my_model_versioned.v1")

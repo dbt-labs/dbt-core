@@ -2,8 +2,7 @@
     Renders a database name given a custom database name. If the custom
     database name is none, then the resulting database is just the "database"
     value in the specified target. If a database override is specified, then
-    the resulting database is the default database concatenated with the
-    custom database.
+    the custom database name is used instead of the default "database" value.
 
     This macro can be overriden in projects to define different semantics
     for rendering a database name.
@@ -13,6 +12,7 @@
     node: The node the database is being generated for
 
 #}
+
 {% macro generate_database_name(custom_database_name=none, node=none) -%}
     {% do return(adapter.dispatch('generate_database_name', 'dbt')(custom_database_name, node)) %}
 {%- endmacro %}

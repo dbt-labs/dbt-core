@@ -76,6 +76,10 @@ class SQLAdapter(BaseAdapter):
         return "float8" if decimals else "integer"
 
     @classmethod
+    def convert_integer_type(cls, agate_table: agate.Table, col_idx: int) -> str:
+        return "integer"
+
+    @classmethod
     def convert_boolean_type(cls, agate_table: agate.Table, col_idx: int) -> str:
         return "boolean"
 

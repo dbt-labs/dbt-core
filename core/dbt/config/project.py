@@ -652,6 +652,13 @@ class Project:
             generic_test_paths.append(os.path.join(test_path, "generic"))
         return generic_test_paths
 
+    @property
+    def fixture_paths(self):
+        fixture_paths = []
+        for test_path in self.test_paths:
+            fixture_paths.append(os.path.join(test_path, "fixtures"))
+        return fixture_paths
+
     def __str__(self):
         cfg = self.to_project_config(with_packages=True)
         return str(cfg)
@@ -697,7 +704,7 @@ class Project:
                 "snapshots": self.snapshots,
                 "sources": self.sources,
                 "tests": self.tests,
-                "unit_tests": self.unit_tests,
+                "unit-tests": self.unit_tests,
                 "metrics": self.metrics,
                 "semantic-models": self.semantic_models,
                 "saved-queries": self.saved_queries,

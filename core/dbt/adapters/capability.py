@@ -4,7 +4,7 @@ from typing import Optional, DefaultDict, Mapping
 
 
 class Capability(str, Enum):
-    """Enumeration of optional adapter features which can be probed using BaseAdapter.has_feature()"""
+    """Enumeration of optional adapter features which can be probed using BaseAdapter.capabilities()"""
 
     SchemaMetadataByRelations = "SchemaMetadataByRelations"
     """Indicates efficient support for retrieving schema metadata for a list of relations, rather than always retrieving
