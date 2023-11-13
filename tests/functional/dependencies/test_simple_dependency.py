@@ -374,3 +374,23 @@ class TestSimpleDependencyBadProfile(object):
         del os.environ["PROFILE_TEST_HOST"]
         run_dbt(["deps"])
         run_dbt(["clean"])
+
+
+class TestSimpleDependcyTarball(object):
+    @pytest.fixture(scope="class", autouse=True)
+    def setUp(self, project):
+        project.run_sql_file(project.test_data_dir / Path("seed.sql"))
+
+    @pytest.fixture(scope="class")
+    def packages(self):
+        return {
+            "packages": [
+                {
+                    "tarball": "https://codeload.github.com/dbt-labs/dbt-utils/tar.gz/0.9.6",
+                    "name": "dbt_utils",
+                }
+            ]
+        }
+
+    def test_deps_tarball(self, project):
+        run_dbt(["deps"])
