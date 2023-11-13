@@ -1,4 +1,8 @@
+from csv import DictReader
+from pathlib import Path
 from typing import List, Set, Dict, Any
+
+from dbt_extractor import py_extract_from_source, ExtractionError  # type: ignore
 
 from dbt.config import RuntimeConfig
 from dbt.context.context_config import ContextConfig
@@ -14,7 +18,7 @@ from dbt.contracts.graph.nodes import (
     UnitTestConfig,
 )
 from dbt.contracts.graph.unparsed import UnparsedUnitTest
-from dbt.exceptions import ParsingError, InvalidUnitTestGivenInput
+from dbt.exceptions import ParsingError, InvalidUnitTestGivenInput, DbtInternalError
 from dbt.graph import UniqueId
 from dbt.node_types import NodeType
 from dbt.parser.schemas import (
@@ -27,7 +31,6 @@ from dbt.parser.schemas import (
     ParseResult,
 )
 from dbt.utils import get_pseudo_test_path
-from dbt_extractor import py_extract_from_source, ExtractionError  # type: ignore
 
 
 class UnitTestManifestLoader:
@@ -203,6 +206,22 @@ class UnitTestParser(YamlReader):
         self.schema_parser = schema_parser
         self.yaml = yaml
 
+    def load_rows_from_seed(self, seed_name):
+        rows = []
+
+        try:
+            seed_node = self.manifest.ref_lookup.perform_lookup(
+                f"seed.{self.project.project_name}.{seed_name}", self.manifest
+            )
+            seed_path = Path(seed_node.root_path) / seed_node.original_file_path
+            with open(seed_path, "r") as f:
+                for row in DictReader(f):
+                    rows.append(row)
+        except DbtInternalError:
+            pass
+        finally:
+            return rows
+
     def parse(self) -> ParseResult:
         for data in self.get_key_dicts():
             unit_test = self._get_unit_test(data)
@@ -214,8 +233,12 @@ class UnitTestParser(YamlReader):
             unit_test_fqn = [self.project.project_name] + model_name_split + [unit_test.name]
             unit_test_config = self._build_unit_test_config(unit_test_fqn, unit_test.config)
 
+            # self.manifest.ref_lookup.perform_lookup('seed.test.my_favorite_source', self.manifest)
+
             # Check that format and type of rows matches for each given input
             for input in unit_test.given:
+                if input.rows is None:
+                    input.rows = self.load_rows_from_seed(input.input.split("'")[1])
                 input.validate_fixture("input", unit_test.name)
             unit_test.expect.validate_fixture("expected", unit_test.name)
 

@@ -100,3 +100,64 @@ class TestUnitTestIncrementalModel:
         # Select by model name
         results = run_dbt(["unit-test", "--select", "my_incremental_model"], expect_pass=True)
         assert len(results) == 2
+
+
+my_new_model = """
+select
+my_favorite_seed.id,
+a + b as c
+from {{ ref('my_favorite_seed') }} as my_favorite_seed
+inner join {{ ref('my_favorite_model') }} as my_favorite_model
+on my_favorite_seed.id = my_second_favorite_model.id
+"""
+
+my_second_favorite_model = """
+select
+2 as id,
+3 as b
+"""
+
+seed_my_favorite_seed = """id,a
+1,5
+2,4
+3,3
+4,2
+5,1
+"""
+
+test_my_model_implicit_seed = """
+unit_tests:
+  - name: t
+    model: my_new_model
+    given:
+      - input: ref('my_favorite_seed')
+      - input: ref('my_second_favorite_model')
+        rows:
+          - {id: 1, b: 2}
+    expect:
+      rows:
+        - {id: 1, c: 7}
+"""
+
+
+class TestUnitTestImplicitSeed:
+    @pytest.fixture(scope="class")
+    def seeds(self):
+        return {"my_favorite_seed.csv": seed_my_favorite_seed}
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_new_model.sql": my_new_model,
+            "my_second_favorite_model.sql": my_second_favorite_model,
+            "schema.yml": test_my_model_implicit_seed,
+        }
+
+    def test_basic(self, project):
+        run_dbt(["seed"])
+        run_dbt(["run"])
+        # assert len(results) == 1
+
+        # Select by model name
+        results = run_dbt(["unit-test", "--select", "my_new_model"], expect_pass=True)
+        assert len(results) == 1
