@@ -122,7 +122,7 @@ unit_tests:
       rows:
         - {c: 2}
 
-  - name: test_my_model_empty
+  - name: test_depends_on_fixture
     model: my_model
     given:
       - input: ref('my_model_a')
@@ -155,7 +155,7 @@ unit_tests:
       rows:
         - {macro_call: override, var_call: var_override, env_var_call: env_var_override, invocation_id: 123}
 
-  - name: test_my_model_string_concat
+  - name: test_has_string_c_ab
     model: my_model
     given:
       - input: ref('my_model_a')

@@ -14,6 +14,7 @@ from fixtures import (
     my_model_b_sql,
     test_my_model_simple_fixture_yml,
     test_my_model_fixture_csv,
+    test_my_model_b_fixture_csv as test_my_model_fixture_csv_modified,
 )
 
 
@@ -61,6 +62,24 @@ class TestUnitTestStateModified(UnitTestState):
         results = run_dbt(["unit-test", "--select", "state:modified", "--state", "state"])
         assert len(results) == 0
 
+        # change underlying fixture file
+        write_file(
+            test_my_model_fixture_csv_modified,
+            project.project_root,
+            "tests",
+            "fixtures",
+            "test_my_model_fixture.csv",
+        )
+        # TODO: remove --no-partial-parse as part of https://github.com/dbt-labs/dbt-core/issues/9067
+        results = run_dbt(
+            ["--no-partial-parse", "unit-test", "--select", "state:modified", "--state", "state"],
+            expect_pass=True,
+        )
+        assert len(results) == 1
+        assert results[0].node.name.endswith("test_depends_on_fixture")
+        # reset changes
+        self.copy_state(project.project_root)
+
         # change unit test definition of a single unit test
         with_changes = test_my_model_simple_fixture_yml.replace("{string_c: ab}", "{string_c: bc}")
         write_config_file(with_changes, project.project_root, "models", "test_my_model.yml")
@@ -68,6 +87,7 @@ class TestUnitTestStateModified(UnitTestState):
             ["unit-test", "--select", "state:modified", "--state", "state"], expect_pass=False
         )
         assert len(results) == 1
+        assert results[0].node.name.endswith("test_has_string_c_ab")
 
         # change underlying model logic
         write_config_file(
