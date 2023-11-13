@@ -622,16 +622,11 @@ class RuntimeUnitTestSourceResolver(RuntimeSourceResolver):
                 disabled=(isinstance(target_source, Disabled)),
             )
         # For unit tests, this isn't a "real" source, it's a ModelNode taking
-        # the place of a source. We want to get the relation of the fake model
-        # node, not the original source relation.
-        return self.create_relation(target_source)
-
-    def create_relation(self, target_source: ManifestNode) -> RelationProxy:
-        if target_source.is_ephemeral_model:
-            self.model.set_cte(target_source.unique_id, None)
-            return self.Relation.create_ephemeral_from_node(self.config, target_source)
-        else:
-            return self.Relation.create_from(self.config, target_source)
+        # the place of a source. We don't really need to return the relation here,
+        # we just need to set_cte, but skipping it confuses typing. We *do* need
+        # the relation in the "this" property.
+        self.model.set_cte(target_source.unique_id, None)
+        return self.Relation.create_ephemeral_from_node(self.config, target_source)
 
 
 # metric` implementations

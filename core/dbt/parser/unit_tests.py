@@ -115,6 +115,7 @@ class UnitTestManifestLoader:
             original_input_node = self._get_original_input_node(given.input, tested_node)
 
             input_name = f"{unit_test_node.name}__{original_input_node.name}"
+            project_root = self.root_project.project_root
             common_fields = {
                 "resource_type": NodeType.Model,
                 "package_name": package_name,
@@ -126,27 +127,18 @@ class UnitTestManifestLoader:
                 "schema": original_input_node.schema,
                 "fqn": original_input_node.fqn,
                 "checksum": FileHash.empty(),
+                "raw_code": self._build_fixture_raw_code(
+                    given.get_rows(project_root, self.root_project.fixture_paths), None
+                ),
             }
 
             if original_input_node.resource_type == NodeType.Model:
-                original_input_node_columns = None
-                if original_input_node.config.contract.enforced:
-                    original_input_node_columns = {
-                        column.name: column.data_type for column in original_input_node.columns
-                    }
                 input_node = ModelNode(
                     **common_fields,
                     name=input_name,
                     path=original_input_node.path,
-                    raw_code=self._build_fixture_raw_code(
-                        given.get_rows(
-                            self.root_project.project_root, self.root_project.fixture_paths
-                        ),
-                        original_input_node_columns,
-                    ),
                 )
             elif original_input_node.resource_type == NodeType.Source:
-                # Note: we don't look at the source columns. Are there circumstances when we should?
                 # We are reusing the database/schema/identifier from the original source,
                 # but that shouldn't matter since this acts as an ephemeral model which just
                 # wraps a CTE around the unit test node.
@@ -154,12 +146,6 @@ class UnitTestManifestLoader:
                     **common_fields,
                     name=original_input_node.name,  # must be the same name for source lookup to work
                     path=input_name + ".sql",  # for writing out compiled_code
-                    raw_code=self._build_fixture_raw_code(
-                        given.get_rows(
-                            self.root_project.project_root, self.root_project.fixture_paths
-                        ),
-                        None,
-                    ),
                     source_name=original_input_node.source_name,  # needed for source lookup
                 )
                 # Sources need to go in the sources dictionary in order to create the right lookup
@@ -176,6 +162,8 @@ class UnitTestManifestLoader:
             unit_test_node.depends_on.nodes.append(input_node.unique_id)
 
     def _build_fixture_raw_code(self, rows, column_name_to_data_types) -> str:
+        # We're not currently using column_name_to_data_types, but leaving here for
+        # possible future use.
         return ("{{{{ get_fixture_sql({rows}, {column_name_to_data_types}) }}}}").format(
             rows=rows, column_name_to_data_types=column_name_to_data_types
         )
