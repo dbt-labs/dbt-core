@@ -218,7 +218,7 @@ class UnitTestParser(YamlReader):
 
         seed_node = self.manifest.ref_lookup.find(seed_name, package_name, None, self.manifest)
 
-        if not seed_node:
+        if not seed_node or seed_node.resource_type != NodeType.Seed:
             raise ParsingError(
                 f"Unable to find seed '{package_name}.{seed_name}' for unit tests in directories: {self.project.seed_paths}"
             )
