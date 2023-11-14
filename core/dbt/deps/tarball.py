@@ -31,8 +31,7 @@ class TarballPinnedPackage(TarballPackageMixin, PinnedPackage):
     def to_dict(self) -> Dict[str, str]:
         return {
             "tarball": self.tarball,
-            "version": self.version,
-            "package": self.package,
+            "name": self.package,
         }
 
     def get_version(self):
