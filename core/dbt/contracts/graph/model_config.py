@@ -15,6 +15,7 @@ from dbt.contracts.util import Replaceable, list_str
 from dbt.exceptions import DbtInternalError, CompilationError
 from dbt import hooks
 from dbt.node_types import NodeType, AccessType
+from dbt_semantic_interfaces.type_enums.export_destination_type import ExportDestinationType
 from mashumaro.jsonschema.annotations import Pattern
 
 
@@ -407,6 +408,8 @@ class SavedQueryConfig(BaseConfig):
         default_factory=dict,
         metadata=MergeBehavior.Update.meta(),
     )
+    export_as: Optional[ExportDestinationType] = None
+    schema: Optional[str] = None
 
 
 @dataclass
