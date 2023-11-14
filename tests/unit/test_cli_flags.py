@@ -366,15 +366,13 @@ class TestFlags:
     def test_profile_settings_interaction(
         self, cli_profile, cli_target, flag_profile, flag_target
     ):
-        cli_params = []
+        cli_params = ["run"]
 
-        if cli_profile is not None:
-            cli_params += ["--profile", cli_profile]
+        if cli_profile:
+            cli_params = ["--profile", cli_profile] + cli_params
 
-        if cli_target is not None:
-            cli_params += ["--target", cli_target]
-
-        cli_params += ["run"]
+        if cli_target:
+            cli_params = ["--target", cli_target] + cli_params
 
         context = self.make_dbt_context("run", cli_params)
 
