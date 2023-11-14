@@ -1,6 +1,6 @@
 import pytest
 from dbt.tests.util import run_dbt, write_file, get_manifest, get_artifact
-from dbt.exceptions import DuplicateResourceNameError
+from dbt.exceptions import DuplicateResourceNameError, ParsingError
 from fixtures import (
     my_model_vars_sql,
     my_model_a_sql,
@@ -228,9 +228,7 @@ class TestUnitTestNonexistentSeed:
         }
 
     def test_nonexistent_seed(self, project):
-        run_dbt(["seed"])
-        run_dbt(["run"])
-
-        # Select by model name
-        with pytest.raises(AttributeError):
+        with pytest.raises(
+            ParsingError, match="Unable to find seed 'test.my_second_favorite_seed' for unit tests"
+        ):
             run_dbt(["unit-test", "--select", "my_new_model"], expect_pass=False)

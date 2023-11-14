@@ -214,18 +214,23 @@ class UnitTestParser(YamlReader):
         """Read rows from seed file on disk if not specified in YAML config. If seed file doesn't exist, return empty list."""
         rows: List[Dict[str, Any]] = []
 
+        package_name = self.project.project_name
+
         try:
             seed_node = self.manifest.ref_lookup.perform_lookup(
-                f"seed.{self.project.project_name}.{seed_name}", self.manifest
+                f"seed.{package_name}.{seed_name}", self.manifest
             )
-            seed_path = Path(seed_node.root_path) / seed_node.original_file_path
-            with open(seed_path, "r") as f:
-                for row in DictReader(f):
-                    rows.append(row)
         except DbtInternalError:
-            pass
-        finally:
-            return rows
+            raise ParsingError(
+                f"Unable to find seed '{package_name}.{seed_name}' for unit tests in directories: {self.project.seed_paths}"
+            )
+
+        seed_path = Path(seed_node.root_path) / seed_node.original_file_path
+        with open(seed_path, "r") as f:
+            for row in DictReader(f):
+                rows.append(row)
+
+        return rows
 
     def parse(self) -> ParseResult:
         for data in self.get_key_dicts():
