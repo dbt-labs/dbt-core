@@ -1080,6 +1080,7 @@ class UnitTestDefinition(GraphNode):
     overrides: Optional[UnitTestOverrides] = None
     depends_on: DependsOn = field(default_factory=DependsOn)
     config: UnitTestConfig = field(default_factory=UnitTestConfig)
+    checksum: Optional[str] = None
 
     @property
     def depends_on_nodes(self):
@@ -1089,6 +1090,23 @@ class UnitTestDefinition(GraphNode):
     def tags(self) -> List[str]:
         tags = self.config.tags
         return [tags] if isinstance(tags, str) else tags
+
+    def build_unit_test_checksum(self, project_root: str, fixture_paths: List[str]):
+        # everything except 'description'
+        data = f"{self.model}-{self.given}-{self.expect}-{self.overrides}"
+
+        # include underlying fixture data
+        for input in self.given:
+            if input.fixture:
+                data += f"-{input.get_rows(project_root, fixture_paths)}"
+
+        self.checksum = hashlib.new("sha256", data.encode("utf-8")).hexdigest()
+
+    def same_contents(self, other: Optional["UnitTestDefinition"]) -> bool:
+        if other is None:
+            return False
+
+        return self.checksum == other.checksum
 
 
 # ====================================

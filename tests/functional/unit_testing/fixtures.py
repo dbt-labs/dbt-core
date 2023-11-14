@@ -105,6 +105,73 @@ unit_tests:
         tags: test_this
 """
 
+
+test_my_model_simple_fixture_yml = """
+unit_tests:
+  - name: test_my_model
+    model: my_model
+    given:
+      - input: ref('my_model_a')
+        rows:
+          - {id: 1, a: 1}
+      - input: ref('my_model_b')
+        rows:
+          - {id: 1, b: 2}
+          - {id: 2, b: 2}
+    expect:
+      rows:
+        - {c: 2}
+
+  - name: test_depends_on_fixture
+    model: my_model
+    given:
+      - input: ref('my_model_a')
+        rows: []
+      - input: ref('my_model_b')
+        format: csv
+        fixture: test_my_model_fixture
+    expect:
+      rows: []
+
+  - name: test_my_model_overrides
+    model: my_model
+    given:
+      - input: ref('my_model_a')
+        rows:
+          - {id: 1, a: 1}
+      - input: ref('my_model_b')
+        rows:
+          - {id: 1, b: 2}
+          - {id: 2, b: 2}
+    overrides:
+      macros:
+        type_numeric: override
+        invocation_id: 123
+      vars:
+        my_test: var_override
+      env_vars:
+        MY_TEST: env_var_override
+    expect:
+      rows:
+        - {macro_call: override, var_call: var_override, env_var_call: env_var_override, invocation_id: 123}
+
+  - name: test_has_string_c_ab
+    model: my_model
+    given:
+      - input: ref('my_model_a')
+        rows:
+          - {id: 1, string_a: a}
+      - input: ref('my_model_b')
+        rows:
+          - {id: 1, string_b: b}
+    expect:
+      rows:
+        - {string_c: ab}
+    config:
+        tags: test_this
+"""
+
+
 datetime_test = """
   - name: test_my_model_datetime
     model: my_model
@@ -381,36 +448,31 @@ unit_tests:
       tags: test_this
 """
 
-test_my_model_fixture_csv = """
-id,b
+test_my_model_fixture_csv = """id,b
 1,2
 2,2
 """
 
-test_my_model_a_fixture_csv = """
-id,string_a
+test_my_model_a_fixture_csv = """id,string_a
 1,a
 """
 
 test_my_model_a_empty_fixture_csv = """
 """
 
-test_my_model_a_numeric_fixture_csv = """
-id,a
+test_my_model_a_numeric_fixture_csv = """id,a
 1,1
 """
 
-test_my_model_b_fixture_csv = """
-id,string_b
+test_my_model_b_fixture_csv = """id,string_b
 1,b
 """
-test_my_model_basic_fixture_csv = """
-c
+
+test_my_model_basic_fixture_csv = """c
 2
 """
 
-test_my_model_concat_fixture_csv = """
-string_c
+test_my_model_concat_fixture_csv = """string_c
 ab
 """
 
