@@ -206,6 +206,10 @@ class UnitTestParser(YamlReader):
         self.schema_parser = schema_parser
         self.yaml = yaml
 
+    def _get_seed_name_from_ref(self, ref: str) -> str:
+        """Extract seed name from ref string."""
+        return py_extract_from_source("{{ " + ref + " }}")["refs"][0]["name"]
+
     def _load_rows_from_seed(self, seed_name: str) -> List[Dict[str, Any]]:
         """Read rows from seed file on disk if not specified in YAML config. If seed file doesn't exist, return empty list."""
         rows: List[Dict[str, Any]] = []
@@ -237,7 +241,8 @@ class UnitTestParser(YamlReader):
             # Check that format and type of rows matches for each given input
             for input in unit_test.given:
                 if input.rows is None:
-                    input.rows = self._load_rows_from_seed(input.input.split("'")[1])
+                    seed_name = self._get_seed_name_from_ref(input.input)
+                    input.rows = self._load_rows_from_seed(seed_name)
                 input.validate_fixture("input", unit_test.name)
             unit_test.expect.validate_fixture("expected", unit_test.name)
 
