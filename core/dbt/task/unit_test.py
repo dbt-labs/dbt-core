@@ -4,11 +4,12 @@ from dbt.dataclass_schema import dbtClassMixin
 import daff
 import threading
 import re
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 from .compile import CompileRunner
 from .run import RunTask
 
+from dbt.clients.agate_helper import list_rows_from_table, json_rows_from_table
 from dbt.contracts.graph.nodes import UnitTestNode
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.results import TestStatus, RunResult
@@ -30,10 +31,17 @@ from dbt.ui import green, red
 
 
 @dataclass
+class UnitTestDiff(dbtClassMixin):
+    actual: List[Dict[str, Any]]
+    expected: List[Dict[str, Any]]
+    rendered: str
+
+
+@dataclass
 class UnitTestResultData(dbtClassMixin):
     should_error: bool
     adapter_response: Dict[str, Any]
-    diff: Optional[str] = None
+    diff: Optional[UnitTestDiff] = None
 
 
 class UnitTestRunner(CompileRunner):
@@ -103,12 +111,18 @@ class UnitTestRunner(CompileRunner):
         expected = self._get_unit_test_agate_table(table, "expected")
 
         # generate diff, if exists
-        diff, should_error = None, False
+        should_error, diff = False, None
         daff_diff = self._get_daff_diff(expected, actual)
         if daff_diff.hasDifference():
-            rendered_diff = self._render_daff_diff(daff_diff)
-            diff = f"\n\n{red('expected')} differs from {green('actual')}:\n\n{rendered_diff}\n"
             should_error = True
+            rendered = self._render_daff_diff(daff_diff)
+            rendered = f"\n\n{red('expected')} differs from {green('actual')}:\n\n{rendered}\n"
+
+            diff = UnitTestDiff(
+                actual=json_rows_from_table(actual),
+                expected=json_rows_from_table(expected),
+                rendered=rendered,
+            )
 
         return UnitTestResultData(
             diff=diff,
@@ -125,7 +139,7 @@ class UnitTestRunner(CompileRunner):
         failures = 0
         if result.should_error:
             status = TestStatus.Fail
-            message = result.diff
+            message = result.diff.rendered if result.diff else None
             failures = 1
 
         return RunResult(
@@ -153,18 +167,11 @@ class UnitTestRunner(CompileRunner):
     def _get_daff_diff(
         self, expected: agate.Table, actual: agate.Table, ordered: bool = False
     ) -> daff.TableDiff:
-        expected_data = [[col.name for col in expected.columns]]
-        for expected_row in expected.rows:
-            expected_data.append(list(expected_row.values()))
 
-        actual_data = [[col.name for col in actual.columns]]
-        for actual_row in actual.rows:
-            actual_data.append(list(actual_row.values()))
+        expected_daff_table = daff.PythonTableView(list_rows_from_table(expected))
+        actual_daff_table = daff.PythonTableView(list_rows_from_table(actual))
 
-        table1 = daff.PythonTableView(expected_data)
-        table2 = daff.PythonTableView(actual_data)
-
-        alignment = daff.Coopy.compareTables(table1, table2).align()
+        alignment = daff.Coopy.compareTables(expected_daff_table, actual_daff_table).align()
         result = daff.PythonTableView([])
 
         flags = daff.CompareFlags()
