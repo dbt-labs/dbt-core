@@ -108,10 +108,10 @@ my_favorite_seed.id,
 a + b as c
 from {{ ref('my_favorite_seed') }} as my_favorite_seed
 inner join {{ ref('my_favorite_model') }} as my_favorite_model
-on my_favorite_seed.id = my_second_favorite_model.id
+on my_favorite_seed.id = my_favorite_model.id
 """
 
-my_second_favorite_model = """
+my_favorite_model = """
 select
 2 as id,
 3 as b
@@ -125,13 +125,43 @@ seed_my_favorite_seed = """id,a
 5,1
 """
 
-test_my_model_implicit_seed = """
+schema_yml_explicit_seed = """
 unit_tests:
   - name: t
     model: my_new_model
     given:
       - input: ref('my_favorite_seed')
-      - input: ref('my_second_favorite_model')
+        rows:
+          - {id: 1, a: 10}
+      - input: ref('my_favorite_model')
+        rows:
+          - {id: 1, b: 2}
+    expect:
+      rows:
+        - {id: 1, c: 12}
+"""
+
+schema_yml_implicit_seed = """
+unit_tests:
+  - name: t
+    model: my_new_model
+    given:
+      - input: ref('my_favorite_seed')
+      - input: ref('my_favorite_model')
+        rows:
+          - {id: 1, b: 2}
+    expect:
+      rows:
+        - {id: 1, c: 7}
+"""
+
+schema_yml_nonexistent_seed = """
+unit_tests:
+  - name: t
+    model: my_new_model
+    given:
+      - input: ref('my_second_favorite_seed')
+      - input: ref('my_favorite_model')
         rows:
           - {id: 1, b: 2}
     expect:
@@ -140,7 +170,7 @@ unit_tests:
 """
 
 
-class TestUnitTestImplicitSeed:
+class TestUnitTestBaseSeed:
     @pytest.fixture(scope="class")
     def seeds(self):
         return {"my_favorite_seed.csv": seed_my_favorite_seed}
@@ -149,8 +179,8 @@ class TestUnitTestImplicitSeed:
     def models(self):
         return {
             "my_new_model.sql": my_new_model,
-            "my_second_favorite_model.sql": my_second_favorite_model,
-            "schema.yml": test_my_model_implicit_seed,
+            "my_favorite_model.sql": my_favorite_model,
+            "schema.yml": self.schema_yml,
         }
 
     def test_basic(self, project):
@@ -161,3 +191,29 @@ class TestUnitTestImplicitSeed:
         # Select by model name
         results = run_dbt(["unit-test", "--select", "my_new_model"], expect_pass=True)
         assert len(results) == 1
+
+
+class TestUnitTestExplicitSeed(TestUnitTestBaseSeed):
+    schema_yml = schema_yml_explicit_seed
+
+
+class TestUnitTestImplicitSeed(TestUnitTestBaseSeed):
+    schema_yml = schema_yml_implicit_seed
+
+
+class TestUnitTestNonexistentSeed(TestUnitTestBaseSeed):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_new_model.sql": my_new_model,
+            "my_favorite_model.sql": my_favorite_model,
+            "schema.yml": schema_yml_nonexistent_seed,
+        }
+
+    def test_basic(self, project):
+        run_dbt(["seed"])
+        run_dbt(["run"])
+
+        # Select by model name
+        with pytest.raises(AttributeError):
+            run_dbt(["unit-test", "--select", "my_new_model"], expect_pass=False)
