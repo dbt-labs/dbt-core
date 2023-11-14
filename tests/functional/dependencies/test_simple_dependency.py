@@ -379,10 +379,6 @@ class TestSimpleDependencyBadProfile(object):
 
 
 class TestSimpleDependcyTarball(object):
-    @pytest.fixture(scope="class", autouse=True)
-    def setUp(self, project):
-        project.run_sql_file(project.test_data_dir / Path("seed.sql"))
-
     @pytest.fixture(scope="class")
     def packages(self):
         return {
@@ -400,10 +396,6 @@ class TestSimpleDependcyTarball(object):
 
 
 class TestBadTarballDependency(object):
-    @pytest.fixture(scope="class", autouse=True)
-    def setUp(self, project):
-        project.run_sql_file(project.test_data_dir / Path("seed.sql"))
-
     def test_malformed_tarball_package_causes_exception(self, project):
         # We have to specify the bad formatted package here because if we do it
         # in a `packages` fixture, the test will blow up in the setup phase, meaning
