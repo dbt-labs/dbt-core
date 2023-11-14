@@ -218,6 +218,10 @@ class TestUnitTestImplicitSeed:
 
 class TestUnitTestNonexistentSeed:
     @pytest.fixture(scope="class")
+    def seeds(self):
+        return {"my_favorite_seed.csv": seed_my_favorite_seed}
+
+    @pytest.fixture(scope="class")
     def models(self):
         return {
             "my_new_model.sql": my_new_model,
