@@ -73,7 +73,6 @@ setup(
         # These are major-version-0 packages also maintained by dbt-labs. Accept patches.
         "dbt-extractor~=0.5.0",
         "minimal-snowplow-tracker~=0.0.2",
-        # DSI is under active development, so we're pinning to specific dev versions for now.
         "dbt-semantic-interfaces~=0.4.0",
         # ----
         # Expect compatibility with all new versions of these packages, so lower bounds only.
@@ -82,7 +81,7 @@ setup(
         "protobuf>=4.0.0",
         "pytz>=2015.7",
         "pyyaml>=6.0",
-        "typing-extensions>=3.7.4",
+        "typing-extensions>=4.4",
         # ----
         # Match snowflake-connector-python, to ensure compatibility in dbt-snowflake
         "cffi>=1.9,<2.0.0",

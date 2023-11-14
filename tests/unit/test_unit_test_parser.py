@@ -132,6 +132,7 @@ class UnitTestParserTest(SchemaParserTest):
             fqn=["snowplow", "my_model", "test_my_model"],
             config=UnitTestConfig(),
         )
+        expected.build_unit_test_checksum("anything", "anything")
         assertEqualNodes(unit_test, expected)
 
     def test_unit_test_config(self):
