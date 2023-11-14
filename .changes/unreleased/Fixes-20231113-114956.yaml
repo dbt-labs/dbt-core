@@ -1,5 +1,5 @@
 kind: Fixes
-body: Fix formating of tarball inforamtion in packages-lock.yml
+body: Fix formatting of tarball information in packages-lock.yml
 time: 2023-11-13T11:49:56.437007-08:00
 custom:
   Author: ChenyuLInx QMalcolm
