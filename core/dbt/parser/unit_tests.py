@@ -114,13 +114,11 @@ class UnitTestManifestLoader:
             # extract the original_input_node from the ref in the "input" key of the given list
             original_input_node = self._get_original_input_node(given.input, tested_node)
 
-            input_name = f"{unit_test_node.name}__{original_input_node.name}"
             project_root = self.root_project.project_root
             common_fields = {
                 "resource_type": NodeType.Model,
                 "package_name": package_name,
                 "original_file_path": original_input_node.original_file_path,
-                "unique_id": f"model.{package_name}.{input_name}",
                 "config": ModelConfig(materialized="ephemeral"),
                 "database": original_input_node.database,
                 "alias": original_input_node.identifier,
@@ -133,8 +131,10 @@ class UnitTestManifestLoader:
             }
 
             if original_input_node.resource_type == NodeType.Model:
+                input_name = f"{unit_test_node.name}__{original_input_node.name}"
                 input_node = ModelNode(
                     **common_fields,
+                    unique_id=f"model.{package_name}.{input_name}",
                     name=input_name,
                     path=original_input_node.path,
                 )
@@ -142,8 +142,10 @@ class UnitTestManifestLoader:
                 # We are reusing the database/schema/identifier from the original source,
                 # but that shouldn't matter since this acts as an ephemeral model which just
                 # wraps a CTE around the unit test node.
+                input_name = f"{unit_test_node.name}__{original_input_node.search_name}__{original_input_node.name}"
                 input_node = UnitTestSourceDefinition(
                     **common_fields,
+                    unique_id=f"model.{package_name}.{input_name}",
                     name=original_input_node.name,  # must be the same name for source lookup to work
                     path=input_name + ".sql",  # for writing out compiled_code
                     source_name=original_input_node.source_name,  # needed for source lookup
@@ -202,7 +204,7 @@ class UnitTestManifestLoader:
                 input_source_name, input_name = source
                 original_input_node = self.manifest.source_lookup.find(
                     f"{input_source_name}.{input_name}",
-                    self.root_project.project_name,
+                    None,
                     self.manifest,
                 )
             else:

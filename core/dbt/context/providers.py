@@ -606,7 +606,7 @@ class RuntimeSourceResolver(BaseSourceResolver):
         return self.Relation.create_from_source(target_source)
 
 
-class RuntimeUnitTestSourceResolver(RuntimeSourceResolver):
+class RuntimeUnitTestSourceResolver(BaseSourceResolver):
     def resolve(self, source_name: str, table_name: str):
         target_source = self.manifest.resolve_source(
             source_name,
