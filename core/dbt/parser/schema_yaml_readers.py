@@ -6,7 +6,6 @@ from dbt.contracts.graph.unparsed import (
     UnparsedDimensionTypeParams,
     UnparsedEntity,
     UnparsedExport,
-    UnparsedExportConfig,
     UnparsedExposure,
     UnparsedGroup,
     UnparsedMeasure,
@@ -19,6 +18,7 @@ from dbt.contracts.graph.unparsed import (
     UnparsedSavedQuery,
     UnparsedSemanticModel,
 )
+from dbt.contracts.graph.model_config import SavedQueryConfig
 from dbt.contracts.graph.nodes import (
     Exposure,
     Group,
@@ -57,7 +57,7 @@ from dbt_semantic_interfaces.type_enums import (
     MetricType,
     TimeGranularity,
 )
-from typing import List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 
 def parse_where_filter(
@@ -669,15 +669,24 @@ class SavedQueryParser(YamlReader):
 
         return config
 
-    def _get_export_config(self, unparsed: UnparsedExportConfig) -> ExportConfig:
-        return ExportConfig(
-            export_as=unparsed.export_as,
-            schema_name=unparsed.schema,
-            alias=unparsed.alias,
-        )
+    def _get_export_config(
+        self, unparsed_export_config: Dict[str, Any], saved_query_config: SavedQueryConfig
+    ) -> ExportConfig:
+        # Combine the two dictionaries using dictionary unpacking
+        # the second dictionary is the one whose keys take priority
+        combined = {**saved_query_config.__dict__, **unparsed_export_config}
+        # `schema` is the user facing attribute, but for DSI protocol purposes we track it as `schema_name`
+        if combined.get("schema") is not None and combined.get("schema_name") is None:
+            combined["schema_name"] = combined["schema"]
 
-    def _get_export(self, unparsed: UnparsedExport) -> Export:
-        return Export(name=unparsed.name, config=self._get_export_config(unparsed.config))
+        return ExportConfig.from_dict(combined)
+
+    def _get_export(
+        self, unparsed: UnparsedExport, saved_query_config: SavedQueryConfig
+    ) -> Export:
+        return Export(
+            name=unparsed.name, config=self._get_export_config(unparsed.config, saved_query_config)
+        )
 
     def _get_query_params(self, unparsed: UnparsedQueryParams) -> QueryParams:
         return QueryParams(
@@ -721,7 +730,7 @@ class SavedQueryParser(YamlReader):
             resource_type=NodeType.SavedQuery,
             unique_id=unique_id,
             query_params=self._get_query_params(unparsed.query_params),
-            exports=[self._get_export(export) for export in unparsed.exports],
+            exports=[self._get_export(export, config) for export in unparsed.exports],
             config=config,
             unrendered_config=unrendered_config,
             group=config.group,
