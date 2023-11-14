@@ -18,7 +18,7 @@ from dbt.contracts.graph.nodes import (
     UnitTestConfig,
 )
 from dbt.contracts.graph.unparsed import UnparsedUnitTest
-from dbt.exceptions import ParsingError, InvalidUnitTestGivenInput, DbtInternalError
+from dbt.exceptions import ParsingError, InvalidUnitTestGivenInput
 from dbt.graph import UniqueId
 from dbt.node_types import NodeType
 from dbt.parser.schemas import (
@@ -216,11 +216,9 @@ class UnitTestParser(YamlReader):
 
         package_name = self.project.project_name
 
-        try:
-            seed_node = self.manifest.ref_lookup.perform_lookup(
-                f"seed.{package_name}.{seed_name}", self.manifest
-            )
-        except DbtInternalError:
+        seed_node = self.manifest.ref_lookup.find(seed_name, package_name, None, self.manifest)
+
+        if not seed_node:
             raise ParsingError(
                 f"Unable to find seed '{package_name}.{seed_name}' for unit tests in directories: {self.project.seed_paths}"
             )
