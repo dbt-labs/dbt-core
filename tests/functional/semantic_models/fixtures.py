@@ -58,10 +58,85 @@ version: 2
 
 semantic_models:
   - name: semantic_people
+    label: "Semantic People"
     model: ref('people')
     dimensions:
       - name: favorite_color
+        label: "Favorite Color"
         type: categorical
+      - name: created_at
+        label: "Created At"
+        type: TIME
+        type_params:
+          time_granularity: day
+    measures:
+      - name: years_tenure
+        label: "Years Tenure"
+        agg: SUM
+        expr: tenure
+      - name: people
+        label: "People"
+        agg: count
+        expr: id
+    entities:
+      - name: id
+        label: "Primary ID"
+        type: primary
+    defaults:
+      agg_time_dimension: created_at
+"""
+
+semantic_model_people_diff_name_yml = """
+version: 2
+
+semantic_models:
+  - name: semantic_people_diff_name
+    label: "Semantic People"
+    model: ref('people')
+    dimensions:
+      - name: favorite_color
+        label: "Favorite Color"
+        type: categorical
+      - name: created_at
+        label: "Created At"
+        type: TIME
+        type_params:
+          time_granularity: day
+    measures:
+      - name: years_tenure
+        label: "Years Tenure"
+        agg: SUM
+        expr: tenure
+      - name: people
+        label: "People"
+        agg: count
+        expr: id
+    entities:
+      - name: id
+        label: "Primary ID"
+        type: primary
+    defaults:
+      agg_time_dimension: created_at
+"""
+
+semantic_model_descriptions = """
+{% docs semantic_model_description %} foo {% enddocs %}
+{% docs dimension_description %} bar {% enddocs %}
+{% docs measure_description %} baz {% enddocs %}
+{% docs entity_description %} qux {% enddocs %}
+"""
+
+semantic_model_people_yml_with_docs = """
+version: 2
+
+semantic_models:
+  - name: semantic_people
+    model: ref('people')
+    description: "{{ doc('semantic_model_description') }}"
+    dimensions:
+      - name: favorite_color
+        type: categorical
+        description: "{{ doc('dimension_description') }}"
       - name: created_at
         type: TIME
         type_params:
@@ -70,11 +145,13 @@ semantic_models:
       - name: years_tenure
         agg: SUM
         expr: tenure
+        description: "{{ doc('measure_description') }}"
       - name: people
         agg: count
         expr: id
     entities:
       - name: id
+        description: "{{ doc('entity_description') }}"
         type: primary
     defaults:
       agg_time_dimension: created_at
@@ -85,10 +162,14 @@ version: 2
 
 semantic_models:
   - name: semantic_people
+    label: "Semantic People"
     model: ref('people')
     config:
       enabled: true
       group: some_group
+      meta:
+        my_meta: 'testing'
+        my_other_meta: 'testing more'
     dimensions:
       - name: favorite_color
         type: categorical
@@ -115,6 +196,7 @@ version: 2
 
 semantic_models:
   - name: semantic_people
+    label: "Semantic People"
     model: ref('people')
     config:
       enabled: false
@@ -138,6 +220,7 @@ semantic_models:
     defaults:
       agg_time_dimension: created_at
 """
+
 
 schema_yml = """models:
   - name: fct_revenue

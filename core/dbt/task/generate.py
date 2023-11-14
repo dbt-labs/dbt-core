@@ -1,10 +1,11 @@
 import os
 import shutil
 from datetime import datetime
-from typing import Dict, List, Any, Optional, Tuple, Set
+from typing import Dict, List, Any, Optional, Tuple, Set, Iterable
 import agate
 
 from dbt.dataclass_schema import ValidationError
+from dbt.clients.system import load_file_contents
 
 from .compile import CompileTask
 
@@ -24,6 +25,8 @@ from dbt.contracts.results import (
     CatalogArtifact,
 )
 from dbt.exceptions import DbtInternalError, AmbiguousCatalogMatchError
+from dbt.graph import ResourceTypeSelector
+from dbt.node_types import NodeType
 from dbt.include.global_project import DOCS_INDEX_FILE_PATH
 from dbt.events.functions import fire_event
 from dbt.events.types import (
@@ -36,7 +39,9 @@ from dbt.parser.manifest import write_manifest
 import dbt.utils
 import dbt.compilation
 import dbt.exceptions
-
+from dbt.constants import (
+    MANIFEST_FILE_NAME,
+)
 
 CATALOG_FILENAME = "catalog.json"
 
@@ -63,7 +68,7 @@ def build_catalog_table(data) -> CatalogTable:
 
 # keys are database name, schema name, table name
 class Catalog(Dict[CatalogKey, CatalogTable]):
-    def __init__(self, columns: List[PrimitiveDict]):
+    def __init__(self, columns: List[PrimitiveDict]) -> None:
         super().__init__()
         for col in columns:
             self.add_column(col)
@@ -237,7 +242,18 @@ class GenerateTask(CompileTask):
             adapter = get_adapter(self.config)
             with adapter.connection_named("generate_catalog"):
                 fire_event(BuildingCatalog())
-                catalog_table, exceptions = adapter.get_catalog(self.manifest)
+                # Get a list of relations we need from the catalog
+                relations = None
+                if self.job_queue is not None:
+                    selected_node_ids = self.job_queue.get_selected_nodes()
+                    selected_nodes = self._get_nodes_from_ids(self.manifest, selected_node_ids)
+                    relations = {
+                        adapter.Relation.create_from(adapter.config, node_id)
+                        for node_id in selected_nodes
+                    }
+
+                # This generates the catalog as an agate.Table
+                catalog_table, exceptions = adapter.get_filtered_catalog(self.manifest, relations)
 
         catalog_data: List[PrimitiveDict] = [
             dict(zip(catalog_table.column_names, map(dbt.utils._coerce_decimal, row)))
@@ -259,15 +275,56 @@ class GenerateTask(CompileTask):
             errors=errors,
         )
 
-        path = os.path.join(self.config.project_target_path, CATALOG_FILENAME)
-        results.write(path)
+        catalog_path = os.path.join(self.config.project_target_path, CATALOG_FILENAME)
+        results.write(catalog_path)
         if self.args.compile:
             write_manifest(self.manifest, self.config.project_target_path)
 
+        if self.args.static:
+
+            # Read manifest.json and catalog.json
+            read_manifest_data = load_file_contents(
+                os.path.join(self.config.project_target_path, MANIFEST_FILE_NAME)
+            )
+            read_catalog_data = load_file_contents(catalog_path)
+
+            # Create new static index file contents
+            index_data = load_file_contents(DOCS_INDEX_FILE_PATH)
+            index_data = index_data.replace('"MANIFEST.JSON INLINE DATA"', read_manifest_data)
+            index_data = index_data.replace('"CATALOG.JSON INLINE DATA"', read_catalog_data)
+
+            # Write out the new index file
+            static_index_path = os.path.join(self.config.project_target_path, "static_index.html")
+            with open(static_index_path, "wb") as static_index_file:
+                static_index_file.write(bytes(index_data, "utf8"))
+
         if exceptions:
             fire_event(WriteCatalogFailure(num_exceptions=len(exceptions)))
-        fire_event(CatalogWritten(path=os.path.abspath(path)))
+        fire_event(CatalogWritten(path=os.path.abspath(catalog_path)))
         return results
+
+    @staticmethod
+    def _get_nodes_from_ids(manifest: Manifest, node_ids: Iterable[str]) -> List[ResultNode]:
+        selected: List[ResultNode] = []
+        for unique_id in node_ids:
+            if unique_id in manifest.nodes:
+                node = manifest.nodes[unique_id]
+                if node.is_relational and not node.is_ephemeral_model:
+                    selected.append(node)
+            elif unique_id in manifest.sources:
+                source = manifest.sources[unique_id]
+                selected.append(source)
+        return selected
+
+    def get_node_selector(self) -> ResourceTypeSelector:
+        if self.manifest is None or self.graph is None:
+            raise DbtInternalError("manifest and graph must be set to perform node selection")
+        return ResourceTypeSelector(
+            graph=self.graph,
+            manifest=self.manifest,
+            previous_state=self.previous_state,
+            resource_types=NodeType.executable(),
+        )
 
     def get_catalog_results(
         self,

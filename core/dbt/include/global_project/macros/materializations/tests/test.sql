@@ -6,15 +6,27 @@
 
     {% set identifier = model['alias'] %}
     {% set old_relation = adapter.get_relation(database=database, schema=schema, identifier=identifier) %}
+
+    {% set store_failures_as = config.get('store_failures_as') %}
+    -- if `--store-failures` is invoked via command line and `store_failures_as` is not set,
+    -- config.get('store_failures_as', 'table') returns None, not 'table'
+    {% if store_failures_as == none %}{% set store_failures_as = 'table' %}{% endif %}
+    {% if store_failures_as not in ['table', 'view'] %}
+        {{ exceptions.raise_compiler_error(
+            "'" ~ store_failures_as ~ "' is not a valid value for `store_failures_as`. "
+            "Accepted values are: ['ephemeral', 'table', 'view']"
+        ) }}
+    {% endif %}
+
     {% set target_relation = api.Relation.create(
-        identifier=identifier, schema=schema, database=database, type='table') -%} %}
+        identifier=identifier, schema=schema, database=database, type=store_failures_as) -%} %}
 
     {% if old_relation %}
         {% do adapter.drop_relation(old_relation) %}
     {% endif %}
 
     {% call statement(auto_begin=True) %}
-        {{ create_table_as(False, target_relation, sql) }}
+        {{ get_create_sql(target_relation, sql) }}
     {% endcall %}
 
     {% do relations.append(target_relation) %}

@@ -36,24 +36,29 @@
     limit 0
 {% endmacro %}
 
-
 {% macro get_empty_schema_sql(columns) -%}
   {{ return(adapter.dispatch('get_empty_schema_sql', 'dbt')(columns)) }}
 {% endmacro %}
 
 {% macro default__get_empty_schema_sql(columns) %}
     {%- set col_err = [] -%}
+    {%- set col_naked_numeric = [] -%}
     select
     {% for i in columns %}
       {%- set col = columns[i] -%}
       {%- if col['data_type'] is not defined -%}
-        {{ col_err.append(col['name']) }}
+        {%- do col_err.append(col['name']) -%}
+      {#-- If this column's type is just 'numeric' then it is missing precision/scale, raise a warning --#}
+      {%- elif col['data_type'].strip().lower() in ('numeric', 'decimal', 'number') -%}
+        {%- do col_naked_numeric.append(col['name']) -%}
       {%- endif -%}
       {% set col_name = adapter.quote(col['name']) if col.get('quote') else col['name'] %}
       cast(null as {{ col['data_type'] }}) as {{ col_name }}{{ ", " if not loop.last }}
     {%- endfor -%}
     {%- if (col_err | length) > 0 -%}
       {{ exceptions.column_type_missing(column_names=col_err) }}
+    {%- elif (col_naked_numeric | length) > 0 -%}
+      {{ exceptions.warn("Detected columns with numeric type and unspecified precision/scale, this can lead to unintended rounding: " ~ col_naked_numeric ~ "`") }}
     {%- endif -%}
 {% endmacro %}
 

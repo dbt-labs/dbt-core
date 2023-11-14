@@ -176,7 +176,7 @@ class BaseSelectionGroup(dbtClassMixin, Iterable[SelectionSpec], metaclass=ABCMe
         indirect_selection: IndirectSelection = IndirectSelection.Eager,
         expect_exists: bool = False,
         raw: Any = None,
-    ):
+    ) -> None:
         self.components: List[SelectionSpec] = list(components)
         self.expect_exists = expect_exists
         self.raw = raw

@@ -62,10 +62,72 @@ def drop_v9_and_prior_metrics(manifest: dict) -> None:
     manifest["disabled"] = filtered_disabled_entries
 
 
+def _convert_dct_with_filter(v10_dct_with_opt_filter):
+    """Upgrage the filter object from v10 to v11.
+
+    v10 filters from a serialized manifest looked like:
+    {..., 'filter': {'where_sql_template': '<filter_value>'}}
+    whereas v11 filters look like:
+    {..., 'filter': {'where_filters': [{'where_sql_template': '<filter_value>'}, ...]}}
+    """
+    if v10_dct_with_opt_filter is not None and v10_dct_with_opt_filter.get("filter") is not None:
+        v10_dct_with_opt_filter["filter"] = {"where_filters": [v10_dct_with_opt_filter["filter"]]}
+
+
+def _convert_metric(v10_metric_dict):
+    """Upgrades a v10 metric object to a v11 metric object.
+
+    Specifcally the following properties change
+    1. metric.filter
+    2. metric.type_params.measure.filter
+    3. metric.type_params.input_measures[x].filter
+    4. metric.type_params.numerator.filter
+    5. metric.type_params.denominator.filter
+    6. metric.type_params.metrics[x].filter"
+    """
+
+    # handles top level metric filter
+    _convert_dct_with_filter(v10_metric_dict)
+
+    type_params = v10_metric_dict.get("type_params")
+    if type_params is not None:
+        _convert_dct_with_filter(type_params.get("measure"))
+        _convert_dct_with_filter(type_params.get("numerator"))
+        _convert_dct_with_filter(type_params.get("denominator"))
+
+        # handles metric.type_params.input_measures[x].filter
+        input_measures = type_params.get("input_measures")
+        if input_measures is not None:
+            for input_measure in input_measures:
+                _convert_dct_with_filter(input_measure)
+
+        # handles metric.type_params.metrics[x].filter
+        metrics = type_params.get("metrics")
+        if metrics is not None:
+            for metric in metrics:
+                _convert_dct_with_filter(metric)
+
+
+def upgrade_v10_metric_filters(manifest: dict):
+    """Handles metric filters changes from v10 to v11."""
+
+    metrics = manifest.get("metrics", {})
+    for metric in metrics.values():
+        _convert_metric(metric)
+
+    disabled_nodes = manifest.get("disabled", {})
+    for unique_id, nodes in disabled_nodes.items():
+        if unique_id.split(".")[0] == "metric":
+            for node in nodes:
+                _convert_metric(node)
+
+
 def upgrade_manifest_json(manifest: dict, manifest_schema_version: int) -> dict:
     # this should remain 9 while the check in `upgrade_schema_version` may change
     if manifest_schema_version <= 9:
         drop_v9_and_prior_metrics(manifest=manifest)
+    elif manifest_schema_version == 10:
+        upgrade_v10_metric_filters(manifest=manifest)
 
     for node_content in manifest.get("nodes", {}).values():
         upgrade_node_content(node_content)
@@ -104,4 +166,6 @@ def upgrade_manifest_json(manifest: dict, manifest_schema_version: int) -> dict:
         doc_content["resource_type"] = "doc"
     if "semantic_models" not in manifest:
         manifest["semantic_models"] = {}
+    if "saved_queries" not in manifest:
+        manifest["saved_queries"] = {}
     return manifest

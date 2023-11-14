@@ -19,6 +19,7 @@ import dbt.helper_types  # noqa:F401
 from dbt.exceptions import CompilationError, ParsingError, DbtInternalError
 
 from dbt.dataclass_schema import dbtClassMixin, StrEnum, ExtensibleDbtClassMixin, ValidationError
+from dbt_semantic_interfaces.type_enums.export_destination_type import ExportDestinationType
 
 from dataclasses import dataclass, field
 from datetime import timedelta
@@ -582,14 +583,16 @@ class MetricTime(dbtClassMixin, Mergeable):
 @dataclass
 class UnparsedMetricInputMeasure(dbtClassMixin):
     name: str
-    filter: Optional[str] = None
+    filter: Optional[Union[str, List[str]]] = None
     alias: Optional[str] = None
+    join_to_timespine: bool = False
+    fill_nulls_with: Optional[int] = None
 
 
 @dataclass
 class UnparsedMetricInput(dbtClassMixin):
     name: str
-    filter: Optional[str] = None
+    filter: Optional[Union[str, List[str]]] = None
     alias: Optional[str] = None
     offset_window: Optional[str] = None
     offset_to_grain: Optional[str] = None  # str is really a TimeGranularity Enum
@@ -613,7 +616,7 @@ class UnparsedMetric(dbtClassMixin):
     type: str
     type_params: UnparsedMetricTypeParams
     description: str = ""
-    filter: Optional[str] = None
+    filter: Optional[Union[str, List[str]]] = None
     # metadata: Optional[Unparsedetadata] = None # TODO
     meta: Dict[str, Any] = field(default_factory=dict)
     tags: List[str] = field(default_factory=list)
@@ -663,6 +666,7 @@ class UnparsedEntity(dbtClassMixin):
     name: str
     type: str  # EntityType enum
     description: Optional[str] = None
+    label: Optional[str] = None
     role: Optional[str] = None
     expr: Optional[str] = None
 
@@ -679,6 +683,7 @@ class UnparsedMeasure(dbtClassMixin):
     name: str
     agg: str  # actually an enum
     description: Optional[str] = None
+    label: Optional[str] = None
     expr: Optional[Union[str, bool, int]] = None
     agg_params: Optional[MeasureAggregationParameters] = None
     non_additive_dimension: Optional[UnparsedNonAdditiveDimension] = None
@@ -697,6 +702,7 @@ class UnparsedDimension(dbtClassMixin):
     name: str
     type: str  # actually an enum
     description: Optional[str] = None
+    label: Optional[str] = None
     is_partition: bool = False
     type_params: Optional[UnparsedDimensionTypeParams] = None
     expr: Optional[str] = None
@@ -708,11 +714,46 @@ class UnparsedSemanticModel(dbtClassMixin):
     model: str  # looks like "ref(...)"
     config: Dict[str, Any] = field(default_factory=dict)
     description: Optional[str] = None
+    label: Optional[str] = None
     defaults: Optional[Defaults] = None
     entities: List[UnparsedEntity] = field(default_factory=list)
     measures: List[UnparsedMeasure] = field(default_factory=list)
     dimensions: List[UnparsedDimension] = field(default_factory=list)
     primary_entity: Optional[str] = None
+
+
+@dataclass
+class UnparsedQueryParams(dbtClassMixin):
+    metrics: List[str] = field(default_factory=list)
+    group_by: List[str] = field(default_factory=list)
+    where: Optional[Union[str, List[str]]] = None
+
+
+@dataclass
+class UnparsedExportConfig(dbtClassMixin):
+    """Nested configuration attributes for exports."""
+
+    export_as: ExportDestinationType
+    schema: Optional[str] = None
+    alias: Optional[str] = None
+
+
+@dataclass
+class UnparsedExport(dbtClassMixin):
+    """Configuration for writing query results to a table."""
+
+    name: str
+    config: UnparsedExportConfig
+
+
+@dataclass
+class UnparsedSavedQuery(dbtClassMixin):
+    name: str
+    query_params: UnparsedQueryParams
+    description: Optional[str] = None
+    label: Optional[str] = None
+    exports: List[UnparsedExport] = field(default_factory=list)
+    config: Dict[str, Any] = field(default_factory=dict)
 
 
 def normalize_date(d: Optional[datetime.date]) -> Optional[datetime.datetime]:

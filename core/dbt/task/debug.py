@@ -6,6 +6,7 @@ import sys
 
 from collections import namedtuple
 from enum import Flag
+from pathlib import Path
 from typing import Optional, Dict, Any, List, Tuple
 
 from dbt.events.functions import fire_event
@@ -86,7 +87,7 @@ class DebugTask(BaseTask):
             if args.project_dir:
                 self.project_dir = args.project_dir
             else:
-                self.project_dir = os.getcwd()
+                self.project_dir = Path.cwd()
         self.project_path = os.path.join(self.project_dir, "dbt_project.yml")
         self.cli_vars: Dict[str, Any] = args.vars
 
@@ -340,7 +341,7 @@ class DebugTask(BaseTask):
 
         try:
             self.project = Project.from_project_root(
-                self.project_dir,
+                str(self.project_dir),
                 renderer,
                 verify_version=self.args.VERSION_CHECK,
             )

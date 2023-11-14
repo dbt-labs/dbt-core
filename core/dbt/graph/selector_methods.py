@@ -18,6 +18,8 @@ from dbt.contracts.graph.nodes import (
     ResultNode,
     ManifestNode,
     ModelNode,
+    SavedQuery,
+    SemanticModel,
 )
 from dbt.contracts.graph.unparsed import UnparsedVersion
 from dbt.contracts.state import PreviousState
@@ -53,6 +55,8 @@ class MethodName(StrEnum):
     SourceStatus = "source_status"
     Wildcard = "wildcard"
     Version = "version"
+    SemanticModel = "semantic_model"
+    SavedQuery = "saved_query"
 
 
 def is_selected_node(fqn: List[str], node_selector: str, is_versioned: bool) -> bool:
@@ -144,6 +148,26 @@ class SelectorMethod(metaclass=abc.ABCMeta):
                 continue
             yield unique_id, metric
 
+    def semantic_model_nodes(
+        self, included_nodes: Set[UniqueId]
+    ) -> Iterator[Tuple[UniqueId, SemanticModel]]:
+
+        for key, semantic_model in self.manifest.semantic_models.items():
+            unique_id = UniqueId(key)
+            if unique_id not in included_nodes:
+                continue
+            yield unique_id, semantic_model
+
+    def saved_query_nodes(
+        self, included_nodes: Set[UniqueId]
+    ) -> Iterator[Tuple[UniqueId, SavedQuery]]:
+
+        for key, saved_query in self.manifest.saved_queries.items():
+            unique_id = UniqueId(key)
+            if unique_id not in included_nodes:
+                continue
+            yield unique_id, saved_query
+
     def all_nodes(
         self, included_nodes: Set[UniqueId]
     ) -> Iterator[Tuple[UniqueId, SelectorTarget]]:
@@ -152,6 +176,7 @@ class SelectorMethod(metaclass=abc.ABCMeta):
             self.source_nodes(included_nodes),
             self.exposure_nodes(included_nodes),
             self.metric_nodes(included_nodes),
+            self.semantic_model_nodes(included_nodes),
         )
 
     def configurable_nodes(
@@ -167,6 +192,8 @@ class SelectorMethod(metaclass=abc.ABCMeta):
             self.parsed_nodes(included_nodes),
             self.exposure_nodes(included_nodes),
             self.metric_nodes(included_nodes),
+            self.semantic_model_nodes(included_nodes),
+            self.saved_query_nodes(included_nodes),
         )
 
     def groupable_nodes(
@@ -210,8 +237,8 @@ class QualifiedNameSelectorMethod(SelectorMethod):
 
         :param str selector: The selector or node name
         """
-        parsed_nodes = list(self.parsed_nodes(included_nodes))
-        for node, real_node in parsed_nodes:
+        non_source_nodes = list(self.non_source_nodes(included_nodes))
+        for node, real_node in non_source_nodes:
             if self.node_is_match(selector, real_node.fqn, real_node.is_versioned):
                 yield node
 
@@ -220,7 +247,9 @@ class TagSelectorMethod(SelectorMethod):
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
         """yields nodes from included that have the specified tag"""
         for node, real_node in self.all_nodes(included_nodes):
-            if any(fnmatch(tag, selector) for tag in real_node.tags):
+            if hasattr(real_node, "tags") and any(
+                fnmatch(tag, selector) for tag in real_node.tags
+            ):
                 yield node
 
 
@@ -314,6 +343,56 @@ class MetricSelectorMethod(SelectorMethod):
             raise DbtRuntimeError(msg)
 
         for node, real_node in self.metric_nodes(included_nodes):
+            if not fnmatch(real_node.package_name, target_package):
+                continue
+            if not fnmatch(real_node.name, target_name):
+                continue
+
+            yield node
+
+
+class SemanticModelSelectorMethod(SelectorMethod):
+    def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
+        parts = selector.split(".")
+        target_package = SELECTOR_GLOB
+        if len(parts) == 1:
+            target_name = parts[0]
+        elif len(parts) == 2:
+            target_package, target_name = parts
+        else:
+            msg = (
+                'Invalid semantic model selector value "{}". Semantic models must be of '
+                "the form ${{semantic_model_name}} or "
+                "${{semantic_model_package.semantic_model_name}}"
+            ).format(selector)
+            raise DbtRuntimeError(msg)
+
+        for node, real_node in self.semantic_model_nodes(included_nodes):
+            if not fnmatch(real_node.package_name, target_package):
+                continue
+            if not fnmatch(real_node.name, target_name):
+                continue
+
+            yield node
+
+
+class SavedQuerySelectorMethod(SelectorMethod):
+    def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
+        parts = selector.split(".")
+        target_package = SELECTOR_GLOB
+        if len(parts) == 1:
+            target_name = parts[0]
+        elif len(parts) == 2:
+            target_package, target_name = parts
+        else:
+            msg = (
+                'Invalid saved query selector value "{}". Saved queries must be of '
+                "the form ${{saved_query_name}} or "
+                "${{saved_query_package.saved_query_name}}"
+            ).format(selector)
+            raise DbtRuntimeError(msg)
+
+        for node, real_node in self.saved_query_nodes(included_nodes):
             if not fnmatch(real_node.package_name, target_package):
                 continue
             if not fnmatch(real_node.name, target_name):
@@ -431,7 +510,7 @@ class ResourceTypeSelectorMethod(SelectorMethod):
             resource_type = NodeType(selector)
         except ValueError as exc:
             raise DbtRuntimeError(f'Invalid resource_type selector "{selector}"') from exc
-        for node, real_node in self.parsed_nodes(included_nodes):
+        for node, real_node in self.all_nodes(included_nodes):
             if real_node.resource_type == resource_type:
                 yield node
 
@@ -539,7 +618,7 @@ class StateSelectorMethod(SelectorMethod):
     def check_modified_content(
         self, old: Optional[SelectorTarget], new: SelectorTarget, adapter_type: str
     ) -> bool:
-        if isinstance(new, (SourceDefinition, Exposure, Metric)):
+        if isinstance(new, (SourceDefinition, Exposure, Metric, SemanticModel)):
             # these all overwrite `same_contents`
             different_contents = not new.same_contents(old)  # type: ignore
         else:
@@ -761,13 +840,15 @@ class MethodManager:
         MethodName.Result: ResultSelectorMethod,
         MethodName.SourceStatus: SourceStatusSelectorMethod,
         MethodName.Version: VersionSelectorMethod,
+        MethodName.SemanticModel: SemanticModelSelectorMethod,
+        MethodName.SavedQuery: SavedQuerySelectorMethod,
     }
 
     def __init__(
         self,
         manifest: Manifest,
         previous_state: Optional[PreviousState],
-    ):
+    ) -> None:
         self.manifest = manifest
         self.previous_state = previous_state
 

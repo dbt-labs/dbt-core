@@ -1,6 +1,6 @@
 from collections.abc import Hashable
 from dataclasses import dataclass, field
-from typing import Optional, TypeVar, Any, Type, Dict, Iterator, Tuple, Set, List
+from typing import Optional, TypeVar, Any, Type, Dict, Iterator, Tuple, Set, Union, FrozenSet
 
 from dbt.contracts.graph.nodes import SourceDefinition, ManifestNode, ResultNode, ParsedNode
 from dbt.contracts.relation import (
@@ -23,6 +23,7 @@ import dbt.exceptions
 
 
 Self = TypeVar("Self", bound="BaseRelation")
+SerializableIterable = Union[Tuple, FrozenSet]
 
 
 @dataclass(frozen=True, eq=False, repr=False)
@@ -35,10 +36,18 @@ class BaseRelation(FakeAPIObject, Hashable):
     include_policy: Policy = field(default_factory=lambda: Policy())
     quote_policy: Policy = field(default_factory=lambda: Policy())
     dbt_created: bool = False
+
     # register relation types that can be renamed for the purpose of replacing relations using stages and backups
-    renameable_relations: List[str] = field(
-        default_factory=lambda: [RelationType.Table, RelationType.View]
-    )
+    # adding a relation type here also requires defining the associated rename macro
+    # e.g. adding RelationType.View in dbt-postgres requires that you define:
+    # include/postgres/macros/relations/view/rename.sql::postgres__get_rename_view_sql()
+    renameable_relations: SerializableIterable = ()
+
+    # register relation types that are atomically replaceable, e.g. they have "create or replace" syntax
+    # adding a relation type here also requires defining the associated replace macro
+    # e.g. adding RelationType.View in dbt-postgres requires that you define:
+    # include/postgres/macros/relations/view/replace.sql::postgres__get_replace_view_sql()
+    replaceable_relations: SerializableIterable = ()
 
     def _is_exactish_match(self, field: ComponentName, value: str) -> bool:
         if self.dbt_created and self.quote_policy.get_part(field) is False:
@@ -290,8 +299,12 @@ class BaseRelation(FakeAPIObject, Hashable):
         return cls.from_dict(kwargs)
 
     @property
-    def can_be_renamed(self):
+    def can_be_renamed(self) -> bool:
         return self.type in self.renameable_relations
+
+    @property
+    def can_be_replaced(self) -> bool:
+        return self.type in self.replaceable_relations
 
     def __repr__(self) -> str:
         return "<{} {}>".format(self.__class__.__name__, self.render())
@@ -446,11 +459,11 @@ class SchemaSearchMap(Dict[InformationSchema, Set[Optional[str]]]):
         self[key].add(schema)
 
     def search(self) -> Iterator[Tuple[InformationSchema, Optional[str]]]:
-        for information_schema_name, schemas in self.items():
+        for information_schema, schemas in self.items():
             for schema in schemas:
-                yield information_schema_name, schema
+                yield information_schema, schema
 
-    def flatten(self, allow_multiple_databases: bool = False):
+    def flatten(self, allow_multiple_databases: bool = False) -> "SchemaSearchMap":
         new = self.__class__()
 
         # make sure we don't have multiple databases if allow_multiple_databases is set to False

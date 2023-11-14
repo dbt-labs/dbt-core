@@ -34,15 +34,21 @@ class SchemaYamlRenderer(BaseRenderer):
         Return True if it's tests or description - those aren't rendered now
         because they're rendered later in parse_generic_tests or process_docs.
         """
+        # top level descriptions and tests
         if len(keypath) >= 1 and keypath[0] in ("tests", "description"):
             return True
 
+        # columns descriptions and tests
         if len(keypath) == 2 and keypath[1] in ("tests", "description"):
+            return True
+
+        # versions
+        if len(keypath) == 5 and keypath[4] == "description":
             return True
 
         if (
             len(keypath) >= 3
-            and keypath[0] == "columns"
+            and keypath[0] in ("columns", "dimensions", "measures", "entities")
             and keypath[2] in ("tests", "description")
         ):
             return True
@@ -69,6 +75,11 @@ class SchemaYamlRenderer(BaseRenderer):
         elif self.key == "metrics":
             # This ensures all key paths that end in 'filter' for a metric are skipped
             if keypath[-1] == "filter":
+                return False
+            elif self._is_norender_key(keypath[0:]):
+                return False
+        elif self.key == "saved_queries":
+            if keypath[0] == "query_params" and len(keypath) > 1 and keypath[1] == "where":
                 return False
             elif self._is_norender_key(keypath[0:]):
                 return False

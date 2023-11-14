@@ -1,7 +1,17 @@
+from argparse import Namespace
 import pytest
 from unittest import mock
 
-from dbt.tests.util import run_dbt, get_manifest, write_file, rm_file, run_dbt_and_capture
+import dbt.flags as flags
+from dbt.tests.util import (
+    run_dbt,
+    get_manifest,
+    write_file,
+    rm_file,
+    run_dbt_and_capture,
+    rename_dir,
+)
+from tests.functional.utils import up_one
 from dbt.tests.fixtures.project import write_project_files
 from tests.functional.partial_parsing.fixtures import (
     model_one_sql,
@@ -54,22 +64,15 @@ from tests.functional.partial_parsing.fixtures import (
     gsm_override_sql,
     gsm_override2_sql,
     orders_sql,
-    orders_downstream_sql,
     snapshot_sql,
     snapshot2_sql,
     generic_schema_yml,
     generic_test_sql,
     generic_test_schema_yml,
     generic_test_edited_sql,
-    groups_schema_yml_one_group,
-    groups_schema_yml_two_groups,
-    groups_schema_yml_two_groups_edited,
-    groups_schema_yml_one_group_model_in_group2,
-    groups_schema_yml_two_groups_private_orders_valid_access,
-    groups_schema_yml_two_groups_private_orders_invalid_access,
 )
 
-from dbt.exceptions import CompilationError, ParsingError
+from dbt.exceptions import CompilationError
 from dbt.contracts.files import ParseFileType
 from dbt.contracts.results import TestStatus
 from dbt.plugins.manifest import PluginNodes, ModelNodeArgs
@@ -653,93 +656,6 @@ class TestTests:
         assert expected_nodes == list(manifest.nodes.keys())
 
 
-class TestGroups:
-    @pytest.fixture(scope="class")
-    def models(self):
-        return {
-            "orders.sql": orders_sql,
-            "orders_downstream.sql": orders_downstream_sql,
-            "schema.yml": groups_schema_yml_one_group,
-        }
-
-    def test_pp_groups(self, project):
-
-        # initial run
-        results = run_dbt()
-        assert len(results) == 2
-        manifest = get_manifest(project.project_root)
-        expected_nodes = ["model.test.orders", "model.test.orders_downstream"]
-        expected_groups = ["group.test.test_group"]
-        assert expected_nodes == sorted(list(manifest.nodes.keys()))
-        assert expected_groups == sorted(list(manifest.groups.keys()))
-
-        # add group to schema
-        write_file(groups_schema_yml_two_groups, project.project_root, "models", "schema.yml")
-        results = run_dbt(["--partial-parse", "run"])
-        assert len(results) == 2
-        manifest = get_manifest(project.project_root)
-        expected_nodes = ["model.test.orders", "model.test.orders_downstream"]
-        expected_groups = ["group.test.test_group", "group.test.test_group2"]
-        assert expected_nodes == sorted(list(manifest.nodes.keys()))
-        assert expected_groups == sorted(list(manifest.groups.keys()))
-
-        # edit group in schema
-        write_file(
-            groups_schema_yml_two_groups_edited, project.project_root, "models", "schema.yml"
-        )
-        results = run_dbt(["--partial-parse", "run"])
-        assert len(results) == 2
-        manifest = get_manifest(project.project_root)
-        expected_nodes = ["model.test.orders", "model.test.orders_downstream"]
-        expected_groups = ["group.test.test_group", "group.test.test_group2_edited"]
-        assert expected_nodes == sorted(list(manifest.nodes.keys()))
-        assert expected_groups == sorted(list(manifest.groups.keys()))
-
-        # delete group in schema
-        write_file(groups_schema_yml_one_group, project.project_root, "models", "schema.yml")
-        results = run_dbt(["--partial-parse", "run"])
-        assert len(results) == 2
-        manifest = get_manifest(project.project_root)
-        expected_nodes = ["model.test.orders", "model.test.orders_downstream"]
-        expected_groups = ["group.test.test_group"]
-        assert expected_nodes == sorted(list(manifest.nodes.keys()))
-        assert expected_groups == sorted(list(manifest.groups.keys()))
-
-        # add back second group
-        write_file(groups_schema_yml_two_groups, project.project_root, "models", "schema.yml")
-        results = run_dbt(["--partial-parse", "run"])
-        assert len(results) == 2
-
-        # remove second group with model still configured to second group
-        write_file(
-            groups_schema_yml_one_group_model_in_group2,
-            project.project_root,
-            "models",
-            "schema.yml",
-        )
-        with pytest.raises(ParsingError):
-            results = run_dbt(["--partial-parse", "run"])
-
-        # add back second group, make orders private with valid ref
-        write_file(
-            groups_schema_yml_two_groups_private_orders_valid_access,
-            project.project_root,
-            "models",
-            "schema.yml",
-        )
-        results = run_dbt(["--partial-parse", "run"])
-        assert len(results) == 2
-
-        write_file(
-            groups_schema_yml_two_groups_private_orders_invalid_access,
-            project.project_root,
-            "models",
-            "schema.yml",
-        )
-        with pytest.raises(ParsingError):
-            results = run_dbt(["--partial-parse", "run"])
-
-
 class TestExternalModels:
     @pytest.fixture(scope="class")
     def external_model_node(self):
@@ -846,3 +762,65 @@ class TestExternalModels:
         run_dbt(["--partial-parse", "parse"])
         assert len(manifest.nodes) == 6
         assert len(manifest.external_node_unique_ids) == 4
+
+
+class TestPortablePartialParsing:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "model_one.sql": model_one_sql,
+        }
+
+    @pytest.fixture(scope="class")
+    def packages(self):
+        return {"packages": [{"local": "local_dependency"}]}
+
+    @pytest.fixture(scope="class")
+    def local_dependency_files(self):
+        return {
+            "dbt_project.yml": local_dependency__dbt_project_yml,
+            "models": {
+                "schema.yml": local_dependency__models__schema_yml,
+                "model_to_import.sql": local_dependency__models__model_to_import_sql,
+            },
+            "macros": {"dep_macro.sql": local_dependency__macros__dep_macro_sql},
+            "seeds": {"seed.csv": local_dependency__seeds__seed_csv},
+        }
+
+    def rename_project_root(self, project, new_project_root):
+        with up_one(new_project_root):
+            rename_dir(project.project_root, new_project_root)
+            project.project_root = new_project_root
+            # flags.project_dir is set during the project test fixture, and is persisted across run_dbt calls,
+            # so it needs to be reset between invocations
+            flags.set_from_args(Namespace(PROJECT_DIR=new_project_root), None)
+
+    @pytest.fixture(scope="class", autouse=True)
+    def initial_run_and_rename_project_dir(self, project, local_dependency_files):
+        initial_project_root = project.project_root
+        renamed_project_root = os.path.join(project.project_root.dirname, "renamed_project_dir")
+
+        write_project_files(project.project_root, "local_dependency", local_dependency_files)
+
+        # initial run
+        run_dbt(["deps"])
+        assert len(run_dbt(["seed"])) == 1
+        assert len(run_dbt(["run"])) == 2
+
+        self.rename_project_root(project, renamed_project_root)
+        yield
+        self.rename_project_root(project, initial_project_root)
+
+    def test_pp_renamed_project_dir_unchanged_project_contents(self, project):
+        # partial parse same project in new absolute dir location, using partial_parse.msgpack created in previous dir
+        run_dbt(["deps"])
+        assert len(run_dbt(["--partial-parse", "seed"])) == 1
+        assert len(run_dbt(["--partial-parse", "run"])) == 2
+
+    def test_pp_renamed_project_dir_changed_project_contents(self, project):
+        write_file(model_two_sql, project.project_root, "models", "model_two.sql")
+
+        # partial parse changed project in new absolute dir location, using partial_parse.msgpack created in previous dir
+        run_dbt(["deps"])
+        len(run_dbt(["--partial-parse", "seed"])) == 1
+        len(run_dbt(["--partial-parse", "run"])) == 3

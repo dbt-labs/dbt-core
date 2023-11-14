@@ -44,7 +44,7 @@ class NodeSelector(MethodManager):
         manifest: Manifest,
         previous_state: Optional[PreviousState] = None,
         include_empty_nodes: bool = False,
-    ):
+    ) -> None:
         super().__init__(manifest, previous_state)
         self.full_graph = graph
         self.include_empty_nodes = include_empty_nodes
@@ -171,6 +171,9 @@ class NodeSelector(MethodManager):
         elif unique_id in self.manifest.semantic_models:
             semantic_model = self.manifest.semantic_models[unique_id]
             return semantic_model.config.enabled
+        elif unique_id in self.manifest.saved_queries:
+            saved_query = self.manifest.saved_queries[unique_id]
+            return saved_query.config.enabled
         node = self.manifest.nodes[unique_id]
 
         if self.include_empty_nodes:
@@ -196,6 +199,8 @@ class NodeSelector(MethodManager):
             node = self.manifest.metrics[unique_id]
         elif unique_id in self.manifest.semantic_models:
             node = self.manifest.semantic_models[unique_id]
+        elif unique_id in self.manifest.saved_queries:
+            node = self.manifest.saved_queries[unique_id]
         else:
             raise DbtInternalError(f"Node {unique_id} not found in the manifest!")
         return self.node_is_match(node)
@@ -325,7 +330,7 @@ class ResourceTypeSelector(NodeSelector):
         previous_state: Optional[PreviousState],
         resource_types: List[NodeType],
         include_empty_nodes: bool = False,
-    ):
+    ) -> None:
         super().__init__(
             graph=graph,
             manifest=manifest,

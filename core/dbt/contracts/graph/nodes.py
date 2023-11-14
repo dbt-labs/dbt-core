@@ -12,6 +12,7 @@ from dbt.dataclass_schema import dbtClassMixin, ExtensibleDbtClassMixin
 
 from dbt.clients.system import write_file
 from dbt.contracts.files import FileHash
+from dbt.contracts.graph.saved_queries import Export, QueryParams
 from dbt.contracts.graph.semantic_models import (
     Defaults,
     Dimension,
@@ -36,6 +37,7 @@ from dbt.contracts.graph.unparsed import (
     UnparsedColumn,
 )
 from dbt.contracts.graph.node_args import ModelNodeArgs
+from dbt.contracts.graph.semantic_layer_common import WhereFilterIntersection
 from dbt.contracts.util import Replaceable, AdditionalPropertiesMixin
 from dbt.events.functions import warn_or_error
 from dbt.exceptions import ParsingError, ContractBreakingChangeError
@@ -49,7 +51,6 @@ from dbt.events.types import (
 from dbt.events.contextvars import set_log_contextvars
 from dbt.flags import get_flags
 from dbt.node_types import ModelLanguage, NodeType, AccessType
-from dbt_semantic_interfaces.call_parameter_sets import FilterCallParameterSets
 from dbt_semantic_interfaces.references import (
     EntityReference,
     MeasureReference,
@@ -59,10 +60,10 @@ from dbt_semantic_interfaces.references import (
 )
 from dbt_semantic_interfaces.references import MetricReference as DSIMetricReference
 from dbt_semantic_interfaces.type_enums import MetricType, TimeGranularity
-from dbt_semantic_interfaces.parsing.where_filter_parser import WhereFilterParser
 
 from .model_config import (
     NodeConfig,
+    ModelConfig,
     SeedConfig,
     TestConfig,
     SourceConfig,
@@ -71,6 +72,7 @@ from .model_config import (
     EmptySnapshotConfig,
     SnapshotConfig,
     SemanticModelConfig,
+    SavedQueryConfig,
 )
 
 
@@ -231,6 +233,7 @@ class ColumnInfo(AdditionalPropertiesMixin, ExtensibleDbtClassMixin, Replaceable
 @dataclass
 class Contract(dbtClassMixin, Replaceable):
     enforced: bool = False
+    alias_types: bool = True
     checksum: Optional[str] = None
 
 
@@ -569,6 +572,7 @@ class HookNode(CompiledNode):
 class ModelNode(CompiledNode):
     resource_type: Literal[NodeType.Model]
     access: AccessType = AccessType.Protected
+    config: ModelConfig = field(default_factory=ModelConfig)
     constraints: List[ModelLevelConstraint] = field(default_factory=list)
     version: Optional[NodeVersion] = None
     latest_version: Optional[NodeVersion] = None
@@ -605,7 +609,7 @@ class ModelNode(CompiledNode):
             path="",
             unrendered_config=unrendered_config,
             depends_on=DependsOn(nodes=args.depends_on_nodes),
-            config=NodeConfig(enabled=args.enabled),
+            config=ModelConfig(enabled=args.enabled),
         )
 
     @property
@@ -1299,8 +1303,8 @@ class SourceDefinition(NodeInfoMixin, ParsedSourceMandatory):
         return []
 
     @property
-    def has_freshness(self):
-        return bool(self.freshness) and self.loaded_at_field is not None
+    def has_freshness(self) -> bool:
+        return bool(self.freshness)
 
     @property
     def search_name(self):
@@ -1396,19 +1400,12 @@ class Exposure(GraphNode):
 
 
 @dataclass
-class WhereFilter(dbtClassMixin):
-    where_sql_template: str
-
-    @property
-    def call_parameter_sets(self) -> FilterCallParameterSets:
-        return WhereFilterParser.parse_call_parameter_sets(self.where_sql_template)
-
-
-@dataclass
 class MetricInputMeasure(dbtClassMixin):
     name: str
-    filter: Optional[WhereFilter] = None
+    filter: Optional[WhereFilterIntersection] = None
     alias: Optional[str] = None
+    join_to_timespine: bool = False
+    fill_nulls_with: Optional[int] = None
 
     def measure_reference(self) -> MeasureReference:
         return MeasureReference(element_name=self.name)
@@ -1426,7 +1423,7 @@ class MetricTimeWindow(dbtClassMixin):
 @dataclass
 class MetricInput(dbtClassMixin):
     name: str
-    filter: Optional[WhereFilter] = None
+    filter: Optional[WhereFilterIntersection] = None
     alias: Optional[str] = None
     offset_window: Optional[MetricTimeWindow] = None
     offset_to_grain: Optional[TimeGranularity] = None
@@ -1463,7 +1460,7 @@ class Metric(GraphNode):
     label: str
     type: MetricType
     type_params: MetricTypeParams
-    filter: Optional[WhereFilter] = None
+    filter: Optional[WhereFilterIntersection] = None
     metadata: Optional[SourceFileMetadata] = None
     resource_type: Literal[NodeType.Metric]
     meta: Dict[str, Any] = field(default_factory=dict)
@@ -1569,6 +1566,7 @@ class SemanticModel(GraphNode):
     model: str
     node_relation: Optional[NodeRelation]
     description: Optional[str] = None
+    label: Optional[str] = None
     defaults: Optional[Defaults] = None
     entities: Sequence[Entity] = field(default_factory=list)
     measures: Sequence[Measure] = field(default_factory=list)
@@ -1671,6 +1669,137 @@ class SemanticModel(GraphNode):
             else None
         )
 
+    def same_model(self, old: "SemanticModel") -> bool:
+        return self.model == old.same_model
+
+    def same_node_relation(self, old: "SemanticModel") -> bool:
+        return self.node_relation == old.node_relation
+
+    def same_description(self, old: "SemanticModel") -> bool:
+        return self.description == old.description
+
+    def same_defaults(self, old: "SemanticModel") -> bool:
+        return self.defaults == old.defaults
+
+    def same_entities(self, old: "SemanticModel") -> bool:
+        return self.entities == old.entities
+
+    def same_dimensions(self, old: "SemanticModel") -> bool:
+        return self.dimensions == old.dimensions
+
+    def same_measures(self, old: "SemanticModel") -> bool:
+        return self.measures == old.measures
+
+    def same_config(self, old: "SemanticModel") -> bool:
+        return self.config == old.config
+
+    def same_primary_entity(self, old: "SemanticModel") -> bool:
+        return self.primary_entity == old.primary_entity
+
+    def same_group(self, old: "SemanticModel") -> bool:
+        return self.group == old.group
+
+    def same_contents(self, old: Optional["SemanticModel"]) -> bool:
+        # existing when it didn't before is a change!
+        # metadata/tags changes are not "changes"
+        if old is None:
+            return True
+
+        return (
+            self.same_model(old)
+            and self.same_node_relation(old)
+            and self.same_description(old)
+            and self.same_defaults(old)
+            and self.same_entities(old)
+            and self.same_dimensions(old)
+            and self.same_measures(old)
+            and self.same_config(old)
+            and self.same_primary_entity(old)
+            and self.same_group(old)
+            and True
+        )
+
+
+# ====================================
+# SavedQuery and related classes
+# ====================================
+
+
+@dataclass
+class SavedQueryMandatory(GraphNode):
+    query_params: QueryParams
+    exports: List[Export]
+
+
+@dataclass
+class SavedQuery(NodeInfoMixin, SavedQueryMandatory):
+    description: Optional[str] = None
+    label: Optional[str] = None
+    metadata: Optional[SourceFileMetadata] = None
+    config: SavedQueryConfig = field(default_factory=SavedQueryConfig)
+    unrendered_config: Dict[str, Any] = field(default_factory=dict)
+    group: Optional[str] = None
+    depends_on: DependsOn = field(default_factory=DependsOn)
+    created_at: float = field(default_factory=lambda: time.time())
+    refs: List[RefArgs] = field(default_factory=list)
+
+    @property
+    def metrics(self) -> List[str]:
+        return self.query_params.metrics
+
+    @property
+    def depends_on_nodes(self):
+        return self.depends_on.nodes
+
+    def same_metrics(self, old: "SavedQuery") -> bool:
+        return self.query_params.metrics == old.query_params.metrics
+
+    def same_group_by(self, old: "SavedQuery") -> bool:
+        return self.query_params.group_by == old.query_params.group_by
+
+    def same_description(self, old: "SavedQuery") -> bool:
+        return self.description == old.description
+
+    def same_where(self, old: "SavedQuery") -> bool:
+        return self.query_params.where == old.query_params.where
+
+    def same_label(self, old: "SavedQuery") -> bool:
+        return self.label == old.label
+
+    def same_config(self, old: "SavedQuery") -> bool:
+        return self.config == old.config
+
+    def same_group(self, old: "SavedQuery") -> bool:
+        return self.group == old.group
+
+    def same_exports(self, old: "SavedQuery") -> bool:
+        if len(self.exports) != len(old.exports):
+            return False
+
+        # exports should be in the same order, so we zip them for easy iteration
+        for (old_export, new_export) in zip(old.exports, self.exports):
+            if not new_export.same_contents(old_export):
+                return False
+
+        return True
+
+    def same_contents(self, old: Optional["SavedQuery"]) -> bool:
+        # existing when it didn't before is a change!
+        # metadata/tags changes are not "changes"
+        if old is None:
+            return True
+
+        return (
+            self.same_metrics(old)
+            and self.same_group_by(old)
+            and self.same_description(old)
+            and self.same_where(old)
+            and self.same_label(old)
+            and self.same_config(old)
+            and self.same_group(old)
+            and True
+        )
+
 
 # ====================================
 # Patches
@@ -1738,6 +1867,7 @@ GraphMemberNode = Union[
     ResultNode,
     Exposure,
     Metric,
+    SavedQuery,
     SemanticModel,
 ]
 

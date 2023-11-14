@@ -1,9 +1,13 @@
 import pickle
 import pytest
 
+from hypothesis import given
+from hypothesis.strategies import builds, lists
+
 from dbt.node_types import NodeType, AccessType
 from dbt.contracts.files import FileHash
 from dbt.contracts.graph.model_config import (
+    ModelConfig,
     NodeConfig,
     SeedConfig,
     TestConfig,
@@ -33,7 +37,10 @@ from dbt.contracts.graph.nodes import (
     HookNode,
     Owner,
     TestMetadata,
+    SemanticModel,
+    RefArgs,
 )
+from dbt.contracts.graph.semantic_models import Dimension, Entity, Measure
 from dbt.contracts.graph.unparsed import (
     ExposureType,
     FreshnessThreshold,
@@ -62,7 +69,7 @@ flags.set_from_args(Namespace(SEND_ANONYMOUS_USAGE_STATS=False), None)
 
 @pytest.fixture
 def populated_node_config_object():
-    result = NodeConfig(
+    result = ModelConfig(
         column_types={"a": "text"},
         materialized="table",
         post_hook=[Hook(sql='insert into blah(a, b) select "1", 1')],
@@ -89,12 +96,13 @@ def populated_node_config_dict():
         "grants": {},
         "packages": [],
         "docs": {"show": True},
-        "contract": {"enforced": False},
+        "contract": {"enforced": False, "alias_types": True},
+        "access": "protected",
     }
 
 
 def test_config_populated(populated_node_config_object, populated_node_config_dict):
-    assert_symmetric(populated_node_config_object, populated_node_config_dict, NodeConfig)
+    assert_symmetric(populated_node_config_object, populated_node_config_dict, ModelConfig)
     pickle.loads(pickle.dumps(populated_node_config_object))
 
 
@@ -127,14 +135,14 @@ same_node_configs = [
 @pytest.mark.parametrize("func", different_node_configs)
 def test_config_different(unrendered_node_config_dict, func):
     value = func(unrendered_node_config_dict)
-    assert not NodeConfig.same_contents(unrendered_node_config_dict, value)
+    assert not ModelConfig.same_contents(unrendered_node_config_dict, value)
 
 
 @pytest.mark.parametrize("func", same_node_configs)
 def test_config_same(unrendered_node_config_dict, func):
     value = func(unrendered_node_config_dict)
     assert unrendered_node_config_dict != value
-    assert NodeConfig.same_contents(unrendered_node_config_dict, value)
+    assert ModelConfig.same_contents(unrendered_node_config_dict, value)
 
 
 @pytest.fixture
@@ -173,12 +181,13 @@ def base_parsed_model_dict():
             "meta": {},
             "grants": {},
             "docs": {"show": True},
-            "contract": {"enforced": False},
+            "contract": {"enforced": False, "alias_types": True},
             "packages": [],
+            "access": "protected",
         },
         "deferred": False,
         "docs": {"show": True},
-        "contract": {"enforced": False},
+        "contract": {"enforced": False, "alias_types": True},
         "columns": {},
         "meta": {},
         "checksum": {
@@ -213,7 +222,7 @@ def basic_parsed_model_object():
         schema="test_schema",
         alias="bar",
         tags=[],
-        config=NodeConfig(),
+        config=ModelConfig(),
         meta={},
         checksum=FileHash.from_contents(""),
         created_at=1.0,
@@ -282,11 +291,12 @@ def complex_parsed_model_dict():
             "meta": {},
             "grants": {},
             "docs": {"show": True},
-            "contract": {"enforced": False},
+            "contract": {"enforced": False, "alias_types": True},
             "packages": [],
+            "access": "protected",
         },
         "docs": {"show": True},
-        "contract": {"enforced": False},
+        "contract": {"enforced": False, "alias_types": True},
         "columns": {
             "a": {
                 "name": "a",
@@ -334,7 +344,7 @@ def complex_parsed_model_object():
         alias="bar",
         tags=["tag"],
         meta={},
-        config=NodeConfig(
+        config=ModelConfig(
             column_types={"a": "text"},
             materialized="ephemeral",
             post_hook=[Hook(sql='insert into blah(a, b) select "1", 1')],
@@ -503,7 +513,7 @@ def basic_parsed_seed_dict():
             "meta": {},
             "grants": {},
             "docs": {"show": True},
-            "contract": {"enforced": False},
+            "contract": {"enforced": False, "alias_types": True},
             "packages": [],
         },
         "deferred": False,
@@ -596,7 +606,7 @@ def complex_parsed_seed_dict():
             "meta": {},
             "grants": {},
             "docs": {"show": True},
-            "contract": {"enforced": False},
+            "contract": {"enforced": False, "alias_types": True},
             "packages": [],
         },
         "deferred": False,
@@ -803,11 +813,11 @@ def base_parsed_hook_dict():
             "meta": {},
             "grants": {},
             "docs": {"show": True},
-            "contract": {"enforced": False},
+            "contract": {"enforced": False, "alias_types": True},
             "packages": [],
         },
         "docs": {"show": True},
-        "contract": {"enforced": False},
+        "contract": {"enforced": False, "alias_types": True},
         "columns": {},
         "meta": {},
         "checksum": {
@@ -886,11 +896,11 @@ def complex_parsed_hook_dict():
             "meta": {},
             "grants": {},
             "docs": {"show": True},
-            "contract": {"enforced": False},
+            "contract": {"enforced": False, "alias_types": True},
             "packages": [],
         },
         "docs": {"show": True},
-        "contract": {"enforced": False},
+        "contract": {"enforced": False, "alias_types": True},
         "columns": {
             "a": {
                 "name": "a",
@@ -1043,7 +1053,7 @@ def basic_parsed_schema_test_dict():
             "schema": "dbt_test__audit",
         },
         "docs": {"show": True},
-        "contract": {"enforced": False},
+        "contract": {"enforced": False, "alias_types": True},
         "columns": {},
         "test_metadata": {
             "name": "foo",
@@ -1123,7 +1133,7 @@ def complex_parsed_schema_test_dict():
             "schema": "dbt_test__audit",
         },
         "docs": {"show": False},
-        "contract": {"enforced": False},
+        "contract": {"enforced": False, "alias_types": True},
         "columns": {
             "a": {
                 "name": "a",
@@ -1244,7 +1254,7 @@ def basic_timestamp_snapshot_config_dict():
         "grants": {},
         "packages": [],
         "docs": {"show": True},
-        "contract": {"enforced": False},
+        "contract": {"enforced": False, "alias_types": True},
     }
 
 
@@ -1282,7 +1292,7 @@ def complex_timestamp_snapshot_config_dict():
         "grants": {},
         "packages": [],
         "docs": {"show": True},
-        "contract": {"enforced": False},
+        "contract": {"enforced": False, "alias_types": True},
     }
 
 
@@ -1348,7 +1358,7 @@ def basic_check_snapshot_config_dict():
         "grants": {},
         "packages": [],
         "docs": {"show": True},
-        "contract": {"enforced": False},
+        "contract": {"enforced": False, "alias_types": True},
     }
 
 
@@ -1386,7 +1396,7 @@ def complex_set_snapshot_config_dict():
         "grants": {},
         "packages": [],
         "docs": {"show": True},
-        "contract": {"enforced": False},
+        "contract": {"enforced": False, "alias_types": True},
     }
 
 
@@ -1502,11 +1512,11 @@ def basic_timestamp_snapshot_dict():
             "meta": {},
             "grants": {},
             "docs": {"show": True},
-            "contract": {"enforced": False},
+            "contract": {"enforced": False, "alias_types": True},
             "packages": [],
         },
         "docs": {"show": True},
-        "contract": {"enforced": False},
+        "contract": {"enforced": False, "alias_types": True},
         "columns": {},
         "meta": {},
         "checksum": {
@@ -1650,11 +1660,11 @@ def basic_check_snapshot_dict():
             "meta": {},
             "grants": {},
             "docs": {"show": True},
-            "contract": {"enforced": False},
+            "contract": {"enforced": False, "alias_types": True},
             "packages": [],
         },
         "docs": {"show": True},
-        "contract": {"enforced": False},
+        "contract": {"enforced": False, "alias_types": True},
         "columns": {},
         "meta": {},
         "checksum": {
@@ -2061,14 +2071,6 @@ def test_complex_source_definition(
     pickle.loads(pickle.dumps(node))
 
 
-def test_source_no_loaded_at(complex_parsed_source_definition_object):
-    node = complex_parsed_source_definition_object
-    assert node.has_freshness is True
-    # no loaded_at_field -> does not have freshness
-    node.loaded_at_field = None
-    assert node.has_freshness is False
-
-
 def test_source_no_freshness(complex_parsed_source_definition_object):
     node = complex_parsed_source_definition_object
     assert node.has_freshness is True
@@ -2350,3 +2352,18 @@ def basic_parsed_metric_object():
         meta={},
         tags=[],
     )
+
+
+@given(
+    builds(
+        SemanticModel,
+        depends_on=builds(DependsOn),
+        dimensions=lists(builds(Dimension)),
+        entities=lists(builds(Entity)),
+        measures=lists(builds(Measure)),
+        refs=lists(builds(RefArgs)),
+    )
+)
+def test_semantic_model_symmetry(semantic_model: SemanticModel):
+    assert semantic_model == SemanticModel.from_dict(semantic_model.to_dict())
+    assert semantic_model == pickle.loads(pickle.dumps(semantic_model))

@@ -76,6 +76,7 @@ schema_file_keys = (
     "exposures",
     "metrics",
     "semantic_models",
+    "saved_queries",
 )
 
 
@@ -224,6 +225,12 @@ class SchemaParser(SimpleParser[YamlBlock, ModelNode]):
 
                 semantic_model_parser = SemanticModelParser(self, yaml_block)
                 semantic_model_parser.parse()
+
+            if "saved_queries" in dct:
+                from dbt.parser.schema_yaml_readers import SavedQueryParser
+
+                saved_query_parser = SavedQueryParser(self, yaml_block)
+                saved_query_parser.parse()
 
 
 Parsed = TypeVar("Parsed", UnpatchedSourceDefinition, ParsedNodePatch, ParsedMacroPatch)
@@ -469,6 +476,7 @@ class PatchParser(YamlReader, Generic[NonSourceTarget, Parsed]):
                     self.normalize_docs_attribute(data, path)
                     self.normalize_group_attribute(data, path)
                     self.normalize_contract_attribute(data, path)
+                    self.normalize_access_attribute(data, path)
                 node = self._target_type().from_dict(data)
             except (ValidationError, JSONValidationError) as exc:
                 raise YamlParseDictError(path, self.key, data, exc)
@@ -502,6 +510,9 @@ class PatchParser(YamlReader, Generic[NonSourceTarget, Parsed]):
 
     def normalize_contract_attribute(self, data, path):
         return self.normalize_attribute(data, path, "contract")
+
+    def normalize_access_attribute(self, data, path):
+        return self.normalize_attribute(data, path, "access")
 
     def patch_node_config(self, node, patch):
         # Get the ContextConfig that's used in calculating the config

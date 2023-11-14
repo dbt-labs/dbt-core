@@ -1,6 +1,7 @@
 import os
 import threading
 import time
+from typing import Optional
 
 from .base import BaseRunner
 from .printer import (
@@ -20,12 +21,15 @@ from dbt.events.types import (
     FreshnessCheckComplete,
     LogStartLine,
     LogFreshnessResult,
+    Note,
 )
 from dbt.node_types import NodeType
 
-from dbt.graph import ResourceTypeSelector
+from dbt.adapters.capability import Capability
+from dbt.contracts.connection import AdapterResponse
 from dbt.contracts.graph.nodes import SourceDefinition
-
+from dbt.events.base_types import EventLevel
+from dbt.graph import ResourceTypeSelector
 
 RESULT_FILE_NAME = "sources.json"
 
@@ -95,26 +99,42 @@ class FreshnessRunner(BaseRunner):
         return result
 
     def execute(self, compiled_node, manifest):
-        # we should only be here if we compiled_node.has_freshness, and
-        # therefore loaded_at_field should be a str. If this invariant is
-        # broken, raise!
-        if compiled_node.loaded_at_field is None:
-            raise DbtInternalError(
-                "Got to execute for source freshness of a source that has no loaded_at_field!"
-            )
-
         relation = self.adapter.Relation.create_from_source(compiled_node)
         # given a Source, calculate its freshness.
         with self.adapter.connection_for(compiled_node):
             self.adapter.clear_transaction()
-            adapter_response, freshness = self.adapter.calculate_freshness(
-                relation,
-                compiled_node.loaded_at_field,
-                compiled_node.freshness.filter,
-                manifest=manifest,
-            )
+            adapter_response: Optional[AdapterResponse] = None
+            freshness = None
 
-        status = compiled_node.freshness.status(freshness["age"])
+            if compiled_node.loaded_at_field is not None:
+                adapter_response, freshness = self.adapter.calculate_freshness(
+                    relation,
+                    compiled_node.loaded_at_field,
+                    compiled_node.freshness.filter,
+                    manifest=manifest,
+                )
+
+                status = compiled_node.freshness.status(freshness["age"])
+            elif self.adapter.supports(Capability.TableLastModifiedMetadata):
+                if compiled_node.freshness.filter is not None:
+                    fire_event(
+                        Note(
+                            f"A filter cannot be applied to a metadata freshness check on source '{compiled_node.name}'.",
+                            EventLevel.WARN,
+                        )
+                    )
+
+                adapter_response, freshness = self.adapter.calculate_freshness_from_metadata(
+                    relation,
+                    manifest=manifest,
+                )
+
+                status = compiled_node.freshness.status(freshness["age"])
+            else:
+                status = FreshnessStatus.Warn
+                fire_event(
+                    Note(f"Skipping freshness for source {compiled_node.name}."),
+                )
 
         # adapter_response was not returned in previous versions, so this will be None
         # we cannot call to_dict() on NoneType
