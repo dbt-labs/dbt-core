@@ -102,7 +102,9 @@ def is_selected_node(fqn: List[str], node_selector: str, is_versioned: bool) -> 
     return True
 
 
-SelectorTarget = Union[SourceDefinition, ManifestNode, Exposure, Metric]
+SelectorTarget = Union[
+    SourceDefinition, ManifestNode, Exposure, Metric, SemanticModel, UnitTestDefinition
+]
 
 
 class SelectorMethod(metaclass=abc.ABCMeta):
@@ -639,7 +641,9 @@ class StateSelectorMethod(SelectorMethod):
     def check_modified_content(
         self, old: Optional[SelectorTarget], new: SelectorTarget, adapter_type: str
     ) -> bool:
-        if isinstance(new, (SourceDefinition, Exposure, Metric, SemanticModel)):
+        if isinstance(
+            new, (SourceDefinition, Exposure, Metric, SemanticModel, UnitTestDefinition)
+        ):
             # these all overwrite `same_contents`
             different_contents = not new.same_contents(old)  # type: ignore
         else:
@@ -730,6 +734,10 @@ class StateSelectorMethod(SelectorMethod):
                 previous_node = manifest.exposures[node]
             elif node in manifest.metrics:
                 previous_node = manifest.metrics[node]
+            elif node in manifest.semantic_models:
+                previous_node = manifest.semantic_models[node]
+            elif node in manifest.unit_tests:
+                previous_node = manifest.unit_tests[node]
 
             keyword_args = {}
             if checker.__name__ in [

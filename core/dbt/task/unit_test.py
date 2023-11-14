@@ -4,11 +4,12 @@ from dbt.dataclass_schema import dbtClassMixin
 import daff
 import threading
 import re
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, AbstractSet, List
 
 from .compile import CompileRunner
 from .run import RunTask
 
+from dbt.adapters.factory import get_adapter
 from dbt.clients.agate_helper import list_rows_from_table, json_rows_from_table
 from dbt.contracts.graph.nodes import UnitTestNode
 from dbt.contracts.graph.manifest import Manifest
@@ -245,12 +246,24 @@ class UnitTestTask(RunTask):
         return loader.load()
 
     def reset_job_queue_and_manifest(self):
+        # We want deferral to happen here (earlier than normal) before we turn
+        # the normal manifest into the unit testing manifest
+        adapter = get_adapter(self.config)
+        with adapter.connection_named("master"):
+            self.populate_adapter_cache(adapter)
+            self.defer_to_manifest(adapter, self.job_queue._selected)
+
         # We have the selected models from the "regular" manifest, now we switch
         # to using the unit_test_manifest to run the unit tests.
         self.using_unit_test_manifest = True
         self.manifest = self.build_unit_test_manifest()
         self.compile_manifest()  # create the networkx graph
         self.job_queue = self.get_graph_queue()
+
+    def before_run(self, adapter, selected_uids: AbstractSet[str]) -> None:
+        # We already did cache population + deferral earlier (in reset_job_queue_and_manifest)
+        # and we don't need to create any schemas
+        pass
 
     def get_node_selector(self) -> ResourceTypeSelector:
         if self.manifest is None or self.graph is None:
