@@ -183,10 +183,9 @@ class TestUnitTestExplicitSeed:
             "schema.yml": schema_yml_explicit_seed,
         }
 
-    def test_basic(self, project):
+    def test_explicit_seed(self, project):
         run_dbt(["seed"])
         run_dbt(["run"])
-        # assert len(results) == 1
 
         # Select by model name
         results = run_dbt(["unit-test", "--select", "my_new_model"], expect_pass=True)
@@ -206,10 +205,9 @@ class TestUnitTestImplicitSeed:
             "schema.yml": schema_yml_implicit_seed,
         }
 
-    def test_basic(self, project):
+    def test_implicit_seed(self, project):
         run_dbt(["seed"])
         run_dbt(["run"])
-        # assert len(results) == 1
 
         # Select by model name
         results = run_dbt(["unit-test", "--select", "my_new_model"], expect_pass=True)
@@ -229,7 +227,7 @@ class TestUnitTestNonexistentSeed:
             "schema.yml": schema_yml_nonexistent_seed,
         }
 
-    def test_basic(self, project):
+    def test_nonexistent_seed(self, project):
         run_dbt(["seed"])
         run_dbt(["run"])
 
