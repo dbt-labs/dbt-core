@@ -1,7 +1,7 @@
 betterproto[compiler]==1.2.5
 black==22.10.0
 bumpversion
-ddtrace
+ddtrace==2.1.7
 docutils
 flake8
 flaky
