@@ -22,12 +22,15 @@ class MockConfig:
     target_name: str = "mock_config_target_name"
 
 
-class CustomRunnableTask(GraphRunnableTask):
-    did_cancel: bool = False
+class MockRunnableTask(GraphRunnableTask):
+    def __init__(self, exception_class: Exception = Exception):
+        self.forced_exception_class = exception_class
+        self.did_cancel: bool = False
+        super().__init__(args=MockArgs(), config=MockConfig(), manifest=None)
 
     def run_queue(self, pool):
         """Override `run_queue` to raise a system exit"""
-        raise SystemExit()
+        raise self.forced_exception_class()
 
     def _cancel_connections(self, pool):
         """Override `_cancel_connections` to track whether it was called"""
@@ -43,9 +46,19 @@ class CustomRunnableTask(GraphRunnableTask):
 
 
 def test_graph_runnable_task_cancels_connection_on_system_exit():
-    task = CustomRunnableTask(args=MockArgs(), config=MockConfig(), manifest=None)
+    task = MockRunnableTask(exception_class=SystemExit)
 
     with pytest.raises(SystemExit):
+        task.execute_nodes()
+
+    # If `did_cancel` is True, that means `_cancel_connections` was called
+    assert task.did_cancel is True
+
+
+def test_graph_runnable_task_cancels_connection_on_keyboard_interrupt():
+    task = MockRunnableTask(exception_class=KeyboardInterrupt)
+
+    with pytest.raises(KeyboardInterrupt):
         task.execute_nodes()
 
     # If `did_cancel` is True, that means `_cancel_connections` was called
