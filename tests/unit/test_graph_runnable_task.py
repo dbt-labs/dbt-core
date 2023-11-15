@@ -63,3 +63,13 @@ def test_graph_runnable_task_cancels_connection_on_keyboard_interrupt():
 
     # If `did_cancel` is True, that means `_cancel_connections` was called
     assert task.did_cancel is True
+
+
+def test_graph_runnable_task_doesnt_cancel_connection_on_generic_exception():
+    task = MockRunnableTask(exception_class=Exception)
+
+    with pytest.raises(Exception):
+        task.execute_nodes()
+
+    # If `did_cancel` is True, that means `_cancel_connections` was called
+    assert task.did_cancel is False
