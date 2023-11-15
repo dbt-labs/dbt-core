@@ -1,0 +1,7 @@
+kind: Features
+body: Move --target and --profile command line flags to global config. Also, allow
+  these flags to be set by environment variable (DBT_TARGET, and DBT_PROFILE).
+time: 2023-11-15T09:20:05.12461Z
+custom:
+  Author: barton996
+  Issue: "7798"
