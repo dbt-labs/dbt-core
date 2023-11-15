@@ -1,6 +1,6 @@
 black==22.8.0
 bumpversion
-ddtrace
+ddtrace==2.1.7
 flake8
 flaky
 freezegun==0.3.12
