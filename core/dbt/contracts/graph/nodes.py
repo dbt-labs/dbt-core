@@ -1063,8 +1063,18 @@ class GenericTestNode(TestShouldStoreFailures, CompiledNode, HasTestMetadata):
 
 
 @dataclass
+class UnitTestSourceDefinition(ModelNode):
+    source_name: str = "undefined"
+    quoting: Quoting = field(default_factory=Quoting)
+
+    @property
+    def search_name(self):
+        return f"{self.source_name}.{self.name}"
+
+
+@dataclass
 class UnitTestNode(CompiledNode):
-    resource_type: NodeType = field(metadata={"restrict": [NodeType.Unit]})
+    resource_type: Literal[NodeType.Unit]
     tested_node_unique_id: Optional[str] = None
     this_input_node_unique_id: Optional[str] = None
     overrides: Optional[UnitTestOverrides] = None

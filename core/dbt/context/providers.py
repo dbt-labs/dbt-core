@@ -606,6 +606,29 @@ class RuntimeSourceResolver(BaseSourceResolver):
         return self.Relation.create_from_source(target_source)
 
 
+class RuntimeUnitTestSourceResolver(BaseSourceResolver):
+    def resolve(self, source_name: str, table_name: str):
+        target_source = self.manifest.resolve_source(
+            source_name,
+            table_name,
+            self.current_project,
+            self.model.package_name,
+        )
+        if target_source is None or isinstance(target_source, Disabled):
+            raise TargetNotFoundError(
+                node=self.model,
+                target_name=f"{source_name}.{table_name}",
+                target_kind="source",
+                disabled=(isinstance(target_source, Disabled)),
+            )
+        # For unit tests, this isn't a "real" source, it's a ModelNode taking
+        # the place of a source. We don't really need to return the relation here,
+        # we just need to set_cte, but skipping it confuses typing. We *do* need
+        # the relation in the "this" property.
+        self.model.set_cte(target_source.unique_id, None)
+        return self.Relation.create_ephemeral_from_node(self.config, target_source)
+
+
 # metric` implementations
 class ParseMetricResolver(BaseMetricResolver):
     def resolve(self, name: str, package: Optional[str] = None) -> MetricReference:
@@ -746,7 +769,7 @@ class RuntimeUnitTestProvider(Provider):
     DatabaseWrapper = RuntimeDatabaseWrapper
     Var = UnitTestVar
     ref = RuntimeUnitTestRefResolver
-    source = RuntimeSourceResolver  # TODO: RuntimeUnitTestSourceResolver
+    source = RuntimeUnitTestSourceResolver
     metric = RuntimeMetricResolver
 
 

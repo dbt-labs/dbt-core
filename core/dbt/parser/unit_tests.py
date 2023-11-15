@@ -16,6 +16,7 @@ from dbt.contracts.graph.nodes import (
     UnitTestDefinition,
     DependsOn,
     UnitTestConfig,
+    UnitTestSourceDefinition,
 )
 from dbt.contracts.graph.unparsed import UnparsedUnitTest
 from dbt.exceptions import ParsingError, InvalidUnitTestGivenInput
@@ -108,44 +109,54 @@ class UnitTestManifestLoader:
               - {id: 2, b: 2}
         """
         # Add the model "input" nodes, consisting of all referenced models in the unit test.
-        # This creates a model for every input in every test, so there may be multiple
-        # input models substituting for the same input ref'd model.
+        # This creates an ephemeral model for every input in every test, so there may be multiple
+        # input models substituting for the same input ref'd model. Note that since these are
+        # always "ephemeral" they just wrap the tested_node SQL in additional CTEs. No actual table
+        # or view is created.
         for given in test_case.given:
             # extract the original_input_node from the ref in the "input" key of the given list
             original_input_node = self._get_original_input_node(given.input, tested_node)
 
-            original_input_node_columns = None
-            if (
-                original_input_node.resource_type == NodeType.Model
-                and original_input_node.config.contract.enforced
-            ):
-                original_input_node_columns = {
-                    column.name: column.data_type for column in original_input_node.columns
-                }
-
-            # TODO: include package_name?
-            input_name = f"{unit_test_node.name}__{original_input_node.name}"
-            input_unique_id = f"model.{package_name}.{input_name}"
-            input_node = ModelNode(
-                raw_code=self._build_fixture_raw_code(
-                    given.get_rows(
-                        self.root_project.project_root, self.root_project.fixture_paths
-                    ),
-                    original_input_node_columns,
+            project_root = self.root_project.project_root
+            common_fields = {
+                "resource_type": NodeType.Model,
+                "package_name": package_name,
+                "original_file_path": original_input_node.original_file_path,
+                "config": ModelConfig(materialized="ephemeral"),
+                "database": original_input_node.database,
+                "alias": original_input_node.identifier,
+                "schema": original_input_node.schema,
+                "fqn": original_input_node.fqn,
+                "checksum": FileHash.empty(),
+                "raw_code": self._build_fixture_raw_code(
+                    given.get_rows(project_root, self.root_project.fixture_paths), None
                 ),
-                resource_type=NodeType.Model,
-                package_name=package_name,
-                path=original_input_node.path,
-                original_file_path=original_input_node.original_file_path,
-                unique_id=input_unique_id,
-                name=input_name,
-                config=ModelConfig(materialized="ephemeral"),
-                database=original_input_node.database,
-                schema=original_input_node.schema,
-                alias=original_input_node.alias,
-                fqn=input_unique_id.split("."),
-                checksum=FileHash.empty(),
-            )
+            }
+
+            if original_input_node.resource_type == NodeType.Model:
+                input_name = f"{unit_test_node.name}__{original_input_node.name}"
+                input_node = ModelNode(
+                    **common_fields,
+                    unique_id=f"model.{package_name}.{input_name}",
+                    name=input_name,
+                    path=original_input_node.path,
+                )
+            elif original_input_node.resource_type == NodeType.Source:
+                # We are reusing the database/schema/identifier from the original source,
+                # but that shouldn't matter since this acts as an ephemeral model which just
+                # wraps a CTE around the unit test node.
+                input_name = f"{unit_test_node.name}__{original_input_node.search_name}__{original_input_node.name}"
+                input_node = UnitTestSourceDefinition(
+                    **common_fields,
+                    unique_id=f"model.{package_name}.{input_name}",
+                    name=original_input_node.name,  # must be the same name for source lookup to work
+                    path=input_name + ".sql",  # for writing out compiled_code
+                    source_name=original_input_node.source_name,  # needed for source lookup
+                )
+                # Sources need to go in the sources dictionary in order to create the right lookup
+                self.unit_test_manifest.sources[input_node.unique_id] = input_node  # type: ignore
+
+            # Both ModelNode and UnitTestSourceDefinition need to go in nodes dictionary
             self.unit_test_manifest.nodes[input_node.unique_id] = input_node
 
             # Populate this_input_node_unique_id if input fixture represents node being tested
@@ -156,6 +167,8 @@ class UnitTestManifestLoader:
             unit_test_node.depends_on.nodes.append(input_node.unique_id)
 
     def _build_fixture_raw_code(self, rows, column_name_to_data_types) -> str:
+        # We're not currently using column_name_to_data_types, but leaving here for
+        # possible future use.
         return ("{{{{ get_fixture_sql({rows}, {column_name_to_data_types}) }}}}").format(
             rows=rows, column_name_to_data_types=column_name_to_data_types
         )
@@ -181,18 +194,21 @@ class UnitTestManifestLoader:
                 raise InvalidUnitTestGivenInput(input=input)
 
             if statically_parsed["refs"]:
-                for ref in statically_parsed["refs"]:
-                    name = ref.get("name")
-                    package = ref.get("package")
-                    version = ref.get("version")
-                    # TODO: disabled lookup, versioned lookup, public models
-                    original_input_node = self.manifest.ref_lookup.find(
-                        name, package, version, self.manifest
-                    )
+                ref = list(statically_parsed["refs"])[0]
+                name = ref.get("name")
+                package = ref.get("package")
+                version = ref.get("version")
+                # TODO: disabled lookup, versioned lookup, public models
+                original_input_node = self.manifest.ref_lookup.find(
+                    name, package, version, self.manifest
+                )
             elif statically_parsed["sources"]:
-                input_package_name, input_source_name = statically_parsed["sources"][0]
+                source = list(statically_parsed["sources"])[0]
+                input_source_name, input_name = source
                 original_input_node = self.manifest.source_lookup.find(
-                    input_source_name, input_package_name, self.manifest
+                    f"{input_source_name}.{input_name}",
+                    None,
+                    self.manifest,
                 )
             else:
                 raise InvalidUnitTestGivenInput(input=input)
