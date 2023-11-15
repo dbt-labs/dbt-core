@@ -133,7 +133,7 @@ class UnitTestManifestLoader:
                 ),
             }
 
-            if original_input_node.resource_type == NodeType.Model:
+            if original_input_node.resource_type in (NodeType.Model, NodeType.Seed):
                 input_name = f"{unit_test_node.name}__{original_input_node.name}"
                 input_node = ModelNode(
                     **common_fields,
