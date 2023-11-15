@@ -243,7 +243,7 @@ class UnitTestParser(YamlReader):
 
             # Check that format and type of rows matches for each given input
             for input in unit_test.given:
-                if input.rows is None:
+                if input.rows is None and input.fixture is None:
                     seed_name = self._get_seed_name_from_ref(input.input)
                     input.rows = self._load_rows_from_seed(seed_name)
                 input.validate_fixture("input", unit_test.name)

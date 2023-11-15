@@ -5,7 +5,7 @@ from dbt.tests.util import (
     get_manifest,
     get_artifact,
 )
-from dbt.exceptions import DuplicateResourceNameError
+from dbt.exceptions import DuplicateResourceNameError, ParsingError
 from fixtures import (
     my_model_vars_sql,
     my_model_a_sql,
