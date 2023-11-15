@@ -206,22 +206,25 @@ class UnitTestParser(YamlReader):
         self.schema_parser = schema_parser
         self.yaml = yaml
 
-    def _get_seed_name_from_ref(self, ref: str) -> str:
-        """Extract seed name from ref string."""
-        return py_extract_from_source("{{ " + ref + " }}")["refs"][0]["name"]
-
-    def _load_rows_from_seed(self, seed_name: str) -> List[Dict[str, Any]]:
+    def _load_rows_from_seed(self, ref: Dict[str, str]) -> List[Dict[str, Any]]:
         """Read rows from seed file on disk if not specified in YAML config. If seed file doesn't exist, return empty list."""
         rows: List[Dict[str, Any]] = []
 
-        package_name = self.project.project_name
+        seed_name = ref["name"]
+        package_name = ref.get("package", self.project.project_name)
 
         seed_node = self.manifest.ref_lookup.find(seed_name, package_name, None, self.manifest)
 
         if not seed_node or seed_node.resource_type != NodeType.Seed:
-            raise ParsingError(
-                f"Unable to find seed '{package_name}.{seed_name}' for unit tests in directories: {self.project.seed_paths}"
-            )
+            # Seed not found in custom package specified
+            if package_name != self.project.project_name:
+                raise ParsingError(
+                    f"Unable to find seed '{package_name}.{seed_name}' for unit tests in '{package_name}' package"
+                )
+            else:
+                raise ParsingError(
+                    f"Unable to find seed '{package_name}.{seed_name}' for unit tests in directories: {self.project.seed_paths}"
+                )
 
         seed_path = Path(seed_node.root_path) / seed_node.original_file_path
         with open(seed_path, "r") as f:
@@ -244,8 +247,8 @@ class UnitTestParser(YamlReader):
             # Check that format and type of rows matches for each given input
             for input in unit_test.given:
                 if input.rows is None and input.fixture is None:
-                    seed_name = self._get_seed_name_from_ref(input.input)
-                    input.rows = self._load_rows_from_seed(seed_name)
+                    ref = py_extract_from_source("{{ " + input.input + " }}")["refs"][0]
+                    input.rows = self._load_rows_from_seed(ref)
                 input.validate_fixture("input", unit_test.name)
             unit_test.expect.validate_fixture("expected", unit_test.name)
 
