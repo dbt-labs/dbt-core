@@ -1,3 +1,4 @@
+import functools
 import os
 from pathlib import Path
 from typing import Dict
@@ -7,6 +8,7 @@ from dbt.config.project import PartialProject
 from dbt.contracts.project import TarballPackage
 from dbt.deps.base import PinnedPackage, UnpinnedPackage, get_downloads_path
 from dbt.exceptions import DependencyError
+from dbt.utils import _connection_exception_retry as connection_exception_retry
 
 
 class TarballPackageMixin:
@@ -26,7 +28,7 @@ class TarballPinnedPackage(TarballPackageMixin, PinnedPackage):
     def __init__(self, tarball: str, package: str) -> None:
         super().__init__(tarball)
         self.package = package
-        self.version = "tarball"
+        self.version = tarball
         self.tar_path = os.path.join(Path(get_downloads_path()), self.package)
         self.untarred_path = f"{self.tar_path}_untarred"
 
@@ -49,8 +51,11 @@ class TarballPinnedPackage(TarballPackageMixin, PinnedPackage):
 
     def _fetch_metadata(self, project, renderer):
         """Download and untar the project and parse metadata from the project folder."""
-        system.download(self.tarball, self.tar_path)
-        system.untar_package(self.tar_path,self.untarred_path)
+        download_untar_fn = functools.partial(
+            self.download_and_untar, self.tarball, self.tar_path, self.untarred_path, self.name
+        )
+        connection_exception_retry(download_untar_fn, 5)
+
         tar_contents = os.listdir(self.untarred_path)
         if len(tar_contents) != 1:
             raise DependencyError(
@@ -59,13 +64,14 @@ class TarballPinnedPackage(TarballPackageMixin, PinnedPackage):
             )
         child_folder = os.listdir(self.untarred_path)[0]
 
-        self.untarred_path = os.path.join(self.untarred_path,child_folder)
+        self.untarred_path = os.path.join(self.untarred_path, child_folder)
         partial = PartialProject.from_project_root(self.untarred_path)
         metadata = partial.render_package_metadata(renderer)
-        metadata.name = self.package if self.package else metadata.name
+        metadata.name = metadata.name
         return metadata
 
     def install(self, project, renderer):
+        # self.download_and_untar(self.tarball, self.untarred_path)
         dest_path = self.get_installation_path(project, renderer)
         if os.path.exists(dest_path):
             if system.path_is_symlink(dest_path):
