@@ -80,6 +80,12 @@ def _create_packages_yml_entry(package: str, version: Optional[str], source: str
     if source == "git":
         version_key = "revision"
 
+    if source == "tarball":
+        version_key = "tarball"
+        package_key = "name"
+
+    packages_yml_entry = {package_key: package}
+
     if version:
         if "," in version:
             version = version.split(",")  # type: ignore

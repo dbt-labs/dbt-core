@@ -39,8 +39,7 @@ class TestLocalPackage(unittest.TestCase):
 
 class TestTarballPackage(unittest.TestCase):
     class MockMetadata:
-        name = 'mock_metadata_name'
-
+        name = "mock_metadata_name"
 
     @mock.patch("dbt.config.project.PartialProject.from_project_root")
     @mock.patch("os.listdir")
@@ -48,37 +47,39 @@ class TestTarballPackage(unittest.TestCase):
     @mock.patch("dbt.clients.system.untar_package")
     @mock.patch("dbt.clients.system.download")
     def test_fetch_metadata(
-        self, 
+        self,
         mock_download,
         mock_untar_package,
         mock_get_downloads_path,
         mock_listdir,
         mock_from_project_root,
     ):
-        mock_listdir.return_value = ['one_directory/']
+        mock_listdir.return_value = ["one_directory/"]
         mock_get_downloads_path.return_value = "downloads_path"
         mock_from_project_root.return_value = object()
         mock_from_project_root.return_value
         dict_well_formed_contract = {
             "tarball": "http://example.com/invalid_url@/package.tar.gz",
-            "name": "my_package"
+            "name": "my_package",
         }
 
         a_contract = TarballPackage.from_dict(dict_well_formed_contract)
         a = TarballUnpinnedPackage.from_contract(a_contract)
 
         a_pinned = a.resolved()
-        with mock.patch.object(PartialProject,'from_project_root',return_value=PartialProject):
+        with mock.patch.object(PartialProject, "from_project_root", return_value=PartialProject):
             with mock.patch.object(
-                PartialProject,
-                "render_package_metadata",
-                return_value=self.MockMetadata
+                PartialProject, "render_package_metadata", return_value=self.MockMetadata
             ):
-                metadata = a_pinned.fetch_metadata('',DbtProjectYamlRenderer())
+                metadata = a_pinned.fetch_metadata("", DbtProjectYamlRenderer())
 
         assert metadata == self.MockMetadata
-        mock_download.assert_called_once_with('http://example.com/invalid_url@/package.tar.gz', 'downloads_path/my_package')
-        mock_untar_package.assert_called_once_with('downloads_path/my_package', 'downloads_path/my_package_untarred')
+        mock_download.assert_called_once_with(
+            "http://example.com/invalid_url@/package.tar.gz", "downloads_path/my_package"
+        )
+        mock_untar_package.assert_called_once_with(
+            "downloads_path/my_package", "downloads_path/my_package_untarred", "my_package"
+        )
 
     @mock.patch("dbt.config.project.PartialProject.from_project_root")
     @mock.patch("os.listdir")
@@ -86,40 +87,40 @@ class TestTarballPackage(unittest.TestCase):
     @mock.patch("dbt.clients.system.untar_package")
     @mock.patch("dbt.clients.system.download")
     def test_fetch_metadata_fails_on_incorrect_tar_folder_structure(
-        self, 
+        self,
         mock_download,
         mock_untar_package,
         mock_get_downloads_path,
         mock_listdir,
         mock_from_project_root,
     ):
-        mock_listdir.return_value = ['one_directory/','another_directory/']
+        mock_listdir.return_value = ["one_directory/", "another_directory/"]
 
         mock_get_downloads_path.return_value = "downloads_path"
         mock_from_project_root.return_value = object()
         mock_from_project_root.return_value
         dict_well_formed_contract = {
             "tarball": "http://example.com/invalid_url@/package.tar.gz",
-            "name": "my_package"
+            "name": "my_package",
         }
 
         a_contract = TarballPackage.from_dict(dict_well_formed_contract)
         a = TarballUnpinnedPackage.from_contract(a_contract)
 
         a_pinned = a.resolved()
-        with mock.patch.object(PartialProject,'from_project_root',return_value=PartialProject):
+        with mock.patch.object(PartialProject, "from_project_root", return_value=PartialProject):
             with mock.patch.object(
-                PartialProject,
-                "render_package_metadata",
-                return_value=self.MockMetadata
+                PartialProject, "render_package_metadata", return_value=self.MockMetadata
             ):
                 with self.assertRaises(dbt.exceptions.DependencyError):
-                    metadata = a_pinned.fetch_metadata('',DbtProjectYamlRenderer())
-
+                    a_pinned.fetch_metadata("", DbtProjectYamlRenderer())
 
     @mock.patch("dbt.deps.tarball.get_downloads_path")
     def test_tarball_package_contract(self, mock_get_downloads_path):
-        dict_well_formed_contract = {"tarball": "http://example.com/invalid_url@/package.tar.gz", "name": "my_cool_package"}
+        dict_well_formed_contract = {
+            "tarball": "http://example.com/invalid_url@/package.tar.gz",
+            "name": "my_cool_package",
+        }
         a_contract = TarballPackage.from_dict(dict_well_formed_contract)
 
         # check contract and resolver
@@ -135,6 +136,7 @@ class TestTarballPackage(unittest.TestCase):
 
     def test_tarball_package_contract_fails_on_no_name(self):
         from mashumaro.exceptions import MissingField
+
         # check bad contract (no name) fails
         a_contract = {"tarball": "http://example.com"}
         with self.assertRaises(MissingField):
