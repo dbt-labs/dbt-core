@@ -39,8 +39,7 @@ class TarballPinnedPackage(TarballPackageMixin, PinnedPackage):
     def to_dict(self) -> Dict[str, str]:
         return {
             "tarball": self.tarball,
-            "version": self.version,
-            "package": self.package,
+            "name": self.package,
         }
 
     def get_version(self):
@@ -67,11 +66,14 @@ class TarballPinnedPackage(TarballPackageMixin, PinnedPackage):
         self.untarred_path = os.path.join(self.untarred_path, child_folder)
         partial = PartialProject.from_project_root(self.untarred_path)
         metadata = partial.render_package_metadata(renderer)
-        metadata.name = metadata.name
+        metadata.name = self.package if self.package else metadata.name
         return metadata
 
     def install(self, project, renderer):
-        # self.download_and_untar(self.tarball, self.untarred_path)
+        download_untar_fn = functools.partial(
+            self.download_and_untar, self.tarball, self.tar_path, self.untarred_path, self.name
+        )
+        connection_exception_retry(download_untar_fn, 5)
         dest_path = self.get_installation_path(project, renderer)
         if os.path.exists(dest_path):
             if system.path_is_symlink(dest_path):
