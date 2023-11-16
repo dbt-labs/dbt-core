@@ -1,4 +1,3 @@
-from collections import ChainMap
 from enum import Enum
 import os
 import threading
@@ -56,13 +55,11 @@ class EventLevel(str, Enum):
 class BaseEvent:
     """BaseEvent for proto message generated python events"""
 
-    # TODO: improve setup
-    # from dbt.events import core_types_pb2
-    _PROTO_TYPES_MODULES = ChainMap(types_pb2.__dict__)
+    PROTO_TYPES_MODULE = types_pb2
 
     def __init__(self, *args, **kwargs) -> None:
         class_name = type(self).__name__
-        msg_cls = self._PROTO_TYPES_MODULES[class_name]
+        msg_cls = getattr(self.PROTO_TYPES_MODULE, class_name)
         if class_name == "Formatting" and len(args) > 0:
             kwargs["msg"] = args[0]
             args = ()
@@ -138,8 +135,7 @@ class EventMsg(Protocol):
 def msg_from_base_event(event: BaseEvent, level: Optional[EventLevel] = None):
 
     msg_class_name = f"{type(event).__name__}Msg"
-    msg_cls = BaseEvent._PROTO_TYPES_MODULES[msg_class_name]
-    # msg_cls = getattr(types_pb2, msg_class_name)
+    msg_cls = getattr(event.PROTO_TYPES_MODULE, msg_class_name)
 
     # level in EventInfo must be a string, not an EventLevel
     msg_level: str = level.value if level else event.level_tag().value

@@ -1,7 +1,6 @@
 import os
 import traceback
 from typing import Callable, List, Optional, Protocol, Tuple
-from types import ModuleType
 from uuid import uuid4
 
 from dbt.common.events.base_types import BaseEvent, EventLevel, msg_from_base_event, EventMsg
@@ -39,9 +38,6 @@ class EventManager:
         )
         self.loggers.append(logger)
 
-    def add_event_protos(self, event_proto_module: ModuleType) -> None:
-        BaseEvent._PROTO_TYPES_MODULES.update(event_proto_module.__dict__)
-
     def flush(self) -> None:
         for logger in self.loggers:
             logger.flush()
@@ -56,9 +52,6 @@ class IEventManager(Protocol):
         ...
 
     def add_logger(self, config: LoggerConfig) -> None:
-        ...
-
-    def add_event_protos(self, event_proto_module: ModuleType) -> None:
         ...
 
 

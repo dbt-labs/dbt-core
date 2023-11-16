@@ -7,16 +7,16 @@ import pytest
 
 from dbt.contracts.results import TimingInfo, RunResult, RunStatus
 from dbt.common.events import AdapterLogger, types
+from dbt.common.events.base_types import msg_from_base_event
 from dbt.events import types as core_types
-from dbt.common.events.base_types import (
-    BaseEvent,
+from dbt.events.base_types import (
+    CoreBaseEvent,
     DebugLevel,
     DynamicLevel,
     ErrorLevel,
     InfoLevel,
     TestLevel,
     WarnLevel,
-    msg_from_base_event,
 )
 from dbt.common.events.eventmgr import TestEventManager, EventManager
 from dbt.common.events.functions import msg_to_dict, msg_to_json, ctx_set_event_manager
@@ -97,7 +97,7 @@ class TestEventCodes:
     # checks to see if event codes are duplicated to keep codes singluar and clear.
     # also checks that event codes follow correct namming convention ex. E001
     def test_event_codes(self):
-        all_concrete = get_all_subclasses(BaseEvent)
+        all_concrete = get_all_subclasses(CoreBaseEvent)
         all_codes = set()
 
         for event_cls in all_concrete:
@@ -448,7 +448,7 @@ class TestEventJSONSerialization:
     # just fine and others won't.
     def test_all_serializable(self):
         all_non_abstract_events = set(
-            get_all_subclasses(BaseEvent),
+            get_all_subclasses(CoreBaseEvent),
         )
         all_event_values_list = list(map(lambda x: x.__class__, sample_values))
         diff = all_non_abstract_events.difference(set(all_event_values_list))

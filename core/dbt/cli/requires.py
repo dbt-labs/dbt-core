@@ -10,7 +10,6 @@ from dbt.cli.flags import Flags
 from dbt.config import RuntimeConfig
 from dbt.config.runtime import load_project, load_profile, UnsetProfile
 
-from dbt.events import core_types_pb2 as event_types
 from dbt.common.events.base_types import EventLevel
 from dbt.common.events.functions import (
     fire_event,
@@ -56,7 +55,7 @@ def preflight(func):
         # Logging
         callbacks = ctx.obj.get("callbacks", [])
         set_invocation_id()
-        setup_event_logger(flags=flags, callbacks=callbacks, event_modules=[event_types])
+        setup_event_logger(flags=flags, callbacks=callbacks)
 
         # Tracking
         initialize_from_flags(flags.SEND_ANONYMOUS_USAGE_STATS, flags.PROFILES_DIR)

@@ -1,4 +1,4 @@
-from dbt.common.events.base_types import WarnLevel
+from dbt.events.base_types import WarnLevel
 from dbt.common.ui import warning_tag, line_wrap_message
 
 

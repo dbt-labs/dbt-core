@@ -12,7 +12,6 @@ import json
 import os
 import sys
 from typing import Callable, Dict, List, Optional, TextIO, Union
-from types import ModuleType
 import uuid
 from google.protobuf.json_format import MessageToDict
 
@@ -36,14 +35,10 @@ def make_log_dir_if_missing(log_path: Union[Path, str]) -> None:
 
 
 # TODO: make None default
-def setup_event_logger(
-    flags, callbacks: List[Callable[[EventMsg], None]] = [], event_modules: List[ModuleType] = []
-) -> None:
+def setup_event_logger(flags, callbacks: List[Callable[[EventMsg], None]] = []) -> None:
     cleanup_event_logger()
     make_log_dir_if_missing(flags.LOG_PATH)
     EVENT_MANAGER.callbacks = callbacks.copy()
-    for event_module in event_modules:
-        EVENT_MANAGER.add_event_protos(event_module)
 
     if flags.LOG_LEVEL != "none":
         line_format = _line_format_from_str(flags.LOG_FORMAT, LineFormat.PlainText)
