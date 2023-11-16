@@ -186,7 +186,7 @@ class TestUnitTestExplicitSeed:
         run_dbt(["run"])
 
         # Select by model name
-        results = run_dbt(["unit-test", "--select", "my_new_model"], expect_pass=True)
+        results = run_dbt(["test", "--select", "my_new_model"], expect_pass=True)
         assert len(results) == 1
 
 
@@ -208,7 +208,7 @@ class TestUnitTestImplicitSeed:
         run_dbt(["run"])
 
         # Select by model name
-        results = run_dbt(["unit-test", "--select", "my_new_model"], expect_pass=True)
+        results = run_dbt(["test", "--select", "my_new_model"], expect_pass=True)
         assert len(results) == 1
 
 
@@ -229,4 +229,4 @@ class TestUnitTestNonexistentSeed:
         with pytest.raises(
             ParsingError, match="Unable to find seed 'test.my_second_favorite_seed' for unit tests"
         ):
-            run_dbt(["unit-test", "--select", "my_new_model"], expect_pass=False)
+            run_dbt(["test", "--select", "my_new_model"], expect_pass=False)

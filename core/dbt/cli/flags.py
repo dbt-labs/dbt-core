@@ -396,7 +396,6 @@ def command_args(command: CliCommand) -> ArgsList:
         CliCommand.SOURCE_FRESHNESS: cli.freshness,
         CliCommand.TEST: cli.test,
         CliCommand.RETRY: cli.retry,
-        CliCommand.UNIT_TEST: cli.unit_test,
     }
     click_cmd: Optional[ClickCommand] = CMD_DICT.get(command, None)
     if click_cmd is None:
