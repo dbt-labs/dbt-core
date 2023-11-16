@@ -28,7 +28,7 @@ class TarballPinnedPackage(TarballPackageMixin, PinnedPackage):
     def __init__(self, tarball: str, package: str) -> None:
         super().__init__(tarball)
         self.package = package
-        self.version = tarball
+        self.version = "tarball"
         self.tar_path = os.path.join(Path(get_downloads_path()), self.package)
         self.untarred_path = f"{self.tar_path}_untarred"
 
