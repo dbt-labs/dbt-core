@@ -1,5 +1,5 @@
 kind: Fixes
-For packages installed with tarball method, fetch metadata to resolve nested dependencies
+body: For packages installed with tarball method, fetch metadata to resolve nested dependencies
 time: 2023-10-13T13:09:43.188308-04:00
 custom:
   Author: adamlopez
