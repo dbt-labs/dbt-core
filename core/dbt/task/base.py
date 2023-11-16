@@ -308,7 +308,7 @@ class BaseRunner(metaclass=ABCMeta):
             with collect_timing_info("compile", ctx.timing.append):
                 # if we fail here, we still have a compiled node to return
                 # this has the benefit of showing a build path for the errant
-                # model
+                # model.  This calls the 'compile' method in CompileTask
                 ctx.node = self.compile(manifest)
 
             # for ephemeral nodes, we only want to compile, not run

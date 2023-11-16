@@ -3,7 +3,6 @@ from dbt.tests.util import (
     run_dbt,
     write_file,
     get_manifest,
-    get_artifact,
 )
 from dbt.exceptions import DuplicateResourceNameError, ParsingError
 from fixtures import (
@@ -37,31 +36,31 @@ class TestUnitTests:
         assert len(results) == 3
 
         # Select by model name
-        results = run_dbt(["unit-test", "--select", "my_model"], expect_pass=False)
+        results = run_dbt(["test", "--select", "my_model"], expect_pass=False)
         assert len(results) == 5
 
         # Test select by test name
-        results = run_dbt(["unit-test", "--select", "test_name:test_my_model_string_concat"])
+        results = run_dbt(["test", "--select", "test_name:test_my_model_string_concat"])
         assert len(results) == 1
 
         # Select, method not specified
-        results = run_dbt(["unit-test", "--select", "test_my_model_overrides"])
+        results = run_dbt(["test", "--select", "test_my_model_overrides"])
         assert len(results) == 1
 
         # Select using tag
-        results = run_dbt(["unit-test", "--select", "tag:test_this"])
+        results = run_dbt(["test", "--select", "tag:test_this"])
         assert len(results) == 1
 
         # Partial parsing... remove test
         write_file(test_my_model_yml, project.project_root, "models", "test_my_model.yml")
-        results = run_dbt(["unit-test", "--select", "my_model"], expect_pass=False)
+        results = run_dbt(["test", "--select", "my_model"], expect_pass=False)
         assert len(results) == 4
 
         # Partial parsing... put back removed test
         write_file(
             test_my_model_yml + datetime_test, project.project_root, "models", "test_my_model.yml"
         )
-        results = run_dbt(["unit-test", "--select", "my_model"], expect_pass=False)
+        results = run_dbt(["test", "--select", "my_model"], expect_pass=False)
         assert len(results) == 5
 
         manifest = get_manifest(project.project_root)
@@ -69,12 +68,6 @@ class TestUnitTests:
         # Every unit test has a depends_on to the model it tests
         for unit_test_definition in manifest.unit_tests.values():
             assert unit_test_definition.depends_on.nodes[0] == "model.test.my_model"
-
-        # We should have a UnitTestNode for every test, plus two input models for each test
-        unit_test_manifest = get_artifact(
-            project.project_root, "target", "unit_test_manifest.json"
-        )
-        assert len(unit_test_manifest["nodes"]) == 15
 
         # Check for duplicate unit test name
         # this doesn't currently pass with partial parsing because of the root problem
@@ -103,7 +96,7 @@ class TestUnitTestIncrementalModel:
         assert len(results) == 2
 
         # Select by model name
-        results = run_dbt(["unit-test", "--select", "my_incremental_model"], expect_pass=True)
+        results = run_dbt(["test", "--select", "my_incremental_model"], expect_pass=True)
         assert len(results) == 2
 
 

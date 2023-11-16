@@ -870,6 +870,7 @@ cli.commands["source"].add_command(snapshot_freshness, "snapshot-freshness")  # 
 @p.project_dir
 @p.select
 @p.selector
+@p.show_output_format
 @p.state
 @p.defer_state
 @p.deprecated_state

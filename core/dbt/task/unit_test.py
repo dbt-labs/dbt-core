@@ -245,7 +245,7 @@ class UnitTestTask(RunTask):
         loader = UnitTestManifestLoader(self.manifest, self.config, self.job_queue._selected)
         return loader.load()
 
-    def reset_job_queue_and_manifest(self):
+    def build_unit_test_manifest_from_job_queue(self):
         # We want deferral to happen here (earlier than normal) before we turn
         # the normal manifest into the unit testing manifest
         adapter = get_adapter(self.config)

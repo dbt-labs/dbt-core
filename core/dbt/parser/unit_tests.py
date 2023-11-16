@@ -44,9 +44,9 @@ class UnitTestManifestLoader:
 
     def load(self) -> Manifest:
         for unique_id in self.selected:
-            unit_test_case = self.manifest.unit_tests[unique_id]
-            self.parse_unit_test_case(unit_test_case)
-
+            if unique_id in self.manifest.unit_tests:
+                unit_test_case = self.manifest.unit_tests[unique_id]
+                self.parse_unit_test_case(unit_test_case)
         return self.unit_test_manifest
 
     def parse_unit_test_case(self, test_case: UnitTestDefinition):
@@ -86,7 +86,6 @@ class UnitTestManifestLoader:
             overrides=test_case.overrides,
         )
 
-        # TODO: generalize this method
         ctx = generate_parse_exposure(
             unit_test_node,  # type: ignore
             self.root_project,

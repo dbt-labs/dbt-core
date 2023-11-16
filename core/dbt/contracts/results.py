@@ -1,7 +1,12 @@
 import threading
 
 from dbt.contracts.graph.unparsed import FreshnessThreshold
-from dbt.contracts.graph.nodes import CompiledNode, SourceDefinition, ResultNode
+from dbt.contracts.graph.nodes import (
+    CompiledNode,
+    SourceDefinition,
+    ResultNode,
+    UnitTestDefinition,
+)
 from dbt.contracts.util import (
     BaseArtifactMetadata,
     ArtifactMixin,
@@ -153,7 +158,7 @@ class BaseResult(dbtClassMixin):
 
 @dataclass
 class NodeResult(BaseResult):
-    node: ResultNode
+    node: Union[ResultNode, UnitTestDefinition]
 
 
 @dataclass

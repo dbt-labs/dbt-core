@@ -65,5 +65,6 @@ class TestUnitTestSourceInput:
         results = run_dbt(["run"])
         len(results) == 1
 
-        results = run_dbt(["unit-test"])
-        assert len(results) == 1
+        results = run_dbt(["test"])
+        # following includes 2 non-unit tests
+        assert len(results) == 3

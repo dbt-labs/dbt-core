@@ -39,7 +39,6 @@ from dbt.constants import (
     MANIFEST_FILE_NAME,
     PARTIAL_PARSE_FILE_NAME,
     SEMANTIC_MANIFEST_FILE_NAME,
-    UNIT_TEST_MANIFEST_FILE_NAME,
 )
 from dbt.helper_types import PathSet
 from dbt.events.functions import fire_event, get_invocation_id, warn_or_error
@@ -1767,11 +1766,7 @@ def write_semantic_manifest(manifest: Manifest, target_path: str) -> None:
 
 
 def write_manifest(manifest: Manifest, target_path: str, which: Optional[str] = None):
-    if which and which == "unit-test":
-        file_name = UNIT_TEST_MANIFEST_FILE_NAME
-    else:
-        file_name = MANIFEST_FILE_NAME
-
+    file_name = MANIFEST_FILE_NAME
     path = os.path.join(target_path, file_name)
     manifest.write(path)
 

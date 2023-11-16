@@ -25,6 +25,7 @@ from dbt.contracts.graph.nodes import (
     InjectedCTE,
     SeedNode,
     UnitTestNode,
+    UnitTestDefinition,
 )
 from dbt.exceptions import (
     GraphDependencyNotFoundError,
@@ -539,6 +540,9 @@ class Compiler:
         the node's raw_code into compiled_code, and then calls the
         recursive method to "prepend" the ctes.
         """
+        if isinstance(node, UnitTestDefinition):
+            return node
+
         # Make sure Lexer for sqlparse 0.4.4 is initialized
         from sqlparse.lexer import Lexer  # type: ignore
 

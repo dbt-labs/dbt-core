@@ -1082,15 +1082,29 @@ class UnitTestNode(CompiledNode):
 
 
 @dataclass
-class UnitTestDefinition(GraphNode):
+class UnitTestDefinitionMandatory:
     model: str
     given: Sequence[UnitTestInputFixture]
     expect: UnitTestOutputFixture
+
+
+@dataclass
+class UnitTestDefinition(NodeInfoMixin, GraphNode, UnitTestDefinitionMandatory):
     description: str = ""
     overrides: Optional[UnitTestOverrides] = None
     depends_on: DependsOn = field(default_factory=DependsOn)
     config: UnitTestConfig = field(default_factory=UnitTestConfig)
     checksum: Optional[str] = None
+
+    @property
+    def build_path(self):
+        # TODO: is this actually necessary?
+        return self.original_file_path
+
+    @property
+    def compiled_path(self):
+        # TODO: is this actually necessary?
+        return self.original_file_path
 
     @property
     def depends_on_nodes(self):

@@ -141,19 +141,12 @@ class GraphRunnableTask(ConfiguredTask):
         spec = self.get_selection_spec()
         return selector.get_graph_queue(spec)
 
-    # A callback for unit testing
-    def reset_job_queue_and_manifest(self):
-        pass
-
     def _runtime_initialize(self):
         self.compile_manifest()
         if self.manifest is None or self.graph is None:
             raise DbtInternalError("_runtime_initialize never loaded the graph!")
 
         self.job_queue = self.get_graph_queue()
-
-        # for unit testing
-        self.reset_job_queue_and_manifest()
 
         # we use this a couple of times. order does not matter.
         self._flattened_nodes = []
@@ -164,9 +157,11 @@ class GraphRunnableTask(ConfiguredTask):
                 self._flattened_nodes.append(self.manifest.sources[uid])
             elif uid in self.manifest.saved_queries:
                 self._flattened_nodes.append(self.manifest.saved_queries[uid])
+            elif uid in self.manifest.unit_tests:
+                self._flattened_nodes.append(self.manifest.unit_tests[uid])
             else:
                 raise DbtInternalError(
-                    f"Node selection returned {uid}, expected a node or a source"
+                    f"Node selection returned {uid}, expected a node, a source, or a unit test"
                 )
 
         self.num_nodes = len([n for n in self._flattened_nodes if not n.is_ephemeral_model])
@@ -496,7 +491,7 @@ class GraphRunnableTask(ConfiguredTask):
 
         if self.args.write_json:
             # args.which used to determine file name for unit test manifest
-            write_manifest(self.manifest, self.config.project_target_path, self.args.which)
+            write_manifest(self.manifest, self.config.project_target_path)
             if hasattr(result, "write"):
                 result.write(self.result_path())
 

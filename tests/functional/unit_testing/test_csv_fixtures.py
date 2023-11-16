@@ -38,7 +38,7 @@ class TestUnitTestsWithInlineCSV:
         assert len(results) == 3
 
         # Select by model name
-        results = run_dbt(["unit-test", "--select", "my_model"], expect_pass=False)
+        results = run_dbt(["test", "--select", "my_model"], expect_pass=False)
         assert len(results) == 5
 
         # Check error with invalid format key
@@ -49,7 +49,7 @@ class TestUnitTestsWithInlineCSV:
             "test_my_model.yml",
         )
         with pytest.raises(YamlParseDictError):
-            results = run_dbt(["unit-test", "--select", "my_model"], expect_pass=False)
+            results = run_dbt(["test", "--select", "my_model"], expect_pass=False)
 
         # Check error with csv format defined but dict on rows
         write_file(
@@ -59,7 +59,7 @@ class TestUnitTestsWithInlineCSV:
             "test_my_model.yml",
         )
         with pytest.raises(ParsingError):
-            results = run_dbt(["unit-test", "--select", "my_model"], expect_pass=False)
+            results = run_dbt(["test", "--select", "my_model"], expect_pass=False)
 
 
 class TestUnitTestsWithFileCSV:
@@ -91,7 +91,7 @@ class TestUnitTestsWithFileCSV:
         assert len(results) == 3
 
         # Select by model name
-        results = run_dbt(["unit-test", "--select", "my_model"], expect_pass=False)
+        results = run_dbt(["test", "--select", "my_model"], expect_pass=False)
         assert len(results) == 5
 
         # Check error with invalid format key
@@ -102,7 +102,7 @@ class TestUnitTestsWithFileCSV:
             "test_my_model.yml",
         )
         with pytest.raises(YamlParseDictError):
-            results = run_dbt(["unit-test", "--select", "my_model"], expect_pass=False)
+            results = run_dbt(["test", "--select", "my_model"], expect_pass=False)
 
         # Check error with csv format defined but dict on rows
         write_file(
@@ -112,7 +112,7 @@ class TestUnitTestsWithFileCSV:
             "test_my_model.yml",
         )
         with pytest.raises(ParsingError):
-            results = run_dbt(["unit-test", "--select", "my_model"], expect_pass=False)
+            results = run_dbt(["test", "--select", "my_model"], expect_pass=False)
 
 
 class TestUnitTestsWithMixedCSV:
@@ -144,7 +144,7 @@ class TestUnitTestsWithMixedCSV:
         assert len(results) == 3
 
         # Select by model name
-        results = run_dbt(["unit-test", "--select", "my_model"], expect_pass=False)
+        results = run_dbt(["test", "--select", "my_model"], expect_pass=False)
         assert len(results) == 5
 
         # Check error with invalid format key
@@ -155,7 +155,7 @@ class TestUnitTestsWithMixedCSV:
             "test_my_model.yml",
         )
         with pytest.raises(YamlParseDictError):
-            results = run_dbt(["unit-test", "--select", "my_model"], expect_pass=False)
+            results = run_dbt(["test", "--select", "my_model"], expect_pass=False)
 
         # Check error with csv format defined but dict on rows
         write_file(
@@ -165,7 +165,7 @@ class TestUnitTestsWithMixedCSV:
             "test_my_model.yml",
         )
         with pytest.raises(ParsingError):
-            results = run_dbt(["unit-test", "--select", "my_model"], expect_pass=False)
+            results = run_dbt(["test", "--select", "my_model"], expect_pass=False)
 
 
 class TestUnitTestsMissingCSVFile:
@@ -184,8 +184,8 @@ class TestUnitTestsMissingCSVFile:
 
         # Select by model name
         expected_error = "Could not find fixture file fake_fixture for unit test"
-        with pytest.raises(ParsingError, match=expected_error):
-            results = run_dbt(["unit-test", "--select", "my_model"], expect_pass=False)
+        results = run_dbt(["test", "--select", "my_model"], expect_pass=False)
+        assert expected_error in results[0].message
 
 
 class TestUnitTestsDuplicateCSVFile:
@@ -216,8 +216,6 @@ class TestUnitTestsDuplicateCSVFile:
         assert len(results) == 3
 
         # Select by model name
-        with pytest.raises(ParsingError) as exc:
-            results = run_dbt(["unit-test", "--select", "my_model"], expect_pass=False)
-            expected_error = "Found multiple fixture files named test_my_model_basic_fixture at ['one-folder/test_my_model_basic_fixture.csv', 'another-folder/test_my_model_basic_fixture.csv']"
-            # doing the match inline with the pytest.raises caused a bad character error with the dashes.  So we do it here.
-            assert exc.match(expected_error)
+        results = run_dbt(["test", "--select", "my_model"], expect_pass=False)
+        expected_error = "Found multiple fixture files named test_my_model_basic_fixture at ['one-folder/test_my_model_basic_fixture.csv', 'another-folder/test_my_model_basic_fixture.csv']"
+        assert expected_error in results[0].message

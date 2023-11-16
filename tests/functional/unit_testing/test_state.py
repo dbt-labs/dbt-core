@@ -55,11 +55,11 @@ class UnitTestState:
 class TestUnitTestStateModified(UnitTestState):
     def test_state_modified(self, project):
         run_dbt(["run"])
-        run_dbt(["unit-test"], expect_pass=False)
+        run_dbt(["test"], expect_pass=False)
         self.copy_state(project.project_root)
 
         # no changes
-        results = run_dbt(["unit-test", "--select", "state:modified", "--state", "state"])
+        results = run_dbt(["test", "--select", "state:modified", "--state", "state"])
         assert len(results) == 0
 
         # change underlying fixture file
@@ -72,7 +72,7 @@ class TestUnitTestStateModified(UnitTestState):
         )
         # TODO: remove --no-partial-parse as part of https://github.com/dbt-labs/dbt-core/issues/9067
         results = run_dbt(
-            ["--no-partial-parse", "unit-test", "--select", "state:modified", "--state", "state"],
+            ["--no-partial-parse", "test", "--select", "state:modified", "--state", "state"],
             expect_pass=True,
         )
         assert len(results) == 1
@@ -84,7 +84,7 @@ class TestUnitTestStateModified(UnitTestState):
         with_changes = test_my_model_simple_fixture_yml.replace("{string_c: ab}", "{string_c: bc}")
         write_config_file(with_changes, project.project_root, "models", "test_my_model.yml")
         results = run_dbt(
-            ["unit-test", "--select", "state:modified", "--state", "state"], expect_pass=False
+            ["test", "--select", "state:modified", "--state", "state"], expect_pass=False
         )
         assert len(results) == 1
         assert results[0].node.name.endswith("test_has_string_c_ab")
@@ -100,7 +100,7 @@ class TestUnitTestStateModified(UnitTestState):
             "my_model.sql",
         )
         results = run_dbt(
-            ["unit-test", "--select", "state:modified", "--state", "state"], expect_pass=False
+            ["test", "--select", "state:modified", "--state", "state"], expect_pass=False
         )
         assert len(results) == 4
 
@@ -108,7 +108,7 @@ class TestUnitTestStateModified(UnitTestState):
 class TestUnitTestRetry(UnitTestState):
     def test_unit_test_retry(self, project):
         run_dbt(["run"])
-        run_dbt(["unit-test"], expect_pass=False)
+        run_dbt(["test"], expect_pass=False)
         self.copy_state(project.project_root)
 
         results = run_dbt(["retry"], expect_pass=False)
@@ -130,6 +130,6 @@ class TestUnitTestDeferState(UnitTestState):
     def test_unit_test_defer_state(self, project):
         run_dbt(["run", "--target", "otherschema"])
         self.copy_state(project.project_root)
-        results = run_dbt(["unit-test", "--defer", "--state", "state"], expect_pass=False)
+        results = run_dbt(["test", "--defer", "--state", "state"], expect_pass=False)
         assert len(results) == 4
         assert sorted([r.status for r in results]) == ["fail", "pass", "pass", "pass"]

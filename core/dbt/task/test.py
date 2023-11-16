@@ -1,18 +1,17 @@
 from distutils.util import strtobool
 
+import io
 from dataclasses import dataclass
 from dbt.utils import _coerce_decimal
 from dbt.events.format import pluralize
 from dbt.dataclass_schema import dbtClassMixin
 import threading
-from typing import Dict, Any
+from typing import Dict, Any, Optional, Union
 
 from .compile import CompileRunner
 from .run import RunTask
 
-from dbt.contracts.graph.nodes import (
-    TestNode,
-)
+from dbt.contracts.graph.nodes import TestNode, UnitTestDefinition
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.results import TestStatus, PrimitiveDict, RunResult
 from dbt.context.providers import generate_runtime_model_context
@@ -31,6 +30,7 @@ from dbt.graph import (
     ResourceTypeSelector,
 )
 from dbt.node_types import NodeType
+from dbt.parser.unit_tests import UnitTestManifestLoader
 from dbt.flags import get_flags
 
 
@@ -59,10 +59,16 @@ class TestResultData(dbtClassMixin):
         return bool(field)
 
 
+@dataclass
+class UnitTestResultData(dbtClassMixin):
+    should_error: bool
+    adapter_response: Dict[str, Any]
+    diff: Optional[str] = None
+
+
 class TestRunner(CompileRunner):
     def describe_node(self):
-        node_name = self.node.name
-        return "test {}".format(node_name)
+        return f"{self.node.resource_type} {self.node.name}"
 
     def print_result_line(self, result):
         model = result.node
@@ -143,9 +149,79 @@ class TestRunner(CompileRunner):
         TestResultData.validate(test_result_dct)
         return TestResultData.from_dict(test_result_dct)
 
-    def execute(self, test: TestNode, manifest: Manifest):
-        result = self.execute_test(test, manifest)
+    def build_unit_test_manifest_from_test(
+        self, unit_test_def: UnitTestDefinition, manifest: Manifest
+    ) -> Manifest:
+        # build a unit test manifest with only the test from this UnitTestDefinition
+        loader = UnitTestManifestLoader(manifest, self.config, {unit_test_def.unique_id})
+        return loader.load()
 
+    def execute_unit_test(
+        self, unit_test_def: UnitTestDefinition, manifest: Manifest
+    ) -> UnitTestResultData:
+
+        unit_test_manifest = self.build_unit_test_manifest_from_test(unit_test_def, manifest)
+
+        # The unit test node and definition have the same unique_id
+        unit_test_node = unit_test_manifest.nodes[unit_test_def.unique_id]
+
+        # Compile the node
+        compiler = self.adapter.get_compiler()
+        unit_test_node = compiler.compile_node(unit_test_node, unit_test_manifest, {})
+
+        # generate_runtime_unit_test_context not strictly needed - this is to run the 'unit'
+        # materialization, not compile the node.compiled_code
+        context = generate_runtime_model_context(unit_test_node, self.config, unit_test_manifest)
+
+        materialization_macro = unit_test_manifest.find_materialization_macro_by_name(
+            self.config.project_name, unit_test_node.get_materialization(), self.adapter.type()
+        )
+
+        if materialization_macro is None:
+            raise MissingMaterializationError(
+                materialization=unit_test_node.get_materialization(),
+                adapter_type=self.adapter.type(),
+            )
+
+        if "config" not in context:
+            raise DbtInternalError(
+                "Invalid materialization context generated, missing config: {}".format(context)
+            )
+
+        # generate materialization macro
+        macro_func = MacroGenerator(materialization_macro, context)
+        # execute materialization macro
+        macro_func()
+        # load results from context
+        # could eventually be returned directly by materialization
+        result = context["load_result"]("main")
+        adapter_response = result["response"].to_dict(omit_none=True)
+        table = result["table"]
+        actual = self._get_unit_test_table(table, "actual")
+        expected = self._get_unit_test_table(table, "expected")
+        should_error = actual.rows != expected.rows
+        diff = None
+        if should_error:
+            actual_output = self._agate_table_to_str(actual)
+            expected_output = self._agate_table_to_str(expected)
+
+            diff = f"\n\nActual:\n{actual_output}\n\nExpected:\n{expected_output}\n"
+        return UnitTestResultData(
+            diff=diff,
+            should_error=should_error,
+            adapter_response=adapter_response,
+        )
+
+    def execute(self, test: Union[TestNode, UnitTestDefinition], manifest: Manifest):
+        if isinstance(test, UnitTestDefinition):
+            unit_test_result = self.execute_unit_test(test, manifest)
+            return self.build_unit_test_run_result(test, unit_test_result)
+        else:
+            # Note: manifest here is a normal manifest
+            test_result = self.execute_test(test, manifest)
+            return self.build_test_run_result(test, test_result)
+
+    def build_test_run_result(self, test: TestNode, result: TestResultData) -> RunResult:
         severity = test.config.severity.upper()
         thread_id = threading.current_thread().name
         num_errors = pluralize(result.failures, "result")
@@ -167,6 +243,31 @@ class TestRunner(CompileRunner):
         else:
             status = TestStatus.Pass
 
+        run_result = RunResult(
+            node=test,
+            status=status,
+            timing=[],
+            thread_id=thread_id,
+            execution_time=0,
+            message=message,
+            adapter_response=result.adapter_response,
+            failures=failures,
+        )
+        return run_result
+
+    def build_unit_test_run_result(
+        self, test: UnitTestDefinition, result: UnitTestResultData
+    ) -> RunResult:
+        thread_id = threading.current_thread().name
+
+        status = TestStatus.Pass
+        message = None
+        failures = 0
+        if result.should_error:
+            status = TestStatus.Fail
+            message = result.diff
+            failures = 1
+
         return RunResult(
             node=test,
             status=status,
@@ -181,6 +282,24 @@ class TestRunner(CompileRunner):
     def after_execute(self, result):
         self.print_result_line(result)
 
+    def _get_unit_test_table(self, result_table, actual_or_expected: str):
+        unit_test_table = result_table.where(
+            lambda row: row["actual_or_expected"] == actual_or_expected
+        )
+        columns = list(unit_test_table.columns.keys())
+        columns.remove("actual_or_expected")
+        return unit_test_table.select(columns)
+
+    def _agate_table_to_str(self, table) -> str:
+        # Hack to get Agate table output as string
+        output = io.StringIO()
+        # "output" is a cli param: show_output_format
+        if self.config.args.output == "json":
+            table.to_json(path=output)
+        else:
+            table.print_table(output=output, max_rows=None)
+        return output.getvalue().strip()
+
 
 class TestSelector(ResourceTypeSelector):
     def __init__(self, graph, manifest, previous_state) -> None:
@@ -188,7 +307,7 @@ class TestSelector(ResourceTypeSelector):
             graph=graph,
             manifest=manifest,
             previous_state=previous_state,
-            resource_types=[NodeType.Test],
+            resource_types=[NodeType.Test, NodeType.Unit],
         )
 
 
