@@ -84,6 +84,7 @@ class BuildTask(RunTask):
         NodeType.Snapshot: snapshot_model_runner,
         NodeType.Seed: seed_runner,
         NodeType.Test: test_runner,
+        NodeType.Unit: test_runner,
     }
     ALL_RESOURCE_VALUES = frozenset({x for x in RUNNER_MAP.keys()})
 

@@ -67,3 +67,9 @@ class TestUnitTestSourceInput:
 
         results = run_dbt(["test", "--select", "test_type:unit"])
         assert len(results) == 1
+
+        results = run_dbt(["build"])
+        assert len(results) == 5
+        result_unique_ids = [result.node.unique_id for result in results]
+        assert len(result_unique_ids) == 5
+        assert "unit_test.test.customers.test_customers" in result_unique_ids
