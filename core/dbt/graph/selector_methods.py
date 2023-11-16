@@ -558,14 +558,16 @@ class TestTypeSelectorMethod(SelectorMethod):
             search_type = GenericTestNode
         elif selector in ("singular", "data"):
             search_type = SingularTestNode
+        elif selector in ("unit"):
+            search_type = UnitTestDefinition
         else:
             raise DbtRuntimeError(
                 f'Invalid test type selector {selector}: expected "generic" or ' '"singular"'
             )
 
-        for node, real_node in self.parsed_nodes(included_nodes):
-            if isinstance(real_node, search_type):
-                yield node
+        for unique_id, node in self.parsed_and_unit_nodes(included_nodes):
+            if isinstance(node, search_type):
+                yield unique_id
 
 
 class StateSelectorMethod(SelectorMethod):
