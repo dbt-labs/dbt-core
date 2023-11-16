@@ -1,13 +1,16 @@
+import agate
 from dataclasses import dataclass
 from dbt.dataclass_schema import dbtClassMixin
+import daff
 import threading
-from typing import Dict, Any, Optional, AbstractSet
-import io
+import re
+from typing import Dict, Any, Optional, AbstractSet, List
 
 from .compile import CompileRunner
 from .run import RunTask
 
 from dbt.adapters.factory import get_adapter
+from dbt.clients.agate_helper import list_rows_from_table, json_rows_from_table
 from dbt.contracts.graph.nodes import UnitTestNode
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.results import TestStatus, RunResult
@@ -25,16 +28,26 @@ from dbt.exceptions import (
 )
 from dbt.node_types import NodeType
 from dbt.parser.unit_tests import UnitTestManifestLoader
+from dbt.ui import green, red
+
+
+@dataclass
+class UnitTestDiff(dbtClassMixin):
+    actual: List[Dict[str, Any]]
+    expected: List[Dict[str, Any]]
+    rendered: str
 
 
 @dataclass
 class UnitTestResultData(dbtClassMixin):
     should_error: bool
     adapter_response: Dict[str, Any]
-    diff: Optional[str] = None
+    diff: Optional[UnitTestDiff] = None
 
 
 class UnitTestRunner(CompileRunner):
+    _ANSI_ESCAPE = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+
     def describe_node(self):
         return f"{self.node.resource_type} {self.node.name}"
 
@@ -95,15 +108,23 @@ class UnitTestRunner(CompileRunner):
         result = context["load_result"]("main")
         adapter_response = result["response"].to_dict(omit_none=True)
         table = result["table"]
-        actual = self._get_unit_test_table(table, "actual")
-        expected = self._get_unit_test_table(table, "expected")
-        should_error = actual.rows != expected.rows
-        diff = None
-        if should_error:
-            actual_output = self._agate_table_to_str(actual)
-            expected_output = self._agate_table_to_str(expected)
+        actual = self._get_unit_test_agate_table(table, "actual")
+        expected = self._get_unit_test_agate_table(table, "expected")
 
-            diff = f"\n\nActual:\n{actual_output}\n\nExpected:\n{expected_output}\n"
+        # generate diff, if exists
+        should_error, diff = False, None
+        daff_diff = self._get_daff_diff(expected, actual)
+        if daff_diff.hasDifference():
+            should_error = True
+            rendered = self._render_daff_diff(daff_diff)
+            rendered = f"\n\n{red('expected')} differs from {green('actual')}:\n\n{rendered}\n"
+
+            diff = UnitTestDiff(
+                actual=json_rows_from_table(actual),
+                expected=json_rows_from_table(expected),
+                rendered=rendered,
+            )
+
         return UnitTestResultData(
             diff=diff,
             should_error=should_error,
@@ -119,7 +140,7 @@ class UnitTestRunner(CompileRunner):
         failures = 0
         if result.should_error:
             status = TestStatus.Fail
-            message = result.diff
+            message = result.diff.rendered if result.diff else None
             failures = 1
 
         return RunResult(
@@ -136,7 +157,7 @@ class UnitTestRunner(CompileRunner):
     def after_execute(self, result):
         self.print_result_line(result)
 
-    def _get_unit_test_table(self, result_table, actual_or_expected: str):
+    def _get_unit_test_agate_table(self, result_table, actual_or_expected: str) -> agate.Table:
         unit_test_table = result_table.where(
             lambda row: row["actual_or_expected"] == actual_or_expected
         )
@@ -144,14 +165,32 @@ class UnitTestRunner(CompileRunner):
         columns.remove("actual_or_expected")
         return unit_test_table.select(columns)
 
-    def _agate_table_to_str(self, table) -> str:
-        # Hack to get Agate table output as string
-        output = io.StringIO()
-        if self.config.args.output == "json":
-            table.to_json(path=output)
-        else:
-            table.print_table(output=output, max_rows=None)
-        return output.getvalue().strip()
+    def _get_daff_diff(
+        self, expected: agate.Table, actual: agate.Table, ordered: bool = False
+    ) -> daff.TableDiff:
+
+        expected_daff_table = daff.PythonTableView(list_rows_from_table(expected))
+        actual_daff_table = daff.PythonTableView(list_rows_from_table(actual))
+
+        alignment = daff.Coopy.compareTables(expected_daff_table, actual_daff_table).align()
+        result = daff.PythonTableView([])
+
+        flags = daff.CompareFlags()
+        flags.ordered = ordered
+
+        diff = daff.TableDiff(alignment, flags)
+        diff.hilite(result)
+        return diff
+
+    def _render_daff_diff(self, daff_diff: daff.TableDiff) -> str:
+        result = daff.PythonTableView([])
+        daff_diff.hilite(result)
+        rendered = daff.TerminalDiffRender().render(result)
+        # strip colors if necessary
+        if not self.config.args.use_colors:
+            rendered = self._ANSI_ESCAPE.sub("", rendered)
+
+        return rendered
 
 
 class UnitTestSelector(ResourceTypeSelector):

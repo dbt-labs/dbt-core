@@ -81,6 +81,7 @@ setup(
         "protobuf>=4.0.0",
         "pytz>=2015.7",
         "pyyaml>=6.0",
+        "daff>=1.3.46",
         "typing-extensions>=4.4",
         # ----
         # Match snowflake-connector-python, to ensure compatibility in dbt-snowflake

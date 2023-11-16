@@ -3,6 +3,7 @@ from codecs import BOM_UTF8
 import agate
 import datetime
 import isodate
+import io
 import json
 import dbt.utils
 from typing import Iterable, List, Dict, Union, Optional, Any
@@ -135,6 +136,23 @@ def table_from_data_flat(data, column_names: Iterable[str]) -> agate.Table:
     return table_from_rows(
         rows=rows, column_names=column_names, text_only_columns=text_only_columns
     )
+
+
+def json_rows_from_table(table: agate.Table) -> List[Dict[str, Any]]:
+    "Convert a table to a list of row dict objects"
+    output = io.StringIO()
+    table.to_json(path=output)  # type: ignore
+
+    return json.loads(output.getvalue())
+
+
+def list_rows_from_table(table: agate.Table) -> List[Any]:
+    "Convert a table to a list of lists, where the first element represents the header"
+    rows = [[col.name for col in table.columns]]
+    for row in table.rows:
+        rows.append(list(row.values()))
+
+    return rows
 
 
 def empty_table():
