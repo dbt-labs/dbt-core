@@ -2,6 +2,7 @@ import os
 import json
 import pytest
 from datetime import datetime, timedelta
+import yaml
 
 import dbt.version
 from dbt.cli.main import dbtRunner
@@ -15,7 +16,6 @@ from tests.functional.sources.fixtures import (
     freshness_via_metadata_schema_yml,
 )
 from dbt.tests.util import AnyStringWith, AnyFloat
-from dbt import deprecations
 
 
 class SuccessfulSourceFreshnessTest(BaseSourcesTest):
@@ -368,15 +368,16 @@ class TestSourceFreshnessMacroOverride(SuccessfulSourceFreshnessTest):
 
     def test_source_freshness(self, project):
         # ensure that the deprecation warning is raised
-        deprecations.reset_deprecations()
-        assert deprecations.active_deprecations == set()
-        self.run_dbt_with_vars(
-            project,
-            ["source", "freshness"],
-            expect_pass=False,
+        vars_dict = {
+            "test_run_schema": project.test_schema,
+            "test_loaded_at": project.adapter.quote("updated_at"),
+        }
+        events = []
+        dbtRunner(callbacks=[events.append]).invoke(
+            ["source", "freshness", "--vars", yaml.safe_dump(vars_dict)]
         )
-        expected = {"collect-freshness-return-signature"}
-        assert expected == deprecations.active_deprecations
+        matches = list([e for e in events if e.info.name == "CollectFreshnessReturnSignature"])
+        assert matches
 
 
 class TestMetadataFreshnessFails:

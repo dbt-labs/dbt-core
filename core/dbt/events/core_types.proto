@@ -3,7 +3,6 @@ syntax = "proto3";
 package proto_types;
 
 import "google/protobuf/timestamp.proto";
-import "google/protobuf/struct.proto";
 
 // Common event info
 message CoreEventInfo {
@@ -61,17 +60,6 @@ message ConfigDataPathDeprecation {
 message ConfigDataPathDeprecationMsg {
     CoreEventInfo info = 1;
     ConfigDataPathDeprecation data = 2;
-}
-
-// D005
-message AdapterDeprecationWarning {
-    string old_name = 1;
-    string new_name = 2;
-}
-
-message AdapterDeprecationWarningMsg {
-    CoreEventInfo info = 1;
-    AdapterDeprecationWarning data = 2;
 }
 
 // D006
@@ -136,15 +124,6 @@ message ConfigTargetPathDeprecation {
 message ConfigTargetPathDeprecationMsg {
     CoreEventInfo info = 1;
     ConfigTargetPathDeprecation data = 2;
-}
-
-// D012
-message CollectFreshnessReturnSignature {
-}
-
-message CollectFreshnessReturnSignatureMsg {
-    CoreEventInfo info = 1;
-    CollectFreshnessReturnSignature data = 2;
 }
 
 // I065

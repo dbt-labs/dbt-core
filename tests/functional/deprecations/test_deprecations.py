@@ -66,24 +66,6 @@ class TestConfigPathDeprecation:
         assert expected_msg in exc_str
 
 
-class TestAdapterDeprecations:
-    @pytest.fixture(scope="class")
-    def models(self):
-        return {"already_exists.sql": models__already_exists_sql}
-
-    def test_adapter(self, project):
-        deprecations.reset_deprecations()
-        assert deprecations.active_deprecations == set()
-        run_dbt(["run"])
-        expected = {"adapter:already_exists"}
-        assert expected == deprecations.active_deprecations
-
-    def test_adapter_fail(self, project):
-        deprecations.reset_deprecations()
-        assert deprecations.active_deprecations == set()
-        run_dbt(["--warn-error", "run"], expect_pass=False)
-
-
 class TestPackageInstallPathDeprecation:
     @pytest.fixture(scope="class")
     def models_trivial(self):

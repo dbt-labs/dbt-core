@@ -2,6 +2,11 @@ from dbt.events.base_types import WarnLevel
 from dbt.common.ui import warning_tag, line_wrap_message
 
 
+# =======================================================
+# D - Deprecations
+# =======================================================
+
+
 class DeprecatedModel(WarnLevel):
     def code(self) -> str:
         return "I065"
@@ -13,11 +18,6 @@ class DeprecatedModel(WarnLevel):
             "This model should be disabled or removed."
         )
         return warning_tag(msg)
-
-
-# =======================================================
-# D - Deprecations
-# =======================================================
 
 
 class PackageRedirectDeprecation(WarnLevel):
@@ -65,20 +65,6 @@ class ConfigDataPathDeprecation(WarnLevel):
         description = (
             f"The `{self.deprecated_path}` config has been renamed to `{self.exp_path}`. "
             "Please update your `dbt_project.yml` configuration to reflect this change."
-        )
-        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
-
-
-class AdapterDeprecationWarning(WarnLevel):
-    def code(self) -> str:
-        return "D005"
-
-    def message(self) -> str:
-        description = (
-            f"The adapter function `adapter.{self.old_name}` is deprecated and will be removed in "
-            f"a future release of dbt. Please use `adapter.{self.new_name}` instead. "
-            f"\n\nDocumentation for {self.new_name} can be found here:"
-            f"\n\nhttps://docs.getdbt.com/docs/adapter"
         )
         return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
 
@@ -174,18 +160,5 @@ class ConfigTargetPathDeprecation(WarnLevel):
             f"and will no longer be supported in a future version of dbt-core. "
             f"If you wish to write dbt {output} to a custom directory, please use "
             f"the {cli_flag} CLI flag or {env_var} env var instead."
-        )
-        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
-
-
-class CollectFreshnessReturnSignature(WarnLevel):
-    def code(self) -> str:
-        return "D012"
-
-    def message(self) -> str:
-        description = (
-            "The 'collect_freshness' macro signature has changed to return the full "
-            "query result, rather than just a table of values. See the v1.5 migration guide "
-            "for details on how to update your custom macro: https://docs.getdbt.com/guides/migration/versions/upgrading-to-v1.5"
         )
         return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))

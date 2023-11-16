@@ -51,6 +51,35 @@ def format_adapter_message(name, base_msg, args) -> str:
     return f"{name} adapter: {msg}"
 
 
+# TODO: move to adapter event
+class CollectFreshnessReturnSignature(WarnLevel):
+    def code(self) -> str:
+        return "D012"
+
+    def message(self) -> str:
+        description = (
+            "The 'collect_freshness' macro signature has changed to return the full "
+            "query result, rather than just a table of values. See the v1.5 migration guide "
+            "for details on how to update your custom macro: https://docs.getdbt.com/guides/migration/versions/upgrading-to-v1.5"
+        )
+        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+
+
+# TODO: move to adapter event
+class AdapterDeprecationWarning(WarnLevel):
+    def code(self) -> str:
+        return "D005"
+
+    def message(self) -> str:
+        description = (
+            f"The adapter function `adapter.{self.old_name}` is deprecated and will be removed in "
+            f"a future release of dbt. Please use `adapter.{self.new_name}` instead. "
+            f"\n\nDocumentation for {self.new_name} can be found here:"
+            f"\n\nhttps://docs.getdbt.com/docs/adapter"
+        )
+        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+
+
 # =======================================================
 # A - Pre-project loading
 # =======================================================

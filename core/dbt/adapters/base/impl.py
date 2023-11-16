@@ -68,6 +68,7 @@ from dbt.common.events.types import (
     CatalogGenerationError,
     ConstraintNotSupported,
     ConstraintNotEnforced,
+    CollectFreshnessReturnSignature,
 )
 from dbt.common.utils import filter_null_values, executor, cast_to_str, AttrDict
 
@@ -82,7 +83,7 @@ from dbt.adapters.base.relation import (
 from dbt.adapters.base import Column as BaseColumn
 from dbt.adapters.base import Credentials
 from dbt.adapters.cache import RelationsCache, _make_ref_key_dict
-from dbt import deprecations
+
 
 GET_CATALOG_MACRO_NAME = "get_catalog"
 GET_CATALOG_RELATIONS_MACRO_NAME = "get_catalog_relations"
@@ -1263,7 +1264,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         ]
         result = self.execute_macro(FRESHNESS_MACRO_NAME, kwargs=kwargs, manifest=manifest)
         if isinstance(result, agate.Table):
-            deprecations.warn("collect-freshness-return-signature")
+            warn_or_error(CollectFreshnessReturnSignature())
             adapter_response = None
             table = result
         else:

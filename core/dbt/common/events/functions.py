@@ -34,7 +34,6 @@ def make_log_dir_if_missing(log_path: Union[Path, str]) -> None:
     log_path.mkdir(parents=True, exist_ok=True)
 
 
-# TODO: make None default
 def setup_event_logger(flags, callbacks: List[Callable[[EventMsg], None]] = []) -> None:
     cleanup_event_logger()
     make_log_dir_if_missing(flags.LOG_PATH)

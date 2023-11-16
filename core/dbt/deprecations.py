@@ -1,17 +1,14 @@
 import abc
 from typing import Optional, Set, List, Dict, ClassVar
-from types import ModuleType
 
 import dbt.tracking
 
-from dbt.common.events import types as common_types
 from dbt.events import types as core_types
 
 
 class DBTDeprecation:
     _name: ClassVar[Optional[str]] = None
     _event: ClassVar[Optional[str]] = None
-    _event_module: ClassVar[Optional[ModuleType]] = common_types
 
     @property
     def name(self) -> str:
@@ -26,7 +23,7 @@ class DBTDeprecation:
     @property
     def event(self) -> abc.ABCMeta:
         if self._event is not None:
-            module_path = self._event_module
+            module_path = core_types
             class_name = self._event
 
             try:
@@ -44,67 +41,48 @@ class DBTDeprecation:
             active_deprecations.add(self.name)
 
 
-class DBTCoreDeprecation(DBTDeprecation):
-    _event_module = core_types
-
-
-class PackageRedirectDeprecation(DBTCoreDeprecation):
+class PackageRedirectDeprecation(DBTDeprecation):
     _name = "package-redirect"
     _event = "PackageRedirectDeprecation"
 
 
-class PackageInstallPathDeprecation(DBTCoreDeprecation):
+class PackageInstallPathDeprecation(DBTDeprecation):
     _name = "install-packages-path"
     _event = "PackageInstallPathDeprecation"
 
 
-class ConfigSourcePathDeprecation(DBTCoreDeprecation):
+class ConfigSourcePathDeprecation(DBTDeprecation):
     _name = "project-config-source-paths"
     _event = "ConfigSourcePathDeprecation"
 
 
-class ConfigDataPathDeprecation(DBTCoreDeprecation):
+class ConfigDataPathDeprecation(DBTDeprecation):
     _name = "project-config-data-paths"
     _event = "ConfigDataPathDeprecation"
 
 
-def renamed_method(old_name: str, new_name: str):
-    class AdapterDeprecationWarning(DBTCoreDeprecation):
-        _name = "adapter:{}".format(old_name)
-        _event = "AdapterDeprecationWarning"
-
-    dep = AdapterDeprecationWarning()
-    deprecations_list.append(dep)
-    deprecations[dep.name] = dep
-
-
-class MetricAttributesRenamed(DBTCoreDeprecation):
+class MetricAttributesRenamed(DBTDeprecation):
     _name = "metric-attr-renamed"
     _event = "MetricAttributesRenamed"
 
 
-class ExposureNameDeprecation(DBTCoreDeprecation):
+class ExposureNameDeprecation(DBTDeprecation):
     _name = "exposure-name"
     _event = "ExposureNameDeprecation"
 
 
-class ConfigLogPathDeprecation(DBTCoreDeprecation):
+class ConfigLogPathDeprecation(DBTDeprecation):
     _name = "project-config-log-path"
     _event = "ConfigLogPathDeprecation"
 
 
-class ConfigTargetPathDeprecation(DBTCoreDeprecation):
+class ConfigTargetPathDeprecation(DBTDeprecation):
     _name = "project-config-target-path"
     _event = "ConfigTargetPathDeprecation"
 
 
-class CollectFreshnessReturnSignature(DBTCoreDeprecation):
-    _name = "collect-freshness-return-signature"
-    _event = "CollectFreshnessReturnSignature"
-
-
 def renamed_env_var(old_name: str, new_name: str):
-    class EnvironmentVariableRenamed(DBTCoreDeprecation):
+    class EnvironmentVariableRenamed(DBTDeprecation):
         _name = f"environment-variable-renamed:{old_name}"
         _event = "EnvironmentVariableRenamed"
 
@@ -140,7 +118,6 @@ deprecations_list: List[DBTDeprecation] = [
     ExposureNameDeprecation(),
     ConfigLogPathDeprecation(),
     ConfigTargetPathDeprecation(),
-    CollectFreshnessReturnSignature(),
 ]
 
 deprecations: Dict[str, DBTDeprecation] = {d.name: d for d in deprecations_list}

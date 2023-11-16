@@ -92,6 +92,28 @@ message GenericMessage {
     EventInfo info = 1;
 }
 
+// A - Deprecations - to move to adapter events
+// D005
+message AdapterDeprecationWarning {
+    string old_name = 1;
+    string new_name = 2;
+}
+
+message AdapterDeprecationWarningMsg {
+    EventInfo info = 1;
+    AdapterDeprecationWarning data = 2;
+}
+
+// D012
+message CollectFreshnessReturnSignature {
+}
+
+message CollectFreshnessReturnSignatureMsg {
+    EventInfo info = 1;
+    CollectFreshnessReturnSignature data = 2;
+}
+
+
 // A - Pre-project loading
 
 // A001
