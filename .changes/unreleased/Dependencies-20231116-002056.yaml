@@ -1,0 +1,6 @@
+kind: "Dependencies"
+body: "Bump ddtrace from 2.1.7 to 2.2.0"
+time: 2023-11-16T00:20:56.00000Z
+custom:
+  Author: dependabot[bot]
+  PR: 9103
