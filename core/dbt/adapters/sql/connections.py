@@ -4,12 +4,12 @@ from typing import List, Optional, Tuple, Any, Iterable, Dict
 
 import agate
 
+from dbt.adapters.events.types import ConnectionUsed, SQLQuery, SQLCommit, SQLQueryStatus
 import dbt.common.clients.agate_helper
 import dbt.common.exceptions
 from dbt.adapters.base import BaseConnectionManager
 from dbt.adapters.contracts.connection import Connection, ConnectionState, AdapterResponse
 from dbt.common.events.functions import fire_event
-from dbt.common.events.types import ConnectionUsed, SQLQuery, SQLCommit, SQLQueryStatus
 from dbt.common.events.contextvars import get_node_info
 from dbt.common.utils import cast_to_str
 

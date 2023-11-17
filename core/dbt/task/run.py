@@ -27,12 +27,14 @@ from dbt.exceptions import (
 )
 from dbt.common.exceptions import DbtValidationError
 from dbt.adapters.exceptions import MissingMaterializationError
-from dbt.common.events.functions import fire_event, get_invocation_id
-from dbt.common.events.types import (
+from dbt.adapters.events.types import (
     DatabaseErrorRunningHook,
-    Formatting,
     HooksRunning,
     FinishedRunningStats,
+)
+from dbt.common.events.functions import fire_event, get_invocation_id
+from dbt.common.events.types import (
+    Formatting,
     LogModelResult,
     LogStartLine,
     LogHookEndLine,

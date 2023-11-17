@@ -60,7 +60,7 @@ from dbt.clients.jinja import MacroGenerator
 from dbt.contracts.graph.manifest import Manifest, MacroManifest
 from dbt.contracts.graph.nodes import ResultNode
 from dbt.common.events.functions import fire_event, warn_or_error
-from dbt.common.events.types import (
+from dbt.adapters.events.types import (
     CacheMiss,
     ListRelations,
     CodeExecution,
@@ -68,7 +68,6 @@ from dbt.common.events.types import (
     CatalogGenerationError,
     ConstraintNotSupported,
     ConstraintNotEnforced,
-    CollectFreshnessReturnSignature,
 )
 from dbt.common.utils import filter_null_values, executor, cast_to_str, AttrDict
 
@@ -83,6 +82,7 @@ from dbt.adapters.base.relation import (
 from dbt.adapters.base import Column as BaseColumn
 from dbt.adapters.base import Credentials
 from dbt.adapters.cache import RelationsCache, _make_ref_key_dict
+from dbt.adapters.events.types import CollectFreshnessReturnSignature
 
 
 GET_CATALOG_MACRO_NAME = "get_catalog"

@@ -15,7 +15,7 @@ from dbt.common.exceptions.cache import (
     NoneRelationFoundError,
 )
 from dbt.common.events.functions import fire_event, fire_event_if
-from dbt.common.events.types import CacheAction, CacheDumpGraph
+from dbt.adapters.events.types import CacheAction, CacheDumpGraph
 from dbt.utils import lowercase
 
 

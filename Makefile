@@ -46,6 +46,11 @@ proto_types:  ## generates google protobuf python file from types.proto
 core_proto_types:  ## generates google protobuf python file from core_types.proto
 	protoc -I=./core/dbt/events --python_out=./core/dbt/events ./core/dbt/events/core_types.proto
 
+.PHONY: adapter_proto_types
+adapter_proto_types:  ## generates google protobuf python file from core_types.proto
+	protoc -I=./core/dbt/adapters/events --python_out=./core/dbt/adapters/events ./core/dbt/adapters/events/adapter_types.proto
+
+
 .PHONY: mypy
 mypy: .env ## Runs mypy against staged changes for static type checking.
 	@\

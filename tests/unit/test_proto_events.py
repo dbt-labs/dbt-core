@@ -1,9 +1,11 @@
+from dbt.adapters.events.types import (
+    RollbackFailed,
+    PluginLoadError,
+)
 from dbt.common.events.types import (
     MainReportVersion,
     MainReportArgs,
-    RollbackFailed,
     MainEncounteredError,
-    PluginLoadError,
     LogStartLine,
     LogTestResult,
 )

@@ -40,7 +40,7 @@ from dbt.adapters.base.query_headers import (
 )
 from dbt.common.events import AdapterLogger
 from dbt.common.events.functions import fire_event
-from dbt.common.events.types import (
+from dbt.adapters.events.types import (
     NewConnection,
     ConnectionReused,
     ConnectionLeftOpenInCleanup,

@@ -2,7 +2,7 @@ import abc
 from functools import wraps
 from typing import Callable, Optional, Any, FrozenSet, Dict, Set
 from dbt.common.events.functions import warn_or_error
-from dbt.common.events.types import AdapterDeprecationWarning
+from dbt.adapters.events.types import AdapterDeprecationWarning
 
 Decorator = Callable[[Any], Callable]
 

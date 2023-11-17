@@ -26,9 +26,8 @@ from dbt.common.dataclass_schema import (
 from dbt.common.contracts.util import Replaceable
 from dbt.common.utils import md5
 
-# TODO: dbt.common.events dependency
 from dbt.common.events.functions import fire_event
-from dbt.common.events.types import NewConnectionOpening
+from dbt.adapters.events.types import NewConnectionOpening
 
 # TODO: this is a very bad dependency - shared global state
 from dbt.common.events.contextvars import get_node_info

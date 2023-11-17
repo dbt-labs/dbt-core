@@ -56,6 +56,8 @@ class IEventManager(Protocol):
 
 
 class TestEventManager(IEventManager):
+    __test__ = False
+
     def __init__(self) -> None:
         self.event_history: List[Tuple[BaseEvent, Optional[EventLevel]]] = []
         self.loggers = []

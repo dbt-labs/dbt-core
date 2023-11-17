@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from dbt.common.events.event_handler import set_package_logging
 from dbt.common.events.functions import fire_event, EVENT_MANAGER
 from dbt.common.events.contextvars import get_node_info
-from dbt.common.events.types import (
+from dbt.adapters.events.types import (
     AdapterEventDebug,
     AdapterEventInfo,
     AdapterEventWarning,
