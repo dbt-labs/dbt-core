@@ -190,7 +190,6 @@ def cli(ctx, **kwargs):
 @p.full_refresh
 @p.include_saved_query
 @p.indirect_selection
-@p.profile
 @p.profiles_dir
 @p.project_dir
 @p.resource_type
@@ -201,7 +200,6 @@ def cli(ctx, **kwargs):
 @p.defer_state
 @p.deprecated_state
 @p.store_failures
-@p.target
 @p.target_path
 @p.threads
 @p.vars
@@ -229,10 +227,8 @@ def build(ctx, **kwargs):
 @click.pass_context
 @global_flags
 @p.clean_project_files_only
-@p.profile
 @p.profiles_dir
 @p.project_dir
-@p.target
 @p.target_path
 @p.vars
 @requires.postflight
@@ -266,7 +262,6 @@ def docs(ctx, **kwargs):
 @p.exclude
 @p.favor_state
 @p.deprecated_favor_state
-@p.profile
 @p.profiles_dir
 @p.project_dir
 @p.select
@@ -276,7 +271,6 @@ def docs(ctx, **kwargs):
 @p.state
 @p.defer_state
 @p.deprecated_state
-@p.target
 @p.target_path
 @p.threads
 @p.vars
@@ -305,10 +299,8 @@ def docs_generate(ctx, **kwargs):
 @global_flags
 @p.browser
 @p.port
-@p.profile
 @p.profiles_dir
 @p.project_dir
-@p.target
 @p.target_path
 @p.vars
 @requires.postflight
@@ -341,7 +333,6 @@ def docs_serve(ctx, **kwargs):
 @p.show_output_format
 @p.indirect_selection
 @p.introspect
-@p.profile
 @p.profiles_dir
 @p.project_dir
 @p.select
@@ -351,7 +342,6 @@ def docs_serve(ctx, **kwargs):
 @p.defer_state
 @p.deprecated_state
 @p.compile_inject_ephemeral_ctes
-@p.target
 @p.target_path
 @p.threads
 @p.vars
@@ -389,7 +379,6 @@ def compile(ctx, **kwargs):
 @p.show_limit
 @p.indirect_selection
 @p.introspect
-@p.profile
 @p.profiles_dir
 @p.project_dir
 @p.select
@@ -398,7 +387,6 @@ def compile(ctx, **kwargs):
 @p.state
 @p.defer_state
 @p.deprecated_state
-@p.target
 @p.target_path
 @p.threads
 @p.vars
@@ -428,10 +416,8 @@ def show(ctx, **kwargs):
 @global_flags
 @p.debug_connection
 @p.config_dir
-@p.profile
 @p.profiles_dir_exists_false
 @p.project_dir
-@p.target
 @p.vars
 @requires.postflight
 @requires.preflight
@@ -452,10 +438,8 @@ def debug(ctx, **kwargs):
 @cli.command("deps")
 @click.pass_context
 @global_flags
-@p.profile
 @p.profiles_dir_exists_false
 @p.project_dir
-@p.target
 @p.vars
 @p.source
 @p.dry_run
@@ -502,11 +486,9 @@ def deps(ctx, **kwargs):
 @global_flags
 # for backwards compatibility, accept 'project_name' as an optional positional argument
 @click.argument("project_name", required=False)
-@p.profile
 @p.profiles_dir_exists_false
 @p.project_dir
 @p.skip_profile_setup
-@p.target
 @p.vars
 @requires.postflight
 @requires.preflight
@@ -528,7 +510,6 @@ def init(ctx, **kwargs):
 @p.models
 @p.output
 @p.output_keys
-@p.profile
 @p.profiles_dir
 @p.project_dir
 @p.resource_type
@@ -537,7 +518,6 @@ def init(ctx, **kwargs):
 @p.state
 @p.defer_state
 @p.deprecated_state
-@p.target
 @p.target_path
 @p.vars
 @requires.postflight
@@ -569,10 +549,8 @@ cli.add_command(ls, "ls")
 @cli.command("parse")
 @click.pass_context
 @global_flags
-@p.profile
 @p.profiles_dir
 @p.project_dir
-@p.target
 @p.target_path
 @p.threads
 @p.vars
@@ -598,7 +576,6 @@ def parse(ctx, **kwargs):
 @p.deprecated_favor_state
 @p.exclude
 @p.full_refresh
-@p.profile
 @p.profiles_dir
 @p.project_dir
 @p.select
@@ -606,7 +583,6 @@ def parse(ctx, **kwargs):
 @p.state
 @p.defer_state
 @p.deprecated_state
-@p.target
 @p.target_path
 @p.threads
 @p.vars
@@ -636,8 +612,6 @@ def run(ctx, **kwargs):
 @p.project_dir
 @p.profiles_dir
 @p.vars
-@p.profile
-@p.target
 @p.state
 @p.threads
 @requires.postflight
@@ -666,14 +640,12 @@ def retry(ctx, **kwargs):
 @p.defer_state
 @p.exclude
 @p.full_refresh
-@p.profile
 @p.profiles_dir
 @p.project_dir
 @p.resource_type
 @p.select
 @p.selector
 @p.state  # required
-@p.target
 @p.target_path
 @p.threads
 @p.vars
@@ -702,10 +674,8 @@ def clone(ctx, **kwargs):
 @global_flags
 @click.argument("macro")
 @p.args
-@p.profile
 @p.profiles_dir
 @p.project_dir
-@p.target
 @p.target_path
 @p.threads
 @p.vars
@@ -734,7 +704,6 @@ def run_operation(ctx, **kwargs):
 @global_flags
 @p.exclude
 @p.full_refresh
-@p.profile
 @p.profiles_dir
 @p.project_dir
 @p.select
@@ -743,7 +712,6 @@ def run_operation(ctx, **kwargs):
 @p.state
 @p.defer_state
 @p.deprecated_state
-@p.target
 @p.target_path
 @p.threads
 @p.vars
@@ -774,7 +742,6 @@ def seed(ctx, **kwargs):
 @p.exclude
 @p.favor_state
 @p.deprecated_favor_state
-@p.profile
 @p.profiles_dir
 @p.project_dir
 @p.select
@@ -782,7 +749,6 @@ def seed(ctx, **kwargs):
 @p.state
 @p.defer_state
 @p.deprecated_state
-@p.target
 @p.target_path
 @p.threads
 @p.vars
@@ -819,7 +785,6 @@ def source(ctx, **kwargs):
 @global_flags
 @p.exclude
 @p.output_path  # TODO: Is this ok to re-use?  We have three different output params, how much can we consolidate?
-@p.profile
 @p.profiles_dir
 @p.project_dir
 @p.select
@@ -827,7 +792,6 @@ def source(ctx, **kwargs):
 @p.state
 @p.defer_state
 @p.deprecated_state
-@p.target
 @p.target_path
 @p.threads
 @p.vars
@@ -866,7 +830,6 @@ cli.commands["source"].add_command(snapshot_freshness, "snapshot-freshness")  # 
 @p.favor_state
 @p.deprecated_favor_state
 @p.indirect_selection
-@p.profile
 @p.profiles_dir
 @p.project_dir
 @p.select
@@ -875,7 +838,6 @@ cli.commands["source"].add_command(snapshot_freshness, "snapshot-freshness")  # 
 @p.defer_state
 @p.deprecated_state
 @p.store_failures
-@p.target
 @p.target_path
 @p.threads
 @p.vars
