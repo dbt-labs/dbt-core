@@ -65,7 +65,7 @@ class dbtPlugin:
         raise NotImplementedError(f"get_manifest_artifacts hook not implemented for {self.name}")
 
 
-@functools.cache
+@functools.lru_cache(maxsize=None)
 def _get_dbt_modules() -> Mapping[str, ModuleType]:
     # This is an expensive function, especially in the context of testing, when
     # it is called repeatedly, so we break it out and cache the result globally.
