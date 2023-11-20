@@ -9,7 +9,7 @@ from dbt.adapters.sql import SQLAdapter
 from dbt.adapters.postgres import PostgresConnectionManager
 from dbt.adapters.postgres.column import PostgresColumn
 from dbt.adapters.postgres import PostgresRelation
-from dbt.common.constraints import ConstraintType
+from dbt.common.contracts.constraints import ConstraintType
 from dbt.common.dataclass_schema import dbtClassMixin, ValidationError
 from dbt.common.exceptions import DbtRuntimeError
 from dbt.adapters.exceptions import (

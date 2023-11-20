@@ -23,7 +23,11 @@ from typing import (
 from multiprocessing.context import SpawnContext
 
 from dbt.adapters.capability import Capability, CapabilityDict
-from dbt.common.constraints import ColumnLevelConstraint, ConstraintType, ModelLevelConstraint
+from dbt.common.contracts.constraints import (
+    ColumnLevelConstraint,
+    ConstraintType,
+    ModelLevelConstraint,
+)
 
 import agate
 import pytz

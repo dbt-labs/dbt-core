@@ -1,4 +1,4 @@
-from dbt.common.constraints import ColumnLevelConstraint, ConstraintType
+from dbt.common.contracts.constraints import ColumnLevelConstraint, ConstraintType
 from dbt.contracts.graph.unparsed import (
     HasColumnProps,
     UnparsedColumn,

@@ -7,7 +7,11 @@ import hashlib
 from mashumaro.types import SerializableType
 from typing import Optional, Union, List, Dict, Any, Sequence, Tuple, Iterator, Literal
 
-from dbt.common.constraints import ColumnLevelConstraint, ConstraintType, ModelLevelConstraint
+from dbt.common.contracts.constraints import (
+    ColumnLevelConstraint,
+    ConstraintType,
+    ModelLevelConstraint,
+)
 from dbt.common.dataclass_schema import dbtClassMixin, ExtensibleDbtClassMixin
 
 from dbt.clients.system import write_file
