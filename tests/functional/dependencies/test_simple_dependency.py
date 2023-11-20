@@ -4,9 +4,11 @@ import tempfile
 
 from pathlib import Path
 
+from dbt.exceptions import DbtProjectError
 from dbt.tests.util import (
     check_relations_equal,
     run_dbt,
+    write_config_file,
 )
 
 
@@ -276,6 +278,25 @@ class TestRekeyedDependencyWithSubduplicates(object):
         assert len(os.listdir("dbt_packages")) == 2
 
 
+class TestTarballNestedDependencies(object):
+    # this version of dbt_expectations has a dependency on dbt_date, which the
+    # package config handling should detect
+    @pytest.fixture(scope="class")
+    def packages(self):
+        return {
+            "packages": [
+                {
+                    "tarball": "https://github.com/calogica/dbt-expectations/archive/refs/tags/0.9.0.tar.gz",
+                    "name": "dbt_expectations",
+                },
+            ]
+        }
+
+    def test_simple_dependency_deps(self, project):
+        run_dbt(["deps"])
+        assert set(os.listdir("dbt_packages")) == set(["dbt_expectations", "dbt_date"])
+
+
 class DependencyBranchBase(object):
     @pytest.fixture(scope="class", autouse=True)
     def setUp(self, project):
@@ -374,3 +395,42 @@ class TestSimpleDependencyBadProfile(object):
         del os.environ["PROFILE_TEST_HOST"]
         run_dbt(["deps"])
         run_dbt(["clean"])
+
+
+class TestSimpleDependcyTarball(object):
+    @pytest.fixture(scope="class")
+    def packages(self):
+        return {
+            "packages": [
+                {
+                    "tarball": "https://codeload.github.com/dbt-labs/dbt-utils/tar.gz/0.9.6",
+                    "name": "dbt_utils",
+                }
+            ]
+        }
+
+    def test_deps_simple_tarball_doesnt_error_out(self, project):
+        run_dbt(["deps"])
+        assert len(os.listdir("dbt_packages")) == 1
+
+
+class TestBadTarballDependency(object):
+    def test_malformed_tarball_package_causes_exception(self, project):
+        # We have to specify the bad formatted package here because if we do it
+        # in a `packages` fixture, the test will blow up in the setup phase, meaning
+        # we can't appropriately catch it with a `pytest.raises`
+        bad_tarball_package_spec = {
+            "packages": [
+                {
+                    "tarball": "https://codeload.github.com/dbt-labs/dbt-utils/tar.gz/0.9.6",
+                    "version": "dbt_utils",
+                }
+            ]
+        }
+        write_config_file(bad_tarball_package_spec, "packages.yml")
+
+        with pytest.raises(
+            DbtProjectError, match=r"The packages.yml file in this project is malformed"
+        ) as e:
+            run_dbt(["deps"])
+            assert e is not None
