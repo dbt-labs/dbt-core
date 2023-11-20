@@ -52,3 +52,14 @@ class TestCLI:
                 continue
             cmd = Command.from_str(command.name)
             command_args(cmd)
+
+    def test_global_flags_not_on_subcommands(self):
+        def run_test(command):
+            # For each subcommand
+            for command_name, command in command.commands.items():
+                # Get string representation of all parameter options for this subcommand e.g. "['-t', '--target']"
+                parameter_options = [str(sorted(param.opts)) for param in command.params]
+                # Check there are no parameter options that have been applied twice
+                assert sorted(list(set(parameter_options))) == sorted(parameter_options)
+
+        run_test(cli)
