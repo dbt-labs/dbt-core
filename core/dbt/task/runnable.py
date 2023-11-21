@@ -210,6 +210,8 @@ class GraphRunnableTask(ConfiguredTask):
             status: Dict[str, str] = {}
             try:
                 result = runner.run_with_hooks(self.manifest)
+            except Exception as exc:
+                raise DbtInternalError(f"Unable to execute node: {exc}")
             finally:
                 finishctx = TimestampNamed("finished_at")
                 with finishctx, DbtModelState(status):

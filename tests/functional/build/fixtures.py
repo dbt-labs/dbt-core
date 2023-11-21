@@ -137,6 +137,19 @@ models:
           - not_null
 """
 
+unit_tests__yml = """
+unit_tests:
+  - name: ut_model_3
+    model: model_3
+    given:
+      - input: ref('model_1')
+        rows:
+          - {iso3: ABW, name: Aruba}
+    expect:
+      rows:
+        - {iso3: ABW, name: Aruba}
+"""
+
 models_failing_tests__tests_yml = """
 version: 2
 

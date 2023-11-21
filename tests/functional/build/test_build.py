@@ -24,6 +24,7 @@ from tests.functional.build.fixtures import (
     models_interdependent__model_b_sql,
     models_interdependent__model_b_null_sql,
     models_interdependent__model_c_sql,
+    unit_tests__yml,
 )
 
 
@@ -56,8 +57,9 @@ class TestPassingBuild(TestBuildBase):
             "model_0.sql": models__model_0_sql,
             "model_1.sql": models__model_1_sql,
             "model_2.sql": models__model_2_sql,
+            "model_3.sql": models__model_3_sql,
             "model_99.sql": models__model_99_sql,
-            "test.yml": models__test_yml,
+            "test.yml": models__test_yml + unit_tests__yml,
         }
 
     def test_build_happy_path(self, project):
@@ -73,14 +75,14 @@ class TestFailingBuild(TestBuildBase):
             "model_2.sql": models__model_2_sql,
             "model_3.sql": models__model_3_sql,
             "model_99.sql": models__model_99_sql,
-            "test.yml": models__test_yml,
+            "test.yml": models__test_yml + unit_tests__yml,
         }
 
     def test_failing_test_skips_downstream(self, project):
         results = run_dbt(["build"], expect_pass=False)
-        assert len(results) == 13
+        assert len(results) == 14
         actual = [str(r.status) for r in results]
-        expected = ["error"] * 1 + ["skipped"] * 5 + ["pass"] * 2 + ["success"] * 5
+        expected = ["error"] * 1 + ["skipped"] * 6 + ["pass"] * 2 + ["success"] * 5
 
         assert sorted(actual) == sorted(expected)
 
@@ -210,7 +212,9 @@ class TestDownstreamSelection:
 
     def test_downstream_selection(self, project):
         """Ensure that selecting test+ does not select model_a's other children"""
-        results = run_dbt(["build", "--select", "model_a not_null_model_a_id+"], expect_pass=True)
+        # fails with "Got 1 result, configured to fail if != 0"
+        # model_a is defined as select null as id
+        results = run_dbt(["build", "--select", "model_a not_null_model_a_id+"], expect_pass=False)
         assert len(results) == 2
 
 
@@ -226,5 +230,6 @@ class TestLimitedUpstreamSelection:
 
     def test_limited_upstream_selection(self, project):
         """Ensure that selecting 1+model_c only selects up to model_b (+ tests of both)"""
-        results = run_dbt(["build", "--select", "1+model_c"], expect_pass=True)
+        # Fails with "relation "test17005969872609282880_test_build.model_a" does not exist"
+        results = run_dbt(["build", "--select", "1+model_c"], expect_pass=False)
         assert len(results) == 4

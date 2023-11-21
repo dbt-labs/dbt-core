@@ -1095,6 +1095,7 @@ class UnitTestDefinition(NodeInfoMixin, GraphNode, UnitTestDefinitionMandatory):
     depends_on: DependsOn = field(default_factory=DependsOn)
     config: UnitTestConfig = field(default_factory=UnitTestConfig)
     checksum: Optional[str] = None
+    schema: Optional[str] = None
 
     @property
     def build_path(self):

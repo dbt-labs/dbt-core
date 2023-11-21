@@ -134,7 +134,11 @@ class UnitTestManifestLoader:
                 ),
             }
 
-            if original_input_node.resource_type in (NodeType.Model, NodeType.Seed):
+            if original_input_node.resource_type in (
+                NodeType.Model,
+                NodeType.Seed,
+                NodeType.Snapshot,
+            ):
                 input_name = f"{unit_test_node.name}__{original_input_node.name}"
                 input_node = ModelNode(
                     **common_fields,
@@ -289,6 +293,7 @@ class UnitTestParser(YamlReader):
                 depends_on=DependsOn(nodes=[tested_model_node.unique_id]),
                 fqn=unit_test_fqn,
                 config=unit_test_config,
+                schema=tested_model_node.schema,
             )
             # for calculating state:modified
             unit_test_definition.build_unit_test_checksum(
