@@ -1,6 +1,8 @@
+import functools
 import importlib
 import pkgutil
-from typing import Dict, List, Callable
+from types import ModuleType
+from typing import Dict, List, Callable, Mapping
 
 from dbt.contracts.graph.manifest import Manifest
 from dbt.exceptions import DbtRuntimeError
@@ -63,6 +65,17 @@ class dbtPlugin:
         raise NotImplementedError(f"get_manifest_artifacts hook not implemented for {self.name}")
 
 
+@functools.lru_cache(maxsize=None)
+def _get_dbt_modules() -> Mapping[str, ModuleType]:
+    # This is an expensive function, especially in the context of testing, when
+    # it is called repeatedly, so we break it out and cache the result globally.
+    return {
+        name: importlib.import_module(name)
+        for _, name, _ in pkgutil.iter_modules()
+        if name.startswith(PluginManager.PLUGIN_MODULE_PREFIX)
+    }
+
+
 class PluginManager:
     PLUGIN_MODULE_PREFIX = "dbt_"
     PLUGIN_ATTR_NAME = "plugins"
@@ -91,11 +104,7 @@ class PluginManager:
 
     @classmethod
     def from_modules(cls, project_name: str) -> "PluginManager":
-        discovered_dbt_modules = {
-            name: importlib.import_module(name)
-            for _, name, _ in pkgutil.iter_modules()
-            if name.startswith(cls.PLUGIN_MODULE_PREFIX)
-        }
+        discovered_dbt_modules = _get_dbt_modules()
 
         plugins = []
         for name, module in discovered_dbt_modules.items():
