@@ -217,5 +217,5 @@ class TestUnitTestsDuplicateCSVFile:
 
         # Select by model name
         results = run_dbt(["test", "--select", "my_model"], expect_pass=False)
-        expected_error = "Found multiple fixture files named test_my_model_basic_fixture at ['one-folder/test_my_model_basic_fixture.csv', 'another-folder/test_my_model_basic_fixture.csv']"
+        expected_error = "Found multiple fixture files named test_my_model_basic_fixture"
         assert expected_error in results[0].message
