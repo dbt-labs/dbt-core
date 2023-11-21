@@ -89,6 +89,7 @@ class UnitTestParserTest(SchemaParserTest):
             package="snowplow",
             name="my_model",
             config=mock.MagicMock(enabled=True),
+            schema="test_schema",
             refs=[],
             sources=[],
             patch_path=None,
@@ -131,6 +132,7 @@ class UnitTestParserTest(SchemaParserTest):
             depends_on=DependsOn(nodes=["model.snowplow.my_model"]),
             fqn=["snowplow", "my_model", "test_my_model"],
             config=UnitTestConfig(),
+            schema="test_schema",
         )
         expected.build_unit_test_checksum("anything", "anything")
         assertEqualNodes(unit_test, expected)
