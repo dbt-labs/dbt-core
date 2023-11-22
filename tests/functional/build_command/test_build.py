@@ -1,7 +1,7 @@
 import pytest
 
 from dbt.tests.util import run_dbt
-from tests.functional.build.fixtures import (
+from tests.functional.build_command.fixtures import (
     seeds__country_csv,
     snapshots__snap_0,
     snapshots__snap_1,
