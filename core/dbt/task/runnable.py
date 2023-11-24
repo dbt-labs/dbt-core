@@ -492,7 +492,6 @@ class GraphRunnableTask(ConfiguredTask):
             )
 
         if self.args.write_json:
-            # args.which used to determine file name for unit test manifest
             write_manifest(self.manifest, self.config.project_target_path)
             if hasattr(result, "write"):
                 result.write(self.result_path())
