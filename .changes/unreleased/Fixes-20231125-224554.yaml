@@ -1,0 +1,6 @@
+kind: Fixes
+body: Pring change directory when dbt init
+time: 2023-11-25T22:45:54.943283+09:00
+custom:
+  Author: jx2lee
+  Issue: "9041"

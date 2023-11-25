@@ -182,6 +182,7 @@ class ProfileWrittenWithTargetTemplateYAML(InfoLevel):
             f"Profile {self.name} written to {self.path} using target's "
             "profile_template.yml and your supplied values. Run 'dbt debug' to "
             "validate the connection."
+            f'\n\np.s change directories to "{self.name}" to use this project.'
         )
 
 
