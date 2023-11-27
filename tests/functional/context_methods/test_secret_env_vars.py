@@ -127,6 +127,7 @@ class TestAllowSecretProfilePackage(FirstDependencyProject):
         # this will not be written to logs or lock file
         assert not ("abc123" in log_output)
         assert not ("abc123" in lock_file_contents)
+        assert "{{ env_var('DBT_ENV_SECRET_GIT_TOKEN') }}" in lock_file_contents
 
         # this will be scrubbed from logs, but not from the lock file
         assert not ("first_dependency" in log_output)
