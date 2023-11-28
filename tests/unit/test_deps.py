@@ -22,6 +22,10 @@ from dbt.semver import VersionSpecifier
 from dbt.version import get_installed_version
 
 from dbt.dataclass_schema import ValidationError
+from dbt.flags import set_from_args
+from argparse import Namespace
+
+set_from_args(Namespace(WARN_ERROR=False), None)
 
 
 class TestLocalPackage(unittest.TestCase):
@@ -71,6 +75,27 @@ class TestTarballPackage(unittest.TestCase):
         metastore = RegistryPackageMetadata.from_dict(dct)
         self.assertEqual(metastore.downloads.tarball, "http://example.com")
 
+    def test_tarball_pinned_package_contract_with_unrendered(self):
+        contract = TarballPackage(
+            tarball="http://example.com/invalid_url@/package.tar.gz",
+            name="my_cool_package",
+            unrendered={"tarball": "tarball_unrendered"},
+        )
+        tarball_unpinned_package = TarballUnpinnedPackage.from_contract(contract)
+
+        self.assertEqual(
+            tarball_unpinned_package.tarball, "http://example.com/invalid_url@/package.tar.gz"
+        )
+        self.assertEqual(tarball_unpinned_package.package, "my_cool_package")
+        self.assertEqual(tarball_unpinned_package.tarball_unrendered, "tarball_unrendered")
+
+        tarball_pinned_package = tarball_unpinned_package.resolved()
+        tarball_unpinned_package_dict = tarball_pinned_package.to_dict()
+        self.assertEqual(
+            tarball_unpinned_package_dict,
+            {"tarball": "tarball_unrendered", "name": "my_cool_package"},
+        )
+
 
 class TestGitPackage(unittest.TestCase):
     def test_init(self):
@@ -91,6 +116,23 @@ class TestGitPackage(unittest.TestCase):
         self.assertEqual(a_pinned.get_version(), "0.0.1")
         self.assertEqual(a_pinned.source_type(), "git")
         self.assertIs(a_pinned.warn_unpinned, True)
+
+        a_pinned_dict = a_pinned.to_dict()
+        self.assertEqual(a_pinned_dict, {"git": "http://example.com", "revision": "0.0.1"})
+
+    def test_init_with_unrendered(self):
+        contract = GitPackage(
+            git="http://example.com", revision="0.0.1", unrendered={"git": "git_unrendered"}
+        )
+
+        git_unpinned_package = GitUnpinnedPackage.from_contract(contract)
+        self.assertEqual(git_unpinned_package.git, "http://example.com")
+        self.assertEqual(git_unpinned_package.revisions, ["0.0.1"])
+        self.assertIs(git_unpinned_package.git_unrendered, "git_unrendered")
+
+        git_pinned_package = git_unpinned_package.resolved()
+        git_pinned_package_dict = git_pinned_package.to_dict()
+        self.assertEqual(git_pinned_package_dict, {"git": "git_unrendered", "revision": "0.0.1"})
 
     @mock.patch("shutil.copytree")
     @mock.patch("dbt.deps.local.system.make_symlink")
