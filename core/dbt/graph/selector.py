@@ -48,8 +48,8 @@ class NodeSelector(MethodManager):
         include_empty_nodes: bool = False,
     ) -> None:
         super().__init__(manifest, previous_state)
-        self.full_graph = graph
-        self.include_empty_nodes = include_empty_nodes
+        self.full_graph: Graph = graph
+        self.include_empty_nodes: bool = include_empty_nodes
 
         # build a subgraph containing only non-empty, enabled nodes and enabled
         # sources.
@@ -258,6 +258,8 @@ class NodeSelector(MethodManager):
                     node = self.manifest.nodes[unique_id]
                 elif unique_id in self.manifest.unit_tests:
                     node = self.manifest.unit_tests[unique_id]  # type: ignore
+                # Test and Unit nodes that are not selected themselves, but whose
+                # parents are selected.
                 if can_select_indirectly(node):
                     # should we add it in directly?
                     if indirect_selection == IndirectSelection.Eager or set(

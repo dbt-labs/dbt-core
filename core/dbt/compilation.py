@@ -135,7 +135,7 @@ class Linker:
     def __init__(self, data=None) -> None:
         if data is None:
             data = {}
-        self.graph = nx.DiGraph(**data)
+        self.graph: nx.DiGraph = nx.DiGraph(**data)
 
     def edges(self):
         return self.graph.edges()

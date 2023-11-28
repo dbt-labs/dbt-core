@@ -8,7 +8,7 @@ from .test import TestRunner as test_runner
 from dbt.adapters.factory import get_adapter
 from dbt.contracts.results import NodeStatus
 from dbt.exceptions import DbtInternalError
-from dbt.graph import ResourceTypeSelector
+from dbt.graph import ResourceTypeSelector, GraphQueue
 from dbt.node_types import NodeType
 from dbt.task.test import TestSelector
 from dbt.task.base import BaseRunner
@@ -104,6 +104,12 @@ class BuildTask(RunTask):
             values.update(self.ALL_RESOURCE_VALUES)
 
         return list(values)
+
+    def get_graph_queue(self) -> GraphQueue:
+        selector = self.get_node_selector()
+        # Following uses self.selection_arg and self.exclusion_arg
+        spec = self.get_selection_spec()
+        return selector.get_graph_queue(spec)
 
     def get_node_selector(self) -> ResourceTypeSelector:
         if self.manifest is None or self.graph is None:
