@@ -41,8 +41,11 @@ from dbt.logger import GLOBAL_LOGGER as logger
 ```
 
 Simply change it to these two lines with your adapter's database name, and all your existing call sites will now use the new system for v1.0:
+
 ```python
-from dbt.common.events import AdapterLogger
+
+from dbt.adapter.events.logging import AdapterLogger
+
 logger = AdapterLogger("<database name>")
 # e.g. AdapterLogger("Snowflake")
 ```
