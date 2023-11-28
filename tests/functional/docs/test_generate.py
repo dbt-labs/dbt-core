@@ -25,7 +25,7 @@ sources:
 """
 
 
-class TestGenerate:
+class TestBaseGenerate:
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -41,6 +41,8 @@ class TestGenerate:
             "second_seed.csv": sample_seed,
         }
 
+
+class TestGenerateManifestNotCompiled(TestBaseGenerate):
     def test_manifest_not_compiled(self, project):
         run_dbt(["docs", "generate", "--no-compile"])
         # manifest.json is written out in parsing now, but it
@@ -50,23 +52,31 @@ class TestGenerate:
         assert model_id in manifest.nodes
         assert manifest.nodes[model_id].compiled is False
 
+
+class TestGenerateEmptyCatalog(TestBaseGenerate):
     def test_generate_empty_catalog(self, project):
         catalog = run_dbt(["docs", "generate", "--empty-catalog"])
         assert catalog.nodes == {}, "nodes should be empty"
         assert catalog.sources == {}, "sources should be empty"
         assert catalog.errors is None, "errors should be null"
 
+
+class TestGenerateSelectLimitsCatalog(TestBaseGenerate):
     def test_select_limits_catalog(self, project):
         run_dbt(["run"])
         catalog = run_dbt(["docs", "generate", "--select", "my_model"])
         assert len(catalog.nodes) == 1
         assert "model.test.my_model" in catalog.nodes
 
+
+class TestGenerateSelectLimitsNoMatch(TestBaseGenerate):
     def test_select_limits_no_match(self, project):
         run_dbt(["run"])
         catalog = run_dbt(["docs", "generate", "--select", "my_missing_model"])
         assert len(catalog.nodes) == 0
 
+
+class TestGenerateCatalogWithSources(TestBaseGenerate):
     def test_catalog_with_sources(self, project):
         run_dbt(["build"])
         catalog = run_dbt(["docs", "generate"])
@@ -76,6 +86,8 @@ class TestGenerate:
         # 2 sources (only ones that exist)
         assert len(catalog.sources) == 2
 
+
+class TestGenerateSelectSource(TestBaseGenerate):
     def test_select_source(self, project):
         run_dbt(["build"])
         catalog = run_dbt(["docs", "generate", "--select", "source:test.my_seed.sample_seed"])
