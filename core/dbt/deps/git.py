@@ -102,10 +102,11 @@ class GitPinnedPackage(GitPackageMixin, PinnedPackage):
     ) -> ProjectPackageMetadata:
         path = self._checkout()
 
+        # raise warning (or error) if this package is not pinned
         if (self.revision == "HEAD" or self.revision in ("main", "master")) and self.warn_unpinned:
-            warn_or_error(DepsUnpinned(git=self.git))
+            warn_or_error(DepsUnpinned(revision=self.revision, git=self.git))
 
-        # overwrite 'revision' with actual commit SHA
+        # now overwrite 'revision' with actual commit SHA
         self.revision = git.get_current_sha(path)
 
         partial = PartialProject.from_project_root(path)
