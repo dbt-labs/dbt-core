@@ -2,11 +2,44 @@ import pytest
 
 from dbt.tests.util import run_dbt, get_manifest
 
+sample_seed = """sample_num,sample_bool
+1,true
+2,false
+3,true
+"""
+
+second_seed = """sample_num,sample_bool
+4,true
+5,false
+6,true
+"""
+
+sample_config = """
+sources:
+  - name: my_seed
+    schema: "{{ target.schema }}"
+    tables:
+      - name: sample_seed
+      - name: second_seed
+      - name: fake_seed
+"""
+
 
 class TestGenerate:
     @pytest.fixture(scope="class")
     def models(self):
-        return {"my_model.sql": "select 1 as fun", "alt_model.sql": "select 1 as notfun"}
+        return {
+            "my_model.sql": "select 1 as fun",
+            "alt_model.sql": "select 1 as notfun",
+            "sample_config.yml": sample_config,
+        }
+
+    @pytest.fixture(scope="class")
+    def seeds(self):
+        return {
+            "sample_seed.csv": sample_seed,
+            "second_seed.csv": sample_seed,
+        }
 
     def test_manifest_not_compiled(self, project):
         run_dbt(["docs", "generate", "--no-compile"])
@@ -33,3 +66,23 @@ class TestGenerate:
         run_dbt(["run"])
         catalog = run_dbt(["docs", "generate", "--select", "my_missing_model"])
         assert len(catalog.nodes) == 0
+
+    def test_catalog_with_sources(self, project):
+        run_dbt(["build"])
+        catalog = run_dbt(["docs", "generate"])
+
+        # 2 seeds + 2 models
+        assert len(catalog.nodes) == 4
+        # 2 sources (only ones that exist)
+        assert len(catalog.sources) == 2
+
+    def test_select_source(self, project):
+        run_dbt(["build"])
+        catalog = run_dbt(["docs", "generate", "--select", "source:test.my_seed.sample_seed"])
+
+        # 2 seeds
+        # TODO: Filtering doesn't work for seeds
+        assert len(catalog.nodes) == 2
+        # 2 sources
+        # TODO: Filtering doesn't work for sources
+        assert len(catalog.sources) == 2
