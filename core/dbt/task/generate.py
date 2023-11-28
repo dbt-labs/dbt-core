@@ -247,6 +247,12 @@ class GenerateTask(CompileTask):
                 if self.job_queue is not None:
                     selected_node_ids = self.job_queue.get_selected_nodes()
                     selected_nodes = self._get_nodes_from_ids(self.manifest, selected_node_ids)
+
+                    source_ids = self._get_nodes_from_ids(
+                        self.manifest, self.manifest.sources.keys()
+                    )
+                    selected_nodes.extend(source_ids)
+
                     relations = {
                         adapter.Relation.create_from(adapter.config, node_id)
                         for node_id in selected_nodes
