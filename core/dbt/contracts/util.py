@@ -198,7 +198,7 @@ class VersionedSchema(dbtClassMixin):
     @classmethod
     @functools.lru_cache
     def json_schema(cls) -> Dict[str, Any]:
-        json_schema_obj = build_json_schema(cls, dialect=DRAFT_2020_12)
+        json_schema_obj = build_json_schema(cls, dialect=DRAFT_2020_12, with_dialect_uri=True)
         json_schema = json_schema_obj.to_dict()
         json_schema["$id"] = str(cls.dbt_schema_version)
         return json_schema
