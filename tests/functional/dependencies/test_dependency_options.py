@@ -82,6 +82,7 @@ sha1_hash: 71304bca2138cf8004070b3573a1e17183c0c1a8
                 "deps",
                 "--add-package",
                 "dbt-labs/audit_helper@0.9.0",
+                "--lock",
             ]
         )
         assert not os.path.exists("dbt_packages")
