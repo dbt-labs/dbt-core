@@ -1,13 +1,12 @@
+import glob
 import importlib
 import importlib.util
-import os
-import glob
 import json
-from typing import Iterator, List, Optional, Tuple
-
+import os
 import requests
 
-import dbt.exceptions
+from typing import Iterator, List, Optional, Tuple
+
 import dbt.common.semver as semver
 
 from dbt.common.ui import green, red, yellow
