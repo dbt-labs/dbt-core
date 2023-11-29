@@ -598,6 +598,22 @@ class UnparsedMetricInput(dbtClassMixin):
 
 
 @dataclass
+class ConstantPropertyInput(dbtClassMixin):
+    base_property: str
+    conversion_property: str
+
+
+@dataclass
+class UnparsedConversionTypeParams(dbtClassMixin):
+    base_measure: Union[UnparsedMetricInputMeasure, str]
+    conversion_measure: Union[UnparsedMetricInputMeasure, str]
+    entity: str
+    calculation: str  # ConversionCalculationType Enum
+    window: Optional[str] = None
+    constant_properties: Optional[List[ConstantPropertyInput]] = None
+
+
+@dataclass
 class UnparsedMetricTypeParams(dbtClassMixin):
     measure: Optional[Union[UnparsedMetricInputMeasure, str]] = None
     numerator: Optional[Union[UnparsedMetricInput, str]] = None
@@ -606,6 +622,7 @@ class UnparsedMetricTypeParams(dbtClassMixin):
     window: Optional[str] = None
     grain_to_date: Optional[str] = None  # str is really a TimeGranularity Enum
     metrics: Optional[List[Union[UnparsedMetricInput, str]]] = None
+    conversion_type_params: Optional[UnparsedConversionTypeParams] = None
 
 
 @dataclass
