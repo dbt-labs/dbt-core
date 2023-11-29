@@ -169,14 +169,12 @@ def _pad_lines(lines: List[List[str]], seperator: str = "") -> List[List[str]]:
 
     result: List[List[str]] = []
     for i, line in enumerate(lines):
-
         # add another list to hold padded strings
         if len(result) == i:
             result.append([""] * len(line))
 
         # iterate over columns in the line
         for j, item in enumerate(line):
-
             # the last column does not need padding
             if j == len(line) - 1:
                 result[i][j] = item

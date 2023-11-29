@@ -106,7 +106,6 @@ def load_yml_dict(file_path):
 
 
 def package_and_project_data_from_root(project_root):
-
     packages_yml_dict = load_yml_dict(f"{project_root}/{PACKAGES_FILE_NAME}")
     dependencies_yml_dict = load_yml_dict(f"{project_root}/{DEPENDENCIES_FILE_NAME}")
 
@@ -188,7 +187,6 @@ def value_or(value: Optional[T], default: T) -> T:
 
 
 def load_raw_project(project_root: str) -> Dict[str, Any]:
-
     project_root = os.path.normpath(project_root)
     project_yaml_filepath = os.path.join(project_root, "dbt_project.yml")
 
@@ -301,7 +299,6 @@ class PartialProject(RenderComponents):
         self,
         renderer: DbtProjectYamlRenderer,
     ) -> RenderComponents:
-
         rendered_project = renderer.render_project(self.project_dict, self.project_root)
         rendered_packages = renderer.render_packages(
             self.packages_dict, self.packages_specified_path

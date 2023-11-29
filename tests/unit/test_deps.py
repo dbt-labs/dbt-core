@@ -690,7 +690,6 @@ class TestPackageSpec(unittest.TestCase):
         self.assertEqual(resolved[0].version, "0.1.4a1")
 
     def test_validation_error_when_version_is_missing_from_package_config(self):
-
         packages_data = {"packages": [{"package": "dbt-labs-test/b", "version": None}]}
 
         with self.assertRaises(ValidationError) as exc:
@@ -700,7 +699,6 @@ class TestPackageSpec(unittest.TestCase):
         assert msg in str(exc.exception)
 
     def test_validation_error_when_namespace_is_missing_from_package_config(self):
-
         packages_data = {"packages": [{"package": "dbt-labs", "version": "1.0.0"}]}
 
         with self.assertRaises(ValidationError) as exc:
