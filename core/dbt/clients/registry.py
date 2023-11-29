@@ -14,7 +14,7 @@ from dbt.common.events.types import (
 )
 from dbt.utils import memoized, _connection_exception_retry as connection_exception_retry
 from dbt import deprecations
-from dbt import semver
+from dbt.common import semver
 import os
 
 if os.getenv("DBT_PACKAGE_HUB_URL"):
