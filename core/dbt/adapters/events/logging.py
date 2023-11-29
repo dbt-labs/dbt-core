@@ -7,9 +7,10 @@ from dbt.adapters.events.types import (
     AdapterEventWarning,
     AdapterEventError,
 )
+from dbt.common.events import get_event_manager
 from dbt.common.events.contextvars import get_node_info
 from dbt.common.events.event_handler import set_package_logging
-from dbt.common.events.functions import fire_event, EVENT_MANAGER
+from dbt.common.events.functions import fire_event
 
 
 @dataclass
@@ -63,4 +64,4 @@ class AdapterLogger:
         """By default, dbt suppresses non-dbt package logs. This method allows
         you to set the log level for a specific package.
         """
-        set_package_logging(package_name, level, EVENT_MANAGER)
+        set_package_logging(package_name, level, get_event_manager())

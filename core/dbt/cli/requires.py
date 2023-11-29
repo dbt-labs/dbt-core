@@ -14,9 +14,9 @@ from dbt.common.events.base_types import EventLevel
 from dbt.common.events.functions import (
     fire_event,
     LOG_VERSION,
-    set_invocation_id,
-    setup_event_logger,
 )
+from dbt.common.events.event_manager_client import set_invocation_id
+from dbt.events.logging import setup_event_logger
 from dbt.common.events.types import (
     CommandCompleted,
     MainReportVersion,
@@ -54,8 +54,8 @@ def preflight(func):
 
         # Logging
         callbacks = ctx.obj.get("callbacks", [])
-        set_invocation_id()
         setup_event_logger(flags=flags, callbacks=callbacks)
+        set_invocation_id()
 
         # Tracking
         initialize_from_flags(flags.SEND_ANONYMOUS_USAGE_STATS, flags.PROFILES_DIR)

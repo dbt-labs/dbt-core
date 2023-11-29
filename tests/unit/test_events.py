@@ -6,6 +6,7 @@ from typing import TypeVar
 import pytest
 
 from dbt.adapters.events import types as adapter_types
+from dbt.common.events.event_manager_client import ctx_set_event_manager
 from dbt.contracts.results import TimingInfo, RunResult, RunStatus
 from dbt.common.events import types
 from dbt.adapters.events.logging import AdapterLogger
@@ -21,7 +22,7 @@ from dbt.events.base_types import (
     WarnLevel,
 )
 from dbt.common.events.eventmgr import TestEventManager, EventManager
-from dbt.common.events.functions import msg_to_dict, msg_to_json, ctx_set_event_manager
+from dbt.common.events.functions import msg_to_dict, msg_to_json
 from dbt.common.events.helpers import get_json_string_utcnow
 from dbt.common.events.types import RunResultError
 from dbt.flags import set_from_args
