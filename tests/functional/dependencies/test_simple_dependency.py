@@ -242,12 +242,12 @@ class TestSimpleDependencyWithSubdirs(object):
         assert os.path.exists("package-lock.yml")
         expected = """packages:
 - git: https://github.com/dbt-labs/dbt-multipe-packages.git
-  revision: v0.1.0
+  revision: 53782f3ede8fdf307ee1d8e418aa65733a4b72fa
   subdirectory: dbt-utils-main
 - git: https://github.com/dbt-labs/dbt-multipe-packages.git
-  revision: v0.1.0
+  revision: 53782f3ede8fdf307ee1d8e418aa65733a4b72fa
   subdirectory: dbt-date-main
-sha1_hash: 0b643b06246ca34be82ef09524a30635d37aa3be
+sha1_hash: b9c8042f29446c55a33f9f211737f445a640c7a1
 """
         with open("package-lock.yml") as fp:
             contents = fp.read()
@@ -276,6 +276,25 @@ class TestRekeyedDependencyWithSubduplicates(object):
     def test_simple_dependency_deps(self, project):
         run_dbt(["deps"])
         assert len(os.listdir("dbt_packages")) == 2
+
+
+class TestTarballNestedDependencies(object):
+    # this version of dbt_expectations has a dependency on dbt_date, which the
+    # package config handling should detect
+    @pytest.fixture(scope="class")
+    def packages(self):
+        return {
+            "packages": [
+                {
+                    "tarball": "https://github.com/calogica/dbt-expectations/archive/refs/tags/0.9.0.tar.gz",
+                    "name": "dbt_expectations",
+                },
+            ]
+        }
+
+    def test_simple_dependency_deps(self, project):
+        run_dbt(["deps"])
+        assert set(os.listdir("dbt_packages")) == set(["dbt_expectations", "dbt_date"])
 
 
 class DependencyBranchBase(object):
