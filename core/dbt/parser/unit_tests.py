@@ -52,11 +52,9 @@ class UnitTestManifestLoader:
         return self.unit_test_manifest
 
     def parse_unit_test_case(self, test_case: UnitTestDefinition):
-        package_name = self.root_project.project_name
-
         # Create unit test node based on the node being tested
         tested_node = self.manifest.ref_lookup.perform_lookup(
-            f"model.{package_name}.{test_case.model}", self.manifest
+            f"model.{test_case.package_name}.{test_case.model}", self.manifest
         )
         assert isinstance(tested_node, ModelNode)
 
@@ -68,7 +66,7 @@ class UnitTestManifestLoader:
         unit_test_node = UnitTestNode(
             name=name,
             resource_type=NodeType.Unit,
-            package_name=package_name,
+            package_name=test_case.package_name,
             path=get_pseudo_test_path(name, test_case.original_file_path),
             original_file_path=test_case.original_file_path,
             unique_id=test_case.unique_id,
@@ -92,7 +90,7 @@ class UnitTestManifestLoader:
             unit_test_node,  # type: ignore
             self.root_project,
             self.manifest,
-            package_name,
+            test_case.package_name,
         )
         get_rendered(unit_test_node.raw_code, ctx, unit_test_node, capture_macros=True)
         # unit_test_node now has a populated refs/sources
@@ -121,7 +119,7 @@ class UnitTestManifestLoader:
             project_root = self.root_project.project_root
             common_fields = {
                 "resource_type": NodeType.Model,
-                "package_name": package_name,
+                "package_name": test_case.package_name,
                 "original_file_path": original_input_node.original_file_path,
                 "config": ModelConfig(materialized="ephemeral"),
                 "database": original_input_node.database,
@@ -142,7 +140,7 @@ class UnitTestManifestLoader:
                 input_name = f"{unit_test_node.name}__{original_input_node.name}"
                 input_node = ModelNode(
                     **common_fields,
-                    unique_id=f"model.{package_name}.{input_name}",
+                    unique_id=f"model.{test_case.package_name}.{input_name}",
                     name=input_name,
                     path=original_input_node.path,
                 )
@@ -153,7 +151,7 @@ class UnitTestManifestLoader:
                 input_name = f"{unit_test_node.name}__{original_input_node.search_name}__{original_input_node.name}"
                 input_node = UnitTestSourceDefinition(
                     **common_fields,
-                    unique_id=f"model.{package_name}.{input_name}",
+                    unique_id=f"model.{test_case.package_name}.{input_name}",
                     name=original_input_node.name,  # must be the same name for source lookup to work
                     path=input_name + ".sql",  # for writing out compiled_code
                     source_name=original_input_node.source_name,  # needed for source lookup
@@ -226,35 +224,6 @@ class UnitTestParser(YamlReader):
         super().__init__(schema_parser, yaml, "unit_tests")
         self.schema_parser = schema_parser
         self.yaml = yaml
-
-    def _load_rows_from_seed(self, ref_str: str) -> List[Dict[str, Any]]:
-        """Read rows from seed file on disk if not specified in YAML config. If seed file doesn't exist, return empty list."""
-        ref = py_extract_from_source("{{ " + ref_str + " }}")["refs"][0]
-
-        rows: List[Dict[str, Any]] = []
-
-        seed_name = ref["name"]
-        package_name = ref.get("package", self.project.project_name)
-
-        seed_node = self.manifest.ref_lookup.find(seed_name, package_name, None, self.manifest)
-
-        if not seed_node or seed_node.resource_type != NodeType.Seed:
-            # Seed not found in custom package specified
-            if package_name != self.project.project_name:
-                raise ParsingError(
-                    f"Unable to find seed '{package_name}.{seed_name}' for unit tests in '{package_name}' package"
-                )
-            else:
-                raise ParsingError(
-                    f"Unable to find seed '{package_name}.{seed_name}' for unit tests in directories: {self.project.seed_paths}"
-                )
-
-        seed_path = Path(seed_node.root_path) / seed_node.original_file_path
-        with open(seed_path, "r") as f:
-            for row in DictReader(f):
-                rows.append(row)
-
-        return rows
 
     def parse(self) -> ParseResult:
         for data in self.get_key_dicts():
@@ -351,3 +320,32 @@ class UnitTestParser(YamlReader):
         fqn.append(model_name)
         fqn.append(test_name)
         return fqn
+
+    def _load_rows_from_seed(self, ref_str: str) -> List[Dict[str, Any]]:
+        """Read rows from seed file on disk if not specified in YAML config. If seed file doesn't exist, return empty list."""
+        ref = py_extract_from_source("{{ " + ref_str + " }}")["refs"][0]
+
+        rows: List[Dict[str, Any]] = []
+
+        seed_name = ref["name"]
+        package_name = ref.get("package", self.project.project_name)
+
+        seed_node = self.manifest.ref_lookup.find(seed_name, package_name, None, self.manifest)
+
+        if not seed_node or seed_node.resource_type != NodeType.Seed:
+            # Seed not found in custom package specified
+            if package_name != self.project.project_name:
+                raise ParsingError(
+                    f"Unable to find seed '{package_name}.{seed_name}' for unit tests in '{package_name}' package"
+                )
+            else:
+                raise ParsingError(
+                    f"Unable to find seed '{package_name}.{seed_name}' for unit tests in directories: {self.project.seed_paths}"
+                )
+
+        seed_path = Path(seed_node.root_path) / seed_node.original_file_path
+        with open(seed_path, "r") as f:
+            for row in DictReader(f):
+                rows.append(row)
+
+        return rows
