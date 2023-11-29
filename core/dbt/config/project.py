@@ -33,7 +33,7 @@ from dbt.exceptions import (
 from dbt.common.exceptions import SemverError
 from dbt.graph import SelectionSpec
 from dbt.common.helper_types import NoValue
-from dbt.semver import VersionSpecifier, versions_compatible
+from dbt.common.semver import VersionSpecifier, versions_compatible
 from dbt.version import get_installed_version
 from dbt.utils import MultiDict, md5
 from dbt.node_types import NodeType

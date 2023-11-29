@@ -18,7 +18,7 @@ from dbt.contracts.project import (
     RegistryPackage,
 )
 from dbt.contracts.project import PackageConfig
-from dbt.semver import VersionSpecifier
+from dbt.common.semver import VersionSpecifier
 from dbt.version import get_installed_version
 
 from dbt.common.dataclass_schema import ValidationError

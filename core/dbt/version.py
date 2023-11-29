@@ -8,7 +8,7 @@ from typing import Iterator, List, Optional, Tuple
 import requests
 
 import dbt.exceptions
-import dbt.semver
+import dbt.common.semver as semver
 
 from dbt.common.ui import green, red, yellow
 
@@ -34,13 +34,13 @@ def get_version_information() -> str:
     return "\n\n".join(msg_lines)
 
 
-def get_installed_version() -> dbt.semver.VersionSpecifier:
-    return dbt.semver.VersionSpecifier.from_version_string(__version__)
+def get_installed_version() -> semver.VersionSpecifier:
+    return semver.VersionSpecifier.from_version_string(__version__)
 
 
 def get_latest_version(
     version_url: str = PYPI_VERSION_URL,
-) -> Optional[dbt.semver.VersionSpecifier]:
+) -> Optional[semver.VersionSpecifier]:
     try:
         resp = requests.get(version_url, timeout=1)
         data = resp.json()
@@ -48,7 +48,7 @@ def get_latest_version(
     except (json.JSONDecodeError, KeyError, requests.RequestException):
         return None
 
-    return dbt.semver.VersionSpecifier.from_version_string(version_string)
+    return semver.VersionSpecifier.from_version_string(version_string)
 
 
 def _get_core_msg_lines(installed, latest) -> Tuple[List[List[str]], str]:
@@ -96,7 +96,7 @@ def _format_core_msg(lines: List[List[str]]) -> str:
     return msg + "\n".join(msg_lines)
 
 
-def _get_plugins_msg(installed: dbt.semver.VersionSpecifier) -> str:
+def _get_plugins_msg(installed: semver.VersionSpecifier) -> str:
     msg_lines = ["Plugins:"]
 
     plugins = []
@@ -122,9 +122,9 @@ def _get_plugins_msg(installed: dbt.semver.VersionSpecifier) -> str:
 
 
 def _get_plugin_msg_info(
-    name: str, version_s: str, core: dbt.semver.VersionSpecifier
+    name: str, version_s: str, core: semver.VersionSpecifier
 ) -> Tuple[str, bool]:
-    plugin = dbt.semver.VersionSpecifier.from_version_string(version_s)
+    plugin = semver.VersionSpecifier.from_version_string(version_s)
     latest_plugin = get_latest_version(version_url=get_package_pypi_url(name))
 
     needs_update = False
