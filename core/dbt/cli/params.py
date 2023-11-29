@@ -83,13 +83,6 @@ deprecated_defer = click.option(
     hidden=True,
 )
 
-dry_run = click.option(
-    "--dry-run",
-    envvar=None,
-    help="Option to run `dbt deps --add-package` without updating package-lock.yml file.",
-    is_flag=True,
-)
-
 empty = click.option(
     "--empty/--no-empty",
     envvar="DBT_EMPTY",
