@@ -19,6 +19,7 @@ import dbt.helper_types  # noqa:F401
 from dbt.exceptions import CompilationError, ParsingError, DbtInternalError
 
 from dbt.dataclass_schema import dbtClassMixin, StrEnum, ExtensibleDbtClassMixin, ValidationError
+from dbt_semantic_interfaces.type_enums import ConversionCalculationType
 
 from dataclasses import dataclass, field
 from datetime import timedelta
@@ -608,7 +609,9 @@ class UnparsedConversionTypeParams(dbtClassMixin):
     base_measure: Union[UnparsedMetricInputMeasure, str]
     conversion_measure: Union[UnparsedMetricInputMeasure, str]
     entity: str
-    calculation: str  # ConversionCalculationType Enum
+    calculation: str = (
+        ConversionCalculationType.CONVERSION_RATE.value
+    )  # ConversionCalculationType Enum
     window: Optional[str] = None
     constant_properties: Optional[List[ConstantPropertyInput]] = None
 

@@ -1445,7 +1445,7 @@ class ConversionTypeParams(dbtClassMixin):
     base_measure: MetricInputMeasure
     conversion_measure: MetricInputMeasure
     entity: str
-    calculation: ConversionCalculationType
+    calculation: ConversionCalculationType = ConversionCalculationType.CONVERSION_RATE
     window: Optional[MetricTimeWindow] = None
     constant_properties: Optional[List[ConstantPropertyInput]] = None
 
