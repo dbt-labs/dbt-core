@@ -9,9 +9,9 @@ from dbt.contracts.project import (
     GitPackage,
 )
 from dbt.deps.base import PinnedPackage, UnpinnedPackage, get_downloads_path
-from dbt.exceptions import ExecutableError, MultipleVersionGitDepsError
+from dbt.exceptions import ExecutableError, MultipleVersionGitDepsError, scrub_secrets, env_secrets
 from dbt.events.functions import fire_event, warn_or_error
-from dbt.events.types import EnsureGitInstalled, DepsUnpinned
+from dbt.events.types import EnsureGitInstalled, DepsUnpinned, DepsScrubbedPackageName
 from dbt.utils import md5
 
 
@@ -23,10 +23,12 @@ class GitPackageMixin:
     def __init__(
         self,
         git: str,
+        git_unrendered: str,
         subdirectory: Optional[str] = None,
     ) -> None:
         super().__init__()
         self.git = git
+        self.git_unrendered = git_unrendered
         self.subdirectory = subdirectory
 
     @property
@@ -41,19 +43,23 @@ class GitPinnedPackage(GitPackageMixin, PinnedPackage):
     def __init__(
         self,
         git: str,
+        git_unrendered: str,
         revision: str,
         warn_unpinned: bool = True,
         subdirectory: Optional[str] = None,
     ) -> None:
-        super().__init__(git, subdirectory)
+        super().__init__(git, git_unrendered, subdirectory)
         self.revision = revision
         self.warn_unpinned = warn_unpinned
         self.subdirectory = subdirectory
         self._checkout_name = md5sum(self.name)
 
     def to_dict(self) -> Dict[str, str]:
+        git_scrubbed = scrub_secrets(self.git_unrendered, env_secrets())
+        if self.git_unrendered != git_scrubbed:
+            warn_or_error(DepsScrubbedPackageName(package_name=git_scrubbed))
         ret = {
-            "git": self.git,
+            "git": git_scrubbed,
             "revision": self.revision,
         }
         if self.subdirectory:
@@ -96,8 +102,13 @@ class GitPinnedPackage(GitPackageMixin, PinnedPackage):
     ) -> ProjectPackageMetadata:
         path = self._checkout()
 
+        # raise warning (or error) if this package is not pinned
         if (self.revision == "HEAD" or self.revision in ("main", "master")) and self.warn_unpinned:
-            warn_or_error(DepsUnpinned(git=self.git))
+            warn_or_error(DepsUnpinned(revision=self.revision, git=self.git))
+
+        # now overwrite 'revision' with actual commit SHA
+        self.revision = git.get_current_sha(path)
+
         partial = PartialProject.from_project_root(path)
         return partial.render_package_metadata(renderer)
 
@@ -116,11 +127,12 @@ class GitUnpinnedPackage(GitPackageMixin, UnpinnedPackage[GitPinnedPackage]):
     def __init__(
         self,
         git: str,
+        git_unrendered: str,
         revisions: List[str],
         warn_unpinned: bool = True,
         subdirectory: Optional[str] = None,
     ) -> None:
-        super().__init__(git, subdirectory)
+        super().__init__(git, git_unrendered, subdirectory)
         self.revisions = revisions
         self.warn_unpinned = warn_unpinned
         self.subdirectory = subdirectory
@@ -133,6 +145,7 @@ class GitUnpinnedPackage(GitPackageMixin, UnpinnedPackage[GitPinnedPackage]):
         warn_unpinned = contract.warn_unpinned is not False
         return cls(
             git=contract.git,
+            git_unrendered=(contract.unrendered.get("git") or contract.git),
             revisions=revisions,
             warn_unpinned=warn_unpinned,
             subdirectory=contract.subdirectory,
@@ -157,6 +170,7 @@ class GitUnpinnedPackage(GitPackageMixin, UnpinnedPackage[GitPinnedPackage]):
 
         return GitUnpinnedPackage(
             git=self.git,
+            git_unrendered=self.git_unrendered,
             revisions=self.revisions + other.revisions,
             warn_unpinned=warn_unpinned,
             subdirectory=self.subdirectory,
@@ -168,9 +182,9 @@ class GitUnpinnedPackage(GitPackageMixin, UnpinnedPackage[GitPinnedPackage]):
             requested = {"HEAD"}
         elif len(requested) > 1:
             raise MultipleVersionGitDepsError(self.name, requested)
-
         return GitPinnedPackage(
             git=self.git,
+            git_unrendered=self.git_unrendered,
             revision=requested.pop(),
             warn_unpinned=self.warn_unpinned,
             subdirectory=self.subdirectory,

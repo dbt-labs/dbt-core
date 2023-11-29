@@ -128,9 +128,18 @@ def package_and_project_data_from_root(project_root):
     return packages_dict, packages_specified_path
 
 
-def package_config_from_data(packages_data: Dict[str, Any]) -> PackageConfig:
+def package_config_from_data(
+    packages_data: Dict[str, Any],
+    unrendered_packages_data: Optional[Dict[str, Any]] = None,
+) -> PackageConfig:
     if not packages_data:
         packages_data = {"packages": []}
+
+    # this depends on the two lists being in the same order
+    if unrendered_packages_data:
+        unrendered_packages_data = deepcopy(unrendered_packages_data)
+        for i in range(0, len(packages_data.get("packages", []))):
+            packages_data["packages"][i]["unrendered"] = unrendered_packages_data["packages"][i]
 
     if PACKAGE_LOCK_HASH_KEY in packages_data:
         packages_data.pop(PACKAGE_LOCK_HASH_KEY)
@@ -326,7 +335,7 @@ class PartialProject(RenderComponents):
 
     def render_package_metadata(self, renderer: PackageRenderer) -> ProjectPackageMetadata:
         packages_data = renderer.render_data(self.packages_dict)
-        packages_config = package_config_from_data(packages_data)
+        packages_config = package_config_from_data(packages_data, self.packages_dict)
         if not self.project_name:
             raise DbtProjectError("Package dbt_project.yml must have a name!")
         return ProjectPackageMetadata(self.project_name, packages_config.packages)
@@ -461,8 +470,9 @@ class PartialProject(RenderComponents):
         on_run_end: List[str] = value_or(cfg.on_run_end, [])
 
         query_comment = _query_comment_from_cfg(cfg.query_comment)
-
-        packages: PackageConfig = package_config_from_data(rendered.packages_dict)
+        packages: PackageConfig = package_config_from_data(
+            rendered.packages_dict, unrendered.packages_dict
+        )
         selectors = selector_config_from_data(rendered.selectors_dict)
         manifest_selectors: Dict[str, Any] = {}
         if rendered.selectors_dict and rendered.selectors_dict["selectors"]:
