@@ -48,6 +48,23 @@ local_dependency__seed_csv = """id,name
 3,John
 """
 
+my_model_sql = """
+select * from {{ ref('dep_model') }}
+"""
+
+my_model_schema_yml = """
+unit_tests:
+  - name: test_my_model_name_id
+    model: my_model
+    given:
+      - input: ref('dep_model')
+        rows:
+          - {name_id: Joe_1}
+    expect:
+      rows:
+        - {name_id: Joe_1}
+"""
+
 
 class TestUnitTestingInDependency:
     @pytest.fixture(scope="class", autouse=True)
@@ -69,7 +86,8 @@ class TestUnitTestingInDependency:
     @pytest.fixture(scope="class")
     def models(self):
         return {
-            "my_model.sql": "select 1 as fun",
+            "my_model.sql": my_model_sql,
+            "schema.yml": my_model_schema_yml,
         }
 
     def test_unit_test_in_dependency(self, project):
@@ -79,6 +97,18 @@ class TestUnitTestingInDependency:
         assert len(results) == 2
 
         results = run_dbt(["test"])
-        assert len(results) == 2
+        assert len(results) == 3
         unique_ids = get_unique_ids_in_results(results)
         assert "unit_test.local_dep.dep_model.test_dep_model_id" in unique_ids
+
+        results = run_dbt(["test", "--select", "test_type:unit"])
+        # two unit tests, 1 in root package, one in local_dep package
+        assert len(results) == 2
+
+        results = run_dbt(["test", "--select", "local_dep"])
+        # 2 tests in local_dep package
+        assert len(results) == 2
+
+        results = run_dbt(["test", "--select", "test"])
+        # 1 test in root package
+        assert len(results) == 1
