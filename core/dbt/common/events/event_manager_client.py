@@ -1,25 +1,13 @@
 # Since dbt-rpc does not do its own log setup, and since some events can
 # currently fire before logs can be configured by setup_event_logger(), we
 # create a default configuration with default settings and no file output.
-import uuid
-
-from dbt.common.events.eventmgr import IEventManager, EventManager
+from dbt.common.events.event_manager import IEventManager, EventManager
 
 _EVENT_MANAGER: IEventManager = EventManager()
 
 
 def get_event_manager() -> IEventManager:
     return _EVENT_MANAGER
-
-
-def get_invocation_id() -> str:
-    return _EVENT_MANAGER.invocation_id
-
-
-def set_invocation_id() -> None:
-    # This is primarily for setting the invocation_id for separate
-    # commands in the dbt servers. It shouldn't be necessary for the CLI.
-    _EVENT_MANAGER.invocation_id = str(uuid.uuid4())
 
 
 def ctx_set_event_manager(event_manager: IEventManager) -> None:

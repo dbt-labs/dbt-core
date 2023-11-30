@@ -1,6 +1,7 @@
 from pathlib import Path
 
-from dbt.common.events.event_manager_client import get_invocation_id, get_event_manager
+from dbt.common.events.event_manager_client import get_event_manager
+from dbt.common.invocation import get_invocation_id
 from dbt.common.helper_types import WarnErrorOptions
 from dbt.common.utils import ForgivingJSONEncoder
 from dbt.common.events.base_types import BaseEvent, EventLevel, EventMsg

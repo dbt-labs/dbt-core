@@ -8,6 +8,8 @@ from google.protobuf.message import Message
 from dbt.common.events.helpers import get_json_string_utcnow
 from typing import Optional
 
+from dbt.common.invocation import get_invocation_id
+
 if sys.version_info >= (3, 8):
     from typing import Protocol
 else:
@@ -24,12 +26,6 @@ def get_global_metadata_vars() -> dict:
     from dbt.common.events.functions import get_metadata_vars
 
     return get_metadata_vars()
-
-
-def get_invocation_id() -> str:
-    from dbt.common.events.functions import get_invocation_id
-
-    return get_invocation_id()
 
 
 # exactly one pid per concrete event

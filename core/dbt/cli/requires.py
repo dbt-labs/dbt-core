@@ -1,4 +1,5 @@
 import dbt.tracking
+from dbt.common.invocation import reset_invocation_id
 from dbt.version import installed as installed_version
 from dbt.adapters.factory import adapter_management, register_adapter
 from dbt.flags import set_flags, get_flag_dict
@@ -15,7 +16,6 @@ from dbt.common.events.functions import (
     fire_event,
     LOG_VERSION,
 )
-from dbt.common.events.event_manager_client import set_invocation_id
 from dbt.events.logging import setup_event_logger
 from dbt.common.events.types import (
     CommandCompleted,
@@ -52,10 +52,12 @@ def preflight(func):
         ctx.obj["flags"] = flags
         set_flags(flags)
 
+        # Reset invocation_id for each 'invocation' of a dbt command (can happen multiple times in a single process)
+        reset_invocation_id()
+
         # Logging
         callbacks = ctx.obj.get("callbacks", [])
         setup_event_logger(flags=flags, callbacks=callbacks)
-        set_invocation_id()
 
         # Tracking
         initialize_from_flags(flags.SEND_ANONYMOUS_USAGE_STATS, flags.PROFILES_DIR)

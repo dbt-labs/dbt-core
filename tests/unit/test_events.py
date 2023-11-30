@@ -21,7 +21,7 @@ from dbt.events.base_types import (
     TestLevel,
     WarnLevel,
 )
-from dbt.common.events.eventmgr import TestEventManager, EventManager
+from dbt.common.events.event_manager import TestEventManager, EventManager
 from dbt.common.events.functions import msg_to_dict, msg_to_json
 from dbt.common.events.helpers import get_json_string_utcnow
 from dbt.common.events.types import RunResultError

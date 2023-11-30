@@ -2,7 +2,7 @@ import os
 from functools import partial
 from typing import List, Callable
 
-from dbt.common.events.base_types import EventMsg, EventLevel, get_invocation_id
+from dbt.common.events.base_types import EventMsg, EventLevel
 from dbt.common.events.event_manager_client import cleanup_event_logger, get_event_manager
 from dbt.common.events.functions import (
     make_log_dir_if_missing,
@@ -10,6 +10,7 @@ from dbt.common.events.functions import (
     env_scrubber,
     get_stdout_config,
 )
+from dbt.common.invocation import get_invocation_id
 from dbt.common.events.logger import LineFormat, LoggerConfig
 
 # These are the logging events issued by the "clean" command,

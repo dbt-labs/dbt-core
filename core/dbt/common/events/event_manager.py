@@ -1,7 +1,6 @@
 import os
 import traceback
 from typing import Callable, List, Optional, Protocol, Tuple
-from uuid import uuid4
 
 from dbt.common.events.base_types import BaseEvent, EventLevel, msg_from_base_event, EventMsg
 from dbt.common.events.logger import LoggerConfig, _Logger, _TextLogger, _JsonLogger, LineFormat
@@ -11,7 +10,6 @@ class EventManager:
     def __init__(self) -> None:
         self.loggers: List[_Logger] = []
         self.callbacks: List[Callable[[EventMsg], None]] = []
-        self.invocation_id: str = str(uuid4())
 
     def fire_event(self, e: BaseEvent, level: Optional[EventLevel] = None) -> None:
         msg = msg_from_base_event(e, level=level)
@@ -45,7 +43,6 @@ class EventManager:
 
 class IEventManager(Protocol):
     callbacks: List[Callable[[EventMsg], None]]
-    invocation_id: str
     loggers: List[_Logger]
 
     def fire_event(self, e: BaseEvent, level: Optional[EventLevel] = None) -> None:
