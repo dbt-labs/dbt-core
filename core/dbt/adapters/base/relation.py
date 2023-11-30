@@ -42,6 +42,7 @@ class BaseRelation(FakeAPIObject, Hashable):
     include_policy: Policy = field(default_factory=lambda: Policy())
     quote_policy: Policy = field(default_factory=lambda: Policy())
     dbt_created: bool = False
+    limit: Optional[int] = None
 
     # register relation types that can be renamed for the purpose of replacing relations using stages and backups
     # adding a relation type here also requires defining the associated rename macro
@@ -200,6 +201,15 @@ class BaseRelation(FakeAPIObject, Hashable):
         # if there is nothing set, this will return the empty string.
         return ".".join(part for _, part in self._render_iterator() if part is not None)
 
+    def render_limited(self) -> str:
+        rendered = self.render()
+        if self.limit is None:
+            return rendered
+        elif self.limit == 0:
+            return f"(select * from {rendered} where false limit 0) _dbt_limit_subq"
+        else:
+            return f"(select * from {rendered} limit {self.limit}) _dbt_limit_subq"
+
     def quoted(self, identifier):
         return "{quote_char}{identifier}{quote_char}".format(
             quote_char=self.quote_character,
@@ -235,13 +245,11 @@ class BaseRelation(FakeAPIObject, Hashable):
         cls: Type[Self],
         config: HasQuoting,
         node: ManifestNode,
+        limit: Optional[int],
     ) -> Self:
         # Note that ephemeral models are based on the name.
         identifier = cls.add_ephemeral_prefix(node.name)
-        return cls.create(
-            type=cls.CTE,
-            identifier=identifier,
-        ).quote(identifier=False)
+        return cls.create(type=cls.CTE, identifier=identifier, limit=limit).quote(identifier=False)
 
     @classmethod
     def create_from_node(
@@ -323,7 +331,7 @@ class BaseRelation(FakeAPIObject, Hashable):
         return hash(self.render())
 
     def __str__(self) -> str:
-        return self.render()
+        return self.render() if self.limit is None else self.render_limited()
 
     @property
     def database(self) -> Optional[str]:

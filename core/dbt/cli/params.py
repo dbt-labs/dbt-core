@@ -90,6 +90,12 @@ dry_run = click.option(
     is_flag=True,
 )
 
+empty = click.option(
+    "--empty/--no-empty",
+    envvar="DBT_EMPTY",
+    help="If specified, limit input refs and sources to zero rows.",
+    is_flag=True,
+)
 
 enable_legacy_logger = click.option(
     "--enable-legacy-logger/--no-enable-legacy-logger",

@@ -793,8 +793,15 @@ class TestProject(BaseConfigTest):
             project.packages,
             PackageConfig(
                 packages=[
-                    LocalPackage(local="foo"),
-                    GitPackage(git="git@example.com:dbt-labs/dbt-utils.git", revision="test-rev"),
+                    LocalPackage(local="foo", unrendered={"local": "foo"}),
+                    GitPackage(
+                        git="git@example.com:dbt-labs/dbt-utils.git",
+                        revision="test-rev",
+                        unrendered={
+                            "git": "git@example.com:dbt-labs/dbt-utils.git",
+                            "revision": "test-rev",
+                        },
+                    ),
                 ]
             ),
         )
