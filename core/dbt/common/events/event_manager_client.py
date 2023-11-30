@@ -7,7 +7,13 @@ _EVENT_MANAGER: IEventManager = EventManager()
 
 
 def get_event_manager() -> IEventManager:
+    global _EVENT_MANAGER
     return _EVENT_MANAGER
+
+
+def add_logger_to_manager(logger) -> None:
+    global _EVENT_MANAGER
+    _EVENT_MANAGER.add_logger(logger)
 
 
 def ctx_set_event_manager(event_manager: IEventManager) -> None:

@@ -78,6 +78,10 @@ def stop_capture_stdout_logs() -> None:
     CAPTURE_STREAM = None
 
 
+def get_capture_stream() -> Optional[TextIO]:
+    return CAPTURE_STREAM
+
+
 # returns a dictionary representation of the event fields.
 # the message may contain secrets which must be scrubbed at the usage site.
 def msg_to_json(msg: EventMsg) -> str:

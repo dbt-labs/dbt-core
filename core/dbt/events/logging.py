@@ -3,12 +3,16 @@ from functools import partial
 from typing import List, Callable
 
 from dbt.common.events.base_types import EventMsg, EventLevel
-from dbt.common.events.event_manager_client import cleanup_event_logger, get_event_manager
+from dbt.common.events.event_manager_client import (
+    cleanup_event_logger,
+    get_event_manager,
+    add_logger_to_manager,
+)
 from dbt.common.events.functions import (
     make_log_dir_if_missing,
-    CAPTURE_STREAM,
     env_scrubber,
     get_stdout_config,
+    get_capture_stream,
 )
 from dbt.common.invocation import get_invocation_id
 from dbt.common.events.logger import LineFormat, LoggerConfig
@@ -80,20 +84,19 @@ def setup_event_logger(flags, callbacks: List[Callable[[EventMsg], None]] = []) 
             log_level,
             flags.LOG_CACHE_EVENTS,
         )
-        event_manager.add_logger(console_config)
 
-        if CAPTURE_STREAM:
+        if get_capture_stream():
             # Create second stdout logger to support test which want to know what's
             # being sent to stdout.
-            console_config.output_stream = CAPTURE_STREAM
-            event_manager.add_logger(console_config)
+            console_config.output_stream = get_capture_stream()
+        add_logger_to_manager(console_config)
 
     if flags.LOG_LEVEL_FILE != "none":
         # create and add the file logger to the event manager
         log_file = os.path.join(flags.LOG_PATH, "dbt.log")
         log_file_format = _line_format_from_str(flags.LOG_FORMAT_FILE, LineFormat.DebugText)
         log_level_file = EventLevel.DEBUG if flags.DEBUG else EventLevel(flags.LOG_LEVEL_FILE)
-        event_manager.add_logger(
+        add_logger_to_manager(
             _get_logfile_config(
                 log_file,
                 flags.USE_COLORS_FILE,
