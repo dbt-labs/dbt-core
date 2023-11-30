@@ -292,13 +292,6 @@ def _coerce_decimal(value):
     return value
 
 
-def lowercase(value: Optional[str]) -> Optional[str]:
-    if value is None:
-        return None
-    else:
-        return value.lower()
-
-
 def fqn_search(root: Dict[str, Any], fqn: List[str]) -> Iterator[Dict[str, Any]]:
     """Iterate into a nested dictionary, looking for keys in the fqn as levels.
     Yield the level config.

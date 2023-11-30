@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Dict, List, Any, Optional, Tuple, Set, Iterable
 import agate
 
+import dbt.common.utils.formatting
 from dbt.common.dataclass_schema import ValidationError
 from dbt.clients.system import load_file_contents
 
@@ -182,7 +183,7 @@ def format_stats(stats: PrimitiveDict) -> StatsDict:
 
 
 def mapping_key(node: ResultNode) -> CatalogKey:
-    dkey = dbt.utils.lowercase(node.database)
+    dkey = dbt.common.utils.formatting.lowercase(node.database)
     return CatalogKey(dkey, node.schema.lower(), node.identifier.lower())
 
 

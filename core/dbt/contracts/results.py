@@ -16,7 +16,7 @@ from dbt.common.events.types import TimingInfoCollected
 from dbt.common.events.contextvars import get_node_info
 from dbt.common.events.helpers import datetime_to_json_string
 from dbt.logger import TimingProcessor
-from dbt.utils import lowercase
+from dbt.common.utils.formatting import lowercase
 from dbt.common.utils import cast_to_str, cast_to_int
 from dbt.common.dataclass_schema import dbtClassMixin, StrEnum
 
