@@ -245,7 +245,7 @@ class BaseRelation(FakeAPIObject, Hashable):
         cls: Type[Self],
         config: HasQuoting,
         node: ManifestNode,
-        limit: Optional[int],
+        limit: Optional[int] = None,
     ) -> Self:
         # Note that ephemeral models are based on the name.
         identifier = cls.add_ephemeral_prefix(node.name)
