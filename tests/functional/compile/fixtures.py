@@ -56,3 +56,19 @@ models:
         tests:
           - unique
 """
+
+schema_with_unknown_macro_yml = """
+version: 2
+
+models:
+  - name: second_model
+    description: "The second model"
+    columns:
+      - name: fun
+        tests:
+          - not_null
+      - name: schema
+        tests:
+          - unique
+          - im_the_unknown_macro
+"""

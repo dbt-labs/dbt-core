@@ -13,6 +13,7 @@ from tests.functional.compile.fixtures import (
     third_ephemeral_model_sql,
     with_recursive_model_sql,
     schema_yml,
+    schema_with_unknown_macro_yml,
     model_multiline_jinja,
 )
 from tests.functional.assertions.test_runner import dbtTestRunner
@@ -224,3 +225,40 @@ class TestCompile:
             summary = json.load(summary_file)
             assert "_invocation_id" in summary
             assert "linked" in summary
+
+
+class TestUnknownMacroDemo:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "first_model.sql": first_model_sql,
+            "second_model.sql": second_model_sql,
+            "schema.yml": schema_with_unknown_macro_yml,  # UNKNOWN MACRO HERE
+        }
+
+    # Test passes.
+    # `compile` catches the unknown macro
+    def test_compile_with_unknown_macro_raises_an_error(self, project, mocker) -> None:
+        with pytest.raises(DbtException, match=".*calling a macro that does not exist.*"):
+            run_dbt(["compile"])
+
+    # Test fails. (when it should pass)
+    # The test should pass as there is the same unknown macro, but
+    # `parse` DOES NOT catch the unknown macro with the current code
+    def test_parse_with_unknown_macro__raises_an_error(self, project, mocker) -> None:
+        with pytest.raises(Exception):
+            run_dbt(["parse"])
+
+    # Test passes. (when it should fail)
+    # This is just to show there's a None value in the `macros.depends_on`
+    def test_parse_with_unknown_macro__yields_a_None_value_in_its_dependencies(
+        self, project, mocker
+    ) -> None:
+        dbt = dbtTestRunner()
+        parse_result = dbt.invoke(["parse"])
+        manifest = parse_result.result
+        problematic_node_id = [n for n in manifest.nodes if "im_the_unknown_macro" in n][0]
+
+        problematic_node = manifest.nodes[problematic_node_id]
+
+        assert None in problematic_node.depends_on.macros
