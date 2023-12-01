@@ -25,7 +25,13 @@ from dbt.contracts.graph.nodes import (
 from dbt.context.context_config import ContextConfig
 from dbt.context.configured import generate_schema_yml_context, SchemaYamlVars
 from dbt.dataclass_schema import ValidationError
-from dbt.exceptions import SchemaConfigError, CompilationError, ParsingError, TestConfigError
+from dbt.exceptions import (
+    SchemaConfigError,
+    CompilationError,
+    ParsingError,
+    TestConfigError,
+    UndefinedMacroError,
+)
 from dbt.contracts.files import FileHash
 from dbt.utils import md5, get_pseudo_test_path
 from dbt.clients.jinja import get_rendered, add_rendered_test_kwargs
@@ -163,6 +169,7 @@ class SchemaGenericTestParser(SimpleParser):
                 package_name=target.package_name,
                 render_ctx=self.render_ctx,
             )
+
             if self.schema_yaml_vars.env_vars:
                 self.store_env_vars(target, schema_file_id, self.schema_yaml_vars.env_vars)
                 self.schema_yaml_vars.env_vars = {}
@@ -271,6 +278,10 @@ class SchemaGenericTestParser(SimpleParser):
         macro_unique_id = self.macro_resolver.get_macro_id(
             node.package_name, "test_" + builder.name
         )
+
+        if macro_unique_id is None:
+            raise UndefinedMacroError(f"Unable to resolve macro '{builder.name}'")
+
         # Add the depends_on here so we can limit the macros added
         # to the context in rendering processing
         node.depends_on.add_macro(macro_unique_id)
@@ -327,6 +338,7 @@ class SchemaGenericTestParser(SimpleParser):
             schema_file_id=block.file.file_id,
             version=block.version,
         )
+
         self.add_test_node(block, node)
         return node
 
