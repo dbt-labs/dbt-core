@@ -303,4 +303,4 @@ class TestListPathGraphSelection(SelectionFixtures):
                 str(project.project_root),
             ]
         )
-        assert results == ["test.test.subdir"]
+        assert results == ["data_test.test.subdir"]

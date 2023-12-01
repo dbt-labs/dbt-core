@@ -13,7 +13,7 @@ models:
   - name: my_model
     columns:
       - name: fun
-        tests:
+        data_tests:
           - not_null
 """
 
@@ -30,7 +30,7 @@ class TestRelationNameInTests:
         results = run_dbt(["run"])
         assert len(results) == 1
         manifest = get_manifest(project.project_root)
-        test_id = "test.test.not_null_my_model_fun.bf3b032a01"
+        test_id = "data_test.test.not_null_my_model_fun.bf3b032a01"
         assert test_id in manifest.nodes
         assert manifest.nodes[test_id].relation_name is None
 

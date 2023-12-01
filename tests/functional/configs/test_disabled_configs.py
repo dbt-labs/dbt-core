@@ -62,7 +62,7 @@ class TestDisabledConfigs(BaseConfigProject):
                     },
                 },
             },
-            "tests": {
+            "data-tests": {
                 "test": {
                     "enabled": "{{ (target.name == 'default') | as_bool }}",
                     "severity": "WARN",

@@ -232,7 +232,7 @@ sources:
           description: A description of my table
           columns:
             - name: color
-              tests:
+              data_tests:
                 - not_null:
                     severity: WARN
                 - accepted_values:
@@ -246,7 +246,7 @@ models:
       columns:
         - name: color
           description: The color value
-          tests:
+          data_tests:
             - not_null:
                 severity: WARN
             - accepted_values:
@@ -260,13 +260,13 @@ MULTIPLE_TABLE_VERSIONED_MODEL_TESTS = """
 models:
     - name: my_model
       description: A description of my model
-      tests:
+      data_tests:
         - unique:
             column_name: color
       columns:
         - name: color
           description: The color value
-          tests:
+          data_tests:
             - not_null:
                 severity: WARN
         - name: location_id
@@ -274,7 +274,7 @@ models:
       versions:
         - v: 1
           defined_in: arbitrary_file_name
-          tests: []
+          data_tests: []
           columns:
             - include: '*'
             - name: extra
@@ -353,7 +353,7 @@ sources:
       - name: my_table
         columns:
           - name: id
-            tests:
+            data_tests:
               - not_null
               - unique
 """
@@ -465,7 +465,7 @@ class SchemaParserSourceTest(SchemaParserTest):
 
         file_id = "snowplow://" + normalize("models/test_one.yml")
         self.assertIn(file_id, self.parser.manifest.files)
-        self.assertEqual(self.parser.manifest.files[file_id].tests, {})
+        self.assertEqual(self.parser.manifest.files[file_id].data_tests, {})
         self.assertEqual(
             self.parser.manifest.files[file_id].sources, ["source.snowplow.my_source.my_table"]
         )
@@ -493,7 +493,7 @@ class SchemaParserSourceTest(SchemaParserTest):
         self.assertEqual(table.name, "my_table")
         self.assertIsNone(table.description)
         self.assertEqual(len(table.columns), 1)
-        self.assertEqual(len(table.columns[0].tests), 2)
+        self.assertEqual(len(table.columns[0].data_tests), 2)
 
 
 class SchemaParserModelsTest(SchemaParserTest):
@@ -545,7 +545,7 @@ class SchemaParserModelsTest(SchemaParserTest):
         self.assertTrue(tests[0].name.startswith("accepted_values_"))
         self.assertEqual(tests[0].fqn, ["snowplow", tests[0].name])
         self.assertEqual(
-            tests[0].unique_id.split("."), ["test", "snowplow", tests[0].name, "9d4814efde"]
+            tests[0].unique_id.split("."), ["data_test", "snowplow", tests[0].name, "9d4814efde"]
         )
         self.assertEqual(tests[0].test_metadata.name, "accepted_values")
         self.assertIsNone(tests[0].test_metadata.namespace)
@@ -569,7 +569,7 @@ class SchemaParserModelsTest(SchemaParserTest):
         self.assertTrue(tests[1].name.startswith("foreign_package_test_case_"))
         self.assertEqual(tests[1].package_name, "snowplow")
         self.assertEqual(
-            tests[1].unique_id.split("."), ["test", "snowplow", tests[1].name, "13958f62f7"]
+            tests[1].unique_id.split("."), ["data_test", "snowplow", tests[1].name, "13958f62f7"]
         )
         self.assertEqual(tests[1].test_metadata.name, "test_case")
         self.assertEqual(tests[1].test_metadata.namespace, "foreign_package")
@@ -590,7 +590,7 @@ class SchemaParserModelsTest(SchemaParserTest):
         self.assertTrue(tests[2].name.startswith("not_null_"))
         self.assertEqual(tests[2].fqn, ["snowplow", tests[2].name])
         self.assertEqual(
-            tests[2].unique_id.split("."), ["test", "snowplow", tests[2].name, "2f61818750"]
+            tests[2].unique_id.split("."), ["data_test", "snowplow", tests[2].name, "2f61818750"]
         )
         self.assertEqual(tests[2].test_metadata.name, "not_null")
         self.assertIsNone(tests[2].test_metadata.namespace)
@@ -670,7 +670,7 @@ class SchemaParserVersionedModels(SchemaParserTest):
         self.assertTrue(tests[0].name.startswith("not_null"))
         self.assertEqual(tests[0].fqn, ["snowplow", tests[0].name])
         self.assertEqual(
-            tests[0].unique_id.split("."), ["test", "snowplow", tests[0].name, "b704420587"]
+            tests[0].unique_id.split("."), ["data_test", "snowplow", tests[0].name, "b704420587"]
         )
         self.assertEqual(tests[0].test_metadata.name, "not_null")
         self.assertIsNone(tests[0].test_metadata.namespace)
@@ -691,7 +691,7 @@ class SchemaParserVersionedModels(SchemaParserTest):
         self.assertTrue(tests[1].name.startswith("not_null"))
         self.assertEqual(tests[1].package_name, "snowplow")
         self.assertEqual(
-            tests[1].unique_id.split("."), ["test", "snowplow", tests[1].name, "3375708d04"]
+            tests[1].unique_id.split("."), ["data_test", "snowplow", tests[1].name, "3375708d04"]
         )
         self.assertEqual(tests[1].test_metadata.name, "not_null")
         self.assertIsNone(tests[0].test_metadata.namespace)
@@ -712,7 +712,7 @@ class SchemaParserVersionedModels(SchemaParserTest):
         self.assertTrue(tests[2].name.startswith("unique"))
         self.assertEqual(tests[2].fqn, ["snowplow", tests[2].name])
         self.assertEqual(
-            tests[2].unique_id.split("."), ["test", "snowplow", tests[2].name, "29b09359d1"]
+            tests[2].unique_id.split("."), ["data_test", "snowplow", tests[2].name, "29b09359d1"]
         )
         self.assertEqual(tests[2].test_metadata.name, "unique")
         self.assertIsNone(tests[2].test_metadata.namespace)
@@ -1567,7 +1567,7 @@ class SingularTestParserTest(BaseParserTest):
             database="test",
             schema="dbt_test__audit",
             resource_type=NodeType.Test,
-            unique_id="test.snowplow.test_1",
+            unique_id="data_test.snowplow.test_1",
             fqn=["snowplow", "test_1"],
             package_name="snowplow",
             original_file_path=normalize("tests/test_1.sql"),
@@ -1583,7 +1583,7 @@ class SingularTestParserTest(BaseParserTest):
         assertEqualNodes(node, expected)
         file_id = "snowplow://" + normalize("tests/test_1.sql")
         self.assertIn(file_id, self.parser.manifest.files)
-        self.assertEqual(self.parser.manifest.files[file_id].nodes, ["test.snowplow.test_1"])
+        self.assertEqual(self.parser.manifest.files[file_id].nodes, ["data_test.snowplow.test_1"])
 
 
 class GenericTestParserTest(BaseParserTest):

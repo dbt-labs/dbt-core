@@ -98,7 +98,7 @@ TestDef = Union[Dict[str, Any], str]
 
 @dataclass
 class HasColumnAndTestProps(HasColumnProps):
-    tests: List[TestDef] = field(default_factory=list)
+    data_tests: List[TestDef] = field(default_factory=list)
 
 
 @dataclass
@@ -145,7 +145,7 @@ class UnparsedVersion(dbtClassMixin):
     config: Dict[str, Any] = field(default_factory=dict)
     constraints: List[Dict[str, Any]] = field(default_factory=list)
     docs: Docs = field(default_factory=Docs)
-    tests: Optional[List[TestDef]] = None
+    data_tests: Optional[List[TestDef]] = None
     columns: Sequence[Union[dbt.helper_types.IncludeExclude, UnparsedColumn]] = field(
         default_factory=list
     )
@@ -248,7 +248,11 @@ class UnparsedModelUpdate(UnparsedNodeUpdate):
                 f"get_tests_for_version called for version '{version}' not in version map"
             )
         unparsed_version = self._version_map[version]
-        return unparsed_version.tests if unparsed_version.tests is not None else self.tests
+        return (
+            unparsed_version.data_tests
+            if unparsed_version.data_tests is not None
+            else self.data_tests
+        )
 
 
 @dataclass
@@ -401,7 +405,7 @@ class SourceTablePatch(dbtClassMixin):
     freshness: Optional[FreshnessThreshold] = field(default_factory=FreshnessThreshold)
     external: Optional[ExternalTable] = None
     tags: Optional[List[str]] = None
-    tests: Optional[List[TestDef]] = None
+    data_tests: Optional[List[TestDef]] = None
     columns: Optional[Sequence[UnparsedColumn]] = None
 
     def to_patch_dict(self) -> Dict[str, Any]:

@@ -31,22 +31,22 @@ MODELS__SCHEMA_YML = """
 version: 2
 models:
 - name: foo_alias
-  tests:
+  data_tests:
   - expect_value:
       field: tablename
       value: foo
 - name: ref_foo_alias
-  tests:
+  data_tests:
   - expect_value:
       field: tablename
       value: ref_foo_alias
 - name: alias_in_project
-  tests:
+  data_tests:
   - expect_value:
       field: tablename
       value: project_alias
 - name: alias_in_project_with_override
-  tests:
+  data_tests:
   - expect_value:
       field: tablename
       value: override_alias
@@ -128,12 +128,12 @@ MODELS_DUPE_CUSTOM_DATABASE__SCHEMA_YML = """
 version: 2
 models:
 - name: model_a
-  tests:
+  data_tests:
   - expect_value:
       field: tablename
       value: duped_alias
 - name: model_b
-  tests:
+  data_tests:
   - expect_value:
       field: tablename
       value: duped_alias
@@ -161,17 +161,17 @@ MODELS_DUPE_CUSTOM_SCHEMA__SCHEMA_YML = """
 version: 2
 models:
 - name: model_a
-  tests:
+  data_tests:
   - expect_value:
       field: tablename
       value: duped_alias
 - name: model_b
-  tests:
+  data_tests:
   - expect_value:
       field: tablename
       value: duped_alias
 - name: model_c
-  tests:
+  data_tests:
   - expect_value:
       field: tablename
       value: duped_alias

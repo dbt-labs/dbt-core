@@ -221,10 +221,10 @@ class SourcePatcher:
         return generic_test_parser
 
     def get_source_tests(self, target: UnpatchedSourceDefinition) -> Iterable[GenericTestNode]:
-        for test, column in target.get_tests():
+        for data_test, column in target.get_tests():
             yield self.parse_source_test(
                 target=target,
-                test=test,
+                data_test=data_test,
                 column=column,
             )
 
@@ -249,7 +249,7 @@ class SourcePatcher:
     def parse_source_test(
         self,
         target: UnpatchedSourceDefinition,
-        test: Dict[str, Any],
+        data_test: Dict[str, Any],
         column: Optional[UnparsedColumn],
     ) -> GenericTestNode:
         column_name: Optional[str]
@@ -269,7 +269,7 @@ class SourcePatcher:
         generic_test_parser = self.get_generic_test_parser_for(target.package_name)
         node = generic_test_parser.parse_generic_test(
             target=target,
-            test=test,
+            data_test=data_test,
             tags=tags,
             column_name=column_name,
             schema_file_id=target.file_id,

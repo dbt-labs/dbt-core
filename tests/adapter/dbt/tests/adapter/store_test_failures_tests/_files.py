@@ -132,7 +132,7 @@ models:
   - name: chipmunks
     columns:
       - name: name
-        tests:
+        data_tests:
           - not_null:
               store_failures_as: view
           - accepted_values:
@@ -143,7 +143,7 @@ models:
                 - simon
                 - theodore
       - name: shirt
-        tests:
+        data_tests:
           - not_null:
               store_failures: true
               store_failures_as: view

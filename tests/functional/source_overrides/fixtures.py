@@ -17,11 +17,11 @@ sources:
         # on the override, the "color" column is only unique, it can be null!
         columns:
           - name: id
-            tests:
+            data_tests:
               - not_null
               - unique
           - name: color
-            tests:
+            data_tests:
               - unique
       - name: my_other_table
         freshness: null
@@ -50,11 +50,11 @@ sources:
         # on the override, the "color" column is only unique, it can be null!
         columns:
           - name: id
-            tests:
+            data_tests:
               - not_null
               - unique
           - name: color
-            tests:
+            data_tests:
               - unique
       - name: my_other_table
         freshness: null
@@ -96,22 +96,22 @@ sources:
         identifier: my_seed
         columns:
           - name: id
-            tests:
+            data_tests:
               - unique
               - not_null
           - name: color
-            tests:
+            data_tests:
               - unique
               - not_null
       - name: my_other_table
         identifier: my_other_seed
         columns:
           - name: id
-            tests:
+            data_tests:
               - unique
               - not_null
           - name: letter
-            tests:
+            data_tests:
               - unique
               - not_null
       - name: snapshot_freshness
@@ -328,11 +328,11 @@ sources:
         # on the override, the "color" column is only unique, it can be null!
         columns:
           - name: id
-            tests:
+            data_tests:
               - not_null
               - unique
           - name: color
-            tests:
+            data_tests:
               - unique
       - name: my_other_table
         freshness: null

@@ -59,7 +59,7 @@ models:
   - name: base
     columns:
      - name: id
-       tests:
+       data_tests:
          - not_null
 """
 
@@ -69,7 +69,7 @@ models:
   - name: view_model
     columns:
      - name: id
-       tests:
+       data_tests:
          - not_null
 """
 
@@ -79,7 +79,7 @@ models:
   - name: table_model
     columns:
      - name: id
-       tests:
+       data_tests:
          - not_null
 """
 

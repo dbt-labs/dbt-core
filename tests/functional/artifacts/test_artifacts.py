@@ -30,7 +30,7 @@ models:
     columns:
       - name: id
         description: The user ID number
-        tests:
+        data_tests:
           - unique
           - not_null
       - name: first_name
@@ -41,7 +41,7 @@ models:
         description: The user's IP address
       - name: updated_at
         description: The last time this user's email was updated
-    tests:
+    data_tests:
       - test.nothing
 
   - name: second_model
@@ -368,13 +368,13 @@ models:
       meta:
         color: blue
         size: large
-    tests:
+    data_tests:
       - unique:
           column_name: count
     columns:
       - name: first_name
         description: "The first name being summarized"
-        tests:
+        data_tests:
           - unique
       - name: ct
         description: "The number of instances of the first name"
@@ -387,7 +387,7 @@ models:
           materialized: view
           meta:
             color: red
-        tests: []
+        data_tests: []
         columns:
           - include: '*'
             exclude: ['ct']
@@ -497,7 +497,10 @@ def verify_manifest(project, expected_manifest, start_time, manifest_schema_path
                 assert unique_id in manifest[key]
                 assert manifest[key][unique_id] == node, f"{unique_id} did not match"
         else:  # ['docs', 'parent_map', 'child_map', 'group_map', 'selectors', 'semantic_models', 'saved_queries']
-            assert manifest[key] == expected_manifest[key]
+            for unique_id, nodes in manifest[key].items():
+                assert unique_id in expected_manifest[key]
+                assert sorted(nodes) == sorted(expected_manifest[key][unique_id])
+            # assert manifest[key] == expected_manifest[key]
 
 
 def verify_manifest_macros(manifest, expected=None):

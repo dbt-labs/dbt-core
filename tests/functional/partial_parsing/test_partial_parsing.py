@@ -134,9 +134,9 @@ class TestModels:
         assert model_three_node.description == "The third model"
         schema_file = manifest.files[schema_file_id]
         assert type(schema_file).__name__ == "SchemaSourceFile"
-        assert len(schema_file.tests) == 1
+        assert len(schema_file.data_tests) == 1
         tests = schema_file.get_all_test_ids()
-        assert tests == ["test.test.unique_model_three_id.6776ac8160"]
+        assert tests == ["data_test.test.unique_model_three_id.6776ac8160"]
         unique_test_id = tests[0]
         assert unique_test_id in manifest.nodes
 
@@ -156,7 +156,7 @@ class TestModels:
         schema_file_id = "test://" + normalize("models/schema.yml")
         schema_file = manifest.files[schema_file_id]
         tests = schema_file.get_all_test_ids()
-        assert tests == ["test.test.not_null_model_three_id.3162ce0a6f"]
+        assert tests == ["data_test.test.not_null_model_three_id.3162ce0a6f"]
         not_null_test_id = tests[0]
         assert not_null_test_id in manifest.nodes.keys()
         assert unique_test_id not in manifest.nodes.keys()
@@ -398,7 +398,7 @@ class TestSources:
         results = run_dbt(["--partial-parse", "test"])
         manifest = get_manifest(project.project_root)
         assert len(manifest.nodes) == 9
-        test_id = "test.test.my_test"
+        test_id = "data_test.test.my_test"
         assert test_id in manifest.nodes
 
         # Change macro that data test depends on
@@ -468,7 +468,7 @@ class TestPartialParsingDependency:
         assert source_id in manifest.sources
         # We have 1 root model, 1 local_dep model, 1 local_dep seed, 1 local_dep source test, 2 root source tests
         assert len(manifest.nodes) == 5
-        test_id = "test.local_dep.source_unique_seed_source_seed_id.afa94935ed"
+        test_id = "data_test.local_dep.source_unique_seed_source_seed_id.afa94935ed"
         assert test_id in manifest.nodes
 
         # Remove a source override
@@ -516,7 +516,7 @@ class TestNestedMacros:
         )
         results = run_dbt(["--partial-parse", "test"], expect_pass=False)
         manifest = get_manifest(project.project_root)
-        test_node_id = "test.test.type_two_model_a_.842bc6c2a7"
+        test_node_id = "data_test.test.type_two_model_a_.842bc6c2a7"
         assert test_node_id in manifest.nodes
         results = sorted(results, key=lambda r: r.node.name)
         assert len(results) == 2
@@ -621,7 +621,7 @@ class TestTests:
         results = run_dbt()
         assert len(results) == 1
         manifest = get_manifest(project.project_root)
-        expected_nodes = ["model.test.orders", "test.test.unique_orders_id.1360ecc70e"]
+        expected_nodes = ["model.test.orders", "data_test.test.unique_orders_id.1360ecc70e"]
         assert expected_nodes == list(manifest.nodes.keys())
 
         # add generic test in test-path
@@ -630,12 +630,12 @@ class TestTests:
         results = run_dbt(["--partial-parse", "run"])
         assert len(results) == 1
         manifest = get_manifest(project.project_root)
-        test_id = "test.test.is_odd_orders_id.82834fdc5b"
+        test_id = "data_test.test.is_odd_orders_id.82834fdc5b"
         assert test_id in manifest.nodes
         expected_nodes = [
             "model.test.orders",
-            "test.test.unique_orders_id.1360ecc70e",
-            "test.test.is_odd_orders_id.82834fdc5b",
+            "data_test.test.unique_orders_id.1360ecc70e",
+            "data_test.test.is_odd_orders_id.82834fdc5b",
         ]
         assert expected_nodes == list(manifest.nodes.keys())
 
@@ -646,12 +646,12 @@ class TestTests:
         results = run_dbt(["--partial-parse", "run"])
         assert len(results) == 1
         manifest = get_manifest(project.project_root)
-        test_id = "test.test.is_odd_orders_id.82834fdc5b"
+        test_id = "data_test.test.is_odd_orders_id.82834fdc5b"
         assert test_id in manifest.nodes
         expected_nodes = [
             "model.test.orders",
-            "test.test.unique_orders_id.1360ecc70e",
-            "test.test.is_odd_orders_id.82834fdc5b",
+            "data_test.test.unique_orders_id.1360ecc70e",
+            "data_test.test.is_odd_orders_id.82834fdc5b",
         ]
         assert expected_nodes == list(manifest.nodes.keys())
 

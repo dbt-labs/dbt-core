@@ -6,12 +6,12 @@ models:
   - name: sample_model
     columns:
       - name: sample_num
-        tests:
+        data_tests:
           - accepted_values:
               values: [1, 2]
           - not_null
       - name: sample_bool
-        tests:
+        data_tests:
           - not_null
           - unique
 """
