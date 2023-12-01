@@ -884,8 +884,8 @@ class TestSchemaTestNameCollision:
 
         # both tests have the same unique id except for the hash
         expected_unique_ids = [
-            "test.test.not_null_base_extension_id.922d83a56c",
-            "test.test.not_null_base_extension_id.c8d18fe069",
+            "data_test.test.not_null_base_extension_id.922d83a56c",
+            "data_test.test.not_null_base_extension_id.c8d18fe069",
         ]
         assert test_results[0].node.unique_id in expected_unique_ids
         assert test_results[1].node.unique_id in expected_unique_ids
@@ -906,7 +906,7 @@ class TestGenericTestsCollide:
         """These tests collide, since only the configs differ"""
         with pytest.raises(DuplicateResourceNameError) as exc:
             run_dbt()
-        assert "dbt found two tests with the name" in str(exc.value)
+        assert "dbt found two data_tests with the name" in str(exc.value)
 
 
 class TestGenericTestsConfigCustomMacros:
@@ -950,8 +950,8 @@ class TestGenericTestsCustomNames:
 
         # custom names propagate to the unique_id
         expected_unique_ids = [
-            "test.test.not_null_where_1_equals_1.7b96089006",
-            "test.test.not_null_where_1_equals_2.8ae586e17f",
+            "data_test.test.not_null_where_1_equals_1.7b96089006",
+            "data_test.test.not_null_where_1_equals_2.8ae586e17f",
         ]
         assert test_results[0].node.unique_id in expected_unique_ids
         assert test_results[1].node.unique_id in expected_unique_ids

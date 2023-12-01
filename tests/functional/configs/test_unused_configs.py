@@ -30,7 +30,7 @@ class TestUnusedModelConfigs:
                     "enabled": True,
                 }
             },
-            "tests": {
+            "data-tests": {
                 "test": {
                     "enabled": True,
                 }

@@ -101,7 +101,7 @@ class TestEnvVars:
         source = manifest.sources[source_id]
         assert source.database == "dbt"
         schema_file = manifest.files[source.file_id]
-        test_id = "test.test.source_not_null_seed_sources_raw_customers_id.e39ee7bf0d"
+        test_id = "data_test.test.source_not_null_seed_sources_raw_customers_id.e39ee7bf0d"
         test_node = manifest.nodes[test_id]
         assert test_node.config.severity == "WARN"
 
@@ -157,7 +157,9 @@ class TestEnvVars:
         os.environ["ENV_VAR_COLOR"] = "green"
         results = run_dbt(["--partial-parse", "run"])
         manifest = get_manifest(project.project_root)
-        test_color_id = "test.test.check_color_model_one_env_var_ENV_VAR_COLOR___fun.89638de387"
+        test_color_id = (
+            "data_test.test.check_color_model_one_env_var_ENV_VAR_COLOR___fun.89638de387"
+        )
         test_node = manifest.nodes[test_color_id]
         # kwarg was rendered but not changed (it will be rendered again when compiled)
         assert test_node.test_metadata.kwargs["color"] == "env_var('ENV_VAR_COLOR')"

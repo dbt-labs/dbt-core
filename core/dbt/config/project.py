@@ -440,7 +440,7 @@ class PartialProject(RenderComponents):
         seeds: Dict[str, Any]
         snapshots: Dict[str, Any]
         sources: Dict[str, Any]
-        tests: Dict[str, Any]
+        data_tests: Dict[str, Any]
         unit_tests: Dict[str, Any]
         metrics: Dict[str, Any]
         semantic_models: Dict[str, Any]
@@ -454,7 +454,9 @@ class PartialProject(RenderComponents):
         seeds = cfg.seeds
         snapshots = cfg.snapshots
         sources = cfg.sources
-        tests = cfg.tests
+        # the `tests` config is deprecated but still allowed. Copy it into
+        # `data_tests` to simplify logic throughout the rest of the system.
+        data_tests = cfg.data_tests if "data-tests" in rendered.project_dict else cfg.tests
         unit_tests = cfg.unit_tests
         metrics = cfg.metrics
         semantic_models = cfg.semantic_models
@@ -516,7 +518,7 @@ class PartialProject(RenderComponents):
             selectors=selectors,
             query_comment=query_comment,
             sources=sources,
-            tests=tests,
+            data_tests=data_tests,
             unit_tests=unit_tests,
             metrics=metrics,
             semantic_models=semantic_models,
@@ -627,7 +629,7 @@ class Project:
     seeds: Dict[str, Any]
     snapshots: Dict[str, Any]
     sources: Dict[str, Any]
-    tests: Dict[str, Any]
+    data_tests: Dict[str, Any]
     unit_tests: Dict[str, Any]
     metrics: Dict[str, Any]
     semantic_models: Dict[str, Any]
@@ -713,7 +715,7 @@ class Project:
                 "seeds": self.seeds,
                 "snapshots": self.snapshots,
                 "sources": self.sources,
-                "tests": self.tests,
+                "data-tests": self.data_tests,
                 "unit-tests": self.unit_tests,
                 "metrics": self.metrics,
                 "semantic-models": self.semantic_models,

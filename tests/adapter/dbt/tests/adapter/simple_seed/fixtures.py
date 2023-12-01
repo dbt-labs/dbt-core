@@ -54,46 +54,46 @@ seeds:
 - name: seed_enabled
   columns:
   - name: birthday
-    tests:
+    data_tests:
     - column_type:
         type: date
   - name: seed_id
-    tests:
+    data_tests:
     - column_type:
         type: text
 
 - name: seed_tricky
   columns:
   - name: seed_id
-    tests:
+    data_tests:
     - column_type:
         type: integer
   - name: seed_id_str
-    tests:
+    data_tests:
     - column_type:
         type: text
   - name: a_bool
-    tests:
+    data_tests:
     - column_type:
         type: boolean
   - name: looks_like_a_bool
-    tests:
+    data_tests:
     - column_type:
         type: text
   - name: a_date
-    tests:
+    data_tests:
     - column_type:
         type: timestamp without time zone
   - name: looks_like_a_date
-    tests:
+    data_tests:
     - column_type:
         type: text
   - name: relative
-    tests:
+    data_tests:
     - column_type:
         type: text
   - name: weekday
-    tests:
+    data_tests:
     - column_type:
         type: text
 """

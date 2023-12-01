@@ -27,7 +27,7 @@ models:
 
     columns:
       - name: id
-        tests:
+        data_tests:
           - not_null:
               meta:
                   owner: 'Simple Simon'
@@ -102,7 +102,7 @@ version: 2
 models:
   - name: untagged
     description: "This is a model description"
-    tests:
+    data_tests:
       - not_null:
           error_if: ">2"
           config:

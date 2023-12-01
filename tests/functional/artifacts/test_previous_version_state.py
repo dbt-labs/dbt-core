@@ -128,12 +128,12 @@ version: 2
 models:
   - name: my_model
     description: "Example model"
-    tests:
+    data_tests:
       - check_nothing
       - disabled_check_nothing
     columns:
      - name: id
-       tests:
+       data_tests:
        - not_null
 
 semantic_models:

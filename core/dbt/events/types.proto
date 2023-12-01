@@ -415,6 +415,17 @@ message CollectFreshnessReturnSignatureMsg {
     CollectFreshnessReturnSignature data = 2;
 }
 
+// D013
+message TestsConfigDeprecation {
+    string deprecated_path = 1;
+    string exp_path = 2;
+}
+
+message TestsConfigDeprecationMsg {
+    EventInfo info = 1;
+    TestsConfigDeprecation data = 2;
+}
+
 // E - DB Adapter
 
 // E001

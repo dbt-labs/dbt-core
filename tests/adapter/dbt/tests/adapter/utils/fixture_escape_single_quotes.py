@@ -39,7 +39,7 @@ models__test_escape_single_quotes_yml = """
 version: 2
 models:
   - name: test_escape_single_quotes
-    tests:
+    data_tests:
       - assert_equal:
           actual: actual
           expected: expected

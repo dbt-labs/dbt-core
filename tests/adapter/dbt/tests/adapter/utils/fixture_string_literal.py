@@ -12,7 +12,7 @@ models__test_string_literal_yml = """
 version: 2
 models:
   - name: test_string_literal
-    tests:
+    data_tests:
       - assert_equal:
           actual: actual
           expected: expected

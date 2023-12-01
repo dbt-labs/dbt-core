@@ -221,7 +221,7 @@ class SourceFile(BaseSourceFile):
 class SchemaSourceFile(BaseSourceFile):
     dfy: Dict[str, Any] = field(default_factory=dict)
     # these are in the manifest.nodes dictionary
-    tests: Dict[str, Any] = field(default_factory=dict)
+    data_tests: Dict[str, Any] = field(default_factory=dict)
     sources: List[str] = field(default_factory=list)
     exposures: List[str] = field(default_factory=list)
     metrics: List[str] = field(default_factory=list)
@@ -273,31 +273,31 @@ class SchemaSourceFile(BaseSourceFile):
     def add_test(self, node_unique_id, test_from):
         name = test_from["name"]
         key = test_from["key"]
-        if key not in self.tests:
-            self.tests[key] = {}
-        if name not in self.tests[key]:
-            self.tests[key][name] = []
-        self.tests[key][name].append(node_unique_id)
+        if key not in self.data_tests:
+            self.data_tests[key] = {}
+        if name not in self.data_tests[key]:
+            self.data_tests[key][name] = []
+        self.data_tests[key][name].append(node_unique_id)
 
-    # this is only used in unit tests
+    # this is only used in tests/unit
     def remove_tests(self, yaml_key, name):
-        if yaml_key in self.tests:
-            if name in self.tests[yaml_key]:
-                del self.tests[yaml_key][name]
+        if yaml_key in self.data_tests:
+            if name in self.data_tests[yaml_key]:
+                del self.data_tests[yaml_key][name]
 
-    # this is only used in tests (unit + functional)
+    # this is only used in the tests directory (unit + functional)
     def get_tests(self, yaml_key, name):
-        if yaml_key in self.tests:
-            if name in self.tests[yaml_key]:
-                return self.tests[yaml_key][name]
+        if yaml_key in self.data_tests:
+            if name in self.data_tests[yaml_key]:
+                return self.data_tests[yaml_key][name]
         return []
 
     def get_key_and_name_for_test(self, test_unique_id):
         yaml_key = None
         block_name = None
-        for key in self.tests.keys():
-            for name in self.tests[key]:
-                for unique_id in self.tests[key][name]:
+        for key in self.data_tests.keys():
+            for name in self.data_tests[key]:
+                for unique_id in self.data_tests[key][name]:
                     if unique_id == test_unique_id:
                         yaml_key = key
                         block_name = name
@@ -306,9 +306,9 @@ class SchemaSourceFile(BaseSourceFile):
 
     def get_all_test_ids(self):
         test_ids = []
-        for key in self.tests.keys():
-            for name in self.tests[key]:
-                test_ids.extend(self.tests[key][name])
+        for key in self.data_tests.keys():
+            for name in self.data_tests[key]:
+                test_ids.extend(self.data_tests[key][name])
         return test_ids
 
     def add_env_var(self, var, yaml_key, name):

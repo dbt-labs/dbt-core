@@ -719,7 +719,7 @@ class TestProject(BaseConfigTest):
                         "post-hook": "grant select on {{ this }} to bi_user",
                     },
                 },
-                "tests": {"my_test_project": {"fail_calc": "sum(failures)"}},
+                "data-tests": {"my_test_project": {"fail_calc": "sum(failures)"}},
                 "require-dbt-version": ">=0.1.0",
             }
         )
@@ -783,7 +783,7 @@ class TestProject(BaseConfigTest):
             },
         )
         self.assertEqual(
-            project.tests,
+            project.data_tests,
             {
                 "my_test_project": {"fail_calc": "sum(failures)"},
             },

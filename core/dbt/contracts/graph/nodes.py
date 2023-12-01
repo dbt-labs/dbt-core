@@ -400,7 +400,7 @@ class ParsedNode(NodeInfoMixin, ParsedNodeMandatory, SerializableType):
             return RPCNode.from_dict(dct)
         elif resource_type == "sql":
             return SqlNode.from_dict(dct)
-        elif resource_type == "test":
+        elif resource_type == "data_test" or resource_type == "test":
             if "test_metadata" in dct:
                 return GenericTestNode.from_dict(dct)
             else:
@@ -1251,20 +1251,20 @@ class UnpatchedSourceDefinition(BaseNode):
         return [] if self.table.columns is None else self.table.columns
 
     def get_tests(self) -> Iterator[Tuple[Dict[str, Any], Optional[UnparsedColumn]]]:
-        for test in self.tests:
-            yield normalize_test(test), None
+        for data_test in self.data_tests:
+            yield normalize_test(data_test), None
 
         for column in self.columns:
-            if column.tests is not None:
-                for test in column.tests:
-                    yield normalize_test(test), column
+            if column.data_tests is not None:
+                for data_test in column.data_tests:
+                    yield normalize_test(data_test), column
 
     @property
-    def tests(self) -> List[TestDef]:
-        if self.table.tests is None:
+    def data_tests(self) -> List[TestDef]:
+        if self.table.data_tests is None:
             return []
         else:
-            return self.table.tests
+            return self.table.data_tests
 
 
 @dataclass

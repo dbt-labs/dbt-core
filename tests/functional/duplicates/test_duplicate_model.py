@@ -50,7 +50,7 @@ models:
       alias: table_model_local_dep
     columns:
       - name: id
-        tests:
+        data_tests:
           - unique
 """
 
@@ -191,7 +191,7 @@ class TestDuplicateModelNameWithTestAcrossPackages:
         assert root_model_node_id in manifest.nodes
 
         # test node exists and is attached to correct node
-        test_node_id = "test.local_dep.unique_table_model_id.1da9e464d9"
+        test_node_id = "data_test.local_dep.unique_table_model_id.1da9e464d9"
         assert test_node_id in manifest.nodes
         assert manifest.nodes[test_node_id].attached_node == local_dep_model_node_id
 

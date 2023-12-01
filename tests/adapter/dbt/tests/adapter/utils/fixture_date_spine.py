@@ -85,7 +85,7 @@ models__test_date_spine_yml = """
 version: 2
 models:
   - name: test_date_spine
-    tests:
+    data_tests:
       - assert_equal:
           actual: date_day
           expected: expected
