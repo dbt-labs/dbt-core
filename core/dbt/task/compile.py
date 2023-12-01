@@ -41,6 +41,7 @@ class CompileRunner(BaseRunner):
 
     def compile(self, manifest):
         compiler = self.adapter.get_compiler()
+
         return compiler.compile_node(self.node, manifest, {})
 
 

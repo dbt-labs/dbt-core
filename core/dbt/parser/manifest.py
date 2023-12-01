@@ -315,7 +315,7 @@ class ManifestLoader:
                 file_diff=file_diff,
             )
 
-            manifest = loader.load()
+            manifest = loader.load()  # None Node Step 0
 
             _check_manifest(manifest, config)
             manifest.build_flat_graph()
@@ -440,8 +440,8 @@ class ManifestLoader:
             # the other files are loaded.  Also need to parse tests, specifically
             # generic tests
             start_load_macros = time.perf_counter()
-            self.load_and_parse_macros(project_parser_files)
 
+            self.load_and_parse_macros(project_parser_files)
             # If we're partially parsing check that certain macros have not been changed
             if self.partially_parsing and self.skip_partial_parsing_because_of_macros():
                 fire_event(
@@ -494,8 +494,7 @@ class ManifestLoader:
                     continue
                 self.parse_project(
                     project, project_parser_files[project.project_name], parser_types
-                )
-
+                )  # None Node Step 1
             self.cleanup_disabled()
 
             self._perf_info.parse_project_elapsed = time.perf_counter() - start_parse_projects
@@ -545,7 +544,6 @@ class ManifestLoader:
             self._perf_info.static_analysis_path_count = (
                 self.manifest._parsing_info.static_analysis_path_count
             )
-
         # Inject any available external nodes, reprocess refs if changes to the manifest were made.
         external_nodes_modified = False
         if skip_parsing:
@@ -641,7 +639,6 @@ class ManifestLoader:
         parser_files,
         parser_types: List[Type[Parser]],
     ) -> None:
-
         project_loader_info = self._perf_info._project_index[project.project_name]
         start_timer = time.perf_counter()
         total_parsed_path_count = 0
@@ -668,7 +665,7 @@ class ManifestLoader:
                     else:
                         dct = block.file.dict_from_yaml
                     # this is where the schema file gets parsed
-                    parser.parse_file(block, dct=dct)
+                    parser.parse_file(block, dct=dct)  # None Node Step 2
                     # Came out of here with UnpatchedSourceDefinition containing configs at the source level
                     # and not configs at the table level (as expected)
                 else:

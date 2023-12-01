@@ -170,6 +170,7 @@ class ConfiguredTask(BaseTask):
         # we cannot get adapter in init since it will break rpc #5579
         adapter = get_adapter(self.config)
         compiler = adapter.get_compiler()
+
         self.graph = compiler.compile(self.manifest)
 
         compile_time = time.perf_counter() - start_compile_manifest

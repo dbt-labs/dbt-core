@@ -25,7 +25,13 @@ from dbt.contracts.graph.nodes import (
 from dbt.context.context_config import ContextConfig
 from dbt.context.configured import generate_schema_yml_context, SchemaYamlVars
 from dbt.dataclass_schema import ValidationError
-from dbt.exceptions import SchemaConfigError, CompilationError, ParsingError, TestConfigError
+from dbt.exceptions import (
+    SchemaConfigError,
+    CompilationError,
+    ParsingError,
+    TestConfigError,
+    UndefinedMacroError,
+)
 from dbt.contracts.files import FileHash
 from dbt.utils import md5, get_pseudo_test_path
 from dbt.clients.jinja import get_rendered, add_rendered_test_kwargs
@@ -163,6 +169,7 @@ class SchemaGenericTestParser(SimpleParser):
                 package_name=target.package_name,
                 render_ctx=self.render_ctx,
             )
+
             if self.schema_yaml_vars.env_vars:
                 self.store_env_vars(target, schema_file_id, self.schema_yaml_vars.env_vars)
                 self.schema_yaml_vars.env_vars = {}
@@ -222,7 +229,7 @@ class SchemaGenericTestParser(SimpleParser):
             test_metadata=metadata,
             file_key_name=file_key_name,
         )
-        self.render_test_update(node, config, builder, schema_file_id)
+        self.render_test_update(node, config, builder, schema_file_id)  # None Node Step 8
 
         return node
 
@@ -268,9 +275,15 @@ class SchemaGenericTestParser(SimpleParser):
     # more to handle additional macros or to use static
     # parsing to avoid jinja overhead.
     def render_test_update(self, node, config, builder, schema_file_id):
+        # None Node Step 9 => get_macro_id returns None since the macro does not exist
         macro_unique_id = self.macro_resolver.get_macro_id(
             node.package_name, "test_" + builder.name
         )
+
+        # None Node Solution ? => macro_unique_id should throw ?
+        if macro_unique_id is None:
+            raise UndefinedMacroError(f"Unable to resolve macro '{builder.name}'")
+
         # Add the depends_on here so we can limit the macros added
         # to the context in rendering processing
         node.depends_on.add_macro(macro_unique_id)
@@ -319,6 +332,7 @@ class SchemaGenericTestParser(SimpleParser):
         builds the initial node to be parsed, but rendering is basically the
         same
         """
+        # None Node Step 7
         node = self.parse_generic_test(
             target=block.target,
             test=block.test,
@@ -327,6 +341,7 @@ class SchemaGenericTestParser(SimpleParser):
             schema_file_id=block.file.file_id,
             version=block.version,
         )
+
         self.add_test_node(block, node)
         return node
 
@@ -381,18 +396,18 @@ class SchemaGenericTestParser(SimpleParser):
             tags=column_tags,
             version=version,
         )
-        self.parse_node(block)
+        self.parse_node(block)  # None Node Step 6
 
     def parse_tests(self, block: TestBlock) -> None:
         for column in block.columns:
             self.parse_column_tests(block, column, None)
 
         for test in block.tests:
-            self.parse_test(block, test, None, None)
+            self.parse_test(block, test, None, None)  # None Node Step 5
 
     def parse_versioned_tests(self, block: VersionedTestBlock) -> None:
         if not block.target.versions:
-            self.parse_tests(block)
+            self.parse_tests(block)  # None Node Step 4
         else:
             for version in block.target.versions:
                 for column in block.target.get_columns_for_version(version.v):

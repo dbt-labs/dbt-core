@@ -153,6 +153,7 @@ class SchemaParser(SimpleParser[YamlBlock, ModelNode]):
 
         # If partially parsing, dct should be from pp_dict, otherwise
         # dict_from_yaml
+
         if dct:
             # contains the FileBlock and the data (dictionary)
             yaml_block = YamlBlock.from_file_block(block, dct)
@@ -168,7 +169,9 @@ class SchemaParser(SimpleParser[YamlBlock, ModelNode]):
                 # even if they are disabled in the schema file
                 model_parse_result = ModelPatchParser(self, yaml_block, "models").parse()
                 for versioned_test_block in model_parse_result.versioned_test_blocks:
-                    self.generic_test_parser.parse_versioned_tests(versioned_test_block)
+                    self.generic_test_parser.parse_versioned_tests(
+                        versioned_test_block
+                    )  # None Node Step 3
 
             # PatchParser.parse()
             if "seeds" in dct:
@@ -677,6 +680,7 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
 
     def parse_patch(self, block: TargetBlock[UnparsedModelUpdate], refs: ParserRef) -> None:
         target = block.target
+
         if NodeType.Model.pluralize() != target.yaml_key:
             warn_or_error(
                 WrongResourceSchemaFile(
@@ -803,6 +807,7 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
                 source_file.append_patch(
                     versioned_model_patch.yaml_key, versioned_model_node.unique_id
                 )
+
             self.manifest.rebuild_ref_lookup()
             self.manifest.rebuild_disabled_lookup()
 

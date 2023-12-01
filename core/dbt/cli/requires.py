@@ -268,6 +268,7 @@ def manifest(*args0, write=True, write_perf_info=False):
 
             # a manifest has already been set on the context, so don't overwrite it
             if ctx.obj.get("manifest") is None:
+                # None Node Step 00 => Context creates manifest
                 manifest = ManifestLoader.get_full_manifest(
                     runtime_config,
                     write_perf_info=write_perf_info,

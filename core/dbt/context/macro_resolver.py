@@ -123,10 +123,12 @@ class MacroResolver:
         # Now look up in the standard search order
         if macro_name in self.macros_by_name:
             return self.macros_by_name[macro_name]
-        return None
+
+        # a lot of macros returns None, this seems like handled behaviour elsewhere
+        return None  # None Node Step 11 => typo implies invalid macro
 
     def get_macro_id(self, local_package, macro_name) -> Optional[str]:
-        macro = self.get_macro(local_package, macro_name)
+        macro = self.get_macro(local_package, macro_name)  # None Node Step 10 => returns None
         if macro is None:
             return None
         else:
