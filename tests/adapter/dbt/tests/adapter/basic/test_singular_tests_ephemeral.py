@@ -39,6 +39,17 @@ class BaseSingularTestsEphemeral:
             "name": "singular_tests_ephemeral",
         }
 
+    @pytest.fixture(autouse=True)
+    def clean_up(self, project):
+        yield
+        with project.adapter.connection_named("__test"):
+            relation = project.adapter.Relation.create(
+                database=project.database, schema=project.test_schema
+            )
+            project.adapter.drop_schema(relation)
+
+    pass
+
     def test_singular_tests_ephemeral(self, project):
         # check results from seed command
         results = run_dbt(["seed"])

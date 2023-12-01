@@ -404,6 +404,22 @@ class BaseGenerateProject:
             },
         }
 
+    @pytest.fixture(autouse=True)
+    def clean_up(self, project):
+        yield
+        with project.adapter.connection_named("__test"):
+            relation = project.adapter.Relation.create(
+                database=project.database, schema=project.test_schema
+            )
+            project.adapter.drop_schema(relation)
+
+            relation = project.adapter.Relation.create(
+                database=project.database, schema=project.alternate_schema
+            )
+            project.adapter.drop_schema(relation)
+
+    pass
+
 
 class BaseDocsGenerate(BaseGenerateProject):
     @pytest.fixture(scope="class")
