@@ -19,6 +19,7 @@ class Column:
     char_size: Optional[int] = None
     numeric_precision: Optional[Any] = None
     numeric_scale: Optional[Any] = None
+    comment: Optional[str] = None
 
     @classmethod
     def translate_type(cls, dtype: str) -> str:
@@ -122,7 +123,13 @@ class Column:
         return "<Column {} ({})>".format(self.name, self.data_type)
 
     @classmethod
-    def from_description(cls, name: str, raw_data_type: str) -> "Column":
+    def from_description(
+        cls,
+        name: str,
+        raw_data_type: str,
+        *,
+        comment: Optional[str] = None,
+    ) -> "Column":
         match = re.match(r"([^(]+)(\([^)]+\))?", raw_data_type)
         if match is None:
             raise DbtRuntimeError(f'Could not interpret data type "{raw_data_type}"')
@@ -158,4 +165,11 @@ class Column:
                         f'could not convert "{parts[1]}" to an integer'
                     )
 
-        return cls(name, data_type, char_size, numeric_precision, numeric_scale)
+        return cls(
+            name,
+            data_type,
+            char_size,
+            numeric_precision,
+            numeric_scale,
+            comment=comment,
+        )
