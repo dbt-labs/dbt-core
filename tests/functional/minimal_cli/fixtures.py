@@ -1,4 +1,5 @@
 import pytest
+from click.testing import CliRunner
 
 models__schema_yml = """
 version: 2
@@ -51,6 +52,10 @@ select 1
 
 
 class BaseConfigProject:
+    @pytest.fixture()
+    def runner(self):
+        return CliRunner()
+
     @pytest.fixture(scope="class")
     def project_config_update(self):
         return {
