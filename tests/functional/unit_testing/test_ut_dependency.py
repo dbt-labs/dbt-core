@@ -20,7 +20,7 @@ sources:
       - name: "seed"
         columns:
           - name: id
-            tests:
+            data_tests:
               - unique
 
 unit_tests:

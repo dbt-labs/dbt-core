@@ -576,7 +576,7 @@ class TestList:
                 self.dir("models/schema.yml"),
             ),
         }
-        self.expect_given_output(["--resource-type", "test"], expectations)
+        self.expect_given_output(["--resource-type", "data_test"], expectations)
 
     def expect_all_output(self):
         # generic test FQNS include the resource + column they're defined on
@@ -612,12 +612,12 @@ class TestList:
         results = self.run_dbt_ls
 
     def expect_select(self):
-        results = self.run_dbt_ls(["--resource-type", "test", "--select", "outer"])
+        results = self.run_dbt_ls(["--resource-type", "data_test", "--select", "outer"])
         assert set(results) == {"test.not_null_outer_id", "test.unique_outer_id"}
 
-        self.run_dbt_ls(["--resource-type", "test", "--select", "inner"], expect_pass=True)
+        self.run_dbt_ls(["--resource-type", "data_test", "--select", "inner"], expect_pass=True)
 
-        results = self.run_dbt_ls(["--resource-type", "test", "--select", "+inner"])
+        results = self.run_dbt_ls(["--resource-type", "data_test", "--select", "+inner"])
         assert set(results) == {"test.not_null_outer_id", "test.unique_outer_id"}
 
         results = self.run_dbt_ls(["--resource-type", "semantic_model"])
@@ -646,7 +646,7 @@ class TestList:
 
     def expect_resource_type_multiple(self):
         """Expect selected resources when --resource-type given multiple times"""
-        results = self.run_dbt_ls(["--resource-type", "test", "--resource-type", "model"])
+        results = self.run_dbt_ls(["--resource-type", "data_test", "--resource-type", "model"])
         assert set(results) == {
             "test.ephemeral",
             "test.incremental",
@@ -659,7 +659,14 @@ class TestList:
         }
 
         results = self.run_dbt_ls(
-            ["--resource-type", "test", "--resource-type", "model", "--exclude", "unique_outer_id"]
+            [
+                "--resource-type",
+                "data_test",
+                "--resource-type",
+                "model",
+                "--exclude",
+                "unique_outer_id",
+            ]
         )
         assert set(results) == {
             "test.ephemeral",
@@ -674,7 +681,7 @@ class TestList:
         results = self.run_dbt_ls(
             [
                 "--resource-type",
-                "test",
+                "data_test",
                 "--resource-type",
                 "model",
                 "--select",
@@ -743,7 +750,7 @@ class TestList:
         results = self.run_dbt_ls(
             [
                 "--resource-type",
-                "test",
+                "data_test",
                 "--output",
                 "json",
                 "--output-keys",

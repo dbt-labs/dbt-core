@@ -112,7 +112,7 @@ class TestRunner(CompileRunner):
     def before_execute(self):
         self.print_start_line()
 
-    def execute_test(self, data_test: TestNode, manifest: Manifest) -> TestResultData:
+    def execute_data_test(self, data_test: TestNode, manifest: Manifest) -> TestResultData:
         context = generate_runtime_model_context(data_test, self.config, manifest)
 
         materialization_macro = manifest.find_materialization_macro_by_name(
@@ -239,7 +239,7 @@ class TestRunner(CompileRunner):
             return self.build_unit_test_run_result(test, unit_test_result)
         else:
             # Note: manifest here is a normal manifest
-            test_result = self.execute_test(test, manifest)
+            test_result = self.execute_data_test(test, manifest)
             return self.build_test_run_result(test, test_result)
 
     def build_test_run_result(self, test: TestNode, result: TestResultData) -> RunResult:
