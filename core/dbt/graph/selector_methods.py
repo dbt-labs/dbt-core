@@ -155,6 +155,8 @@ class SelectorMethod(metaclass=abc.ABCMeta):
         self, included_nodes: Set[UniqueId]
     ) -> Iterator[Tuple[UniqueId, UnitTestDefinition]]:
         for unique_id, unit_test in self.manifest.unit_tests.items():
+            if unit_test.resource_type != NodeType.Unit:
+                next
             unique_id = UniqueId(unique_id)
             if unique_id not in included_nodes:
                 continue
@@ -741,6 +743,7 @@ class StateSelectorMethod(SelectorMethod):
             elif node in manifest.semantic_models:
                 previous_node = manifest.semantic_models[node]
             elif node in manifest.unit_tests:
+                assert isinstance(node, UnitTestDefinition)
                 previous_node = manifest.unit_tests[node]
 
             keyword_args = {}

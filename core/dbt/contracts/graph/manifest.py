@@ -43,6 +43,7 @@ from dbt.contracts.graph.nodes import (
     SourceDefinition,
     UnpatchedSourceDefinition,
     UnitTestDefinition,
+    UnitTestDef,
 )
 from dbt.contracts.graph.unparsed import SourcePatch, NodeVersion, UnparsedVersion
 from dbt.contracts.graph.manifest_upgrade import upgrade_manifest_json
@@ -1620,7 +1621,7 @@ class WritableManifest(ArtifactMixin):
             description="Metadata about the manifest",
         )
     )
-    unit_tests: Mapping[UniqueID, UnitTestDefinition] = field(
+    unit_tests: Mapping[UniqueID, UnitTestDef] = field(
         metadata=dict(
             description="The unit tests defined in the project",
         )

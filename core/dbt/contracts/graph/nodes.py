@@ -1134,6 +1134,11 @@ class UnitTestDefinition(NodeInfoMixin, GraphNode, UnitTestDefinitionMandatory):
         return self.checksum == other.checksum
 
 
+class UnitTestFixture(BaseNode):
+    resource_type: Literal[NodeType.Fixture]
+    rows: Optional[List[Dict[str, Any]]] = None
+
+
 # ====================================
 # Snapshot node
 # ====================================
@@ -1966,3 +1971,5 @@ Resource = Union[
 ]
 
 TestNode = Union[SingularTestNode, GenericTestNode]
+
+UnitTestDef = Union[UnitTestDefinition, UnitTestFixture]

@@ -332,5 +332,9 @@ class SchemaSourceFile(BaseSourceFile):
 class FixtureSourceFile(BaseSourceFile):
     unit_tests: List[str] = field(default_factory=list)
 
+    def add_unit_test(self, value):
+        if value not in self.unit_tests:
+            self.unit_tests.append(value)
+
 
 AnySourceFile = Union[SchemaSourceFile, SourceFile]
