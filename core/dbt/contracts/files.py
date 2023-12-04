@@ -22,6 +22,7 @@ class ParseFileType(StrEnum):
     Documentation = "docs"
     Schema = "schema"
     Hook = "hook"  # not a real filetype, from dbt_project.yml
+    Fixture = "fixture"
 
 
 parse_file_type_to_parser = {
@@ -35,6 +36,7 @@ parse_file_type_to_parser = {
     ParseFileType.Documentation: "DocumentationParser",
     ParseFileType.Schema: "SchemaParser",
     ParseFileType.Hook: "HookParser",
+    ParseFileType.Fixture: None,
 }
 
 
@@ -152,7 +154,6 @@ class BaseSourceFile(dbtClassMixin, SerializableType):
     parse_file_type: Optional[ParseFileType] = None
     # we don't want to serialize this
     contents: Optional[str] = None
-    # the unique IDs contained in this file
 
     @property
     def file_id(self):
@@ -326,6 +327,10 @@ class SchemaSourceFile(BaseSourceFile):
             del self.env_vars[yaml_key][name]
             if not self.env_vars[yaml_key]:
                 del self.env_vars[yaml_key]
+
+
+class FixtureSourceFile(BaseSourceFile):
+    unit_tests: List[str] = field(default_factory=list)
 
 
 AnySourceFile = Union[SchemaSourceFile, SourceFile]

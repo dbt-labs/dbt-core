@@ -10,6 +10,7 @@ from dbt.contracts.files import (
     FileHash,
     AnySourceFile,
     SchemaSourceFile,
+    FixtureSourceFile,
 )
 from dbt.config import Project
 from dbt.dataclass_schema import dbtClassMixin
@@ -46,7 +47,13 @@ def load_source_file(
     saved_files,
 ) -> Optional[AnySourceFile]:
 
-    sf_cls = SchemaSourceFile if parse_file_type == ParseFileType.Schema else SourceFile
+    if parse_file_type == ParseFileType.Schema:
+        sf_cls = SchemaSourceFile
+    elif parse_file_type == ParseFileType.Fixture:
+        sf_cls = FixtureSourceFile  # type:ignore[assignment]
+    else:
+        sf_cls = SourceFile  # type:ignore[assignment]
+
     source_file = sf_cls(
         path=path,
         checksum=FileHash.empty(),
@@ -421,6 +428,11 @@ def get_file_types_for_project(project):
             "paths": project.all_source_paths,
             "extensions": [".yml", ".yaml"],
             "parser": "SchemaParser",
+        },
+        ParseFileType.Fixture: {
+            "paths": project.fixture_paths,
+            "extensions": [".csv"],
+            "parser": "FixtureParser",
         },
     }
     return file_types
