@@ -199,6 +199,8 @@ class Linker:
         for metric in manifest.metrics.values():
             self.link_node(metric, manifest)
         for unit_test in manifest.unit_tests.values():
+            if not isinstance(unit_test, UnitTestDefinition):
+                continue
             self.link_node(unit_test, manifest)
         for saved_query in manifest.saved_queries.values():
             self.link_node(saved_query, manifest)

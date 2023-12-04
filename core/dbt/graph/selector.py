@@ -205,7 +205,8 @@ class NodeSelector(MethodManager):
         elif unique_id in self.manifest.semantic_models:
             node = self.manifest.semantic_models[unique_id]
         elif unique_id in self.manifest.unit_tests:
-            node = self.manifest.unit_tests[unique_id]
+            # This should only be a UnitTestDefinition, not a UnitTestFixture
+            node = self.manifest.unit_tests[unique_id]  # type:ignore[assignment]
         elif unique_id in self.manifest.saved_queries:
             node = self.manifest.saved_queries[unique_id]
         else:

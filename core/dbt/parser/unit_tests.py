@@ -47,7 +47,7 @@ class UnitTestManifestLoader:
     def load(self) -> Manifest:
         for unique_id in self.selected:
             if unique_id in self.manifest.unit_tests:
-                unit_test_case = self.manifest.unit_tests[unique_id]
+                unit_test_case: UnitTestDefinition = self.manifest.unit_tests[unique_id]  # type: ignore[assignment]
                 self.parse_unit_test_case(unit_test_case)
         return self.unit_test_manifest
 
