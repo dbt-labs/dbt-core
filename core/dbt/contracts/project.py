@@ -285,9 +285,9 @@ class Project(dbtClassMixin, Replaceable):
             raise ValidationError(
                 f"Invalid dbt_cloud config. Expected a 'dict' but got '{type(data['dbt_cloud'])}'"
             )
-        if data.get("tests", None) and data.get("data_tests", None):
+        if data.get("tests", None) and data.get("data-tests", None):
             raise ValidationError(
-                "Invalid project config: cannot have both 'tests' and 'data_tests' defined"
+                "Invalid project config: cannot have both 'tests' and 'data-tests' defined"
             )
         if "tests" in data:
             deprecations.warn(

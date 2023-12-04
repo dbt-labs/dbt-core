@@ -33,6 +33,17 @@ models:
          - not_null
 """
 
+test_type_mixed_yaml = """
+models:
+  - name: model
+    columns:
+     - name: id
+       data_tests:
+         - not_null
+       tests:
+         - unique
+"""
+
 old_tests_yaml = """
 models:
   - name: model

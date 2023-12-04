@@ -1,8 +1,8 @@
 import pytest
 
 from dbt import deprecations
-import dbt.exceptions
-from dbt.tests.util import run_dbt
+from dbt.exceptions import CompilationError, ProjectContractError, YamlParseDictError
+from dbt.tests.util import run_dbt, update_config_file
 from dbt.tests.fixtures.project import write_project_files
 
 from tests.functional.deprecations.fixtures import (
@@ -14,6 +14,7 @@ from tests.functional.deprecations.fixtures import (
     data_tests_yaml,
     seed_csv,
     sources_old_tests_yaml,
+    test_type_mixed_yaml,
 )
 
 
@@ -37,7 +38,7 @@ class TestTestsConfigDeprecation:
     def test_tests_config_fail(self, project):
         deprecations.reset_deprecations()
         assert deprecations.active_deprecations == set()
-        with pytest.raises(dbt.exceptions.CompilationError) as exc:
+        with pytest.raises(CompilationError) as exc:
             run_dbt(["--warn-error", "--no-partial-parse", "parse"])
         exc_str = " ".join(str(exc.value).split())  # flatten all whitespace
         expected_msg = "The `tests` config has been renamed to `data-tests`"
@@ -59,7 +60,7 @@ class TestSchemaTestDeprecation:
     def test_schema_tests_fail(self, project):
         deprecations.reset_deprecations()
         assert deprecations.active_deprecations == set()
-        with pytest.raises(dbt.exceptions.CompilationError) as exc:
+        with pytest.raises(CompilationError) as exc:
             run_dbt(["--warn-error", "--no-partial-parse", "parse"])
         exc_str = " ".join(str(exc.value).split())  # flatten all whitespace
         expected_msg = "The `tests` config has been renamed to `data_tests`"
@@ -89,6 +90,35 @@ class TestSourceSchemaTestDeprecation:
         run_dbt(["seed"])
         results = run_dbt(["test"])
         assert len(results) == 1
+
+
+# test for failure with test and data_tests in the same file
+class TestBothSchemaTestDeprecation:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"model.sql": models_trivial__model_sql, "schema.yml": test_type_mixed_yaml}
+
+    def test_schema(self, project):
+        expected_msg = "Invalid test config: cannot have both 'tests' and 'data_tests' defined"
+        with pytest.raises(YamlParseDictError) as excinfo:
+            run_dbt(["parse"])
+        assert expected_msg in str(excinfo.value)
+
+
+# test for failure with  test and data_tests in the same dbt_project.yml
+class TestBothProjectTestDeprecation:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"model.sql": models_trivial__model_sql}
+
+    def test_tests_config(self, project):
+        config_patch = {"tests": {"+enabled": "true"}, "data-tests": {"+tags": "super"}}
+        update_config_file(config_patch, project.project_root, "dbt_project.yml")
+
+        expected_msg = "Invalid project config: cannot have both 'tests' and 'data-tests' defined"
+        with pytest.raises(ProjectContractError) as excinfo:
+            run_dbt(["parse"])
+        assert expected_msg in str(excinfo.value)
 
 
 # test a local dependency can have tests while the rest of the project uses data_tests
