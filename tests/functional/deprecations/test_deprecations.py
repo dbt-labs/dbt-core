@@ -176,7 +176,7 @@ class TestTestsConfigDeprecation:
 
     @pytest.fixture(scope="class")
     def project_config_update(self, unique_schema):
-        return {"data-tests": {"enabled": "true"}}
+        return {"tests": {"enabled": "true"}}
 
     def test_tests_config(self, project):
         deprecations.reset_deprecations()
