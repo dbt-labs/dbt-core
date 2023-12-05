@@ -280,6 +280,8 @@ class GraphRunnableTask(ConfiguredTask):
             runner = self.get_runner(node)
             # we finally know what we're running! Make sure we haven't decided
             # to skip it due to upstream failures
+            breakpoint()
+            # TODO:is it in skipped children?
             if runner.node.unique_id in self._skipped_children:
                 cause = self._skipped_children.pop(runner.node.unique_id)
                 runner.do_skip(cause=cause)

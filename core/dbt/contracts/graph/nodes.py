@@ -1237,7 +1237,8 @@ class UnpatchedSourceDefinition(BaseNode):
 
     def validate_data_tests(self):
         """
-        sources parse tests differently than models, so we need to do some validation here where it's done in the PatchParser for other nodes
+        sources parse tests differently than models, so we need to do some validation
+        here where it's done in the PatchParser for other nodes
         """
         if self.tests and self.data_tests:
             raise ValidationError(
