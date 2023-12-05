@@ -43,7 +43,6 @@ class TestBuild(BaseConfigProject):
     def test_build(self, runner, project):
         runner.invoke(cli, ["deps"])
         result = runner.invoke(cli, ["build"])
-        breakpoint()
         # 1 seed, 1 model, 2 data tests
         assert "PASS=4" in result.output
         # 2 data tests
