@@ -4,7 +4,6 @@ from contextlib import contextmanager
 from datetime import datetime
 from enum import Enum
 import time
-from itertools import chain
 from typing import (
     Any,
     Callable,
@@ -75,6 +74,7 @@ from dbt.adapters.events.types import (
 )
 from dbt.common.utils import filter_null_values, executor, cast_to_str, AttrDict
 
+from dbt.adapters.contracts.relation import RelationConfig
 from dbt.adapters.base.connections import Connection, AdapterResponse, BaseConnectionManager
 from dbt.adapters.base.meta import AdapterMeta, available
 from dbt.adapters.base.relation import (
@@ -109,11 +109,13 @@ def _expect_row_value(key: str, row: agate.Row):
     return row[key]
 
 
-def _catalog_filter_schemas(manifest: Manifest) -> Callable[[agate.Row], bool]:
+def _catalog_filter_schemas(
+    used_schemas: frozenset[tuple[str, str]]
+) -> Callable[[agate.Row], bool]:
     """Return a function that takes a row and decides if the row should be
     included in the catalog output.
     """
-    schemas = frozenset((d.lower(), s.lower()) for d, s in manifest.get_used_schemas())
+    schemas = frozenset((d.lower(), s.lower()) for d, s in used_schemas)
 
     def test(row: agate.Row) -> bool:
         table_database = _expect_row_value("table_database", row)
@@ -428,7 +430,7 @@ class BaseAdapter(metaclass=AdapterMeta):
             if (node.is_relational and not node.is_ephemeral_model and not node.is_external_node)
         }
 
-    def _get_catalog_schemas(self, manifest: Manifest) -> SchemaSearchMap:
+    def _get_catalog_schemas(self, relation_configs: Iterable[RelationConfig]) -> SchemaSearchMap:
         """Get a mapping of each node's "information_schema" relations to a
         set of all schemas expected in that information_schema.
 
@@ -438,7 +440,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         lowercase strings.
         """
         info_schema_name_map = SchemaSearchMap()
-        relations = self._get_catalog_relations(manifest)
+        relations = self._get_catalog_relations(relation_configs)
         for relation in relations:
             info_schema_name_map.add(relation)
         # result is a map whose keys are information_schema Relations without
@@ -459,18 +461,13 @@ class BaseAdapter(metaclass=AdapterMeta):
 
         return relations_by_info_schema
 
-    def _get_catalog_relations(self, manifest: Manifest) -> List[BaseRelation]:
-
-        nodes = chain(
-            [
-                node
-                for node in manifest.nodes.values()
-                if (node.is_relational and not node.is_ephemeral_model)
-            ],
-            manifest.sources.values(),
-        )
-
-        relations = [self.Relation.create_from(self.config, n) for n in nodes]  # type: ignore[arg-type]
+    def _get_catalog_relations(
+        self, relation_configs: Iterable[RelationConfig]
+    ) -> List[BaseRelation]:
+        relations = [
+            self.Relation.create_from(quoting=self.config, config=relation_config)
+            for relation_config in relation_configs
+        ]
         return relations
 
     def _relations_cache_for_schemas(
@@ -1116,7 +1113,9 @@ class BaseAdapter(metaclass=AdapterMeta):
         return result
 
     @classmethod
-    def _catalog_filter_table(cls, table: agate.Table, manifest: Manifest) -> agate.Table:
+    def _catalog_filter_table(
+        cls, table: agate.Table, used_schemas: frozenset[tuple[str, str]]
+    ) -> agate.Table:
         """Filter the table as appropriate for catalog entries. Subclasses can
         override this to change filtering rules on a per-adapter basis.
         """
@@ -1126,31 +1125,28 @@ class BaseAdapter(metaclass=AdapterMeta):
             table.column_names,
             text_only_columns=["table_database", "table_schema", "table_name"],
         )
-        return table.where(_catalog_filter_schemas(manifest))
+        return table.where(_catalog_filter_schemas(used_schemas))
 
     def _get_one_catalog(
         self,
         information_schema: InformationSchema,
         schemas: Set[str],
-        manifest: Manifest,
+        used_schemas: frozenset[tuple[str, str]],
     ) -> agate.Table:
         kwargs = {"information_schema": information_schema, "schemas": schemas}
         table = self.execute_macro(
             GET_CATALOG_MACRO_NAME,
             kwargs=kwargs,
-            # pass in the full manifest so we get any local project
-            # overrides
-            manifest=manifest,
         )
 
-        results = self._catalog_filter_table(table, manifest)  # type: ignore[arg-type]
+        results = self._catalog_filter_table(table, used_schemas)  # type: ignore[arg-type]
         return results
 
     def _get_one_catalog_by_relations(
         self,
         information_schema: InformationSchema,
         relations: List[BaseRelation],
-        manifest: Manifest,
+        used_schemas: frozenset[tuple[str, str]],
     ) -> agate.Table:
 
         kwargs = {
@@ -1160,16 +1156,16 @@ class BaseAdapter(metaclass=AdapterMeta):
         table = self.execute_macro(
             GET_CATALOG_RELATIONS_MACRO_NAME,
             kwargs=kwargs,
-            # pass in the full manifest, so we get any local project
-            # overrides
-            manifest=manifest,
         )
 
-        results = self._catalog_filter_table(table, manifest)  # type: ignore[arg-type]
+        results = self._catalog_filter_table(table, used_schemas)  # type: ignore[arg-type]
         return results
 
     def get_filtered_catalog(
-        self, manifest: Manifest, relations: Optional[Set[BaseRelation]] = None
+        self,
+        relation_configs: Iterable[RelationConfig],
+        used_schemas: frozenset,
+        relations: Optional[Set[BaseRelation]] = None,
     ):
         catalogs: agate.Table
         if (
@@ -1178,11 +1174,11 @@ class BaseAdapter(metaclass=AdapterMeta):
             or not self.supports(Capability.SchemaMetadataByRelations)
         ):
             # Do it the traditional way. We get the full catalog.
-            catalogs, exceptions = self.get_catalog(manifest)
+            catalogs, exceptions = self.get_catalog(relation_configs, used_schemas)
         else:
             # Do it the new way. We try to save time by selecting information
             # only for the exact set of relations we are interested in.
-            catalogs, exceptions = self.get_catalog_by_relations(manifest, relations)
+            catalogs, exceptions = self.get_catalog_by_relations(used_schemas, relations)
 
         if relations and catalogs:
             relation_map = {
@@ -1210,16 +1206,20 @@ class BaseAdapter(metaclass=AdapterMeta):
     def row_matches_relation(self, row: agate.Row, relations: Set[BaseRelation]):
         pass
 
-    def get_catalog(self, manifest: Manifest) -> Tuple[agate.Table, List[Exception]]:
+    def get_catalog(
+        self,
+        relation_configs: Iterable[RelationConfig],
+        used_schemas: frozenset[tuple[str, str]],
+    ) -> Tuple[agate.Table, List[Exception]]:
         with executor(self.config) as tpe:
             futures: List[Future[agate.Table]] = []
-            schema_map: SchemaSearchMap = self._get_catalog_schemas(manifest)
+            schema_map: SchemaSearchMap = self._get_catalog_schemas(relation_configs)
             for info, schemas in schema_map.items():
                 if len(schemas) == 0:
                     continue
                 name = ".".join([str(info.database), "information_schema"])
                 fut = tpe.submit_connected(
-                    self, name, self._get_one_catalog, info, schemas, manifest
+                    self, name, self._get_one_catalog, info, schemas, used_schemas
                 )
                 futures.append(fut)
 
@@ -1227,7 +1227,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         return catalogs, exceptions
 
     def get_catalog_by_relations(
-        self, manifest: Manifest, relations: Set[BaseRelation]
+        self, used_schemas: frozenset[tuple[str, str]], relations: Set[BaseRelation]
     ) -> Tuple[agate.Table, List[Exception]]:
         with executor(self.config) as tpe:
             futures: List[Future[agate.Table]] = []
@@ -1241,7 +1241,7 @@ class BaseAdapter(metaclass=AdapterMeta):
                     self._get_one_catalog_by_relations,
                     info_schema,
                     relations,
-                    manifest,
+                    used_schemas,
                 )
                 futures.append(fut)
 

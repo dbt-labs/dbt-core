@@ -3,6 +3,7 @@ import shutil
 from datetime import datetime
 from typing import Dict, List, Any, Optional, Tuple, Set, Iterable
 import agate
+from itertools import chain
 
 import dbt.common.utils.formatting
 from dbt.common.dataclass_schema import ValidationError
@@ -261,7 +262,17 @@ class GenerateTask(CompileTask):
                     }
 
                 # This generates the catalog as an agate.Table
-                catalog_table, exceptions = adapter.get_filtered_catalog(self.manifest, relations)
+                catalogable_nodes = chain(
+                    [
+                        node
+                        for node in self.manifest.nodes.values()
+                        if (node.is_relational and not node.is_ephemeral_model)
+                    ]
+                )
+                used_schemas = self.manifest.get_used_schemas()
+                catalog_table, exceptions = adapter.get_filtered_catalog(
+                    catalogable_nodes, used_schemas, relations
+                )
 
         catalog_data: List[PrimitiveDict] = [
             dict(zip(catalog_table.column_names, map(dbt.utils._coerce_decimal, row)))
