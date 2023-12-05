@@ -497,10 +497,7 @@ def verify_manifest(project, expected_manifest, start_time, manifest_schema_path
                 assert unique_id in manifest[key]
                 assert manifest[key][unique_id] == node, f"{unique_id} did not match"
         else:  # ['docs', 'parent_map', 'child_map', 'group_map', 'selectors', 'semantic_models', 'saved_queries']
-            for unique_id, nodes in manifest[key].items():
-                assert unique_id in expected_manifest[key]
-                assert sorted(nodes) == sorted(expected_manifest[key][unique_id])
-            # assert manifest[key] == expected_manifest[key]
+            assert manifest[key] == expected_manifest[key]
 
 
 def verify_manifest_macros(manifest, expected=None):

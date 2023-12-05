@@ -21,7 +21,7 @@ class TestSelectionExpansion:
         indirect_selection="eager",
         selector_name=None,
     ):
-        list_args = ["ls", "--resource-type", "data_test"]
+        list_args = ["ls", "--resource-type", "test"]
         if include:
             list_args.extend(("--select", include))
         if exclude:

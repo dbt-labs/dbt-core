@@ -20,7 +20,7 @@ class AccessType(StrEnum):
 class NodeType(StrEnum):
     Model = "model"
     Analysis = "analysis"
-    Test = "data_test"
+    Test = "test"
     Snapshot = "snapshot"
     Operation = "operation"
     Seed = "seed"

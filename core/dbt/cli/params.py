@@ -399,8 +399,7 @@ resource_type = click.option(
             "source",
             "analysis",
             "model",
-            "test",  # TODO should we preserve but deprecate this?
-            "data_test",
+            "test",
             "exposure",
             "snapshot",
             "seed",

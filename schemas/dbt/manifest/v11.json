@@ -996,7 +996,7 @@
           "type": "string"
         },
         "resource_type": {
-          "const": "data_test"
+          "const": "test"
         },
         "package_name": {
           "type": "string"
@@ -2636,7 +2636,7 @@
           "type": "string"
         },
         "resource_type": {
-          "const": "data_test"
+          "const": "test"
         },
         "package_name": {
           "type": "string"
@@ -5767,7 +5767,7 @@
           "enum": [
             "model",
             "analysis",
-            "data_test",
+            "test",
             "snapshot",
             "operation",
             "seed",
@@ -6345,7 +6345,7 @@
           "enum": [
             "model",
             "analysis",
-            "data_test",
+            "test",
             "snapshot",
             "operation",
             "seed",
@@ -6663,7 +6663,7 @@
           "enum": [
             "model",
             "analysis",
-            "data_test",
+            "test",
             "snapshot",
             "operation",
             "seed",
