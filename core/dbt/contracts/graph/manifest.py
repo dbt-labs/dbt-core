@@ -799,7 +799,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     metrics: MutableMapping[str, Metric] = field(default_factory=dict)
     groups: MutableMapping[str, Group] = field(default_factory=dict)
     selectors: MutableMapping[str, Any] = field(default_factory=dict)
-    files: MutableMapping[str, Union[AnySourceFile]] = field(default_factory=dict)
+    files: MutableMapping[str, AnySourceFile] = field(default_factory=dict)
     metadata: ManifestMetadata = field(default_factory=ManifestMetadata)
     flat_graph: Dict[str, Any] = field(default_factory=dict)
     state_check: ManifestStateCheck = field(default_factory=ManifestStateCheck)
@@ -1511,11 +1511,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         self.semantic_models[semantic_model.unique_id] = semantic_model
         source_file.semantic_models.append(semantic_model.unique_id)
 
-    def add_unit_test(
-        self,
-        source_file: Union[SchemaSourceFile, FixtureSourceFile],
-        unit_test: UnitTestDefinition,
-    ):
+    def add_unit_test(self, source_file: SchemaSourceFile, unit_test: UnitTestDefinition):
         if unit_test.unique_id in self.unit_tests:
             raise DuplicateResourceNameError(unit_test, self.unit_tests[unit_test.unique_id])
         self.unit_tests[unit_test.unique_id] = unit_test

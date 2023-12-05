@@ -1,5 +1,5 @@
 import pytest
-from dbt.exceptions import ParsingError, YamlParseDictError
+from dbt.exceptions import ParsingError, YamlParseDictError, DuplicateResourceNameError
 from dbt.tests.util import run_dbt, write_file
 from fixtures import (
     my_model_sql,
@@ -186,13 +186,8 @@ class TestUnitTestsMissingCSVFile:
         }
 
     def test_missing(self, project):
-        results = run_dbt(["run"])
-        assert len(results) == 3
-
-        # Select by model name
-        expected_error = "Could not find fixture file fake_fixture for unit test"
-        results = run_dbt(["test", "--select", "my_model"], expect_pass=False)
-        assert expected_error in results[0].message
+        with pytest.raises(ParsingError):
+            run_dbt(["run"])
 
 
 class TestUnitTestsDuplicateCSVFile:
@@ -219,10 +214,5 @@ class TestUnitTestsDuplicateCSVFile:
         }
 
     def test_duplicate(self, project):
-        results = run_dbt(["run"])
-        assert len(results) == 3
-
-        # Select by model name
-        results = run_dbt(["test", "--select", "my_model"], expect_pass=False)
-        expected_error = "Found multiple fixture files named test_my_model_basic_fixture"
-        assert expected_error in results[0].message
+        with pytest.raises(DuplicateResourceNameError):
+            run_dbt(["run"])

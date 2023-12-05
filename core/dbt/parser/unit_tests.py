@@ -286,7 +286,8 @@ class UnitTestParser(YamlReader):
         if unit_test_definition.expect.fixture:
             # find fixture file object and store unit_test_definition unique_id
             fixture_source_file = self.get_fixture_source_file(
-                unit_test_definition.expect.fixture, self.project.project_name
+                unit_test_definition.expect.fixture,
+                self.project.project_name,
             )
             fixture_source_file.unit_tests.append(unit_test_definition.unique_id)
 
@@ -297,7 +298,9 @@ class UnitTestParser(YamlReader):
             fixture_source_file = self.manifest.files[fixture.file_id]
             return fixture_source_file
         else:
-            raise ParsingError(f"Fixture file not found: {fixture_unique_id}")
+            raise ParsingError(
+                f"File not found for fixture '{fixture_name}' in unit tests in {self.yaml.path.original_file_path}"
+            )
 
     def _get_unit_test(self, data: Dict[str, Any]) -> UnparsedUnitTest:
         try:
