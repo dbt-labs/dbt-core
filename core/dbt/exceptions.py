@@ -2186,7 +2186,7 @@ class DuplicateResourceNameError(CompilationError):
             model_name = self.node_1.file_key_name
             duped_name = f'{self.node_1.name}" defined on {column_name}"{model_name}'
             action = "running"
-            formatted_name = "tests"  # TODO: should this be data_tests?
+            formatted_name = "data tests"
         # all other resource types
         else:
             formatted_name = duped_name

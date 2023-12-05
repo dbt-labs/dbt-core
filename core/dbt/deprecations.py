@@ -83,11 +83,6 @@ def renamed_method(old_name: str, new_name: str):
     deprecations[dep.name] = dep
 
 
-# class MetricAttributesRenamed(DBTDeprecation):
-#     _name = "metric-attr-renamed"
-#     _event = "MetricAttributesRenamed"
-
-
 class ExposureNameDeprecation(DBTDeprecation):
     _name = "exposure-name"
     _event = "ExposureNameDeprecation"
@@ -136,7 +131,6 @@ deprecations_list: List[DBTDeprecation] = [
     PackageInstallPathDeprecation(),
     ConfigSourcePathDeprecation(),
     ConfigDataPathDeprecation(),
-    # MetricAttributesRenamed(),
     ExposureNameDeprecation(),
     ConfigLogPathDeprecation(),
     ConfigTargetPathDeprecation(),

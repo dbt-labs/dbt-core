@@ -113,14 +113,6 @@ class TestBlock(TargetColumnsBlock[Testable], Generic[Testable]):
         else:
             return self.target.data_tests
 
-    # TODO: should this persist?
-    # @property
-    # def tests(self) -> List[TestDef]:
-    #     if self.target.data_tests is None:
-    #         return []
-    #     else:
-    #         return self.target.data_tests
-
     @property
     def quote_columns(self) -> Optional[bool]:
         return self.target.quote_columns
