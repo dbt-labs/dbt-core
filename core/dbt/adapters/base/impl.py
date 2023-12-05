@@ -18,6 +18,7 @@ from typing import (
     Type,
     TypedDict,
     Union,
+    FrozenSet,
 )
 from multiprocessing.context import SpawnContext
 
@@ -110,7 +111,7 @@ def _expect_row_value(key: str, row: agate.Row):
 
 
 def _catalog_filter_schemas(
-    used_schemas: frozenset[tuple[str, str]]
+    used_schemas: FrozenSet[tuple[str, str]]
 ) -> Callable[[agate.Row], bool]:
     """Return a function that takes a row and decides if the row should be
     included in the catalog output.
@@ -1114,7 +1115,7 @@ class BaseAdapter(metaclass=AdapterMeta):
 
     @classmethod
     def _catalog_filter_table(
-        cls, table: agate.Table, used_schemas: frozenset[tuple[str, str]]
+        cls, table: agate.Table, used_schemas: FrozenSet[tuple[str, str]]
     ) -> agate.Table:
         """Filter the table as appropriate for catalog entries. Subclasses can
         override this to change filtering rules on a per-adapter basis.
@@ -1131,7 +1132,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         self,
         information_schema: InformationSchema,
         schemas: Set[str],
-        used_schemas: frozenset[tuple[str, str]],
+        used_schemas: FrozenSet[tuple[str, str]],
     ) -> agate.Table:
         kwargs = {"information_schema": information_schema, "schemas": schemas}
         table = self.execute_macro(
@@ -1146,7 +1147,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         self,
         information_schema: InformationSchema,
         relations: List[BaseRelation],
-        used_schemas: frozenset[tuple[str, str]],
+        used_schemas: FrozenSet[tuple[str, str]],
     ) -> agate.Table:
 
         kwargs = {
@@ -1164,7 +1165,7 @@ class BaseAdapter(metaclass=AdapterMeta):
     def get_filtered_catalog(
         self,
         relation_configs: Iterable[RelationConfig],
-        used_schemas: frozenset,
+        used_schemas: FrozenSet[tuple[str, str]],
         relations: Optional[Set[BaseRelation]] = None,
     ):
         catalogs: agate.Table
@@ -1209,7 +1210,7 @@ class BaseAdapter(metaclass=AdapterMeta):
     def get_catalog(
         self,
         relation_configs: Iterable[RelationConfig],
-        used_schemas: frozenset[tuple[str, str]],
+        used_schemas: FrozenSet[tuple[str, str]],
     ) -> Tuple[agate.Table, List[Exception]]:
         with executor(self.config) as tpe:
             futures: List[Future[agate.Table]] = []
@@ -1227,7 +1228,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         return catalogs, exceptions
 
     def get_catalog_by_relations(
-        self, used_schemas: frozenset[tuple[str, str]], relations: Set[BaseRelation]
+        self, used_schemas: FrozenSet[tuple[str, str]], relations: Set[BaseRelation]
     ) -> Tuple[agate.Table, List[Exception]]:
         with executor(self.config) as tpe:
             futures: List[Future[agate.Table]] = []
