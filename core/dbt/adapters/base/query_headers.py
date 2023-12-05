@@ -5,17 +5,16 @@ from dbt.adapters.clients.jinja import QueryStringGenerator
 
 from dbt.context.manifest import generate_query_header_context
 from dbt.adapters.contracts.connection import AdapterRequiredConfig, QueryComment
-from dbt.contracts.graph.nodes import ResultNode
 from dbt.contracts.graph.manifest import Manifest
 from dbt.common.exceptions import DbtRuntimeError
 
 
-class NodeWrapper:
-    def __init__(self, node) -> None:
-        self._inner_node = node
+class QueryHeaderContextWrapper:
+    def __init__(self, context) -> None:
+        self._inner_context = context
 
     def __getattr__(self, name):
-        return getattr(self._inner_node, name, "")
+        return getattr(self._inner_context, name, "")
 
 
 class _QueryComment(local):
@@ -53,7 +52,7 @@ class _QueryComment(local):
         self.append = append
 
 
-QueryStringFunc = Callable[[str, Optional[NodeWrapper]], str]
+QueryStringFunc = Callable[[str, Optional[QueryHeaderContextWrapper]], str]
 
 
 class MacroQueryStringSetter:
@@ -90,10 +89,10 @@ class MacroQueryStringSetter:
     def reset(self):
         self.set("master", None)
 
-    def set(self, name: str, node: Optional[ResultNode]):
-        wrapped: Optional[NodeWrapper] = None
-        if node is not None:
-            wrapped = NodeWrapper(node)
+    def set(self, name: str, query_header_context: Any):
+        wrapped: Optional[QueryHeaderContextWrapper] = None
+        if query_header_context is not None:
+            wrapped = QueryHeaderContextWrapper(query_header_context)
         comment_str = self.generator(name, wrapped)
 
         append = False

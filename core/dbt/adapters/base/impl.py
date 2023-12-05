@@ -63,7 +63,6 @@ from dbt.common.clients.agate_helper import (
 )
 from dbt.common.clients.jinja import CallableMacroGenerator
 from dbt.contracts.graph.manifest import Manifest, MacroManifest
-from dbt.contracts.graph.nodes import ResultNode
 from dbt.common.events.functions import fire_event, warn_or_error
 from dbt.adapters.events.types import (
     CacheMiss,
@@ -285,10 +284,10 @@ class BaseAdapter(metaclass=AdapterMeta):
         return conn.name
 
     @contextmanager
-    def connection_named(self, name: str, node: Optional[ResultNode] = None) -> Iterator[None]:
+    def connection_named(self, name: str, query_header_context: Any = None) -> Iterator[None]:
         try:
             if self.connections.query_header is not None:
-                self.connections.query_header.set(name, node)
+                self.connections.query_header.set(name, query_header_context)
             self.acquire_connection(name)
             yield
         finally:
