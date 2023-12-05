@@ -296,11 +296,6 @@ class BaseAdapter(metaclass=AdapterMeta):
             if self.connections.query_header is not None:
                 self.connections.query_header.reset()
 
-    @contextmanager
-    def connection_for(self, node: ResultNode) -> Iterator[None]:
-        with self.connection_named(node.unique_id, node):
-            yield
-
     @available.parse(lambda *a, **k: ("", empty_table()))
     def execute(
         self, sql: str, auto_begin: bool = False, fetch: bool = False, limit: Optional[int] = None
