@@ -799,9 +799,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     metrics: MutableMapping[str, Metric] = field(default_factory=dict)
     groups: MutableMapping[str, Group] = field(default_factory=dict)
     selectors: MutableMapping[str, Any] = field(default_factory=dict)
-    files: MutableMapping[str, Union[AnySourceFile, FixtureSourceFile]] = field(
-        default_factory=dict
-    )
+    files: MutableMapping[str, Union[AnySourceFile]] = field(default_factory=dict)
     metadata: ManifestMetadata = field(default_factory=ManifestMetadata)
     flat_graph: Dict[str, Any] = field(default_factory=dict)
     state_check: ManifestStateCheck = field(default_factory=ManifestStateCheck)
@@ -1454,6 +1452,8 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
                 source_file.exposures.append(node.unique_id)
             if isinstance(node, Group):
                 source_file.groups.append(node.unique_id)
+        elif isinstance(source_file, FixtureSourceFile):
+            pass
         else:
             source_file.nodes.append(node.unique_id)
 
@@ -1496,6 +1496,8 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
                 source_file.semantic_models.append(node.unique_id)
             if isinstance(node, Exposure):
                 source_file.exposures.append(node.unique_id)
+        elif isinstance(source_file, FixtureSourceFile):
+            pass
         else:
             source_file.nodes.append(node.unique_id)
 

@@ -341,4 +341,4 @@ class FixtureSourceFile(BaseSourceFile):
             self.unit_tests.append(value)
 
 
-AnySourceFile = Union[SchemaSourceFile, SourceFile]
+AnySourceFile = Union[SchemaSourceFile, SourceFile, FixtureSourceFile]
