@@ -420,15 +420,13 @@ class BaseAdapter(metaclass=AdapterMeta):
         else:
             return True
 
-    def _get_cache_schemas(self, manifest: Manifest) -> Set[BaseRelation]:
+    def _get_cache_schemas(self, relation_configs: Iterable[RelationConfig]) -> Set[BaseRelation]:
         """Get the set of schema relations that the cache logic needs to
-        populate. This means only executable nodes are included.
+        populate.
         """
-        # the cache only cares about executable nodes
         return {
-            self.Relation.create_from(self.config, node).without_identifier()  # type: ignore[arg-type]
-            for node in manifest.nodes.values()
-            if (node.is_relational and not node.is_ephemeral_model and not node.is_external_node)
+            self.Relation.create_from(quoting=self.config, config=relation_config)
+            for relation_config in relation_configs
         }
 
     def _get_catalog_schemas(self, relation_configs: Iterable[RelationConfig]) -> SchemaSearchMap:
@@ -472,13 +470,15 @@ class BaseAdapter(metaclass=AdapterMeta):
         return relations
 
     def _relations_cache_for_schemas(
-        self, manifest: Manifest, cache_schemas: Optional[Set[BaseRelation]] = None
+        self,
+        relation_configs: Iterable[RelationConfig],
+        cache_schemas: Optional[Set[BaseRelation]] = None,
     ) -> None:
         """Populate the relations cache for the given schemas. Returns an
         iterable of the schemas populated, as strings.
         """
         if not cache_schemas:
-            cache_schemas = self._get_cache_schemas(manifest)
+            cache_schemas = self._get_cache_schemas(relation_configs)
         with executor(self.config) as tpe:
             futures: List[Future[List[BaseRelation]]] = []
             for cache_schema in cache_schemas:
@@ -507,7 +507,7 @@ class BaseAdapter(metaclass=AdapterMeta):
 
     def set_relations_cache(
         self,
-        manifest: Manifest,
+        relation_configs: Iterable[RelationConfig],
         clear: bool = False,
         required_schemas: Optional[Set[BaseRelation]] = None,
     ) -> None:
@@ -517,7 +517,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         with self.cache.lock:
             if clear:
                 self.cache.clear()
-            self._relations_cache_for_schemas(manifest, required_schemas)
+            self._relations_cache_for_schemas(relation_configs, required_schemas)
 
     @available
     def cache_added(self, relation: Optional[BaseRelation]) -> str:

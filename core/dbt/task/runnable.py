@@ -406,11 +406,21 @@ class GraphRunnableTask(ConfiguredTask):
         if not self.args.populate_cache:
             return
 
+        if self.manifest is None:
+            raise DbtInternalError("manifest was None in populate_adapter_cache")
+
         start_populate_cache = time.perf_counter()
+        # the cache only cares about executable nodes
+        cachable_nodes = [
+            node
+            for node in self.manifest.nodes.values()
+            if (node.is_relational and not node.is_ephemeral_model and not node.is_external_node)
+        ]
+
         if get_flags().CACHE_SELECTED_ONLY is True:
-            adapter.set_relations_cache(self.manifest, required_schemas=required_schemas)
+            adapter.set_relations_cache(cachable_nodes, required_schemas=required_schemas)
         else:
-            adapter.set_relations_cache(self.manifest)
+            adapter.set_relations_cache(cachable_nodes)
         cache_populate_time = time.perf_counter() - start_populate_cache
         if dbt.tracking.active_user is not None:
             dbt.tracking.track_runnable_timing(
