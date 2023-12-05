@@ -38,7 +38,7 @@ from dbt.contracts.graph.manifest import Manifest
 from dbt.adapters.base.query_headers import (
     MacroQueryStringSetter,
 )
-from dbt.common.events import AdapterLogger
+from dbt.adapters.events.logging import AdapterLogger
 from dbt.common.events.functions import fire_event
 from dbt.adapters.events.types import (
     NewConnection,

@@ -7,7 +7,7 @@ import dbt.common.exceptions
 from dbt.adapters.base import Credentials
 from dbt.adapters.sql import SQLConnectionManager
 from dbt.adapters.contracts.connection import AdapterResponse
-from dbt.common.events import AdapterLogger
+from dbt.adapters.events.logging import AdapterLogger
 
 from dbt.common.helper_types import Port
 from dataclasses import dataclass

@@ -13,7 +13,7 @@ from dbt.adapters.events.types import AdapterImportError, PluginLoadError, Adapt
 from dbt.common.exceptions import DbtInternalError, DbtRuntimeError
 from dbt.adapters.include.global_project import PACKAGE_PATH as GLOBAL_PROJECT_PATH
 from dbt.adapters.include.global_project import PROJECT_NAME as GLOBAL_PROJECT_NAME
-from dbt.semver import VersionSpecifier
+from dbt.common.semver import VersionSpecifier
 from dbt.mp_context import get_mp_context
 
 Adapter = AdapterProtocol

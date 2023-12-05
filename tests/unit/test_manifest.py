@@ -374,7 +374,7 @@ class ManifestTest(unittest.TestCase):
             saved_queries={},
         )
 
-        invocation_id = dbt.common.events.functions.EVENT_MANAGER.invocation_id
+        invocation_id = dbt.common.invocation._INVOCATION_ID
         self.assertEqual(
             manifest.writable_manifest().to_dict(omit_none=True),
             {
@@ -511,9 +511,7 @@ class ManifestTest(unittest.TestCase):
     @mock.patch.object(tracking, "active_user")
     def test_metadata(self, mock_user):
         mock_user.id = "cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf"
-        dbt.common.events.functions.EVENT_MANAGER.invocation_id = (
-            "01234567-0123-0123-0123-0123456789ab"
-        )
+        dbt.common.invocation._INVOCATION_ID = "01234567-0123-0123-0123-0123456789ab"
         set_from_args(Namespace(SEND_ANONYMOUS_USAGE_STATS=False), None)
         now = datetime.utcnow()
         self.assertEqual(
@@ -536,9 +534,7 @@ class ManifestTest(unittest.TestCase):
     @freezegun.freeze_time("2018-02-14T09:15:13Z")
     def test_no_nodes_with_metadata(self, mock_user):
         mock_user.id = "cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf"
-        dbt.common.events.functions.EVENT_MANAGER.invocation_id = (
-            "01234567-0123-0123-0123-0123456789ab"
-        )
+        dbt.common.invocation._INVOCATION_ID = "01234567-0123-0123-0123-0123456789ab"
         set_from_args(Namespace(SEND_ANONYMOUS_USAGE_STATS=False), None)
         metadata = ManifestMetadata(
             project_id="098f6bcd4621d373cade4e832627b4f6",

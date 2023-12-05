@@ -3,7 +3,7 @@ from typing import Union
 
 from dbt.common.events.base_types import EventLevel
 from dbt.common.events.types import Note
-from dbt.common.events.eventmgr import IEventManager
+from dbt.common.events.event_manager import IEventManager
 
 
 _log_level_to_event_level_map = {

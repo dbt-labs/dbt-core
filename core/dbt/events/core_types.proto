@@ -137,3 +137,16 @@ message DeprecatedModelMsg {
     CoreEventInfo info = 1;
     DeprecatedModel data = 2;
 }
+
+
+// M - Deps generation
+
+//M035
+message DepsScrubbedPackageName{
+    string package_name = 1;
+}
+
+message DepsScrubbedPackageNameMsg{
+    CoreEventInfo info = 1;
+    DepsScrubbedPackageName data = 2;
+}

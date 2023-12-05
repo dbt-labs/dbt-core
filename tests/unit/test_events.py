@@ -6,8 +6,10 @@ from typing import TypeVar
 import pytest
 
 from dbt.adapters.events import types as adapter_types
+from dbt.common.events.event_manager_client import ctx_set_event_manager
 from dbt.contracts.results import TimingInfo, RunResult, RunStatus
-from dbt.common.events import AdapterLogger, types
+from dbt.common.events import types
+from dbt.adapters.events.logging import AdapterLogger
 from dbt.common.events.base_types import msg_from_base_event
 from dbt.events import types as core_types
 from dbt.events.base_types import (
@@ -19,8 +21,8 @@ from dbt.events.base_types import (
     TestLevel,
     WarnLevel,
 )
-from dbt.common.events.eventmgr import TestEventManager, EventManager
-from dbt.common.events.functions import msg_to_dict, msg_to_json, ctx_set_event_manager
+from dbt.common.events.event_manager import TestEventManager, EventManager
+from dbt.common.events.functions import msg_to_dict, msg_to_json
 from dbt.common.events.helpers import get_json_string_utcnow
 from dbt.common.events.types import RunResultError
 from dbt.flags import set_from_args
@@ -307,6 +309,7 @@ sample_values = [
     types.DepsLockUpdating(lock_filepath=""),
     types.DepsAddPackage(package_name="", version="", packages_filepath=""),
     types.DepsFoundDuplicatePackage(removed_package={}),
+    core_types.DepsScrubbedPackageName(package_name=""),
     types.SemanticValidationFailure(msg=""),
     # Q - Node execution ======================
     types.RunningOperationCaughtError(exc=""),

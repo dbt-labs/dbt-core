@@ -7,6 +7,7 @@ import pickle
 from collections import defaultdict
 from typing import List, Dict, Any, Tuple, Optional
 
+from dbt.common.invocation import get_invocation_id
 from dbt.flags import get_flags
 from dbt.adapters.factory import get_adapter
 from dbt.clients import jinja
@@ -27,7 +28,7 @@ from dbt.exceptions import (
     DbtRuntimeError,
 )
 from dbt.graph import Graph
-from dbt.common.events.functions import fire_event, get_invocation_id
+from dbt.common.events.functions import fire_event
 from dbt.common.events.types import FoundStats, Note, WritingInjectedSQLForNode
 from dbt.common.events.contextvars import get_node_info
 from dbt.node_types import NodeType, ModelLanguage

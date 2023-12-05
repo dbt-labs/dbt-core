@@ -2,7 +2,7 @@ import logging
 
 from dbt.common.events.base_types import EventLevel
 from dbt.common.events.event_handler import DbtEventLoggingHandler, set_package_logging
-from dbt.common.events.eventmgr import TestEventManager
+from dbt.common.events.event_manager import TestEventManager
 
 
 def test_event_logging_handler_emits_records_correctly():

@@ -34,20 +34,6 @@ class PartialParsingDeletedExposure(DebugLevel):
 
 ```
 
-
-# Adapter Maintainers
-To integrate existing log messages from adapters, you likely have a line of code like this in your adapter already:
-```python
-from dbt.logger import GLOBAL_LOGGER as logger
-```
-
-Simply change it to these two lines with your adapter's database name, and all your existing call sites will now use the new system for v1.0:
-```python
-from dbt.common.events import AdapterLogger
-logger = AdapterLogger("<database name>")
-# e.g. AdapterLogger("Snowflake")
-```
-
 ## Compiling types.proto
 
 After adding a new message in `types.proto`, either:

@@ -162,3 +162,16 @@ class ConfigTargetPathDeprecation(WarnLevel):
             f"the {cli_flag} CLI flag or {env_var} env var instead."
         )
         return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+
+
+# =======================================================
+# M - Deps generation
+# =======================================================
+
+
+class DepsScrubbedPackageName(WarnLevel):
+    def code(self):
+        return "M035"
+
+    def message(self) -> str:
+        return f"Detected secret env var in {self.package_name}. dbt will write a scrubbed representation to the lock file. This will cause issues with subsequent 'dbt deps' using the lock file, requiring 'dbt deps --upgrade'"

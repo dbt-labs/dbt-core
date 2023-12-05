@@ -40,7 +40,8 @@ class BaseCurrentTimestamp:
         sql_timestamp = current_timestamp
         now_utc = self.utcnow_matching_type(sql_timestamp)
         # Plenty of wiggle room if clocks aren't perfectly sync'd, etc
-        tolerance = timedelta(minutes=1)
+        # The clock on the macos image appears to be a few minutes slow in GHA, causing false negatives
+        tolerance = timedelta(minutes=5)
         assert (sql_timestamp > (now_utc - tolerance)) and (
             sql_timestamp < (now_utc + tolerance)
         ), f"SQL timestamp {sql_timestamp.isoformat()} is not close enough to Python UTC {now_utc.isoformat()}"
