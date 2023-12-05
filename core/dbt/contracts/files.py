@@ -36,7 +36,7 @@ parse_file_type_to_parser = {
     ParseFileType.Documentation: "DocumentationParser",
     ParseFileType.Schema: "SchemaParser",
     ParseFileType.Hook: "HookParser",
-    ParseFileType.Fixture: None,
+    ParseFileType.Fixture: "FixtureParser",
 }
 
 
@@ -330,6 +330,7 @@ class SchemaSourceFile(BaseSourceFile):
 
 
 class FixtureSourceFile(BaseSourceFile):
+    fixture: Optional[str] = None
     unit_tests: List[str] = field(default_factory=list)
 
     def add_unit_test(self, value):

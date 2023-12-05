@@ -155,12 +155,9 @@ class SelectorMethod(metaclass=abc.ABCMeta):
         self, included_nodes: Set[UniqueId]
     ) -> Iterator[Tuple[UniqueId, UnitTestDefinition]]:
         for unique_id, unit_test in self.manifest.unit_tests.items():
-            if unit_test.resource_type != NodeType.Unit:
-                next
             unique_id = UniqueId(unique_id)
             if unique_id not in included_nodes:
                 continue
-            assert isinstance(unit_test, UnitTestDefinition)
             yield unique_id, unit_test
 
     def parsed_and_unit_nodes(self, included_nodes: Set[UniqueId]):

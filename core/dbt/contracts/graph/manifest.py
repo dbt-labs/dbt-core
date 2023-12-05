@@ -42,7 +42,8 @@ from dbt.contracts.graph.nodes import (
     SemanticModel,
     SourceDefinition,
     UnpatchedSourceDefinition,
-    UnitTestDef,
+    UnitTestDefinition,
+    UnitTestFixture,
 )
 from dbt.contracts.graph.unparsed import SourcePatch, NodeVersion, UnparsedVersion
 from dbt.contracts.graph.manifest_upgrade import upgrade_manifest_json
@@ -806,8 +807,9 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     disabled: MutableMapping[str, List[GraphMemberNode]] = field(default_factory=dict)
     env_vars: MutableMapping[str, str] = field(default_factory=dict)
     semantic_models: MutableMapping[str, SemanticModel] = field(default_factory=dict)
-    unit_tests: MutableMapping[str, UnitTestDef] = field(default_factory=dict)
+    unit_tests: MutableMapping[str, UnitTestDefinition] = field(default_factory=dict)
     saved_queries: MutableMapping[str, SavedQuery] = field(default_factory=dict)
+    fixtures: MutableMapping[str, UnitTestFixture] = field(default_factory=dict)
 
     _doc_lookup: Optional[DocLookup] = field(
         default=None, metadata={"serialize": lambda x: None, "deserialize": lambda x: None}
@@ -1060,8 +1062,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         elif unique_id in self.semantic_models:
             return self.semantic_models[unique_id]
         elif unique_id in self.unit_tests:
-            # This should only be UnitTestDefinition, not UnitTestFixture
-            return self.unit_tests[unique_id]  # type:ignore[return-value]
+            return self.unit_tests[unique_id]
         elif unique_id in self.saved_queries:
             return self.saved_queries[unique_id]
         else:
@@ -1507,12 +1508,20 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         source_file.semantic_models.append(semantic_model.unique_id)
 
     def add_unit_test(
-        self, source_file: Union[SchemaSourceFile, FixtureSourceFile], unit_test: UnitTestDef
+        self,
+        source_file: Union[SchemaSourceFile, FixtureSourceFile],
+        unit_test: UnitTestDefinition,
     ):
         if unit_test.unique_id in self.unit_tests:
             raise DuplicateResourceNameError(unit_test, self.unit_tests[unit_test.unique_id])
         self.unit_tests[unit_test.unique_id] = unit_test
         source_file.unit_tests.append(unit_test.unique_id)
+
+    def add_fixture(self, source_file: FixtureSourceFile, fixture: UnitTestFixture):
+        if fixture.unique_id in self.fixtures:
+            raise DuplicateResourceNameError(fixture, self.fixtures[fixture.unique_id])
+        self.fixtures[fixture.unique_id] = fixture
+        source_file.fixture = fixture.unique_id
 
     def add_saved_query(self, source_file: SchemaSourceFile, saved_query: SavedQuery) -> None:
         _check_duplicates(saved_query, self.saved_queries)
@@ -1629,7 +1638,7 @@ class WritableManifest(ArtifactMixin):
             description="Metadata about the manifest",
         )
     )
-    unit_tests: Mapping[UniqueID, UnitTestDef] = field(
+    unit_tests: Mapping[UniqueID, UnitTestDefinition] = field(
         metadata=dict(
             description="The unit tests defined in the project",
         )

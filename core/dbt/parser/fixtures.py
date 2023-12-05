@@ -32,4 +32,4 @@ class FixtureParser(Parser[UnitTestFixture]):
             unique_id=unique_id,
             resource_type=NodeType.Fixture,
         )
-        self.manifest.add_unit_test(file_block.file, fixture)
+        self.manifest.add_fixture(file_block.file, fixture)

@@ -1971,5 +1971,3 @@ Resource = Union[
 ]
 
 TestNode = Union[SingularTestNode, GenericTestNode]
-
-UnitTestDef = Union[UnitTestDefinition, UnitTestFixture]

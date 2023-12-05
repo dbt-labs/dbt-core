@@ -47,7 +47,7 @@ class UnitTestManifestLoader:
     def load(self) -> Manifest:
         for unique_id in self.selected:
             if unique_id in self.manifest.unit_tests:
-                unit_test_case: UnitTestDefinition = self.manifest.unit_tests[unique_id]  # type: ignore[assignment]
+                unit_test_case: UnitTestDefinition = self.manifest.unit_tests[unique_id]
                 self.parse_unit_test_case(unit_test_case)
         return self.unit_test_manifest
 
@@ -264,6 +264,9 @@ class UnitTestParser(YamlReader):
                 config=unit_test_config,
                 schema=tested_model_node.schema,
             )
+            # For partial parsing, we add the unique_id of the unit test definition to the
+            # fixture file records
+            self._add_unit_test_to_fixture_files(unit_test_definition)
             # for calculating state:modified
             unit_test_definition.build_unit_test_checksum(
                 self.schema_parser.project.project_root, self.schema_parser.project.fixture_paths
@@ -271,6 +274,30 @@ class UnitTestParser(YamlReader):
             self.manifest.add_unit_test(self.yaml.file, unit_test_definition)
 
         return ParseResult()
+
+    def _add_unit_test_to_fixture_files(self, unit_test_definition):
+        for given in unit_test_definition.given:
+            if given.fixture:
+                # find fixture file object and store unit_test_definition unique_id
+                fixture_source_file = self.get_fixture_source_file(
+                    given.fixture, self.project.project_name
+                )
+                fixture_source_file.unit_tests.append(unit_test_definition.unique_id)
+        if unit_test_definition.expect.fixture:
+            # find fixture file object and store unit_test_definition unique_id
+            fixture_source_file = self.get_fixture_source_file(
+                unit_test_definition.expect.fixture, self.project.project_name
+            )
+            fixture_source_file.unit_tests.append(unit_test_definition.unique_id)
+
+    def get_fixture_source_file(self, fixture_name: str, project_name: str):
+        fixture_unique_id = f"fixture.{project_name}.{fixture_name}"
+        if fixture_unique_id in self.manifest.fixtures:
+            fixture = self.manifest.fixture[fixture_unique_id]
+            fixture_source_file = self.manifest.files[fixture.file_id]
+            return fixture_source_file
+        else:
+            raise ParsingError(f"Fixture file not found: {fixture_unique_id}")
 
     def _get_unit_test(self, data: Dict[str, Any]) -> UnparsedUnitTest:
         try:
