@@ -53,7 +53,6 @@ models:
          - not_null
 """
 
-
 sources_old_tests_yaml = """
 sources:
   - name: seed_source

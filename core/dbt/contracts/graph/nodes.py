@@ -1240,10 +1240,6 @@ class UnpatchedSourceDefinition(BaseNode):
         sources parse tests differently than models, so we need to do some validation
         here where it's done in the PatchParser for other nodes
         """
-        if self.tests and self.data_tests:
-            raise ValidationError(
-                "Invalid test config: cannot have both 'tests' and 'data_tests' defined"
-            )
         for column in self.columns:
             if column.tests and column.data_tests:
                 raise ValidationError(
@@ -1256,11 +1252,6 @@ class UnpatchedSourceDefinition(BaseNode):
                     exp_path="data_tests",
                 )
                 column.data_tests = column.tests
-        if self.tests:
-            deprecations.warn(
-                "project-test-config", deprecated_path="tests", exp_path="data_tests"
-            )
-            self.data_tests = self.tests
 
     @property
     def quote_columns(self) -> Optional[bool]:

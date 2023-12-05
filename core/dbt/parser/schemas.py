@@ -530,10 +530,6 @@ class PatchParser(YamlReader, Generic[NonSourceTarget, Parsed]):
         return self.normalize_attribute(data, path, "access")
 
     def validate_data_tests(self, data):
-        if "tests" in data and "data_tests" in data:
-            raise ValidationError(
-                "Invalid test config: cannot have both 'tests' and 'data_tests' defined"
-            )
         if data.get("columns"):
             for column in data["columns"]:
                 if "tests" in column and "data_tests" in column:
@@ -547,11 +543,6 @@ class PatchParser(YamlReader, Generic[NonSourceTarget, Parsed]):
                         exp_path="data_tests",
                     )
                     column["data_tests"] = column.pop("tests")
-        if "tests" in data:
-            deprecations.warn(
-                "project-test-config", deprecated_path="tests", exp_path="data_tests"
-            )
-            data["data_tests"] = data.pop("tests")
 
     def patch_node_config(self, node, patch):
         # Get the ContextConfig that's used in calculating the config
