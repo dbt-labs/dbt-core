@@ -293,7 +293,7 @@ class UnitTestParser(YamlReader):
     def get_fixture_source_file(self, fixture_name: str, project_name: str):
         fixture_unique_id = f"fixture.{project_name}.{fixture_name}"
         if fixture_unique_id in self.manifest.fixtures:
-            fixture = self.manifest.fixture[fixture_unique_id]
+            fixture = self.manifest.fixtures[fixture_unique_id]
             fixture_source_file = self.manifest.files[fixture.file_id]
             return fixture_source_file
         else:

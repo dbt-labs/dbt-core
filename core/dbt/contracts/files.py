@@ -169,6 +169,8 @@ class BaseSourceFile(dbtClassMixin, SerializableType):
     def _deserialize(cls, dct: Dict[str, int]):
         if dct["parse_file_type"] == "schema":
             sf = SchemaSourceFile.from_dict(dct)
+        elif dct["parse_file_type"] == "fixture":
+            sf = FixtureSourceFile.from_dict(dct)
         else:
             sf = SourceFile.from_dict(dct)
         return sf
@@ -329,6 +331,7 @@ class SchemaSourceFile(BaseSourceFile):
                 del self.env_vars[yaml_key]
 
 
+@dataclass
 class FixtureSourceFile(BaseSourceFile):
     fixture: Optional[str] = None
     unit_tests: List[str] = field(default_factory=list)

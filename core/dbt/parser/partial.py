@@ -1021,6 +1021,8 @@ class PartialParsing:
         # Create a list of file_ids for source_files that need to be reparsed, and
         # a dictionary of file_ids to yaml_keys to names.
         for source_file in self.saved_files.values():
+            if source_file.parse_file_type == ParseFileType.Fixture:
+                continue
             file_id = source_file.file_id
             if not source_file.env_vars:
                 continue

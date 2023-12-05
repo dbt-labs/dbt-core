@@ -799,7 +799,9 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     metrics: MutableMapping[str, Metric] = field(default_factory=dict)
     groups: MutableMapping[str, Group] = field(default_factory=dict)
     selectors: MutableMapping[str, Any] = field(default_factory=dict)
-    files: MutableMapping[str, AnySourceFile] = field(default_factory=dict)
+    files: MutableMapping[str, Union[AnySourceFile, FixtureSourceFile]] = field(
+        default_factory=dict
+    )
     metadata: ManifestMetadata = field(default_factory=ManifestMetadata)
     flat_graph: Dict[str, Any] = field(default_factory=dict)
     state_check: ManifestStateCheck = field(default_factory=ManifestStateCheck)
