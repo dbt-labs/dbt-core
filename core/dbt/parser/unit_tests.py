@@ -255,10 +255,9 @@ class UnitTestParser(YamlReader):
                 schema=tested_model_node.schema,
             )
 
-            # Check that format and type of rows matches for each given input
-            # convert rows to a list of dictionaries
-            # and add the unique_id of the unit_test_definition to the fixture
-            # source_file for partial parsing.
+            # Check that format and type of rows matches for each given input,
+            # convert rows to a list of dictionaries, and add the unique_id of
+            # the unit_test_definition to the fixture source_file for partial parsing.
             self._validate_and_normalize_given(unit_test_definition)
             self._validate_and_normalize_expect(unit_test_definition)
 
@@ -360,9 +359,6 @@ class UnitTestParser(YamlReader):
                 ut_fixture.rows = fixture.rows
             else:
                 ut_fixture.rows = self._convert_csv_to_list_of_dicts(ut_fixture.rows)
-        else:
-            # This is a dictionary already
-            pass
 
     def _convert_csv_to_list_of_dicts(self, csv_string: str) -> List[Dict[str, Any]]:
         dummy_file = StringIO(csv_string)

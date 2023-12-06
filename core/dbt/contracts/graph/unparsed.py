@@ -766,34 +766,8 @@ class UnitTestFormat(StrEnum):
     Dict = "dict"
 
 
-class UnitTestFixture:
-    @property
-    def format(self) -> UnitTestFormat:
-        return UnitTestFormat.Dict
-
-    @property
-    def rows(self) -> Optional[Union[str, List[Dict[str, Any]]]]:
-        return None
-
-    @property
-    def fixture(self) -> Optional[str]:
-        return None
-
-    def validate_fixture(self, fixture_type, test_name) -> None:
-        if self.format == UnitTestFormat.Dict and not isinstance(self.rows, list):
-            raise ParsingError(
-                f"Unit test {test_name} has {fixture_type} rows which do not match format {self.format}"
-            )
-        if self.format == UnitTestFormat.CSV and not (
-            isinstance(self.rows, str) or isinstance(self.fixture, str)
-        ):
-            raise ParsingError(
-                f"Unit test {test_name} has {fixture_type} rows or fixtures which do not match format {self.format}.  Expected string."
-            )
-
-
 @dataclass
-class UnitTestInputFixture(dbtClassMixin, UnitTestFixture):
+class UnitTestInputFixture(dbtClassMixin):
     input: str
     rows: Optional[Union[str, List[Dict[str, Any]]]] = None
     format: UnitTestFormat = UnitTestFormat.Dict
@@ -801,7 +775,7 @@ class UnitTestInputFixture(dbtClassMixin, UnitTestFixture):
 
 
 @dataclass
-class UnitTestOutputFixture(dbtClassMixin, UnitTestFixture):
+class UnitTestOutputFixture(dbtClassMixin):
     rows: Optional[Union[str, List[Dict[str, Any]]]] = None
     format: UnitTestFormat = UnitTestFormat.Dict
     fixture: Optional[str] = None
