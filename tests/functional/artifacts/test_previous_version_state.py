@@ -262,8 +262,8 @@ seeds:
 
 
 class TestPreviousVersionState:
-    CURRENT_EXPECTED_MANIFEST_VERSION = 11
-    CURRENT_EXPECTED_RUN_RESULTS_VERSION = 5
+    CURRENT_EXPECTED_MANIFEST_VERSION = 12
+    CURRENT_EXPECTED_RUN_RESULTS_VERSION = 6
 
     @pytest.fixture(scope="class")
     def models(self):
@@ -412,7 +412,7 @@ class TestPreviousVersionState:
             current_manifest_schema_version == self.CURRENT_EXPECTED_MANIFEST_VERSION
         ), "Sounds like you've bumped the manifest version and need to update this test!"
         # If we need a newly generated manifest, uncomment the following line and commit the result
-        # self.generate_latest_manifest(project, current_manifest_schema_version)
+        self.generate_latest_manifest(project, current_manifest_schema_version)
         self.compare_previous_state(project, current_manifest_schema_version, True, 0)
 
     def test_backwards_compatible_versions(self, project):
@@ -443,7 +443,7 @@ class TestPreviousVersionState:
             current_run_results_schema_version == self.CURRENT_EXPECTED_RUN_RESULTS_VERSION
         ), "Sounds like you've bumped the run_results version and need to update this test!"
         # If we need a newly generated run_results, uncomment the following line and commit the result
-        # self.generate_latest_run_results(project, current_run_results_schema_version)
+        self.generate_latest_run_results(project, current_run_results_schema_version)
         self.compare_previous_results(project, current_run_results_schema_version, True, 0)
 
     def test_backwards_compatible_run_results_versions(self, project):

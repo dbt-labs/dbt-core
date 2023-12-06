@@ -250,7 +250,7 @@ class RunExecutionResult(
 
 
 @dataclass
-@schema_version("run-results", 5)
+@schema_version("run-results", 6)
 class RunResultsArtifact(ExecutionResult, ArtifactMixin):
     results: Sequence[RunResultOutput]
     args: Dict[str, Any] = field(default_factory=dict)
@@ -276,6 +276,7 @@ class RunResultsArtifact(ExecutionResult, ArtifactMixin):
     def compatible_previous_versions(cls) -> Iterable[Tuple[str, int]]:
         return [
             ("run-results", 4),
+            ("run-results", 5),
         ]
 
     @classmethod

@@ -1551,7 +1551,7 @@ AnyManifest = Union[Manifest, MacroManifest]
 
 
 @dataclass
-@schema_version("manifest", 11)
+@schema_version("manifest", 12)
 class WritableManifest(ArtifactMixin):
     nodes: Mapping[UniqueID, ManifestNode] = field(
         metadata=dict(description=("The nodes defined in the dbt project and its dependencies"))
@@ -1619,6 +1619,7 @@ class WritableManifest(ArtifactMixin):
             ("manifest", 8),
             ("manifest", 9),
             ("manifest", 10),
+            ("manifest", 11),
         ]
 
     @classmethod
