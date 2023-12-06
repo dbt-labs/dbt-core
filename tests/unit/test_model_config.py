@@ -1,7 +1,8 @@
 from dataclasses import dataclass, field
 from dbt.common.dataclass_schema import dbtClassMixin
 from typing import List, Dict
-from dbt.contracts.graph.model_config import MergeBehavior, ShowBehavior, CompareBehavior
+from dbt.contracts.graph.model_config import ShowBehavior
+from dbt.common.contracts.config.base import MergeBehavior, CompareBehavior
 
 
 @dataclass

@@ -2,6 +2,10 @@ import datetime
 import re
 
 from dbt import deprecations
+from dbt.common.contracts.config.properties import (
+    AdditionalPropertiesAllowed,
+    AdditionalPropertiesMixin,
+)
 from dbt.node_types import NodeType
 from dbt.contracts.graph.semantic_models import (
     Defaults,
@@ -9,7 +13,6 @@ from dbt.contracts.graph.semantic_models import (
     MeasureAggregationParameters,
 )
 from dbt.contracts.util import (
-    AdditionalPropertiesMixin,
     Mergeable,
     Replaceable,
 )
@@ -308,11 +311,6 @@ class FreshnessThreshold(dbtClassMixin, Mergeable):
 
     def __bool__(self):
         return bool(self.warn_after) or bool(self.error_after)
-
-
-@dataclass
-class AdditionalPropertiesAllowed(AdditionalPropertiesMixin, ExtensibleDbtClassMixin):
-    _extra: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
