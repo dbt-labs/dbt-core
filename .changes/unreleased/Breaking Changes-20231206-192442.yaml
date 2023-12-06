@@ -1,0 +1,6 @@
+kind: Breaking Changes
+body: Fix changing the current working directory when using dpt deps, clean and init.
+time: 2023-12-06T19:24:42.575372+09:00
+custom:
+  Author: rariyama
+  Issue: "8997"
