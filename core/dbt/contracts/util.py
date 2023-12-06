@@ -10,6 +10,7 @@ from dbt.exceptions import (
 )
 from dbt.version import __version__
 
+from dbt.common.contracts.util import Replaceable
 from dbt.common.events.functions import get_metadata_vars
 from dbt.common.invocation import get_invocation_id
 from dbt.common.dataclass_schema import dbtClassMixin
@@ -39,11 +40,6 @@ def list_str() -> List[str]:
     Because `list` could be any kind of list, I guess
     """
     return []
-
-
-class Replaceable:
-    def replace(self, **kwargs):
-        return dataclasses.replace(self, **kwargs)
 
 
 class Mergeable(Replaceable):

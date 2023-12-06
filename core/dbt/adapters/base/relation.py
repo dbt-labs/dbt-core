@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from typing import Optional, TypeVar, Any, Type, Dict, Iterator, Tuple, Set, Union, FrozenSet
 
 from dbt.contracts.graph.nodes import SourceDefinition, ManifestNode, ResultNode, ParsedNode
-from dbt.contracts.relation import (
+from dbt.adapters.contracts.relation import (
     RelationType,
     ComponentName,
     HasQuoting,

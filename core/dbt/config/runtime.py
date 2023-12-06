@@ -15,13 +15,13 @@ from typing import (
     Type,
 )
 
-from dbt.flags import get_flags
 from dbt.adapters.factory import get_include_paths, get_relation_class_by_name
-from dbt.config.project import load_raw_project
 from dbt.adapters.contracts.connection import AdapterRequiredConfig, Credentials, HasCredentials
+from dbt.adapters.contracts.relation import ComponentName
+from dbt.flags import get_flags
+from dbt.config.project import load_raw_project
 from dbt.contracts.graph.manifest import ManifestMetadata
 from dbt.contracts.project import Configuration, UserConfig
-from dbt.contracts.relation import ComponentName
 from dbt.common.dataclass_schema import ValidationError
 from dbt.common.events.functions import warn_or_error
 from dbt.common.events.types import UnusedResourceConfigPath

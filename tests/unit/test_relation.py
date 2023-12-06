@@ -3,7 +3,7 @@ from dataclasses import replace
 import pytest
 
 from dbt.adapters.base import BaseRelation
-from dbt.contracts.relation import RelationType
+from dbt.adapters.contracts.relation import RelationType
 
 
 @pytest.mark.parametrize(

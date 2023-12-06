@@ -7,7 +7,7 @@ import unittest
 from unittest import mock
 
 from dbt.adapters.base import BaseRelation
-from dbt.contracts.relation import Path
+from dbt.adapters.contracts.relation import Path
 from dbt.task.debug import DebugTask
 
 from dbt.adapters.base.query_headers import MacroQueryStringSetter

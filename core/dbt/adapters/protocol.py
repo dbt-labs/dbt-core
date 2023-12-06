@@ -14,10 +14,10 @@ from typing_extensions import Protocol
 import agate
 
 from dbt.adapters.contracts.connection import Connection, AdapterRequiredConfig, AdapterResponse
+from dbt.adapters.contracts.relation import Policy, HasQuoting
 from dbt.contracts.graph.nodes import ResultNode
 from dbt.contracts.graph.model_config import BaseConfig
 from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.relation import Policy, HasQuoting
 
 
 @dataclass
