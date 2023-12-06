@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 from shutil import rmtree
 
@@ -16,6 +17,13 @@ from dbt.task.base import (
 
 
 class CleanTask(BaseTask):
+    def __enter__(self):
+        self.orig_dir = os.getcwd()
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        os.chdir(self.orig_dir)
+
     def run(self):
         """
         This function takes all the paths in the target file
