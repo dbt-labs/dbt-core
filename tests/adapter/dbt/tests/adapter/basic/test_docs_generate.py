@@ -433,11 +433,6 @@ class BaseDocsGenerate(BaseGenerateProject):
         yield
         with project.adapter.connection_named("__test"):
             relation = project.adapter.Relation.create(
-                database=project.database, schema=project.unique_schema
-            )
-            project.adapter.drop_schema(relation)
-
-            relation = project.adapter.Relation.create(
                 database=project.database, schema=project.alternate_schema
             )
             project.adapter.drop_schema(relation)
