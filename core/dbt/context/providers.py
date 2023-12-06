@@ -89,11 +89,6 @@ class RelationProxy:
     def __getattr__(self, key):
         return getattr(self._relation_type, key)
 
-    def create_from_source(self, *args, **kwargs):
-        # bypass our create when creating from source so as not to mess up
-        # the source quoting
-        return self._relation_type.create_from_source(*args, **kwargs)
-
     def create(self, *args, **kwargs):
         kwargs["quote_policy"] = merge(self._quoting_config, kwargs.pop("quote_policy", {}))
         return self._relation_type.create(*args, **kwargs)
@@ -529,7 +524,7 @@ class RuntimeRefResolver(BaseRefResolver):
     def create_relation(self, target_model: ManifestNode) -> RelationProxy:
         if target_model.is_ephemeral_model:
             self.model.set_cte(target_model.unique_id, None)
-            return self.Relation.create_ephemeral_from_node(self.config, target_model)
+            return self.Relation.create_ephemeral_from(target_model)
         else:
             return self.Relation.create_from(self.config, target_model)
 
@@ -588,7 +583,7 @@ class RuntimeSourceResolver(BaseSourceResolver):
                 target_kind="source",
                 disabled=(isinstance(target_source, Disabled)),
             )
-        return self.Relation.create_from_source(target_source)
+        return self.Relation.create_from(self.config, target_source)
 
 
 # metric` implementations
@@ -1475,7 +1470,7 @@ class ModelContext(ProviderContext):
         object for that stateful other
         """
         if getattr(self.model, "defer_relation", None):
-            return self.db_wrapper.Relation.create_from_node(
+            return self.db_wrapper.Relation.create_from(
                 self.config, self.model.defer_relation  # type: ignore
             )
         else:

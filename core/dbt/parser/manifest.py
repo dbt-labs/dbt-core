@@ -1357,7 +1357,7 @@ def _check_resource_uniqueness(
 
         # the full node name is really defined by the adapter's relation
         relation_cls = get_relation_class_by_name(config.credentials.type)
-        relation = relation_cls.create_from(config=config, node=node)
+        relation = relation_cls.create_from(quoting=config, relation_config=node)  # type: ignore[arg-type]
         full_node_name = str(relation)
 
         existing_alias = alias_resources.get(full_node_name)

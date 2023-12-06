@@ -4,7 +4,12 @@ from typing import NoReturn
 from dbt.common.events.functions import warn_or_error
 from dbt.common.events.types import JinjaLogWarning
 
-from dbt.common.exceptions import DbtRuntimeError, NotImplementedError, DbtDatabaseError
+from dbt.common.exceptions import (
+    DbtRuntimeError,
+    NotImplementedError,
+    DbtDatabaseError,
+    DataclassNotDictError,
+)
 from dbt.adapters.exceptions import (
     MissingConfigError,
     ColumnTypeMissingError,
@@ -15,7 +20,6 @@ from dbt.exceptions import (
     MissingRelationError,
     AmbiguousAliasError,
     AmbiguousCatalogMatchError,
-    DataclassNotDictError,
     CompilationError,
     DependencyNotFoundError,
     DependencyError,

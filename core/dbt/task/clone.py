@@ -108,7 +108,7 @@ class CloneTask(GraphRunnableTask):
 
                 # cache the 'other' schemas too!
                 if node.defer_relation:  # type: ignore
-                    other_relation = adapter.Relation.create_from_node(
+                    other_relation = adapter.Relation.create_from(
                         self.config, node.defer_relation  # type: ignore
                     )
                     result.add(other_relation.without_identifier())

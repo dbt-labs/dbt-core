@@ -146,7 +146,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
 
     def set_connection_name(self, name: Optional[str] = None) -> Connection:
         """Called by 'acquire_connection' in BaseAdapter, which is called by
-        'connection_named', called by 'connection_for(node)'.
+        'connection_named'.
         Creates a connection for this thread if one doesn't already
         exist, and will rename an existing connection."""
 

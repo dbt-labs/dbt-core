@@ -1,23 +1,13 @@
 from dataclasses import dataclass
-from typing import (
-    Type,
-    Hashable,
-    Optional,
-    ContextManager,
-    List,
-    Generic,
-    TypeVar,
-    Tuple,
-)
+from typing import Type, Hashable, Optional, ContextManager, List, Generic, TypeVar, Tuple, Any
 from typing_extensions import Protocol
 
 import agate
 
 from dbt.adapters.contracts.connection import Connection, AdapterRequiredConfig, AdapterResponse
-from dbt.contracts.graph.nodes import ResultNode
+from dbt.adapters.contracts.relation import Policy, HasQuoting, RelationConfig
 from dbt.common.contracts.config.base import BaseConfig
 from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.relation import Policy, HasQuoting
 
 
 @dataclass
@@ -42,7 +32,9 @@ class RelationProtocol(Protocol):
         ...
 
     @classmethod
-    def create_from(cls: Type[Self], config: HasQuoting, node: ResultNode) -> Self:
+    def create_from(
+        cls: Type[Self], quoting: HasQuoting, relation_config: RelationConfig, **kwargs: Any
+    ) -> Self:
         ...
 
 

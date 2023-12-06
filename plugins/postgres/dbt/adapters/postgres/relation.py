@@ -7,7 +7,7 @@ from dbt.adapters.relation_configs import (
     RelationResults,
 )
 from dbt.context.providers import RuntimeConfigObject
-from dbt.contracts.relation import RelationType
+from dbt.adapters.contracts.relation import RelationType
 from dbt.common.exceptions import DbtRuntimeError
 
 from dbt.adapters.postgres.relation_configs import (

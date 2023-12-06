@@ -8,9 +8,8 @@ from typing_extensions import Protocol
 
 from dbt.common.dataclass_schema import dbtClassMixin, StrEnum
 
-from dbt.contracts.util import Replaceable
-from dbt.common.exceptions import CompilationError
-from dbt.exceptions import DataclassNotDictError
+from dbt.common.contracts.util import Replaceable
+from dbt.common.exceptions import CompilationError, DataclassNotDictError
 from dbt.common.utils import deep_merge
 
 
@@ -21,6 +20,14 @@ class RelationType(StrEnum):
     MaterializedView = "materialized_view"
     External = "external"
     Ephemeral = "ephemeral"
+
+
+class RelationConfig(Protocol):
+    name: str
+    database: str
+    schema: str
+    identifier: str
+    quoting_dict: Dict[str, bool]
 
 
 class ComponentName(StrEnum):
