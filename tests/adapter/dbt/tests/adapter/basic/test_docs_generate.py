@@ -409,7 +409,7 @@ class BaseGenerateProject:
         yield
         with project.adapter.connection_named("__test"):
             relation = project.adapter.Relation.create(
-                database=project.database, schema=project.test_schema
+                database=project.database, schema=project.unique_schema
             )
             project.adapter.drop_schema(relation)
 
