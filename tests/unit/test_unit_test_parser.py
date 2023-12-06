@@ -134,7 +134,7 @@ class UnitTestParserTest(SchemaParserTest):
             config=UnitTestConfig(),
             schema="test_schema",
         )
-        expected.build_unit_test_checksum("anything", "anything")
+        expected.build_unit_test_checksum()
         assertEqualNodes(unit_test, expected)
 
     def test_unit_test_config(self):

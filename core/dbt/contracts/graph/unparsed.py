@@ -1,10 +1,7 @@
 import datetime
 import re
-import csv
-from io import StringIO
 
 from dbt import deprecations
-from dbt.clients.system import find_matching
 from dbt.node_types import NodeType
 from dbt.contracts.graph.semantic_models import (
     Defaults,
@@ -781,39 +778,6 @@ class UnitTestFixture:
     @property
     def fixture(self) -> Optional[str]:
         return None
-
-    def get_rows(self, project_root: str, paths: List[str]) -> List[Dict[str, Any]]:
-        if self.format == UnitTestFormat.Dict:
-            assert isinstance(self.rows, List)
-            return self.rows
-        elif self.format == UnitTestFormat.CSV:
-            rows = []
-            if self.fixture is not None:
-                assert isinstance(self.fixture, str)
-                file_path = self.get_fixture_path(self.fixture, project_root, paths)
-                with open(file_path, newline="") as csvfile:
-                    reader = csv.DictReader(csvfile)
-                    for row in reader:
-                        rows.append(row)
-            else:  # using inline csv
-                assert isinstance(self.rows, str)
-                dummy_file = StringIO(self.rows)
-                reader = csv.DictReader(dummy_file)
-                for row in reader:
-                    rows.append(row)
-            return rows
-
-    def get_fixture_path(self, fixture: str, project_root: str, paths: List[str]) -> str:
-        fixture_path = f"{fixture}.csv"
-        matches = find_matching(project_root, paths, fixture_path)
-        if len(matches) == 0:
-            raise ParsingError(f"Could not find fixture file {fixture} for unit test")
-        elif len(matches) > 1:
-            raise ParsingError(
-                f"Found multiple fixture files named {fixture} at {[d['relative_path'] for d in matches]}. Please use a unique name for each fixture file."
-            )
-
-        return matches[0]["absolute_path"]
 
     def validate_fixture(self, fixture_type, test_name) -> None:
         if self.format == UnitTestFormat.Dict and not isinstance(self.rows, list):

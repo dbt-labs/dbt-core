@@ -1116,14 +1116,14 @@ class UnitTestDefinition(NodeInfoMixin, GraphNode, UnitTestDefinitionMandatory):
         tags = self.config.tags
         return [tags] if isinstance(tags, str) else tags
 
-    def build_unit_test_checksum(self, project_root: str, fixture_paths: List[str]):
+    def build_unit_test_checksum(self):
         # everything except 'description'
         data = f"{self.model}-{self.given}-{self.expect}-{self.overrides}"
 
         # include underlying fixture data
         for input in self.given:
             if input.fixture:
-                data += f"-{input.get_rows(project_root, fixture_paths)}"
+                data += f"-{input.rows}"
 
         self.checksum = hashlib.new("sha256", data.encode("utf-8")).hexdigest()
 
