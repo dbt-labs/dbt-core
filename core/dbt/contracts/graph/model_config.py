@@ -1,13 +1,13 @@
-from dataclasses import field, Field, dataclass
+from dataclasses import field, dataclass
 from typing import Any, List, Optional, Dict, Union, Type
 from typing_extensions import Annotated
 
 from dbt.common.contracts.config.base import BaseConfig, MergeBehavior, CompareBehavior
-from dbt.common.contracts.config.metadata import Metadata
+from dbt.common.contracts.config.materialization import OnConfigurationChangeOption
+from dbt.common.contracts.config.metadata import Metadata, ShowBehavior
 from dbt.common.dataclass_schema import (
     dbtClassMixin,
     ValidationError,
-    StrEnum,
 )
 from dbt.contracts.graph.unparsed import Docs
 from dbt.contracts.graph.utils import validate_color
@@ -16,23 +16,6 @@ from dbt import hooks
 from dbt.node_types import NodeType, AccessType
 from dbt_semantic_interfaces.type_enums.export_destination_type import ExportDestinationType
 from mashumaro.jsonschema.annotations import Pattern
-
-
-class ShowBehavior(Metadata):
-    Show = 1
-    Hide = 2
-
-    @classmethod
-    def default_field(cls) -> "ShowBehavior":
-        return cls.Show
-
-    @classmethod
-    def metadata_key(cls) -> str:
-        return "show_hide"
-
-    @classmethod
-    def should_show(cls, fld: Field) -> bool:
-        return cls.from_field(fld) == cls.Show
 
 
 def metas(*metas: Metadata) -> Dict[str, Any]:
@@ -51,16 +34,6 @@ def insensitive_patterns(*patterns: str):
 
 class Severity(str):
     pass
-
-
-class OnConfigurationChangeOption(StrEnum):
-    Apply = "apply"
-    Continue = "continue"
-    Fail = "fail"
-
-    @classmethod
-    def default(cls) -> "OnConfigurationChangeOption":
-        return cls.Apply
 
 
 @dataclass

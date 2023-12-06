@@ -50,3 +50,20 @@ def _set_meta_value(obj: M, key: str, existing: Optional[Dict[str, Any]] = None)
         result = existing.copy()
     result.update({key: obj})
     return result
+
+
+class ShowBehavior(Metadata):
+    Show = 1
+    Hide = 2
+
+    @classmethod
+    def default_field(cls) -> "ShowBehavior":
+        return cls.Show
+
+    @classmethod
+    def metadata_key(cls) -> str:
+        return "show_hide"
+
+    @classmethod
+    def should_show(cls, fld: Field) -> bool:
+        return cls.from_field(fld) == cls.Show

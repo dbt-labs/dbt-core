@@ -43,7 +43,7 @@ from dbt.contracts.graph.unparsed import (
 from dbt.contracts.graph.node_args import ModelNodeArgs
 from dbt.contracts.graph.semantic_layer_common import WhereFilterIntersection
 from dbt.contracts.util import Replaceable
-from ...common.contracts.config.properties import AdditionalPropertiesMixin
+from dbt.common.contracts.config.properties import AdditionalPropertiesMixin
 from dbt.common.events.functions import warn_or_error
 from dbt.exceptions import ParsingError, ContractBreakingChangeError
 from dbt.common.events.types import (
