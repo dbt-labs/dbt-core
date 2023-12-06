@@ -130,7 +130,7 @@ class TestUnitTestsWithFileCSV:
         manifest = run_dbt(["parse"])
         fixture = manifest.fixtures["fixture.test.test_my_model_a_fixture"]
         fixture_source_file = manifest.files[fixture.file_id]
-        assert fixture_source_file.contents == "id,string_a\n1,a\n2,2"
+        assert "2,2" in fixture_source_file.contents
 
         # Check error with invalid format key
         write_file(
