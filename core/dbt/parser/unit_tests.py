@@ -279,19 +279,19 @@ class UnitTestParser(YamlReader):
         for given in unit_test_definition.given:
             if given.fixture:
                 # find fixture file object and store unit_test_definition unique_id
-                fixture_source_file = self.get_fixture_source_file(
+                fixture_source_file = self._get_fixture_source_file(
                     given.fixture, self.project.project_name
                 )
                 fixture_source_file.unit_tests.append(unit_test_definition.unique_id)
         if unit_test_definition.expect.fixture:
             # find fixture file object and store unit_test_definition unique_id
-            fixture_source_file = self.get_fixture_source_file(
+            fixture_source_file = self._get_fixture_source_file(
                 unit_test_definition.expect.fixture,
                 self.project.project_name,
             )
             fixture_source_file.unit_tests.append(unit_test_definition.unique_id)
 
-    def get_fixture_source_file(self, fixture_name: str, project_name: str):
+    def _get_fixture_source_file(self, fixture_name: str, project_name: str):
         fixture_unique_id = f"fixture.{project_name}.{fixture_name}"
         if fixture_unique_id in self.manifest.fixtures:
             fixture = self.manifest.fixtures[fixture_unique_id]
