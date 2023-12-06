@@ -32,6 +32,7 @@ class BaseRelation(FakeAPIObject, Hashable):
     include_policy: Policy = field(default_factory=lambda: Policy())
     quote_policy: Policy = field(default_factory=lambda: Policy())
     dbt_created: bool = False
+    limit: Optional[int] = None
 
     # register relation types that can be renamed for the purpose of replacing relations using stages and backups
     # adding a relation type here also requires defining the associated rename macro
@@ -190,6 +191,15 @@ class BaseRelation(FakeAPIObject, Hashable):
         # if there is nothing set, this will return the empty string.
         return ".".join(part for _, part in self._render_iterator() if part is not None)
 
+    def render_limited(self) -> str:
+        rendered = self.render()
+        if self.limit is None:
+            return rendered
+        elif self.limit == 0:
+            return f"(select * from {rendered} where false limit 0) _dbt_limit_subq"
+        else:
+            return f"(select * from {rendered} limit {self.limit}) _dbt_limit_subq"
+
     def quoted(self, identifier):
         return "{quote_char}{identifier}{quote_char}".format(
             quote_char=self.quote_character,
@@ -204,12 +214,14 @@ class BaseRelation(FakeAPIObject, Hashable):
     def create_ephemeral_from(
         cls: Type[Self],
         relation_config: RelationConfig,
+        limit: Optional[int],
     ) -> Self:
         # Note that ephemeral models are based on the name.
         identifier = cls.add_ephemeral_prefix(relation_config.name)
         return cls.create(
             type=cls.CTE,
             identifier=identifier,
+            limit=limit,
         ).quote(identifier=False)
 
     @classmethod
@@ -223,7 +235,6 @@ class BaseRelation(FakeAPIObject, Hashable):
 
         config_quoting = relation_config.quoting_dict
         config_quoting.pop("column", None)
-
         # precedence: kwargs quoting > relation config quoting > base quoting > default quoting
         quote_policy = deep_merge(
             cls.get_default_quote_policy().to_dict(omit_none=True),
@@ -276,7 +287,7 @@ class BaseRelation(FakeAPIObject, Hashable):
         return hash(self.render())
 
     def __str__(self) -> str:
-        return self.render()
+        return self.render() if self.limit is None else self.render_limited()
 
     @property
     def database(self) -> Optional[str]:
