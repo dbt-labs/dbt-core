@@ -262,8 +262,6 @@ class Project(dbtClassMixin, Replaceable):
             "semantic_models": "semantic-models",
             "saved_queries": "saved-queries",
             "dbt_cloud": "dbt-cloud",
-            "unit_tests": "unit-tests",
-            "data_tests": "data-tests",
         }
 
     @classmethod
@@ -285,13 +283,13 @@ class Project(dbtClassMixin, Replaceable):
             raise ValidationError(
                 f"Invalid dbt_cloud config. Expected a 'dict' but got '{type(data['dbt_cloud'])}'"
             )
-        if data.get("tests", None) and data.get("data-tests", None):
+        if data.get("tests", None) and data.get("data_tests", None):
             raise ValidationError(
-                "Invalid project config: cannot have both 'tests' and 'data-tests' defined"
+                "Invalid project config: cannot have both 'tests' and 'data_tests' defined"
             )
         if "tests" in data:
             deprecations.warn(
-                "project-test-config", deprecated_path="tests", exp_path="data-tests"
+                "project-test-config", deprecated_path="tests", exp_path="data_tests"
             )
 
 

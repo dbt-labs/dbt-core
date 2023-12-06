@@ -41,7 +41,7 @@ class TestTestsConfigDeprecation:
         with pytest.raises(CompilationError) as exc:
             run_dbt(["--warn-error", "--no-partial-parse", "parse"])
         exc_str = " ".join(str(exc.value).split())  # flatten all whitespace
-        expected_msg = "The `tests` config has been renamed to `data-tests`"
+        expected_msg = "The `tests` config has been renamed to `data_tests`"
         assert expected_msg in exc_str
 
 
@@ -112,10 +112,10 @@ class TestBothProjectTestDeprecation:
         return {"model.sql": models_trivial__model_sql}
 
     def test_tests_config(self, project):
-        config_patch = {"tests": {"+enabled": "true"}, "data-tests": {"+tags": "super"}}
+        config_patch = {"tests": {"+enabled": "true"}, "data_tests": {"+tags": "super"}}
         update_config_file(config_patch, project.project_root, "dbt_project.yml")
 
-        expected_msg = "Invalid project config: cannot have both 'tests' and 'data-tests' defined"
+        expected_msg = "Invalid project config: cannot have both 'tests' and 'data_tests' defined"
         with pytest.raises(ProjectContractError) as excinfo:
             run_dbt(["parse"])
         assert expected_msg in str(excinfo.value)
