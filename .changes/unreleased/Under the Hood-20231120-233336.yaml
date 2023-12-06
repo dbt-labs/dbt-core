@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Forward default implementation of rename_relation to get_rename_sql
+time: 2023-11-20T23:33:36.103869+01:00
+custom:
+  Author: sdebruyn
+  Issue: "9124"
