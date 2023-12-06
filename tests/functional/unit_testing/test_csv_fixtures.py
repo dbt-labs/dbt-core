@@ -131,6 +131,7 @@ class TestUnitTestsWithFileCSV:
         fixture = manifest.fixtures["fixture.test.test_my_model_a_fixture"]
         fixture_source_file = manifest.files[fixture.file_id]
         assert "2,2" in fixture_source_file.contents
+        assert fixture.rows == [{'id': '1', 'string_a': 'a'}, {'id': '2', 'string_a': '2'}]
 
         # Check error with invalid format key
         write_file(

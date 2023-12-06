@@ -799,7 +799,6 @@ class UnitTestFixture:
                 assert isinstance(self.rows, str)
                 dummy_file = StringIO(self.rows)
                 reader = csv.DictReader(dummy_file)
-                rows = []
                 for row in reader:
                     rows.append(row)
             return rows

@@ -43,7 +43,7 @@ from dbt.contracts.graph.nodes import (
     SourceDefinition,
     UnpatchedSourceDefinition,
     UnitTestDefinition,
-    UnitTestFixture,
+    UnitTestFileFixture,
 )
 from dbt.contracts.graph.unparsed import SourcePatch, NodeVersion, UnparsedVersion
 from dbt.contracts.graph.manifest_upgrade import upgrade_manifest_json
@@ -809,7 +809,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     semantic_models: MutableMapping[str, SemanticModel] = field(default_factory=dict)
     unit_tests: MutableMapping[str, UnitTestDefinition] = field(default_factory=dict)
     saved_queries: MutableMapping[str, SavedQuery] = field(default_factory=dict)
-    fixtures: MutableMapping[str, UnitTestFixture] = field(default_factory=dict)
+    fixtures: MutableMapping[str, UnitTestFileFixture] = field(default_factory=dict)
 
     _doc_lookup: Optional[DocLookup] = field(
         default=None, metadata={"serialize": lambda x: None, "deserialize": lambda x: None}
@@ -1517,7 +1517,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         self.unit_tests[unit_test.unique_id] = unit_test
         source_file.unit_tests.append(unit_test.unique_id)
 
-    def add_fixture(self, source_file: FixtureSourceFile, fixture: UnitTestFixture):
+    def add_fixture(self, source_file: FixtureSourceFile, fixture: UnitTestFileFixture):
         if fixture.unique_id in self.fixtures:
             raise DuplicateResourceNameError(fixture, self.fixtures[fixture.unique_id])
         self.fixtures[fixture.unique_id] = fixture

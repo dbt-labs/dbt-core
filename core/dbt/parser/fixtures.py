@@ -1,13 +1,15 @@
-from typing import Optional
+from typing import Optional, Dict, List, Any
+from io import StringIO
+import csv
 
 from dbt.contracts.files import FixtureSourceFile
-from dbt.contracts.graph.nodes import UnitTestFixture
+from dbt.contracts.graph.nodes import UnitTestFileFixture
 from dbt.node_types import NodeType
 from dbt.parser.base import Parser
 from dbt.parser.search import FileBlock
 
 
-class FixtureParser(Parser[UnitTestFixture]):
+class FixtureParser(Parser[UnitTestFileFixture]):
     @property
     def resource_type(self) -> NodeType:
         return NodeType.Fixture
@@ -24,12 +26,21 @@ class FixtureParser(Parser[UnitTestFixture]):
         assert isinstance(file_block.file, FixtureSourceFile)
         unique_id = self.generate_unique_id(file_block.name)
 
-        fixture = UnitTestFixture(
+        fixture = UnitTestFileFixture(
             name=file_block.name,
             path=file_block.file.path.relative_path,
             original_file_path=file_block.path.original_file_path,
             package_name=self.project.project_name,
             unique_id=unique_id,
             resource_type=NodeType.Fixture,
+            rows=self.get_rows(file_block.file.contents),
         )
         self.manifest.add_fixture(file_block.file, fixture)
+
+    def get_rows(self, contents) -> List[Dict[str, Any]]:
+        rows = []
+        dummy_file = StringIO(contents)
+        reader = csv.DictReader(dummy_file)
+        for row in reader:
+            rows.append(row)
+        return rows

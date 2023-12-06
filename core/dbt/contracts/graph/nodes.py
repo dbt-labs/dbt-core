@@ -1134,7 +1134,8 @@ class UnitTestDefinition(NodeInfoMixin, GraphNode, UnitTestDefinitionMandatory):
         return self.checksum == other.checksum
 
 
-class UnitTestFixture(BaseNode):
+@dataclass
+class UnitTestFileFixture(BaseNode):
     resource_type: Literal[NodeType.Fixture]
     rows: Optional[List[Dict[str, Any]]] = None
 
