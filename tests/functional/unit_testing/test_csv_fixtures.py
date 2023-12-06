@@ -91,7 +91,8 @@ class TestUnitTestsWithFileCSV:
         assert len(results) == 3
 
         manifest = run_dbt(["parse"])  # Note: this manifest is deserialized from msgpack
-        fixture_source_file = manifest.files["test://tests/fixtures/test_my_model_a_fixture.csv"]
+        fixture = manifest.fixtures["fixture.test.test_my_model_a_fixture"]
+        fixture_source_file = manifest.files[fixture.file_id]
         assert fixture_source_file.fixture == "fixture.test.test_my_model_a_fixture"
         assert fixture_source_file.unit_tests == [
             "unit_test.test.my_model.test_my_model_string_concat"
