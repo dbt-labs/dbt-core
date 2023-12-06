@@ -432,8 +432,9 @@ class BaseDocsGenerate(BaseGenerateProject):
     def clean_up(self, project):
         yield
         with project.adapter.connection_named("__test"):
+            alternate_schema = f"{project.test_schema}_test"
             relation = project.adapter.Relation.create(
-                database=project.database, schema=project.alternate_schema
+                database=project.database, schema=alternate_schema
             )
             project.adapter.drop_schema(relation)
 
