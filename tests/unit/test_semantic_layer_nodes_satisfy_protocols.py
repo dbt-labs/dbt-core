@@ -2,6 +2,8 @@ import pytest
 import copy
 
 from dbt.contracts.graph.nodes import (
+    ConstantPropertyInput,
+    ConversionTypeParams,
     Metric,
     MetricInput,
     MetricInputMeasure,
@@ -234,6 +236,21 @@ def complex_metric_input_measure(where_filter) -> MetricInputMeasure:
 
 
 @pytest.fixture(scope="session")
+def conversion_type_params(
+    simple_metric_input_measure, metric_time_window
+) -> ConversionTypeParams:
+    return ConversionTypeParams(
+        base_measure=simple_metric_input_measure,
+        conversion_measure=simple_metric_input_measure,
+        entity="entity",
+        window=metric_time_window,
+        constant_properties=[
+            ConstantPropertyInput(base_property="base", conversion_property="conversion")
+        ],
+    )
+
+
+@pytest.fixture(scope="session")
 def complex_metric_type_params(
     metric_time_window, simple_metric_input, simple_metric_input_measure
 ) -> MetricTypeParams:
@@ -245,6 +262,7 @@ def complex_metric_type_params(
         window=metric_time_window,
         grain_to_date=TimeGranularity.DAY,
         metrics=[simple_metric_input],
+        conversion_type_params=conversion_type_params,
     )
 
 
