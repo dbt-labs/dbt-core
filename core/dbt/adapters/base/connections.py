@@ -34,7 +34,6 @@ from dbt.adapters.contracts.connection import (
     LazyHandle,
     AdapterResponse,
 )
-from dbt.contracts.graph.manifest import Manifest
 from dbt.adapters.base.query_headers import (
     MacroQueryStringSetter,
 )
@@ -79,8 +78,8 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         self.lock: RLock = mp_context.RLock()
         self.query_header: Optional[MacroQueryStringSetter] = None
 
-    def set_query_header(self, manifest: Manifest) -> None:
-        self.query_header = MacroQueryStringSetter(self.profile, manifest)
+    def set_query_header(self, query_header_context: Dict[str, Any]) -> None:
+        self.query_header = MacroQueryStringSetter(self.profile, query_header_context)
 
     @staticmethod
     def get_thread_identifier() -> Hashable:
