@@ -43,7 +43,12 @@ from dbt.contracts.graph.nodes import (
 from dbt.contracts.graph.metrics import MetricReference, ResolvedMetricReference
 from dbt.contracts.graph.unparsed import NodeVersion
 from dbt.common.events.functions import get_metadata_vars
-from dbt.common.exceptions import DbtInternalError, DbtRuntimeError, DbtValidationError
+from dbt.common.exceptions import (
+    DbtInternalError,
+    DbtRuntimeError,
+    DbtValidationError,
+    MacrosSourcesUnWriteableError,
+)
 from dbt.adapters.exceptions import MissingConfigError
 from dbt.exceptions import (
     CompilationError,
@@ -66,7 +71,6 @@ from dbt.exceptions import (
     TargetNotFoundError,
     DbtReferenceError,
 )
-from dbt.common.exceptions.macros import MacrosSourcesUnWriteableError
 from dbt.config import IsFQNResource
 from dbt.node_types import NodeType, ModelLanguage
 
