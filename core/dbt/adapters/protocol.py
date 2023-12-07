@@ -1,5 +1,16 @@
 from dataclasses import dataclass
-from typing import Type, Hashable, Optional, ContextManager, List, Generic, TypeVar, Tuple, Any
+from typing import (
+    Type,
+    Hashable,
+    Optional,
+    ContextManager,
+    List,
+    Generic,
+    TypeVar,
+    Tuple,
+    Any,
+    Dict,
+)
 from typing_extensions import Protocol
 
 import agate
@@ -8,7 +19,6 @@ from dbt.adapters.contracts.connection import Connection, AdapterRequiredConfig,
 from dbt.adapters.contracts.macros import MacroResolverProtocol
 from dbt.adapters.contracts.relation import Policy, HasQuoting, RelationConfig
 from dbt.common.contracts.config.base import BaseConfig
-from dbt.contracts.graph.manifest import Manifest
 
 
 @dataclass
@@ -80,7 +90,7 @@ class AdapterProtocol(  # type: ignore[misc]
     def type(cls) -> str:
         pass
 
-    def set_query_header(self, manifest: Manifest) -> None:
+    def set_query_header(self, query_header_context: Dict[str, Any]) -> None:
         ...
 
     @staticmethod

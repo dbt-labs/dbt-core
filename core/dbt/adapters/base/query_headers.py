@@ -2,10 +2,7 @@ from threading import local
 from typing import Optional, Callable, Dict, Any
 
 from dbt.adapters.clients.jinja import QueryStringGenerator
-
-from dbt.context.manifest import generate_query_header_context
 from dbt.adapters.contracts.connection import AdapterRequiredConfig, QueryComment
-from dbt.contracts.graph.manifest import Manifest
 from dbt.common.exceptions import DbtRuntimeError
 
 
@@ -56,9 +53,11 @@ QueryStringFunc = Callable[[str, Optional[QueryHeaderContextWrapper]], str]
 
 
 class MacroQueryStringSetter:
-    def __init__(self, config: AdapterRequiredConfig, manifest: Manifest) -> None:
-        self.manifest = manifest
+    def __init__(
+        self, config: AdapterRequiredConfig, query_header_context: Dict[str, Any]
+    ) -> None:
         self.config = config
+        self._query_header_context = query_header_context
 
         comment_macro = self._get_comment_macro()
         self.generator: QueryStringFunc = lambda name, model: ""
@@ -81,7 +80,7 @@ class MacroQueryStringSetter:
         return self.config.query_comment.comment
 
     def _get_context(self) -> Dict[str, Any]:
-        return generate_query_header_context(self.config, self.manifest)
+        return self._query_header_context
 
     def add(self, sql: str) -> str:
         return self.comment.add(sql)

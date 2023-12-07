@@ -72,6 +72,7 @@ from dbt.clients.system import (
 )
 from dbt.config import Project, RuntimeConfig
 from dbt.context.docs import generate_runtime_docs_context
+from dbt.context.manifest import generate_query_header_context
 from dbt.context.macro_resolver import MacroResolver, TestMacroNamespace
 from dbt.context.configured import generate_macro_context
 from dbt.context.providers import ParseProvider
@@ -236,7 +237,7 @@ class ManifestLoader:
         self,
         root_project: RuntimeConfig,
         all_projects: Mapping[str, Project],
-        macro_hook: Optional[Callable[[Manifest], Any]] = None,
+        macro_hook: Optional[Callable[[Dict[str, Any]], Any]] = None,
         file_diff: Optional[FileDiff] = None,
     ) -> None:
         self.root_project: RuntimeConfig = root_project
@@ -250,9 +251,9 @@ class ManifestLoader:
         # This is a MacroQueryStringSetter callable, which is called
         # later after we set the MacroManifest in the adapter. It sets
         # up the query headers.
-        self.macro_hook: Callable[[Manifest], Any]
+        self.macro_hook: Callable[[Dict[str, Any]], Any]
         if macro_hook is None:
-            self.macro_hook = lambda m: None
+            self.macro_hook = lambda c: None
         else:
             self.macro_hook = macro_hook
 
@@ -1001,9 +1002,9 @@ class ManifestLoader:
     def save_macros_to_adapter(self, adapter):
         macro_manifest = MacroManifest(self.manifest.macros)
         adapter.set_macro_resolver(macro_manifest)
-        # This executes the callable macro_hook and sets the
-        # query headers
-        self.macro_hook(macro_manifest)
+        # This executes the callable macro_hook and sets the query headers
+        query_header_context = generate_query_header_context(adapter.config, macro_manifest)
+        self.macro_hook(query_header_context)
 
     # This creates a MacroManifest which contains the macros in
     # the adapter. Only called by the load_macros call from the
@@ -1032,7 +1033,7 @@ class ManifestLoader:
     def load_macros(
         cls,
         root_config: RuntimeConfig,
-        macro_hook: Callable[[Manifest], Any],
+        macro_hook: Callable[[Dict[str, Any]], Any],
         base_macros_only=False,
     ) -> Manifest:
         with PARSING_STATE:
