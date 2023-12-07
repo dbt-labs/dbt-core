@@ -317,7 +317,7 @@ class UnitTestParser(YamlReader):
         return fqn
 
     def _get_fixture(self, fixture_name: str, project_name: str):
-        fixture_unique_id = f"fixture.{project_name}.{fixture_name}"
+        fixture_unique_id = f"{NodeType.Fixture}.{project_name}.{fixture_name}"
         if fixture_unique_id in self.manifest.fixtures:
             fixture = self.manifest.fixtures[fixture_unique_id]
             return fixture
