@@ -466,7 +466,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         self, relation_configs: Iterable[RelationConfig]
     ) -> List[BaseRelation]:
         relations = [
-            self.Relation.create_from(quoting=self.config, config=relation_config)
+            self.Relation.create_from(quoting=self.config, relation_config=relation_config)
             for relation_config in relation_configs
         ]
         return relations
