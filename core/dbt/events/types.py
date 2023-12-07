@@ -420,6 +420,18 @@ class CollectFreshnessReturnSignature(WarnLevel):
         return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
 
 
+class TestsConfigDeprecation(WarnLevel):
+    def code(self) -> str:
+        return "D013"
+
+    def message(self) -> str:
+        description = (
+            f"The `{self.deprecated_path}` config has been renamed to `{self.exp_path}`. "
+            "Please update your `dbt_project.yml` configuration to reflect this change."
+        )
+        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+
+
 # =======================================================
 # E - DB Adapter
 # =======================================================
@@ -1497,7 +1509,7 @@ class DepsUnpinned(WarnLevel):
         elif self.revision in ("main", "master"):
             unpinned_msg = f'pinned to the "{self.revision}" branch'
         else:
-            unpinned_msg = None
+            unpinned_msg = "not pinned to any branch, tag, or commit"
 
         msg = (
             f'The git package "{self.git}" \n\tis {unpinned_msg}.\n\tThis can introduce '
@@ -1536,6 +1548,17 @@ class DepsFoundDuplicatePackage(InfoLevel):
 
     def message(self) -> str:
         return f"Found duplicate package in packages.yml, removing: {self.removed_package}"
+
+
+# M034 is missing
+
+
+class DepsScrubbedPackageName(WarnLevel):
+    def code(self):
+        return "M035"
+
+    def message(self) -> str:
+        return f"Detected secret env var in {self.package_name}. dbt will write a scrubbed representation to the lock file. This will cause issues with subsequent 'dbt deps' using the lock file, requiring 'dbt deps --upgrade'"
 
 
 # =======================================================

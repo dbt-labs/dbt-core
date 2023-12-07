@@ -1,10 +1,7 @@
 import datetime
 import re
-import csv
-from io import StringIO
 
 from dbt import deprecations
-from dbt.clients.system import find_matching
 from dbt.node_types import NodeType
 from dbt.contracts.graph.semantic_models import (
     Defaults,
@@ -22,6 +19,7 @@ import dbt.helper_types  # noqa:F401
 from dbt.exceptions import CompilationError, ParsingError, DbtInternalError
 
 from dbt.dataclass_schema import dbtClassMixin, StrEnum, ExtensibleDbtClassMixin, ValidationError
+from dbt_semantic_interfaces.type_enums import ConversionCalculationType
 
 from dataclasses import dataclass, field
 from datetime import timedelta
@@ -98,6 +96,7 @@ TestDef = Union[Dict[str, Any], str]
 
 @dataclass
 class HasColumnAndTestProps(HasColumnProps):
+    data_tests: List[TestDef] = field(default_factory=list)
     tests: List[TestDef] = field(default_factory=list)
 
 
@@ -145,7 +144,7 @@ class UnparsedVersion(dbtClassMixin):
     config: Dict[str, Any] = field(default_factory=dict)
     constraints: List[Dict[str, Any]] = field(default_factory=list)
     docs: Docs = field(default_factory=Docs)
-    tests: Optional[List[TestDef]] = None
+    data_tests: Optional[List[TestDef]] = None
     columns: Sequence[Union[dbt.helper_types.IncludeExclude, UnparsedColumn]] = field(
         default_factory=list
     )
@@ -248,7 +247,11 @@ class UnparsedModelUpdate(UnparsedNodeUpdate):
                 f"get_tests_for_version called for version '{version}' not in version map"
             )
         unparsed_version = self._version_map[version]
-        return unparsed_version.tests if unparsed_version.tests is not None else self.tests
+        return (
+            unparsed_version.data_tests
+            if unparsed_version.data_tests is not None
+            else self.data_tests
+        )
 
 
 @dataclass
@@ -401,7 +404,7 @@ class SourceTablePatch(dbtClassMixin):
     freshness: Optional[FreshnessThreshold] = field(default_factory=FreshnessThreshold)
     external: Optional[ExternalTable] = None
     tags: Optional[List[str]] = None
-    tests: Optional[List[TestDef]] = None
+    data_tests: Optional[List[TestDef]] = None
     columns: Optional[Sequence[UnparsedColumn]] = None
 
     def to_patch_dict(self) -> Dict[str, Any]:
@@ -601,6 +604,24 @@ class UnparsedMetricInput(dbtClassMixin):
 
 
 @dataclass
+class ConstantPropertyInput(dbtClassMixin):
+    base_property: str
+    conversion_property: str
+
+
+@dataclass
+class UnparsedConversionTypeParams(dbtClassMixin):
+    base_measure: Union[UnparsedMetricInputMeasure, str]
+    conversion_measure: Union[UnparsedMetricInputMeasure, str]
+    entity: str
+    calculation: str = (
+        ConversionCalculationType.CONVERSION_RATE.value
+    )  # ConversionCalculationType Enum
+    window: Optional[str] = None
+    constant_properties: Optional[List[ConstantPropertyInput]] = None
+
+
+@dataclass
 class UnparsedMetricTypeParams(dbtClassMixin):
     measure: Optional[Union[UnparsedMetricInputMeasure, str]] = None
     numerator: Optional[Union[UnparsedMetricInput, str]] = None
@@ -609,6 +630,7 @@ class UnparsedMetricTypeParams(dbtClassMixin):
     window: Optional[str] = None
     grain_to_date: Optional[str] = None  # str is really a TimeGranularity Enum
     metrics: Optional[List[Union[UnparsedMetricInput, str]]] = None
+    conversion_type_params: Optional[UnparsedConversionTypeParams] = None
 
 
 @dataclass
@@ -769,68 +791,8 @@ class UnitTestFormat(StrEnum):
     Dict = "dict"
 
 
-class UnitTestFixture:
-    @property
-    def format(self) -> UnitTestFormat:
-        return UnitTestFormat.Dict
-
-    @property
-    def rows(self) -> Optional[Union[str, List[Dict[str, Any]]]]:
-        return None
-
-    @property
-    def fixture(self) -> Optional[str]:
-        return None
-
-    def get_rows(self, project_root: str, paths: List[str]) -> List[Dict[str, Any]]:
-        if self.format == UnitTestFormat.Dict:
-            assert isinstance(self.rows, List)
-            return self.rows
-        elif self.format == UnitTestFormat.CSV:
-            rows = []
-            if self.fixture is not None:
-                assert isinstance(self.fixture, str)
-                file_path = self.get_fixture_path(self.fixture, project_root, paths)
-                with open(file_path, newline="") as csvfile:
-                    reader = csv.DictReader(csvfile)
-                    for row in reader:
-                        rows.append(row)
-            else:  # using inline csv
-                assert isinstance(self.rows, str)
-                dummy_file = StringIO(self.rows)
-                reader = csv.DictReader(dummy_file)
-                rows = []
-                for row in reader:
-                    rows.append(row)
-            return rows
-
-    def get_fixture_path(self, fixture: str, project_root: str, paths: List[str]) -> str:
-        fixture_path = f"{fixture}.csv"
-        matches = find_matching(project_root, paths, fixture_path)
-        if len(matches) == 0:
-            raise ParsingError(f"Could not find fixture file {fixture} for unit test")
-        elif len(matches) > 1:
-            raise ParsingError(
-                f"Found multiple fixture files named {fixture} at {[d['relative_path'] for d in matches]}. Please use a unique name for each fixture file."
-            )
-
-        return matches[0]["absolute_path"]
-
-    def validate_fixture(self, fixture_type, test_name) -> None:
-        if self.format == UnitTestFormat.Dict and not isinstance(self.rows, list):
-            raise ParsingError(
-                f"Unit test {test_name} has {fixture_type} rows which do not match format {self.format}"
-            )
-        if self.format == UnitTestFormat.CSV and not (
-            isinstance(self.rows, str) or isinstance(self.fixture, str)
-        ):
-            raise ParsingError(
-                f"Unit test {test_name} has {fixture_type} rows or fixtures which do not match format {self.format}.  Expected string."
-            )
-
-
 @dataclass
-class UnitTestInputFixture(dbtClassMixin, UnitTestFixture):
+class UnitTestInputFixture(dbtClassMixin):
     input: str
     rows: Optional[Union[str, List[Dict[str, Any]]]] = None
     format: UnitTestFormat = UnitTestFormat.Dict
@@ -838,7 +800,7 @@ class UnitTestInputFixture(dbtClassMixin, UnitTestFixture):
 
 
 @dataclass
-class UnitTestOutputFixture(dbtClassMixin, UnitTestFixture):
+class UnitTestOutputFixture(dbtClassMixin):
     rows: Optional[Union[str, List[Dict[str, Any]]]] = None
     format: UnitTestFormat = UnitTestFormat.Dict
     fixture: Optional[str] = None

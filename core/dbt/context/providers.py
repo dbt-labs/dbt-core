@@ -218,6 +218,10 @@ class BaseResolver(metaclass=abc.ABCMeta):
     def Relation(self):
         return self.db_wrapper.Relation
 
+    @property
+    def resolve_limit(self) -> Optional[int]:
+        return 0 if getattr(self.config.args, "EMPTY", False) else None
+
     @abc.abstractmethod
     def __call__(self, *args: str) -> Union[str, RelationProxy, MetricReference]:
         pass
@@ -533,9 +537,11 @@ class RuntimeRefResolver(BaseRefResolver):
     def create_relation(self, target_model: ManifestNode) -> RelationProxy:
         if target_model.is_ephemeral_model:
             self.model.set_cte(target_model.unique_id, None)
-            return self.Relation.create_ephemeral_from_node(self.config, target_model)
+            return self.Relation.create_ephemeral_from_node(
+                self.config, target_model, limit=self.resolve_limit
+            )
         else:
-            return self.Relation.create_from(self.config, target_model)
+            return self.Relation.create_from(self.config, target_model, limit=self.resolve_limit)
 
     def validate(
         self,
@@ -603,7 +609,7 @@ class RuntimeSourceResolver(BaseSourceResolver):
                 target_kind="source",
                 disabled=(isinstance(target_source, Disabled)),
             )
-        return self.Relation.create_from_source(target_source)
+        return self.Relation.create_from_source(target_source, limit=self.resolve_limit)
 
 
 class RuntimeUnitTestSourceResolver(BaseSourceResolver):

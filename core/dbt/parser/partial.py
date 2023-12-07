@@ -280,6 +280,10 @@ class PartialParsing:
         if saved_source_file.parse_file_type == ParseFileType.Documentation:
             self.delete_doc_node(saved_source_file)
 
+        # fixtures
+        if saved_source_file.parse_file_type == ParseFileType.Fixture:
+            self.delete_fixture_node(saved_source_file)
+
         fire_event(PartialParsingFile(operation="deleted", file_id=file_id))
 
     # Updates for non-schema files
@@ -293,6 +297,8 @@ class PartialParsing:
             self.update_macro_in_saved(new_source_file, old_source_file)
         elif new_source_file.parse_file_type == ParseFileType.Documentation:
             self.update_doc_in_saved(new_source_file, old_source_file)
+        elif new_source_file.parse_file_type == ParseFileType.Fixture:
+            self.update_fixture_in_saved(new_source_file, old_source_file)
         else:
             raise Exception(f"Invalid parse_file_type in source_file {file_id}")
         fire_event(PartialParsingFile(operation="updated", file_id=file_id))
@@ -374,6 +380,13 @@ class PartialParsing:
         if self.already_scheduled_for_parsing(old_source_file):
             return
         self.delete_doc_node(old_source_file)
+        self.saved_files[new_source_file.file_id] = deepcopy(new_source_file)
+        self.add_to_pp_files(new_source_file)
+
+    def update_fixture_in_saved(self, new_source_file, old_source_file):
+        if self.already_scheduled_for_parsing(old_source_file):
+            return
+        self.delete_fixture_node(old_source_file)
         self.saved_files[new_source_file.file_id] = deepcopy(new_source_file)
         self.add_to_pp_files(new_source_file)
 
@@ -577,6 +590,20 @@ class PartialParsing:
         self.schedule_nodes_for_parsing(source_file.nodes)
         source_file.nodes = []
         # Remove the file object
+        self.saved_manifest.files.pop(source_file.file_id)
+
+    def delete_fixture_node(self, source_file):
+        # remove fixtures from the "fixtures" dictionary
+        fixture_unique_id = source_file.fixture
+        self.saved_manifest.fixtures.pop(fixture_unique_id)
+        unit_tests = source_file.unit_tests.copy()
+        for unique_id in unit_tests:
+            unit_test = self.saved_manifest.unit_tests.pop(unique_id)
+            # schedule unit_test for parsing
+            self._schedule_for_parsing(
+                "unit_tests", unit_test, unit_test.name, self.delete_schema_unit_test
+            )
+            source_file.unit_tests.remove(unique_id)
         self.saved_manifest.files.pop(source_file.file_id)
 
     # Schema files -----------------------
@@ -1021,6 +1048,8 @@ class PartialParsing:
         # Create a list of file_ids for source_files that need to be reparsed, and
         # a dictionary of file_ids to yaml_keys to names.
         for source_file in self.saved_files.values():
+            if source_file.parse_file_type == ParseFileType.Fixture:
+                continue
             file_id = source_file.file_id
             if not source_file.env_vars:
                 continue

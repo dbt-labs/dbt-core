@@ -1,6 +1,6 @@
 import pytest
-from dbt.exceptions import ParsingError, YamlParseDictError
-from dbt.tests.util import run_dbt, write_file
+from dbt.exceptions import ParsingError, YamlParseDictError, DuplicateResourceNameError
+from dbt.tests.util import run_dbt, write_file, rm_file
 from fixtures import (
     my_model_sql,
     my_model_a_sql,
@@ -90,9 +90,48 @@ class TestUnitTestsWithFileCSV:
         results = run_dbt(["run"])
         assert len(results) == 3
 
+        manifest = run_dbt(["parse"])  # Note: this manifest is deserialized from msgpack
+        fixture = manifest.fixtures["fixture.test.test_my_model_a_fixture"]
+        fixture_source_file = manifest.files[fixture.file_id]
+        assert fixture_source_file.fixture == "fixture.test.test_my_model_a_fixture"
+        assert fixture_source_file.unit_tests == [
+            "unit_test.test.my_model.test_my_model_string_concat"
+        ]
+
         # Select by model name
         results = run_dbt(["test", "--select", "my_model"], expect_pass=False)
         assert len(results) == 5
+
+        # Check partial parsing remove fixture file
+        rm_file(project.project_root, "tests", "fixtures", "test_my_model_a_fixture.csv")
+        with pytest.raises(
+            ParsingError,
+            match="File not found for fixture 'test_my_model_a_fixture' in unit tests",
+        ):
+            run_dbt(["test", "--select", "my_model"], expect_pass=False)
+        # put back file and check that it works
+        write_file(
+            test_my_model_a_fixture_csv,
+            project.project_root,
+            "tests",
+            "fixtures",
+            "test_my_model_a_fixture.csv",
+        )
+        results = run_dbt(["test", "--select", "my_model"], expect_pass=False)
+        assert len(results) == 5
+        # Now update file
+        write_file(
+            test_my_model_a_fixture_csv + "2,2",
+            project.project_root,
+            "tests",
+            "fixtures",
+            "test_my_model_a_fixture.csv",
+        )
+        manifest = run_dbt(["parse"])
+        fixture = manifest.fixtures["fixture.test.test_my_model_a_fixture"]
+        fixture_source_file = manifest.files[fixture.file_id]
+        assert "2,2" in fixture_source_file.contents
+        assert fixture.rows == [{"id": "1", "string_a": "a"}, {"id": "2", "string_a": "2"}]
 
         # Check error with invalid format key
         write_file(
@@ -179,13 +218,8 @@ class TestUnitTestsMissingCSVFile:
         }
 
     def test_missing(self, project):
-        results = run_dbt(["run"])
-        assert len(results) == 3
-
-        # Select by model name
-        expected_error = "Could not find fixture file fake_fixture for unit test"
-        results = run_dbt(["test", "--select", "my_model"], expect_pass=False)
-        assert expected_error in results[0].message
+        with pytest.raises(ParsingError):
+            run_dbt(["run"])
 
 
 class TestUnitTestsDuplicateCSVFile:
@@ -212,10 +246,5 @@ class TestUnitTestsDuplicateCSVFile:
         }
 
     def test_duplicate(self, project):
-        results = run_dbt(["run"])
-        assert len(results) == 3
-
-        # Select by model name
-        results = run_dbt(["test", "--select", "my_model"], expect_pass=False)
-        expected_error = "Found multiple fixture files named test_my_model_basic_fixture"
-        assert expected_error in results[0].message
+        with pytest.raises(DuplicateResourceNameError):
+            run_dbt(["run"])

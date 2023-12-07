@@ -727,21 +727,21 @@ class StateSelectorMethod(SelectorMethod):
 
         manifest: WritableManifest = self.previous_state.manifest
 
-        for node, real_node in self.all_nodes(included_nodes):
+        for unique_id, node in self.all_nodes(included_nodes):
             previous_node: Optional[SelectorTarget] = None
 
-            if node in manifest.nodes:
-                previous_node = manifest.nodes[node]
-            elif node in manifest.sources:
-                previous_node = manifest.sources[node]
-            elif node in manifest.exposures:
-                previous_node = manifest.exposures[node]
-            elif node in manifest.metrics:
-                previous_node = manifest.metrics[node]
-            elif node in manifest.semantic_models:
-                previous_node = manifest.semantic_models[node]
-            elif node in manifest.unit_tests:
-                previous_node = manifest.unit_tests[node]
+            if unique_id in manifest.nodes:
+                previous_node = manifest.nodes[unique_id]
+            elif unique_id in manifest.sources:
+                previous_node = manifest.sources[unique_id]
+            elif unique_id in manifest.exposures:
+                previous_node = manifest.exposures[unique_id]
+            elif unique_id in manifest.metrics:
+                previous_node = manifest.metrics[unique_id]
+            elif unique_id in manifest.semantic_models:
+                previous_node = manifest.semantic_models[unique_id]
+            elif unique_id in manifest.unit_tests:
+                previous_node = manifest.unit_tests[unique_id]
 
             keyword_args = {}
             if checker.__name__ in [
@@ -751,8 +751,8 @@ class StateSelectorMethod(SelectorMethod):
             ]:
                 keyword_args["adapter_type"] = adapter_type  # type: ignore
 
-            if checker(previous_node, real_node, **keyword_args):  # type: ignore
-                yield node
+            if checker(previous_node, node, **keyword_args):  # type: ignore
+                yield unique_id
 
 
 class ResultSelectorMethod(SelectorMethod):

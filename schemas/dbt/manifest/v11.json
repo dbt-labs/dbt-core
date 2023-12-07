@@ -3645,25 +3645,7 @@
           "type": "string"
         },
         "resource_type": {
-          "enum": [
-            "model",
-            "analysis",
-            "test",
-            "snapshot",
-            "operation",
-            "seed",
-            "rpc",
-            "sql_operation",
-            "doc",
-            "source",
-            "macro",
-            "exposure",
-            "metric",
-            "group",
-            "saved_query",
-            "semantic_model",
-            "unit_test"
-          ]
+          "const": "unit_test"
         },
         "package_name": {
           "type": "string"
@@ -3874,7 +3856,18 @@
         "contract": {
           "$ref": "#/$defs/Contract"
         },
-        "attached_node": {
+        "tested_node_unique_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "this_input_node_unique_id": {
           "anyOf": [
             {
               "type": "string"
@@ -5734,6 +5727,31 @@
           "propertyNames": {
             "type": "string"
           }
+        },
+        "export_as": {
+          "anyOf": [
+            {
+              "enum": [
+                "table",
+                "view"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "schema": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "additionalProperties": true
@@ -5791,6 +5809,12 @@
           "type": "array",
           "items": {
             "$ref": "#/$defs/Export"
+          }
+        },
+        "_event_status": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
           }
         },
         "description": {
@@ -6508,9 +6532,12 @@
                   "type": "string"
                 }
               }
+            },
+            {
+              "type": "null"
             }
           ],
-          "default": ""
+          "default": null
         },
         "format": {
           "enum": [
@@ -6518,6 +6545,17 @@
             "dict"
           ],
           "default": "dict"
+        },
+        "fixture": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "additionalProperties": false,
@@ -6542,9 +6580,12 @@
                   "type": "string"
                 }
               }
+            },
+            {
+              "type": "null"
             }
           ],
-          "default": ""
+          "default": null
         },
         "format": {
           "enum": [
@@ -6552,6 +6593,17 @@
             "dict"
           ],
           "default": "dict"
+        },
+        "fixture": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "additionalProperties": false
@@ -6592,6 +6644,18 @@
       "type": "object",
       "title": "UnitTestDefinition",
       "properties": {
+        "model": {
+          "type": "string"
+        },
+        "given": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/UnitTestInputFixture"
+          }
+        },
+        "expect": {
+          "$ref": "#/$defs/UnitTestOutputFixture"
+        },
         "name": {
           "type": "string"
         },
@@ -6634,17 +6698,11 @@
             "type": "string"
           }
         },
-        "model": {
-          "type": "string"
-        },
-        "given": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/UnitTestInputFixture"
+        "_event_status": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
           }
-        },
-        "expect": {
-          "$ref": "#/$defs/UnitTestOutputFixture"
         },
         "description": {
           "type": "string",
@@ -6666,20 +6724,42 @@
         },
         "config": {
           "$ref": "#/$defs/UnitTestConfig"
+        },
+        "checksum": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "schema": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "additionalProperties": false,
       "required": [
+        "model",
+        "given",
+        "expect",
         "name",
         "resource_type",
         "package_name",
         "path",
         "original_file_path",
         "unique_id",
-        "fqn",
-        "model",
-        "given",
-        "expect"
+        "fqn"
       ]
     },
     "WritableManifest": {

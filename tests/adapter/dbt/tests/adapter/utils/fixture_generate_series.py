@@ -38,7 +38,7 @@ models__test_generate_series_yml = """
 version: 2
 models:
   - name: test_generate_series
-    tests:
+    data_tests:
       - assert_equal:
           actual: generated_number
           expected: expected

@@ -145,6 +145,7 @@ sample_values = [
     types.ConfigLogPathDeprecation(deprecated_path=""),
     types.ConfigTargetPathDeprecation(deprecated_path=""),
     types.CollectFreshnessReturnSignature(),
+    types.TestsConfigDeprecation(deprecated_path="", exp_path=""),
     # E - DB Adapter ======================
     types.AdapterEventDebug(),
     types.AdapterEventInfo(),
@@ -303,6 +304,7 @@ sample_values = [
     types.DepsLockUpdating(lock_filepath=""),
     types.DepsAddPackage(package_name="", version="", packages_filepath=""),
     types.DepsFoundDuplicatePackage(removed_package={}),
+    types.DepsScrubbedPackageName(package_name=""),
     types.SemanticValidationFailure(msg=""),
     # Q - Node execution ======================
     types.RunningOperationCaughtError(exc=""),

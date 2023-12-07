@@ -9,49 +9,49 @@ models:
     columns:
       - name: id
         tags: [column_level_tag]
-        tests:
+        data_tests:
           - unique
 
   - name: incremental_ignore
     columns:
       - name: id
         tags: [column_level_tag]
-        tests:
+        data_tests:
           - unique
 
   - name: incremental_ignore_target
     columns:
       - name: id
         tags: [column_level_tag]
-        tests:
+        data_tests:
           - unique
 
   - name: incremental_append_new_columns
     columns:
       - name: id
         tags: [column_level_tag]
-        tests:
+        data_tests:
           - unique
 
   - name: incremental_append_new_columns_target
     columns:
       - name: id
         tags: [column_level_tag]
-        tests:
+        data_tests:
           - unique
 
   - name: incremental_sync_all_columns
     columns:
       - name: id
         tags: [column_level_tag]
-        tests:
+        data_tests:
           - unique
 
   - name: incremental_sync_all_columns_target
     columns:
       - name: id
         tags: [column_leveL_tag]
-        tests:
+        data_tests:
           - unique
 """
 

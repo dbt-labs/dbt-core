@@ -103,7 +103,7 @@ models__test_listagg_yml = """
 version: 2
 models:
   - name: test_listagg
-    tests:
+    data_tests:
       - assert_equal:
           actual: actual
           expected: expected

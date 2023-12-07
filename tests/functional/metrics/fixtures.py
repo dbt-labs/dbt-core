@@ -626,3 +626,41 @@ metrics:
     meta:
         my_meta: 'testing'
 """
+
+conversion_semantic_model_purchasing_yml = """
+version: 2
+
+semantic_models:
+  - name: semantic_purchasing
+    model: ref('purchasing')
+    measures:
+      - name: num_orders
+        agg: COUNT
+        expr: purchased_at
+      - name: num_visits
+        agg: SUM
+        expr: 1
+    dimensions:
+      - name: purchased_at
+        type: TIME
+    entities:
+      - name: purchase
+        type: primary
+        expr: '1'
+    defaults:
+      agg_time_dimension: purchased_at
+
+"""
+
+conversion_metric_yml = """
+version: 2
+metrics:
+    - name: converted_orders_over_visits
+      label: Number of orders converted from visits
+      type: conversion
+      type_params:
+        conversion_type_params:
+          base_measure: num_visits
+          conversion_measure: num_orders
+          entity: purchase
+"""

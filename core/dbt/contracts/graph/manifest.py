@@ -43,10 +43,17 @@ from dbt.contracts.graph.nodes import (
     SourceDefinition,
     UnpatchedSourceDefinition,
     UnitTestDefinition,
+    UnitTestFileFixture,
 )
 from dbt.contracts.graph.unparsed import SourcePatch, NodeVersion, UnparsedVersion
 from dbt.contracts.graph.manifest_upgrade import upgrade_manifest_json
-from dbt.contracts.files import SourceFile, SchemaSourceFile, FileHash, AnySourceFile
+from dbt.contracts.files import (
+    SourceFile,
+    SchemaSourceFile,
+    FileHash,
+    AnySourceFile,
+    FixtureSourceFile,
+)
 from dbt.contracts.util import (
     BaseArtifactMetadata,
     SourceKey,
@@ -802,6 +809,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     semantic_models: MutableMapping[str, SemanticModel] = field(default_factory=dict)
     unit_tests: MutableMapping[str, UnitTestDefinition] = field(default_factory=dict)
     saved_queries: MutableMapping[str, SavedQuery] = field(default_factory=dict)
+    fixtures: MutableMapping[str, UnitTestFileFixture] = field(default_factory=dict)
 
     _doc_lookup: Optional[DocLookup] = field(
         default=None, metadata={"serialize": lambda x: None, "deserialize": lambda x: None}
@@ -1444,6 +1452,8 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
                 source_file.exposures.append(node.unique_id)
             if isinstance(node, Group):
                 source_file.groups.append(node.unique_id)
+        elif isinstance(source_file, FixtureSourceFile):
+            pass
         else:
             source_file.nodes.append(node.unique_id)
 
@@ -1486,6 +1496,8 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
                 source_file.semantic_models.append(node.unique_id)
             if isinstance(node, Exposure):
                 source_file.exposures.append(node.unique_id)
+        elif isinstance(source_file, FixtureSourceFile):
+            pass
         else:
             source_file.nodes.append(node.unique_id)
 
@@ -1504,6 +1516,12 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             raise DuplicateResourceNameError(unit_test, self.unit_tests[unit_test.unique_id])
         self.unit_tests[unit_test.unique_id] = unit_test
         source_file.unit_tests.append(unit_test.unique_id)
+
+    def add_fixture(self, source_file: FixtureSourceFile, fixture: UnitTestFileFixture):
+        if fixture.unique_id in self.fixtures:
+            raise DuplicateResourceNameError(fixture, self.fixtures[fixture.unique_id])
+        self.fixtures[fixture.unique_id] = fixture
+        source_file.fixture = fixture.unique_id
 
     def add_saved_query(self, source_file: SchemaSourceFile, saved_query: SavedQuery) -> None:
         _check_duplicates(saved_query, self.saved_queries)
@@ -1563,7 +1581,7 @@ AnyManifest = Union[Manifest, MacroManifest]
 
 
 @dataclass
-@schema_version("manifest", 11)
+@schema_version("manifest", 12)
 class WritableManifest(ArtifactMixin):
     nodes: Mapping[UniqueID, ManifestNode] = field(
         metadata=dict(description=("The nodes defined in the dbt project and its dependencies"))
@@ -1636,6 +1654,7 @@ class WritableManifest(ArtifactMixin):
             ("manifest", 8),
             ("manifest", 9),
             ("manifest", 10),
+            ("manifest", 11),
         ]
 
     @classmethod

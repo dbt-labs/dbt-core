@@ -73,7 +73,7 @@ setup(
         # These are major-version-0 packages also maintained by dbt-labs. Accept patches.
         "dbt-extractor~=0.5.0",
         "minimal-snowplow-tracker~=0.0.2",
-        "dbt-semantic-interfaces~=0.4.0",
+        "dbt-semantic-interfaces~=0.5.0a2",
         # ----
         # Expect compatibility with all new versions of these packages, so lower bounds only.
         "jsonschema>=3.0",

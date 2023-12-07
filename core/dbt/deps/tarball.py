@@ -7,14 +7,17 @@ from dbt.clients import system
 from dbt.config.project import PartialProject
 from dbt.contracts.project import TarballPackage
 from dbt.deps.base import PinnedPackage, UnpinnedPackage, get_downloads_path
-from dbt.exceptions import DependencyError
+from dbt.exceptions import DependencyError, scrub_secrets, env_secrets
+from dbt.events.functions import warn_or_error
+from dbt.events.types import DepsScrubbedPackageName
 from dbt.utils import _connection_exception_retry as connection_exception_retry
 
 
 class TarballPackageMixin:
-    def __init__(self, tarball: str) -> None:
+    def __init__(self, tarball: str, tarball_unrendered: str) -> None:
         super().__init__()
         self.tarball = tarball
+        self.tarball_unrendered = tarball_unrendered
 
     @property
     def name(self):
@@ -25,8 +28,8 @@ class TarballPackageMixin:
 
 
 class TarballPinnedPackage(TarballPackageMixin, PinnedPackage):
-    def __init__(self, tarball: str, package: str) -> None:
-        super().__init__(tarball)
+    def __init__(self, tarball: str, tarball_unrendered: str, package: str) -> None:
+        super().__init__(tarball, tarball_unrendered)
         self.package = package
         self.version = "tarball"
         self.tar_path = os.path.join(Path(get_downloads_path()), self.package)
@@ -37,8 +40,11 @@ class TarballPinnedPackage(TarballPackageMixin, PinnedPackage):
         return self.package
 
     def to_dict(self) -> Dict[str, str]:
+        tarball_scrubbed = scrub_secrets(self.tarball_unrendered, env_secrets())
+        if self.tarball_unrendered != tarball_scrubbed:
+            warn_or_error(DepsScrubbedPackageName(package_name=tarball_scrubbed))
         return {
-            "tarball": self.tarball,
+            "tarball": tarball_scrubbed,
             "name": self.package,
         }
 
@@ -87,19 +93,28 @@ class TarballUnpinnedPackage(TarballPackageMixin, UnpinnedPackage[TarballPinnedP
     def __init__(
         self,
         tarball: str,
+        tarball_unrendered: str,
         package: str,
     ) -> None:
-        super().__init__(tarball)
+        super().__init__(tarball, tarball_unrendered)
         # setup to recycle RegistryPinnedPackage fns
         self.package = package
         self.version = "tarball"
 
     @classmethod
     def from_contract(cls, contract: TarballPackage) -> "TarballUnpinnedPackage":
-        return cls(tarball=contract.tarball, package=contract.name)
+        return cls(
+            tarball=contract.tarball,
+            tarball_unrendered=(contract.unrendered.get("tarball") or contract.tarball),
+            package=contract.name,
+        )
 
     def incorporate(self, other: "TarballUnpinnedPackage") -> "TarballUnpinnedPackage":
-        return TarballUnpinnedPackage(tarball=self.tarball, package=self.package)
+        return TarballUnpinnedPackage(
+            tarball=self.tarball, tarball_unrendered=self.tarball_unrendered, package=self.package
+        )
 
     def resolved(self) -> TarballPinnedPackage:
-        return TarballPinnedPackage(tarball=self.tarball, package=self.package)
+        return TarballPinnedPackage(
+            tarball=self.tarball, tarball_unrendered=self.tarball_unrendered, package=self.package
+        )

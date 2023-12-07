@@ -719,7 +719,7 @@ class TestProject(BaseConfigTest):
                         "post-hook": "grant select on {{ this }} to bi_user",
                     },
                 },
-                "tests": {"my_test_project": {"fail_calc": "sum(failures)"}},
+                "data_tests": {"my_test_project": {"fail_calc": "sum(failures)"}},
                 "require-dbt-version": ">=0.1.0",
             }
         )
@@ -783,7 +783,7 @@ class TestProject(BaseConfigTest):
             },
         )
         self.assertEqual(
-            project.tests,
+            project.data_tests,
             {
                 "my_test_project": {"fail_calc": "sum(failures)"},
             },
@@ -793,8 +793,15 @@ class TestProject(BaseConfigTest):
             project.packages,
             PackageConfig(
                 packages=[
-                    LocalPackage(local="foo"),
-                    GitPackage(git="git@example.com:dbt-labs/dbt-utils.git", revision="test-rev"),
+                    LocalPackage(local="foo", unrendered={"local": "foo"}),
+                    GitPackage(
+                        git="git@example.com:dbt-labs/dbt-utils.git",
+                        revision="test-rev",
+                        unrendered={
+                            "git": "git@example.com:dbt-labs/dbt-utils.git",
+                            "revision": "test-rev",
+                        },
+                    ),
                 ]
             ),
         )

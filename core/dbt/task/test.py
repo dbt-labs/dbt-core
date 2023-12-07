@@ -112,16 +112,16 @@ class TestRunner(CompileRunner):
     def before_execute(self):
         self.print_start_line()
 
-    def execute_test(self, test: TestNode, manifest: Manifest) -> TestResultData:
-        context = generate_runtime_model_context(test, self.config, manifest)
+    def execute_data_test(self, data_test: TestNode, manifest: Manifest) -> TestResultData:
+        context = generate_runtime_model_context(data_test, self.config, manifest)
 
         materialization_macro = manifest.find_materialization_macro_by_name(
-            self.config.project_name, test.get_materialization(), self.adapter.type()
+            self.config.project_name, data_test.get_materialization(), self.adapter.type()
         )
 
         if materialization_macro is None:
             raise MissingMaterializationError(
-                materialization=test.get_materialization(), adapter_type=self.adapter.type()
+                materialization=data_test.get_materialization(), adapter_type=self.adapter.type()
             )
 
         if "config" not in context:
@@ -140,14 +140,14 @@ class TestRunner(CompileRunner):
         num_rows = len(table.rows)
         if num_rows != 1:
             raise DbtInternalError(
-                f"dbt internally failed to execute {test.unique_id}: "
+                f"dbt internally failed to execute {data_test.unique_id}: "
                 f"Returned {num_rows} rows, but expected "
                 f"1 row"
             )
         num_cols = len(table.columns)
         if num_cols != 3:
             raise DbtInternalError(
-                f"dbt internally failed to execute {test.unique_id}: "
+                f"dbt internally failed to execute {data_test.unique_id}: "
                 f"Returned {num_cols} columns, but expected "
                 f"3 columns"
             )
@@ -239,7 +239,7 @@ class TestRunner(CompileRunner):
             return self.build_unit_test_run_result(test, unit_test_result)
         else:
             # Note: manifest here is a normal manifest
-            test_result = self.execute_test(test, manifest)
+            test_result = self.execute_data_test(test, manifest)
             return self.build_test_run_result(test, test_result)
 
     def build_test_run_result(self, test: TestNode, result: TestResultData) -> RunResult:

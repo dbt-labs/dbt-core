@@ -48,7 +48,7 @@ graph_file_name = "graph.gpickle"
 def print_compile_stats(stats):
     names = {
         NodeType.Model: "model",
-        NodeType.Test: "test",
+        NodeType.Test: "data test",
         NodeType.Unit: "unit test",
         NodeType.Snapshot: "snapshot",
         NodeType.Analysis: "analysis",

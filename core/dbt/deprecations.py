@@ -51,6 +51,8 @@ class PackageInstallPathDeprecation(DBTDeprecation):
     _event = "PackageInstallPathDeprecation"
 
 
+# deprecations with a pattern of `project-config-*` for the name are not hardcoded
+# they are called programatically via the pattern below
 class ConfigSourcePathDeprecation(DBTDeprecation):
     _name = "project-config-source-paths"
     _event = "ConfigSourcePathDeprecation"
@@ -59,26 +61,6 @@ class ConfigSourcePathDeprecation(DBTDeprecation):
 class ConfigDataPathDeprecation(DBTDeprecation):
     _name = "project-config-data-paths"
     _event = "ConfigDataPathDeprecation"
-
-
-def renamed_method(old_name: str, new_name: str):
-    class AdapterDeprecationWarning(DBTDeprecation):
-        _name = "adapter:{}".format(old_name)
-        _event = "AdapterDeprecationWarning"
-
-    dep = AdapterDeprecationWarning()
-    deprecations_list.append(dep)
-    deprecations[dep.name] = dep
-
-
-class MetricAttributesRenamed(DBTDeprecation):
-    _name = "metric-attr-renamed"
-    _event = "MetricAttributesRenamed"
-
-
-class ExposureNameDeprecation(DBTDeprecation):
-    _name = "exposure-name"
-    _event = "ExposureNameDeprecation"
 
 
 class ConfigLogPathDeprecation(DBTDeprecation):
@@ -91,9 +73,29 @@ class ConfigTargetPathDeprecation(DBTDeprecation):
     _event = "ConfigTargetPathDeprecation"
 
 
+def renamed_method(old_name: str, new_name: str):
+    class AdapterDeprecationWarning(DBTDeprecation):
+        _name = "adapter:{}".format(old_name)
+        _event = "AdapterDeprecationWarning"
+
+    dep = AdapterDeprecationWarning()
+    deprecations_list.append(dep)
+    deprecations[dep.name] = dep
+
+
+class ExposureNameDeprecation(DBTDeprecation):
+    _name = "exposure-name"
+    _event = "ExposureNameDeprecation"
+
+
 class CollectFreshnessReturnSignature(DBTDeprecation):
     _name = "collect-freshness-return-signature"
     _event = "CollectFreshnessReturnSignature"
+
+
+class TestsConfigDeprecation(DBTDeprecation):
+    _name = "project-test-config"
+    _event = "TestsConfigDeprecation"
 
 
 def renamed_env_var(old_name: str, new_name: str):
@@ -129,10 +131,10 @@ deprecations_list: List[DBTDeprecation] = [
     PackageInstallPathDeprecation(),
     ConfigSourcePathDeprecation(),
     ConfigDataPathDeprecation(),
-    MetricAttributesRenamed(),
     ExposureNameDeprecation(),
     ConfigLogPathDeprecation(),
     ConfigTargetPathDeprecation(),
+    TestsConfigDeprecation(),
     CollectFreshnessReturnSignature(),
 ]
 

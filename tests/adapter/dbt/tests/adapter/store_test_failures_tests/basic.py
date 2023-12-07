@@ -167,7 +167,7 @@ class StoreTestFailuresAsProjectLevelOff(StoreTestFailuresAsBase):
 
     @pytest.fixture(scope="class")
     def project_config_update(self):
-        return {"tests": {"store_failures": False}}
+        return {"data_tests": {"store_failures": False}}
 
     def test_tests_run_successfully_and_are_stored_as_expected(self, project):
         expected_results = {
@@ -204,7 +204,7 @@ class StoreTestFailuresAsProjectLevelView(StoreTestFailuresAsBase):
 
     @pytest.fixture(scope="class")
     def project_config_update(self):
-        return {"tests": {"store_failures_as": "view"}}
+        return {"data_tests": {"store_failures_as": "view"}}
 
     def test_tests_run_successfully_and_are_stored_as_expected(self, project):
         expected_results = {
@@ -242,7 +242,7 @@ class StoreTestFailuresAsProjectLevelEphemeral(StoreTestFailuresAsBase):
 
     @pytest.fixture(scope="class")
     def project_config_update(self):
-        return {"tests": {"store_failures_as": "ephemeral", "store_failures": True}}
+        return {"data_tests": {"store_failures_as": "ephemeral", "store_failures": True}}
 
     def test_tests_run_successfully_and_are_stored_as_expected(self, project):
         expected_results = {

@@ -7,7 +7,7 @@ import dbt.deprecations
 import dbt.exceptions
 import json
 
-from dbt.config.renderer import DbtProjectYamlRenderer
+from dbt.config.renderer import PackageRenderer
 from dbt.config.project import package_config_from_data, load_yml_dict
 from dbt.constants import PACKAGE_LOCK_FILE_NAME, PACKAGE_LOCK_HASH_KEY
 from dbt.deps.base import downloads_directory
@@ -231,7 +231,10 @@ class DepsTask(BaseTask):
 
         packages_lock_dict = load_yml_dict(f"{self.project.project_root}/{PACKAGE_LOCK_FILE_NAME}")
 
-        packages_lock_config = package_config_from_data(packages_lock_dict).packages
+        renderer = PackageRenderer(self.cli_vars)
+        packages_lock_config = package_config_from_data(
+            renderer.render_data(packages_lock_dict), packages_lock_dict
+        ).packages
 
         if not packages_lock_config:
             fire_event(DepsNoPackagesFound())
@@ -239,7 +242,7 @@ class DepsTask(BaseTask):
 
         with downloads_directory():
             lock_defined_deps = resolve_lock_packages(packages_lock_config)
-            renderer = DbtProjectYamlRenderer(None, self.cli_vars)
+            renderer = PackageRenderer(self.cli_vars)
 
             packages_to_upgrade = []
 

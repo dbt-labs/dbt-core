@@ -8,6 +8,7 @@ import hashlib
 from mashumaro.types import SerializableType
 from typing import Optional, Union, List, Dict, Any, Sequence, Tuple, Iterator, Literal
 
+from dbt import deprecations
 from dbt.dataclass_schema import dbtClassMixin, ExtensibleDbtClassMixin
 
 from dbt.clients.system import write_file
@@ -21,6 +22,7 @@ from dbt.contracts.graph.semantic_models import (
     SourceFileMetadata,
 )
 from dbt.contracts.graph.unparsed import (
+    ConstantPropertyInput,
     Docs,
     ExposureType,
     ExternalTable,
@@ -43,10 +45,7 @@ from dbt.contracts.graph.node_args import ModelNodeArgs
 from dbt.contracts.graph.semantic_layer_common import WhereFilterIntersection
 from dbt.contracts.util import Replaceable, AdditionalPropertiesMixin
 from dbt.events.functions import warn_or_error
-from dbt.exceptions import (
-    ParsingError,
-    ContractBreakingChangeError,
-)
+from dbt.exceptions import ParsingError, ContractBreakingChangeError, ValidationError
 from dbt.events.types import (
     SeedIncreased,
     SeedExceedsLimitSamePath,
@@ -65,7 +64,11 @@ from dbt_semantic_interfaces.references import (
     TimeDimensionReference,
 )
 from dbt_semantic_interfaces.references import MetricReference as DSIMetricReference
-from dbt_semantic_interfaces.type_enums import MetricType, TimeGranularity
+from dbt_semantic_interfaces.type_enums import (
+    ConversionCalculationType,
+    MetricType,
+    TimeGranularity,
+)
 
 from .model_config import (
     NodeConfig,
@@ -1116,14 +1119,14 @@ class UnitTestDefinition(NodeInfoMixin, GraphNode, UnitTestDefinitionMandatory):
         tags = self.config.tags
         return [tags] if isinstance(tags, str) else tags
 
-    def build_unit_test_checksum(self, project_root: str, fixture_paths: List[str]):
+    def build_unit_test_checksum(self):
         # everything except 'description'
         data = f"{self.model}-{self.given}-{self.expect}-{self.overrides}"
 
         # include underlying fixture data
         for input in self.given:
             if input.fixture:
-                data += f"-{input.get_rows(project_root, fixture_paths)}"
+                data += f"-{input.rows}"
 
         self.checksum = hashlib.new("sha256", data.encode("utf-8")).hexdigest()
 
@@ -1132,6 +1135,12 @@ class UnitTestDefinition(NodeInfoMixin, GraphNode, UnitTestDefinitionMandatory):
             return False
 
         return self.checksum == other.checksum
+
+
+@dataclass
+class UnitTestFileFixture(BaseNode):
+    resource_type: Literal[NodeType.Fixture]
+    rows: Optional[List[Dict[str, Any]]] = None
 
 
 # ====================================
@@ -1237,6 +1246,24 @@ class UnpatchedSourceDefinition(BaseNode):
     def get_source_representation(self):
         return f'source("{self.source.name}", "{self.table.name}")'
 
+    def validate_data_tests(self):
+        """
+        sources parse tests differently than models, so we need to do some validation
+        here where it's done in the PatchParser for other nodes
+        """
+        for column in self.columns:
+            if column.tests and column.data_tests:
+                raise ValidationError(
+                    "Invalid test config: cannot have both 'tests' and 'data_tests' defined"
+                )
+            if column.tests:
+                deprecations.warn(
+                    "project-test-config",
+                    deprecated_path="tests",
+                    exp_path="data_tests",
+                )
+                column.data_tests = column.tests
+
     @property
     def quote_columns(self) -> Optional[bool]:
         result = None
@@ -1251,14 +1278,23 @@ class UnpatchedSourceDefinition(BaseNode):
         return [] if self.table.columns is None else self.table.columns
 
     def get_tests(self) -> Iterator[Tuple[Dict[str, Any], Optional[UnparsedColumn]]]:
-        for test in self.tests:
-            yield normalize_test(test), None
+        self.validate_data_tests()
+        for data_test in self.data_tests:
+            yield normalize_test(data_test), None
 
         for column in self.columns:
-            if column.tests is not None:
-                for test in column.tests:
-                    yield normalize_test(test), column
+            if column.data_tests is not None:
+                for data_test in column.data_tests:
+                    yield normalize_test(data_test), column
 
+    @property
+    def data_tests(self) -> List[TestDef]:
+        if self.table.data_tests is None:
+            return []
+        else:
+            return self.table.data_tests
+
+    # deprecated
     @property
     def tests(self) -> List[TestDef]:
         if self.table.tests is None:
@@ -1520,6 +1556,16 @@ class MetricInput(dbtClassMixin):
 
 
 @dataclass
+class ConversionTypeParams(dbtClassMixin):
+    base_measure: MetricInputMeasure
+    conversion_measure: MetricInputMeasure
+    entity: str
+    calculation: ConversionCalculationType = ConversionCalculationType.CONVERSION_RATE
+    window: Optional[MetricTimeWindow] = None
+    constant_properties: Optional[List[ConstantPropertyInput]] = None
+
+
+@dataclass
 class MetricTypeParams(dbtClassMixin):
     measure: Optional[MetricInputMeasure] = None
     input_measures: List[MetricInputMeasure] = field(default_factory=list)
@@ -1529,6 +1575,7 @@ class MetricTypeParams(dbtClassMixin):
     window: Optional[MetricTimeWindow] = None
     grain_to_date: Optional[TimeGranularity] = None
     metrics: Optional[List[MetricInput]] = None
+    conversion_type_params: Optional[ConversionTypeParams] = None
 
 
 @dataclass

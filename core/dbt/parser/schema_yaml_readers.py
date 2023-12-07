@@ -17,6 +17,7 @@ from dbt.contracts.graph.unparsed import (
     UnparsedQueryParams,
     UnparsedSavedQuery,
     UnparsedSemanticModel,
+    UnparsedConversionTypeParams,
 )
 from dbt.contracts.graph.model_config import SavedQueryConfig
 from dbt.contracts.graph.nodes import (
@@ -29,6 +30,7 @@ from dbt.contracts.graph.nodes import (
     MetricTypeParams,
     SemanticModel,
     SavedQuery,
+    ConversionTypeParams,
 )
 from dbt.contracts.graph.saved_queries import Export, ExportConfig, QueryParams
 from dbt.contracts.graph.semantic_layer_common import WhereFilter, WhereFilterIntersection
@@ -52,6 +54,7 @@ from dbt.clients.jinja import get_rendered
 from dbt.dataclass_schema import ValidationError
 from dbt_semantic_interfaces.type_enums import (
     AggregationType,
+    ConversionCalculationType,
     DimensionType,
     EntityType,
     MetricType,
@@ -226,7 +229,7 @@ class MetricParser(YamlReader):
                     self.yaml.path,
                     "window",
                     {"window": unparsed_window},
-                    f"Invalid window ({unparsed_window}) in cumulative metric. Should be of the form `<count> <granularity>`, "
+                    f"Invalid window ({unparsed_window}) in cumulative/conversion metric. Should be of the form `<count> <granularity>`, "
                     "e.g., `28 days`",
                 )
 
@@ -240,7 +243,7 @@ class MetricParser(YamlReader):
                     self.yaml.path,
                     "window",
                     {"window": unparsed_window},
-                    f"Invalid time granularity {granularity} in cumulative metric window string: ({unparsed_window})",
+                    f"Invalid time granularity {granularity} in cumulative/conversion metric window string: ({unparsed_window})",
                 )
 
             count = parts[0]
@@ -249,7 +252,7 @@ class MetricParser(YamlReader):
                     self.yaml.path,
                     "window",
                     {"window": unparsed_window},
-                    f"Invalid count ({count}) in cumulative metric window string: ({unparsed_window})",
+                    f"Invalid count ({count}) in cumulative/conversion metric window string: ({unparsed_window})",
                 )
 
             return MetricTimeWindow(
@@ -295,6 +298,20 @@ class MetricParser(YamlReader):
 
         return metric_inputs
 
+    def _get_optional_conversion_type_params(
+        self, unparsed: Optional[UnparsedConversionTypeParams]
+    ) -> Optional[ConversionTypeParams]:
+        if unparsed is None:
+            return None
+        return ConversionTypeParams(
+            base_measure=self._get_input_measure(unparsed.base_measure),
+            conversion_measure=self._get_input_measure(unparsed.conversion_measure),
+            entity=unparsed.entity,
+            calculation=ConversionCalculationType(unparsed.calculation),
+            window=self._get_time_window(unparsed.window),
+            constant_properties=unparsed.constant_properties,
+        )
+
     def _get_metric_type_params(self, type_params: UnparsedMetricTypeParams) -> MetricTypeParams:
         grain_to_date: Optional[TimeGranularity] = None
         if type_params.grain_to_date is not None:
@@ -308,6 +325,9 @@ class MetricParser(YamlReader):
             window=self._get_time_window(type_params.window),
             grain_to_date=grain_to_date,
             metrics=self._get_metric_inputs(type_params.metrics),
+            conversion_type_params=self._get_optional_conversion_type_params(
+                type_params.conversion_type_params
+            )
             # input measures are calculated via metric processing post parsing
             # input_measures=?,
         )

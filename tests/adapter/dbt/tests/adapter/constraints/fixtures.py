@@ -279,7 +279,7 @@ models:
             expression: (id > 0)
           - type: check
             expression: id >= 1
-        tests:
+        data_tests:
           - unique
       - name: color
         data_type: text
@@ -298,7 +298,7 @@ models:
           - type: primary_key
           - type: check
             expression: (id > 0)
-        tests:
+        data_tests:
           - unique
       - name: color
         data_type: text
@@ -317,7 +317,7 @@ models:
           - type: primary_key
           - type: check
             expression: (id > 0)
-        tests:
+        data_tests:
           - unique
       - name: color
         data_type: text
@@ -336,7 +336,7 @@ models:
           - type: primary_key
           - type: check
             expression: (id > 0)
-        tests:
+        data_tests:
           - unique
       - name: color
         data_type: text
@@ -365,7 +365,7 @@ models:
           - type: foreign_key
             expression: {schema}.foreign_key_model (id)
           - type: unique
-        tests:
+        data_tests:
           - unique
       - name: color
         data_type: text
@@ -384,7 +384,7 @@ models:
           - type: primary_key
           - type: check
             expression: (id > 0)
-        tests:
+        data_tests:
           - unique
       - name: color
         data_type: text
@@ -403,7 +403,7 @@ models:
           - type: primary_key
           - type: check
             expression: (id > 0)
-        tests:
+        data_tests:
           - unique
       - name: color
         data_type: text
@@ -422,7 +422,7 @@ models:
           - type: primary_key
           - type: check
             expression: (id > 0)
-        tests:
+        data_tests:
           - unique
       - name: color
         data_type: text
@@ -466,7 +466,7 @@ models:
         description: hello
         constraints:
           - type: not_null
-        tests:
+        data_tests:
           - unique
       - name: color
         data_type: text
@@ -517,7 +517,7 @@ models:
         description: hello
         constraints:
           - type: not_null
-        tests:
+        data_tests:
           - unique
       - name: from  # reserved word
         quote: true

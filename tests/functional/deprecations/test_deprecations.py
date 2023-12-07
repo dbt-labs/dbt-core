@@ -3,32 +3,11 @@ import pytest
 from dbt import deprecations
 import dbt.exceptions
 from dbt.tests.util import run_dbt
-
-
-models__already_exists_sql = """
-select 1 as id
-
-{% if adapter.already_exists(this.schema, this.identifier) and not should_full_refresh() %}
-    where id > (select max(id) from {{this}})
-{% endif %}
-"""
-
-models_trivial__model_sql = """
-select 1 as id
-"""
-
-
-bad_name_yaml = """
-version: 2
-
-exposures:
-  - name: simple exposure spaced!!
-    type: dashboard
-    depends_on:
-      - ref('model')
-    owner:
-      email: something@example.com
-"""
+from tests.functional.deprecations.fixtures import (
+    models_trivial__model_sql,
+    models__already_exists_sql,
+    bad_name_yaml,
+)
 
 
 class TestConfigPathDeprecation:

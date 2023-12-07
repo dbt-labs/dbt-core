@@ -72,11 +72,11 @@ class SchemaGenericTestParser(SimpleParser):
     def parse_column_tests(
         self, block: TestBlock, column: UnparsedColumn, version: Optional[NodeVersion]
     ) -> None:
-        if not column.tests:
+        if not column.data_tests:
             return
 
-        for test in column.tests:
-            self.parse_test(block, test, column, version)
+        for data_test in column.data_tests:
+            self.parse_test(block, data_test, column, version)
 
     def create_test_node(
         self,
@@ -148,7 +148,7 @@ class SchemaGenericTestParser(SimpleParser):
     def parse_generic_test(
         self,
         target: Testable,
-        test: Dict[str, Any],
+        data_test: Dict[str, Any],
         tags: List[str],
         column_name: Optional[str],
         schema_file_id: str,
@@ -156,7 +156,7 @@ class SchemaGenericTestParser(SimpleParser):
     ) -> GenericTestNode:
         try:
             builder = TestBuilder(
-                test=test,
+                data_test=data_test,
                 target=target,
                 column_name=column_name,
                 version=version,
@@ -321,7 +321,7 @@ class SchemaGenericTestParser(SimpleParser):
         """
         node = self.parse_generic_test(
             target=block.target,
-            test=block.test,
+            data_test=block.data_test,
             tags=block.tags,
             column_name=block.column_name,
             schema_file_id=block.file.file_id,
@@ -357,12 +357,12 @@ class SchemaGenericTestParser(SimpleParser):
     def parse_test(
         self,
         target_block: TestBlock,
-        test: TestDef,
+        data_test: TestDef,
         column: Optional[UnparsedColumn],
         version: Optional[NodeVersion],
     ) -> None:
-        if isinstance(test, str):
-            test = {test: {}}
+        if isinstance(data_test, str):
+            data_test = {data_test: {}}
 
         if column is None:
             column_name: Optional[str] = None
@@ -376,7 +376,7 @@ class SchemaGenericTestParser(SimpleParser):
 
         block = GenericTestBlock.from_test_block(
             src=target_block,
-            test=test,
+            data_test=data_test,
             column_name=column_name,
             tags=column_tags,
             version=version,
@@ -387,8 +387,8 @@ class SchemaGenericTestParser(SimpleParser):
         for column in block.columns:
             self.parse_column_tests(block, column, None)
 
-        for test in block.tests:
-            self.parse_test(block, test, None, None)
+        for data_test in block.data_tests:
+            self.parse_test(block, data_test, None, None)
 
     def parse_versioned_tests(self, block: VersionedTestBlock) -> None:
         if not block.target.versions:

@@ -72,7 +72,7 @@ sources:
       - name: raw_customers
         columns:
           - name: id
-            tests:
+            data_tests:
               - not_null:
                   severity: "{{ 'error' if target.name == 'prod' else 'warn' }}"
               - unique

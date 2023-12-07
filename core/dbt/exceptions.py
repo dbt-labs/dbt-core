@@ -1319,26 +1319,26 @@ class TestArgsNotDictError(ParsingError):
 
 
 class TestDefinitionDictLengthError(ParsingError):
-    def __init__(self, test):
-        self.test = test
+    def __init__(self, data_test):
+        self.data_test = data_test
         super().__init__(msg=self.get_message())
 
     def get_message(self) -> str:
 
         msg = (
             "test definition dictionary must have exactly one key, got"
-            f" {self.test} instead ({len(self.test)} keys)"
+            f" {self.data_test} instead ({len(self.data_test)} keys)"
         )
         return msg
 
 
 class TestTypeError(ParsingError):
-    def __init__(self, test: Any):
-        self.test = test
+    def __init__(self, data_test: Any):
+        self.data_test = data_test
         super().__init__(msg=self.get_message())
 
     def get_message(self) -> str:
-        msg = f"test must be dict or str, got {type(self.test)} (value {self.test})"
+        msg = f"test must be dict or str, got {type(self.data_test)} (value {self.data_test})"
         return msg
 
 
@@ -2186,7 +2186,7 @@ class DuplicateResourceNameError(CompilationError):
             model_name = self.node_1.file_key_name
             duped_name = f'{self.node_1.name}" defined on {column_name}"{model_name}'
             action = "running"
-            formatted_name = "tests"
+            formatted_name = "data tests"
         # all other resource types
         else:
             formatted_name = duped_name

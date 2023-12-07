@@ -70,10 +70,8 @@ class TestUnitTestStateModified(UnitTestState):
             "fixtures",
             "test_my_model_fixture.csv",
         )
-        # TODO: remove --no-partial-parse as part of https://github.com/dbt-labs/dbt-core/issues/9067
         results = run_dbt(
-            ["--no-partial-parse", "test", "--select", "state:modified", "--state", "state"],
-            expect_pass=True,
+            ["test", "--select", "state:modified", "--state", "state"], expect_pass=True
         )
         assert len(results) == 1
         assert results[0].node.name.endswith("test_depends_on_fixture")
