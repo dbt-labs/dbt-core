@@ -275,16 +275,7 @@ class GraphRunnableTask(ConfiguredTask):
             self.job_queue.mark_done(result.node.unique_id)
 
         while not self.job_queue.empty():
-            node = self.job_queue.get()
-            self._raise_set_error()
-            runner = self.get_runner(node)
-            # we finally know what we're running! Make sure we haven't decided
-            # to skip it due to upstream failures
-            if runner.node.unique_id in self._skipped_children:
-                cause = self._skipped_children.pop(runner.node.unique_id)
-                runner.do_skip(cause=cause)
-            args = (runner,)
-            self._submit(pool, args, callback)
+            self.handle_job_queue(pool, callback)
 
         # block on completion
         if get_flags().FAIL_FAST:
@@ -300,6 +291,18 @@ class GraphRunnableTask(ConfiguredTask):
         self._raise_set_error()
 
         return
+
+    def handle_job_queue(self, pool, callback):
+        node = self.job_queue.get()
+        self._raise_set_error()
+        runner = self.get_runner(node)
+        # we finally know what we're running! Make sure we haven't decided
+        # to skip it due to upstream failures
+        if runner.node.unique_id in self._skipped_children:
+            cause = self._skipped_children.pop(runner.node.unique_id)
+            runner.do_skip(cause=cause)
+        args = (runner,)
+        self._submit(pool, args, callback)
 
     def _handle_result(self, result: RunResult):
         """Mark the result as completed, insert the `CompileResultNode` into

@@ -8,7 +8,7 @@ from .test import TestRunner as test_runner
 from dbt.adapters.factory import get_adapter
 from dbt.contracts.results import NodeStatus
 from dbt.exceptions import DbtInternalError
-from dbt.graph import ResourceTypeSelector, GraphQueue
+from dbt.graph import ResourceTypeSelector, GraphQueue, Graph
 from dbt.node_types import NodeType
 from dbt.task.test import TestSelector
 from dbt.task.base import BaseRunner
@@ -129,6 +129,34 @@ class BuildTask(RunTask):
         # in the node_selector (filter_selection).
         return selector_wo_unit_tests.get_graph_queue(spec)
 
+    def handle_job_queue(self, pool, callback):
+        # special callback because mark_done won't work on unit tests since
+        # they're not actually in the job_queue
+        def ut_callback(result):
+            """Note: mark_done, at a minimum, must happen here or dbt will
+            deadlock during ephemeral result error handling!
+            """
+            self._handle_result(result)
+
+        node = self.job_queue.get()
+        if node.resource_type == NodeType.Model and self.model_to_unit_test_map[node.unique_id]:
+            for unit_test_unique_id in self.model_to_unit_test_map[node.unique_id]:
+                unit_test_node = self.manifest.unit_tests[unit_test_unique_id]
+                self.handle_job_queue_node(unit_test_node, pool, ut_callback)
+            # _mark_dependent_errors won't work for this so we'll have to kludge somehow
+        self.handle_job_queue_node(node, pool, callback)
+
+    def handle_job_queue_node(self, node, pool, callback):
+        self._raise_set_error()
+        runner = self.get_runner(node)
+        # we finally know what we're running! Make sure we haven't decided
+        # to skip it due to upstream failures
+        if runner.node.unique_id in self._skipped_children:
+            cause = self._skipped_children.pop(runner.node.unique_id)
+            runner.do_skip(cause=cause)
+        args = (runner,)
+        self._submit(pool, args, callback)
+
     def build_model_to_unit_test_map(self, selected_unit_tests):
         dct = {}
         for unit_test_unique_id in selected_unit_tests:
@@ -161,9 +189,9 @@ class BuildTask(RunTask):
     def get_runner_type(self, node):
         return self.RUNNER_MAP.get(node.resource_type)
 
-    def compile_manifest(self):
+    def compile_manifest(self) -> None:
         if self.manifest is None:
             raise DbtInternalError("compile_manifest called before manifest was loaded")
         adapter = get_adapter(self.config)
         compiler = adapter.get_compiler()
-        self.graph = compiler.compile(self.manifest, add_test_edges=True)
+        self.graph: Graph = compiler.compile(self.manifest, add_test_edges=True)
