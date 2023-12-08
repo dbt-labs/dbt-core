@@ -1,0 +1,6 @@
+kind: Fixes
+body: Clean up whitespace in array_construct macro
+time: 2023-12-08T15:41:29.095036354+01:00
+custom:
+  Author: barskern
+  Issue: "9257"
