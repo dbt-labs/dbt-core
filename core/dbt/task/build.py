@@ -88,24 +88,23 @@ class BuildTask(RunTask):
     }
     ALL_RESOURCE_VALUES = frozenset({x for x in RUNNER_MAP.keys()})
 
-    @property
     def resource_types(self, no_unit_tests=False):
         if self.args.include_saved_query:
             self.RUNNER_MAP[NodeType.SavedQuery] = SavedQueryRunner
             self.ALL_RESOURCE_VALUES = self.ALL_RESOURCE_VALUES.union({NodeType.SavedQuery})
 
         if not self.args.resource_types:
-            return list(self.ALL_RESOURCE_VALUES)
+            resource_types = list(self.ALL_RESOURCE_VALUES)
+        else:
+            resource_types = set(self.args.resource_types)
 
-        values = set(self.args.resource_types)
+            if "all" in resource_types:
+                resource_types.remove("all")
+                resource_types.update(self.ALL_RESOURCE_VALUES)
 
-        if "all" in values:
-            values.remove("all")
-            values.update(self.ALL_RESOURCE_VALUES)
-
-        if no_unit_tests is True and NodeType.Unit in values:
-            values.remove(NodeType.Unit)
-        return list(values)
+        if no_unit_tests is True and NodeType.Unit in resource_types:
+            resource_types.remove(NodeType.Unit)
+        return list(resource_types)
 
     def get_graph_queue(self) -> GraphQueue:
         # Following uses self.selection_arg and self.exclusion_arg
@@ -124,11 +123,21 @@ class BuildTask(RunTask):
         # Get the difference in the sets of nodes with and without unit tests and
         # save it
         selected_unit_tests = full_selected_nodes - selected_nodes_wo_unit_tests
-        self.selected_unit_tests = selected_unit_tests
+        self.build_model_to_unit_test_map(selected_unit_tests)
 
         # get_graph_queue in the selector will remove NodeTypes not specified
         # in the node_selector (filter_selection).
         return selector_wo_unit_tests.get_graph_queue(spec)
+
+    def build_model_to_unit_test_map(self, selected_unit_tests):
+        dct = {}
+        for unit_test_unique_id in selected_unit_tests:
+            unit_test = self.manifest.unit_tests[unit_test_unique_id]
+            model_unique_id = unit_test.depends_on.nodes[0]
+            if model_unique_id not in dct:
+                dct[model_unique_id] = []
+            dct[model_unique_id].append(unit_test.unique_id)
+        self.model_to_unit_test_map = dct
 
     def get_node_selector(self, no_unit_tests=False) -> ResourceTypeSelector:
         if self.manifest is None or self.graph is None:
