@@ -19,6 +19,7 @@ from typing import (
 from itertools import chain
 import time
 
+from dbt.context.manifest import generate_query_header_context
 from dbt.contracts.graph.semantic_manifest import SemanticManifest
 from dbt.common.events.base_types import EventLevel
 import json
@@ -1003,7 +1004,9 @@ class ManifestLoader:
         adapter.set_macro_resolver(macro_manifest)
         # This executes the callable macro_hook and sets the
         # query headers
-        self.macro_hook(macro_manifest)
+        # This executes the callable macro_hook and sets the query headers
+        query_header_context = generate_query_header_context(adapter.config, macro_manifest)
+        self.macro_hook(query_header_context)
 
     # This creates a MacroManifest which contains the macros in
     # the adapter. Only called by the load_macros call from the

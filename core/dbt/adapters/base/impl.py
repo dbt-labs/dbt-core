@@ -54,7 +54,10 @@ from dbt.common.exceptions import (
     MacroResultError,
 )
 
-from dbt.adapters.protocol import AdapterConfig
+from dbt.adapters.protocol import (
+    AdapterConfig,
+    MacroContextGeneratorCallable,
+)
 from dbt.common.clients.agate_helper import (
     empty_table,
     get_column_value_uncased,
@@ -62,7 +65,7 @@ from dbt.common.clients.agate_helper import (
     table_from_rows,
     Integer,
 )
-from dbt.common.clients.jinja import CallableMacroGenerator, MacroProtocol
+from dbt.common.clients.jinja import CallableMacroGenerator
 from dbt.common.events.functions import fire_event, warn_or_error
 from dbt.adapters.events.types import (
     CacheMiss,
@@ -80,7 +83,6 @@ from dbt.adapters.base.connections import (
     Connection,
     AdapterResponse,
     BaseConnectionManager,
-    AdapterRequiredConfig,
 )
 from dbt.adapters.base.meta import AdapterMeta, available
 from dbt.adapters.base.relation import (
@@ -263,12 +265,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         self.cache = RelationsCache(log_cache_events=config.log_cache_events)
         self.connections = self.ConnectionManager(config, mp_context)
         self._macro_resolver: Optional[MacroResolverProtocol] = None
-        self._macro_context_generator: Optional[
-            Callable[
-                [MacroProtocol, AdapterRequiredConfig, MacroResolverProtocol, Optional[str]],
-                Dict[str, Any],
-            ]
-        ] = None
+        self._macro_context_generator: Optional[MacroContextGeneratorCallable] = None
 
     ###
     # Methods to set / access a macro resolver
@@ -285,10 +282,7 @@ class BaseAdapter(metaclass=AdapterMeta):
 
     def set_macro_context_generator(
         self,
-        macro_context_generator: Callable[
-            [MacroProtocol, AdapterRequiredConfig, MacroResolverProtocol, Optional[str]],
-            Dict[str, Any],
-        ],
+        macro_context_generator: MacroContextGeneratorCallable,
     ) -> None:
         self._macro_context_generator = macro_context_generator
 

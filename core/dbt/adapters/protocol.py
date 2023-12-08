@@ -9,7 +9,6 @@ from typing import (
     TypeVar,
     Tuple,
     Any,
-    Callable,
     Dict,
 )
 from typing_extensions import Protocol
@@ -21,7 +20,6 @@ from dbt.adapters.contracts.macros import MacroResolverProtocol
 from dbt.adapters.contracts.relation import Policy, HasQuoting, RelationConfig
 from dbt.common.contracts.config.base import BaseConfig
 from dbt.common.clients.jinja import MacroProtocol
-from dbt.contracts.graph.manifest import Manifest
 
 
 @dataclass
@@ -58,6 +56,17 @@ Relation_T = TypeVar("Relation_T", bound=RelationProtocol)
 Column_T = TypeVar("Column_T", bound=ColumnProtocol)
 
 
+class MacroContextGeneratorCallable(Protocol):
+    def __call__(
+        self,
+        macro_protocol: MacroProtocol,
+        config: AdapterRequiredConfig,
+        macro_resolver: MacroResolverProtocol,
+        package_name: Optional[str],
+    ) -> Dict[str, Any]:
+        ...
+
+
 # TODO CT-211
 class AdapterProtocol(  # type: ignore[misc]
     Protocol,
@@ -91,10 +100,7 @@ class AdapterProtocol(  # type: ignore[misc]
 
     def set_macro_context_generator(
         self,
-        macro_context_generator: Callable[
-            [MacroProtocol, AdapterRequiredConfig, MacroResolverProtocol, Optional[str]],
-            Dict[str, Any],
-        ],
+        macro_context_generator: MacroContextGeneratorCallable,
     ) -> None:
         ...
 
@@ -102,7 +108,7 @@ class AdapterProtocol(  # type: ignore[misc]
     def type(cls) -> str:
         pass
 
-    def set_query_header(self, manifest: Manifest) -> None:
+    def set_query_header(self, query_header_context: Dict[str, Any]) -> None:
         ...
 
     @staticmethod
