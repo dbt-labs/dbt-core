@@ -327,8 +327,11 @@ class NodeSelector(MethodManager):
         """Returns a queue over nodes in the graph that tracks progress of
         dependecies.
         """
+        # Filtering hapens in get_selected
         selected_nodes = self.get_selected(spec)
+        # Save to global variable
         selected_resources.set_selected_resources(selected_nodes)
+        # Construct a new graph using the selected_nodes
         new_graph = self.full_graph.get_subset_graph(selected_nodes)
         # should we give a way here for consumers to mutate the graph?
         return GraphQueue(new_graph.graph, self.manifest, selected_nodes)

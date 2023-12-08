@@ -89,7 +89,7 @@ class BuildTask(RunTask):
     ALL_RESOURCE_VALUES = frozenset({x for x in RUNNER_MAP.keys()})
 
     @property
-    def resource_types(self):
+    def resource_types(self, no_unit_tests=False):
         if self.args.include_saved_query:
             self.RUNNER_MAP[NodeType.SavedQuery] = SavedQueryRunner
             self.ALL_RESOURCE_VALUES = self.ALL_RESOURCE_VALUES.union({NodeType.SavedQuery})
@@ -103,19 +103,38 @@ class BuildTask(RunTask):
             values.remove("all")
             values.update(self.ALL_RESOURCE_VALUES)
 
+        if no_unit_tests is True and NodeType.Unit in values:
+            values.remove(NodeType.Unit)
         return list(values)
 
     def get_graph_queue(self) -> GraphQueue:
-        selector = self.get_node_selector()
         # Following uses self.selection_arg and self.exclusion_arg
         spec = self.get_selection_spec()
-        return selector.get_graph_queue(spec)
 
-    def get_node_selector(self) -> ResourceTypeSelector:
+        # selector including unit tests
+        full_selector = self.get_node_selector(no_unit_tests=False)
+        # selected node unique_ids with unit_tests
+        full_selected_nodes = full_selector.get_selected(spec)
+
+        # This selector removes the unit_tests from the selector
+        selector_wo_unit_tests = self.get_node_selector(no_unit_tests=True)
+        # selected node unique_ids without unit_tests
+        selected_nodes_wo_unit_tests = selector_wo_unit_tests.get_selected(spec)
+
+        # Get the difference in the sets of nodes with and without unit tests and
+        # save it
+        selected_unit_tests = full_selected_nodes - selected_nodes_wo_unit_tests
+        self.selected_unit_tests = selected_unit_tests
+
+        # get_graph_queue in the selector will remove NodeTypes not specified
+        # in the node_selector (filter_selection).
+        return selector_wo_unit_tests.get_graph_queue(spec)
+
+    def get_node_selector(self, no_unit_tests=False) -> ResourceTypeSelector:
         if self.manifest is None or self.graph is None:
             raise DbtInternalError("manifest and graph must be set to get node selection")
 
-        resource_types = self.resource_types
+        resource_types = self.resource_types(no_unit_tests)
 
         if resource_types == [NodeType.Test]:
             return TestSelector(
