@@ -133,9 +133,6 @@ class BuildTask(RunTask):
         # special callback because mark_done won't work on unit tests since
         # they're not actually in the job_queue
         def ut_callback(result):
-            """Note: mark_done, at a minimum, must happen here or dbt will
-            deadlock during ephemeral result error handling!
-            """
             self._handle_result(result)
 
         node = self.job_queue.get()
@@ -143,7 +140,14 @@ class BuildTask(RunTask):
             for unit_test_unique_id in self.model_to_unit_test_map[node.unique_id]:
                 unit_test_node = self.manifest.unit_tests[unit_test_unique_id]
                 self.handle_job_queue_node(unit_test_node, pool, ut_callback)
-            # _mark_dependent_errors won't work for this so we'll have to kludge somehow
+                # _mark_dependent_errors won't work for this so set in skipped_children directly
+                if unit_test_node._event_status["node_status"] in [
+                    NodeStatus.Error,
+                    NodeStatus.Fail,
+                ]:
+                    # _skipped_children contains a run_results for ephemeral nodes, but that
+                    # should never be the case here.
+                    self._skipped_children[node.unique_id] = None
         self.handle_job_queue_node(node, pool, callback)
 
     def handle_job_queue_node(self, node, pool, callback):
