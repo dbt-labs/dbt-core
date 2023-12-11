@@ -7,6 +7,8 @@ from dbt.tests.util import run_dbt, get_manifest
 
 
 from tests.functional.metrics.fixtures import (
+    conversion_semantic_model_purchasing_yml,
+    conversion_metric_yml,
     mock_purchase_data_csv,
     models_people_sql,
     models_people_metrics_yml,
@@ -339,3 +341,61 @@ class TestInvalidTimestampWindowMetrics:
         # initial run
         with pytest.raises(ParsingError):
             run_dbt(["run"])
+
+
+class TestConversionMetric:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "purchasing.sql": purchasing_model_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+            "semantic_models.yml": conversion_semantic_model_purchasing_yml,
+            "conversion_metric.yml": conversion_metric_yml,
+        }
+
+    @pytest.fixture(scope="class")
+    def seeds(self):
+        return {
+            "mock_purchase_data.csv": mock_purchase_data_csv,
+        }
+
+    def test_conversion_metric(
+        self,
+        project,
+    ):
+        # initial parse
+        runner = dbtRunner()
+        result = runner.invoke(["parse"])
+        assert result.success
+        assert isinstance(result.result, Manifest)
+
+        # make sure the metric is in the manifest
+        manifest = get_manifest(project.project_root)
+        metric_ids = list(manifest.metrics.keys())
+        expected_metric_ids = [
+            "metric.test.converted_orders_over_visits",
+        ]
+        assert metric_ids == expected_metric_ids
+        assert manifest.metrics[
+            "metric.test.converted_orders_over_visits"
+        ].type_params.conversion_type_params
+        assert (
+            len(
+                manifest.metrics[
+                    "metric.test.converted_orders_over_visits"
+                ].type_params.input_measures
+            )
+            == 2
+        )
+        assert (
+            manifest.metrics[
+                "metric.test.converted_orders_over_visits"
+            ].type_params.conversion_type_params.window
+            is None
+        )
+        assert (
+            manifest.metrics[
+                "metric.test.converted_orders_over_visits"
+            ].type_params.conversion_type_params.entity
+            == "purchase"
+        )
