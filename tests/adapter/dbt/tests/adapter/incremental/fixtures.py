@@ -149,6 +149,38 @@ from source_data where id <= 3
 {% endif %}
 """
 
+_MODELS__INCREMENTAL_SYNC_ALL_QUOTED_COLUMNS = """
+{{
+    config(
+        materialized='incremental',
+        unique_key='id',
+        on_schema_change='sync_all_columns'
+
+    )
+}}
+
+WITH source_data AS (SELECT * FROM {{ ref('model_b') }} )
+
+{% set string_type = dbt.type_string() %}
+
+{% if is_incremental() %}
+
+SELECT id
+       ,CAST ('new incremental field' AS {{string_type}}) AS "new incremental quoted field"
+
+FROM source_data WHERE id NOT IN (SELECT id FROM {{ this }} )
+ORDER BY id
+
+{% else %}
+
+SELECT *
+
+FROM source_data WHERE id <= 3
+ORDER BY id
+
+{% endif %}
+"""
+
 _MODELS__INCREMENTAL_APPEND_NEW_COLUMNS_REMOVE_ONE = """
 {{
     config(
@@ -201,6 +233,31 @@ select id
        ,field2
        ,field3
        ,field4
+
+from source_data
+"""
+
+_MODELS__B = """
+{{
+    config(materialized='table')
+}}
+
+with source_data as (
+
+    select 1 as id, 'aaa' as "space field", 'bbb' as "special!@#.%^*field", 111 as "3field", 'TTT' as "фиелд4"
+    union all select 2 as id, 'ccc' as "space field", 'ddd' as "special!@#.%^*field", 222 as "3field", 'UUU' as "фиелд4"
+    union all select 3 as id, 'eee' as "space field", 'fff' as "special!@#.%^*field", 333 as "3field", 'VVV' as "фиелд4"
+    union all select 4 as id, 'ggg' as "space field", 'hhh' as "special!@#.%^*field", 444 as "3field", 'WWW' as "фиелд4"
+    union all select 5 as id, 'iii' as "space field", 'jjj' as "special!@#.%^*field", 555 as "3field", 'XXX' as "фиелд4"
+    union all select 6 as id, 'kkk' as "space field", 'lll' as "special!@#.%^*field", 666 as "3field", 'YYY' as "фиелд4"
+
+)
+
+select id
+       ,"space field"
+       ,"special!@#.%^*field"
+       ,"3field"
+       ,"фиелд4"
 
 from source_data
 """
@@ -277,6 +334,26 @@ select id
        --,field2
        ,cast(case when id <= 3 then null else field3 end as {{string_type}}) as field3
        ,cast(case when id <= 3 then null else field4 end as {{string_type}}) as field4
+
+from source_data
+order by id
+"""
+
+_MODELS__INCREMENTAL_SYNC_ALL_QUOTED_COLUMNS_TARGET = """
+{{
+    config(materialized='table')
+}}
+
+with source_data as (
+
+    select * from {{ ref('model_b') }}
+
+)
+
+{% set string_type = dbt.type_string() %}
+
+select id
+       ,cast(case when id <= 3 then null else 'new incremental field' end as {{string_type}}) as "new incremental quoted field"
 
 from source_data
 order by id
