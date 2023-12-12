@@ -861,7 +861,10 @@ def manifest(
         disabled=[],
         selectors={},
         groups={},
-        metadata=ManifestMetadata(adapter_type="postgres"),
+        metadata=ManifestMetadata(
+            adapter_type="postgres",
+            project_name="pkg",
+        ),
     )
     return manifest
 
@@ -1123,6 +1126,28 @@ def test_select_package(manifest):
     assert method.arguments == []
 
     assert search_manifest_using_method(manifest, method, "pkg") == {
+        "union_model",
+        "versioned_model.v1",
+        "versioned_model.v2",
+        "versioned_model.v3",
+        "versioned_model.v4",
+        "versioned_model.v12",
+        "table_model",
+        "table_model_py",
+        "table_model_csv",
+        "view_model",
+        "ephemeral_model",
+        "seed",
+        "raw.seed",
+        "unique_table_model_id",
+        "not_null_table_model_id",
+        "unique_view_model_id",
+        "view_test_nothing",
+        "mynamespace.seed",
+        "mynamespace.ephemeral_model",
+        "mynamespace.union_model",
+    }
+    assert search_manifest_using_method(manifest, method, ".") == {
         "union_model",
         "versioned_model.v1",
         "versioned_model.v2",
