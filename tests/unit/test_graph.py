@@ -19,6 +19,7 @@ from dbt.contracts.files import SourceFile, FileHash, FilePath
 from dbt.contracts.graph.manifest import MacroManifest, ManifestStateCheck
 from dbt.graph import NodeSelector, parse_difference
 from dbt.events.logging import setup_event_logger
+from dbt.mp_context import get_mp_context
 
 try:
     from queue import Empty
@@ -153,7 +154,7 @@ class GraphTest(unittest.TestCase):
 
     def load_manifest(self, config):
         inject_plugin(PostgresPlugin)
-        register_adapter(config)
+        register_adapter(config, get_mp_context())
         loader = dbt.parser.manifest.ManifestLoader(config, {config.project_name: config})
         loader.manifest.macros = self.macro_manifest.macros
         loader.load()

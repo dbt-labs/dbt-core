@@ -26,6 +26,7 @@ from dbt.clients.yaml_helper import load_yaml_text
 from dbt.links import ProfileConfigDocs
 from dbt.common.ui import green, red
 from dbt.common.events.format import pluralize
+from dbt.mp_context import get_mp_context
 from dbt.version import get_installed_version
 
 from dbt.task.base import BaseTask, get_nearest_project_dir
@@ -443,7 +444,7 @@ class DebugTask(BaseTask):
     @staticmethod
     def attempt_connection(profile) -> Optional[str]:
         """Return a string containing the error message, or None if there was no error."""
-        register_adapter(profile)
+        register_adapter(profile, get_mp_context())
         adapter = get_adapter(profile)
         try:
             with adapter.connection_named("debug"):

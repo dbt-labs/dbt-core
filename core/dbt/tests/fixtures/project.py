@@ -7,6 +7,7 @@ from datetime import datetime
 import warnings
 import yaml
 
+from dbt.mp_context import get_mp_context
 from dbt.parser.manifest import ManifestLoader
 from dbt.common.exceptions import CompilationError, DbtDatabaseError
 from dbt.context.providers import generate_runtime_macro_context
@@ -287,7 +288,7 @@ def adapter(
     )
     flags.set_from_args(args, {})
     runtime_config = RuntimeConfig.from_args(args)
-    register_adapter(runtime_config)
+    register_adapter(runtime_config, get_mp_context())
     adapter = get_adapter(runtime_config)
     # We only need the base macros, not macros from dependencies, and don't want
     # to run 'dbt deps' here.

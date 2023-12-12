@@ -1,5 +1,6 @@
 import dbt.tracking
 from dbt.common.invocation import reset_invocation_id
+from dbt.mp_context import get_mp_context
 from dbt.version import installed as installed_version
 from dbt.adapters.factory import adapter_management, register_adapter, get_adapter
 from dbt.flags import set_flags, get_flag_dict
@@ -274,7 +275,7 @@ def manifest(*args0, write=True, write_perf_info=False):
                 raise DbtProjectError("profile, project, and runtime_config required for manifest")
 
             runtime_config = ctx.obj["runtime_config"]
-            register_adapter(runtime_config)
+            register_adapter(runtime_config, get_mp_context())
             adapter = get_adapter(runtime_config)
             adapter.set_macro_context_generator(generate_runtime_macro_context)
 
