@@ -140,7 +140,7 @@ class BuildTask(RunTask):
             self._handle_result(result)
 
         node = self.job_queue.get()
-        if node.resource_type == NodeType.Model and self.model_to_unit_test_map[node.unique_id]:
+        if node.resource_type == NodeType.Model and node.unique_id in self.model_to_unit_test_map:
             for unit_test_unique_id in self.model_to_unit_test_map[node.unique_id]:
                 unit_test_node = self.manifest.unit_tests[unit_test_unique_id]
                 self.handle_job_queue_node(unit_test_node, pool, ut_callback)
