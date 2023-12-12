@@ -598,3 +598,33 @@ unit_tests:
       format: csv
       fixture: test_my_model_basic_fixture
 """
+
+top_level_domains_sql = """
+SELECT 'example.com' AS tld
+UNION ALL
+SELECT 'gmail.com' AS tld
+"""
+
+test_my_model_external_nodes_sql = """
+WITH
+accounts AS (
+  SELECT user_id, email, email_top_level_domain
+  FROM {{ ref('external_package', 'external_model')}}
+),
+top_level_domains AS (
+  SELECT tld FROM {{ ref('top_level_domains')}}
+),
+joined AS (
+  SELECT
+    accounts.user_id as user_id,
+    top_level_domains.tld as tld
+  FROM accounts
+  LEFT OUTER JOIN top_level_domains
+    ON   accounts.email_top_level_domain = top_level_domains.tld
+)
+
+SELECT
+  joined.user_id as user_id,
+  CASE WHEN joined.tld IS NULL THEN 'FALSE' ELSE 'TRUE' END AS is_valid_email_address
+from joined
+"""
