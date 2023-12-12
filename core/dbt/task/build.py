@@ -147,10 +147,15 @@ class BuildTask(RunTask):
                 # _mark_dependent_errors called in _handle_result won't work for this
                 # because the model is not dependent to the unit tests in the graph,
                 # so set in skipped_children directly
-                if unit_test_node._event_status in self.MARK_DEPENDENT_ERRORS_STATUSES:
+                if (
+                    "node_status" in unit_test_node._event_status
+                    and unit_test_node._event_status["node_status"]
+                    in self.MARK_DEPENDENT_ERRORS_STATUSES
+                ):
                     # The _skipped_children dictionary can contain a run_result for ephemeral nodes,
                     # but that should never be the case here.
                     self._skipped_children[node.unique_id] = None
+                unit_test_node.clear_event_status()
         self.handle_job_queue_node(node, pool, callback)
 
     # factor out the parts that are common to handling unit test and other nodes

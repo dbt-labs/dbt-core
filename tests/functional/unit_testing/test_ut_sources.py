@@ -1,5 +1,6 @@
 import pytest
-from dbt.tests.util import run_dbt
+from dbt.tests.util import run_dbt, write_file
+from dbt.contracts.results import RunStatus, TestStatus
 
 raw_customers_csv = """id,first_name,last_name,email
 1,Michael,Perez,mperez0@chronoengine.com
@@ -45,6 +46,18 @@ customers_sql = """
 select * from {{ source('seed_sources', 'raw_customers') }}
 """
 
+failing_test_schema_yml = """
+  - name: fail_test_customers
+    model: customers
+    given:
+      - input: source('seed_sources', 'raw_customers')
+        rows:
+          - {id: 1, first_name: Emily}
+    expect:
+      rows:
+        - {id: 1, first_name: Joan}
+"""
+
 
 class TestUnitTestSourceInput:
     @pytest.fixture(scope="class")
@@ -73,3 +86,18 @@ class TestUnitTestSourceInput:
         result_unique_ids = [result.node.unique_id for result in results]
         assert len(result_unique_ids) == 5
         assert "unit_test.test.customers.test_customers" in result_unique_ids
+
+        # write failing unit test
+        write_file(
+            schema_sources_yml + failing_test_schema_yml,
+            project.project_root,
+            "models",
+            "sources.yml",
+        )
+        results = run_dbt(["build"], expect_pass=False)
+        for result in results:
+            if result.node.unique_id == "model.test.customers":
+                assert result.status == RunStatus.Skipped
+            elif result.node.unique_id == "model.test.customers":
+                assert result.status == TestStatus.Fail
+        assert len(results) == 6
