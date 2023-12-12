@@ -1,4 +1,5 @@
 import pytest
+from unittest import mock
 from dbt.tests.util import (
     run_dbt,
     write_file,
@@ -6,6 +7,7 @@ from dbt.tests.util import (
 )
 from dbt.contracts.results import NodeStatus
 from dbt.exceptions import DuplicateResourceNameError, ParsingError
+from dbt.plugins.manifest import PluginNodes, ModelNodeArgs
 from fixtures import (
     my_model_sql,
     my_model_vars_sql,
@@ -17,6 +19,8 @@ from fixtures import (
     event_sql,
     test_my_model_incremental_yml,
     test_my_model_yml_invalid,
+    test_my_model_external_nodes_sql,
+    top_level_domains_sql,
 )
 
 
@@ -256,3 +260,61 @@ class TestUnitTestInvalidInputConfiguration:
         assert len(results) == 3
 
         run_dbt(["test"], expect_pass=False)
+
+
+test_unit_test_with_external_nodes_yml = """
+unit_tests:
+  - name: test_unit_test_with_external_nodes
+    model: test_my_model_external_nodes
+    given:
+      - input: ref('external_package', 'external_model')
+        rows:
+          - {user_id: 1, email: cool@example.com,     email_top_level_domain: example.com}
+          - {user_id: 2, email: cool@unknown.com,     email_top_level_domain: unknown.com}
+          - {user_id: 3, email: badgmail.com,         email_top_level_domain: gmail.com}
+          - {user_id: 4, email: missingdot@gmailcom,  email_top_level_domain: gmail.com}
+      - input: ref('top_level_domains')
+        rows:
+          - {tld: example.com}
+          - {tld: gmail.com}
+    expect:
+      rows:
+        - {user_id: 1, is_valid_email_address: true}
+        - {user_id: 2, is_valid_email_address: false}
+        - {user_id: 3, is_valid_email_address: true}
+        - {user_id: 4, is_valid_email_address: true}
+"""
+
+
+class TestUnitTestExternalNode:
+    @pytest.fixture(scope="class")
+    def external_model_node(self):
+        return ModelNodeArgs(
+            name="external_model",
+            package_name="external_package",
+            identifier="test_identifier",
+            schema="test_schema",
+        )
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "top_level_domains.sql": top_level_domains_sql,
+            "test_my_model_external_nodes.sql": test_my_model_external_nodes_sql,
+            "test_unit_test_with_external_nodes.yml": test_unit_test_with_external_nodes_yml,
+        }
+
+    @mock.patch("dbt.plugins.get_plugin_manager")
+    def test_unit_test_external_nodes(
+        self,
+        get_plugin_manager,
+        project,
+        external_model_node,
+    ):
+        # initial plugin - one external model
+        external_nodes = PluginNodes()
+        external_nodes.add_model(external_model_node)
+        get_plugin_manager.return_value.get_nodes.return_value = external_nodes
+
+        results = run_dbt(["test", "--select", "test_my_model_external_nodes"], expect_pass=True)
+        assert len(results) == 1
