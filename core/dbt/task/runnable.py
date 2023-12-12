@@ -294,6 +294,7 @@ class GraphRunnableTask(ConfiguredTask):
 
         return
 
+    # The build command overrides this
     def handle_job_queue(self, pool, callback):
         node = self.job_queue.get()
         self._raise_set_error()

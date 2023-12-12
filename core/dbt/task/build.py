@@ -102,10 +102,13 @@ class BuildTask(RunTask):
                 resource_types.remove("all")
                 resource_types.update(self.ALL_RESOURCE_VALUES)
 
+        # First we get selected_nodes including unit tests, then without,
+        # and do a set difference.
         if no_unit_tests is True and NodeType.Unit in resource_types:
             resource_types.remove(NodeType.Unit)
         return list(resource_types)
 
+    # overrides get_graph_queue in runnable.py
     def get_graph_queue(self) -> GraphQueue:
         # Following uses self.selection_arg and self.exclusion_arg
         spec = self.get_selection_spec()
@@ -129,6 +132,7 @@ class BuildTask(RunTask):
         # in the node_selector (filter_selection).
         return selector_wo_unit_tests.get_graph_queue(spec)
 
+    # overrides handle_job_queue in runnable.py
     def handle_job_queue(self, pool, callback):
         # special callback because mark_done won't work on unit tests since
         # they're not actually in the job_queue
@@ -140,16 +144,16 @@ class BuildTask(RunTask):
             for unit_test_unique_id in self.model_to_unit_test_map[node.unique_id]:
                 unit_test_node = self.manifest.unit_tests[unit_test_unique_id]
                 self.handle_job_queue_node(unit_test_node, pool, ut_callback)
-                # _mark_dependent_errors won't work for this so set in skipped_children directly
-                if unit_test_node._event_status["node_status"] in [
-                    NodeStatus.Error,
-                    NodeStatus.Fail,
-                ]:
-                    # _skipped_children contains a run_results for ephemeral nodes, but that
-                    # should never be the case here.
+                # _mark_dependent_errors called in _handle_result won't work for this
+                # because the model is not dependent to the unit tests in the graph,
+                # so set in skipped_children directly
+                if unit_test_node._event_status in self.MARK_DEPENDENT_ERRORS_STATUSES:
+                    # The _skipped_children dictionary can contain a run_result for ephemeral nodes,
+                    # but that should never be the case here.
                     self._skipped_children[node.unique_id] = None
         self.handle_job_queue_node(node, pool, callback)
 
+    # factor out the parts that are common to handling unit test and other nodes
     def handle_job_queue_node(self, node, pool, callback):
         self._raise_set_error()
         runner = self.get_runner(node)
@@ -161,6 +165,8 @@ class BuildTask(RunTask):
         args = (runner,)
         self._submit(pool, args, callback)
 
+    # Make a map of model unique_ids to selected unit test unique_ids,
+    # for processing before the model.
     def build_model_to_unit_test_map(self, selected_unit_tests):
         dct = {}
         for unit_test_unique_id in selected_unit_tests:
@@ -171,6 +177,7 @@ class BuildTask(RunTask):
             dct[model_unique_id].append(unit_test.unique_id)
         self.model_to_unit_test_map = dct
 
+    # We return two different kinds of selectors, one with unit tests and one without
     def get_node_selector(self, no_unit_tests=False) -> ResourceTypeSelector:
         if self.manifest is None or self.graph is None:
             raise DbtInternalError("manifest and graph must be set to get node selection")
@@ -193,6 +200,7 @@ class BuildTask(RunTask):
     def get_runner_type(self, node):
         return self.RUNNER_MAP.get(node.resource_type)
 
+    # Special build compile_manifest method to pass add_test_edges to the compiler
     def compile_manifest(self) -> None:
         if self.manifest is None:
             raise DbtInternalError("compile_manifest called before manifest was loaded")

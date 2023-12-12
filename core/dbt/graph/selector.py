@@ -258,8 +258,8 @@ class NodeSelector(MethodManager):
                     node = self.manifest.nodes[unique_id]
                 elif unique_id in self.manifest.unit_tests:
                     node = self.manifest.unit_tests[unique_id]  # type: ignore
-                # Test and Unit nodes that are not selected themselves, but whose
-                # parents are selected.
+                # Test nodes that are not selected themselves, but whose parents are selected.
+                # (Does not include unit tests because they can only have one parent.)
                 if can_select_indirectly(node):
                     # should we add it in directly?
                     if indirect_selection == IndirectSelection.Eager or set(
