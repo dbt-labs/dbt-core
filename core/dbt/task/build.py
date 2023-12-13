@@ -1,5 +1,5 @@
 import threading
-from typing import Dict, List
+from typing import Dict, List, Set
 
 from .run import RunTask, ModelRunner as run_model_runner
 from .snapshot import SnapshotRunner as snapshot_model_runner
@@ -91,6 +91,7 @@ class BuildTask(RunTask):
 
     def __init__(self, args, config, manifest) -> None:
         super().__init__(args, config, manifest)
+        self.selected_unit_tests: Set = set()
         self.model_to_unit_test_map: Dict[str, List] = {}
 
     def resource_types(self, no_unit_tests=False):
@@ -131,6 +132,7 @@ class BuildTask(RunTask):
         # Get the difference in the sets of nodes with and without unit tests and
         # save it
         selected_unit_tests = full_selected_nodes - selected_nodes_wo_unit_tests
+        self.selected_unit_tests = selected_unit_tests
         self.build_model_to_unit_test_map(selected_unit_tests)
 
         # get_graph_queue in the selector will remove NodeTypes not specified
@@ -139,6 +141,8 @@ class BuildTask(RunTask):
 
     # overrides handle_job_queue in runnable.py
     def handle_job_queue(self, pool, callback):
+        if self.run_count == 0:
+            self.num_nodes = self.num_nodes + len(self.selected_unit_tests)
         node = self.job_queue.get()
         if (
             node.resource_type == NodeType.Model
@@ -165,6 +169,7 @@ class BuildTask(RunTask):
     def call_model_and_unit_tests_runner(self, runner) -> RunResult:
         node = runner.node
         assert self.manifest
+        self.run_count = self.run_count - 1
         for unit_test_unique_id in self.model_to_unit_test_map[node.unique_id]:
             unit_test_node = self.manifest.unit_tests[unit_test_unique_id]
             unit_test_runner = self.get_runner(unit_test_node)
@@ -174,6 +179,8 @@ class BuildTask(RunTask):
                 # The _skipped_children dictionary can contain a run_result for ephemeral nodes,
                 # but that should never be the case here.
                 self._skipped_children[node.unique_id] = None
+        self.run_count = self.run_count + 1
+        runner.node_index = self.run_count
         if runner.node.unique_id in self._skipped_children:
             cause = self._skipped_children.pop(runner.node.unique_id)
             runner.do_skip(cause=cause)
