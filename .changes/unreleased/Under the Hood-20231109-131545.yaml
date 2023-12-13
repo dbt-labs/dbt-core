@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Make extract_toplevel_blocks() Faster
+time: 2023-11-09T13:15:45.338059-05:00
+custom:
+  Author: peterallenwebb qmalcolm
+  Issue: "9037"
