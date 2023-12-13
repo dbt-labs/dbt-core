@@ -75,14 +75,14 @@ sha1_hash: 71304bca2138cf8004070b3573a1e17183c0c1a8
         )
         assert len(os.listdir("dbt_packages")) == 3
 
-    def test_deps_add_dry_run(self, clean_start):
+    def test_deps_add_without_install(self, clean_start):
         os.rename("packages.yml", "dependencies.yml")
         run_dbt(
             [
                 "deps",
                 "--add-package",
                 "dbt-labs/audit_helper@0.9.0",
-                "--dry-run",
+                "--lock",
             ]
         )
         assert not os.path.exists("dbt_packages")

@@ -428,6 +428,18 @@ class BaseDocsGenerate(BaseGenerateProject):
             model_stats=no_stats(),
         )
 
+    @pytest.fixture(autouse=True)
+    def clean_up(self, project):
+        yield
+        with project.adapter.connection_named("__test"):
+            alternate_schema = f"{project.test_schema}_test"
+            relation = project.adapter.Relation.create(
+                database=project.database, schema=alternate_schema
+            )
+            project.adapter.drop_schema(relation)
+
+    pass
+
     # Test "--no-compile" flag works and produces no manifest.json
     def test_run_and_generate_no_compile(self, project, expected_catalog):
         start_time = run_and_generate(project, ["--no-compile"])
