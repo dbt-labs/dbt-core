@@ -1,0 +1,6 @@
+kind: Features
+body: Ability to add a meaningful name in the Postgresql Indexes
+time: 2023-11-04T21:34:14.9393+01:00
+custom:
+  Author: nazliander
+  Issue: "8580"

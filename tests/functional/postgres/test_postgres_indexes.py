@@ -1,20 +1,19 @@
-import pytest
 import re
-from dbt.tests.util import (
-    run_dbt,
-    run_dbt_and_capture,
-)
+
+import pytest
+from dbt.tests.util import run_dbt, run_dbt_and_capture
+from freezegun import freeze_time
+
 from tests.functional.postgres.fixtures import (
     models__incremental_sql,
     models__table_sql,
-    models_invalid__missing_columns_sql,
     models_invalid__invalid_columns_type_sql,
     models_invalid__invalid_type_sql,
     models_invalid__invalid_unique_config_sql,
+    models_invalid__missing_columns_sql,
     seeds__seed_csv,
     snapshots__colors_sql,
 )
-
 
 INDEX_DEFINITION_PATTERN = re.compile(r"using\s+(\w+)\s+\((.+)\)\Z")
 
@@ -51,6 +50,7 @@ class TestPostgresIndex:
             },
         }
 
+    @freeze_time("2023-11-04 12:00:00")
     def test_table(self, project, unique_schema):
         results = run_dbt(["run", "--models", "table"])
         assert len(results) == 1
@@ -62,9 +62,16 @@ class TestPostgresIndex:
             {"columns": "column_a, column_b", "unique": False, "type": "btree"},
             {"columns": "column_b, column_a", "unique": True, "type": "btree"},
             {"columns": "column_a", "unique": False, "type": "hash"},
+            {
+                "name": "column_c_index_1699099200000",
+                "columns": "column_c",
+                "unique": False,
+                "type": "btree",
+            },
         ]
-        assert len(indexes) == len(expected)
+        assert indexes == expected
 
+    @freeze_time("2023-11-04 12:00:00")
     def test_incremental(self, project, unique_schema):
         for additional_argument in [[], [], ["--full-refresh"]]:
             results = run_dbt(["run", "--models", "incremental"] + additional_argument)
@@ -73,9 +80,14 @@ class TestPostgresIndex:
             indexes = self.get_indexes("incremental", project, unique_schema)
             expected = [
                 {"columns": "column_a", "unique": False, "type": "hash"},
-                {"columns": "column_a, column_b", "unique": True, "type": "btree"},
+                {
+                    "name": "column_a_and_column_b_index_1699099200000",
+                    "columns": "column_a, column_b",
+                    "unique": True,
+                    "type": "btree",
+                },
             ]
-            assert len(indexes) == len(expected)
+            assert indexes == expected
 
     def test_seed(self, project, unique_schema):
         for additional_argument in [[], [], ["--full-refresh"]]:
@@ -104,17 +116,18 @@ class TestPostgresIndex:
     def get_indexes(self, table_name, project, unique_schema):
         sql = f"""
             SELECT
-              pg_get_indexdef(idx.indexrelid) as index_definition
-            FROM pg_index idx
-            JOIN pg_class tab ON tab.oid = idx.indrelid
-            WHERE
-              tab.relname = '{table_name}'
-              AND tab.relnamespace = (
-                SELECT oid FROM pg_namespace WHERE nspname = '{unique_schema}'
-              );
+              indexname AS index_name, indexdef as index_definition
+            FROM pg_indexes
+            WHERE tablename = '{table_name}'
+              AND schemaname = '{unique_schema}'
         """
         results = project.run_sql(sql, fetch="all")
-        return [self.parse_index_definition(row[0]) for row in results]
+        return [
+            dict(name=row[0], **self.parse_index_definition(row[1]))
+            if row[0].startswith("column")
+            else self.parse_index_definition(row[1])
+            for row in results
+        ]
 
     def parse_index_definition(self, index_definition):
         index_definition = index_definition.lower()
