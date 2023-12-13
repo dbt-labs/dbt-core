@@ -156,20 +156,14 @@ class BuildTask(RunTask):
 
     def handle_model_with_unit_tests_node(self, node, pool, callback):
         self._raise_set_error()
-        runner = self.get_runner(node)
-        #       if runner.node.unique_id in self._skipped_children:
-        #           cause = self._skipped_children.pop(runner.node.unique_id)
-        #           runner.do_skip(cause=cause)
-        args = (runner,)
+        args = [node]
         if self.config.args.single_threaded:
             callback(self.call_model_and_unit_tests_runner(*args))
         else:
             pool.apply_async(self.call_model_and_unit_tests_runner, args=args, callback=callback)
 
-    def call_model_and_unit_tests_runner(self, runner) -> RunResult:
-        node = runner.node
+    def call_model_and_unit_tests_runner(self, node) -> RunResult:
         assert self.manifest
-        self.run_count = self.run_count - 1
         for unit_test_unique_id in self.model_to_unit_test_map[node.unique_id]:
             unit_test_node = self.manifest.unit_tests[unit_test_unique_id]
             unit_test_runner = self.get_runner(unit_test_node)
@@ -179,14 +173,13 @@ class BuildTask(RunTask):
                 # The _skipped_children dictionary can contain a run_result for ephemeral nodes,
                 # but that should never be the case here.
                 self._skipped_children[node.unique_id] = None
-        self.run_count = self.run_count + 1
-        runner.node_index = self.run_count
+        runner = self.get_runner(node)
         if runner.node.unique_id in self._skipped_children:
             cause = self._skipped_children.pop(runner.node.unique_id)
             runner.do_skip(cause=cause)
         return self.call_runner(runner)
 
-    # factor out the parts that are common to handling unit test and other nodes
+    # handle non-model-plus-unit-tests nodes
     def handle_job_queue_node(self, node, pool, callback):
         self._raise_set_error()
         runner = self.get_runner(node)
@@ -195,7 +188,7 @@ class BuildTask(RunTask):
         if runner.node.unique_id in self._skipped_children:
             cause = self._skipped_children.pop(runner.node.unique_id)
             runner.do_skip(cause=cause)
-        args = (runner,)
+        args = [runner]
         if self.config.args.single_threaded:
             callback(self.call_runner(*args))
         else:

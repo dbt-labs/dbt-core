@@ -304,7 +304,7 @@ class GraphRunnableTask(ConfiguredTask):
         if runner.node.unique_id in self._skipped_children:
             cause = self._skipped_children.pop(runner.node.unique_id)
             runner.do_skip(cause=cause)
-        args = (runner,)
+        args = [runner]
         self._submit(pool, args, callback)
 
     def _handle_result(self, result: RunResult):
