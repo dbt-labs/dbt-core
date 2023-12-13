@@ -78,7 +78,7 @@ class BuildTask(RunTask):
     I.E. a resource of type Model is handled by the ModelRunner which is
     imported as run_model_runner."""
 
-    MARK_DEPENDENT_ERRORS_STATUSES = [NodeStatus.Error, NodeStatus.Fail]
+    MARK_DEPENDENT_ERRORS_STATUSES = [NodeStatus.Error, NodeStatus.Fail, NodeStatus.Skipped]
 
     RUNNER_MAP = {
         NodeType.Model: run_model_runner,
@@ -140,18 +140,30 @@ class BuildTask(RunTask):
     # overrides handle_job_queue in runnable.py
     def handle_job_queue(self, pool, callback):
         node = self.job_queue.get()
-        if node.resource_type == NodeType.Model and node.unique_id in self.model_to_unit_test_map:
-            args = node
-            if self.config.args.single_threaded:
-                callback(self.call_model_and_unit_tests_runner(node))
-            else:
-                pool.apply_async(
-                    self.call_model_and_unit_tests_runner, args=args, callback=callback
-                )
+        if (
+            node.resource_type == NodeType.Model
+            and self.model_to_unit_test_map
+            and node.unique_id in self.model_to_unit_test_map
+        ):
+            self.handle_model_with_unit_tests_node(node, pool, callback)
+
         else:
             self.handle_job_queue_node(node, pool, callback)
 
-    def call_model_and_unit_tests_runner(self, node) -> RunResult:
+    def handle_model_with_unit_tests_node(self, node, pool, callback):
+        self._raise_set_error()
+        runner = self.get_runner(node)
+        #       if runner.node.unique_id in self._skipped_children:
+        #           cause = self._skipped_children.pop(runner.node.unique_id)
+        #           runner.do_skip(cause=cause)
+        args = (runner,)
+        if self.config.args.single_threaded:
+            callback(self.call_model_and_unit_tests_runner(*args))
+        else:
+            pool.apply_async(self.call_model_and_unit_tests_runner, args=args, callback=callback)
+
+    def call_model_and_unit_tests_runner(self, runner) -> RunResult:
+        node = runner.node
         assert self.manifest
         for unit_test_unique_id in self.model_to_unit_test_map[node.unique_id]:
             unit_test_node = self.manifest.unit_tests[unit_test_unique_id]
@@ -162,13 +174,10 @@ class BuildTask(RunTask):
                 # The _skipped_children dictionary can contain a run_result for ephemeral nodes,
                 # but that should never be the case here.
                 self._skipped_children[node.unique_id] = None
-            unit_test_node.clear_event_status()
-        model_runner = self.get_runner(node)
-        if model_runner.node.unique_id in self._skipped_children:
-            cause = self._skipped_children.pop(model_runner.node.unique_id)
-            model_runner.do_skip(cause=cause)
-        result = self.call_runner(model_runner)
-        return result
+        if runner.node.unique_id in self._skipped_children:
+            cause = self._skipped_children.pop(runner.node.unique_id)
+            runner.do_skip(cause=cause)
+        return self.call_runner(runner)
 
     # factor out the parts that are common to handling unit test and other nodes
     def handle_job_queue_node(self, node, pool, callback):
@@ -180,7 +189,10 @@ class BuildTask(RunTask):
             cause = self._skipped_children.pop(runner.node.unique_id)
             runner.do_skip(cause=cause)
         args = (runner,)
-        self._submit(pool, args, callback)
+        if self.config.args.single_threaded:
+            callback(self.call_runner(*args))
+        else:
+            pool.apply_async(self.call_runner, args=args, callback=callback)
 
     # Make a map of model unique_ids to selected unit test unique_ids,
     # for processing before the model.

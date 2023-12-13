@@ -82,7 +82,7 @@ class TestFailingBuild(TestBuildBase):
         results = run_dbt(["build"], expect_pass=False)
         assert len(results) == 14
         actual = [str(r.status) for r in results]
-        expected = ["error"] * 1 + ["skipped"] * 6 + ["pass"] * 2 + ["success"] * 5
+        expected = ["error"] * 2 + ["skipped"] * 5 + ["pass"] * 2 + ["success"] * 5
 
         assert sorted(actual) == sorted(expected)
 
