@@ -5,7 +5,7 @@ import traceback
 from contextlib import contextmanager
 from importlib import import_module
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Type, Union
+from typing import Any, Dict, List, Optional, Set, Type
 
 from dbt.adapters.base.plugin import AdapterPlugin
 from dbt.adapters.protocol import AdapterConfig, AdapterProtocol, RelationProtocol
@@ -89,9 +89,7 @@ class AdapterContainer:
 
         return plugin.credentials
 
-    def register_adapter(
-        self, config: AdapterRequiredConfig, mp_context: Union[SpawnContext, SpawnContext]
-    ) -> None:
+    def register_adapter(self, config: AdapterRequiredConfig, mp_context: SpawnContext) -> None:
         adapter_name = config.credentials.type
         adapter_type = self.get_adapter_class_by_name(adapter_name)
         adapter_version = import_module(f".{adapter_name}.__version__", "dbt.adapters").version
@@ -176,9 +174,7 @@ class AdapterContainer:
 FACTORY: AdapterContainer = AdapterContainer()
 
 
-def register_adapter(
-    config: AdapterRequiredConfig, mp_context: Union[SpawnContext, SpawnContext]
-) -> None:
+def register_adapter(config: AdapterRequiredConfig, mp_context: SpawnContext) -> None:
     FACTORY.register_adapter(config, mp_context)
 
 
