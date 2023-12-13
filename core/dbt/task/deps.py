@@ -220,8 +220,9 @@ class DepsTask(BaseTask):
             if previous_hash != current_hash:
                 self.lock()
 
-        # Early return when dry run or lock only.
-        if self.args.dry_run or self.args.lock:
+        # Early return when 'dbt deps --lock'
+        # Just resolve packages and write lock file, don't actually install packages
+        if self.args.lock:
             return
 
         if system.path_exists(self.project.packages_install_path):
