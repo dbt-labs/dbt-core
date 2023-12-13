@@ -134,29 +134,36 @@ class BuildTask(RunTask):
 
     # overrides handle_job_queue in runnable.py
     def handle_job_queue(self, pool, callback):
-        # special callback because mark_done won't work on unit tests since
-        # they're not actually in the job_queue
-        def ut_callback(result):
-            self._handle_result(result)
-
         node = self.job_queue.get()
         if node.resource_type == NodeType.Model and node.unique_id in self.model_to_unit_test_map:
-            for unit_test_unique_id in self.model_to_unit_test_map[node.unique_id]:
-                unit_test_node = self.manifest.unit_tests[unit_test_unique_id]
-                self.handle_job_queue_node(unit_test_node, pool, ut_callback)
-                # _mark_dependent_errors called in _handle_result won't work for this
-                # because the model is not dependent to the unit tests in the graph,
-                # so set in skipped_children directly
-                if (
-                    "node_status" in unit_test_node._event_status
-                    and unit_test_node._event_status["node_status"]
-                    in self.MARK_DEPENDENT_ERRORS_STATUSES
-                ):
-                    # The _skipped_children dictionary can contain a run_result for ephemeral nodes,
-                    # but that should never be the case here.
-                    self._skipped_children[node.unique_id] = None
-                unit_test_node.clear_event_status()
-        self.handle_job_queue_node(node, pool, callback)
+            args = node
+            if self.config.args.single_threaded:
+                callback(self.call_model_and_unit_tests_runner(node))
+            else:
+                pool.apply_async(
+                    self.call_model_and_unit_tests_runner, args=args, callback=callback
+                )
+        else:
+            self.handle_job_queue_node(node, pool, callback)
+
+    def call_model_and_unit_tests_runner(self, node) -> RunResult:
+        assert self.manifest
+        for unit_test_unique_id in self.model_to_unit_test_map[node.unique_id]:
+            unit_test_node = self.manifest.unit_tests[unit_test_unique_id]
+            unit_test_runner = self.get_runner(unit_test_node)
+            result = self.call_runner(unit_test_runner)
+            self._handle_result(result)
+            if result.status in self.MARK_DEPENDENT_ERRORS_STATUSES:
+                # The _skipped_children dictionary can contain a run_result for ephemeral nodes,
+                # but that should never be the case here.
+                self._skipped_children[node.unique_id] = None
+            unit_test_node.clear_event_status()
+        model_runner = self.get_runner(node)
+        if model_runner.node.unique_id in self._skipped_children:
+            cause = self._skipped_children.pop(model_runner.node.unique_id)
+            model_runner.do_skip(cause=cause)
+        result = self.call_runner(model_runner)
+        return result
 
     # factor out the parts that are common to handling unit test and other nodes
     def handle_job_queue_node(self, node, pool, callback):
