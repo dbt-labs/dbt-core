@@ -1,4 +1,5 @@
 import threading
+from typing import Dict, List
 
 from .run import RunTask, ModelRunner as run_model_runner
 from .snapshot import SnapshotRunner as snapshot_model_runner
@@ -87,6 +88,10 @@ class BuildTask(RunTask):
         NodeType.Unit: test_runner,
     }
     ALL_RESOURCE_VALUES = frozenset({x for x in RUNNER_MAP.keys()})
+
+    def __init__(self, args, config, manifest) -> None:
+        super().__init__(args, config, manifest)
+        self.model_to_unit_test_map: Dict[str, List] = {}
 
     def resource_types(self, no_unit_tests=False):
         if self.args.include_saved_query:
