@@ -4,6 +4,7 @@ from dbt.tests.util import (
     write_file,
     get_manifest,
 )
+from dbt.contracts.results import NodeStatus
 from dbt.exceptions import DuplicateResourceNameError, ParsingError
 from fixtures import (
     my_model_vars_sql,
@@ -38,6 +39,12 @@ class TestUnitTests:
         # Select by model name
         results = run_dbt(["test", "--select", "my_model"], expect_pass=False)
         assert len(results) == 5
+
+        results = run_dbt(["build", "--select", "my_model"], expect_pass=False)
+        assert len(results) == 6
+        for result in results:
+            if result.node.unique_id == "model.test.my_model":
+                result.status == NodeStatus.Skipped
 
         # Test select by test name
         results = run_dbt(["test", "--select", "test_name:test_my_model_string_concat"])
