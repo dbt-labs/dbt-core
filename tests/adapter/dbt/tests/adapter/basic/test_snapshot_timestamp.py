@@ -33,6 +33,17 @@ class BaseSnapshotTimestamp:
     def project_config_update(self):
         return {"name": "snapshot_strategy_timestamp"}
 
+    @pytest.fixture(autouse=True)
+    def clean_up(self, project):
+        yield
+        with project.adapter.connection_named("__test"):
+            relation = project.adapter.Relation.create(
+                database=project.database, schema=project.test_schema
+            )
+            project.adapter.drop_schema(relation)
+
+    pass
+
     def test_snapshot_timestamp(self, project):
         # seed command
         results = run_dbt(["seed"])

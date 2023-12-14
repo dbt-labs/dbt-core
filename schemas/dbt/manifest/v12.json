@@ -7843,7 +7843,8 @@
               "simple",
               "ratio",
               "cumulative",
-              "derived"
+              "derived",
+              "conversion"
             ]
           },
           "type_params": {
@@ -8404,6 +8405,241 @@
                         "name"
                       ]
                     }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "conversion_type_params": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "title": "ConversionTypeParams",
+                    "properties": {
+                      "base_measure": {
+                        "type": "object",
+                        "title": "MetricInputMeasure",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "filter": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "title": "WhereFilterIntersection",
+                                "properties": {
+                                  "where_filters": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "title": "WhereFilter",
+                                      "properties": {
+                                        "where_sql_template": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "additionalProperties": false,
+                                      "required": [
+                                        "where_sql_template"
+                                      ]
+                                    }
+                                  }
+                                },
+                                "additionalProperties": false,
+                                "required": [
+                                  "where_filters"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
+                          },
+                          "alias": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
+                          },
+                          "join_to_timespine": {
+                            "type": "boolean",
+                            "default": false
+                          },
+                          "fill_nulls_with": {
+                            "anyOf": [
+                              {
+                                "type": "integer"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
+                          }
+                        },
+                        "additionalProperties": false,
+                        "required": [
+                          "name"
+                        ]
+                      },
+                      "conversion_measure": {
+                        "type": "object",
+                        "title": "MetricInputMeasure",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "filter": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "title": "WhereFilterIntersection",
+                                "properties": {
+                                  "where_filters": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "title": "WhereFilter",
+                                      "properties": {
+                                        "where_sql_template": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "additionalProperties": false,
+                                      "required": [
+                                        "where_sql_template"
+                                      ]
+                                    }
+                                  }
+                                },
+                                "additionalProperties": false,
+                                "required": [
+                                  "where_filters"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
+                          },
+                          "alias": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
+                          },
+                          "join_to_timespine": {
+                            "type": "boolean",
+                            "default": false
+                          },
+                          "fill_nulls_with": {
+                            "anyOf": [
+                              {
+                                "type": "integer"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
+                          }
+                        },
+                        "additionalProperties": false,
+                        "required": [
+                          "name"
+                        ]
+                      },
+                      "entity": {
+                        "type": "string"
+                      },
+                      "calculation": {
+                        "enum": [
+                          "conversions",
+                          "conversion_rate"
+                        ],
+                        "default": "conversion_rate"
+                      },
+                      "window": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "title": "MetricTimeWindow",
+                            "properties": {
+                              "count": {
+                                "type": "integer"
+                              },
+                              "granularity": {
+                                "enum": [
+                                  "day",
+                                  "week",
+                                  "month",
+                                  "quarter",
+                                  "year"
+                                ]
+                              }
+                            },
+                            "additionalProperties": false,
+                            "required": [
+                              "count",
+                              "granularity"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null
+                      },
+                      "constant_properties": {
+                        "anyOf": [
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "title": "ConstantPropertyInput",
+                              "properties": {
+                                "base_property": {
+                                  "type": "string"
+                                },
+                                "conversion_property": {
+                                  "type": "string"
+                                }
+                              },
+                              "additionalProperties": false,
+                              "required": [
+                                "base_property",
+                                "conversion_property"
+                              ]
+                            }
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null
+                      }
+                    },
+                    "additionalProperties": false,
+                    "required": [
+                      "base_measure",
+                      "conversion_measure",
+                      "entity"
+                    ]
                   },
                   {
                     "type": "null"
@@ -16264,7 +16500,8 @@
                         "simple",
                         "ratio",
                         "cumulative",
-                        "derived"
+                        "derived",
+                        "conversion"
                       ]
                     },
                     "type_params": {
@@ -16825,6 +17062,241 @@
                                   "name"
                                 ]
                               }
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null
+                        },
+                        "conversion_type_params": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "title": "ConversionTypeParams",
+                              "properties": {
+                                "base_measure": {
+                                  "type": "object",
+                                  "title": "MetricInputMeasure",
+                                  "properties": {
+                                    "name": {
+                                      "type": "string"
+                                    },
+                                    "filter": {
+                                      "anyOf": [
+                                        {
+                                          "type": "object",
+                                          "title": "WhereFilterIntersection",
+                                          "properties": {
+                                            "where_filters": {
+                                              "type": "array",
+                                              "items": {
+                                                "type": "object",
+                                                "title": "WhereFilter",
+                                                "properties": {
+                                                  "where_sql_template": {
+                                                    "type": "string"
+                                                  }
+                                                },
+                                                "additionalProperties": false,
+                                                "required": [
+                                                  "where_sql_template"
+                                                ]
+                                              }
+                                            }
+                                          },
+                                          "additionalProperties": false,
+                                          "required": [
+                                            "where_filters"
+                                          ]
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ],
+                                      "default": null
+                                    },
+                                    "alias": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ],
+                                      "default": null
+                                    },
+                                    "join_to_timespine": {
+                                      "type": "boolean",
+                                      "default": false
+                                    },
+                                    "fill_nulls_with": {
+                                      "anyOf": [
+                                        {
+                                          "type": "integer"
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ],
+                                      "default": null
+                                    }
+                                  },
+                                  "additionalProperties": false,
+                                  "required": [
+                                    "name"
+                                  ]
+                                },
+                                "conversion_measure": {
+                                  "type": "object",
+                                  "title": "MetricInputMeasure",
+                                  "properties": {
+                                    "name": {
+                                      "type": "string"
+                                    },
+                                    "filter": {
+                                      "anyOf": [
+                                        {
+                                          "type": "object",
+                                          "title": "WhereFilterIntersection",
+                                          "properties": {
+                                            "where_filters": {
+                                              "type": "array",
+                                              "items": {
+                                                "type": "object",
+                                                "title": "WhereFilter",
+                                                "properties": {
+                                                  "where_sql_template": {
+                                                    "type": "string"
+                                                  }
+                                                },
+                                                "additionalProperties": false,
+                                                "required": [
+                                                  "where_sql_template"
+                                                ]
+                                              }
+                                            }
+                                          },
+                                          "additionalProperties": false,
+                                          "required": [
+                                            "where_filters"
+                                          ]
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ],
+                                      "default": null
+                                    },
+                                    "alias": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ],
+                                      "default": null
+                                    },
+                                    "join_to_timespine": {
+                                      "type": "boolean",
+                                      "default": false
+                                    },
+                                    "fill_nulls_with": {
+                                      "anyOf": [
+                                        {
+                                          "type": "integer"
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ],
+                                      "default": null
+                                    }
+                                  },
+                                  "additionalProperties": false,
+                                  "required": [
+                                    "name"
+                                  ]
+                                },
+                                "entity": {
+                                  "type": "string"
+                                },
+                                "calculation": {
+                                  "enum": [
+                                    "conversions",
+                                    "conversion_rate"
+                                  ],
+                                  "default": "conversion_rate"
+                                },
+                                "window": {
+                                  "anyOf": [
+                                    {
+                                      "type": "object",
+                                      "title": "MetricTimeWindow",
+                                      "properties": {
+                                        "count": {
+                                          "type": "integer"
+                                        },
+                                        "granularity": {
+                                          "enum": [
+                                            "day",
+                                            "week",
+                                            "month",
+                                            "quarter",
+                                            "year"
+                                          ]
+                                        }
+                                      },
+                                      "additionalProperties": false,
+                                      "required": [
+                                        "count",
+                                        "granularity"
+                                      ]
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ],
+                                  "default": null
+                                },
+                                "constant_properties": {
+                                  "anyOf": [
+                                    {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "title": "ConstantPropertyInput",
+                                        "properties": {
+                                          "base_property": {
+                                            "type": "string"
+                                          },
+                                          "conversion_property": {
+                                            "type": "string"
+                                          }
+                                        },
+                                        "additionalProperties": false,
+                                        "required": [
+                                          "base_property",
+                                          "conversion_property"
+                                        ]
+                                      }
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ],
+                                  "default": null
+                                }
+                              },
+                              "additionalProperties": false,
+                              "required": [
+                                "base_measure",
+                                "conversion_measure",
+                                "entity"
+                              ]
                             },
                             {
                               "type": "null"

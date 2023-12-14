@@ -18,6 +18,17 @@ class BaseSingularTests:
     def project_config_update(self):
         return {"name": "singular_tests"}
 
+    @pytest.fixture(autouse=True)
+    def clean_up(self, project):
+        yield
+        with project.adapter.connection_named("__test"):
+            relation = project.adapter.Relation.create(
+                database=project.database, schema=project.test_schema
+            )
+            project.adapter.drop_schema(relation)
+
+    pass
+
     def test_singular_tests(self, project):
         # test command
         results = run_dbt(["test"], expect_pass=False)
