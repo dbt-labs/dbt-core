@@ -21,6 +21,7 @@ from dbt.contracts.graph.semantic_models import (
     SourceFileMetadata,
 )
 from dbt.contracts.graph.unparsed import (
+    ConstantPropertyInput,
     Docs,
     ExposureType,
     ExternalTable,
@@ -59,7 +60,11 @@ from dbt_semantic_interfaces.references import (
     TimeDimensionReference,
 )
 from dbt_semantic_interfaces.references import MetricReference as DSIMetricReference
-from dbt_semantic_interfaces.type_enums import MetricType, TimeGranularity
+from dbt_semantic_interfaces.type_enums import (
+    ConversionCalculationType,
+    MetricType,
+    TimeGranularity,
+)
 
 from .model_config import (
     NodeConfig,
@@ -1436,6 +1441,16 @@ class MetricInput(dbtClassMixin):
 
 
 @dataclass
+class ConversionTypeParams(dbtClassMixin):
+    base_measure: MetricInputMeasure
+    conversion_measure: MetricInputMeasure
+    entity: str
+    calculation: ConversionCalculationType = ConversionCalculationType.CONVERSION_RATE
+    window: Optional[MetricTimeWindow] = None
+    constant_properties: Optional[List[ConstantPropertyInput]] = None
+
+
+@dataclass
 class MetricTypeParams(dbtClassMixin):
     measure: Optional[MetricInputMeasure] = None
     input_measures: List[MetricInputMeasure] = field(default_factory=list)
@@ -1445,6 +1460,7 @@ class MetricTypeParams(dbtClassMixin):
     window: Optional[MetricTimeWindow] = None
     grain_to_date: Optional[TimeGranularity] = None
     metrics: Optional[List[MetricInput]] = None
+    conversion_type_params: Optional[ConversionTypeParams] = None
 
 
 @dataclass
