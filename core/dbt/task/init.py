@@ -267,19 +267,18 @@ class InitTask(BaseTask):
         adapter = self.ask_for_adapter_choice()
         self.create_profile_from_target(adapter, profile_name=profile_name)
 
-    def get_valid_project_name(self) -> str:
-        """Returns a valid project name, either from CLI arg or user prompt."""
-        name = self.args.project_name
+    def check_valid_project_name(self) -> None:
+        name = os.path.basename(self.args.project_dir)
         internal_package_names = {GLOBAL_PROJECT_NAME}
         available_adapters = list(_get_adapter_plugin_names())
         for adapter_name in available_adapters:
             internal_package_names.update(f"dbt_{adapter_name}")
-        while not ProjectName.is_valid(name) or name in internal_package_names:
-            if name:
-                click.echo(name + " is not a valid project name.")
-            name = click.prompt("Enter a name for your project (letters, digits, underscore)")
-
-        return name
+        if not ProjectName.is_valid(name) or name in internal_package_names:
+            raise DbtRuntimeError(
+                msg="{} is not a valid project name.\nEnter a name for your project (letters, digits, underscore)".format(
+                    name
+                )
+            )
 
     def create_new_project(self, project_name: str, profile_name: str):
         self.copy_starter_repo(project_name)
@@ -295,11 +294,18 @@ class InitTask(BaseTask):
             )
         )
 
+    def check_if_project_directory_empty(self) -> bool:
+        """Check if the project directory is empty"""
+        if os.listdir(self.args.project_dir):
+            return False
+        else:
+            return True
+
     def run(self):
         """Entry point for the init task."""
         profiles_dir = get_flags().PROFILES_DIR
         self.create_profiles_dir(profiles_dir)
-        project_name = self.args.project_dir.name
+        project_name = Path(self.args.project_dir).name
 
         try:
             move_to_nearest_project_dir(self.args.project_dir)
@@ -323,11 +329,19 @@ class InitTask(BaseTask):
         else:
             # When dbt init is run outside of an existing project,
             # create a new project and set up the user's profile.
+            self.check_valid_project_name()
+
+            if not self.check_if_project_directory_empty():
+                raise DbtRuntimeError(
+                    msg=f"{project_name} directory not empty; eg: mkdir project_name; cd project_name; dbt init"
+                )
 
             # If the user specified an existing profile to use, use it instead of generating a new one
             user_profile_name = self.args.profile
             if user_profile_name:
-                if not self.check_if_profile_exists(user_profile_name):
+                if not self.args.project_name and not self.check_if_profile_exists(
+                    user_profile_name
+                ):
                     raise DbtRuntimeError(
                         msg="Could not find profile named '{}'".format(user_profile_name)
                     )
