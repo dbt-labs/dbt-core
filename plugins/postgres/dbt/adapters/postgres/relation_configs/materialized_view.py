@@ -8,7 +8,7 @@ from dbt.adapters.relation_configs import (
     RelationConfigValidationMixin,
     RelationConfigValidationRule,
 )
-from dbt.contracts.graph.nodes import ModelNode
+from dbt.adapters.contracts.relation import RelationConfig
 from dbt.common.exceptions import DbtRuntimeError
 
 from dbt.adapters.postgres.relation_configs.constants import MAX_CHARACTERS_IN_IDENTIFIER
@@ -66,17 +66,19 @@ class PostgresMaterializedViewConfig(RelationConfigBase, RelationConfigValidatio
         return materialized_view
 
     @classmethod
-    def from_model_node(cls, model_node: ModelNode) -> "PostgresMaterializedViewConfig":
-        materialized_view_config = cls.parse_model_node(model_node)
+    def from_relation_config(
+        cls, relation_config: RelationConfig
+    ) -> "PostgresMaterializedViewConfig":
+        materialized_view_config = cls.parse_model_node(relation_config)
         materialized_view = cls.from_dict(materialized_view_config)
         return materialized_view
 
     @classmethod
-    def parse_model_node(cls, model_node: ModelNode) -> dict:
-        indexes: List[dict] = model_node.config.extra.get("indexes", [])
+    def parse_model_node(cls, relation_config: RelationConfig) -> dict:
+        indexes: List[dict] = relation_config.config.extra.get("indexes", [])
         config_dict = {
-            "table_name": model_node.identifier,
-            "query": model_node.compiled_code,
+            "table_name": relation_config.identifier,
+            "query": relation_config.compiled_code,
             "indexes": [PostgresIndexConfig.parse_model_node(index) for index in indexes],
         }
         return config_dict
