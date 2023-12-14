@@ -167,6 +167,10 @@ class BuildTask(RunTask):
         for unit_test_unique_id in self.model_to_unit_test_map[node.unique_id]:
             unit_test_node = self.manifest.unit_tests[unit_test_unique_id]
             unit_test_runner = self.get_runner(unit_test_node)
+            # If the model is marked skip, also skip the unit tests
+            if node.unique_id in self._skipped_children:
+                # cause is only for ephemeral nodes
+                unit_test_runner.do_skip(cause=None)
             result = self.call_runner(unit_test_runner)
             self._handle_result(result)
             if result.status in self.MARK_DEPENDENT_ERRORS_STATUSES:
