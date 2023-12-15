@@ -327,9 +327,9 @@ initialized = False
 
 
 def make_log_dir_if_missing(log_dir):
-    import dbt.clients.system
+    import dbt.common.clients.system
 
-    dbt.clients.system.make_directory(log_dir)
+    dbt.common.clients.system.make_directory(log_dir)
 
 
 class DebugWarnings(logbook.compat.redirected_warnings):

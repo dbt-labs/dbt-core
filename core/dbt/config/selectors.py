@@ -6,7 +6,7 @@ from dbt.common.dataclass_schema import ValidationError
 
 from .renderer import BaseRenderer
 
-from dbt.clients.system import (
+from dbt.common.clients.system import (
     load_file_contents,
     path_exists,
     resolve_path_from_base,

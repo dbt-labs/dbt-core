@@ -15,7 +15,7 @@ from dbt.common.events.types import (
     DebugCmdOut,
     DebugCmdResult,
 )
-import dbt.clients.system
+import dbt.common.clients.system
 import dbt.exceptions
 import dbt.common.exceptions
 from dbt.adapters.factory import get_adapter, register_adapter
@@ -110,7 +110,8 @@ class DebugTask(BaseTask):
         if self.args.config_dir:
             fire_event(
                 OpenCommand(
-                    open_cmd=dbt.clients.system.open_dir_cmd(), profiles_dir=str(self.profiles_dir)
+                    open_cmd=dbt.common.clients.system.open_dir_cmd(),
+                    profiles_dir=str(self.profiles_dir),
                 )
             )
             return DebugRunStatus.SUCCESS.value
@@ -202,7 +203,9 @@ class DebugTask(BaseTask):
                 ),
             )
 
-        raw_profile_data = load_yaml_text(dbt.clients.system.load_file_contents(self.profile_path))
+        raw_profile_data = load_yaml_text(
+            dbt.common.clients.system.load_file_contents(self.profile_path)
+        )
         if isinstance(raw_profile_data, dict):
             self.raw_profile_data = raw_profile_data
 
@@ -395,7 +398,7 @@ class DebugTask(BaseTask):
 
     def test_git(self) -> SubtaskStatus:
         try:
-            dbt.clients.system.run_cmd(os.getcwd(), ["git", "--help"])
+            dbt.common.clients.system.run_cmd(os.getcwd(), ["git", "--help"])
         except dbt.exceptions.ExecutableError as exc:
             return SubtaskStatus(
                 log_msg=red("ERROR"),

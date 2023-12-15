@@ -1,3 +1,4 @@
+import dbt.common.exceptions.base
 import errno
 import fnmatch
 import functools
@@ -24,7 +25,7 @@ from dbt.common.events.types import (
     SystemReportReturnCode,
 )
 from dbt.common.exceptions import DbtInternalError
-from dbt.utils import _connection_exception_retry as connection_exception_retry
+from dbt.common.utils.connection import connection_exception_retry as connection_exception_retry
 from pathspec import PathSpec  # type: ignore
 
 if sys.platform == "win32":
@@ -197,7 +198,7 @@ def read_json(path: str) -> Dict[str, Any]:
 
 
 def write_json(path: str, data: Dict[str, Any]) -> bool:
-    return write_file(path, json.dumps(data, cls=dbt.utils.JSONEncoder))
+    return write_file(path, json.dumps(data, cls=dbt.common.utils.encoding.JSONEncoder))
 
 
 def _windows_rmdir_readonly(func: Callable[[str], Any], path: str, exc: Tuple[Any, OSError, Any]):
@@ -385,7 +386,7 @@ def _handle_posix_error(exc: OSError, cwd: str, cmd: List[str]) -> NoReturn:
 
 
 def _handle_windows_error(exc: OSError, cwd: str, cmd: List[str]) -> NoReturn:
-    cls: Type[dbt.common.exceptions.DbtBaseException] = dbt.exceptions.CommandError
+    cls: Type[dbt.common.exceptions.DbtBaseException] = dbt.common.exceptions.base.CommandError
     if exc.errno == errno.ENOENT:
         message = (
             "Could not find command, ensure it is in the user's PATH "
@@ -411,7 +412,7 @@ def _handle_windows_error(exc: OSError, cwd: str, cmd: List[str]) -> NoReturn:
 def _interpret_oserror(exc: OSError, cwd: str, cmd: List[str]) -> NoReturn:
     """Interpret an OSError exception and raise the appropriate dbt exception."""
     if len(cmd) == 0:
-        raise dbt.exceptions.CommandError(cwd, cmd)
+        raise dbt.common.exceptions.base.CommandError(cwd, cmd)
 
     # all of these functions raise unconditionally
     if os.name == "nt":
@@ -428,7 +429,7 @@ def _interpret_oserror(exc: OSError, cwd: str, cmd: List[str]) -> NoReturn:
 def run_cmd(cwd: str, cmd: List[str], env: Optional[Dict[str, Any]] = None) -> Tuple[bytes, bytes]:
     fire_event(SystemExecutingCmd(cmd=cmd))
     if len(cmd) == 0:
-        raise dbt.exceptions.CommandError(cwd, cmd)
+        raise dbt.common.exceptions.base.CommandError(cwd, cmd)
 
     # the env argument replaces the environment entirely, which has exciting
     # consequences on Windows! Do an update instead.
@@ -502,7 +503,7 @@ def untar_package(tar_path: str, dest_dir: str, rename_to: Optional[str] = None)
     if rename_to:
         downloaded_path = os.path.join(dest_dir, tar_dir_name)
         desired_path = os.path.join(dest_dir, rename_to)
-        dbt.clients.system.rename(downloaded_path, desired_path, force=True)
+        dbt.common.clients.system.rename(downloaded_path, desired_path, force=True)
 
 
 def chmod_and_retry(func, path, exc_info):

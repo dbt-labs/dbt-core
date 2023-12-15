@@ -2,7 +2,7 @@ import os
 import pathspec  # type: ignore
 import pathlib
 from dataclasses import dataclass, field
-from dbt.clients.system import load_file_contents
+from dbt.common.clients.system import load_file_contents
 from dbt.contracts.files import (
     FilePath,
     ParseFileType,

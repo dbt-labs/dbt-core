@@ -65,7 +65,7 @@ from dbt.logger import DbtProcessState
 from dbt.node_types import NodeType, AccessType
 from dbt.clients.jinja import get_rendered, MacroStack
 from dbt.clients.jinja_static import statically_extract_macro_calls
-from dbt.clients.system import (
+from dbt.common.clients.system import (
     make_directory,
     path_exists,
     read_json,

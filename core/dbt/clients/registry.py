@@ -12,7 +12,8 @@ from dbt.common.events.types import (
     RegistryResponseMissingNestedKeys,
     RegistryResponseExtraNestedKeys,
 )
-from dbt.utils import memoized, _connection_exception_retry as connection_exception_retry
+from dbt.utils import memoized
+from dbt.common.utils.connection import connection_exception_retry as connection_exception_retry
 from dbt import deprecations
 from dbt.common import semver
 import os

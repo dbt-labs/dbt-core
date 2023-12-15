@@ -1,7 +1,8 @@
 import os
 from typing import List, Optional, Dict
 
-from dbt.clients import git, system
+from dbt.clients import git
+from dbt.common.clients import system
 from dbt.config.project import PartialProject, Project
 from dbt.config.renderer import PackageRenderer
 from dbt.contracts.project import (

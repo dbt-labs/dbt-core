@@ -37,7 +37,7 @@ from typing import (
     Tuple,
 )
 
-from dbt.clients.system import write_json
+from dbt.common.clients.system import write_json
 
 
 @dataclass

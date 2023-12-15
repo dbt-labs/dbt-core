@@ -4,7 +4,7 @@ from typing import List, Callable, Iterable, Set, Union, Iterator, TypeVar, Gene
 from pathspec import PathSpec  # type: ignore
 
 from dbt.common.clients.jinja import extract_toplevel_blocks, BlockTag
-from dbt.clients.system import find_matching
+from dbt.common.clients.system import find_matching
 from dbt.config import Project
 from dbt.contracts.files import FilePath, AnySourceFile
 from dbt.exceptions import ParsingError, DbtInternalError

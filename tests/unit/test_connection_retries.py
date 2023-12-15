@@ -2,7 +2,7 @@ import functools
 import pytest
 from requests.exceptions import RequestException
 from dbt.exceptions import ConnectionError
-from dbt.utils import _connection_exception_retry
+from dbt.common.utils.connection import connection_exception_retry
 
 
 def no_retry_fn():
@@ -12,7 +12,7 @@ def no_retry_fn():
 class TestNoRetries:
     def test_no_retry(self):
         fn_to_retry = functools.partial(no_retry_fn)
-        result = _connection_exception_retry(fn_to_retry, 3)
+        result = connection_exception_retry(fn_to_retry, 3)
 
         expected = "success"
 
@@ -29,7 +29,7 @@ class TestMaxRetries:
         fn_to_retry = functools.partial(no_success_fn)
 
         with pytest.raises(ConnectionError):
-            _connection_exception_retry(fn_to_retry, 3)
+            connection_exception_retry(fn_to_retry, 3)
 
 
 def single_retry_fn():
@@ -50,7 +50,7 @@ class TestSingleRetry:
         counter = 0
 
         fn_to_retry = functools.partial(single_retry_fn)
-        result = _connection_exception_retry(fn_to_retry, 3)
+        result = connection_exception_retry(fn_to_retry, 3)
         expected = "success on 2"
 
         # We need to test the return value here, not just that it did not throw an error.

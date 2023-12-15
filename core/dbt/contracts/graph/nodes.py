@@ -14,7 +14,7 @@ from dbt.common.contracts.constraints import (
 )
 from dbt.common.dataclass_schema import dbtClassMixin, ExtensibleDbtClassMixin
 
-from dbt.clients.system import write_file
+from dbt.common.clients.system import write_file
 from dbt.contracts.files import FileHash
 from dbt.contracts.graph.saved_queries import Export, QueryParams
 from dbt.contracts.graph.semantic_models import (

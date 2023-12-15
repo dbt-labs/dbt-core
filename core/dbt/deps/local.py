@@ -1,7 +1,7 @@
 import shutil
 from typing import Dict
 
-from dbt.clients import system
+from dbt.common.clients import system
 from dbt.deps.base import PinnedPackage, UnpinnedPackage
 from dbt.contracts.project import (
     ProjectPackageMetadata,

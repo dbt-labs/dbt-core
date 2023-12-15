@@ -8,7 +8,7 @@ from pathlib import Path
 from tempfile import mkdtemp, NamedTemporaryFile
 
 from dbt.exceptions import ExecutableError, WorkingDirectoryError
-import dbt.clients.system
+import dbt.common.clients.system
 
 
 class SystemClient(unittest.TestCase):
@@ -33,20 +33,20 @@ class SystemClient(unittest.TestCase):
 
     def test__make_file_when_exists(self):
         self.set_up_profile()
-        written = dbt.clients.system.make_file(self.profiles_path, contents="NEW_TEXT")
+        written = dbt.common.clients.system.make_file(self.profiles_path, contents="NEW_TEXT")
 
         self.assertFalse(written)
         self.assertEqual(self.get_profile_text(), "ORIGINAL_TEXT")
 
     def test__make_file_when_not_exists(self):
-        written = dbt.clients.system.make_file(self.profiles_path, contents="NEW_TEXT")
+        written = dbt.common.clients.system.make_file(self.profiles_path, contents="NEW_TEXT")
 
         self.assertTrue(written)
         self.assertEqual(self.get_profile_text(), "NEW_TEXT")
 
     def test__make_file_with_overwrite(self):
         self.set_up_profile()
-        written = dbt.clients.system.make_file(
+        written = dbt.common.clients.system.make_file(
             self.profiles_path, contents="NEW_TEXT", overwrite=True
         )
 
@@ -55,12 +55,12 @@ class SystemClient(unittest.TestCase):
 
     def test__make_dir_from_str(self):
         test_dir_str = self.tmp_dir + "/test_make_from_str/sub_dir"
-        dbt.clients.system.make_directory(test_dir_str)
+        dbt.common.clients.system.make_directory(test_dir_str)
         self.assertTrue(Path(test_dir_str).is_dir())
 
     def test__make_dir_from_pathobj(self):
         test_dir_pathobj = Path(self.tmp_dir + "/test_make_from_pathobj/sub_dir")
-        dbt.clients.system.make_directory(test_dir_pathobj)
+        dbt.common.clients.system.make_directory(test_dir_pathobj)
         self.assertTrue(test_dir_pathobj.is_dir())
 
 
@@ -91,7 +91,7 @@ class TestRunCmd(unittest.TestCase):
 
     def test__executable_does_not_exist(self):
         with self.assertRaises(ExecutableError) as exc:
-            dbt.clients.system.run_cmd(self.run_dir, [self.does_not_exist])
+            dbt.common.clients.system.run_cmd(self.run_dir, [self.does_not_exist])
 
         msg = str(exc.exception).lower()
 
@@ -101,7 +101,7 @@ class TestRunCmd(unittest.TestCase):
 
     def test__not_exe(self):
         with self.assertRaises(ExecutableError) as exc:
-            dbt.clients.system.run_cmd(self.run_dir, [self.empty_file])
+            dbt.common.clients.system.run_cmd(self.run_dir, [self.empty_file])
 
         msg = str(exc.exception).lower()
         if os.name == "nt":
@@ -114,14 +114,14 @@ class TestRunCmd(unittest.TestCase):
 
     def test__cwd_does_not_exist(self):
         with self.assertRaises(WorkingDirectoryError) as exc:
-            dbt.clients.system.run_cmd(self.does_not_exist, self.exists_cmd)
+            dbt.common.clients.system.run_cmd(self.does_not_exist, self.exists_cmd)
         msg = str(exc.exception).lower()
         self.assertIn("does not exist", msg)
         self.assertIn(self.does_not_exist.lower(), msg)
 
     def test__cwd_not_directory(self):
         with self.assertRaises(WorkingDirectoryError) as exc:
-            dbt.clients.system.run_cmd(self.empty_file, self.exists_cmd)
+            dbt.common.clients.system.run_cmd(self.empty_file, self.exists_cmd)
 
         msg = str(exc.exception).lower()
         self.assertIn("not a directory", msg)
@@ -139,14 +139,14 @@ class TestRunCmd(unittest.TestCase):
         os.chmod(self.run_dir, stat.S_IRUSR)
 
         with self.assertRaises(WorkingDirectoryError) as exc:
-            dbt.clients.system.run_cmd(self.run_dir, self.exists_cmd)
+            dbt.common.clients.system.run_cmd(self.run_dir, self.exists_cmd)
 
         msg = str(exc.exception).lower()
         self.assertIn("permissions", msg)
         self.assertIn(self.run_dir.lower(), msg)
 
     def test__ok(self):
-        out, err = dbt.clients.system.run_cmd(self.run_dir, self.exists_cmd)
+        out, err = dbt.common.clients.system.run_cmd(self.run_dir, self.exists_cmd)
         self.assertEqual(out.strip(), b"hello")
         self.assertEqual(err.strip(), b"")
 
@@ -160,7 +160,7 @@ class TestFindMatching(unittest.TestCase):
         with NamedTemporaryFile(prefix="sql-files", suffix=".sql", dir=self.tempdir) as named_file:
             file_path = os.path.dirname(named_file.name)
             relative_path = os.path.basename(file_path)
-            out = dbt.clients.system.find_matching(
+            out = dbt.common.clients.system.find_matching(
                 self.base_dir,
                 [relative_path],
                 "*.sql",
@@ -179,7 +179,7 @@ class TestFindMatching(unittest.TestCase):
         with NamedTemporaryFile(prefix="sql-files", suffix=".SQL", dir=self.tempdir) as named_file:
             file_path = os.path.dirname(named_file.name)
             relative_path = os.path.basename(file_path)
-            out = dbt.clients.system.find_matching(self.base_dir, [relative_path], "*.sql")
+            out = dbt.common.clients.system.find_matching(self.base_dir, [relative_path], "*.sql")
             expected_output = [
                 {
                     "searched_path": relative_path,
@@ -192,12 +192,12 @@ class TestFindMatching(unittest.TestCase):
 
     def test_find_matching_file_pattern_not_found(self):
         with NamedTemporaryFile(prefix="sql-files", suffix=".SQLT", dir=self.tempdir):
-            out = dbt.clients.system.find_matching(self.tempdir, [""], "*.sql")
+            out = dbt.common.clients.system.find_matching(self.tempdir, [""], "*.sql")
             self.assertEqual(out, [])
 
     def test_ignore_spec(self):
         with NamedTemporaryFile(prefix="sql-files", suffix=".sql", dir=self.tempdir):
-            out = dbt.clients.system.find_matching(
+            out = dbt.common.clients.system.find_matching(
                 self.tempdir,
                 [""],
                 "*.sql",
@@ -240,7 +240,7 @@ class TestUntarPackage(unittest.TestCase):
 
         #  now we test can test that we can untar the file successfully
         assert tarfile.is_tarfile(tar.name)
-        dbt.clients.system.untar_package(tar_file_full_path, self.tempdest)
+        dbt.common.clients.system.untar_package(tar_file_full_path, self.tempdest)
         path = Path(os.path.join(self.tempdest, relative_file_a))
         assert path.is_file()
 
@@ -257,7 +257,7 @@ class TestUntarPackage(unittest.TestCase):
 
         #  now that we're set up, test that untarring the file fails
         with self.assertRaises(tarfile.ReadError) as exc:  # noqa: [F841]
-            dbt.clients.system.untar_package(tar_file_path, self.tempdest)
+            dbt.common.clients.system.untar_package(tar_file_path, self.tempdest)
 
     def test_untar_package_empty(self):
         #  create a tarball with nothing in it
@@ -267,5 +267,5 @@ class TestUntarPackage(unittest.TestCase):
 
             #  make sure we throw an error for the empty file
             with self.assertRaises(tarfile.ReadError) as exc:
-                dbt.clients.system.untar_package(named_file.name, self.tempdest)
+                dbt.common.clients.system.untar_package(named_file.name, self.tempdest)
             self.assertEqual("empty file", str(exc.exception))

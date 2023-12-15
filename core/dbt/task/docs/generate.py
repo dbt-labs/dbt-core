@@ -7,7 +7,7 @@ from itertools import chain
 
 import dbt.common.utils.formatting
 from dbt.common.dataclass_schema import ValidationError
-from dbt.clients.system import load_file_contents
+from dbt.common.clients.system import load_file_contents
 
 from dbt.task.docs import DOCS_INDEX_FILE_PATH
 from dbt.task.compile import CompileTask

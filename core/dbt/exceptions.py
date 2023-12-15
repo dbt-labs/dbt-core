@@ -12,6 +12,7 @@ from dbt.common.exceptions import (
     env_secrets,
     scrub_secrets,
     DbtValidationError,
+    CommandError,
 )
 from dbt.node_types import NodeType, AccessType
 
@@ -133,20 +134,6 @@ class DbtSelectorsError(DbtConfigError):
 
 class DbtProfileError(DbtConfigError):
     pass
-
-
-class CommandError(DbtRuntimeError):
-    def __init__(self, cwd: str, cmd: List[str], msg: str = "Error running command") -> None:
-        cmd_scrubbed = list(scrub_secrets(cmd_txt, env_secrets()) for cmd_txt in cmd)
-        super().__init__(msg)
-        self.cwd = cwd
-        self.cmd = cmd_scrubbed
-        self.args = (cwd, cmd_scrubbed, msg)
-
-    def __str__(self):
-        if len(self.cmd) == 0:
-            return f"{self.msg}: No arguments given"
-        return f'{self.msg}: "{self.cmd[0]}"'
 
 
 class ExecutableError(CommandError):

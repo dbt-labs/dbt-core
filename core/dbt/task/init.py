@@ -9,7 +9,7 @@ import yaml
 import click
 
 import dbt.config
-import dbt.clients.system
+import dbt.common.clients.system
 from dbt.config.profile import read_profile
 from dbt.common.exceptions import DbtRuntimeError
 from dbt.flags import get_flags
@@ -68,7 +68,7 @@ class InitTask(BaseTask):
         profiles_path = Path(profiles_dir)
         if not profiles_path.exists():
             fire_event(ConfigFolderDirectory(dir=profiles_dir))
-            dbt.clients.system.make_directory(profiles_dir)
+            dbt.common.clients.system.make_directory(profiles_dir)
             return True
         return False
 

@@ -21,7 +21,7 @@ from dbt.constants import (
     PACKAGES_FILE_NAME,
     PACKAGE_LOCK_HASH_KEY,
 )
-from dbt.clients.system import path_exists, load_file_contents
+from dbt.common.clients.system import path_exists, load_file_contents
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.adapters.contracts.connection import QueryComment
 from dbt.exceptions import (

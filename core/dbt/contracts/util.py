@@ -2,7 +2,7 @@ import dataclasses
 from datetime import datetime
 from typing import List, Tuple, ClassVar, Type, TypeVar, Dict, Any, Optional
 
-from dbt.clients.system import write_json, read_json
+from dbt.common.clients.system import write_json, read_json
 from dbt.exceptions import (
     DbtInternalError,
     DbtRuntimeError,

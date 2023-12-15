@@ -47,8 +47,8 @@ class TestTarballPackage(unittest.TestCase):
     @mock.patch("dbt.config.project.PartialProject.from_project_root")
     @mock.patch("os.listdir")
     @mock.patch("dbt.deps.tarball.get_downloads_path")
-    @mock.patch("dbt.clients.system.untar_package")
-    @mock.patch("dbt.clients.system.download")
+    @mock.patch("dbt.common.clients.system.untar_package")
+    @mock.patch("dbt.common.clients.system.download")
     def test_fetch_metadata(
         self,
         mock_download,
@@ -87,8 +87,8 @@ class TestTarballPackage(unittest.TestCase):
     @mock.patch("dbt.config.project.PartialProject.from_project_root")
     @mock.patch("os.listdir")
     @mock.patch("dbt.deps.tarball.get_downloads_path")
-    @mock.patch("dbt.clients.system.untar_package")
-    @mock.patch("dbt.clients.system.download")
+    @mock.patch("dbt.common.clients.system.untar_package")
+    @mock.patch("dbt.common.clients.system.download")
     def test_fetch_metadata_fails_on_incorrect_tar_folder_structure(
         self,
         mock_download,
