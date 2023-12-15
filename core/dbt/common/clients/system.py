@@ -25,7 +25,7 @@ from dbt.common.events.types import (
     SystemReportReturnCode,
 )
 from dbt.common.exceptions import DbtInternalError
-from dbt.common.utils.connection import connection_exception_retry as connection_exception_retry
+from dbt.common.utils.connection import connection_exception_retry
 from pathspec import PathSpec  # type: ignore
 
 if sys.platform == "win32":
