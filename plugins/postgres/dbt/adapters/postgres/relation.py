@@ -6,7 +6,7 @@ from dbt.adapters.relation_configs import (
     RelationConfigChangeAction,
     RelationResults,
 )
-from dbt.adapters.contracts.relation import RelationType, AdapterRuntimeConfig
+from dbt.adapters.contracts.relation import RelationType, RelationConfig
 from dbt.common.exceptions import DbtRuntimeError
 
 from dbt.adapters.postgres.relation_configs import (
@@ -51,16 +51,14 @@ class PostgresRelation(BaseRelation):
         return MAX_CHARACTERS_IN_IDENTIFIER
 
     def get_materialized_view_config_change_collection(
-        self, relation_results: RelationResults, runtime_config: AdapterRuntimeConfig
+        self, relation_results: RelationResults, relation_config: RelationConfig
     ) -> Optional[PostgresMaterializedViewConfigChangeCollection]:
         config_change_collection = PostgresMaterializedViewConfigChangeCollection()
 
         existing_materialized_view = PostgresMaterializedViewConfig.from_relation_results(
             relation_results
         )
-        new_materialized_view = PostgresMaterializedViewConfig.from_relation_config(
-            runtime_config.model
-        )
+        new_materialized_view = PostgresMaterializedViewConfig.from_config(relation_config)
 
         config_change_collection.indexes = self._get_index_config_changes(
             existing_materialized_view.indexes, new_materialized_view.indexes

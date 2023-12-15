@@ -30,11 +30,6 @@ class RelationConfig(Protocol):
     quoting_dict: Dict[str, bool]
 
 
-class AdapterRuntimeConfig(Protocol):
-    model: RelationConfig
-    properties: Dict[str, str]
-
-
 class ComponentName(StrEnum):
     Database = "database"
     Schema = "schema"

@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
-from typing import Set, FrozenSet, List
+from typing import Set, FrozenSet, List, Dict
+from typing_extensions import Self
 
 import agate
 from dbt.adapters.relation_configs import (
@@ -54,7 +55,7 @@ class PostgresMaterializedViewConfig(RelationConfigBase, RelationConfigValidatio
         }
 
     @classmethod
-    def from_dict(cls, config_dict: dict) -> "PostgresMaterializedViewConfig":
+    def from_dict(cls, config_dict: dict) -> Self:
         kwargs_dict = {
             "table_name": config_dict.get("table_name"),
             "query": config_dict.get("query"),
@@ -62,19 +63,17 @@ class PostgresMaterializedViewConfig(RelationConfigBase, RelationConfigValidatio
                 PostgresIndexConfig.from_dict(index) for index in config_dict.get("indexes", {})
             ),
         }
-        materialized_view: "PostgresMaterializedViewConfig" = super().from_dict(kwargs_dict)  # type: ignore
+        materialized_view: Self = super().from_dict(kwargs_dict)  # type: ignore
         return materialized_view
 
     @classmethod
-    def from_relation_config(
-        cls, relation_config: RelationConfig
-    ) -> "PostgresMaterializedViewConfig":
-        materialized_view_config = cls.parse_model_node(relation_config)
+    def from_config(cls, relation_config: RelationConfig) -> Self:
+        materialized_view_config = cls.parse_config(relation_config)
         materialized_view = cls.from_dict(materialized_view_config)
         return materialized_view
 
     @classmethod
-    def parse_model_node(cls, relation_config: RelationConfig) -> dict:
+    def parse_config(cls, relation_config: RelationConfig) -> Dict:
         indexes: List[dict] = relation_config.config.extra.get("indexes", [])
         config_dict = {
             "table_name": relation_config.identifier,
@@ -84,9 +83,7 @@ class PostgresMaterializedViewConfig(RelationConfigBase, RelationConfigValidatio
         return config_dict
 
     @classmethod
-    def from_relation_results(
-        cls, relation_results: RelationResults
-    ) -> "PostgresMaterializedViewConfig":
+    def from_relation_results(cls, relation_results: RelationResults) -> Self:
         materialized_view_config = cls.parse_relation_results(relation_results)
         materialized_view = cls.from_dict(materialized_view_config)
         return materialized_view
