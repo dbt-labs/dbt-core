@@ -67,7 +67,6 @@ class MacroNamespace(Mapping):
         raise KeyError(key)
 
     def get_from_package(self, package_name: Optional[str], name: str) -> Optional[MacroGenerator]:
-        pkg: FlatNamespace
         if package_name is None:
             return self.get(name)
         elif package_name == GLOBAL_PROJECT_NAME:
@@ -78,10 +77,11 @@ class MacroNamespace(Mapping):
             raise PackageNotFoundForMacroError(package_name)
 
 
-# This class builds the MacroNamespace by adding macros to
-# internal_packages or packages, and locals/globals.
-# Call 'build_namespace' to return a MacroNamespace.
-# This is used by ManifestContext (and subclasses)
+# This class builds the MacroNamespace by adding macros to internal_packages
+# or packages, and locals/globals. Call 'build_namespace' to return a
+# MacroNamespace. This is used by ManifestContext (and subclasses)
+
+
 class MacroNamespaceBuilder:
     def __init__(
         self,
@@ -114,7 +114,7 @@ class MacroNamespaceBuilder:
         hierarchy: Dict[str, FlatNamespace],
         macro: Macro,
         macro_func: MacroGenerator,
-    ):
+    ) -> None:
         if macro.package_name in hierarchy:
             namespace = hierarchy[macro.package_name]
         else:
@@ -125,7 +125,7 @@ class MacroNamespaceBuilder:
             raise DuplicateMacroNameError(macro_func.macro, macro, macro.package_name)
         hierarchy[macro.package_name][macro.name] = macro_func
 
-    def add_macro(self, macro: Macro, ctx: Dict[str, Any]):
+    def add_macro(self, macro: Macro, ctx: Dict[str, Any]) -> None:
         macro_name: str = macro.name
 
         # MacroGenerator is in clients/jinja.py
@@ -147,12 +147,12 @@ class MacroNamespaceBuilder:
             elif macro.package_name == self.root_package:
                 self.globals[macro_name] = macro_func
 
-    def add_macros(self, macros: Iterable[Macro], ctx: Dict[str, Any]):
+    def add_macros(self, macros: Iterable[Macro], ctx: Dict[str, Any]) -> None:
         for macro in macros:
             self.add_macro(macro, ctx)
 
     def build_namespace(self, macros: Iterable[Macro], ctx: Dict[str, Any]) -> MacroNamespace:
-        self.add_macros(macros, ctx)
+        self.add_macros(macros, ctx)  # ONE
 
         # Iterate in reverse-order and overwrite: the packages that are first
         # in the list are the ones we want to "win".

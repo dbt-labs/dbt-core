@@ -195,9 +195,13 @@ def _deep_map_render(
     ret: Any
 
     if isinstance(value, list):
-        ret = [_deep_map_render(func, v, (keypath + (idx,))) for idx, v in enumerate(value)]
+        ret = [
+            _deep_map_render(func, v, (keypath + (idx,))) for idx, v in enumerate(value)
+        ]  # 4.4%
     elif isinstance(value, dict):
-        ret = {k: _deep_map_render(func, v, (keypath + (str(k),))) for k, v in value.items()}
+        ret = {
+            k: _deep_map_render(func, v, (keypath + (str(k),))) for k, v in value.items()
+        }  # 7.3%
     elif isinstance(value, atomic_types):
         ret = func(value, keypath)
     else:

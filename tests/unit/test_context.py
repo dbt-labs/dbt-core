@@ -315,10 +315,21 @@ def mock_macro(name, package_name):
 
 def mock_manifest(config):
     manifest_macros = {}
+    macros_by_package = {}
     for name in ["macro_a", "macro_b"]:
         macro = mock_macro(name, config.project_name)
         manifest_macros[macro.unique_id] = macro
-    return mock.MagicMock(macros=manifest_macros)
+        if macro.package_name not in macros_by_package:
+            macros_by_package[macro.package_name] = {}
+        macro_package = macros_by_package[macro.package_name]
+        macro_package[macro.name] = macro
+
+    def gmbp():
+        return macros_by_package
+
+    m = mock.MagicMock(macros=manifest_macros)
+    m.get_macros_by_package = gmbp
+    return m
 
 
 def mock_model():
@@ -454,14 +465,14 @@ def test_docs_runtime_context(config_postgres):
 
 def test_macro_namespace_duplicates(config_postgres, manifest_fx):
     mn = macros.MacroNamespaceBuilder("root", "search", MacroStack(), ["dbt_postgres", "dbt"])
-    mn.add_macros(manifest_fx.macros.values(), {})
+    mn.add_macros(manifest_fx.macros.values(), {})  # TWO
 
     # same pkg, same name: error
     with pytest.raises(dbt.exceptions.CompilationError):
         mn.add_macro(mock_macro("macro_a", "root"), {})
 
     # different pkg, same name: no error
-    mn.add_macros(mock_macro("macro_a", "dbt"), {})
+    mn.add_macros(mock_macro("macro_a", "dbt"), {})  # THREE
 
 
 def test_macro_namespace(config_postgres, manifest_fx):

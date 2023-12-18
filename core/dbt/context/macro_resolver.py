@@ -87,6 +87,7 @@ class MacroResolver:
 
         if macro.name in namespace:
             raise DuplicateMacroNameError(macro, macro, macro.package_name)
+
         package_namespaces[macro.package_name][macro.name] = macro
 
     def add_macro(self, macro: Macro) -> None:

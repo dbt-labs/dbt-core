@@ -212,11 +212,17 @@ class ManifestLoaderInfo(dbtClassMixin, Writable):
     static_analysis_parsed_path_count: int = 0
     is_partial_parse_enabled: Optional[bool] = None
     is_static_analysis_enabled: Optional[bool] = None
+    loader_init_elapsed: Optional[float] = None
+    read_manifest_elapsed: Optional[float] = None
     read_files_elapsed: Optional[float] = None
+    misc_partial_parsing_elapsed: Optional[float] = None
     load_macros_elapsed: Optional[float] = None
     parse_project_elapsed: Optional[float] = None
     patch_sources_elapsed: Optional[float] = None
     process_manifest_elapsed: Optional[float] = None
+    process_manifest_docs_elapsed: Optional[float] = None
+    write_manifest_elapsed: Optional[float] = None
+    post_parse_elapsed: Optional[float] = None
     load_all_elapsed: Optional[float] = None
     projects: List[ProjectLoaderInfo] = field(default_factory=list)
     _project_index: Dict[str, ProjectLoaderInfo] = field(default_factory=dict)
@@ -237,6 +243,7 @@ class ManifestLoader:
         macro_hook: Optional[Callable[[Manifest], Any]] = None,
         file_diff: Optional[FileDiff] = None,
     ) -> None:
+        start_loader_init = time.perf_counter()
         self.root_project: RuntimeConfig = root_project
         self.all_projects: Mapping[str, Project] = all_projects
         self.file_diff = file_diff
@@ -263,9 +270,12 @@ class ManifestLoader:
         # have been enabled, but not happening because of some issue.
         self.partially_parsing = False
         self.partial_parser: Optional[PartialParsing] = None
+        self._perf_info.loader_init_elapsed = time.perf_counter() - start_loader_init
 
         # This is a saved manifest from a previous run that's used for partial parsing
+        start_read_manifest = time.perf_counter()
         self.saved_manifest: Optional[Manifest] = self.read_manifest_for_partial_parse()
+        self._perf_info.read_manifest_elapsed = time.perf_counter() - start_read_manifest
 
     # This is the method that builds a complete manifest. We sometimes
     # use an abbreviated process in tests.
@@ -317,6 +327,7 @@ class ManifestLoader:
 
             manifest = loader.load()
 
+            start_post_parse = time.perf_counter()
             _check_manifest(manifest, config)
             manifest.build_flat_graph()
 
@@ -325,6 +336,7 @@ class ManifestLoader:
             loader.save_macros_to_adapter(adapter)
 
             # Save performance info
+            loader._perf_info.post_parse_elapsed = time.perf_counter() - start_post_parse
             loader._perf_info.load_all_elapsed = time.perf_counter() - start_load_all
             loader.track_project_load()
 
@@ -369,6 +381,7 @@ class ManifestLoader:
         self._perf_info.read_files_elapsed = time.perf_counter() - start_read_files
 
         skip_parsing = False
+        start_misc_partial_parsing = time.perf_counter()
         if self.saved_manifest is not None:
             self.partial_parser = PartialParsing(self.saved_manifest, self.manifest.files)
             skip_parsing = self.partial_parser.skip_parsing()
@@ -428,6 +441,9 @@ class ManifestLoader:
 
                     if os.environ.get("DBT_PP_TEST"):
                         raise exc
+        self._perf_info.misc_partial_parsing_elapsed = (
+            time.perf_counter() - start_misc_partial_parsing
+        )
 
         if self.manifest._parsing_info is None:
             self.manifest._parsing_info = ParsingInfo()
@@ -509,6 +525,8 @@ class ManifestLoader:
             self.manifest.sources = patcher.sources
             self._perf_info.patch_sources_elapsed = time.perf_counter() - start_patch
 
+            start_process = time.perf_counter()
+
             # We need to rebuild disabled in order to include disabled sources
             self.manifest.rebuild_disabled_lookup()
 
@@ -524,10 +542,13 @@ class ManifestLoader:
             # update the refs, sources, docs and metrics depends_on.nodes
             # These check the created_at time on the nodes to
             # determine whether they need processing.
-            start_process = time.perf_counter()
             self.process_sources(self.root_project.project_name)
             self.process_refs(self.root_project.project_name, self.root_project.dependencies)
+            start_process_manifest_docs = time.perf_counter()
             self.process_docs(self.root_project)
+            self._perf_info.process_manifest_docs_elapsed = (
+                time.perf_counter() - start_process_manifest_docs
+            )
             self.process_metrics(self.root_project)
             self.process_saved_queries(self.root_project)
             self.check_valid_group_config()
@@ -547,6 +568,7 @@ class ManifestLoader:
             )
 
         # Inject any available external nodes, reprocess refs if changes to the manifest were made.
+        start_write_manifest = time.perf_counter()
         external_nodes_modified = False
         if skip_parsing:
             # If we didn't skip parsing, this will have already run because it must run
@@ -567,6 +589,8 @@ class ManifestLoader:
             self.write_manifest_for_partial_parse()
 
         self.check_for_model_deprecations()
+
+        self._perf_info.write_manifest_elapsed = time.perf_counter() - start_write_manifest
 
         return self.manifest
 

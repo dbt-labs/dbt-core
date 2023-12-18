@@ -25,7 +25,7 @@ from dbt.context.configured import FQNLookup
 from dbt.context.context_config import ContextConfig
 from dbt.context.exceptions_jinja import wrapped_exports
 from dbt.context.macro_resolver import MacroResolver, TestMacroNamespace
-from dbt.context.macros import MacroNamespaceBuilder, MacroNamespace
+from dbt.context.virtual_macros import VirtualMacroNamespaceBuilder, VirtualMacroNamespace
 from dbt.context.manifest import ManifestContext
 from dbt.contracts.connection import AdapterResponse
 from dbt.contracts.graph.manifest import Manifest, Disabled
@@ -107,7 +107,7 @@ class BaseDatabaseWrapper:
     via a relation proxy.
     """
 
-    def __init__(self, adapter, namespace: MacroNamespace):
+    def __init__(self, adapter, namespace: VirtualMacroNamespace):
         self._adapter = adapter
         self.Relation = RelationProxy(adapter)
         self._namespace = namespace
@@ -740,7 +740,7 @@ class ProviderContext(ManifestContext):
         # mypy appeasement - we know it'll be a RuntimeConfig
         self.config: RuntimeConfig
         self.model: Union[Macro, ManifestNode] = model
-        super().__init__(config, manifest, model.package_name)
+        super().__init__(config, manifest, model.package_name)  # HEAVY - add_macros
         self.sql_results: Dict[str, Optional[AttrDict]] = {}
         self.context_config: Optional[ContextConfig] = context_config
         self.provider: Provider = provider
@@ -750,9 +750,9 @@ class ProviderContext(ManifestContext):
 
     # This overrides the method in ManifestContext, and provides
     # a model, which the ManifestContext builder does not
-    def _get_namespace_builder(self):
+    def _get_namespace_builder(self) -> VirtualMacroNamespaceBuilder:
         internal_packages = get_adapter_package_names(self.config.credentials.type)
-        return MacroNamespaceBuilder(
+        return VirtualMacroNamespaceBuilder(
             self.config.project_name,
             self.search_package,
             self.macro_stack,
