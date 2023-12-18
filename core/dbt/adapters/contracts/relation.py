@@ -28,6 +28,7 @@ class RelationConfig(Protocol):
     schema: str
     identifier: str
     quoting_dict: Dict[str, bool]
+    config: Dict[str, str]
 
 
 class ComponentName(StrEnum):
