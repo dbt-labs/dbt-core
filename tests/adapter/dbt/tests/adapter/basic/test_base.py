@@ -37,6 +37,17 @@ class BaseSimpleMaterializations:
             "name": "base",
         }
 
+    @pytest.fixture(autouse=True)
+    def clean_up(self, project):
+        yield
+        with project.adapter.connection_named("__test"):
+            relation = project.adapter.Relation.create(
+                database=project.database, schema=project.test_schema
+            )
+            project.adapter.drop_schema(relation)
+
+    pass
+
     def test_base(self, project):
 
         # seed command

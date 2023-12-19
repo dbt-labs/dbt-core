@@ -457,7 +457,6 @@ def debug(ctx, **kwargs):
 @p.target
 @p.vars
 @p.source
-@p.dry_run
 @p.lock
 @p.upgrade
 @p.add_package
@@ -482,12 +481,6 @@ def deps(ctx, **kwargs):
             raise BadOptionUsage(
                 message=f"Version is required in --add-package when a package when source is {flags.SOURCE}",
                 option_name="--add-package",
-            )
-    else:
-        if flags.DRY_RUN:
-            raise BadOptionUsage(
-                message="Invalid flag `--dry-run` when not using `--add-package`.",
-                option_name="--dry-run",
             )
     task = DepsTask(flags, ctx.obj["project"])
     results = task.run()
