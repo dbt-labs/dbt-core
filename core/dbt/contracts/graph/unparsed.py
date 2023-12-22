@@ -6,6 +6,13 @@ from dbt.common.contracts.config.properties import (
     AdditionalPropertiesAllowed,
     AdditionalPropertiesMixin,
 )
+from dbt.common.exceptions import DbtInternalError, CompilationError
+from dbt.common.dataclass_schema import (
+    dbtClassMixin,
+    StrEnum,
+    ExtensibleDbtClassMixin,
+    ValidationError,
+)
 from dbt.node_types import NodeType
 from dbt.contracts.graph.semantic_models import (
     Defaults,
@@ -20,13 +27,6 @@ from dbt.contracts.util import (
 # trigger the PathEncoder
 import dbt.common.helper_types  # noqa:F401
 from dbt.exceptions import ParsingError
-from dbt.common.exceptions import DbtInternalError, CompilationError
-from dbt.common.dataclass_schema import (
-    dbtClassMixin,
-    StrEnum,
-    ExtensibleDbtClassMixin,
-    ValidationError,
-)
 
 from dbt_semantic_interfaces.type_enums import ConversionCalculationType
 
