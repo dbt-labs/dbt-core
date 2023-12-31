@@ -7,7 +7,7 @@ from .base import BaseRunner
 from .printer import (
     print_run_result_error,
 )
-from .runnable import GraphRunnableTask
+from .run import RunTask
 
 from dbt.contracts.results import (
     FreshnessResult,
@@ -170,7 +170,7 @@ class FreshnessSelector(ResourceTypeSelector):
         return node.has_freshness
 
 
-class FreshnessTask(GraphRunnableTask):
+class FreshnessTask(RunTask):
     def defer_to_manifest(self, adapter, selected_uids):
         # freshness don't defer
         return
