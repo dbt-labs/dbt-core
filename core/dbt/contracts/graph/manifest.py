@@ -53,22 +53,23 @@ from dbt.contracts.util import (
     schema_version,
     get_artifact_schema_version,
 )
-from dbt.dataclass_schema import dbtClassMixin
+from dbt.common.dataclass_schema import dbtClassMixin
+
 from dbt.exceptions import (
     CompilationError,
     DuplicateResourceNameError,
-    DuplicateMacroInPackageError,
-    DuplicateMaterializationNameError,
     AmbiguousResourceNameRefError,
 )
-from dbt.helper_types import PathSet
-from dbt.events.functions import fire_event
-from dbt.events.types import MergedFromState, UnpinnedRefNewVersionAvailable
-from dbt.events.contextvars import get_node_info
+from dbt.adapters.exceptions import DuplicateMacroInPackageError, DuplicateMaterializationNameError
+from dbt.common.helper_types import PathSet
+from dbt.common.events.functions import fire_event
+from dbt.common.events.types import MergedFromState, UnpinnedRefNewVersionAvailable
+from dbt.common.events.contextvars import get_node_info
 from dbt.node_types import NodeType, AccessType
-from dbt.flags import get_flags, MP_CONTEXT
+from dbt.flags import get_flags
+from dbt.mp_context import get_mp_context
 from dbt import tracking
-import dbt.utils
+import dbt.common.utils
 
 
 NodeEdgeMap = Dict[str, List[str]]
@@ -830,7 +831,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         metadata={"serialize": lambda x: None, "deserialize": lambda x: None},
     )
     _lock: Lock = field(
-        default_factory=MP_CONTEXT.Lock,
+        default_factory=get_mp_context().Lock,
         metadata={"serialize": lambda x: None, "deserialize": lambda x: None},
     )
 
@@ -842,7 +843,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
 
     @classmethod
     def __post_deserialize__(cls, obj):
-        obj._lock = MP_CONTEXT.Lock()
+        obj._lock = get_mp_context().Lock()
         return obj
 
     def build_flat_graph(self):
@@ -890,7 +891,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         adapter_type: str,
         specificity: int,
     ) -> CandidateList:
-        full_name = dbt.utils.get_materialization_macro_name(
+        full_name = dbt.common.utils.get_materialization_macro_name(
             materialization_name=materialization_name,
             adapter_type=adapter_type,
             with_prefix=False,

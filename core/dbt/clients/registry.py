@@ -1,8 +1,8 @@
 import functools
 from typing import Any, Dict, List
 import requests
-from dbt.events.functions import fire_event
-from dbt.events.types import (
+from dbt.common.events.functions import fire_event
+from dbt.common.events.types import (
     RegistryProgressGETRequest,
     RegistryProgressGETResponse,
     RegistryIndexProgressGETRequest,
@@ -12,9 +12,10 @@ from dbt.events.types import (
     RegistryResponseMissingNestedKeys,
     RegistryResponseExtraNestedKeys,
 )
-from dbt.utils import memoized, _connection_exception_retry as connection_exception_retry
+from dbt.utils import memoized
+from dbt.common.utils.connection import connection_exception_retry
 from dbt import deprecations
-from dbt import semver
+from dbt.common import semver
 import os
 
 if os.getenv("DBT_PACKAGE_HUB_URL"):
@@ -104,7 +105,6 @@ def package(package_name, registry_base_url=None) -> Dict[str, Any]:
     # redirectname redirects based on package name
     # Both can be present at the same time, or neither. Fails gracefully to old name
     if ("redirectnamespace" in response) or ("redirectname" in response):
-
         if ("redirectnamespace" in response) and response["redirectnamespace"] is not None:
             use_namespace = response["redirectnamespace"]
         else:
@@ -160,7 +160,6 @@ def get_compatible_versions(package_name, dbt_version, should_version_check) -> 
 
 
 def _get_index(registry_base_url=None):
-
     url = _get_url("index", registry_base_url)
     fire_event(RegistryIndexProgressGETRequest(url=url))
     # all exceptions from requests get caught in the retry logic so no need to wrap this here

@@ -7,6 +7,7 @@ from multiprocessing.dummy import Pool as ThreadPool
 from pathlib import Path
 from typing import AbstractSet, Optional, Dict, List, Set, Tuple, Iterable
 
+import dbt.common.utils.formatting
 import dbt.exceptions
 import dbt.tracking
 import dbt.utils
@@ -23,9 +24,9 @@ from dbt.contracts.results import (
     BaseResult,
 )
 from dbt.contracts.state import PreviousState
-from dbt.events.contextvars import log_contextvars, task_contextvars
-from dbt.events.functions import fire_event, warn_or_error
-from dbt.events.types import (
+from dbt.common.events.contextvars import log_contextvars, task_contextvars
+from dbt.common.events.functions import fire_event, warn_or_error
+from dbt.common.events.types import (
     Formatting,
     LogCancelLine,
     DefaultSelector,
@@ -38,10 +39,10 @@ from dbt.events.types import (
 )
 from dbt.exceptions import (
     DbtInternalError,
-    NotImplementedError,
     DbtRuntimeError,
     FailFastError,
 )
+from dbt.common.exceptions import NotImplementedError
 from dbt.flags import get_flags
 from dbt.graph import GraphQueue, NodeSelector, SelectionSpec, parse_difference, UniqueId
 from dbt.logger import (
@@ -405,11 +406,21 @@ class GraphRunnableTask(ConfiguredTask):
         if not self.args.populate_cache:
             return
 
+        if self.manifest is None:
+            raise DbtInternalError("manifest was None in populate_adapter_cache")
+
         start_populate_cache = time.perf_counter()
+        # the cache only cares about executable nodes
+        cachable_nodes = [
+            node
+            for node in self.manifest.nodes.values()
+            if (node.is_relational and not node.is_ephemeral_model and not node.is_external_node)
+        ]
+
         if get_flags().CACHE_SELECTED_ONLY is True:
-            adapter.set_relations_cache(self.manifest, required_schemas=required_schemas)
+            adapter.set_relations_cache(cachable_nodes, required_schemas=required_schemas)
         else:
-            adapter.set_relations_cache(self.manifest)
+            adapter.set_relations_cache(cachable_nodes)
         cache_populate_time = time.perf_counter() - start_populate_cache
         if dbt.tracking.active_user is not None:
             dbt.tracking.track_runnable_timing(
@@ -538,7 +549,7 @@ class GraphRunnableTask(ConfiguredTask):
         def list_schemas(db_only: BaseRelation) -> List[Tuple[Optional[str], str]]:
             # the database can be None on some warehouses that don't support it
             database_quoted: Optional[str]
-            db_lowercase = dbt.utils.lowercase(db_only.database)
+            db_lowercase = dbt.common.utils.formatting.lowercase(db_only.database)
             if db_only.database is None:
                 database_quoted = None
             else:
@@ -560,7 +571,7 @@ class GraphRunnableTask(ConfiguredTask):
         list_futures = []
         create_futures = []
 
-        with dbt.utils.executor(self.config) as tpe:
+        with dbt.common.utils.executor(self.config) as tpe:
             for req in required_databases:
                 if req.database is None:
                     name = "list_schemas"
@@ -578,7 +589,7 @@ class GraphRunnableTask(ConfiguredTask):
                     # skip this
                     continue
                 db: Optional[str] = info.database
-                db_lower: Optional[str] = dbt.utils.lowercase(db)
+                db_lower: Optional[str] = dbt.common.utils.formatting.lowercase(db)
                 schema: str = info.schema
 
                 db_schema = (db_lower, schema.lower())

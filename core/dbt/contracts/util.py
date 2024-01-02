@@ -2,7 +2,7 @@ import dataclasses
 from datetime import datetime
 from typing import List, Tuple, ClassVar, Type, TypeVar, Dict, Any, Optional
 
-from dbt.clients.system import write_json, read_json
+from dbt.common.clients.system import write_json, read_json
 from dbt.exceptions import (
     DbtInternalError,
     DbtRuntimeError,
@@ -10,10 +10,12 @@ from dbt.exceptions import (
 )
 from dbt.version import __version__
 
-from dbt.events.functions import get_invocation_id, get_metadata_vars
-from dbt.dataclass_schema import dbtClassMixin
+from dbt.common.contracts.util import Replaceable
+from dbt.common.events.functions import get_metadata_vars
+from dbt.common.invocation import get_invocation_id
+from dbt.common.dataclass_schema import dbtClassMixin
 
-from dbt.dataclass_schema import (
+from dbt.common.dataclass_schema import (
     ValidatedStringMixin,
     ValidationError,
 )
@@ -41,11 +43,6 @@ def list_str() -> List[str]:
     return []
 
 
-class Replaceable:
-    def replace(self, **kwargs):
-        return dataclasses.replace(self, **kwargs)
-
-
 class Mergeable(Replaceable):
     def merged(self, *args):
         """Perform a shallow merge, where the last non-None write wins. This is
@@ -65,60 +62,6 @@ class Mergeable(Replaceable):
 class Writable:
     def write(self, path: str):
         write_json(path, self.to_dict(omit_none=False))  # type: ignore
-
-
-class AdditionalPropertiesMixin:
-    """Make this class an extensible property.
-
-    The underlying class definition must include a type definition for a field
-    named '_extra' that is of type `Dict[str, Any]`.
-    """
-
-    ADDITIONAL_PROPERTIES = True
-
-    # This takes attributes in the dictionary that are
-    # not in the class definitions and puts them in an
-    # _extra dict in the class
-    @classmethod
-    def __pre_deserialize__(cls, data):
-        # dir() did not work because fields with
-        # metadata settings are not found
-        # The original version of this would create the
-        # object first and then update extra with the
-        # extra keys, but that won't work here, so
-        # we're copying the dict so we don't insert the
-        # _extra in the original data. This also requires
-        # that Mashumaro actually build the '_extra' field
-        cls_keys = cls._get_field_names()
-        new_dict = {}
-        for key, value in data.items():
-            # The pre-hook/post-hook mess hasn't been converted yet... That happens in
-            # the super().__pre_deserialize__ below...
-            if key not in cls_keys and key not in ["_extra", "pre-hook", "post-hook"]:
-                if "_extra" not in new_dict:
-                    new_dict["_extra"] = {}
-                new_dict["_extra"][key] = value
-            else:
-                new_dict[key] = value
-        data = new_dict
-        data = super().__pre_deserialize__(data)
-        return data
-
-    def __post_serialize__(self, dct):
-        data = super().__post_serialize__(dct)
-        data.update(self.extra)
-        if "_extra" in data:
-            del data["_extra"]
-        return data
-
-    def replace(self, **kwargs):
-        dct = self.to_dict(omit_none=False)
-        dct.update(kwargs)
-        return self.from_dict(dct)
-
-    @property
-    def extra(self):
-        return self._extra
 
 
 class Readable:

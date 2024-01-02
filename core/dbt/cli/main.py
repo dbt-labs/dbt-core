@@ -21,22 +21,22 @@ from dbt.contracts.results import (
     CatalogArtifact,
     RunExecutionResult,
 )
-from dbt.events.base_types import EventMsg
+from dbt.common.events.base_types import EventMsg
 from dbt.task.build import BuildTask
 from dbt.task.clean import CleanTask
 from dbt.task.clone import CloneTask
 from dbt.task.compile import CompileTask
 from dbt.task.debug import DebugTask
 from dbt.task.deps import DepsTask
+from dbt.task.docs.generate import GenerateTask
+from dbt.task.docs.serve import ServeTask
 from dbt.task.freshness import FreshnessTask
-from dbt.task.generate import GenerateTask
 from dbt.task.init import InitTask
 from dbt.task.list import ListTask
 from dbt.task.retry import RetryTask
 from dbt.task.run import RunTask
 from dbt.task.run_operation import RunOperationTask
 from dbt.task.seed import SeedTask
-from dbt.task.serve import ServeTask
 from dbt.task.show import ShowTask
 from dbt.task.snapshot import SnapshotTask
 from dbt.task.test import TestTask

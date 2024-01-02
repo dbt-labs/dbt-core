@@ -18,7 +18,7 @@ from dbt.contracts.graph.nodes import (
 from dbt.config.project import VarProvider
 from dbt.context import base, providers, docs, manifest, macros
 from dbt.contracts.files import FileHash
-from dbt.events.functions import reset_metadata_vars
+from dbt.common.events.functions import reset_metadata_vars
 from dbt.node_types import NodeType
 import dbt.exceptions
 from .utils import (
@@ -91,7 +91,7 @@ class TestVar(unittest.TestCase):
         var = providers.RuntimeVar(self.context, self.config, self.model)
 
         self.assertEqual(var("foo", "bar"), "bar")
-        with self.assertRaises(dbt.exceptions.CompilationError):
+        with self.assertRaises(dbt.common.exceptions.CompilationError):
             var("foo")
 
     def test_parser_var_default_something(self):
@@ -118,8 +118,9 @@ class TestVar(unittest.TestCase):
 class TestParseWrapper(unittest.TestCase):
     def setUp(self):
         self.mock_config = mock.MagicMock()
+        self.mock_mp_context = mock.MagicMock()
         adapter_class = adapter_factory()
-        self.mock_adapter = adapter_class(self.mock_config)
+        self.mock_adapter = adapter_class(self.mock_config, self.mock_mp_context)
         self.namespace = mock.MagicMock()
         self.wrapper = providers.ParseDatabaseWrapper(self.mock_adapter, self.namespace)
         self.responder = self.mock_adapter.responder
@@ -137,13 +138,14 @@ class TestParseWrapper(unittest.TestCase):
 class TestRuntimeWrapper(unittest.TestCase):
     def setUp(self):
         self.mock_config = mock.MagicMock()
+        self.mock_mp_context = mock.MagicMock()
         self.mock_config.quoting = {
             "database": True,
             "schema": True,
             "identifier": True,
         }
         adapter_class = adapter_factory()
-        self.mock_adapter = adapter_class(self.mock_config)
+        self.mock_adapter = adapter_class(self.mock_config, self.mock_mp_context)
         self.namespace = mock.MagicMock()
         self.wrapper = providers.RuntimeDatabaseWrapper(self.mock_adapter, self.namespace)
         self.responder = self.mock_adapter.responder
@@ -457,7 +459,7 @@ def test_macro_namespace_duplicates(config_postgres, manifest_fx):
     mn.add_macros(manifest_fx.macros.values(), {})
 
     # same pkg, same name: error
-    with pytest.raises(dbt.exceptions.CompilationError):
+    with pytest.raises(dbt.common.exceptions.CompilationError):
         mn.add_macro(mock_macro("macro_a", "root"), {})
 
     # different pkg, same name: no error

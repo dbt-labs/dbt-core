@@ -4,8 +4,9 @@ from dataclasses import dataclass
 from typing import List, Iterator, Dict, Any, TypeVar, Generic, Optional
 
 from dbt.config import RuntimeConfig, Project, IsFQNResource
-from dbt.contracts.graph.model_config import BaseConfig, get_config_for, _listify
-from dbt.exceptions import DbtInternalError
+from dbt.contracts.graph.model_config import get_config_for
+from dbt.common.contracts.config.base import BaseConfig, _listify
+from dbt.common.exceptions import DbtInternalError
 from dbt.node_types import NodeType
 from dbt.utils import fqn_search
 

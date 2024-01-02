@@ -1,4 +1,4 @@
-from dbt.dataclass_schema import ValidationError
+from dbt.common.dataclass_schema import ValidationError
 import pytest
 import os
 

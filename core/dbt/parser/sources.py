@@ -26,10 +26,10 @@ from dbt.contracts.graph.unparsed import (
     UnparsedColumn,
     Time,
 )
+from dbt.common.events.functions import warn_or_error, fire_event
+from dbt.common.events.types import UnusedTables, FreshnessConfigProblem
 
-from dbt.events.functions import warn_or_error, fire_event
-from dbt.events.types import UnusedTables, FreshnessConfigProblem
-from dbt.exceptions import DbtInternalError
+from dbt.common.exceptions import DbtInternalError
 from dbt.node_types import NodeType
 
 from dbt.parser.common import ParserRef

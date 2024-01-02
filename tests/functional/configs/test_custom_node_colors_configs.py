@@ -2,7 +2,7 @@ import pytest
 
 from dbt.tests.util import run_dbt, get_manifest
 
-from dbt.dataclass_schema import ValidationError
+from dbt.common.dataclass_schema import ValidationError
 
 CUSTOM_NODE_COLOR_MODEL_LEVEL = "red"
 CUSTOM_NODE_COLOR_SCHEMA_LEVEL = "blue"

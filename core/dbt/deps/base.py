@@ -6,11 +6,11 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import List, Optional, Generic, TypeVar, Dict
 
-from dbt.clients import system
+from dbt.common.clients import system
 from dbt.contracts.project import ProjectPackageMetadata
-from dbt.events.functions import fire_event
-from dbt.events.types import DepsSetDownloadDirectory
-from dbt.utils import _connection_exception_retry as connection_exception_retry
+from dbt.common.events.functions import fire_event
+from dbt.common.events.types import DepsSetDownloadDirectory
+from dbt.common.utils.connection import connection_exception_retry
 
 DOWNLOADS_PATH = None
 
@@ -126,7 +126,7 @@ class PinnedPackage(BasePackage):
         download appears successful but the file did not make it through as expected
         (generally due to a github incident).  Either way we want to retry downloading
         and untarring to see if we can get a success.  Call this within
-        `_connection_exception_retry`
+        `connection_exception_retry`
         """
 
         system.download(download_url, tar_path)

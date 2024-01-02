@@ -3,7 +3,7 @@ from itertools import product
 import networkx as nx  # type: ignore
 from functools import partial
 
-from dbt.exceptions import DbtInternalError
+from dbt.common.exceptions import DbtInternalError
 
 UniqueId = NewType("UniqueId", str)
 

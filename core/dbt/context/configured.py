@@ -2,7 +2,7 @@ import os
 from typing import Any, Dict, Optional
 
 from dbt.constants import SECRET_ENV_PREFIX, DEFAULT_ENV_PLACEHOLDER
-from dbt.contracts.connection import AdapterRequiredConfig
+from dbt.adapters.contracts.connection import AdapterRequiredConfig
 from dbt.node_types import NodeType
 from dbt.utils import MultiDict
 

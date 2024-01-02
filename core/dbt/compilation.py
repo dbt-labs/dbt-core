@@ -1,4 +1,3 @@
-import argparse
 import json
 
 import networkx as nx  # type: ignore
@@ -8,10 +7,11 @@ import pickle
 from collections import defaultdict
 from typing import List, Dict, Any, Tuple, Optional
 
+from dbt.common.invocation import get_invocation_id
 from dbt.flags import get_flags
 from dbt.adapters.factory import get_adapter
 from dbt.clients import jinja
-from dbt.clients.system import make_directory
+from dbt.common.clients.system import make_directory
 from dbt.context.providers import generate_runtime_model_context
 from dbt.contracts.graph.manifest import Manifest, UniqueID
 from dbt.contracts.graph.nodes import (
@@ -28,13 +28,12 @@ from dbt.exceptions import (
     DbtRuntimeError,
 )
 from dbt.graph import Graph
-from dbt.events.functions import fire_event, get_invocation_id
-from dbt.events.types import FoundStats, Note, WritingInjectedSQLForNode
-from dbt.events.contextvars import get_node_info
+from dbt.common.events.functions import fire_event
+from dbt.common.events.types import FoundStats, Note, WritingInjectedSQLForNode
+from dbt.common.events.contextvars import get_node_info
 from dbt.node_types import NodeType, ModelLanguage
-from dbt.events.format import pluralize
+from dbt.common.events.format import pluralize
 import dbt.tracking
-import dbt.task.list as list_task
 import sqlparse
 
 graph_file_name = "graph.gpickle"
@@ -485,11 +484,8 @@ class Compiler:
         if write:
             self.write_graph_file(linker, manifest)
 
-        # Do not print these for ListTask's
-        if not (
-            self.config.args.__class__ == argparse.Namespace
-            and self.config.args.cls == list_task.ListTask
-        ):
+        # Do not print these for list command
+        if self.config.args.which != "list":
             stats = _generate_stats(manifest)
             print_compile_stats(stats)
 

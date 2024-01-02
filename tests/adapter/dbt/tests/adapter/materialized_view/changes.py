@@ -3,8 +3,8 @@ from typing import Optional
 import pytest
 
 from dbt.adapters.base.relation import BaseRelation
-from dbt.contracts.graph.model_config import OnConfigurationChangeOption
-from dbt.contracts.relation import RelationType
+from dbt.common.contracts.config.materialization import OnConfigurationChangeOption
+from dbt.adapters.contracts.relation import RelationType
 from dbt.tests.util import (
     assert_message_in_logs,
     get_model_file,

@@ -1,7 +1,7 @@
 import os
 from typing import List
 
-from dbt.dataclass_schema import ValidationError
+from dbt.common.dataclass_schema import ValidationError
 
 from dbt.contracts.graph.nodes import IntermediateSnapshotNode, SnapshotNode
 from dbt.exceptions import SnapshopConfigError

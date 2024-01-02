@@ -2,20 +2,23 @@ import dataclasses
 
 import agate
 import decimal
+from multiprocessing import get_context
 import unittest
 from unittest import mock
 
 from dbt.adapters.base import BaseRelation
-from dbt.contracts.relation import Path
+from dbt.adapters.contracts.relation import Path
+from dbt.context.manifest import generate_query_header_context
 from dbt.task.debug import DebugTask
 
-from dbt.adapters.base.query_headers import MacroQueryStringSetter
 from dbt.adapters.postgres import PostgresAdapter
 from dbt.adapters.postgres import Plugin as PostgresPlugin
 from dbt.contracts.files import FileHash
 from dbt.contracts.graph.manifest import ManifestStateCheck
-from dbt.clients import agate_helper
-from dbt.exceptions import DbtValidationError, DbtConfigError
+from dbt.common.clients import agate_helper
+from dbt.exceptions import DbtConfigError
+from dbt.common.exceptions import DbtValidationError
+from dbt.context.providers import generate_runtime_macro_context
 from psycopg2 import extensions as psycopg2_extensions
 from psycopg2 import DatabaseError
 
@@ -59,12 +62,13 @@ class TestPostgresAdapter(unittest.TestCase):
         }
 
         self.config = config_from_parts_or_dicts(project_cfg, profile_cfg)
+        self.mp_context = get_context("spawn")
         self._adapter = None
 
     @property
     def adapter(self):
         if self._adapter is None:
-            self._adapter = PostgresAdapter(self.config)
+            self._adapter = PostgresAdapter(self.config, self.mp_context)
             inject_adapter(self._adapter, PostgresPlugin)
         return self._adapter
 
@@ -349,15 +353,15 @@ class TestPostgresAdapter(unittest.TestCase):
 
         mock_get_relations.return_value = relations
 
-        mock_manifest = mock.MagicMock()
-        mock_manifest.get_used_schemas.return_value = {("dbt", "foo"), ("dbt", "quux")}
+        relation_configs = []
+        used_schemas = {("dbt", "foo"), ("dbt", "quux")}
 
         if filtered:
             catalog, exceptions = self.adapter.get_filtered_catalog(
-                mock_manifest, set([relations[0], relations[3]])
+                relation_configs, used_schemas, set([relations[0], relations[3]])
             )
         else:
-            catalog, exceptions = self.adapter.get_catalog(mock_manifest)
+            catalog, exceptions = self.adapter.get_catalog(relation_configs, used_schemas)
 
         tupled_catalog = set(map(tuple, catalog))
         if filtered:
@@ -399,6 +403,7 @@ class TestConnectingPostgresAdapter(unittest.TestCase):
         }
 
         self.config = config_from_parts_or_dicts(project_cfg, profile_cfg)
+        self.mp_context = get_context("spawn")
 
         self.handle = mock.MagicMock(spec=psycopg2_extensions.connection)
         self.cursor = self.handle.cursor.return_value
@@ -423,12 +428,12 @@ class TestConnectingPostgresAdapter(unittest.TestCase):
         self.mock_state_check.side_effect = _mock_state_check
 
         self.psycopg2.connect.return_value = self.handle
-        self.adapter = PostgresAdapter(self.config)
-        self.adapter._macro_manifest_lazy = load_internal_manifest_macros(self.config)
-        self.adapter.connections.query_header = MacroQueryStringSetter(
-            self.config, self.adapter._macro_manifest_lazy
+        self.adapter = PostgresAdapter(self.config, self.mp_context)
+        self.adapter.set_macro_resolver(load_internal_manifest_macros(self.config))
+        self.adapter.set_macro_context_generator(generate_runtime_macro_context)
+        self.adapter.connections.set_query_header(
+            generate_query_header_context(self.config, self.adapter.get_macro_resolver())
         )
-
         self.qh_patch = mock.patch.object(self.adapter.connections.query_header, "add")
         self.mock_query_header_add = self.qh_patch.start()
         self.mock_query_header_add.side_effect = lambda q: "/* dbt */\n{}".format(q)
@@ -548,15 +553,15 @@ class TestConnectingPostgresAdapter(unittest.TestCase):
             "config-version": 2,
         }
         self.config = config_from_parts_or_dicts(project_cfg, profile_cfg)
+        self.mp_context = get_context("spawn")
         self.adapter.cleanup_connections()
-        self._adapter = PostgresAdapter(self.config)
+        self._adapter = PostgresAdapter(self.config, self.mp_context)
         self.adapter.verify_database("postgres")
 
 
 class TestPostgresFilterCatalog(unittest.TestCase):
     def test__catalog_filter_table(self):
-        manifest = mock.MagicMock()
-        manifest.get_used_schemas.return_value = [["a", "B"], ["a", "1234"]]
+        used_schemas = [["a", "B"], ["a", "1234"]]
         column_names = ["table_name", "table_database", "table_schema", "something"]
         rows = [
             ["foo", "a", "b", "1234"],  # include
@@ -566,7 +571,7 @@ class TestPostgresFilterCatalog(unittest.TestCase):
         ]
         table = agate.Table(rows, column_names, agate_helper.DEFAULT_TYPE_TESTER)
 
-        result = PostgresAdapter._catalog_filter_table(table, manifest)
+        result = PostgresAdapter._catalog_filter_table(table, used_schemas)
         assert len(result) == 3
         for row in result.rows:
             assert isinstance(row["table_schema"], str)

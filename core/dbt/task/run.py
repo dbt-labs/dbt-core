@@ -3,7 +3,7 @@ import threading
 import time
 from typing import List, Dict, Any, Iterable, Set, Tuple, Optional, AbstractSet
 
-from dbt.dataclass_schema import dbtClassMixin
+from dbt.common.dataclass_schema import dbtClassMixin
 
 from .compile import CompileRunner, CompileTask
 
@@ -23,22 +23,24 @@ from dbt.contracts.results import NodeStatus, RunResult, RunStatus, RunningStatu
 from dbt.exceptions import (
     CompilationError,
     DbtInternalError,
-    MissingMaterializationError,
     DbtRuntimeError,
-    DbtValidationError,
 )
-from dbt.events.functions import fire_event, get_invocation_id
-from dbt.events.types import (
+from dbt.common.exceptions import DbtValidationError
+from dbt.adapters.exceptions import MissingMaterializationError
+from dbt.adapters.events.types import (
     DatabaseErrorRunningHook,
-    Formatting,
     HooksRunning,
     FinishedRunningStats,
+)
+from dbt.common.events.functions import fire_event, get_invocation_id
+from dbt.common.events.types import (
+    Formatting,
     LogModelResult,
     LogStartLine,
     LogHookEndLine,
     LogHookStartLine,
 )
-from dbt.events.base_types import EventLevel
+from dbt.common.events.base_types import EventLevel
 from dbt.logger import (
     TextOnly,
     HookMetadata,
@@ -313,8 +315,10 @@ class RunTask(CompileTask):
         return False
 
     def get_hook_sql(self, adapter, hook, idx, num_hooks, extra_context) -> str:
-        compiler = adapter.get_compiler()
-        compiled = compiler.compile_node(hook, self.manifest, extra_context)
+        if self.manifest is None:
+            raise DbtInternalError("compile_node called before manifest was loaded")
+
+        compiled = self.compiler.compile_node(hook, self.manifest, extra_context)
         statement = compiled.compiled_code
         hook_index = hook.index or num_hooks
         hook_obj = get_hook(statement, index=hook_index)

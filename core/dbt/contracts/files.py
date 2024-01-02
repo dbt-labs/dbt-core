@@ -6,7 +6,7 @@ from mashumaro.types import SerializableType
 from typing import List, Optional, Union, Dict, Any
 
 from dbt.constants import MAXIMUM_SEED_SIZE
-from dbt.dataclass_schema import dbtClassMixin, StrEnum
+from dbt.common.dataclass_schema import dbtClassMixin, StrEnum
 
 from .util import SourceKey
 
@@ -159,6 +159,10 @@ class BaseSourceFile(dbtClassMixin, SerializableType):
         if isinstance(self.path, RemoteFile):
             return None
         return f"{self.project_name}://{self.path.original_file_path}"
+
+    @property
+    def original_file_path(self):
+        return self.path.original_file_path
 
     def _serialize(self):
         dct = self.to_dict()

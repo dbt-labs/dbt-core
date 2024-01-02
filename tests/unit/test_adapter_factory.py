@@ -3,40 +3,39 @@ import unittest
 from unittest import mock
 from dbt.adapters.factory import AdapterContainer
 from dbt.adapters.base.plugin import AdapterPlugin
-from dbt.include.global_project import (
+from dbt.adapters.include.global_project import (
     PROJECT_NAME as GLOBAL_PROJECT_NAME,
 )
 
 
 class TestGetPackageNames(unittest.TestCase):
     def setUp(self):
-        with mock.patch("dbt.adapters.base.plugin.project_name_from_path") as get_name:
-            get_name.return_value = "root"
-            self.root_plugin = AdapterPlugin(
-                adapter=mock.MagicMock(),
-                credentials=mock.MagicMock(),
-                include_path="/path/to/root/plugin",
-                dependencies=["childa", "childb"],
-            )
-            get_name.return_value = "pkg_childa"
-            self.childa = AdapterPlugin(
-                adapter=mock.MagicMock(),
-                credentials=mock.MagicMock(),
-                include_path="/path/to/childa",
-            )
-            get_name.return_value = "pkg_childb"
-            self.childb = AdapterPlugin(
-                adapter=mock.MagicMock(),
-                credentials=mock.MagicMock(),
-                include_path="/path/to/childb",
-                dependencies=["childc"],
-            )
-            get_name.return_value = "pkg_childc"
-            self.childc = AdapterPlugin(
-                adapter=mock.MagicMock(),
-                credentials=mock.MagicMock(),
-                include_path="/path/to/childc",
-            )
+        self.root_plugin = AdapterPlugin(
+            adapter=mock.MagicMock(),
+            credentials=mock.MagicMock(),
+            include_path="/path/to/root/plugin",
+            dependencies=["childa", "childb"],
+            project_name="root",
+        )
+        self.childa = AdapterPlugin(
+            adapter=mock.MagicMock(),
+            credentials=mock.MagicMock(),
+            include_path="/path/to/childa",
+            project_name="pkg_childa",
+        )
+        self.childb = AdapterPlugin(
+            adapter=mock.MagicMock(),
+            credentials=mock.MagicMock(),
+            include_path="/path/to/childb",
+            dependencies=["childc"],
+            project_name="pkg_childb",
+        )
+        self.childc = AdapterPlugin(
+            adapter=mock.MagicMock(),
+            credentials=mock.MagicMock(),
+            include_path="/path/to/childc",
+            project_name="pkg_childc",
+        )
 
         self._mock_modules = {
             "root": self.root_plugin,

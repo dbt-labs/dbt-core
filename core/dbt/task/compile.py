@@ -3,13 +3,13 @@ from typing import AbstractSet, Optional
 
 from dbt.contracts.graph.manifest import WritableManifest
 from dbt.contracts.results import RunStatus, RunResult
-from dbt.events.base_types import EventLevel
-from dbt.events.functions import fire_event
-from dbt.events.types import CompiledNode, Note, ParseInlineNodeError
-from dbt.exceptions import (
+from dbt.common.events.base_types import EventLevel
+from dbt.common.events.functions import fire_event
+from dbt.common.events.types import CompiledNode, Note, ParseInlineNodeError
+from dbt.common.exceptions import (
     CompilationError,
     DbtInternalError,
-    Exception as DbtException,
+    DbtBaseException as DbtException,
 )
 
 from dbt.graph import ResourceTypeSelector
@@ -40,8 +40,7 @@ class CompileRunner(BaseRunner):
         )
 
     def compile(self, manifest):
-        compiler = self.adapter.get_compiler()
-        return compiler.compile_node(self.node, manifest, {})
+        return self.compiler.compile_node(self.node, manifest, {})
 
 
 class CompileTask(GraphRunnableTask):

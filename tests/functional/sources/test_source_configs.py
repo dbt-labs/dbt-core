@@ -1,5 +1,5 @@
 import pytest
-from dbt.dataclass_schema import ValidationError
+from dbt.common.dataclass_schema import ValidationError
 
 from dbt.contracts.graph.model_config import SourceConfig
 
