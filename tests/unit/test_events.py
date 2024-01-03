@@ -87,7 +87,7 @@ class TestAdapterLogger:
         event = adapter_types.AdapterEventDebug(name="dbt_tests", base_msg=[1, 2, 3], args=[3])
         assert isinstance(event.base_msg, str)
 
-        event = types.JinjaLogDebug(msg=[1, 2, 3])
+        event = core_types.JinjaLogDebug(msg=[1, 2, 3])
         assert isinstance(event.msg, str)
 
     def test_set_adapter_dependency_log_level(self):
@@ -200,21 +200,21 @@ sample_values = [
     adapter_types.ConstraintNotEnforced(constraint="", adapter=""),
     adapter_types.ConstraintNotSupported(constraint="", adapter=""),
     # I - Project parsing ======================
-    types.InputFileDiffError(category="testing", file_id="my_file"),
-    types.InvalidValueForField(field_name="test", field_value="test"),
-    types.ValidationWarning(resource_type="model", field_name="access", node_name="my_macro"),
-    types.ParsePerfInfoPath(path=""),
-    types.PartialParsingErrorProcessingFile(file=""),
-    types.PartialParsingFile(file_id=""),
-    types.PartialParsingError(exc_info={}),
-    types.PartialParsingSkipParsing(),
-    types.UnableToPartialParse(reason="something went wrong"),
-    types.StateCheckVarsHash(vars="testing", target="testing", profile="testing"),
-    types.PartialParsingNotEnabled(),
-    types.ParsedFileLoadFailed(path="", exc="", exc_info=""),
-    types.PartialParsingEnabled(deleted=0, added=0, changed=0),
-    types.PartialParsingFile(file_id=""),
-    types.InvalidDisabledTargetInTestNode(
+    core_types.InputFileDiffError(category="testing", file_id="my_file"),
+    core_types.InvalidValueForField(field_name="test", field_value="test"),
+    core_types.ValidationWarning(resource_type="model", field_name="access", node_name="my_macro"),
+    core_types.ParsePerfInfoPath(path=""),
+    core_types.PartialParsingErrorProcessingFile(file=""),
+    core_types.PartialParsingFile(file_id=""),
+    core_types.PartialParsingError(exc_info={}),
+    core_types.PartialParsingSkipParsing(),
+    core_types.UnableToPartialParse(reason="something went wrong"),
+    core_types.StateCheckVarsHash(vars="testing", target="testing", profile="testing"),
+    core_types.PartialParsingNotEnabled(),
+    core_types.ParsedFileLoadFailed(path="", exc="", exc_info=""),
+    core_types.PartialParsingEnabled(deleted=0, added=0, changed=0),
+    core_types.PartialParsingFile(file_id=""),
+    core_types.InvalidDisabledTargetInTestNode(
         resource_type_title="",
         unique_id="",
         original_file_path="",
@@ -222,18 +222,18 @@ sample_values = [
         target_name="",
         target_package="",
     ),
-    types.UnusedResourceConfigPath(unused_config_paths=[]),
-    types.SeedIncreased(package_name="", name=""),
-    types.SeedExceedsLimitSamePath(package_name="", name=""),
-    types.SeedExceedsLimitAndPathChanged(package_name="", name=""),
-    types.SeedExceedsLimitChecksumChanged(package_name="", name="", checksum_name=""),
-    types.UnusedTables(unused_tables=[]),
-    types.WrongResourceSchemaFile(
+    core_types.UnusedResourceConfigPath(unused_config_paths=[]),
+    core_types.SeedIncreased(package_name="", name=""),
+    core_types.SeedExceedsLimitSamePath(package_name="", name=""),
+    core_types.SeedExceedsLimitAndPathChanged(package_name="", name=""),
+    core_types.SeedExceedsLimitChecksumChanged(package_name="", name="", checksum_name=""),
+    core_types.UnusedTables(unused_tables=[]),
+    core_types.WrongResourceSchemaFile(
         patch_name="", resource_type="", file_path="", plural_resource_type=""
     ),
-    types.NoNodeForYamlKey(patch_name="", yaml_key="", file_path=""),
-    types.MacroNotFoundForPatch(patch_name=""),
-    types.NodeNotFoundOrDisabled(
+    core_types.NoNodeForYamlKey(patch_name="", yaml_key="", file_path=""),
+    core_types.MacroNotFoundForPatch(patch_name=""),
+    core_types.NodeNotFoundOrDisabled(
         original_file_path="",
         unique_id="",
         resource_type_title="",
@@ -242,31 +242,31 @@ sample_values = [
         target_package="",
         disabled="",
     ),
-    types.JinjaLogWarning(),
-    types.JinjaLogInfo(msg=""),
-    types.JinjaLogDebug(msg=""),
-    types.UnpinnedRefNewVersionAvailable(
+    core_types.JinjaLogWarning(),
+    core_types.JinjaLogInfo(msg=""),
+    core_types.JinjaLogDebug(msg=""),
+    core_types.UnpinnedRefNewVersionAvailable(
         ref_node_name="", ref_node_package="", ref_node_version="", ref_max_version=""
     ),
     core_types.DeprecatedModel(model_name="", model_version="", deprecation_date=""),
-    types.DeprecatedReference(
+    core_types.DeprecatedReference(
         model_name="",
         ref_model_name="",
         ref_model_package="",
         ref_model_deprecation_date="",
         ref_model_latest_version="",
     ),
-    types.UpcomingReferenceDeprecation(
+    core_types.UpcomingReferenceDeprecation(
         model_name="",
         ref_model_name="",
         ref_model_package="",
         ref_model_deprecation_date="",
         ref_model_latest_version="",
     ),
-    types.UnsupportedConstraintMaterialization(materialized=""),
-    types.ParseInlineNodeError(exc=""),
-    types.SemanticValidationFailure(msg=""),
-    types.UnversionedBreakingChange(
+    core_types.UnsupportedConstraintMaterialization(materialized=""),
+    core_types.ParseInlineNodeError(exc=""),
+    core_types.SemanticValidationFailure(msg=""),
+    core_types.UnversionedBreakingChange(
         breaking_changes=[],
         model_name="",
         model_file_path="",
@@ -277,8 +277,9 @@ sample_values = [
         enforced_model_constraint_removed=[],
         materialization_changed=[],
     ),
-    types.WarnStateTargetEqual(state_path=""),
-    types.FreshnessConfigProblem(msg=""),
+    core_types.WarnStateTargetEqual(state_path=""),
+    core_types.FreshnessConfigProblem(msg=""),
+    core_types.SemanticValidationFailure(msg=""),
     # M - Deps generation ======================
     types.GitSparseCheckoutSubdirectory(subdir=""),
     types.GitProgressCheckoutRevision(revision=""),
@@ -310,7 +311,6 @@ sample_values = [
     types.DepsAddPackage(package_name="", version="", packages_filepath=""),
     types.DepsFoundDuplicatePackage(removed_package={}),
     core_types.DepsScrubbedPackageName(package_name=""),
-    types.SemanticValidationFailure(msg=""),
     # Q - Node execution ======================
     types.RunningOperationCaughtError(exc=""),
     types.CompileComplete(),

@@ -22,7 +22,7 @@ from dbt.exceptions import (
 )
 from dbt.common.exceptions.macros import MacroReturn
 from dbt.common.events.functions import fire_event, get_invocation_id
-from dbt.common.events.types import JinjaLogInfo, JinjaLogDebug
+from dbt.events.types import JinjaLogInfo, JinjaLogDebug
 from dbt.common.events.contextvars import get_node_info
 from dbt.version import __version__ as dbt_version
 
