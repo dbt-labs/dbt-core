@@ -400,11 +400,11 @@ sample_values = [
         node_name="", compiled="", is_inline=True, unique_id="model.test.my_model"
     ),
     # W - Node testing ======================
-    types.CatchableExceptionOnRun(exc=""),
-    types.InternalErrorOnRun(build_path="", exc=""),
-    types.GenericExceptionOnRun(build_path="", unique_id="", exc=""),
-    types.NodeConnectionReleaseError(node_name="", exc=""),
-    types.FoundStats(stat_line=""),
+    core_types.CatchableExceptionOnRun(exc=""),
+    core_types.InternalErrorOnRun(build_path="", exc=""),
+    core_types.GenericExceptionOnRun(build_path="", unique_id="", exc=""),
+    core_types.NodeConnectionReleaseError(node_name="", exc=""),
+    core_types.FoundStats(stat_line=""),
     # Z - misc ======================
     types.MainKeyboardInterrupt(),
     types.MainEncounteredError(exc=""),

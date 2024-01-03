@@ -1501,3 +1501,60 @@ class CompiledNode(InfoLevel):
                 return f"Compiled inline node is:\n{self.compiled}"
             else:
                 return f"Compiled node '{self.node_name}' is:\n{self.compiled}"
+
+
+# =======================================================
+# W - Node testing
+# =======================================================
+
+# Skipped W001
+
+
+class CatchableExceptionOnRun(DebugLevel):
+    def code(self) -> str:
+        return "W002"
+
+    def message(self) -> str:
+        return str(self.exc)
+
+
+class InternalErrorOnRun(DebugLevel):
+    def code(self) -> str:
+        return "W003"
+
+    def message(self) -> str:
+        prefix = f"Internal error executing {self.build_path}"
+
+        internal_error_string = """This is an error in dbt. Please try again. If \
+the error persists, open an issue at https://github.com/dbt-labs/dbt-core
+""".strip()
+
+        return f"{red(prefix)}\n" f"{str(self.exc).strip()}\n\n" f"{internal_error_string}"
+
+
+class GenericExceptionOnRun(ErrorLevel):
+    def code(self) -> str:
+        return "W004"
+
+    def message(self) -> str:
+        node_description = self.build_path
+        if node_description is None:
+            node_description = self.unique_id
+        prefix = f"Unhandled error while executing {node_description}"
+        return f"{red(prefix)}\n{str(self.exc).strip()}"
+
+
+class NodeConnectionReleaseError(DebugLevel):
+    def code(self) -> str:
+        return "W005"
+
+    def message(self) -> str:
+        return f"Error releasing connection for node {self.node_name}: {str(self.exc)}"
+
+
+class FoundStats(InfoLevel):
+    def code(self) -> str:
+        return "W006"
+
+    def message(self) -> str:
+        return f"Found {self.stat_line}"
