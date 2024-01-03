@@ -20,6 +20,7 @@ from dbt.constants import (
     DEPENDENCIES_FILE_NAME,
     PACKAGES_FILE_NAME,
     PACKAGE_LOCK_HASH_KEY,
+    DBT_PROJECT_FILE_NAME,
 )
 from dbt.common.clients.system import path_exists, load_file_contents
 from dbt.clients.yaml_helper import load_yaml_text
@@ -82,8 +83,8 @@ Validator Error:
 """
 
 MISSING_DBT_PROJECT_ERROR = """\
-No dbt_project.yml found at expected path {path}
-Verify that each entry within packages.yml (and their transitive dependencies) contains a file named dbt_project.yml
+No {DBT_PROJECT_FILE_NAME} found at expected path {path}
+Verify that each entry within packages.yml (and their transitive dependencies) contains a file named {DBT_PROJECT_FILE_NAME}
 """
 
 
@@ -198,16 +199,20 @@ def value_or(value: Optional[T], default: T) -> T:
 
 def load_raw_project(project_root: str) -> Dict[str, Any]:
     project_root = os.path.normpath(project_root)
-    project_yaml_filepath = os.path.join(project_root, "dbt_project.yml")
+    project_yaml_filepath = os.path.join(project_root, DBT_PROJECT_FILE_NAME)
 
     # get the project.yml contents
     if not path_exists(project_yaml_filepath):
-        raise DbtProjectError(MISSING_DBT_PROJECT_ERROR.format(path=project_yaml_filepath))
+        raise DbtProjectError(
+            MISSING_DBT_PROJECT_ERROR.format(
+                path=project_yaml_filepath, DBT_PROJECT_FILE_NAME=DBT_PROJECT_FILE_NAME
+            )
+        )
 
     project_dict = _load_yaml(project_yaml_filepath)
 
     if not isinstance(project_dict, dict):
-        raise DbtProjectError("dbt_project.yml does not parse to a dictionary")
+        raise DbtProjectError(f"{DBT_PROJECT_FILE_NAME} does not parse to a dictionary")
 
     return project_dict
 
@@ -328,14 +333,14 @@ class PartialProject(RenderComponents):
             return self.create_project(rendered)
         except DbtProjectError as exc:
             if exc.path is None:
-                exc.path = os.path.join(self.project_root, "dbt_project.yml")
+                exc.path = os.path.join(self.project_root, DBT_PROJECT_FILE_NAME)
             raise
 
     def render_package_metadata(self, renderer: PackageRenderer) -> ProjectPackageMetadata:
         packages_data = renderer.render_data(self.packages_dict)
         packages_config = package_config_from_data(packages_data, self.packages_dict)
         if not self.project_name:
-            raise DbtProjectError("Package dbt_project.yml must have a name!")
+            raise DbtProjectError(f"Package defined in {DBT_PROJECT_FILE_NAME} must have a name!")
         return ProjectPackageMetadata(self.project_name, packages_config.packages)
 
     def check_config_path(
@@ -346,7 +351,7 @@ class PartialProject(RenderComponents):
                 msg = (
                     "{deprecated_path} and {expected_path} cannot both be defined. The "
                     "`{deprecated_path}` config has been deprecated in favor of `{expected_path}`. "
-                    "Please update your `dbt_project.yml` configuration to reflect this "
+                    f"Please update your `{DBT_PROJECT_FILE_NAME}` configuration to reflect this "
                     "change."
                 )
                 raise DbtProjectError(
@@ -785,7 +790,7 @@ def read_project_flags(project_dir: str, profiles_dir: str) -> ProjectFlags:
         # want to throw an error for non-existence of dbt_project.yml here
         # because it breaks things.
         project_root = os.path.normpath(project_dir)
-        project_yaml_filepath = os.path.join(project_root, "dbt_project.yml")
+        project_yaml_filepath = os.path.join(project_root, DBT_PROJECT_FILE_NAME)
         if path_exists(project_yaml_filepath):
             try:
                 project_dict = load_raw_project(project_root)
@@ -805,7 +810,7 @@ def read_project_flags(project_dir: str, profiles_dir: str) -> ProjectFlags:
 
         if project_flags and profile_project_flags:
             raise DbtProjectError(
-                "Do not specify both 'config' in profiles.yml and 'flags' in dbt_project.yml. "
+                f"Do not specify both 'config' in profiles.yml and 'flags' in {DBT_PROJECT_FILE_NAME}. "
                 "Using 'config' in profiles.yml is deprecated."
             )
 
