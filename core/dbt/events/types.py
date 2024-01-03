@@ -1,7 +1,10 @@
-from dbt.constants import MAXIMUM_SEED_SIZE_NAME, PIN_PACKAGE_URL
-from dbt.events.base_types import WarnLevel, InfoLevel, DebugLevel, ErrorLevel
+import json
 
-from dbt.common.ui import warning_tag, line_wrap_message, yellow
+from dbt.constants import MAXIMUM_SEED_SIZE_NAME, PIN_PACKAGE_URL
+from dbt.common.ui import warning_tag, line_wrap_message, green, yellow, red
+from dbt.common.events.base_types import EventLevel
+from dbt.common.events.format import format_fancy_output_line, timestamp_to_datetime_string
+from dbt.events.base_types import WarnLevel, InfoLevel, DebugLevel, ErrorLevel, DynamicLevel
 
 
 # =======================================================
@@ -1083,3 +1086,418 @@ class DepsScrubbedPackageName(WarnLevel):
 
     def message(self) -> str:
         return f"Detected secret env var in {self.package_name}. dbt will write a scrubbed representation to the lock file. This will cause issues with subsequent 'dbt deps' using the lock file, requiring 'dbt deps --upgrade'"
+
+
+# =======================================================
+# Q - Node execution
+# =======================================================
+
+
+class RunningOperationCaughtError(ErrorLevel):
+    def code(self) -> str:
+        return "Q001"
+
+    def message(self) -> str:
+        return f"Encountered an error while running operation: {self.exc}"
+
+
+class CompileComplete(InfoLevel):
+    def code(self) -> str:
+        return "Q002"
+
+    def message(self) -> str:
+        return "Done."
+
+
+class FreshnessCheckComplete(InfoLevel):
+    def code(self) -> str:
+        return "Q003"
+
+    def message(self) -> str:
+        return "Done."
+
+
+class SeedHeader(InfoLevel):
+    def code(self) -> str:
+        return "Q004"
+
+    def message(self) -> str:
+        return self.header
+
+
+class SQLRunnerException(DebugLevel):
+    def code(self) -> str:
+        return "Q006"
+
+    def message(self) -> str:
+        return f"Got an exception: {self.exc}"
+
+
+class LogTestResult(DynamicLevel):
+    def code(self) -> str:
+        return "Q007"
+
+    def message(self) -> str:
+        if self.status == "error":
+            info = "ERROR"
+            status = red(
+                info,
+            )
+        elif self.status == "pass":
+            info = "PASS"
+            status = green(info)
+        elif self.status == "warn":
+            info = f"WARN {self.num_failures}"
+            status = yellow(info)
+        else:  # self.status == "fail":
+            info = f"FAIL {self.num_failures}"
+            status = red(info)
+        msg = f"{info} {self.name}"
+
+        return format_fancy_output_line(
+            msg=msg,
+            status=status,
+            index=self.index,
+            total=self.num_models,
+            execution_time=self.execution_time,
+        )
+
+    @classmethod
+    def status_to_level(cls, status):
+        # The statuses come from TestStatus
+        level_lookup = {
+            "fail": EventLevel.ERROR,
+            "pass": EventLevel.INFO,
+            "warn": EventLevel.WARN,
+            "error": EventLevel.ERROR,
+        }
+        if status in level_lookup:
+            return level_lookup[status]
+        else:
+            return EventLevel.INFO
+
+
+# Skipped Q008, Q009, Q010
+
+
+class LogStartLine(InfoLevel):
+    def code(self) -> str:
+        return "Q011"
+
+    def message(self) -> str:
+        msg = f"START {self.description}"
+        return format_fancy_output_line(msg=msg, status="RUN", index=self.index, total=self.total)
+
+
+class LogModelResult(DynamicLevel):
+    def code(self) -> str:
+        return "Q012"
+
+    def message(self) -> str:
+        if self.status == "error":
+            info = "ERROR creating"
+            status = red(self.status.upper())
+        else:
+            info = "OK created"
+            status = green(self.status)
+
+        msg = f"{info} {self.description}"
+        return format_fancy_output_line(
+            msg=msg,
+            status=status,
+            index=self.index,
+            total=self.total,
+            execution_time=self.execution_time,
+        )
+
+
+# Skipped Q013, Q014
+
+
+class LogSnapshotResult(DynamicLevel):
+    def code(self) -> str:
+        return "Q015"
+
+    def message(self) -> str:
+        if self.status == "error":
+            info = "ERROR snapshotting"
+            status = red(self.status.upper())
+        else:
+            info = "OK snapshotted"
+            status = green(self.result_message)
+
+        msg = "{info} {description}".format(info=info, description=self.description, **self.cfg)
+        return format_fancy_output_line(
+            msg=msg,
+            status=status,
+            index=self.index,
+            total=self.total,
+            execution_time=self.execution_time,
+        )
+
+
+class LogSeedResult(DynamicLevel):
+    def code(self) -> str:
+        return "Q016"
+
+    def message(self) -> str:
+        if self.status == "error":
+            info = "ERROR loading"
+            status = red(self.status.upper())
+        else:
+            info = "OK loaded"
+            status = green(self.result_message)
+        msg = f"{info} seed file {self.schema}.{self.relation}"
+        return format_fancy_output_line(
+            msg=msg,
+            status=status,
+            index=self.index,
+            total=self.total,
+            execution_time=self.execution_time,
+        )
+
+
+# Skipped Q017
+
+
+class LogFreshnessResult(DynamicLevel):
+    def code(self) -> str:
+        return "Q018"
+
+    def message(self) -> str:
+        if self.status == "runtime error":
+            info = "ERROR"
+            status = red(info)
+        elif self.status == "error":
+            info = "ERROR STALE"
+            status = red(info)
+        elif self.status == "warn":
+            info = "WARN"
+            status = yellow(info)
+        else:
+            info = "PASS"
+            status = green(info)
+        msg = f"{info} freshness of {self.source_name}.{self.table_name}"
+        return format_fancy_output_line(
+            msg=msg,
+            status=status,
+            index=self.index,
+            total=self.total,
+            execution_time=self.execution_time,
+        )
+
+    @classmethod
+    def status_to_level(cls, status):
+        # The statuses come from FreshnessStatus
+        # TODO should this return EventLevel enum instead?
+        level_lookup = {
+            "runtime error": EventLevel.ERROR,
+            "pass": EventLevel.INFO,
+            "warn": EventLevel.WARN,
+            "error": EventLevel.ERROR,
+        }
+        if status in level_lookup:
+            return level_lookup[status]
+        else:
+            return EventLevel.INFO
+
+
+# Skipped Q019, Q020, Q021
+
+
+class LogCancelLine(ErrorLevel):
+    def code(self) -> str:
+        return "Q022"
+
+    def message(self) -> str:
+        msg = f"CANCEL query {self.conn_name}"
+        return format_fancy_output_line(msg=msg, status=red("CANCEL"), index=None, total=None)
+
+
+class DefaultSelector(InfoLevel):
+    def code(self) -> str:
+        return "Q023"
+
+    def message(self) -> str:
+        return f"Using default selector {self.name}"
+
+
+class NodeStart(DebugLevel):
+    def code(self) -> str:
+        return "Q024"
+
+    def message(self) -> str:
+        return f"Began running node {self.node_info.unique_id}"
+
+
+class NodeFinished(DebugLevel):
+    def code(self) -> str:
+        return "Q025"
+
+    def message(self) -> str:
+        return f"Finished running node {self.node_info.unique_id}"
+
+
+class QueryCancelationUnsupported(InfoLevel):
+    def code(self) -> str:
+        return "Q026"
+
+    def message(self) -> str:
+        msg = (
+            f"The {self.type} adapter does not support query "
+            "cancellation. Some queries may still be "
+            "running!"
+        )
+        return yellow(msg)
+
+
+class ConcurrencyLine(InfoLevel):
+    def code(self) -> str:
+        return "Q027"
+
+    def message(self) -> str:
+        return f"Concurrency: {self.num_threads} threads (target='{self.target_name}')"
+
+
+class WritingInjectedSQLForNode(DebugLevel):
+    def code(self) -> str:
+        return "Q029"
+
+    def message(self) -> str:
+        return f'Writing injected SQL for node "{self.node_info.unique_id}"'
+
+
+class NodeCompiling(DebugLevel):
+    def code(self) -> str:
+        return "Q030"
+
+    def message(self) -> str:
+        return f"Began compiling node {self.node_info.unique_id}"
+
+
+class NodeExecuting(DebugLevel):
+    def code(self) -> str:
+        return "Q031"
+
+    def message(self) -> str:
+        return f"Began executing node {self.node_info.unique_id}"
+
+
+class LogHookStartLine(InfoLevel):
+    def code(self) -> str:
+        return "Q032"
+
+    def message(self) -> str:
+        msg = f"START hook: {self.statement}"
+        return format_fancy_output_line(
+            msg=msg, status="RUN", index=self.index, total=self.total, truncate=True
+        )
+
+
+class LogHookEndLine(InfoLevel):
+    def code(self) -> str:
+        return "Q033"
+
+    def message(self) -> str:
+        msg = f"OK hook: {self.statement}"
+        return format_fancy_output_line(
+            msg=msg,
+            status=green(self.status),
+            index=self.index,
+            total=self.total,
+            execution_time=self.execution_time,
+            truncate=True,
+        )
+
+
+class SkippingDetails(InfoLevel):
+    def code(self) -> str:
+        return "Q034"
+
+    def message(self) -> str:
+        # ToDo: move to core or figure out NodeType
+        if self.resource_type in ["model", "seed", "snapshot"]:
+            msg = f"SKIP relation {self.schema}.{self.node_name}"
+        else:
+            msg = f"SKIP {self.resource_type} {self.node_name}"
+        return format_fancy_output_line(
+            msg=msg, status=yellow("SKIP"), index=self.index, total=self.total
+        )
+
+
+class NothingToDo(WarnLevel):
+    def code(self) -> str:
+        return "Q035"
+
+    def message(self) -> str:
+        return "Nothing to do. Try checking your model configs and model specification args"
+
+
+class RunningOperationUncaughtError(ErrorLevel):
+    def code(self) -> str:
+        return "Q036"
+
+    def message(self) -> str:
+        return f"Encountered an error while running operation: {self.exc}"
+
+
+class EndRunResult(DebugLevel):
+    def code(self) -> str:
+        return "Q037"
+
+    def message(self) -> str:
+        return "Command end result"
+
+
+class NoNodesSelected(WarnLevel):
+    def code(self) -> str:
+        return "Q038"
+
+    def message(self) -> str:
+        return "No nodes selected!"
+
+
+class CommandCompleted(DebugLevel):
+    def code(self) -> str:
+        return "Q039"
+
+    def message(self) -> str:
+        status = "succeeded" if self.success else "failed"
+        completed_at = timestamp_to_datetime_string(self.completed_at)
+        return f"Command `{self.command}` {status} at {completed_at} after {self.elapsed:0.2f} seconds"
+
+
+class ShowNode(InfoLevel):
+    def code(self) -> str:
+        return "Q041"
+
+    def message(self) -> str:
+        if self.output_format == "json":
+            if self.is_inline:
+                return json.dumps({"show": json.loads(self.preview)}, indent=2)
+            else:
+                return json.dumps(
+                    {"node": self.node_name, "show": json.loads(self.preview)}, indent=2
+                )
+        else:
+            if self.is_inline:
+                return f"Previewing inline node:\n{self.preview}"
+            else:
+                return f"Previewing node '{self.node_name}':\n{self.preview}"
+
+
+class CompiledNode(InfoLevel):
+    def code(self) -> str:
+        return "Q042"
+
+    def message(self) -> str:
+        if self.output_format == "json":
+            if self.is_inline:
+                return json.dumps({"compiled": self.compiled}, indent=2)
+            else:
+                return json.dumps({"node": self.node_name, "compiled": self.compiled}, indent=2)
+        else:
+            if self.is_inline:
+                return f"Compiled inline node is:\n{self.compiled}"
+            else:
+                return f"Compiled node '{self.node_name}' is:\n{self.compiled}"

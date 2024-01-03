@@ -29,7 +29,7 @@ message CoreNodeRelation {
 }
 
 // CoreNodeInfo
-// TODO: rename to NodeInfo if not defined in common
+// TODO: rename to CoreNodeInfo if not defined in common
 message CoreNodeInfo {
     string node_path = 1;
     string node_name = 2;
@@ -41,6 +41,25 @@ message CoreNodeInfo {
     string node_finished_at = 8;
     google.protobuf.Struct meta = 9;
     CoreNodeRelation node_relation = 10;
+}
+
+// CoreTimingInfoMsg
+// TODO: rename to TimingInfo if possible
+message CoreTimingInfoMsg {
+    string name = 1;
+    google.protobuf.Timestamp started_at = 2;
+    google.protobuf.Timestamp completed_at = 3;
+}
+
+// RunResult
+message RunResultMsg {
+    string status = 1;
+    string message = 2;
+    repeated CoreTimingInfoMsg timing_info = 3;
+    string thread = 4;
+    float execution_time = 5;
+    google.protobuf.Struct adapter_response = 6;
+    int32 num_failures = 7;
 }
 
 //ColumnType
@@ -1137,4 +1156,381 @@ message DepsScrubbedPackageName{
 message DepsScrubbedPackageNameMsg{
     CoreEventInfo info = 1;
     DepsScrubbedPackageName data = 2;
+}
+
+// Q - Node execution
+
+// Q001
+message RunningOperationCaughtError {
+    string exc = 1;
+}
+
+message RunningOperationCaughtErrorMsg {
+    CoreEventInfo info = 1;
+    RunningOperationCaughtError data = 2;
+}
+
+// Q002
+message CompileComplete {
+}
+
+message CompileCompleteMsg {
+    CoreEventInfo info = 1;
+    CompileComplete data = 2;
+}
+
+// Q003
+message FreshnessCheckComplete {
+}
+
+message FreshnessCheckCompleteMsg {
+    CoreEventInfo info = 1;
+    FreshnessCheckComplete data = 2;
+}
+
+// Q004
+message SeedHeader {
+    string header = 1;
+}
+
+message SeedHeaderMsg {
+    CoreEventInfo info = 1;
+    SeedHeader data = 2;
+}
+
+// Skipped Q005
+
+// Q006
+message SQLRunnerException {
+    string exc = 1;
+    string exc_info = 2;
+}
+
+message SQLRunnerExceptionMsg {
+    CoreEventInfo info = 1;
+    SQLRunnerException data = 2;
+}
+
+// Q007
+message LogTestResult {
+    CoreNodeInfo node_info = 1;
+    string name = 2;
+    string status = 3;
+    int32 index = 4;
+    int32 num_models = 5;
+    float execution_time = 6;
+    int32 num_failures = 7;
+}
+
+message LogTestResultMsg {
+    CoreEventInfo info = 1;
+    LogTestResult data = 2;
+}
+
+
+// Skipped Q008, Q009, Q010
+
+
+// Q011
+message LogStartLine {
+    CoreNodeInfo node_info = 1;
+    string description = 2;
+    int32 index = 3;
+    int32 total = 4;
+}
+
+message LogStartLineMsg {
+    CoreEventInfo info = 1;
+    LogStartLine data = 2;
+}
+
+// Q012
+message LogModelResult {
+    CoreNodeInfo node_info = 1;
+    string description = 2;
+    string status = 3;
+    int32 index = 4;
+    int32 total = 5;
+    float execution_time = 6;
+}
+
+message LogModelResultMsg {
+    CoreEventInfo info = 1;
+    LogModelResult data = 2;
+}
+
+// skipped Q013, Q014
+
+// Q015
+message LogSnapshotResult {
+    CoreNodeInfo node_info = 1;
+    string description = 2;
+    string status = 3;
+    int32 index = 4;
+    int32 total = 5;
+    float execution_time = 6;
+    map<string, string> cfg = 7;
+    string result_message = 8;
+}
+
+message LogSnapshotResultMsg {
+    CoreEventInfo info = 1;
+    LogSnapshotResult data = 2;
+}
+
+// Q016
+message LogSeedResult {
+    CoreNodeInfo node_info = 1;
+    string status = 2;
+    string result_message = 3;
+    int32 index = 4;
+    int32 total = 5;
+    float execution_time = 6;
+    string schema = 7;
+    string relation = 8;
+}
+
+message LogSeedResultMsg {
+    CoreEventInfo info = 1;
+    LogSeedResult data = 2;
+}
+
+// Skipped Q017
+
+// Q018
+message LogFreshnessResult {
+    string status = 1;
+    CoreNodeInfo node_info = 2;
+    int32 index = 3;
+    int32 total = 4;
+    float execution_time = 5;
+    string source_name = 6;
+    string table_name = 7;
+}
+
+message LogFreshnessResultMsg {
+    CoreEventInfo info = 1;
+    LogFreshnessResult data = 2;
+}
+
+
+// Skipped Q019, Q020, Q021
+
+
+// Q022
+message LogCancelLine {
+    string conn_name = 1;
+}
+
+message LogCancelLineMsg {
+    CoreEventInfo info = 1;
+    LogCancelLine data = 2;
+}
+
+// Q023
+message DefaultSelector {
+    string name = 1;
+}
+
+message DefaultSelectorMsg {
+    CoreEventInfo info = 1;
+    DefaultSelector data = 2;
+}
+
+// Q024
+message NodeStart {
+    CoreNodeInfo node_info = 1;
+}
+
+message NodeStartMsg {
+    CoreEventInfo info = 1;
+    NodeStart data = 2;
+}
+
+// Q025
+message NodeFinished {
+    CoreNodeInfo node_info = 1;
+    RunResultMsg run_result = 2;
+}
+
+message NodeFinishedMsg {
+    CoreEventInfo info = 1;
+    NodeFinished data = 2;
+}
+
+// Q026
+message QueryCancelationUnsupported {
+    string type = 1;
+}
+
+message QueryCancelationUnsupportedMsg {
+    CoreEventInfo info = 1;
+    QueryCancelationUnsupported data = 2;
+}
+
+// Q027
+message ConcurrencyLine {
+    int32 num_threads = 1;
+    string target_name = 2;
+    int32 node_count = 3;
+}
+
+message ConcurrencyLineMsg {
+    CoreEventInfo info = 1;
+    ConcurrencyLine data = 2;
+}
+
+// Q029
+message WritingInjectedSQLForNode {
+    CoreNodeInfo node_info = 1;
+}
+
+message WritingInjectedSQLForNodeMsg {
+    CoreEventInfo info = 1;
+    WritingInjectedSQLForNode data = 2;
+}
+
+// Q030
+message NodeCompiling {
+    CoreNodeInfo node_info = 1;
+}
+
+message NodeCompilingMsg {
+    CoreEventInfo info = 1;
+    NodeCompiling data = 2;
+}
+
+// Q031
+message NodeExecuting {
+    CoreNodeInfo node_info = 1;
+}
+
+message NodeExecutingMsg {
+    CoreEventInfo info = 1;
+    NodeExecuting data = 2;
+}
+
+// Q032
+message LogHookStartLine {
+    CoreNodeInfo node_info = 1;
+    string statement = 2;
+    int32 index = 3;
+    int32 total = 4;
+}
+
+message LogHookStartLineMsg {
+    CoreEventInfo info = 1;
+    LogHookStartLine data = 2;
+}
+
+// Q033
+message LogHookEndLine {
+    CoreNodeInfo node_info = 1;
+    string statement = 2;
+    string status = 3;
+    int32 index = 4;
+    int32 total = 5;
+    float execution_time = 6;
+}
+
+message LogHookEndLineMsg {
+    CoreEventInfo info = 1;
+    LogHookEndLine data = 2;
+}
+
+// Q034
+message SkippingDetails {
+    CoreNodeInfo node_info = 1;
+    string resource_type = 2;
+    string schema = 3;
+    string node_name = 4;
+    int32 index = 5;
+    int32 total = 6;
+}
+
+message SkippingDetailsMsg {
+    CoreEventInfo info = 1;
+    SkippingDetails data = 2;
+}
+
+// Q035
+message NothingToDo {
+}
+
+message NothingToDoMsg {
+    CoreEventInfo info = 1;
+    NothingToDo data = 2;
+}
+
+// Q036
+message RunningOperationUncaughtError {
+    string exc = 1;
+}
+
+message RunningOperationUncaughtErrorMsg {
+    CoreEventInfo info = 1;
+    RunningOperationUncaughtError data = 2;
+}
+
+// Q037
+message EndRunResult {
+    repeated RunResultMsg results = 1;
+    float elapsed_time = 2;
+    google.protobuf.Timestamp generated_at = 3;
+    bool success = 4;
+}
+
+message EndRunResultMsg {
+    CoreEventInfo info = 1;
+    EndRunResult data = 2;
+}
+
+// Q038
+message NoNodesSelected {
+}
+
+message NoNodesSelectedMsg {
+    CoreEventInfo info = 1;
+    NoNodesSelected data = 2;
+}
+
+// Q039
+message CommandCompleted {
+    string command = 1;
+    bool success = 2;
+    google.protobuf.Timestamp completed_at = 3;
+    float elapsed = 4;
+}
+
+message CommandCompletedMsg {
+    CoreEventInfo info = 1;
+    CommandCompleted data = 2;
+}
+
+// Q041
+message ShowNode {
+    string node_name = 1;
+    string preview = 2;
+    bool is_inline = 3;
+    string output_format = 4;
+    string unique_id = 5;
+}
+
+message ShowNodeMsg {
+    CoreEventInfo info = 1;
+    ShowNode data = 2;
+}
+
+// Q042
+message CompiledNode {
+    string node_name = 1;
+    string compiled = 2;
+    bool is_inline = 3;
+    string output_format = 4;
+    string unique_id = 5;
+}
+
+message CompiledNodeMsg {
+    CoreEventInfo info = 1;
+    CompiledNode data = 2;
 }

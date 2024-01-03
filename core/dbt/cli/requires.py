@@ -24,12 +24,9 @@ from dbt.events.types import (
     MainReportArgs,
     MainTrackingUserState,
 )
-from dbt.common.events.types import (
-    CommandCompleted,
-    ResourceReport,
-)
+from dbt.common.events.types import MainEncounteredError, MainStackTrace, ResourceReport
 from dbt.common.events.helpers import get_json_string_utcnow
-from dbt.common.events.types import MainEncounteredError, MainStackTrace
+from dbt.events.types import CommandCompleted
 from dbt.common.exceptions import DbtBaseException as DbtException
 from dbt.exceptions import DbtProjectError, FailFastError
 from dbt.parser.manifest import ManifestLoader, write_manifest

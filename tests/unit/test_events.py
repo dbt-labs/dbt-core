@@ -314,27 +314,27 @@ sample_values = [
     core_types.DepsUnpinned(revision="", git=""),
     core_types.NoNodesForSelectionCriteria(spec_raw=""),
     # Q - Node execution ======================
-    types.RunningOperationCaughtError(exc=""),
-    types.CompileComplete(),
-    types.FreshnessCheckComplete(),
-    types.SeedHeader(header=""),
-    types.SQLRunnerException(exc=""),
-    types.LogTestResult(
+    core_types.RunningOperationCaughtError(exc=""),
+    core_types.CompileComplete(),
+    core_types.FreshnessCheckComplete(),
+    core_types.SeedHeader(header=""),
+    core_types.SQLRunnerException(exc=""),
+    core_types.LogTestResult(
         name="",
         index=0,
         num_models=0,
         execution_time=0,
         num_failures=0,
     ),
-    types.LogStartLine(description="", index=0, total=0),
-    types.LogModelResult(
+    core_types.LogStartLine(description="", index=0, total=0),
+    core_types.LogModelResult(
         description="",
         status="",
         index=0,
         total=0,
         execution_time=0,
     ),
-    types.LogSnapshotResult(
+    core_types.LogSnapshotResult(
         status="",
         description="",
         cfg={},
@@ -342,7 +342,7 @@ sample_values = [
         total=0,
         execution_time=0,
     ),
-    types.LogSeedResult(
+    core_types.LogSeedResult(
         status="",
         index=0,
         total=0,
@@ -350,53 +350,55 @@ sample_values = [
         schema="",
         relation="",
     ),
-    types.LogFreshnessResult(
+    core_types.LogFreshnessResult(
         source_name="",
         table_name="",
         index=0,
         total=0,
         execution_time=0,
     ),
-    types.LogCancelLine(conn_name=""),
-    types.DefaultSelector(name=""),
-    types.NodeStart(),
-    types.NodeFinished(),
-    types.QueryCancelationUnsupported(type=""),
-    types.ConcurrencyLine(num_threads=0, target_name=""),
-    types.WritingInjectedSQLForNode(),
-    types.NodeCompiling(),
-    types.NodeExecuting(),
-    types.LogHookStartLine(
+    core_types.LogCancelLine(conn_name=""),
+    core_types.DefaultSelector(name=""),
+    core_types.NodeStart(),
+    core_types.NodeFinished(),
+    core_types.QueryCancelationUnsupported(type=""),
+    core_types.ConcurrencyLine(num_threads=0, target_name=""),
+    core_types.WritingInjectedSQLForNode(),
+    core_types.NodeCompiling(),
+    core_types.NodeExecuting(),
+    core_types.LogHookStartLine(
         statement="",
         index=0,
         total=0,
     ),
-    types.LogHookEndLine(
+    core_types.LogHookEndLine(
         statement="",
         status="",
         index=0,
         total=0,
         execution_time=0,
     ),
-    types.SkippingDetails(
+    core_types.SkippingDetails(
         resource_type="",
         schema="",
         node_name="",
         index=0,
         total=0,
     ),
-    types.NothingToDo(),
-    types.RunningOperationUncaughtError(exc=""),
-    types.EndRunResult(),
-    types.NoNodesSelected(),
-    types.CommandCompleted(
+    core_types.NothingToDo(),
+    core_types.RunningOperationUncaughtError(exc=""),
+    core_types.EndRunResult(),
+    core_types.NoNodesSelected(),
+    core_types.CommandCompleted(
         command="",
         success=True,
         elapsed=0.1,
         completed_at=get_json_string_utcnow(),
     ),
-    types.ShowNode(node_name="", preview="", is_inline=True, unique_id="model.test.my_model"),
-    types.CompiledNode(node_name="", compiled="", is_inline=True, unique_id="model.test.my_model"),
+    core_types.ShowNode(node_name="", preview="", is_inline=True, unique_id="model.test.my_model"),
+    core_types.CompiledNode(
+        node_name="", compiled="", is_inline=True, unique_id="model.test.my_model"
+    ),
     # W - Node testing ======================
     types.CatchableExceptionOnRun(exc=""),
     types.InternalErrorOnRun(build_path="", exc=""),

@@ -17,11 +17,11 @@ from dbt.contracts.results import (
 )
 from dbt.common.exceptions import DbtRuntimeError, DbtInternalError
 from dbt.common.events.functions import fire_event
-from dbt.common.events.types import (
+from dbt.common.events.types import Note
+from dbt.events.types import (
     FreshnessCheckComplete,
     LogStartLine,
     LogFreshnessResult,
-    Note,
 )
 from dbt.node_types import NodeType
 

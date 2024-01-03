@@ -32,8 +32,10 @@ from dbt.common.events.types import (
     GenericExceptionOnRun,
     NodeConnectionReleaseError,
     LogDebugStackTrace,
-    SkippingDetails,
     LogSkipBecauseError,
+)
+from dbt.events.types import (
+    SkippingDetails,
     NodeCompiling,
     NodeExecuting,
 )
