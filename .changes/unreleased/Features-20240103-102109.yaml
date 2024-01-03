@@ -1,0 +1,6 @@
+kind: Features
+body: Support column comment.
+time: 2024-01-03T10:21:09.08576+09:00
+custom:
+  Author: yassun7010
+  Issue: "9198"
