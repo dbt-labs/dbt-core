@@ -5,13 +5,13 @@ from dbt.cli.types import Command as CliCommand
 from dbt.config import RuntimeConfig
 from dbt.contracts.results import NodeStatus
 from dbt.contracts.state import PreviousState
-from dbt.exceptions import DbtRuntimeError
+from dbt.common.exceptions import DbtRuntimeError
 from dbt.graph import GraphQueue
 from dbt.task.base import ConfiguredTask
 from dbt.task.build import BuildTask
 from dbt.task.clone import CloneTask
 from dbt.task.compile import CompileTask
-from dbt.task.generate import GenerateTask
+from dbt.task.docs.generate import GenerateTask
 from dbt.task.run import RunTask
 from dbt.task.run_operation import RunOperationTask
 from dbt.task.seed import SeedTask

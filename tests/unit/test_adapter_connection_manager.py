@@ -2,14 +2,15 @@ import unittest
 from unittest import mock
 import sys
 
+import dbt.adapters.exceptions
 import dbt.exceptions
 
 import psycopg2
 
-from dbt.contracts.connection import Connection
+from dbt.adapters.contracts.connection import Connection
 from dbt.adapters.base import BaseConnectionManager
 from dbt.adapters.postgres import PostgresCredentials, PostgresConnectionManager
-from dbt.events import AdapterLogger
+from dbt.adapters.events.logging import AdapterLogger
 
 
 class BaseConnectionManagerTest(unittest.TestCase):
@@ -75,7 +76,8 @@ class BaseConnectionManagerTest(unittest.TestCase):
             raise ValueError("Something went horribly wrong")
 
         with self.assertRaisesRegex(
-            dbt.exceptions.FailedToConnectError, "Something went horribly wrong"
+            dbt.adapters.exceptions.FailedToConnectError,
+            "Something went horribly wrong",
         ):
 
             BaseConnectionManager.retry_connection(
@@ -110,7 +112,8 @@ class BaseConnectionManagerTest(unittest.TestCase):
             raise ValueError("Something went horribly wrong")
 
         with self.assertRaisesRegex(
-            dbt.exceptions.FailedToConnectError, "Something went horribly wrong"
+            dbt.adapters.exceptions.FailedToConnectError,
+            "Something went horribly wrong",
         ):
 
             BaseConnectionManager.retry_connection(
@@ -185,7 +188,8 @@ class BaseConnectionManagerTest(unittest.TestCase):
             raise ValueError("Something went horribly wrong")
 
         with self.assertRaisesRegex(
-            dbt.exceptions.FailedToConnectError, "Something went horribly wrong"
+            dbt.adapters.exceptions.FailedToConnectError,
+            "Something went horribly wrong",
         ):
             BaseConnectionManager.retry_connection(
                 conn,
@@ -220,7 +224,8 @@ class BaseConnectionManagerTest(unittest.TestCase):
             raise TypeError("An unhandled thing went horribly wrong")
 
         with self.assertRaisesRegex(
-            dbt.exceptions.FailedToConnectError, "An unhandled thing went horribly wrong"
+            dbt.adapters.exceptions.FailedToConnectError,
+            "An unhandled thing went horribly wrong",
         ):
             BaseConnectionManager.retry_connection(
                 conn,
@@ -338,7 +343,8 @@ class BaseConnectionManagerTest(unittest.TestCase):
             return True
 
         with self.assertRaisesRegex(
-            dbt.exceptions.FailedToConnectError, "retry_limit cannot be negative"
+            dbt.adapters.exceptions.FailedToConnectError,
+            "retry_limit cannot be negative",
         ):
             BaseConnectionManager.retry_connection(
                 conn,
@@ -365,7 +371,7 @@ class BaseConnectionManagerTest(unittest.TestCase):
 
         for retry_timeout in [-10, -2.5, lambda _: -100, lambda _: -10.1]:
             with self.assertRaisesRegex(
-                dbt.exceptions.FailedToConnectError,
+                dbt.adapters.exceptions.FailedToConnectError,
                 "retry_timeout cannot be negative or return a negative time",
             ):
                 BaseConnectionManager.retry_connection(
@@ -392,7 +398,7 @@ class BaseConnectionManagerTest(unittest.TestCase):
             return True
 
         with self.assertRaisesRegex(
-            dbt.exceptions.FailedToConnectError,
+            dbt.adapters.exceptions.FailedToConnectError,
             "retry_limit cannot be negative",
         ):
             BaseConnectionManager.retry_connection(

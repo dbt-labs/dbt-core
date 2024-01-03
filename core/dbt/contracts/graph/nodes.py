@@ -2,15 +2,19 @@ import os
 from datetime import datetime
 import time
 from dataclasses import dataclass, field
-from enum import Enum
 import hashlib
 
 from mashumaro.types import SerializableType
 from typing import Optional, Union, List, Dict, Any, Sequence, Tuple, Iterator, Literal
 
-from dbt.dataclass_schema import dbtClassMixin, ExtensibleDbtClassMixin
+from dbt.common.contracts.constraints import (
+    ColumnLevelConstraint,
+    ConstraintType,
+    ModelLevelConstraint,
+)
+from dbt.common.dataclass_schema import dbtClassMixin, ExtensibleDbtClassMixin
 
-from dbt.clients.system import write_file
+from dbt.common.clients.system import write_file
 from dbt.contracts.files import FileHash
 from dbt.contracts.graph.saved_queries import Export, QueryParams
 from dbt.contracts.graph.semantic_models import (
@@ -39,17 +43,18 @@ from dbt.contracts.graph.unparsed import (
 )
 from dbt.contracts.graph.node_args import ModelNodeArgs
 from dbt.contracts.graph.semantic_layer_common import WhereFilterIntersection
-from dbt.contracts.util import Replaceable, AdditionalPropertiesMixin
-from dbt.events.functions import warn_or_error
+from dbt.contracts.util import Replaceable
+from dbt.common.contracts.config.properties import AdditionalPropertiesMixin
+from dbt.common.events.functions import warn_or_error
 from dbt.exceptions import ParsingError, ContractBreakingChangeError
-from dbt.events.types import (
+from dbt.common.events.types import (
     SeedIncreased,
     SeedExceedsLimitSamePath,
     SeedExceedsLimitAndPathChanged,
     SeedExceedsLimitChecksumChanged,
     UnversionedBreakingChange,
 )
-from dbt.events.contextvars import set_log_contextvars
+from dbt.common.events.contextvars import set_log_contextvars
 from dbt.flags import get_flags
 from dbt.node_types import ModelLanguage, NodeType, AccessType
 from dbt_semantic_interfaces.references import (
@@ -183,44 +188,6 @@ class RefArgs(dbtClassMixin):
             return {}
 
 
-class ConstraintType(str, Enum):
-    check = "check"
-    not_null = "not_null"
-    unique = "unique"
-    primary_key = "primary_key"
-    foreign_key = "foreign_key"
-    custom = "custom"
-
-    @classmethod
-    def is_valid(cls, item):
-        try:
-            cls(item)
-        except ValueError:
-            return False
-        return True
-
-
-@dataclass
-class ColumnLevelConstraint(dbtClassMixin):
-    type: ConstraintType
-    name: Optional[str] = None
-    # expression is a user-provided field that will depend on the constraint type.
-    # It could be a predicate (check type), or a sequence sql keywords (e.g. unique type),
-    # so the vague naming of 'expression' is intended to capture this range.
-    expression: Optional[str] = None
-    warn_unenforced: bool = (
-        True  # Warn if constraint cannot be enforced by platform but will be in DDL
-    )
-    warn_unsupported: bool = (
-        True  # Warn if constraint is not supported by the platform and won't be in DDL
-    )
-
-
-@dataclass
-class ModelLevelConstraint(ColumnLevelConstraint):
-    columns: List[str] = field(default_factory=list)
-
-
 @dataclass
 class ColumnInfo(AdditionalPropertiesMixin, ExtensibleDbtClassMixin, Replaceable):
     """Used in all ManifestNodes and SourceDefinition"""
@@ -257,6 +224,13 @@ class HasRelationMetadata(dbtClassMixin, Replaceable):
         if "database" not in data:
             data["database"] = None
         return data
+
+    @property
+    def quoting_dict(self) -> Dict[str, bool]:
+        if hasattr(self, "quoting"):
+            return self.quoting.to_dict(omit_none=True)
+        else:
+            return {}
 
 
 @dataclass

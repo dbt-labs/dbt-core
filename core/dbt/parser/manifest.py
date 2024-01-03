@@ -19,8 +19,9 @@ from typing import (
 from itertools import chain
 import time
 
+from dbt.context.manifest import generate_query_header_context
 from dbt.contracts.graph.semantic_manifest import SemanticManifest
-from dbt.events.base_types import EventLevel
+from dbt.common.events.base_types import EventLevel
 import json
 import pprint
 import msgpack
@@ -40,9 +41,9 @@ from dbt.constants import (
     PARTIAL_PARSE_FILE_NAME,
     SEMANTIC_MANIFEST_FILE_NAME,
 )
-from dbt.helper_types import PathSet
-from dbt.events.functions import fire_event, get_invocation_id, warn_or_error
-from dbt.events.types import (
+from dbt.common.helper_types import PathSet
+from dbt.common.events.functions import fire_event, get_invocation_id, warn_or_error
+from dbt.common.events.types import (
     PartialParsingErrorProcessingFile,
     PartialParsingError,
     ParsePerfInfoPath,
@@ -54,15 +55,17 @@ from dbt.events.types import (
     NodeNotFoundOrDisabled,
     StateCheckVarsHash,
     Note,
-    DeprecatedModel,
     DeprecatedReference,
     UpcomingReferenceDeprecation,
+)
+from dbt.events.types import (
+    DeprecatedModel,
 )
 from dbt.logger import DbtProcessState
 from dbt.node_types import NodeType, AccessType
 from dbt.clients.jinja import get_rendered, MacroStack
 from dbt.clients.jinja_static import statically_extract_macro_calls
-from dbt.clients.system import (
+from dbt.common.clients.system import (
     make_directory,
     path_exists,
     read_json,
@@ -124,7 +127,7 @@ from dbt.parser.snapshots import SnapshotParser
 from dbt.parser.sources import SourcePatcher
 from dbt.version import __version__
 
-from dbt.dataclass_schema import StrEnum, dbtClassMixin
+from dbt.common.dataclass_schema import StrEnum, dbtClassMixin
 from dbt import plugins
 
 from dbt_semantic_interfaces.enum_extension import assert_values_exhausted
@@ -284,7 +287,7 @@ class ManifestLoader:
         # the config and adapter may be persistent.
         if reset:
             config.clear_dependencies()
-            adapter.clear_macro_manifest()
+            adapter.clear_macro_resolver()
         macro_hook = adapter.connections.set_query_header
 
         flags = get_flags()
@@ -998,10 +1001,12 @@ class ManifestLoader:
 
     def save_macros_to_adapter(self, adapter):
         macro_manifest = MacroManifest(self.manifest.macros)
-        adapter._macro_manifest_lazy = macro_manifest
+        adapter.set_macro_resolver(macro_manifest)
         # This executes the callable macro_hook and sets the
         # query headers
-        self.macro_hook(macro_manifest)
+        # This executes the callable macro_hook and sets the query headers
+        query_header_context = generate_query_header_context(adapter.config, macro_manifest)
+        self.macro_hook(query_header_context)
 
     # This creates a MacroManifest which contains the macros in
     # the adapter. Only called by the load_macros call from the
@@ -1355,7 +1360,7 @@ def _check_resource_uniqueness(
 
         # the full node name is really defined by the adapter's relation
         relation_cls = get_relation_class_by_name(config.credentials.type)
-        relation = relation_cls.create_from(config=config, node=node)
+        relation = relation_cls.create_from(quoting=config, relation_config=node)  # type: ignore[arg-type]
         full_node_name = str(relation)
 
         existing_alias = alias_resources.get(full_node_name)
@@ -1513,7 +1518,7 @@ def _process_refs(
                 unique_id=node.unique_id,
                 ref_unique_id=target_model.unique_id,
                 access=AccessType.Private,
-                scope=dbt.utils.cast_to_str(target_model.group),
+                scope=dbt.common.utils.cast_to_str(target_model.group),
             )
         elif manifest.is_invalid_protected_ref(node, target_model, dependencies):
             raise dbt.exceptions.DbtReferenceError(

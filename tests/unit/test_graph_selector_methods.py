@@ -1418,19 +1418,19 @@ def test_select_state_no_change(manifest, previous_state):
 def test_select_state_nothing(manifest, previous_state):
     previous_state.manifest = None
     method = statemethod(manifest, previous_state)
-    with pytest.raises(dbt.exceptions.DbtRuntimeError) as exc:
+    with pytest.raises(dbt.common.exceptions.DbtRuntimeError) as exc:
         search_manifest_using_method(manifest, method, "modified")
     assert "no comparison manifest" in str(exc.value)
 
-    with pytest.raises(dbt.exceptions.DbtRuntimeError) as exc:
+    with pytest.raises(dbt.common.exceptions.DbtRuntimeError) as exc:
         search_manifest_using_method(manifest, method, "new")
     assert "no comparison manifest" in str(exc.value)
 
-    with pytest.raises(dbt.exceptions.DbtRuntimeError) as exc:
+    with pytest.raises(dbt.common.exceptions.DbtRuntimeError) as exc:
         search_manifest_using_method(manifest, method, "unmodified")
     assert "no comparison manifest" in str(exc.value)
 
-    with pytest.raises(dbt.exceptions.DbtRuntimeError) as exc:
+    with pytest.raises(dbt.common.exceptions.DbtRuntimeError) as exc:
         search_manifest_using_method(manifest, method, "old")
     assert "no comparison manifest" in str(exc.value)
 

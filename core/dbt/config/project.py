@@ -21,19 +21,19 @@ from dbt.constants import (
     PACKAGES_FILE_NAME,
     PACKAGE_LOCK_HASH_KEY,
 )
-from dbt.clients.system import path_exists, load_file_contents
+from dbt.common.clients.system import path_exists, load_file_contents
 from dbt.clients.yaml_helper import load_yaml_text
-from dbt.contracts.connection import QueryComment
+from dbt.adapters.contracts.connection import QueryComment
 from dbt.exceptions import (
     DbtProjectError,
-    SemverError,
     ProjectContractBrokenError,
     ProjectContractError,
     DbtRuntimeError,
 )
+from dbt.common.exceptions import SemverError
 from dbt.graph import SelectionSpec
-from dbt.helper_types import NoValue
-from dbt.semver import VersionSpecifier, versions_compatible
+from dbt.common.helper_types import NoValue
+from dbt.common.semver import VersionSpecifier, versions_compatible
 from dbt.version import get_installed_version
 from dbt.utils import MultiDict, md5
 from dbt.node_types import NodeType
@@ -43,7 +43,7 @@ from dbt.contracts.project import (
     SemverString,
 )
 from dbt.contracts.project import PackageConfig, ProjectPackageMetadata
-from dbt.dataclass_schema import ValidationError
+from dbt.common.dataclass_schema import ValidationError
 from .renderer import DbtProjectYamlRenderer, PackageRenderer
 from .selectors import (
     selector_config_from_data,
@@ -106,7 +106,6 @@ def load_yml_dict(file_path):
 
 
 def package_and_project_data_from_root(project_root):
-
     packages_yml_dict = load_yml_dict(f"{project_root}/{PACKAGES_FILE_NAME}")
     dependencies_yml_dict = load_yml_dict(f"{project_root}/{DEPENDENCIES_FILE_NAME}")
 
@@ -197,7 +196,6 @@ def value_or(value: Optional[T], default: T) -> T:
 
 
 def load_raw_project(project_root: str) -> Dict[str, Any]:
-
     project_root = os.path.normpath(project_root)
     project_yaml_filepath = os.path.join(project_root, "dbt_project.yml")
 
@@ -310,7 +308,6 @@ class PartialProject(RenderComponents):
         self,
         renderer: DbtProjectYamlRenderer,
     ) -> RenderComponents:
-
         rendered_project = renderer.render_project(self.project_dict, self.project_root)
         rendered_packages = renderer.render_packages(
             self.packages_dict, self.packages_specified_path

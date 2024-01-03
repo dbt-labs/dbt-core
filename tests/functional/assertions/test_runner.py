@@ -3,7 +3,7 @@ from typing import Callable, List, Optional
 
 from dbt.cli.main import dbtRunner, dbtRunnerResult
 from dbt.contracts.graph.manifest import Manifest
-from dbt.events.base_types import EventMsg
+from dbt.common.events.base_types import EventMsg
 from dbt.tests.util import get_run_results
 
 

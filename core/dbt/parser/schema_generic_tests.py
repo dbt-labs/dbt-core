@@ -24,7 +24,7 @@ from dbt.contracts.graph.nodes import (
 )
 from dbt.context.context_config import ContextConfig
 from dbt.context.configured import generate_schema_yml_context, SchemaYamlVars
-from dbt.dataclass_schema import ValidationError
+from dbt.common.dataclass_schema import ValidationError
 from dbt.exceptions import SchemaConfigError, CompilationError, ParsingError, TestConfigError
 from dbt.contracts.files import FileHash
 from dbt.utils import md5, get_pseudo_test_path

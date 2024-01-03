@@ -1,9 +1,9 @@
 import abc
 from typing import Optional, Set, List, Dict, ClassVar
 
-import dbt.exceptions
-
 import dbt.tracking
+
+from dbt.events import types as core_types
 
 
 class DBTDeprecation:
@@ -23,7 +23,7 @@ class DBTDeprecation:
     @property
     def event(self) -> abc.ABCMeta:
         if self._event is not None:
-            module_path = dbt.events.types
+            module_path = core_types
             class_name = self._event
 
             try:
@@ -36,7 +36,7 @@ class DBTDeprecation:
     def show(self, *args, **kwargs) -> None:
         if self.name not in active_deprecations:
             event = self.event(**kwargs)
-            dbt.events.functions.warn_or_error(event)
+            dbt.common.events.functions.warn_or_error(event)
             self.track_deprecation_warn()
             active_deprecations.add(self.name)
 
@@ -61,16 +61,6 @@ class ConfigDataPathDeprecation(DBTDeprecation):
     _event = "ConfigDataPathDeprecation"
 
 
-def renamed_method(old_name: str, new_name: str):
-    class AdapterDeprecationWarning(DBTDeprecation):
-        _name = "adapter:{}".format(old_name)
-        _event = "AdapterDeprecationWarning"
-
-    dep = AdapterDeprecationWarning()
-    deprecations_list.append(dep)
-    deprecations[dep.name] = dep
-
-
 class MetricAttributesRenamed(DBTDeprecation):
     _name = "metric-attr-renamed"
     _event = "MetricAttributesRenamed"
@@ -89,11 +79,6 @@ class ConfigLogPathDeprecation(DBTDeprecation):
 class ConfigTargetPathDeprecation(DBTDeprecation):
     _name = "project-config-target-path"
     _event = "ConfigTargetPathDeprecation"
-
-
-class CollectFreshnessReturnSignature(DBTDeprecation):
-    _name = "collect-freshness-return-signature"
-    _event = "CollectFreshnessReturnSignature"
 
 
 def renamed_env_var(old_name: str, new_name: str):
@@ -133,7 +118,6 @@ deprecations_list: List[DBTDeprecation] = [
     ExposureNameDeprecation(),
     ConfigLogPathDeprecation(),
     ConfigTargetPathDeprecation(),
-    CollectFreshnessReturnSignature(),
 ]
 
 deprecations: Dict[str, DBTDeprecation] = {d.name: d for d in deprecations_list}

@@ -2,23 +2,23 @@ from dataclasses import dataclass
 from typing import Any, Dict, Optional, Tuple
 import os
 
-from dbt.dataclass_schema import ValidationError
+from dbt.common.dataclass_schema import ValidationError
 
 from dbt.flags import get_flags
-from dbt.clients.system import load_file_contents
+from dbt.common.clients.system import load_file_contents
 from dbt.clients.yaml_helper import load_yaml_text
-from dbt.contracts.connection import Credentials, HasCredentials
+from dbt.adapters.contracts.connection import Credentials, HasCredentials
 from dbt.contracts.project import ProfileConfig, UserConfig
 from dbt.exceptions import (
     CompilationError,
     DbtProfileError,
     DbtProjectError,
-    DbtValidationError,
     DbtRuntimeError,
     ProfileConfigError,
 )
-from dbt.events.types import MissingProfileTarget
-from dbt.events.functions import fire_event
+from dbt.common.exceptions import DbtValidationError
+from dbt.common.events.types import MissingProfileTarget
+from dbt.common.events.functions import fire_event
 from dbt.utils import coerce_dict_str
 
 from .renderer import ProfileRenderer
@@ -75,6 +75,7 @@ class Profile(HasCredentials):
     threads: int
     credentials: Credentials
     profile_env_vars: Dict[str, Any]
+    log_cache_events: bool
 
     def __init__(
         self,
@@ -93,6 +94,9 @@ class Profile(HasCredentials):
         self.threads = threads
         self.credentials = credentials
         self.profile_env_vars = {}  # never available on init
+        self.log_cache_events = (
+            get_flags().LOG_CACHE_EVENTS
+        )  # never available on init, set for adapter instantiation via AdapterRequiredConfig
 
     def to_profile_info(self, serialize_credentials: bool = False) -> Dict[str, Any]:
         """Unlike to_project_config, this dict is not a mirror of any existing

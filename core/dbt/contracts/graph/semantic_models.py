@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from dbt.dataclass_schema import dbtClassMixin
+from dbt.common.dataclass_schema import dbtClassMixin
 from dbt_semantic_interfaces.references import (
     DimensionReference,
     EntityReference,

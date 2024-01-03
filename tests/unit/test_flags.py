@@ -6,7 +6,7 @@ import pytest
 from dbt import flags
 from dbt.contracts.project import UserConfig
 from dbt.graph.selector_spec import IndirectSelection
-from dbt.helper_types import WarnErrorOptions
+from dbt.common.helper_types import WarnErrorOptions
 
 # Skip due to interface for flag updated
 pytestmark = pytest.mark.skip

@@ -1,4 +1,3 @@
-from multiprocessing import get_context
 from pathlib import Path
 from typing import List, Optional
 
@@ -10,8 +9,8 @@ from dbt.cli.flags import Flags
 from dbt.cli.main import cli
 from dbt.cli.types import Command
 from dbt.contracts.project import UserConfig
-from dbt.exceptions import DbtInternalError
-from dbt.helper_types import WarnErrorOptions
+from dbt.common.exceptions import DbtInternalError
+from dbt.common.helper_types import WarnErrorOptions
 from dbt.tests.util import rm_file, write_file
 
 
@@ -33,10 +32,6 @@ class TestFlags:
     def test_which(self, run_context):
         flags = Flags(run_context)
         assert flags.WHICH == "run"
-
-    def test_mp_context(self, run_context):
-        flags = Flags(run_context)
-        assert flags.MP_CONTEXT == get_context("spawn")
 
     @pytest.mark.parametrize("param", cli.params)
     def test_cli_group_flags_from_params(self, run_context, param):

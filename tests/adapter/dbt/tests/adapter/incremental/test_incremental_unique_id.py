@@ -344,6 +344,17 @@ class BaseIncrementalUniqueKey:
             "add_new_rows.sql": seeds__add_new_rows_sql,
         }
 
+    @pytest.fixture(autouse=True)
+    def clean_up(self, project):
+        yield
+        with project.adapter.connection_named("__test"):
+            relation = project.adapter.Relation.create(
+                database=project.database, schema=project.test_schema
+            )
+            project.adapter.drop_schema(relation)
+
+    pass
+
     def update_incremental_model(self, incremental_model):
         """update incremental model after the seed table has been updated"""
         model_result_set = run_dbt(["run", "--select", incremental_model])

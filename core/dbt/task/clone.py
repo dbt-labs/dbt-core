@@ -5,8 +5,8 @@ from dbt.adapters.base import BaseRelation
 from dbt.clients.jinja import MacroGenerator
 from dbt.context.providers import generate_runtime_model_context
 from dbt.contracts.results import RunStatus, RunResult
-from dbt.dataclass_schema import dbtClassMixin
-from dbt.exceptions import DbtInternalError, CompilationError
+from dbt.common.dataclass_schema import dbtClassMixin
+from dbt.common.exceptions import DbtInternalError, CompilationError
 from dbt.graph import ResourceTypeSelector
 from dbt.node_types import NodeType
 from dbt.parser.manifest import write_manifest
@@ -108,7 +108,7 @@ class CloneTask(GraphRunnableTask):
 
                 # cache the 'other' schemas too!
                 if node.defer_relation:  # type: ignore
-                    other_relation = adapter.Relation.create_from_node(
+                    other_relation = adapter.Relation.create_from(
                         self.config, node.defer_relation  # type: ignore
                     )
                     result.add(other_relation.without_identifier())

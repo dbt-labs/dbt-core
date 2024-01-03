@@ -2,12 +2,13 @@ import os
 import re
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
-from dbt.dataclass_schema import StrEnum, dbtClassMixin
+from dbt.common.dataclass_schema import StrEnum, dbtClassMixin
 
 from typing import Set, Iterator, List, Optional, Dict, Union, Any, Iterable, Tuple
 from .graph import UniqueId
 from .selector_methods import MethodName
-from dbt.exceptions import DbtRuntimeError, InvalidSelectorError
+from dbt.common.exceptions import DbtRuntimeError
+from dbt.exceptions import InvalidSelectorError
 
 
 RAW_SELECTOR_PATTERN = re.compile(

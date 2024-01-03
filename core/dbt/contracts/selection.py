@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from dbt.dataclass_schema import dbtClassMixin
+from dbt.common.dataclass_schema import dbtClassMixin
 
 from typing import List, Dict, Any, Union
 

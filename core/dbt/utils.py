@@ -1,43 +1,27 @@
 import collections
-import concurrent.futures
-import copy
 import datetime
 import decimal
 import functools
-import hashlib
 import itertools
 import jinja2
 import json
 import os
-import requests
-import sys
-from tarfile import ReadError
-import time
 from pathlib import PosixPath, WindowsPath
 
-from contextlib import contextmanager
-
-from dbt.events.types import RetryExternalCall, RecordRetryException
-from dbt.exceptions import (
-    ConnectionError,
-    DbtInternalError,
-    DbtConfigError,
-    DuplicateAliasError,
+from dbt.common.utils import md5
+from dbt.common.exceptions import (
     RecursionError,
 )
-from dbt.helper_types import WarnErrorOptions
+from dbt.exceptions import DuplicateAliasError
+from dbt.common.helper_types import WarnErrorOptions
 from dbt import flags
 from enum import Enum
-from typing_extensions import Protocol
 from typing import (
     Tuple,
     Type,
     Any,
     Optional,
-    TypeVar,
     Dict,
-    Union,
-    Callable,
     List,
     Iterator,
     Mapping,
@@ -92,156 +76,8 @@ def get_model_name_or_none(model):
     return name
 
 
-MACRO_PREFIX = "dbt_macro__"
-DOCS_PREFIX = "dbt_docs__"
-
-
-def get_dbt_macro_name(name):
-    if name is None:
-        raise DbtInternalError("Got None for a macro name!")
-    return f"{MACRO_PREFIX}{name}"
-
-
-def get_dbt_docs_name(name):
-    if name is None:
-        raise DbtInternalError("Got None for a doc name!")
-    return f"{DOCS_PREFIX}{name}"
-
-
-def get_materialization_macro_name(materialization_name, adapter_type=None, with_prefix=True):
-    if adapter_type is None:
-        adapter_type = "default"
-    name = f"materialization_{materialization_name}_{adapter_type}"
-    return get_dbt_macro_name(name) if with_prefix else name
-
-
-def get_docs_macro_name(docs_name, with_prefix=True):
-    return get_dbt_docs_name(docs_name) if with_prefix else docs_name
-
-
-def get_test_macro_name(test_name, with_prefix=True):
-    name = f"test_{test_name}"
-    return get_dbt_macro_name(name) if with_prefix else name
-
-
 def split_path(path):
     return path.split(os.sep)
-
-
-def merge(*args):
-    if len(args) == 0:
-        return None
-
-    if len(args) == 1:
-        return args[0]
-
-    lst = list(args)
-    last = lst.pop(len(lst) - 1)
-
-    return _merge(merge(*lst), last)
-
-
-def _merge(a, b):
-    to_return = a.copy()
-    to_return.update(b)
-    return to_return
-
-
-# http://stackoverflow.com/questions/20656135/python-deep-merge-dictionary-data
-def deep_merge(*args):
-    """
-    >>> dbt.utils.deep_merge({'a': 1, 'b': 2, 'c': 3}, {'a': 2}, {'a': 3, 'b': 1})  # noqa
-    {'a': 3, 'b': 1, 'c': 3}
-    """
-    if len(args) == 0:
-        return None
-
-    if len(args) == 1:
-        return copy.deepcopy(args[0])
-
-    lst = list(args)
-    last = copy.deepcopy(lst.pop(len(lst) - 1))
-
-    return _deep_merge(deep_merge(*lst), last)
-
-
-def _deep_merge(destination, source):
-    if isinstance(source, dict):
-        for key, value in source.items():
-            deep_merge_item(destination, key, value)
-        return destination
-
-
-def deep_merge_item(destination, key, value):
-    if isinstance(value, dict):
-        node = destination.setdefault(key, {})
-        destination[key] = deep_merge(node, value)
-    elif isinstance(value, tuple) or isinstance(value, list):
-        if key in destination:
-            destination[key] = list(value) + list(destination[key])
-        else:
-            destination[key] = value
-    else:
-        destination[key] = value
-
-
-def _deep_map_render(
-    func: Callable[[Any, Tuple[Union[str, int], ...]], Any],
-    value: Any,
-    keypath: Tuple[Union[str, int], ...],
-) -> Any:
-    atomic_types: Tuple[Type[Any], ...] = (int, float, str, type(None), bool, datetime.date)
-
-    ret: Any
-
-    if isinstance(value, list):
-        ret = [_deep_map_render(func, v, (keypath + (idx,))) for idx, v in enumerate(value)]
-    elif isinstance(value, dict):
-        ret = {k: _deep_map_render(func, v, (keypath + (str(k),))) for k, v in value.items()}
-    elif isinstance(value, atomic_types):
-        ret = func(value, keypath)
-    else:
-        container_types: Tuple[Type[Any], ...] = (list, dict)
-        ok_types = container_types + atomic_types
-        raise DbtConfigError(
-            "in _deep_map_render, expected one of {!r}, got {!r}".format(ok_types, type(value))
-        )
-
-    return ret
-
-
-def deep_map_render(func: Callable[[Any, Tuple[Union[str, int], ...]], Any], value: Any) -> Any:
-    """This function renders a nested dictionary derived from a yaml
-    file. It is used to render dbt_project.yml, profiles.yml, and
-    schema files.
-
-    It maps the function func() onto each non-container value in 'value'
-    recursively, returning a new value. As long as func does not manipulate
-    the value, then deep_map_render will also not manipulate it.
-
-    value should be a value returned by `yaml.safe_load` or `json.load` - the
-    only expected types are list, dict, native python number, str, NoneType,
-    and bool.
-
-    func() will be called on numbers, strings, Nones, and booleans. Its first
-    parameter will be the value, and the second will be its keypath, an
-    iterable over the __getitem__ keys needed to get to it.
-
-    :raises: If there are cycles in the value, raises a
-        dbt.exceptions.RecursionException
-    """
-    try:
-        return _deep_map_render(func, value, ())
-    except RuntimeError as exc:
-        if "maximum recursion depth exceeded" in str(exc):
-            raise RecursionError("Cycle detected in deep_map_render")
-        raise
-
-
-class AttrDict(dict):
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-        self.__dict__ = self
 
 
 def get_pseudo_test_path(node_name, source_path):
@@ -256,13 +92,6 @@ def get_pseudo_test_path(node_name, source_path):
 def get_pseudo_hook_path(hook_name):
     path_parts = ["hooks", "{}.sql".format(hook_name)]
     return os.path.join(*path_parts)
-
-
-def md5(string, charset="utf-8"):
-    if sys.version_info >= (3, 9):
-        return hashlib.md5(string.encode(charset), usedforsecurity=False).hexdigest()
-    else:
-        return hashlib.md5(string.encode(charset)).hexdigest()
 
 
 def get_hash(model):
@@ -308,14 +137,6 @@ class memoized:
         return functools.partial(self.__call__, obj)
 
 
-K_T = TypeVar("K_T")
-V_T = TypeVar("V_T")
-
-
-def filter_null_values(input: Dict[K_T, Optional[V_T]]) -> Dict[K_T, V_T]:
-    return {k: v for k, v in input.items() if v is not None}
-
-
 def add_ephemeral_model_prefix(s: str) -> str:
     return "__dbt__cte__{}".format(s)
 
@@ -354,16 +175,6 @@ class JSONEncoder(json.JSONEncoder):
             return obj.to_dict(omit_none=True)
         else:
             return super().default(obj)
-
-
-class ForgivingJSONEncoder(JSONEncoder):
-    def default(self, obj):
-        # let dbt's default JSON encoder handle it if possible, fallback to
-        # str()
-        try:
-            return super().default(obj)
-        except TypeError:
-            return str(obj)
 
 
 class Translator:
@@ -444,90 +255,6 @@ def _coerce_decimal(value):
     return value
 
 
-def lowercase(value: Optional[str]) -> Optional[str]:
-    if value is None:
-        return None
-    else:
-        return value.lower()
-
-
-# some types need to make constants available to the jinja context as
-# attributes, and regular properties only work with objects. maybe this should
-# be handled by the RelationProxy?
-
-
-class classproperty(object):
-    def __init__(self, func) -> None:
-        self.func = func
-
-    def __get__(self, obj, objtype):
-        return self.func(objtype)
-
-
-class ConnectingExecutor(concurrent.futures.Executor):
-    def submit_connected(self, adapter, conn_name, func, *args, **kwargs):
-        def connected(conn_name, func, *args, **kwargs):
-            with self.connection_named(adapter, conn_name):
-                return func(*args, **kwargs)
-
-        return self.submit(connected, conn_name, func, *args, **kwargs)
-
-
-# a little concurrent.futures.Executor for single-threaded mode
-class SingleThreadedExecutor(ConnectingExecutor):
-    def submit(*args, **kwargs):
-        # this basic pattern comes from concurrent.futures.Executor itself,
-        # but without handling the `fn=` form.
-        if len(args) >= 2:
-            self, fn, *args = args
-        elif not args:
-            raise TypeError(
-                "descriptor 'submit' of 'SingleThreadedExecutor' object needs an argument"
-            )
-        else:
-            raise TypeError(
-                "submit expected at least 1 positional argument, got %d" % (len(args) - 1)
-            )
-        fut = concurrent.futures.Future()
-        try:
-            result = fn(*args, **kwargs)
-        except Exception as exc:
-            fut.set_exception(exc)
-        else:
-            fut.set_result(result)
-        return fut
-
-    @contextmanager
-    def connection_named(self, adapter, name):
-        yield
-
-
-class MultiThreadedExecutor(
-    ConnectingExecutor,
-    concurrent.futures.ThreadPoolExecutor,
-):
-    @contextmanager
-    def connection_named(self, adapter, name):
-        with adapter.connection_named(name):
-            yield
-
-
-class ThreadedArgs(Protocol):
-    single_threaded: bool
-
-
-class HasThreadingConfig(Protocol):
-    args: ThreadedArgs
-    threads: Optional[int]
-
-
-def executor(config: HasThreadingConfig) -> ConnectingExecutor:
-    if config.args.single_threaded:
-        return SingleThreadedExecutor()
-    else:
-        return MultiThreadedExecutor(max_workers=config.threads)
-
-
 def fqn_search(root: Dict[str, Any], fqn: List[str]) -> Iterator[Dict[str, Any]]:
     """Iterate into a nested dictionary, looking for keys in the fqn as levels.
     Yield the level config.
@@ -596,32 +323,6 @@ class MultiDict(Mapping[str, Any]):
         return any((name in entry for entry in self._itersource()))
 
 
-def _connection_exception_retry(fn, max_attempts: int, attempt: int = 0):
-    """Attempts to run a function that makes an external call, if the call fails
-    on a Requests exception or decompression issue (ReadError), it will be tried
-    up to 5 more times.  All exceptions that Requests explicitly raises inherit from
-    requests.exceptions.RequestException.  See https://github.com/dbt-labs/dbt-core/issues/4579
-    for context on this decompression issues specifically.
-    """
-    try:
-        return fn()
-    except (
-        requests.exceptions.RequestException,
-        ReadError,
-        EOFError,
-    ) as exc:
-        if attempt <= max_attempts - 1:
-            # This import needs to be inline to avoid circular dependency
-            from dbt.events.functions import fire_event
-
-            fire_event(RecordRetryException(exc=str(exc)))
-            fire_event(RetryExternalCall(attempt=attempt, max=max_attempts))
-            time.sleep(1)
-            return _connection_exception_retry(fn, max_attempts, attempt + 1)
-        else:
-            raise ConnectionError("External connection exception occurred: " + str(exc))
-
-
 # This is used to serialize the args in the run_results and in the logs.
 # We do this separately because there are a few fields that don't serialize,
 # i.e. PosixPath, WindowsPath, and types. It also includes args from both
@@ -668,27 +369,3 @@ def args_to_dict(args):
 
         dict_args[key] = var_args[key]
     return dict_args
-
-
-# This is useful for proto generated classes in particular, since
-# the default for protobuf for strings is the empty string, so
-# Optional[str] types don't work for generated Python classes.
-def cast_to_str(string: Optional[str]) -> str:
-    if string is None:
-        return ""
-    else:
-        return string
-
-
-def cast_to_int(integer: Optional[int]) -> int:
-    if integer is None:
-        return 0
-    else:
-        return integer
-
-
-def cast_dict_to_dict_of_strings(dct):
-    new_dct = {}
-    for k, v in dct.items():
-        new_dct[str(k)] = str(v)
-    return new_dct

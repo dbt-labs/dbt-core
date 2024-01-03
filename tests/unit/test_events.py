@@ -5,22 +5,26 @@ from typing import TypeVar
 
 import pytest
 
+from dbt.adapters.events import types as adapter_types
+from dbt.common.events.event_manager_client import ctx_set_event_manager
 from dbt.contracts.results import TimingInfo, RunResult, RunStatus
-from dbt.events import AdapterLogger, types
+from dbt.common.events import types
+from dbt.adapters.events.logging import AdapterLogger
+from dbt.common.events.base_types import msg_from_base_event
+from dbt.events import types as core_types
 from dbt.events.base_types import (
-    BaseEvent,
+    CoreBaseEvent,
     DebugLevel,
     DynamicLevel,
     ErrorLevel,
     InfoLevel,
     TestLevel,
     WarnLevel,
-    msg_from_base_event,
 )
-from dbt.events.eventmgr import TestEventManager, EventManager
-from dbt.events.functions import msg_to_dict, msg_to_json, ctx_set_event_manager
-from dbt.events.helpers import get_json_string_utcnow
-from dbt.events.types import RunResultError
+from dbt.common.events.event_manager import TestEventManager, EventManager
+from dbt.common.events.functions import msg_to_dict, msg_to_json
+from dbt.common.events.helpers import get_json_string_utcnow
+from dbt.common.events.types import RunResultError
 from dbt.flags import set_from_args
 from dbt.task.printer import print_run_result_error
 
@@ -56,14 +60,16 @@ class TestAdapterLogger:
         logger.debug("hello {}", "world")
 
         # enters lower in the call stack to test that it formats correctly
-        event = types.AdapterEventDebug(name="dbt_tests", base_msg="hello {}", args=["world"])
+        event = adapter_types.AdapterEventDebug(
+            name="dbt_tests", base_msg="hello {}", args=["world"]
+        )
         assert "hello world" in event.message()
 
         # tests that it doesn't throw
         logger.debug("1 2 {}", "3")
 
         # enters lower in the call stack to test that it formats correctly
-        event = types.AdapterEventDebug(name="dbt_tests", base_msg="1 2 {}", args=[3])
+        event = adapter_types.AdapterEventDebug(name="dbt_tests", base_msg="1 2 {}", args=[3])
         assert "1 2 3" in event.message()
 
         # tests that it doesn't throw
@@ -72,13 +78,13 @@ class TestAdapterLogger:
         # enters lower in the call stack to test that it formats correctly
         # in this case it's that we didn't attempt to replace anything since there
         # were no args passed after the initial message
-        event = types.AdapterEventDebug(name="dbt_tests", base_msg="boop{x}boop", args=[])
+        event = adapter_types.AdapterEventDebug(name="dbt_tests", base_msg="boop{x}boop", args=[])
         assert "boop{x}boop" in event.message()
 
         # ensure AdapterLogger and subclasses makes all base_msg members
         # of type string; when someone writes logger.debug(a) where a is
         # any non-string object
-        event = types.AdapterEventDebug(name="dbt_tests", base_msg=[1, 2, 3], args=[3])
+        event = adapter_types.AdapterEventDebug(name="dbt_tests", base_msg=[1, 2, 3], args=[3])
         assert isinstance(event.base_msg, str)
 
         event = types.JinjaLogDebug(msg=[1, 2, 3])
@@ -96,7 +102,7 @@ class TestEventCodes:
     # checks to see if event codes are duplicated to keep codes singluar and clear.
     # also checks that event codes follow correct namming convention ex. E001
     def test_event_codes(self):
-        all_concrete = get_all_subclasses(BaseEvent)
+        all_concrete = get_all_subclasses(CoreBaseEvent)
         all_codes = set()
 
         for event_cls in all_concrete:
@@ -133,66 +139,66 @@ sample_values = [
     types.ProjectNameAlreadyExists(name=""),
     types.ProjectCreated(project_name=""),
     # D - Deprecations ======================
-    types.PackageRedirectDeprecation(old_name="", new_name=""),
-    types.PackageInstallPathDeprecation(),
-    types.ConfigSourcePathDeprecation(deprecated_path="", exp_path=""),
-    types.ConfigDataPathDeprecation(deprecated_path="", exp_path=""),
-    types.AdapterDeprecationWarning(old_name="", new_name=""),
-    types.MetricAttributesRenamed(metric_name=""),
-    types.ExposureNameDeprecation(exposure=""),
-    types.InternalDeprecation(name="", reason="", suggested_action="", version=""),
-    types.EnvironmentVariableRenamed(old_name="", new_name=""),
-    types.ConfigLogPathDeprecation(deprecated_path=""),
-    types.ConfigTargetPathDeprecation(deprecated_path=""),
-    types.CollectFreshnessReturnSignature(),
+    core_types.PackageRedirectDeprecation(old_name="", new_name=""),
+    core_types.PackageInstallPathDeprecation(),
+    core_types.ConfigSourcePathDeprecation(deprecated_path="", exp_path=""),
+    core_types.ConfigDataPathDeprecation(deprecated_path="", exp_path=""),
+    adapter_types.AdapterDeprecationWarning(old_name="", new_name=""),
+    core_types.MetricAttributesRenamed(metric_name=""),
+    core_types.ExposureNameDeprecation(exposure=""),
+    core_types.InternalDeprecation(name="", reason="", suggested_action="", version=""),
+    core_types.EnvironmentVariableRenamed(old_name="", new_name=""),
+    core_types.ConfigLogPathDeprecation(deprecated_path=""),
+    core_types.ConfigTargetPathDeprecation(deprecated_path=""),
+    adapter_types.CollectFreshnessReturnSignature(),
     # E - DB Adapter ======================
-    types.AdapterEventDebug(),
-    types.AdapterEventInfo(),
-    types.AdapterEventWarning(),
-    types.AdapterEventError(),
-    types.AdapterRegistered(adapter_name="dbt-awesome", adapter_version="1.2.3"),
-    types.NewConnection(conn_type="", conn_name=""),
-    types.ConnectionReused(conn_name=""),
-    types.ConnectionLeftOpenInCleanup(conn_name=""),
-    types.ConnectionClosedInCleanup(conn_name=""),
-    types.RollbackFailed(conn_name=""),
-    types.ConnectionClosed(conn_name=""),
-    types.ConnectionLeftOpen(conn_name=""),
-    types.Rollback(conn_name=""),
-    types.CacheMiss(conn_name="", database="", schema=""),
-    types.ListRelations(database="", schema=""),
-    types.ConnectionUsed(conn_type="", conn_name=""),
-    types.SQLQuery(conn_name="", sql=""),
-    types.SQLQueryStatus(status="", elapsed=0.1),
-    types.SQLCommit(conn_name=""),
-    types.ColTypeChange(
+    adapter_types.AdapterEventDebug(),
+    adapter_types.AdapterEventInfo(),
+    adapter_types.AdapterEventWarning(),
+    adapter_types.AdapterEventError(),
+    adapter_types.AdapterRegistered(adapter_name="dbt-awesome", adapter_version="1.2.3"),
+    adapter_types.NewConnection(conn_type="", conn_name=""),
+    adapter_types.ConnectionReused(conn_name=""),
+    adapter_types.ConnectionLeftOpenInCleanup(conn_name=""),
+    adapter_types.ConnectionClosedInCleanup(conn_name=""),
+    adapter_types.RollbackFailed(conn_name=""),
+    adapter_types.ConnectionClosed(conn_name=""),
+    adapter_types.ConnectionLeftOpen(conn_name=""),
+    adapter_types.Rollback(conn_name=""),
+    adapter_types.CacheMiss(conn_name="", database="", schema=""),
+    adapter_types.ListRelations(database="", schema=""),
+    adapter_types.ConnectionUsed(conn_type="", conn_name=""),
+    adapter_types.SQLQuery(conn_name="", sql=""),
+    adapter_types.SQLQueryStatus(status="", elapsed=0.1),
+    adapter_types.SQLCommit(conn_name=""),
+    adapter_types.ColTypeChange(
         orig_type="",
         new_type="",
         table={"database": "", "schema": "", "identifier": ""},
     ),
-    types.SchemaCreation(relation={"database": "", "schema": "", "identifier": ""}),
-    types.SchemaDrop(relation={"database": "", "schema": "", "identifier": ""}),
-    types.CacheAction(
+    adapter_types.SchemaCreation(relation={"database": "", "schema": "", "identifier": ""}),
+    adapter_types.SchemaDrop(relation={"database": "", "schema": "", "identifier": ""}),
+    adapter_types.CacheAction(
         action="adding_relation",
         ref_key={"database": "", "schema": "", "identifier": ""},
         ref_key_2={"database": "", "schema": "", "identifier": ""},
     ),
-    types.CacheDumpGraph(before_after="before", action="rename", dump=dict()),
-    types.AdapterImportError(exc=""),
-    types.PluginLoadError(exc_info=""),
-    types.NewConnectionOpening(connection_state=""),
-    types.CodeExecution(conn_name="", code_content=""),
-    types.CodeExecutionStatus(status="", elapsed=0.1),
-    types.CatalogGenerationError(exc=""),
-    types.WriteCatalogFailure(num_exceptions=0),
-    types.CatalogWritten(path=""),
-    types.CannotGenerateDocs(),
-    types.BuildingCatalog(),
-    types.DatabaseErrorRunningHook(hook_type=""),
-    types.HooksRunning(num_hooks=0, hook_type=""),
-    types.FinishedRunningStats(stat_line="", execution="", execution_time=0),
-    types.ConstraintNotEnforced(constraint="", adapter=""),
-    types.ConstraintNotSupported(constraint="", adapter=""),
+    adapter_types.CacheDumpGraph(before_after="before", action="rename", dump=dict()),
+    adapter_types.AdapterImportError(exc=""),
+    adapter_types.PluginLoadError(exc_info=""),
+    adapter_types.NewConnectionOpening(connection_state=""),
+    adapter_types.CodeExecution(conn_name="", code_content=""),
+    adapter_types.CodeExecutionStatus(status="", elapsed=0.1),
+    adapter_types.CatalogGenerationError(exc=""),
+    adapter_types.WriteCatalogFailure(num_exceptions=0),
+    adapter_types.CatalogWritten(path=""),
+    adapter_types.CannotGenerateDocs(),
+    adapter_types.BuildingCatalog(),
+    adapter_types.DatabaseErrorRunningHook(hook_type=""),
+    adapter_types.HooksRunning(num_hooks=0, hook_type=""),
+    adapter_types.FinishedRunningStats(stat_line="", execution="", execution_time=0),
+    adapter_types.ConstraintNotEnforced(constraint="", adapter=""),
+    adapter_types.ConstraintNotSupported(constraint="", adapter=""),
     # I - Project parsing ======================
     types.InputFileDiffError(category="testing", file_id="my_file"),
     types.InvalidValueForField(field_name="test", field_value="test"),
@@ -242,7 +248,7 @@ sample_values = [
     types.UnpinnedRefNewVersionAvailable(
         ref_node_name="", ref_node_package="", ref_node_version="", ref_max_version=""
     ),
-    types.DeprecatedModel(model_name="", model_version="", deprecation_date=""),
+    core_types.DeprecatedModel(model_name="", model_version="", deprecation_date=""),
     types.DeprecatedReference(
         model_name="",
         ref_model_name="",
@@ -303,7 +309,7 @@ sample_values = [
     types.DepsLockUpdating(lock_filepath=""),
     types.DepsAddPackage(package_name="", version="", packages_filepath=""),
     types.DepsFoundDuplicatePackage(removed_package={}),
-    types.DepsScrubbedPackageName(package_name=""),
+    core_types.DepsScrubbedPackageName(package_name=""),
     types.SemanticValidationFailure(msg=""),
     # Q - Node execution ======================
     types.RunningOperationCaughtError(exc=""),
@@ -448,7 +454,7 @@ class TestEventJSONSerialization:
     # just fine and others won't.
     def test_all_serializable(self):
         all_non_abstract_events = set(
-            get_all_subclasses(BaseEvent),
+            get_all_subclasses(CoreBaseEvent),
         )
         all_event_values_list = list(map(lambda x: x.__class__, sample_values))
         diff = all_non_abstract_events.difference(set(all_event_values_list))

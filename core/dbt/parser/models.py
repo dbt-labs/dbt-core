@@ -1,9 +1,9 @@
 from copy import deepcopy
 from dbt.context.context_config import ContextConfig
 from dbt.contracts.graph.nodes import ModelNode, RefArgs
-from dbt.events.base_types import EventLevel
-from dbt.events.types import Note
-from dbt.events.functions import fire_event_if_test
+from dbt.common.events.base_types import EventLevel
+from dbt.common.events.types import Note
+from dbt.common.events.functions import fire_event_if_test
 from dbt.flags import get_flags
 from dbt.node_types import NodeType, ModelLanguage
 from dbt.parser.base import SimpleSQLParser
@@ -19,14 +19,14 @@ from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
 
 # New for Python models :p
 import ast
-from dbt.dataclass_schema import ValidationError
+from dbt.common.dataclass_schema import ValidationError
 from dbt.exceptions import (
     ModelConfigError,
     ParsingError,
     PythonLiteralEvalError,
     PythonParsingError,
-    UndefinedMacroError,
 )
+from dbt.common.exceptions.macros import UndefinedMacroError
 
 dbt_function_key_words = set(["ref", "source", "config", "get"])
 dbt_function_full_names = set(["dbt.ref", "dbt.source", "dbt.config", "dbt.config.get"])

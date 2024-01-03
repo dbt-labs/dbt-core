@@ -35,6 +35,17 @@ class BaseSnapshotCheckCols:
             "cc_name_snapshot.sql": cc_name_snapshot_sql,
         }
 
+    @pytest.fixture(autouse=True)
+    def clean_up(self, project):
+        yield
+        with project.adapter.connection_named("__test"):
+            relation = project.adapter.Relation.create(
+                database=project.database, schema=project.test_schema
+            )
+            project.adapter.drop_schema(relation)
+
+    pass
+
     def test_snapshot_check_cols(self, project):
         # seed command
         results = run_dbt(["seed"])

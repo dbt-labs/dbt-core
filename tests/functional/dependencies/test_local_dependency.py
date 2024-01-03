@@ -9,7 +9,7 @@ import yaml
 from pathlib import Path
 from unittest import mock
 
-import dbt.semver
+import dbt.common.semver as semver
 import dbt.config
 import dbt.exceptions
 
@@ -197,7 +197,7 @@ class TestMissingDependency(object):
 
     def test_missing_dependency(self, project):
         # dbt should raise a runtime exception
-        with pytest.raises(dbt.exceptions.DbtRuntimeError):
+        with pytest.raises(dbt.common.exceptions.DbtRuntimeError):
             run_dbt(["compile"])
 
 
@@ -219,7 +219,7 @@ class TestSimpleDependencyWithSchema(BaseDependencyTest):
 
     @mock.patch("dbt.config.project.get_installed_version")
     def test_local_dependency_out_of_date(self, mock_get, project):
-        mock_get.return_value = dbt.semver.VersionSpecifier.from_version_string("0.0.1")
+        mock_get.return_value = semver.VersionSpecifier.from_version_string("0.0.1")
         run_dbt(["deps"] + self.dbt_vargs(project.test_schema))
         # check seed
         with pytest.raises(dbt.exceptions.DbtProjectError) as exc:
@@ -232,7 +232,7 @@ class TestSimpleDependencyWithSchema(BaseDependencyTest):
 
     @mock.patch("dbt.config.project.get_installed_version")
     def test_local_dependency_out_of_date_no_check(self, mock_get):
-        mock_get.return_value = dbt.semver.VersionSpecifier.from_version_string("0.0.1")
+        mock_get.return_value = semver.VersionSpecifier.from_version_string("0.0.1")
         run_dbt(["deps"])
         run_dbt(["seed", "--no-version-check"])
         results = run_dbt(["run", "--no-version-check"])
@@ -274,7 +274,7 @@ class TestSimpleDependencyNoVersionCheckConfig(BaseDependencyTest):
             }
         )
 
-        mock_get.return_value = dbt.semver.VersionSpecifier.from_version_string("0.0.1")
+        mock_get.return_value = semver.VersionSpecifier.from_version_string("0.0.1")
         run_dbt(["deps", "--vars", vars_arg])
         run_dbt(["seed", "--vars", vars_arg])
         results = run_dbt(["run", "--vars", vars_arg])
@@ -352,7 +352,7 @@ class TestSimpleDependencyDuplicateName(BaseDependencyTest):
 
     def test_local_dependency_same_name_sneaky(self, prepare_dependencies, project):
         shutil.copytree("duplicate_dependency", "./dbt_packages/duplicate_dependency")
-        with pytest.raises(dbt.exceptions.CompilationError):
+        with pytest.raises(dbt.common.exceptions.CompilationError):
             run_dbt(["compile"])
 
         # needed to avoid compilation errors from duplicate package names in test autocleanup

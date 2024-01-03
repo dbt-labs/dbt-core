@@ -59,29 +59,11 @@ class TestConfigPathDeprecation:
     def test_data_path_fail(self, project):
         deprecations.reset_deprecations()
         assert deprecations.active_deprecations == set()
-        with pytest.raises(dbt.exceptions.CompilationError) as exc:
+        with pytest.raises(dbt.common.exceptions.CompilationError) as exc:
             run_dbt(["--warn-error", "debug"])
         exc_str = " ".join(str(exc.value).split())  # flatten all whitespace
         expected_msg = "The `data-paths` config has been renamed"
         assert expected_msg in exc_str
-
-
-class TestAdapterDeprecations:
-    @pytest.fixture(scope="class")
-    def models(self):
-        return {"already_exists.sql": models__already_exists_sql}
-
-    def test_adapter(self, project):
-        deprecations.reset_deprecations()
-        assert deprecations.active_deprecations == set()
-        run_dbt(["run"])
-        expected = {"adapter:already_exists"}
-        assert expected == deprecations.active_deprecations
-
-    def test_adapter_fail(self, project):
-        deprecations.reset_deprecations()
-        assert deprecations.active_deprecations == set()
-        run_dbt(["--warn-error", "run"], expect_pass=False)
 
 
 class TestPackageInstallPathDeprecation:
@@ -103,7 +85,7 @@ class TestPackageInstallPathDeprecation:
     def test_package_path_not_set(self, project):
         deprecations.reset_deprecations()
         assert deprecations.active_deprecations == set()
-        with pytest.raises(dbt.exceptions.CompilationError) as exc:
+        with pytest.raises(dbt.common.exceptions.CompilationError) as exc:
             run_dbt(["--warn-error", "clean"])
         exc_str = " ".join(str(exc.value).split())  # flatten all whitespace
         expected_msg = "path has changed from `dbt_modules` to `dbt_packages`."
@@ -130,7 +112,7 @@ class TestPackageRedirectDeprecation:
     def test_package_redirect_fail(self, project):
         deprecations.reset_deprecations()
         assert deprecations.active_deprecations == set()
-        with pytest.raises(dbt.exceptions.CompilationError) as exc:
+        with pytest.raises(dbt.common.exceptions.CompilationError) as exc:
             run_dbt(["--warn-error", "deps"])
         exc_str = " ".join(str(exc.value).split())  # flatten all whitespace
         expected_msg = "The `fishtown-analytics/dbt_utils` package is deprecated in favor of `dbt-labs/dbt_utils`"
@@ -152,7 +134,7 @@ class TestExposureNameDeprecation:
     def test_exposure_name_fail(self, project):
         deprecations.reset_deprecations()
         assert deprecations.active_deprecations == set()
-        with pytest.raises(dbt.exceptions.CompilationError) as exc:
+        with pytest.raises(dbt.common.exceptions.CompilationError) as exc:
             run_dbt(["--warn-error", "--no-partial-parse", "parse"])
         exc_str = " ".join(str(exc.value).split())  # flatten all whitespace
         expected_msg = "Starting in v1.3, the 'name' of an exposure should contain only letters, numbers, and underscores."

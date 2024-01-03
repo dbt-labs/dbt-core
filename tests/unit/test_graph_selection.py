@@ -214,5 +214,5 @@ invalid_specs = [
 
 @pytest.mark.parametrize("invalid", invalid_specs, ids=lambda k: str(k))
 def test_invalid_specs(invalid):
-    with pytest.raises(dbt.exceptions.DbtRuntimeError):
+    with pytest.raises(dbt.common.exceptions.DbtRuntimeError):
         graph_selector.SelectionCriteria.from_single_spec(invalid)

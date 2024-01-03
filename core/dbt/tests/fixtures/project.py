@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 import pytest  # type: ignore
 import random
 from argparse import Namespace
@@ -6,11 +7,15 @@ from datetime import datetime
 import warnings
 import yaml
 
-from dbt.exceptions import CompilationError, DbtDatabaseError
+from dbt.mp_context import get_mp_context
+from dbt.parser.manifest import ManifestLoader
+from dbt.common.exceptions import CompilationError, DbtDatabaseError
+from dbt.context.providers import generate_runtime_macro_context
 import dbt.flags as flags
 from dbt.config.runtime import RuntimeConfig
 from dbt.adapters.factory import get_adapter, register_adapter, reset_adapters, get_adapter_by_type
-from dbt.events.functions import setup_event_logger, cleanup_event_logger
+from dbt.common.events.event_manager_client import cleanup_event_logger
+from dbt.events.logging import setup_event_logger
 from dbt.tests.util import (
     write_file,
     run_sql_with_adapter,
@@ -265,7 +270,13 @@ def clean_up_logging():
 # into the project in the tests instead of putting them in the fixtures.
 @pytest.fixture(scope="class")
 def adapter(
-    unique_schema, project_root, profiles_root, profiles_yml, dbt_project_yml, clean_up_logging
+    logs_dir,
+    unique_schema,
+    project_root,
+    profiles_root,
+    profiles_yml,
+    dbt_project_yml,
+    clean_up_logging,
 ):
     # The profiles.yml and dbt_project.yml should already be written out
     args = Namespace(
@@ -277,11 +288,18 @@ def adapter(
     )
     flags.set_from_args(args, {})
     runtime_config = RuntimeConfig.from_args(args)
-    register_adapter(runtime_config)
+    register_adapter(runtime_config, get_mp_context())
     adapter = get_adapter(runtime_config)
     # We only need the base macros, not macros from dependencies, and don't want
     # to run 'dbt deps' here.
-    adapter.load_macro_manifest(base_macros_only=True)
+    manifest = ManifestLoader.load_macros(
+        runtime_config,
+        adapter.connections.set_query_header,
+        base_macros_only=True,
+    )
+
+    adapter.set_macro_resolver(manifest)
+    adapter.set_macro_context_generator(generate_runtime_macro_context)
     yield adapter
     adapter.cleanup_connections()
     reset_adapters()
@@ -374,7 +392,7 @@ def project_files(project_root, models, macros, snapshots, properties, seeds, te
 def logs_dir(request, prefix):
     dbt_log_dir = os.path.join(request.config.rootdir, "logs", prefix)
     os.environ["DBT_LOG_PATH"] = str(dbt_log_dir)
-    yield dbt_log_dir
+    yield str(Path(dbt_log_dir))
     del os.environ["DBT_LOG_PATH"]
 
 
@@ -442,6 +460,14 @@ class TestProjInfo:
 
     # Drop the unique test schema, usually called in test cleanup
     def drop_test_schema(self):
+        if self.adapter.get_macro_resolver() is None:
+            manifest = ManifestLoader.load_macros(
+                self.adapter.config,
+                self.adapter.connections.set_query_header,
+                base_macros_only=True,
+            )
+            self.adapter.set_macro_resolver(manifest)
+
         with get_connection(self.adapter):
             for schema_name in self.created_schemas:
                 relation = self.adapter.Relation.create(database=self.database, schema=schema_name)

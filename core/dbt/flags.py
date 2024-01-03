@@ -1,7 +1,6 @@
 # Do not import the os package because we expose this package in jinja
 from os import getenv as os_getenv
 from argparse import Namespace
-from multiprocessing import get_context
 from typing import Optional
 from pathlib import Path
 
@@ -20,11 +19,8 @@ def env_set_truthy(key: str) -> Optional[str]:
 # for setting up logger for legacy logger
 ENABLE_LEGACY_LOGGER = env_set_truthy("DBT_ENABLE_LEGACY_LOGGER")
 
-# This is not a flag, it's a place to store the lock
-MP_CONTEXT = get_context()
 
-
-# this roughly follows the patten of EVENT_MANAGER in dbt/events/functions.py
+# this roughly follows the patten of EVENT_MANAGER in dbt/common/events/functions.py
 # During de-globlization, we'll need to handle both similarly
 # Match USE_COLORS default with default in dbt.cli.params.use_colors for use in --version
 GLOBAL_FLAGS = Namespace(USE_COLORS=True)  # type: ignore
@@ -60,6 +56,7 @@ def set_from_args(args: Namespace, user_config):
         args_param_value = convert_config(arg_name, args_param_value)
         object.__setattr__(flags, arg_name.upper(), args_param_value)
         object.__setattr__(flags, arg_name.lower(), args_param_value)
+    flags.set_common_global_flags()
     GLOBAL_FLAGS = flags  # type: ignore
 
 

@@ -1,6 +1,6 @@
 from typing import List, Dict
 
-from dbt import semver
+from dbt.common import semver
 from dbt.flags import get_flags
 from dbt.version import get_installed_version
 from dbt.clients import registry
@@ -13,8 +13,8 @@ from dbt.exceptions import (
     DependencyError,
     PackageNotFoundError,
     PackageVersionNotFoundError,
-    VersionsNotCompatibleError,
 )
+from dbt.common.exceptions import VersionsNotCompatibleError
 
 
 class RegistryPackageMixin:

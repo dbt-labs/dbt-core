@@ -1,5 +1,5 @@
 import dbt.flags
-import dbt.ui
+import dbt.common.ui
 
 import json
 import logging
@@ -14,7 +14,7 @@ from typing import Optional, List, ContextManager, Callable, Dict, Any, Set
 import colorama
 import logbook
 from dbt.constants import SECRET_ENV_PREFIX
-from dbt.dataclass_schema import dbtClassMixin
+from dbt.common.dataclass_schema import dbtClassMixin
 
 # Colorama is needed for colored logs on Windows because we're using logger.info
 # intead of print(). If the Windows env doesn't have a TERM var set or it is set to None
@@ -327,9 +327,9 @@ initialized = False
 
 
 def make_log_dir_if_missing(log_dir):
-    import dbt.clients.system
+    import dbt.common.clients.system
 
-    dbt.clients.system.make_directory(log_dir)
+    dbt.common.clients.system.make_directory(log_dir)
 
 
 class DebugWarnings(logbook.compat.redirected_warnings):
@@ -531,6 +531,6 @@ def timestamped_line(msg: str) -> str:
 
 def print_timestamped_line(msg: str, use_color: Optional[str] = None):
     if use_color is not None:
-        msg = dbt.ui.color(msg, use_color)
+        msg = dbt.common.ui.color(msg, use_color)
 
     GLOBAL_LOGGER.info(timestamped_line(msg))

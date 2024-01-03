@@ -12,7 +12,7 @@ from dbt.contracts.results import (
     FreshnessExecutionResultArtifact,
 )
 from dbt.contracts.util import VersionedSchema
-from dbt.clients.system import write_file
+from dbt.common.clients.system import write_file
 
 
 @dataclass

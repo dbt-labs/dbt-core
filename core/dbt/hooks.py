@@ -1,4 +1,4 @@
-from dbt.dataclass_schema import StrEnum
+from dbt.common.dataclass_schema import StrEnum
 import json
 
 from typing import Union, Dict, Any

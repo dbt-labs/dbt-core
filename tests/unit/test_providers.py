@@ -55,15 +55,17 @@ class TestRuntimeRefResolver:
     def test_create_relation_with_empty(self, resolver, empty, is_ephemeral_model, expected_limit):
         # setup resolver and input node
         resolver.config.args.EMPTY = empty
+        resolver.config.quoting = {}
         mock_node = mock.Mock()
         mock_node.database = "test"
         mock_node.schema = "test"
         mock_node.identifier = "test"
+        mock_node.quoting_dict = {}
         mock_node.alias = "test"
         mock_node.is_ephemeral_model = is_ephemeral_model
 
         # create limited relation
-        with mock.patch("dbt.adapters.base.relation.ParsedNode", new=mock.Mock):
+        with mock.patch("dbt.contracts.graph.nodes.ParsedNode", new=mock.Mock):
             relation = resolver.create_relation(mock_node)
         assert relation.limit == expected_limit
 
@@ -91,12 +93,14 @@ class TestRuntimeSourceResolver:
     def test_create_relation_with_empty(self, resolver, empty, expected_limit):
         # setup resolver and input source
         resolver.config.args.EMPTY = empty
+        resolver.config.quoting = {}
 
         mock_source = mock.Mock()
         mock_source.database = "test"
         mock_source.schema = "test"
         mock_source.identifier = "test"
         mock_source.quoting = Quoting()
+        mock_source.quoting_dict = {}
         resolver.manifest.resolve_source.return_value = mock_source
 
         # create limited relation
