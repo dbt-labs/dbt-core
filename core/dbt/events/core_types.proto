@@ -19,18 +19,16 @@ message CoreEventInfo {
     string category = 10;
 }
 
-// CoreNodeRelation
-// TODO: rename to NodeRelation if not defined in common
-message CoreNodeRelation {
+// NodeRelation
+message NodeRelation {
     string database = 10;
     string schema = 11;
     string alias = 12;
     string relation_name = 13;
 }
 
-// CoreNodeInfo
-// TODO: rename to CoreNodeInfo if not defined in common
-message CoreNodeInfo {
+// NodeInfo
+message NodeInfo {
     string node_path = 1;
     string node_name = 2;
     string unique_id = 3;
@@ -40,12 +38,11 @@ message CoreNodeInfo {
     string node_started_at = 7;
     string node_finished_at = 8;
     google.protobuf.Struct meta = 9;
-    CoreNodeRelation node_relation = 10;
+    NodeRelation node_relation = 10;
 }
 
-// CoreTimingInfoMsg
-// TODO: rename to TimingInfo if possible
-message CoreTimingInfoMsg {
+// TimingInfoMsg
+message TimingInfoMsg {
     string name = 1;
     google.protobuf.Timestamp started_at = 2;
     google.protobuf.Timestamp completed_at = 3;
@@ -55,7 +52,7 @@ message CoreTimingInfoMsg {
 message RunResultMsg {
     string status = 1;
     string message = 2;
-    repeated CoreTimingInfoMsg timing_info = 3;
+    repeated TimingInfoMsg timing_info = 3;
     string thread = 4;
     float execution_time = 5;
     google.protobuf.Struct adapter_response = 6;
@@ -689,7 +686,7 @@ message NodeNotFoundOrDisabledMsg {
 
 // I061
 message JinjaLogWarning {
-    CoreNodeInfo node_info = 1;
+    NodeInfo node_info = 1;
     string msg = 2;
 }
 
@@ -700,7 +697,7 @@ message JinjaLogWarningMsg {
 
 // I062
 message JinjaLogInfo {
-    CoreNodeInfo node_info = 1;
+    NodeInfo node_info = 1;
     string msg = 2;
 }
 
@@ -711,7 +708,7 @@ message  JinjaLogInfoMsg {
 
 // I063
 message JinjaLogDebug {
-    CoreNodeInfo node_info = 1;
+    NodeInfo node_info = 1;
     string msg = 2;
 }
 
@@ -722,7 +719,7 @@ message JinjaLogDebugMsg {
 
 // I064
 message UnpinnedRefNewVersionAvailable {
-    CoreNodeInfo node_info = 1;
+    NodeInfo node_info = 1;
     string ref_node_name  = 2;
     string ref_node_package = 3;
     string ref_node_version = 4;
@@ -776,7 +773,7 @@ message UnsupportedConstraintMaterializationMsg {
 
 // I069
 message ParseInlineNodeError{
-    CoreNodeInfo node_info = 1;
+    NodeInfo node_info = 1;
     string exc = 2;
 }
 
@@ -1213,7 +1210,7 @@ message SQLRunnerExceptionMsg {
 
 // Q007
 message LogTestResult {
-    CoreNodeInfo node_info = 1;
+    NodeInfo node_info = 1;
     string name = 2;
     string status = 3;
     int32 index = 4;
@@ -1233,7 +1230,7 @@ message LogTestResultMsg {
 
 // Q011
 message LogStartLine {
-    CoreNodeInfo node_info = 1;
+    NodeInfo node_info = 1;
     string description = 2;
     int32 index = 3;
     int32 total = 4;
@@ -1246,7 +1243,7 @@ message LogStartLineMsg {
 
 // Q012
 message LogModelResult {
-    CoreNodeInfo node_info = 1;
+    NodeInfo node_info = 1;
     string description = 2;
     string status = 3;
     int32 index = 4;
@@ -1263,7 +1260,7 @@ message LogModelResultMsg {
 
 // Q015
 message LogSnapshotResult {
-    CoreNodeInfo node_info = 1;
+    NodeInfo node_info = 1;
     string description = 2;
     string status = 3;
     int32 index = 4;
@@ -1280,7 +1277,7 @@ message LogSnapshotResultMsg {
 
 // Q016
 message LogSeedResult {
-    CoreNodeInfo node_info = 1;
+    NodeInfo node_info = 1;
     string status = 2;
     string result_message = 3;
     int32 index = 4;
@@ -1300,7 +1297,7 @@ message LogSeedResultMsg {
 // Q018
 message LogFreshnessResult {
     string status = 1;
-    CoreNodeInfo node_info = 2;
+    NodeInfo node_info = 2;
     int32 index = 3;
     int32 total = 4;
     float execution_time = 5;
@@ -1339,7 +1336,7 @@ message DefaultSelectorMsg {
 
 // Q024
 message NodeStart {
-    CoreNodeInfo node_info = 1;
+    NodeInfo node_info = 1;
 }
 
 message NodeStartMsg {
@@ -1349,7 +1346,7 @@ message NodeStartMsg {
 
 // Q025
 message NodeFinished {
-    CoreNodeInfo node_info = 1;
+    NodeInfo node_info = 1;
     RunResultMsg run_result = 2;
 }
 
@@ -1382,7 +1379,7 @@ message ConcurrencyLineMsg {
 
 // Q029
 message WritingInjectedSQLForNode {
-    CoreNodeInfo node_info = 1;
+    NodeInfo node_info = 1;
 }
 
 message WritingInjectedSQLForNodeMsg {
@@ -1392,7 +1389,7 @@ message WritingInjectedSQLForNodeMsg {
 
 // Q030
 message NodeCompiling {
-    CoreNodeInfo node_info = 1;
+    NodeInfo node_info = 1;
 }
 
 message NodeCompilingMsg {
@@ -1402,7 +1399,7 @@ message NodeCompilingMsg {
 
 // Q031
 message NodeExecuting {
-    CoreNodeInfo node_info = 1;
+    NodeInfo node_info = 1;
 }
 
 message NodeExecutingMsg {
@@ -1412,7 +1409,7 @@ message NodeExecutingMsg {
 
 // Q032
 message LogHookStartLine {
-    CoreNodeInfo node_info = 1;
+    NodeInfo node_info = 1;
     string statement = 2;
     int32 index = 3;
     int32 total = 4;
@@ -1425,7 +1422,7 @@ message LogHookStartLineMsg {
 
 // Q033
 message LogHookEndLine {
-    CoreNodeInfo node_info = 1;
+    NodeInfo node_info = 1;
     string statement = 2;
     string status = 3;
     int32 index = 4;
@@ -1440,7 +1437,7 @@ message LogHookEndLineMsg {
 
 // Q034
 message SkippingDetails {
-    CoreNodeInfo node_info = 1;
+    NodeInfo node_info = 1;
     string resource_type = 2;
     string schema = 3;
     string node_name = 4;
@@ -1541,7 +1538,7 @@ message CompiledNodeMsg {
 
 // W002
 message CatchableExceptionOnRun {
-    CoreNodeInfo node_info = 1;
+    NodeInfo node_info = 1;
     string exc = 2;
     string exc_info = 3;
 }
@@ -1594,4 +1591,390 @@ message FoundStats {
 message FoundStatsMsg {
     CoreEventInfo info = 1;
     FoundStats data = 2;
+}
+
+// Z - Misc
+
+// Z001
+message MainKeyboardInterrupt {
+}
+
+message MainKeyboardInterruptMsg {
+    CoreEventInfo info = 1;
+    MainKeyboardInterrupt data = 2;
+}
+
+// Z002
+message MainEncounteredError {
+    string exc = 1;
+}
+
+message MainEncounteredErrorMsg {
+    CoreEventInfo info = 1;
+    MainEncounteredError data = 2;
+}
+
+// Z003
+message MainStackTrace {
+    string stack_trace = 1;
+}
+
+message MainStackTraceMsg {
+    CoreEventInfo info = 1;
+    MainStackTrace data = 2;
+}
+
+// skipping Z004
+
+
+// Z010
+message TimingInfoCollected {
+    NodeInfo node_info = 1;
+    TimingInfoMsg timing_info = 2;
+}
+
+message TimingInfoCollectedMsg {
+    CoreEventInfo info = 1;
+    TimingInfoCollected data = 2;
+}
+
+// Z011
+message LogDebugStackTrace {
+    string exc_info = 1;
+}
+
+message LogDebugStackTraceMsg {
+    CoreEventInfo info = 1;
+    LogDebugStackTrace data = 2;
+}
+
+// Z012
+message CheckCleanPath {
+    string path = 1;
+}
+
+message CheckCleanPathMsg {
+    CoreEventInfo info = 1;
+    CheckCleanPath data = 2;
+}
+
+// Z013
+message ConfirmCleanPath {
+    string path = 1;
+}
+
+message ConfirmCleanPathMsg {
+    CoreEventInfo info = 1;
+    ConfirmCleanPath data = 2;
+}
+
+// Z014
+message ProtectedCleanPath {
+    string path = 1;
+}
+
+message ProtectedCleanPathMsg {
+    CoreEventInfo info = 1;
+    ProtectedCleanPath data = 2;
+}
+
+// Z015
+message FinishedCleanPaths {
+}
+
+message FinishedCleanPathsMsg {
+    CoreEventInfo info = 1;
+    FinishedCleanPaths data = 2;
+}
+
+// Z016
+message OpenCommand {
+    string open_cmd = 1;
+    string profiles_dir = 2;
+}
+
+message OpenCommandMsg {
+    CoreEventInfo info = 1;
+    OpenCommand data = 2;
+}
+
+
+// Z018
+message ServingDocsPort {
+    string address = 1;
+    int32 port = 2;
+}
+
+message ServingDocsPortMsg {
+    CoreEventInfo info = 1;
+    ServingDocsPort data = 2;
+}
+
+// Z019
+message ServingDocsAccessInfo {
+    string port = 1;
+}
+
+message ServingDocsAccessInfoMsg {
+    CoreEventInfo info = 1;
+    ServingDocsAccessInfo data = 2;
+}
+
+// Z020
+message ServingDocsExitInfo {
+}
+
+message ServingDocsExitInfoMsg {
+    CoreEventInfo info = 1;
+    ServingDocsExitInfo data = 2;
+}
+
+// Z021
+message RunResultWarning {
+    string resource_type = 1;
+    string node_name = 2;
+    string path = 3;
+}
+
+message RunResultWarningMsg {
+    CoreEventInfo info = 1;
+    RunResultWarning data = 2;
+}
+
+// Z022
+message RunResultFailure {
+    string resource_type = 1;
+    string node_name = 2;
+    string path = 3;
+}
+
+message RunResultFailureMsg {
+    CoreEventInfo info = 1;
+    RunResultFailure data = 2;
+}
+
+// Z023
+message StatsLine {
+    map<string, int32> stats = 1;
+}
+
+message StatsLineMsg {
+    CoreEventInfo info = 1;
+    StatsLine data = 2;
+}
+
+// Z024
+message RunResultError {
+    string msg = 1;
+}
+
+message RunResultErrorMsg {
+    CoreEventInfo info = 1;
+    RunResultError data = 2;
+}
+
+// Z025
+message RunResultErrorNoMessage {
+    string status = 1;
+}
+
+message RunResultErrorNoMessageMsg {
+    CoreEventInfo info = 1;
+    RunResultErrorNoMessage data = 2;
+}
+
+// Z026
+message SQLCompiledPath {
+    string path = 1;
+}
+
+message SQLCompiledPathMsg {
+    CoreEventInfo info = 1;
+    SQLCompiledPath data = 2;
+}
+
+// Z027
+message CheckNodeTestFailure {
+    string relation_name = 1;
+}
+
+message CheckNodeTestFailureMsg {
+    CoreEventInfo info = 1;
+    CheckNodeTestFailure data = 2;
+}
+
+// Skipped Z028, Z029
+
+// Z030
+message EndOfRunSummary {
+    int32 num_errors = 1;
+    int32 num_warnings = 2;
+    bool keyboard_interrupt = 3;
+}
+
+message EndOfRunSummaryMsg {
+    CoreEventInfo info = 1;
+    EndOfRunSummary data = 2;
+}
+
+// Skipped Z031, Z032, Z033
+
+// Z034
+message LogSkipBecauseError {
+    string schema = 1;
+    string relation = 2;
+    int32 index = 3;
+    int32 total = 4;
+}
+
+message LogSkipBecauseErrorMsg {
+    CoreEventInfo info = 1;
+    LogSkipBecauseError data = 2;
+}
+
+// Z036
+message EnsureGitInstalled {
+}
+
+message EnsureGitInstalledMsg {
+    CoreEventInfo info = 1;
+    EnsureGitInstalled data = 2;
+}
+
+// Z037
+message DepsCreatingLocalSymlink {
+}
+
+message DepsCreatingLocalSymlinkMsg {
+    CoreEventInfo info = 1;
+    DepsCreatingLocalSymlink data = 2;
+}
+
+// Z038
+message DepsSymlinkNotAvailable {
+}
+
+message DepsSymlinkNotAvailableMsg {
+    CoreEventInfo info = 1;
+    DepsSymlinkNotAvailable data = 2;
+}
+
+// Z039
+message DisableTracking {
+}
+
+message DisableTrackingMsg {
+    CoreEventInfo info = 1;
+    DisableTracking data = 2;
+}
+
+// Z040
+message SendingEvent {
+    string kwargs = 1;
+}
+
+message SendingEventMsg {
+    CoreEventInfo info = 1;
+    SendingEvent data = 2;
+}
+
+// Z041
+message SendEventFailure {
+}
+
+message SendEventFailureMsg {
+    CoreEventInfo info = 1;
+    SendEventFailure data = 2;
+}
+
+// Z042
+message FlushEvents {
+}
+
+message FlushEventsMsg {
+    CoreEventInfo info = 1;
+    FlushEvents data = 2;
+}
+
+// Z043
+message FlushEventsFailure {
+}
+
+message FlushEventsFailureMsg {
+    CoreEventInfo info = 1;
+    FlushEventsFailure data = 2;
+}
+
+// Z044
+message TrackingInitializeFailure {
+    string exc_info = 1;
+}
+
+message TrackingInitializeFailureMsg {
+    CoreEventInfo info = 1;
+    TrackingInitializeFailure data = 2;
+}
+
+// Skipped Z045
+
+// Z046
+message RunResultWarningMessage {
+    string msg = 1;
+}
+
+message RunResultWarningMessageMsg {
+    CoreEventInfo info = 1;
+    RunResultWarningMessage data = 2;
+}
+
+// Z047
+message DebugCmdOut {
+    string msg = 1;
+}
+
+message DebugCmdOutMsg {
+    CoreEventInfo info = 1;
+    DebugCmdOut data = 2;
+}
+
+// Z048
+message DebugCmdResult {
+    string msg = 1;
+}
+
+message DebugCmdResultMsg {
+    CoreEventInfo info = 1;
+    DebugCmdResult data = 2;
+}
+
+// Z049
+message ListCmdOut {
+    string msg = 1;
+}
+
+message ListCmdOutMsg {
+    CoreEventInfo info = 1;
+    ListCmdOut data = 2;
+}
+
+
+// Z051
+message ResourceReport {
+    string command_name = 2;
+    bool command_success = 3;
+    float command_wall_clock_time = 4;
+    // The process_* metrics reflect the resource consumption of the process as
+    // a whole when the command completes. When dbt is being used as a library,
+    // these will reflect the resource consumption of the host process as a whole,
+    // rather than the resources used exclusively by the command.
+    float process_user_time = 5;
+    float process_kernel_time = 6;
+    int64 process_mem_max_rss = 7;
+    int64 process_in_blocks = 8;
+    int64 process_out_blocks = 9;
+}
+
+message ResourceReportMsg {
+    CoreEventInfo info = 1;
+    ResourceReport data = 2;
 }

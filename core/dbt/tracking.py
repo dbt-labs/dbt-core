@@ -15,7 +15,7 @@ from snowplow_tracker import logger as sp_logger
 from dbt import version as dbt_version
 from dbt.clients.yaml_helper import safe_load, yaml  # noqa:F401
 from dbt.common.events.functions import fire_event, get_invocation_id
-from dbt.common.events.types import (
+from dbt.events.types import (
     DisableTracking,
     FlushEvents,
     FlushEventsFailure,

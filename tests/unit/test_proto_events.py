@@ -2,13 +2,13 @@ from dbt.adapters.events.types import (
     RollbackFailed,
     PluginLoadError,
 )
-from dbt.common.events.types import MainEncounteredError
 from dbt.common.events.functions import msg_to_dict, msg_to_json, LOG_VERSION, reset_metadata_vars
 from dbt.common.events import types_pb2
 from dbt.common.events.base_types import msg_from_base_event, EventLevel
 from dbt.events.types import (
     MainReportVersion,
     MainReportArgs,
+    MainEncounteredError,
     LogStartLine,
     LogTestResult,
 )
