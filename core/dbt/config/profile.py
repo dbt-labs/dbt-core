@@ -9,6 +9,7 @@ from dbt.common.clients.system import load_file_contents
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.adapters.contracts.connection import Credentials, HasCredentials
 from dbt.contracts.project import ProfileConfig, UserConfig
+from dbt.events.types import MissingProfileTarget
 from dbt.exceptions import (
     CompilationError,
     DbtProfileError,
@@ -17,7 +18,6 @@ from dbt.exceptions import (
     ProfileConfigError,
 )
 from dbt.common.exceptions import DbtValidationError
-from dbt.common.events.types import MissingProfileTarget
 from dbt.common.events.functions import fire_event
 from dbt.utils import coerce_dict_str
 

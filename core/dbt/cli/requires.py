@@ -19,11 +19,13 @@ from dbt.common.events.functions import (
     LOG_VERSION,
 )
 from dbt.events.logging import setup_event_logger
-from dbt.common.events.types import (
-    CommandCompleted,
+from dbt.events.types import (
     MainReportVersion,
     MainReportArgs,
     MainTrackingUserState,
+)
+from dbt.common.events.types import (
+    CommandCompleted,
     ResourceReport,
 )
 from dbt.common.events.helpers import get_json_string_utcnow

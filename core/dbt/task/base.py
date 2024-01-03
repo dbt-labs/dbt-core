@@ -27,8 +27,6 @@ from dbt.contracts.results import (
 from dbt.common.events.contextvars import get_node_info
 from dbt.common.events.functions import fire_event
 from dbt.common.events.types import (
-    LogDbtProjectError,
-    LogDbtProfileError,
     CatchableExceptionOnRun,
     InternalErrorOnRun,
     GenericExceptionOnRun,
@@ -44,6 +42,10 @@ from dbt.common.exceptions import (
     DbtInternalError,
     CompilationError,
     NotImplementedError,
+)
+from dbt.events.types import (
+    LogDbtProjectError,
+    LogDbtProfileError,
 )
 from dbt.flags import get_flags
 from dbt.graph import Graph

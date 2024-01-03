@@ -13,6 +13,7 @@ from dbt.common.dataclass_schema import (
     StrEnum,
 )
 import dbt.common.events.types as dbt_event_types
+import dbt.events.types as core_dbt_event_types
 
 
 Port = NewType("Port", int)
@@ -67,9 +68,13 @@ class IncludeExclude(dbtClassMixin):
 
 class WarnErrorOptions(IncludeExclude):
     def _validate_items(self, items: List[str]):
-        valid_exception_names = set(
+        valid_common_exception_names = set(
             [name for name, cls in dbt_event_types.__dict__.items() if isinstance(cls, type)]
         )
+        valid_core_exception_names = set(
+            [name for name, cls in core_dbt_event_types.__dict__.items() if isinstance(cls, type)]
+        )
+        valid_exception_names = valid_common_exception_names.union(valid_core_exception_names)
         for item in items:
             if item not in valid_exception_names:
                 raise ValidationError(f"{item} is not a valid dbt error name.")

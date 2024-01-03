@@ -18,6 +18,201 @@ message CoreEventInfo {
     string category = 10;
 }
 
+// A - Pre-project loading
+
+// A001
+message MainReportVersion {
+    string version = 1;
+    int32 log_version = 2;
+}
+
+message MainReportVersionMsg {
+    CoreEventInfo info = 1;
+    MainReportVersion data = 2;
+}
+
+// A002
+message MainReportArgs {
+    map<string, string> args = 1;
+}
+
+message MainReportArgsMsg {
+    CoreEventInfo info = 1;
+    MainReportArgs data = 2;
+}
+
+// A003
+message MainTrackingUserState {
+    string user_state = 1;
+}
+
+message MainTrackingUserStateMsg {
+    CoreEventInfo info = 1;
+    MainTrackingUserState data = 2;
+}
+
+// A004
+message MergedFromState {
+    int32 num_merged = 1;
+    repeated string sample = 2;
+}
+
+message MergedFromStateMsg {
+    CoreEventInfo info = 1;
+    MergedFromState data = 2;
+}
+
+// A005
+message MissingProfileTarget {
+    string profile_name = 1;
+    string target_name = 2;
+}
+
+message MissingProfileTargetMsg {
+    CoreEventInfo info = 1;
+    MissingProfileTarget data = 2;
+}
+
+// Skipped A006, A007
+
+// A008
+message InvalidOptionYAML {
+    string option_name = 1;
+}
+
+message InvalidOptionYAMLMsg {
+    CoreEventInfo info = 1;
+    InvalidOptionYAML data = 2;
+}
+
+// A009
+message LogDbtProjectError {
+    string exc = 1;
+}
+
+message LogDbtProjectErrorMsg {
+    CoreEventInfo info = 1;
+    LogDbtProjectError data = 2;
+}
+
+// Skipped A010
+
+// A011
+message LogDbtProfileError {
+    string exc = 1;
+    repeated string profiles = 2;
+}
+
+message LogDbtProfileErrorMsg {
+    CoreEventInfo info = 1;
+    LogDbtProfileError data = 2;
+}
+
+// Skipped A012, A013, A014, A015, A016
+
+// A017
+message StarterProjectPath {
+    string dir = 1;
+}
+
+message StarterProjectPathMsg {
+    CoreEventInfo info = 1;
+    StarterProjectPath data = 2;
+}
+
+// A018
+message ConfigFolderDirectory {
+    string dir = 1;
+}
+
+message ConfigFolderDirectoryMsg {
+    CoreEventInfo info = 1;
+    ConfigFolderDirectory data = 2;
+}
+
+// A019
+message NoSampleProfileFound {
+    string adapter = 1;
+}
+
+message NoSampleProfileFoundMsg {
+    CoreEventInfo info = 1;
+    NoSampleProfileFound data = 2;
+}
+
+// A020
+message ProfileWrittenWithSample {
+    string name = 1;
+    string path = 2;
+}
+
+message ProfileWrittenWithSampleMsg {
+    CoreEventInfo info = 1;
+    ProfileWrittenWithSample data = 2;
+}
+
+// A021
+message ProfileWrittenWithTargetTemplateYAML {
+    string name = 1;
+    string path = 2;
+}
+
+message ProfileWrittenWithTargetTemplateYAMLMsg {
+    CoreEventInfo info = 1;
+    ProfileWrittenWithTargetTemplateYAML data = 2;
+}
+
+// A022
+message ProfileWrittenWithProjectTemplateYAML {
+    string name = 1;
+    string path = 2;
+}
+
+message ProfileWrittenWithProjectTemplateYAMLMsg {
+    CoreEventInfo info = 1;
+    ProfileWrittenWithProjectTemplateYAML data = 2;
+}
+
+// A023
+message SettingUpProfile {
+}
+
+message SettingUpProfileMsg {
+    CoreEventInfo info = 1;
+    SettingUpProfile data = 2;
+}
+
+// A024
+message InvalidProfileTemplateYAML {
+}
+
+message InvalidProfileTemplateYAMLMsg {
+    CoreEventInfo info = 1;
+    InvalidProfileTemplateYAML data = 2;
+}
+
+// A025
+message ProjectNameAlreadyExists {
+    string name = 1;
+}
+
+message ProjectNameAlreadyExistsMsg {
+    CoreEventInfo info = 1;
+    ProjectNameAlreadyExists data = 2;
+}
+
+// A026
+message ProjectCreated {
+    string project_name = 1;
+    string docs_url = 2;
+    string slack_url = 3;
+}
+
+message ProjectCreatedMsg {
+    CoreEventInfo info = 1;
+    ProjectCreated data = 2;
+}
+
 // D - Deprecation
 
 // D001
