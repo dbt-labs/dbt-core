@@ -23,6 +23,7 @@ from dbt.common.events.types import (
     LogFreshnessResult,
     Note,
 )
+from dbt.contracts.results import RunStatus
 from dbt.node_types import NodeType
 
 from dbt.adapters.capability import Capability
@@ -204,7 +205,11 @@ class FreshnessTask(RunTask):
 
     def task_end_messages(self, results):
         for result in results:
-            if result.status in (FreshnessStatus.Error, FreshnessStatus.RuntimeErr):
+            if result.status in (
+                FreshnessStatus.Error,
+                FreshnessStatus.RuntimeErr,
+                RunStatus.Error,
+            ):
                 print_run_result_error(result)
 
         fire_event(FreshnessCheckComplete())

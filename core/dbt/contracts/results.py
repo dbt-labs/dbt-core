@@ -213,7 +213,6 @@ class RunResultOutput(BaseResult):
 
 
 def process_run_result(result: RunResult) -> RunResultOutput:
-
     compiled = isinstance(result.node, CompiledNode)
 
     return RunResultOutput(
@@ -282,7 +281,8 @@ class RunResultsArtifact(ExecutionResult, ArtifactMixin):
     @classmethod
     def upgrade_schema_version(cls, data):
         """This overrides the "upgrade_schema_version" call in VersionedSchema (via
-        ArtifactMixin) to modify the dictionary passed in from earlier versions of the run_results."""
+        ArtifactMixin) to modify the dictionary passed in from earlier versions of the run_results.
+        """
         run_results_schema_version = get_artifact_schema_version(data)
         # If less than the current version (v5), preprocess contents to match latest schema version
         if run_results_schema_version <= 5:
@@ -398,12 +398,12 @@ class FreshnessMetadata(BaseArtifactMetadata):
 @dataclass
 class FreshnessResult(ExecutionResult):
     metadata: FreshnessMetadata
-    results: Sequence[FreshnessNodeResult]
+    results: Sequence[Union[FreshnessNodeResult, BaseResult]]
 
     @classmethod
     def from_node_results(
         cls,
-        results: List[FreshnessNodeResult],
+        results: List[Union[FreshnessNodeResult, BaseResult]],
         elapsed_time: float,
         generated_at: datetime,
     ):
@@ -426,7 +426,9 @@ class FreshnessExecutionResultArtifact(
 
     @classmethod
     def from_result(cls, base: FreshnessResult):
-        processed = [process_freshness_result(r) for r in base.results]
+        processed = [
+            process_freshness_result(r) for r in base.results if isinstance(r, FreshnessNodeResult)
+        ]
         return cls(
             metadata=base.metadata,
             results=processed,
