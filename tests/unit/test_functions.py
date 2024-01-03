@@ -4,7 +4,8 @@ import pytest
 import dbt.flags as flags
 from dbt.common.events.functions import msg_to_dict, warn_or_error
 from dbt.events.logging import setup_event_logger
-from dbt.common.events.types import InfoLevel, NoNodesForSelectionCriteria
+from dbt.common.events.types import InfoLevel
+from dbt.events.types import NoNodesForSelectionCriteria
 from dbt.common.exceptions import EventCompilationError
 
 

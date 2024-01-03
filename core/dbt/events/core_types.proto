@@ -817,6 +817,318 @@ message FreshnessConfigProblemMsg {
 
 // M - Deps generation
 
+
+
+// M - Deps generation
+
+// M001
+message GitSparseCheckoutSubdirectory {
+    string subdir = 1;
+}
+
+message GitSparseCheckoutSubdirectoryMsg {
+    CoreEventInfo info = 1;
+    GitSparseCheckoutSubdirectory data = 2;
+}
+
+// M002
+message GitProgressCheckoutRevision {
+    string revision = 1;
+}
+
+message GitProgressCheckoutRevisionMsg {
+    CoreEventInfo info = 1;
+    GitProgressCheckoutRevision data = 2;
+}
+
+// M003
+message GitProgressUpdatingExistingDependency {
+    string dir = 1;
+}
+
+message GitProgressUpdatingExistingDependencyMsg {
+    CoreEventInfo info = 1;
+    GitProgressUpdatingExistingDependency data = 2;
+}
+
+// M004
+message GitProgressPullingNewDependency {
+    string dir = 1;
+}
+
+message GitProgressPullingNewDependencyMsg {
+    CoreEventInfo info = 1;
+    GitProgressPullingNewDependency data = 2;
+}
+
+// M005
+message GitNothingToDo {
+    string sha = 1;
+}
+
+message GitNothingToDoMsg {
+    CoreEventInfo info = 1;
+    GitNothingToDo data = 2;
+}
+
+// M006
+message GitProgressUpdatedCheckoutRange {
+    string start_sha = 1;
+    string end_sha = 2;
+}
+
+message GitProgressUpdatedCheckoutRangeMsg {
+    CoreEventInfo info = 1;
+    GitProgressUpdatedCheckoutRange data = 2;
+}
+
+// M007
+message GitProgressCheckedOutAt {
+    string end_sha = 1;
+}
+
+message GitProgressCheckedOutAtMsg {
+    CoreEventInfo info = 1;
+    GitProgressCheckedOutAt data = 2;
+}
+
+// M008
+message RegistryProgressGETRequest {
+    string url = 1;
+}
+
+message RegistryProgressGETRequestMsg {
+    CoreEventInfo info = 1;
+    RegistryProgressGETRequest data = 2;
+}
+
+// M009
+message RegistryProgressGETResponse {
+    string url = 1;
+    int32 resp_code = 2;
+}
+
+message RegistryProgressGETResponseMsg {
+   CoreEventInfo info = 1;
+    RegistryProgressGETResponse data = 2;
+}
+
+// M010
+message SelectorReportInvalidSelector {
+    string valid_selectors = 1;
+    string spec_method = 2;
+    string raw_spec = 3;
+}
+
+message SelectorReportInvalidSelectorMsg {
+    CoreEventInfo info = 1;
+    SelectorReportInvalidSelector data = 2;
+}
+
+// Skipped M011 and M012
+
+// M013
+message DepsNoPackagesFound {
+}
+
+message DepsNoPackagesFoundMsg {
+    CoreEventInfo info = 1;
+    DepsNoPackagesFound data = 2;
+}
+
+// M014
+message DepsStartPackageInstall {
+    string package_name = 1;
+}
+
+message DepsStartPackageInstallMsg {
+    CoreEventInfo info = 1;
+    DepsStartPackageInstall data = 2;
+}
+
+// M015
+message DepsInstallInfo {
+    string version_name = 1;
+}
+
+message DepsInstallInfoMsg {
+    CoreEventInfo info = 1;
+    DepsInstallInfo data = 2;
+}
+
+// M016
+message DepsUpdateAvailable {
+    string version_latest = 1;
+}
+
+message DepsUpdateAvailableMsg {
+    CoreEventInfo info = 1;
+    DepsUpdateAvailable data = 2;
+}
+
+// M017
+message DepsUpToDate {
+}
+
+message DepsUpToDateMsg {
+    CoreEventInfo info = 1;
+    DepsUpToDate data = 2;
+}
+
+// M018
+message DepsListSubdirectory {
+    string subdirectory = 1;
+}
+
+message DepsListSubdirectoryMsg {
+    CoreEventInfo info = 1;
+    DepsListSubdirectory data = 2;
+}
+
+// M019
+message DepsNotifyUpdatesAvailable {
+    repeated string packages = 1;
+}
+
+message DepsNotifyUpdatesAvailableMsg {
+    CoreEventInfo info = 1;
+    DepsNotifyUpdatesAvailable data = 2;
+}
+
+// M022
+message RegistryIndexProgressGETRequest {
+    string url = 1;
+}
+
+message RegistryIndexProgressGETRequestMsg {
+    CoreEventInfo info = 1;
+    RegistryIndexProgressGETRequest data = 2;
+}
+
+// M023
+message RegistryIndexProgressGETResponse {
+    string url = 1;
+    int32 resp_code = 2;
+}
+
+message RegistryIndexProgressGETResponseMsg {
+    CoreEventInfo info = 1;
+    RegistryIndexProgressGETResponse data = 2;
+}
+
+// M024
+message RegistryResponseUnexpectedType {
+    string response = 1;
+}
+
+message RegistryResponseUnexpectedTypeMsg {
+    CoreEventInfo info = 1;
+    RegistryResponseUnexpectedType data = 2;
+}
+
+// M025
+message RegistryResponseMissingTopKeys {
+    string response = 1;
+}
+
+message RegistryResponseMissingTopKeysMsg {
+    CoreEventInfo info = 1;
+    RegistryResponseMissingTopKeys data = 2;
+}
+
+// M026
+message RegistryResponseMissingNestedKeys {
+    string response = 1;
+}
+
+message RegistryResponseMissingNestedKeysMsg {
+    CoreEventInfo info = 1;
+    RegistryResponseMissingNestedKeys data = 2;
+}
+
+// M027
+message RegistryResponseExtraNestedKeys {
+    string response = 1;
+}
+
+message RegistryResponseExtraNestedKeysMsg {
+    CoreEventInfo info = 1;
+    RegistryResponseExtraNestedKeys data = 2;
+}
+
+// M028
+message DepsSetDownloadDirectory {
+    string path = 1;
+}
+
+message DepsSetDownloadDirectoryMsg {
+    CoreEventInfo info = 1;
+    DepsSetDownloadDirectory data = 2;
+}
+
+// M029
+message DepsUnpinned {
+    string revision = 1;
+    string git = 2;
+}
+
+message DepsUnpinnedMsg {
+    CoreEventInfo info = 1;
+    DepsUnpinned data = 2;
+}
+
+// M030
+message NoNodesForSelectionCriteria {
+    string spec_raw = 1;
+}
+
+message NoNodesForSelectionCriteriaMsg {
+    CoreEventInfo info = 1;
+    NoNodesForSelectionCriteria data = 2;
+}
+
+// M031
+message DepsLockUpdating{
+    string lock_filepath = 1;
+}
+
+message DepsLockUpdatingMsg{
+    CoreEventInfo info = 1;
+    DepsLockUpdating data = 2;
+}
+
+// M032
+message DepsAddPackage{
+    string package_name = 1;
+    string version = 2;
+    string packages_filepath = 3;
+}
+
+message DepsAddPackageMsg{
+    CoreEventInfo info = 1;
+    DepsAddPackage data = 2;
+}
+
+//M033
+message DepsFoundDuplicatePackage{
+    map<string, string> removed_package = 1;
+}
+
+message DepsFoundDuplicatePackageMsg{
+    CoreEventInfo info = 1;
+    DepsFoundDuplicatePackage data = 2;
+}
+
+//M034
+message DepsVersionMissing{
+    string source = 1;
+}
+
+message DepsVersionMissingMsg{
+    CoreEventInfo info = 1;
+    DepsVersionMissing data = 2;
+}
+
 //M035
 message DepsScrubbedPackageName{
     string package_name = 1;
