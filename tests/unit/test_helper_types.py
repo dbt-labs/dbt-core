@@ -29,17 +29,26 @@ class TestIncludeExclude:
 
 
 class TestWarnErrorOptions:
-    def test_init(self):
+    def test_init_invalid_error(self):
         with pytest.raises(ValidationError):
             WarnErrorOptions(include=["InvalidError"])
 
         with pytest.raises(ValidationError):
             WarnErrorOptions(include="*", exclude=["InvalidError"])
 
-        warn_error_options = WarnErrorOptions(include=["NoNodesForSelectionCriteria"])
-        assert warn_error_options.include == ["NoNodesForSelectionCriteria"]
+    @pytest.mark.parametrize(
+        "valid_error_name",
+        [
+            "NoNodesForSelectionCriteria",  # core event
+            "AdapterDeprecationWarning",  # adapter event
+            "RetryExternalCall",  # common event
+        ],
+    )
+    def test_init_valid_error(self, valid_error_name):
+        warn_error_options = WarnErrorOptions(include=[valid_error_name])
+        assert warn_error_options.include == [valid_error_name]
         assert warn_error_options.exclude == []
 
-        warn_error_options = WarnErrorOptions(include="*", exclude=["NoNodesForSelectionCriteria"])
+        warn_error_options = WarnErrorOptions(include="*", exclude=[valid_error_name])
         assert warn_error_options.include == "*"
-        assert warn_error_options.exclude == ["NoNodesForSelectionCriteria"]
+        assert warn_error_options.exclude == [valid_error_name]
