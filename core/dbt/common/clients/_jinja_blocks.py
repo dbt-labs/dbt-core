@@ -1,7 +1,7 @@
 import re
 from collections import namedtuple
 
-from dbt.exceptions import (
+from dbt.common.exceptions import (
     BlockDefinitionNotAtTopError,
     DbtInternalError,
     MissingCloseTagError,

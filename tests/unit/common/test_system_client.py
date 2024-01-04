@@ -7,7 +7,7 @@ import pathspec
 from pathlib import Path
 from tempfile import mkdtemp, NamedTemporaryFile
 
-from dbt.exceptions import ExecutableError, WorkingDirectoryError
+from dbt.common.exceptions import ExecutableError, WorkingDirectoryError
 import dbt.common.clients.system
 
 

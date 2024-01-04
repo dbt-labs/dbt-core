@@ -399,7 +399,7 @@ class DebugTask(BaseTask):
     def test_git(self) -> SubtaskStatus:
         try:
             dbt.common.clients.system.run_cmd(os.getcwd(), ["git", "--help"])
-        except dbt.exceptions.ExecutableError as exc:
+        except dbt.common.exceptions.ExecutableError as exc:
             return SubtaskStatus(
                 log_msg=red("ERROR"),
                 run_status=RunStatus.Error,

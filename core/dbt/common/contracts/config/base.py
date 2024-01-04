@@ -6,7 +6,7 @@ from typing import Callable, Dict, Any, List, TypeVar
 from dbt.common.contracts.config.metadata import Metadata
 from dbt.common.exceptions import CompilationError, DbtInternalError
 from dbt.common.contracts.config.properties import AdditionalPropertiesAllowed
-from dbt.contracts.util import Replaceable
+from dbt.common.contracts.util import Replaceable
 
 T = TypeVar("T", bound="BaseConfig")
 
