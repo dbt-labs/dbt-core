@@ -179,15 +179,6 @@ class DuplicateYamlKeyError(CompilationError):
     pass
 
 
-class ConnectionError(Exception):
-    """
-    There was a problem with the connection that returned a bad response,
-    timed out, or resulted in a file that is corrupt.
-    """
-
-    pass
-
-
 # compilation level exceptions
 class GraphDependencyNotFoundError(CompilationError):
     def __init__(self, node, dependency: str) -> None:

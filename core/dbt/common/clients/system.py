@@ -421,7 +421,7 @@ def _interpret_oserror(exc: OSError, cwd: str, cmd: List[str]) -> NoReturn:
         _handle_posix_error(exc, cwd, cmd)
 
     # this should not be reachable, raise _something_ at least!
-    raise dbt.exceptions.DbtInternalError(
+    raise dbt.common.exceptions.DbtInternalError(
         "Unhandled exception in _interpret_oserror: {}".format(exc)
     )
 
