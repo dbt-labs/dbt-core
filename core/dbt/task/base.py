@@ -26,24 +26,26 @@ from dbt.contracts.results import (
 )
 from dbt.common.events.contextvars import get_node_info
 from dbt.common.events.functions import fire_event
-from dbt.common.events.types import (
-    LogDbtProjectError,
-    LogDbtProfileError,
+from dbt.events.types import (
+    SkippingDetails,
+    NodeCompiling,
+    NodeExecuting,
     CatchableExceptionOnRun,
     InternalErrorOnRun,
     GenericExceptionOnRun,
     NodeConnectionReleaseError,
     LogDebugStackTrace,
-    SkippingDetails,
     LogSkipBecauseError,
-    NodeCompiling,
-    NodeExecuting,
 )
 from dbt.common.exceptions import (
     DbtRuntimeError,
     DbtInternalError,
     CompilationError,
     NotImplementedError,
+)
+from dbt.events.types import (
+    LogDbtProjectError,
+    LogDbtProfileError,
 )
 from dbt.flags import get_flags
 from dbt.graph import Graph

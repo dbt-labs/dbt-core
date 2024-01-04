@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Optional, Dict, Any, List, Tuple
 
 from dbt.common.events.functions import fire_event
-from dbt.common.events.types import (
+from dbt.events.types import (
     OpenCommand,
     DebugCmdOut,
     DebugCmdResult,

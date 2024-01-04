@@ -12,8 +12,7 @@ from dbt.contracts.project import (
 from dbt.deps.base import PinnedPackage, UnpinnedPackage, get_downloads_path
 from dbt.exceptions import ExecutableError, MultipleVersionGitDepsError
 from dbt.common.events.functions import fire_event, warn_or_error, scrub_secrets, env_secrets
-from dbt.common.events.types import EnsureGitInstalled, DepsUnpinned
-from dbt.events.types import DepsScrubbedPackageName
+from dbt.events.types import EnsureGitInstalled, DepsUnpinned, DepsScrubbedPackageName
 from dbt.utils import md5
 
 

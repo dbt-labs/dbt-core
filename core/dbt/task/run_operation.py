@@ -11,10 +11,10 @@ from dbt.contracts.files import FileHash
 from dbt.contracts.graph.nodes import HookNode
 from dbt.contracts.results import RunResultsArtifact, RunResult, RunStatus, TimingInfo
 from dbt.common.events.functions import fire_event
-from dbt.common.events.types import (
+from dbt.events.types import (
+    LogDebugStackTrace,
     RunningOperationCaughtError,
     RunningOperationUncaughtError,
-    LogDebugStackTrace,
 )
 from dbt.common.exceptions import DbtInternalError
 from dbt.node_types import NodeType

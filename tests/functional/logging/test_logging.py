@@ -3,7 +3,7 @@ from dbt.tests.util import run_dbt, get_manifest, read_file
 import json
 import os
 from dbt.common.events.functions import fire_event
-from dbt.common.events.types import InvalidOptionYAML
+from dbt.events.types import InvalidOptionYAML
 
 
 my_model_sql = """

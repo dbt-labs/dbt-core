@@ -29,8 +29,9 @@ from dbt.exceptions import (
 )
 from dbt.graph import Graph
 from dbt.common.events.functions import fire_event
-from dbt.common.events.types import FoundStats, Note, WritingInjectedSQLForNode
+from dbt.common.events.types import Note
 from dbt.common.events.contextvars import get_node_info
+from dbt.events.types import WritingInjectedSQLForNode, FoundStats
 from dbt.node_types import NodeType, ModelLanguage
 from dbt.common.events.format import pluralize
 import dbt.tracking

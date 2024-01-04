@@ -2,16 +2,17 @@ from dbt.adapters.events.types import (
     RollbackFailed,
     PluginLoadError,
 )
-from dbt.common.events.types import (
+from dbt.common.events.functions import msg_to_dict, msg_to_json, LOG_VERSION, reset_metadata_vars
+from dbt.common.events import types_pb2
+from dbt.common.events.base_types import msg_from_base_event, EventLevel
+from dbt.events.types import (
     MainReportVersion,
     MainReportArgs,
     MainEncounteredError,
     LogStartLine,
     LogTestResult,
 )
-from dbt.common.events.functions import msg_to_dict, msg_to_json, LOG_VERSION, reset_metadata_vars
-from dbt.common.events import types_pb2
-from dbt.common.events.base_types import msg_from_base_event, EventLevel
+from dbt.events import core_types_pb2
 from dbt.version import installed
 from google.protobuf.json_format import MessageToDict
 from dbt.flags import set_from_args
@@ -54,7 +55,7 @@ def test_events():
     generic_msg.ParseFromString(serialized)
     assert generic_msg.info.code == "A001"
     # get the message class for the real message from the generic message
-    message_class = getattr(types_pb2, f"{generic_msg.info.name}Msg")
+    message_class = getattr(core_types_pb2, f"{generic_msg.info.name}Msg")
     new_msg = message_class()
     new_msg.ParseFromString(serialized)
     assert new_msg.info.code == msg.info.code
@@ -171,7 +172,7 @@ def test_extra_dict_on_event(monkeypatch):
     generic_msg.ParseFromString(serialized)
     assert generic_msg.info.code == "A001"
     # get the message class for the real message from the generic message
-    message_class = getattr(types_pb2, f"{generic_msg.info.name}Msg")
+    message_class = getattr(core_types_pb2, f"{generic_msg.info.name}Msg")
     new_msg = message_class()
     new_msg.ParseFromString(serialized)
     new_msg_dict = MessageToDict(new_msg)

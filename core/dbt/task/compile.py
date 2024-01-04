@@ -5,7 +5,8 @@ from dbt.contracts.graph.manifest import WritableManifest
 from dbt.contracts.results import RunStatus, RunResult
 from dbt.common.events.base_types import EventLevel
 from dbt.common.events.functions import fire_event
-from dbt.common.events.types import CompiledNode, Note, ParseInlineNodeError
+from dbt.common.events.types import Note
+from dbt.events.types import ParseInlineNodeError, CompiledNode
 from dbt.common.exceptions import (
     CompilationError,
     DbtInternalError,

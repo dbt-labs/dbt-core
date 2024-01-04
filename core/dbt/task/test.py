@@ -18,7 +18,7 @@ from dbt.contracts.results import TestStatus, PrimitiveDict, RunResult
 from dbt.context.providers import generate_runtime_model_context
 from dbt.clients.jinja import MacroGenerator
 from dbt.common.events.functions import fire_event
-from dbt.common.events.types import (
+from dbt.events.types import (
     LogTestResult,
     LogStartLine,
 )
