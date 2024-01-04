@@ -145,6 +145,7 @@ sample_values = [
     types.ConfigLogPathDeprecation(deprecated_path=""),
     types.ConfigTargetPathDeprecation(deprecated_path=""),
     types.CollectFreshnessReturnSignature(),
+    types.ProjectFlagsMovedDeprecation(),
     types.PackageMaterializationOverrideDeprecation(
         package_name="my_package", materialization_name="view"
     ),

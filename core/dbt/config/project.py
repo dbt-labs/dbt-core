@@ -20,6 +20,7 @@ from dbt.constants import (
     DEPENDENCIES_FILE_NAME,
     PACKAGES_FILE_NAME,
     PACKAGE_LOCK_HASH_KEY,
+    DBT_PROJECT_FILE_NAME,
 )
 from dbt.clients.system import path_exists, load_file_contents
 from dbt.clients.yaml_helper import load_yaml_text
@@ -35,12 +36,13 @@ from dbt.graph import SelectionSpec
 from dbt.helper_types import NoValue
 from dbt.semver import VersionSpecifier, versions_compatible
 from dbt.version import get_installed_version
-from dbt.utils import MultiDict, md5
+from dbt.utils import MultiDict, md5, coerce_dict_str
 from dbt.node_types import NodeType
 from dbt.config.selectors import SelectorDict
 from dbt.contracts.project import (
     Project as ProjectContract,
     SemverString,
+    ProjectFlags,
 )
 from dbt.contracts.project import PackageConfig, ProjectPackageMetadata
 from dbt.dataclass_schema import ValidationError
@@ -81,8 +83,8 @@ Validator Error:
 """
 
 MISSING_DBT_PROJECT_ERROR = """\
-No dbt_project.yml found at expected path {path}
-Verify that each entry within packages.yml (and their transitive dependencies) contains a file named dbt_project.yml
+No {DBT_PROJECT_FILE_NAME} found at expected path {path}
+Verify that each entry within packages.yml (and their transitive dependencies) contains a file named {DBT_PROJECT_FILE_NAME}
 """
 
 
@@ -199,16 +201,20 @@ def value_or(value: Optional[T], default: T) -> T:
 def load_raw_project(project_root: str) -> Dict[str, Any]:
 
     project_root = os.path.normpath(project_root)
-    project_yaml_filepath = os.path.join(project_root, "dbt_project.yml")
+    project_yaml_filepath = os.path.join(project_root, DBT_PROJECT_FILE_NAME)
 
     # get the project.yml contents
     if not path_exists(project_yaml_filepath):
-        raise DbtProjectError(MISSING_DBT_PROJECT_ERROR.format(path=project_yaml_filepath))
+        raise DbtProjectError(
+            MISSING_DBT_PROJECT_ERROR.format(
+                path=project_yaml_filepath, DBT_PROJECT_FILE_NAME=DBT_PROJECT_FILE_NAME
+            )
+        )
 
     project_dict = _load_yaml(project_yaml_filepath)
 
     if not isinstance(project_dict, dict):
-        raise DbtProjectError("dbt_project.yml does not parse to a dictionary")
+        raise DbtProjectError(f"{DBT_PROJECT_FILE_NAME} does not parse to a dictionary")
 
     return project_dict
 
@@ -323,21 +329,21 @@ class PartialProject(RenderComponents):
             selectors_dict=rendered_selectors,
         )
 
-    # Called by Project.from_project_root (not PartialProject.from_project_root!)
+    # Called by Project.from_project_root which first calls PartialProject.from_project_root
     def render(self, renderer: DbtProjectYamlRenderer) -> "Project":
         try:
             rendered = self.get_rendered(renderer)
             return self.create_project(rendered)
         except DbtProjectError as exc:
             if exc.path is None:
-                exc.path = os.path.join(self.project_root, "dbt_project.yml")
+                exc.path = os.path.join(self.project_root, DBT_PROJECT_FILE_NAME)
             raise
 
     def render_package_metadata(self, renderer: PackageRenderer) -> ProjectPackageMetadata:
         packages_data = renderer.render_data(self.packages_dict)
         packages_config = package_config_from_data(packages_data, self.packages_dict)
         if not self.project_name:
-            raise DbtProjectError("Package dbt_project.yml must have a name!")
+            raise DbtProjectError(f"Package defined in {DBT_PROJECT_FILE_NAME} must have a name!")
         return ProjectPackageMetadata(self.project_name, packages_config.packages)
 
     def check_config_path(
@@ -348,7 +354,7 @@ class PartialProject(RenderComponents):
                 msg = (
                     "{deprecated_path} and {expected_path} cannot both be defined. The "
                     "`{deprecated_path}` config has been deprecated in favor of `{expected_path}`. "
-                    "Please update your `dbt_project.yml` configuration to reflect this "
+                    f"Please update your `{DBT_PROJECT_FILE_NAME}` configuration to reflect this "
                     "change."
                 )
                 raise DbtProjectError(
@@ -420,11 +426,11 @@ class PartialProject(RenderComponents):
 
         docs_paths: List[str] = value_or(cfg.docs_paths, all_source_paths)
         asset_paths: List[str] = value_or(cfg.asset_paths, [])
-        flags = get_flags()
+        global_flags = get_flags()
 
-        flag_target_path = str(flags.TARGET_PATH) if flags.TARGET_PATH else None
+        flag_target_path = str(global_flags.TARGET_PATH) if global_flags.TARGET_PATH else None
         target_path: str = flag_or(flag_target_path, cfg.target_path, "target")
-        log_path: str = str(flags.LOG_PATH)
+        log_path: str = str(global_flags.LOG_PATH)
 
         clean_targets: List[str] = value_or(cfg.clean_targets, [target_path])
         packages_install_path: str = value_or(cfg.packages_install_path, "dbt_packages")
@@ -569,6 +575,11 @@ class PartialProject(RenderComponents):
         ) = package_and_project_data_from_root(project_root)
         selectors_dict = selector_data_from_root(project_root)
 
+        if "flags" in project_dict:
+            # We don't want to include "flags" in the Project,
+            # it goes in ProjectFlags
+            project_dict.pop("flags")
+
         return cls.from_dicts(
             project_root=project_root,
             project_dict=project_dict,
@@ -709,7 +720,6 @@ class Project:
                 "exposures": self.exposures,
                 "vars": self.vars.to_dict(),
                 "require-dbt-version": [v.to_version_string() for v in self.dbt_version],
-                "config-version": self.config_version,
                 "restrict-access": self.restrict_access,
                 "dbt-cloud": self.dbt_cloud,
             }
@@ -773,3 +783,52 @@ class Project:
     def project_target_path(self):
         # If target_path is absolute, project_root will not be included
         return os.path.join(self.project_root, self.target_path)
+
+
+def read_project_flags(project_dir: str, profiles_dir: str) -> ProjectFlags:
+    try:
+        project_flags: Dict[str, Any] = {}
+        # Read project_flags from dbt_project.yml first
+        # Flags are instantiated before the project, so we don't
+        # want to throw an error for non-existence of dbt_project.yml here
+        # because it breaks things.
+        project_root = os.path.normpath(project_dir)
+        project_yaml_filepath = os.path.join(project_root, DBT_PROJECT_FILE_NAME)
+        if path_exists(project_yaml_filepath):
+            try:
+                project_dict = load_raw_project(project_root)
+                if "flags" in project_dict:
+                    project_flags = project_dict.pop("flags")
+            except Exception:
+                # This is probably a yaml load error.The error will be reported
+                # later, when the project loads.
+                pass
+
+        from dbt.config.profile import read_profile
+
+        profile = read_profile(profiles_dir)
+        profile_project_flags: Optional[Dict[str, Any]] = {}
+        if profile:
+            profile_project_flags = coerce_dict_str(profile.get("config", {}))
+
+        if project_flags and profile_project_flags:
+            raise DbtProjectError(
+                f"Do not specify both 'config' in profiles.yml and 'flags' in {DBT_PROJECT_FILE_NAME}. "
+                "Using 'config' in profiles.yml is deprecated."
+            )
+
+        if profile_project_flags:
+            # This can't use WARN_ERROR or WARN_ERROR_OPTIONS because they're in
+            # the config that we're loading. Uses special "warn" method.
+            deprecations.warn("project-flags-moved")
+            project_flags = profile_project_flags
+
+        if project_flags is not None:
+            ProjectFlags.validate(project_flags)
+            return ProjectFlags.from_dict(project_flags)
+    except (DbtProjectError) as exc:
+        # We don't want to eat the DbtProjectError for UserConfig to ProjectFlags
+        raise exc
+    except (DbtRuntimeError, ValidationError):
+        pass
+    return ProjectFlags()

@@ -142,7 +142,6 @@ def profiles_config_update():
 @pytest.fixture(scope="class")
 def dbt_profile_data(unique_schema, dbt_profile_target, profiles_config_update):
     profile = {
-        "config": {"send_anonymous_usage_stats": False},
         "test": {
             "outputs": {
                 "default": {},
@@ -181,6 +180,7 @@ def dbt_project_yml(project_root, project_config_update):
     project_config = {
         "name": "test",
         "profile": "test",
+        "flags": {"send_anonymous_usage_stats": False},
     }
     if project_config_update:
         if isinstance(project_config_update, dict):

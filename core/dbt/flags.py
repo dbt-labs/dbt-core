@@ -39,23 +39,24 @@ def get_flags():
     return GLOBAL_FLAGS
 
 
-def set_from_args(args: Namespace, user_config):
+def set_from_args(args: Namespace, project_flags):
     global GLOBAL_FLAGS
     from dbt.cli.main import cli
     from dbt.cli.flags import Flags, convert_config
 
-    # we set attributes of args after initialize the flags, but user_config
+    # we set attributes of args after initialize the flags, but project_flags
     # is being read in the Flags constructor, so we need to read it here and pass in
-    # to make sure we use the correct user_config
-    if (hasattr(args, "PROFILES_DIR") or hasattr(args, "profiles_dir")) and not user_config:
-        from dbt.config.profile import read_user_config
+    # to make sure we use the correct project_flags
+    profiles_dir = getattr(args, "PROFILES_DIR", None) or getattr(args, "profiles_dir", None)
+    project_dir = getattr(args, "PROJECT_DIR", None) or getattr(args, "project_dir", None)
+    if profiles_dir and project_dir:
+        from dbt.config.project import read_project_flags
 
-        profiles_dir = getattr(args, "PROFILES_DIR", None) or getattr(args, "profiles_dir")
-        user_config = read_user_config(profiles_dir)
+        project_flags = read_project_flags(project_dir, profiles_dir)
 
     # make a dummy context to get the flags, totally arbitrary
     ctx = cli.make_context("run", ["run"])
-    flags = Flags(ctx, user_config)
+    flags = Flags(ctx, project_flags)
     for arg_name, args_param_value in vars(args).items():
         args_param_value = convert_config(arg_name, args_param_value)
         object.__setattr__(flags, arg_name.upper(), args_param_value)

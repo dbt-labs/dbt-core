@@ -3,6 +3,7 @@ import sys
 from dataclasses import dataclass
 from importlib import import_module
 from multiprocessing import get_context
+from pathlib import Path
 from pprint import pformat as pf
 from typing import Any, Callable, Dict, List, Optional, Set, Union
 
@@ -11,8 +12,8 @@ from click.core import Command as ClickCommand, Group, ParameterSource
 from dbt.cli.exceptions import DbtUsageException
 from dbt.cli.resolvers import default_log_path, default_project_dir
 from dbt.cli.types import Command as CliCommand
-from dbt.config.profile import read_user_config
-from dbt.contracts.project import UserConfig
+from dbt.config.project import read_project_flags
+from dbt.contracts.project import ProjectFlags
 from dbt.exceptions import DbtInternalError
 from dbt.deprecations import renamed_env_var
 from dbt.helper_types import WarnErrorOptions
@@ -25,7 +26,7 @@ FLAGS_DEFAULTS = {
     "INDIRECT_SELECTION": "eager",
     "TARGET_PATH": None,
     "WARN_ERROR": None,
-    # Cli args without user_config or env var option.
+    # Cli args without project_flags or env var option.
     "FULL_REFRESH": False,
     "STRICT_MODE": False,
     "STORE_FAILURES": False,
@@ -77,7 +78,7 @@ class Flags:
     """Primary configuration artifact for running dbt"""
 
     def __init__(
-        self, ctx: Optional[Context] = None, user_config: Optional[UserConfig] = None
+        self, ctx: Optional[Context] = None, project_flags: Optional[ProjectFlags] = None
     ) -> None:
         # Set the default flags.
         for key, value in FLAGS_DEFAULTS.items():
@@ -200,23 +201,29 @@ class Flags:
                 invoked_subcommand_ctx, params_assigned_from_default, deprecated_env_vars
             )
 
-        if not user_config:
+        if not project_flags:
+            project_dir = getattr(self, "PROJECT_DIR", str(default_project_dir()))
             profiles_dir = getattr(self, "PROFILES_DIR", None)
-            user_config = read_user_config(profiles_dir) if profiles_dir else None
+            if profiles_dir and project_dir:
+                project_flags = read_project_flags(project_dir, profiles_dir)
+            else:
+                project_flags = None
 
         # Add entire invocation command to flags
         object.__setattr__(self, "INVOCATION_COMMAND", "dbt " + " ".join(sys.argv[1:]))
 
         # Overwrite default assignments with user config if available.
-        if user_config:
+        if project_flags:
             param_assigned_from_default_copy = params_assigned_from_default.copy()
             for param_assigned_from_default in params_assigned_from_default:
-                user_config_param_value = getattr(user_config, param_assigned_from_default, None)
-                if user_config_param_value is not None:
+                project_flags_param_value = getattr(
+                    project_flags, param_assigned_from_default, None
+                )
+                if project_flags_param_value is not None:
                     object.__setattr__(
                         self,
                         param_assigned_from_default.upper(),
-                        convert_config(param_assigned_from_default, user_config_param_value),
+                        convert_config(param_assigned_from_default, project_flags_param_value),
                     )
                     param_assigned_from_default_copy.remove(param_assigned_from_default)
             params_assigned_from_default = param_assigned_from_default_copy
@@ -234,9 +241,11 @@ class Flags:
         # Starting in v1.5, if `log-path` is set in `dbt_project.yml`, it will raise a deprecation warning,
         # with the possibility of removing it in a future release.
         if getattr(self, "LOG_PATH", None) is None:
-            project_dir = getattr(self, "PROJECT_DIR", default_project_dir())
+            project_dir = getattr(self, "PROJECT_DIR", str(default_project_dir()))
             version_check = getattr(self, "VERSION_CHECK", True)
-            object.__setattr__(self, "LOG_PATH", default_log_path(project_dir, version_check))
+            object.__setattr__(
+                self, "LOG_PATH", default_log_path(Path(project_dir), version_check)
+            )
 
         # Support console DO NOT TRACK initiative.
         if os.getenv("DO_NOT_TRACK", "").lower() in ("1", "t", "true", "y", "yes"):
