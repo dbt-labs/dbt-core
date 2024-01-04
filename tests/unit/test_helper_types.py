@@ -31,24 +31,29 @@ class TestIncludeExclude:
 class TestWarnErrorOptions:
     def test_init_invalid_error(self):
         with pytest.raises(ValidationError):
+            WarnErrorOptions(include=["InvalidError"], valid_error_names=set(["ValidError"]))
+
+        with pytest.raises(ValidationError):
+            WarnErrorOptions(
+                include="*", exclude=["InvalidError"], valid_error_names=set(["ValidError"])
+            )
+
+    def test_init_invalid_error_default_valid_error_names(self):
+        with pytest.raises(ValidationError):
             WarnErrorOptions(include=["InvalidError"])
 
         with pytest.raises(ValidationError):
             WarnErrorOptions(include="*", exclude=["InvalidError"])
 
-    @pytest.mark.parametrize(
-        "valid_error_name",
-        [
-            "NoNodesForSelectionCriteria",  # core event
-            "AdapterDeprecationWarning",  # adapter event
-            "RetryExternalCall",  # common event
-        ],
-    )
-    def test_init_valid_error(self, valid_error_name):
-        warn_error_options = WarnErrorOptions(include=[valid_error_name])
-        assert warn_error_options.include == [valid_error_name]
+    def test_init_valid_error(self):
+        warn_error_options = WarnErrorOptions(
+            include=["ValidError"], valid_error_names=set(["ValidError"])
+        )
+        assert warn_error_options.include == ["ValidError"]
         assert warn_error_options.exclude == []
 
-        warn_error_options = WarnErrorOptions(include="*", exclude=[valid_error_name])
+        warn_error_options = WarnErrorOptions(
+            include="*", exclude=["ValidError"], valid_error_names=set(["ValidError"])
+        )
         assert warn_error_options.include == "*"
-        assert warn_error_options.exclude == [valid_error_name]
+        assert warn_error_options.exclude == ["ValidError"]

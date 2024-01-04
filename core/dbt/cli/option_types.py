@@ -1,6 +1,7 @@
 from click import ParamType, Choice
 
 from dbt.config.utils import parse_cli_yaml_string
+from dbt.events import ALL_EVENT_NAMES
 from dbt.exceptions import ValidationError, OptionNotYamlDictError
 from dbt.common.exceptions import DbtValidationError
 
@@ -53,7 +54,9 @@ class WarnErrorOptionsType(YAML):
         include_exclude = super().convert(value, param, ctx)
 
         return WarnErrorOptions(
-            include=include_exclude.get("include", []), exclude=include_exclude.get("exclude", [])
+            include=include_exclude.get("include", []),
+            exclude=include_exclude.get("exclude", []),
+            valid_error_names=ALL_EVENT_NAMES,
         )
 
 

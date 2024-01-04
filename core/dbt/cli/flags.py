@@ -19,6 +19,7 @@ from dbt.common.exceptions import DbtInternalError
 from dbt.common.clients import jinja
 from dbt.deprecations import renamed_env_var
 from dbt.common.helper_types import WarnErrorOptions
+from dbt.events import ALL_EVENT_NAMES
 
 if os.name != "nt":
     # https://bugs.python.org/issue41567
@@ -50,7 +51,9 @@ def convert_config(config_name, config_value):
     ret = config_value
     if config_name.lower() == "warn_error_options" and type(config_value) == dict:
         ret = WarnErrorOptions(
-            include=config_value.get("include", []), exclude=config_value.get("exclude", [])
+            include=config_value.get("include", []),
+            exclude=config_value.get("exclude", []),
+            valid_error_names=ALL_EVENT_NAMES,
         )
     return ret
 

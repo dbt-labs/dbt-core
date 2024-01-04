@@ -5,17 +5,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Tuple, AbstractSet, Union
-from typing import Callable, cast, Generic, Optional, TypeVar, List, NewType, Any, Dict
+from typing import Callable, cast, Generic, Optional, TypeVar, List, NewType, Set
 
 from dbt.common.dataclass_schema import (
     dbtClassMixin,
     ValidationError,
     StrEnum,
 )
-import dbt.adapters.events.types as adapter_dbt_event_types
-import dbt.common.events.types as dbt_event_types
-import dbt.events.types as core_dbt_event_types
-
 
 Port = NewType("Port", int)
 
@@ -68,18 +64,18 @@ class IncludeExclude(dbtClassMixin):
 
 
 class WarnErrorOptions(IncludeExclude):
-    def _validate_items(self, items: List[str]):
-        all_event_types: Dict[str, Any] = {
-            **dbt_event_types.__dict__,
-            **core_dbt_event_types.__dict__,
-            **adapter_dbt_event_types.__dict__,
-        }
-        valid_exception_names = set(
-            [name for name, cls in all_event_types.items() if isinstance(cls, type)]
-        )
+    def __init__(
+        self,
+        include: Union[str, List[str]],
+        exclude: Optional[List[str]] = None,
+        valid_error_names: Optional[Set[str]] = None,
+    ):
+        self._valid_error_names: Set[str] = valid_error_names or set()
+        super().__init__(include=include, exclude=(exclude or []))
 
+    def _validate_items(self, items: List[str]):
         for item in items:
-            if item not in valid_exception_names:
+            if item not in self._valid_error_names:
                 raise ValidationError(f"{item} is not a valid dbt error name.")
 
 
