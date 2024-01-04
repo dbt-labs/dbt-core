@@ -1,7 +1,10 @@
+# necessary for annotating constructors
+from __future__ import annotations
+
 from dataclasses import dataclass, Field
 
 from itertools import chain
-from typing import Callable, Dict, Any, List, TypeVar
+from typing import Callable, Dict, Any, List, TypeVar, Type
 
 from dbt.common.contracts.config.metadata import Metadata
 from dbt.common.exceptions import CompilationError, DbtInternalError
@@ -140,21 +143,18 @@ class BaseConfig(AdditionalPropertiesAllowed, Replaceable):
             )
         return result
 
-    def update_from(self: T, data: Dict[str, Any], adapter_type: str, validate: bool = True) -> T:
+    def update_from(
+        self: T, data: Dict[str, Any], config_cls: Type[BaseConfig], validate: bool = True
+    ) -> T:
         """Given a dict of keys, update the current config from them, validate
         it, and return a new config with the updated values
         """
-        # sadly, this is a circular import
-        from dbt.adapters.factory import get_config_class_by_name
-
         dct = self.to_dict(omit_none=False)
-
-        adapter_config_cls = get_config_class_by_name(adapter_type)
 
         self_merged = self._merge_dicts(dct, data)
         dct.update(self_merged)
 
-        adapter_merged = adapter_config_cls._merge_dicts(dct, data)
+        adapter_merged = config_cls._merge_dicts(dct, data)
         dct.update(adapter_merged)
 
         # any remaining fields must be "clobber"

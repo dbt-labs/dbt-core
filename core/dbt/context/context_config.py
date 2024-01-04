@@ -3,6 +3,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import List, Iterator, Dict, Any, TypeVar, Generic, Optional
 
+from dbt.adapters.factory import get_config_class_by_name
 from dbt.config import RuntimeConfig, Project, IsFQNResource
 from dbt.contracts.graph.model_config import get_config_for
 from dbt.common.contracts.config.base import BaseConfig, _listify
@@ -199,9 +200,11 @@ class ContextConfigGenerator(BaseContextConfigGenerator[C]):
     def _update_from_config(self, result: C, partial: Dict[str, Any], validate: bool = False) -> C:
         translated = self._active_project.credentials.translate_aliases(partial)
         translated = self.translate_hook_names(translated)
-        updated = result.update_from(
-            translated, self._active_project.credentials.type, validate=validate
-        )
+
+        adapter_type = self._active_project.credentials.type
+        adapter_config_cls = get_config_class_by_name(adapter_type)
+
+        updated = result.update_from(translated, adapter_config_cls, validate=validate)
         return updated
 
     def translate_hook_names(self, project_dict):
