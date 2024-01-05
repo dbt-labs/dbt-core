@@ -1,4 +1,4 @@
-from typing import Set, List, Optional, Tuple
+from typing import Set, List, Optional, Tuple, Any
 
 from .graph import Graph, UniqueId
 from .queue import GraphQueue
@@ -64,8 +64,11 @@ class NodeSelector(MethodManager):
         """Select the explicitly included nodes, using the given spec. Return
         the selected set of unique IDs.
         """
-        method = self.get_method(spec.method, spec.method_arguments)
-        return set(method.search(included_nodes, spec.value))
+        if spec.method == 'selector':
+            return self.get_selected(self.project.get_selector(spec.value))
+        else:
+            method = self.get_method(spec.method, spec.method_arguments)
+            return set(method.search(included_nodes, spec.value))
 
     def get_nodes_from_criteria(
         self, spec: SelectionCriteria
@@ -296,7 +299,7 @@ class NodeSelector(MethodManager):
 
         return selected
 
-    def get_selected(self, spec: SelectionSpec) -> Set[UniqueId]:
+    def get_selected(self, spec: SelectionSpec, project: Any=None) -> Set[UniqueId]:
         """get_selected runs through the node selection process:
 
         - node selection. Based on the include/exclude sets, the set
@@ -306,16 +309,18 @@ class NodeSelector(MethodManager):
             - selectors can filter the nodes after all of them have been
               selected
         """
+        if project is not None:
+            self.project = project
         selected_nodes, indirect_only = self.select_nodes(spec)
         filtered_nodes = self.filter_selection(selected_nodes)
 
         return filtered_nodes
 
-    def get_graph_queue(self, spec: SelectionSpec) -> GraphQueue:
+    def get_graph_queue(self, spec: SelectionSpec, project: Any = None) -> GraphQueue:
         """Returns a queue over nodes in the graph that tracks progress of
         dependecies.
         """
-        selected_nodes = self.get_selected(spec)
+        selected_nodes = self.get_selected(spec, project)
         selected_resources.set_selected_resources(selected_nodes)
         new_graph = self.full_graph.get_subset_graph(selected_nodes)
         # should we give a way here for consumers to mutate the graph?

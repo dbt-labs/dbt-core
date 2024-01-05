@@ -115,6 +115,10 @@ class GraphRunnableTask(ConfiguredTask):
         # Doing that is actually a little tricky, so I'm punting it to a new ticket GH #6397
         indirect_selection = getattr(self.args, "INDIRECT_SELECTION", "eager")
 
+        self.config.arg_selector = None
+        if self.selection_arg or self.exclusion_arg:
+            self.config.arg_selector = parse_difference(self.selection_arg, self.exclusion_arg, indirect_selection)
+
         if self.args.selector:
             # use pre-defined selector (--selector)
             spec = self.config.get_selector(self.args.selector)
@@ -138,7 +142,7 @@ class GraphRunnableTask(ConfiguredTask):
     def get_graph_queue(self) -> GraphQueue:
         selector = self.get_node_selector()
         spec = self.get_selection_spec()
-        return selector.get_graph_queue(spec)
+        return selector.get_graph_queue(spec, self.config)
 
     def _runtime_initialize(self):
         self.compile_manifest()

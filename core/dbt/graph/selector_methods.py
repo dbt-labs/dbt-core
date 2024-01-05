@@ -53,6 +53,7 @@ class MethodName(StrEnum):
     Metric = "metric"
     Result = "result"
     SourceStatus = "source_status"
+    Selector = "selector"
     Wildcard = "wildcard"
     Version = "version"
     SemanticModel = "semantic_model"

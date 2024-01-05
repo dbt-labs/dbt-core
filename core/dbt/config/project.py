@@ -754,6 +754,8 @@ class Project:
 
     def get_selector(self, name: str) -> Union[SelectionSpec, bool]:
         if name not in self.selectors:
+            if name == 'arg_selector' and self.arg_selector:
+                return self.arg_selector
             raise DbtRuntimeError(
                 f"Could not find selector named {name}, expected one of {list(self.selectors)}"
             )

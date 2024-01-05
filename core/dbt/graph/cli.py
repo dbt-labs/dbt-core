@@ -33,28 +33,64 @@ def parse_union(
     # turn ['a b', 'c'] -> ['a', 'b', 'c']
     raw_specs = itertools.chain.from_iterable(r.split(" ") for r in components)
     union_components: List[SelectionSpec] = []
+    exclude_components: List[SelectionSpec] = []
+    in_exclude = False
+
     flags = get_flags()
     # ['a', 'b', 'c,d'] -> union('a', 'b', intersection('c', 'd'))
     for raw_spec in raw_specs:
+        if in_exclude == False and raw_spec == 'EXCEPT':
+            in_exclude = True
+            if len(union_components) == 0:
+                for include in DEFAULT_INCLUDES:
+                    union_components.append(
+                        SelectionCriteria.from_single_spec(include, indirect_selection=False)
+                    )
+            continue
+
         intersection_components: List[SelectionSpec] = [
             SelectionCriteria.from_single_spec(part, indirect_selection=indirect_selection)
             for part in raw_spec.split(INTERSECTION_DELIMITER)
         ]
-        union_components.append(
-            SelectionIntersection(
-                components=intersection_components,
-                expect_exists=expect_exists,
-                raw=raw_spec,
-                indirect_selection=IndirectSelection(flags.INDIRECT_SELECTION),
+        if in_exclude:
+            exclude_components.append(
+                SelectionIntersection(
+                    components=intersection_components,
+                    expect_exists=expect_exists,
+                    raw=raw_spec,
+                    indirect_selection=IndirectSelection(flags.INDIRECT_SELECTION),
+                )
             )
-        )
-    return SelectionUnion(
+        else:
+            union_components.append(
+                SelectionIntersection(
+                    components=intersection_components,
+                    expect_exists=expect_exists,
+                    raw=raw_spec,
+                    indirect_selection=IndirectSelection(flags.INDIRECT_SELECTION),
+                )
+            )
+    res = SelectionUnion(
         components=union_components,
         expect_exists=False,
         raw=components,
         indirect_selection=IndirectSelection(flags.INDIRECT_SELECTION),
     )
 
+    if len(exclude_components) == 0:
+        return res
+    else:
+        return SelectionDifference(
+            components=[
+                res,
+                SelectionUnion(
+                    components=exclude_components,
+                    expect_exists=False,
+                    raw=components,
+                    indirect_selection=False
+                )
+            ]
+        )
 
 def parse_union_from_default(
     raw: Optional[List[str]],
@@ -123,9 +159,9 @@ def _get_list_dicts(dct: Dict[str, Any], key: str) -> List[RawDefinition]:
     return result
 
 
-def _parse_exclusions(definition, result={}) -> Optional[SelectionSpec]:
+def _parse_exclusions(definition) -> Optional[SelectionSpec]:
     exclusions = _get_list_dicts(definition, "exclude")
-    parsed_exclusions = [parse_from_definition(excl, result=result) for excl in exclusions]
+    parsed_exclusions = [parse_from_definition(excl) for excl in exclusions]
     if len(parsed_exclusions) == 1:
         return parsed_exclusions[0]
     elif len(parsed_exclusions) > 1:
@@ -135,7 +171,7 @@ def _parse_exclusions(definition, result={}) -> Optional[SelectionSpec]:
 
 
 def _parse_include_exclude_subdefs(
-    definitions: List[RawDefinition], result={}
+    definitions: List[RawDefinition]
 ) -> Tuple[List[SelectionSpec], Optional[SelectionSpec]]:
     include_parts: List[SelectionSpec] = []
     diff_arg: Optional[SelectionSpec] = None
@@ -149,16 +185,16 @@ def _parse_include_exclude_subdefs(
                     f"You cannot provide multiple exclude arguments to the "
                     f"same selector set operator:\n{yaml_sel_cfg}"
                 )
-            diff_arg = _parse_exclusions(definition, result=result)
+            diff_arg = _parse_exclusions(definition)
         else:
-            include_parts.append(parse_from_definition(definition, result=result))
+            include_parts.append(parse_from_definition(definition))
 
     return (include_parts, diff_arg)
 
 
-def parse_union_definition(definition: Dict[str, Any], result={}) -> SelectionSpec:
+def parse_union_definition(definition: Dict[str, Any]) -> SelectionSpec:
     union_def_parts = _get_list_dicts(definition, "union")
-    include, exclude = _parse_include_exclude_subdefs(union_def_parts, result=result)
+    include, exclude = _parse_include_exclude_subdefs(union_def_parts)
 
     union = SelectionUnion(components=include)
 
@@ -169,9 +205,9 @@ def parse_union_definition(definition: Dict[str, Any], result={}) -> SelectionSp
         return SelectionDifference(components=[union, exclude], raw=definition)
 
 
-def parse_intersection_definition(definition: Dict[str, Any], result={}) -> SelectionSpec:
+def parse_intersection_definition(definition: Dict[str, Any]) -> SelectionSpec:
     intersection_def_parts = _get_list_dicts(definition, "intersection")
-    include, exclude = _parse_include_exclude_subdefs(intersection_def_parts, result=result)
+    include, exclude = _parse_include_exclude_subdefs(intersection_def_parts)
     intersection = SelectionIntersection(components=include)
 
     if exclude is None:
@@ -181,7 +217,7 @@ def parse_intersection_definition(definition: Dict[str, Any], result={}) -> Sele
         return SelectionDifference(components=[intersection, exclude], raw=definition)
 
 
-def parse_dict_definition(definition: Dict[str, Any], result={}) -> SelectionSpec:
+def parse_dict_definition(definition: Dict[str, Any]) -> SelectionSpec:
     diff_arg: Optional[SelectionSpec] = None
     if len(definition) == 1:
         key = list(definition)[0]
@@ -194,15 +230,10 @@ def parse_dict_definition(definition: Dict[str, Any], result={}) -> SelectionSpe
             "method": key,
             "value": value,
         }
-    elif definition.get("method") == "selector":
-        sel_def = definition.get("value")
-        if sel_def not in result:
-            raise DbtValidationError(f"Existing selector definition for {sel_def} not found.")
-        return result[definition["value"]]["definition"]
     elif "method" in definition and "value" in definition:
         dct = definition
         if "exclude" in definition:
-            diff_arg = _parse_exclusions(definition, result=result)
+            diff_arg = _parse_exclusions(definition)
             dct = {k: v for k, v in dct.items() if k != "exclude"}
     else:
         raise DbtValidationError(
@@ -220,8 +251,7 @@ def parse_dict_definition(definition: Dict[str, Any], result={}) -> SelectionSpe
 
 def parse_from_definition(
     definition: RawDefinition,
-    rootlevel=False,
-    result: Dict[str, Dict[str, Union[SelectionSpec, bool]]] = {},
+    rootlevel=False
 ) -> SelectionSpec:
 
     if (
@@ -236,13 +266,13 @@ def parse_from_definition(
             f"in a root level selector definition; found {keys}."
         )
     if isinstance(definition, str):
-        return SelectionCriteria.from_single_spec(definition)
+        return parse_union_from_default(raw=[definition], default=[])
     elif "union" in definition:
-        return parse_union_definition(definition, result=result)
+        return parse_union_definition(definition)
     elif "intersection" in definition:
-        return parse_intersection_definition(definition, result=result)
+        return parse_intersection_definition(definition)
     elif isinstance(definition, dict):
-        return parse_dict_definition(definition, result=result)
+        return parse_dict_definition(definition)
     else:
         raise DbtValidationError(
             f"Expected to find union, intersection, str or dict, instead "
@@ -259,7 +289,7 @@ def parse_from_selectors_definition(
         result[selector.name] = {
             "default": selector.default,
             "definition": parse_from_definition(
-                selector.definition, rootlevel=True, result=deepcopy(result)
+                selector.definition, rootlevel=True
             ),
         }
     return result

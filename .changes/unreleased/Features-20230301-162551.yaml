@@ -1,0 +1,51 @@
+kind: Features
+body: |-
+  There are some really cool features in DBT such as the ability to choose models and their descendents, graph ordered builds, and much more.  However, I found that some of the syntax seemed to be lacking (particularly around the selectors yml syntax).
+  
+  The definition part of the selector yaml supports some model selection operators, but requires that the end user use a different approach to describe what can be done in short-hand on the command line.  For example, on the command line, I can select the children of a model using
+  
+  ```bash
+  dbt ls --select some_model+
+  ```
+  
+  In the yaml,
+  ```yaml
+  - name: some_selector
+    description:
+      - some_model+
+  ```
+  does not work and instead
+  
+  ```yaml
+  - name: some_selector
+    description:
+      - method: fqn
+        value: some_model
+        children: true
+  ```
+  must be used.
+  
+  The yaml is very useful in defining routine selections.  This inconsistency with the command line forces the end user to learn two approaches.
+  
+  Furthermore, there is support from the command line to union and intersect using the --select operator.  However, if one wishes to exclude, the separate --exclude operator is needed.  The syntax is very straight forward for the command line approach, but again the yaml approach is different.  I see value in the yaml approach.  I just believe that the two should be compatible.  In this PR, I propose that the --select can include NOT as a way of embedding excluded models in a single string.
+  
+  ```bash
+  dbt ls --select 'selector:some_selector+1 NOT selector:some_selector'
+  ```
+  
+  In addition, dbt doesn't allow selectors to be expanded using the children/parent/ancestor operators.  This PR addresses that and makes selectors just like any other method.
+  
+  Syntax in the yaml is also supported
+  ```yaml
+  - definition:
+    union:
+      - selector:some_other_selector+1 NOT some_model+2
+    name: some_selector
+  ```
+  
+  Most of the code removes the selectors dictionary from being passed around and instead opts to pass the project to the graph/cli get_selected and get_graph_queue methods.
+
+time: 2023-03-01T16:25:51.627771-05:00
+custom:
+  Author: acurtis-evi
+  Issue: "5009"

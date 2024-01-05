@@ -57,7 +57,7 @@ class ListTask(GraphRunnableTask):
     def _iterate_selected_nodes(self):
         selector = self.get_node_selector()
         spec = self.get_selection_spec()
-        nodes = sorted(selector.get_selected(spec))
+        nodes = sorted(selector.get_selected(spec, self.config))
         if not nodes:
             warn_or_error(NoNodesSelected())
             return
