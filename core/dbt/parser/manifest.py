@@ -106,7 +106,7 @@ from dbt.contracts.graph.nodes import (
     NodeRelation,
 )
 from dbt.contracts.graph.unparsed import NodeVersion
-from dbt.contracts.util import Writable
+from dbt.artifacts.base import Writable
 from dbt.exceptions import (
     TargetNotFoundError,
     AmbiguousAliasError,

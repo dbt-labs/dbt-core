@@ -2,14 +2,14 @@ import threading
 
 from dbt.contracts.graph.unparsed import FreshnessThreshold
 from dbt.contracts.graph.nodes import CompiledNode, SourceDefinition, ResultNode
-from dbt.contracts.util import (
+from dbt.artifacts.base import (
     BaseArtifactMetadata,
     ArtifactMixin,
     VersionedSchema,
-    Replaceable,
     schema_version,
     get_artifact_schema_version,
 )
+from dbt.common.contracts.util import Replaceable
 from dbt.common.exceptions import DbtInternalError
 from dbt.common.events.functions import fire_event
 from dbt.events.types import TimingInfoCollected

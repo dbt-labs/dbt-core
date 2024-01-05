@@ -11,7 +11,7 @@ from dbt.contracts.results import (
     RunResultsArtifact,
     FreshnessExecutionResultArtifact,
 )
-from dbt.contracts.util import VersionedSchema
+from dbt.artifacts.base import VersionedSchema
 from dbt.common.clients.system import write_file
 
 

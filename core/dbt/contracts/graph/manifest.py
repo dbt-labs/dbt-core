@@ -46,13 +46,13 @@ from dbt.contracts.graph.nodes import (
 from dbt.contracts.graph.unparsed import SourcePatch, NodeVersion, UnparsedVersion
 from dbt.contracts.graph.manifest_upgrade import upgrade_manifest_json
 from dbt.contracts.files import SourceFile, SchemaSourceFile, FileHash, AnySourceFile
-from dbt.contracts.util import (
+from dbt.artifacts.base import (
     BaseArtifactMetadata,
-    SourceKey,
     ArtifactMixin,
     schema_version,
     get_artifact_schema_version,
 )
+from dbt.contracts.util import SourceKey
 from dbt.common.dataclass_schema import dbtClassMixin
 
 from dbt.exceptions import (

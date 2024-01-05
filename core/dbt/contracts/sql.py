@@ -13,7 +13,7 @@ from dbt.contracts.results import (
     ExecutionResult,
     RunExecutionResult,
 )
-from dbt.contracts.util import VersionedSchema, schema_version
+from dbt.artifacts.base import VersionedSchema, schema_version
 from dbt.logger import LogMessage
 
 
