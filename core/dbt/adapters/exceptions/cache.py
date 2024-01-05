@@ -1,7 +1,7 @@
 import re
 from typing import Dict
 
-from dbt.common.exceptions import DbtInternalError
+from dbt_common.exceptions import DbtInternalError
 
 
 class CacheInconsistencyError(DbtInternalError):
