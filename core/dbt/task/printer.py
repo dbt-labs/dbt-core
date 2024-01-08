@@ -20,7 +20,7 @@ from dbt.events.types import (
 from dbt.tracking import InvocationProcessor
 from dbt.common.events.format import pluralize
 
-from dbt.contracts.results import NodeStatus
+from dbt.artifacts.results import NodeStatus
 from dbt.node_types import NodeType
 
 

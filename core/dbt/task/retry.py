@@ -3,7 +3,7 @@ from pathlib import Path
 from dbt.cli.flags import Flags
 from dbt.cli.types import Command as CliCommand
 from dbt.config import RuntimeConfig
-from dbt.contracts.results import NodeStatus
+from dbt.artifacts.results import NodeStatus
 from dbt.contracts.state import PreviousState
 from dbt.common.exceptions import DbtRuntimeError
 from dbt.graph import GraphQueue

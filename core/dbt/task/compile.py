@@ -2,7 +2,7 @@ import threading
 from typing import AbstractSet, Optional
 
 from dbt.contracts.graph.manifest import WritableManifest
-from dbt.contracts.results import RunStatus, RunResult
+from dbt.artifacts.run import RunStatus, RunResult
 from dbt.common.events.base_types import EventLevel
 from dbt.common.events.functions import fire_event
 from dbt.common.events.types import Note
