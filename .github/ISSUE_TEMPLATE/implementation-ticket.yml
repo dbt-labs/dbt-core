@@ -35,10 +35,9 @@ body:
       label: Suggested Tests
       description: |
         Provide scenarios to test.  Link to existing similar tests if appropriate.
-    placeholder: |
-        Example: |
-          1. Test with no version specified in the schema file and use selection logic on a versioned model for a specific version.  Expect pass.
-          2. Test with a version specified in the schema file that is no valid.  Expect ParsingError.
+      placeholder: |
+         1. Test with no version specified in the schema file and use selection logic on a versioned model for a specific version.  Expect pass.
+         2. Test with a version specified in the schema file that is no valid.  Expect ParsingError.
     validations:
       required: true
   - type: textarea
