@@ -7,7 +7,8 @@ import pytest
 
 from dbt.adapters.events import types as adapter_types
 from dbt.common.events.event_manager_client import ctx_set_event_manager
-from dbt.contracts.results import TimingInfo, RunResult, RunStatus
+from dbt.artifacts.results import TimingInfo, RunStatus
+from dbt.artifacts.run import RunResult
 from dbt.common.events import types
 from dbt.adapters.events.logging import AdapterLogger
 from dbt.common.events.base_types import msg_from_base_event
