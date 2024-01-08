@@ -40,7 +40,7 @@ body:
           1. Test with no version specified in the schema file and use selection logic on a versioned model for a specific version.  Expect pass.
           2. Test with a version specified in the schema file that is no valid.  Expect ParsingError.
     validations:
-      required: false
+      required: true
   - type: textarea
     attributes:
       label: Impact to Other Teams
