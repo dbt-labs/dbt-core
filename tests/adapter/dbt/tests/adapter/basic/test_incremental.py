@@ -1,6 +1,6 @@
 import pytest
 from dbt.tests.util import run_dbt, check_relations_equal, relation_from_name
-from dbt.contracts.results import RunStatus
+from dbt.artifacts.results import RunStatus
 from dbt.tests.adapter.basic.files import (
     seeds_base_csv,
     seeds_added_csv,

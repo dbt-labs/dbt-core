@@ -6,11 +6,9 @@ import json
 from typing import Type, Dict, Any
 
 from dbt.contracts.graph.manifest import WritableManifest
-from dbt.contracts.results import (
-    CatalogArtifact,
-    RunResultsArtifact,
-    FreshnessExecutionResultArtifact,
-)
+from dbt.artifacts.catalog import CatalogArtifact
+from dbt.artifacts.run import RunResultsArtifact
+from dbt.artifacts.freshness import FreshnessExecutionResultArtifact
 from dbt.artifacts.base import VersionedSchema
 from dbt.common.clients.system import write_file
 

@@ -6,7 +6,7 @@ import pytest
 
 from dbt.artifacts.base import get_artifact_schema_version
 from dbt.contracts.graph.manifest import WritableManifest
-from dbt.contracts.results import RunResultsArtifact
+from dbt.artifacts.run import RunResultsArtifact
 from dbt.exceptions import IncompatibleSchemaError
 from dbt.tests.util import run_dbt, get_manifest
 
