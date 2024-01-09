@@ -49,7 +49,6 @@ from dbt.events.types import (
 )
 from dbt.flags import get_flags
 from dbt.graph import Graph
-from dbt.logger import log_manager
 from dbt.task.printer import print_run_result_error
 
 
@@ -81,21 +80,6 @@ class BaseTask(metaclass=ABCMeta):
         self.args = args
         self.config = config
         self.project = config if isinstance(config, Project) else project
-
-    @classmethod
-    def pre_init_hook(cls, args):
-        """A hook called before the task is initialized."""
-        if args.log_format == "json":
-            log_manager.format_json()
-        else:
-            log_manager.format_text()
-
-    @classmethod
-    def set_log_format(cls):
-        if get_flags().LOG_FORMAT == "json":
-            log_manager.format_json()
-        else:
-            log_manager.format_text()
 
     @classmethod
     def from_args(cls, args, *pargs, **kwargs):

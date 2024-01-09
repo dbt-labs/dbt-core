@@ -63,7 +63,6 @@ class SqlCompileRunner(GenericSqlRunner[RemoteCompileResult]):
             compiled_code=compiled_node.compiled_code,
             node=compiled_node,
             timing=[],  # this will get added later
-            logs=[],
             generated_at=datetime.utcnow(),
         )
 
@@ -73,7 +72,6 @@ class SqlCompileRunner(GenericSqlRunner[RemoteCompileResult]):
             compiled_code=result.compiled_code,
             node=result.node,
             timing=timing_info,
-            logs=[],
             generated_at=datetime.utcnow(),
         )
 
@@ -93,7 +91,6 @@ class SqlExecuteRunner(GenericSqlRunner[RemoteRunResult]):
             node=compiled_node,
             table=table,
             timing=[],
-            logs=[],
             generated_at=datetime.utcnow(),
         )
 
@@ -104,6 +101,5 @@ class SqlExecuteRunner(GenericSqlRunner[RemoteRunResult]):
             node=result.node,
             table=result.table,
             timing=timing_info,
-            logs=[],
             generated_at=datetime.utcnow(),
         )

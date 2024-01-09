@@ -24,7 +24,7 @@ from dbt.contracts.results import (
     BaseResult,
 )
 from dbt.contracts.state import PreviousState
-from dbt_common.events.contextvars import log_contextvars, task_contextvars
+from dbt_common.events.contextvars import task_contextvars
 from dbt_common.events.functions import fire_event, warn_or_error
 from dbt_common.events.types import Formatting
 from dbt.events.types import (
@@ -45,15 +45,6 @@ from dbt.exceptions import (
 from dbt_common.exceptions import NotImplementedError
 from dbt.flags import get_flags
 from dbt.graph import GraphQueue, NodeSelector, SelectionSpec, parse_difference, UniqueId
-from dbt.logger import (
-    DbtProcessState,
-    TextOnly,
-    UniqueID,
-    TimestampNamed,
-    DbtModelState,
-    ModelMetadata,
-    NodeCount,
-)
 from dbt.parser.manifest import write_manifest
 from dbt.task.base import ConfiguredTask, BaseRunner
 from .printer import (
@@ -62,7 +53,6 @@ from .printer import (
 )
 
 RESULT_FILE_NAME = "run_results.json"
-RUNNING_STATE = DbtProcessState("running")
 
 
 class GraphRunnableTask(ConfiguredTask):
@@ -189,36 +179,27 @@ class GraphRunnableTask(ConfiguredTask):
         return cls(self.config, adapter, node, run_count, num_nodes)
 
     def call_runner(self, runner: BaseRunner) -> RunResult:
-        uid_context = UniqueID(runner.node.unique_id)
-        with RUNNING_STATE, uid_context, log_contextvars(node_info=runner.node.node_info):
-            startctx = TimestampNamed("node_started_at")
-            index = self.index_offset(runner.node_index)
-            runner.node.update_event_status(
-                started_at=datetime.utcnow().isoformat(), node_status=RunningStatus.Started
-            )
-            extended_metadata = ModelMetadata(runner.node, index)
+        runner.node.update_event_status(
+            started_at=datetime.utcnow().isoformat(), node_status=RunningStatus.Started
+        )
 
-            with startctx, extended_metadata:
-                fire_event(
-                    NodeStart(
-                        node_info=runner.node.node_info,
-                    )
+        fire_event(
+            NodeStart(
+                node_info=runner.node.node_info,
+            )
+        )
+        try:
+            result = runner.run_with_hooks(self.manifest)
+        finally:
+            fire_event(
+                NodeFinished(
+                    node_info=runner.node.node_info,
+                    run_result=result.to_msg_dict(),
                 )
-            status: Dict[str, str] = {}
-            try:
-                result = runner.run_with_hooks(self.manifest)
-            finally:
-                finishctx = TimestampNamed("finished_at")
-                with finishctx, DbtModelState(status):
-                    fire_event(
-                        NodeFinished(
-                            node_info=runner.node.node_info,
-                            run_result=result.to_msg_dict(),
-                        )
-                    )
-            # `_event_status` dict is only used for logging.  Make sure
-            # it gets deleted when we're done with it
-            runner.node.clear_event_status()
+            )
+        # `_event_status` dict is only used for logging.  Make sure
+        # it gets deleted when we're done with it
+        runner.node.clear_event_status()
 
         fail_fast = get_flags().FAIL_FAST
 
@@ -345,15 +326,12 @@ class GraphRunnableTask(ConfiguredTask):
         num_threads = self.config.threads
         target_name = self.config.target_name
 
-        # following line can be removed when legacy logger is removed
-        with NodeCount(self.num_nodes):
-            fire_event(
-                ConcurrencyLine(
-                    num_threads=num_threads, target_name=target_name, node_count=self.num_nodes
-                )
+        fire_event(
+            ConcurrencyLine(
+                num_threads=num_threads, target_name=target_name, node_count=self.num_nodes
             )
-        with TextOnly():
-            fire_event(Formatting(""))
+        )
+        fire_event(Formatting(""))
 
         pool = ThreadPool(num_threads)
         try:
@@ -470,8 +448,7 @@ class GraphRunnableTask(ConfiguredTask):
                 )
 
             if len(self._flattened_nodes) == 0:
-                with TextOnly():
-                    fire_event(Formatting(""))
+                fire_event(Formatting(""))
                 warn_or_error(NothingToDo())
                 result = self.get_result(
                     results=[],
@@ -479,8 +456,7 @@ class GraphRunnableTask(ConfiguredTask):
                     elapsed_time=0.0,
                 )
             else:
-                with TextOnly():
-                    fire_event(Formatting(""))
+                fire_event(Formatting(""))
                 selected_uids = frozenset(n.unique_id for n in self._flattened_nodes)
                 result = self.execute_with_hooks(selected_uids)
 

@@ -124,7 +124,6 @@ def global_flags(func):
     @p.cache_selected_only
     @p.debug
     @p.deprecated_print
-    @p.enable_legacy_logger
     @p.fail_fast
     @p.log_cache_events
     @p.log_file_max_bytes

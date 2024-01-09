@@ -73,13 +73,11 @@ class collect_timing_info:
     def __exit__(self, exc_type, exc_value, traceback):
         self.timing_info.end()
         self.callback(self.timing_info)
-        # Note: when legacy logger is removed, we can remove the following line
-        with TimingProcessor(self.timing_info):
-            fire_event(
-                TimingInfoCollected(
-                    timing_info=self.timing_info.to_msg_dict(), node_info=get_node_info()
-                )
+        fire_event(
+            TimingInfoCollected(
+                timing_info=self.timing_info.to_msg_dict(), node_info=get_node_info()
             )
+        )
 
 
 class RunningStatus(StrEnum):

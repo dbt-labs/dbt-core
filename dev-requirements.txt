@@ -15,7 +15,6 @@ pytest
 pytest-cov
 pytest-csv
 pytest-dotenv
-pytest-logbook
 pytest-mock
 pytest-split
 pytest-xdist
