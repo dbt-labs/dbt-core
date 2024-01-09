@@ -1,0 +1,6 @@
+kind: Dependencies
+body: Remove logbook dependency
+time: 2024-01-09T12:05:30.176656-06:00
+custom:
+  Author: emmyoop
+  PR: "9353"
