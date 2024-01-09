@@ -148,7 +148,7 @@ jobs:
           echo "release_branch: ${{ needs.set-variables.outputs.release_branch }}"
 
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: "3.8"
 
