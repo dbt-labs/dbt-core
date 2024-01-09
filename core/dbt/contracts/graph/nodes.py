@@ -7,14 +7,14 @@ import hashlib
 from mashumaro.types import SerializableType
 from typing import Optional, Union, List, Dict, Any, Sequence, Tuple, Iterator, Literal
 
-from dbt.common.contracts.constraints import (
+from dbt_common.contracts.constraints import (
     ColumnLevelConstraint,
     ConstraintType,
     ModelLevelConstraint,
 )
-from dbt.common.dataclass_schema import dbtClassMixin, ExtensibleDbtClassMixin
+from dbt_common.dataclass_schema import dbtClassMixin, ExtensibleDbtClassMixin
 
-from dbt.common.clients.system import write_file
+from dbt_common.clients.system import write_file
 from dbt.contracts.files import FileHash
 from dbt.contracts.graph.saved_queries import Export, QueryParams
 from dbt.contracts.graph.semantic_models import (
@@ -44,8 +44,8 @@ from dbt.contracts.graph.unparsed import (
 from dbt.contracts.graph.node_args import ModelNodeArgs
 from dbt.contracts.graph.semantic_layer_common import WhereFilterIntersection
 from dbt.contracts.util import Replaceable
-from dbt.common.contracts.config.properties import AdditionalPropertiesMixin
-from dbt.common.events.functions import warn_or_error
+from dbt_common.contracts.config.properties import AdditionalPropertiesMixin
+from dbt_common.events.functions import warn_or_error
 from dbt.exceptions import ParsingError, ContractBreakingChangeError
 from dbt.events.types import (
     SeedIncreased,
@@ -54,7 +54,7 @@ from dbt.events.types import (
     SeedExceedsLimitChecksumChanged,
     UnversionedBreakingChange,
 )
-from dbt.common.events.contextvars import set_log_contextvars
+from dbt_common.events.contextvars import set_log_contextvars
 from dbt.flags import get_flags
 from dbt.node_types import ModelLanguage, NodeType, AccessType
 from dbt_semantic_interfaces.references import (

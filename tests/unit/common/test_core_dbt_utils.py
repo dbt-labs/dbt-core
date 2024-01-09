@@ -2,8 +2,8 @@ import requests
 import tarfile
 import unittest
 
-from dbt.common.exceptions import ConnectionError
-from dbt.common.utils.connection import connection_exception_retry
+from dbt_common.exceptions import ConnectionError
+from dbt_common.utils.connection import connection_exception_retry
 
 
 class TestCoreDbtUtils(unittest.TestCase):

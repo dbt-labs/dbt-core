@@ -9,16 +9,16 @@ import yaml
 import click
 
 import dbt.config
-import dbt.common.clients.system
+import dbt_common.clients.system
 from dbt.config.profile import read_profile
-from dbt.common.exceptions import DbtRuntimeError
+from dbt_common.exceptions import DbtRuntimeError
 from dbt.flags import get_flags
 from dbt.version import _get_adapter_plugin_names
 from dbt.adapters.factory import load_plugin, get_include_paths
 
 from dbt.contracts.util import Identifier as ProjectName
 
-from dbt.common.events.functions import fire_event
+from dbt_common.events.functions import fire_event
 from dbt.events.types import (
     StarterProjectPath,
     ConfigFolderDirectory,
@@ -68,7 +68,7 @@ class InitTask(BaseTask):
         profiles_path = Path(profiles_dir)
         if not profiles_path.exists():
             fire_event(ConfigFolderDirectory(dir=profiles_dir))
-            dbt.common.clients.system.make_directory(profiles_dir)
+            dbt_common.clients.system.make_directory(profiles_dir)
             return True
         return False
 
@@ -300,7 +300,7 @@ class InitTask(BaseTask):
         try:
             move_to_nearest_project_dir(self.args.project_dir)
             in_project = True
-        except dbt.common.exceptions.DbtRuntimeError:
+        except dbt_common.exceptions.DbtRuntimeError:
             in_project = False
 
         if in_project:

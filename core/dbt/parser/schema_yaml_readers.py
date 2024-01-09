@@ -41,7 +41,7 @@ from dbt.contracts.graph.semantic_models import (
     Measure,
     NonAdditiveDimension,
 )
-from dbt.common.exceptions import DbtInternalError
+from dbt_common.exceptions import DbtInternalError
 from dbt.exceptions import YamlParseDictError, JSONValidationError
 from dbt.context.providers import generate_parse_exposure, generate_parse_semantic_models
 
@@ -52,7 +52,7 @@ from dbt.context.context_config import (
     UnrenderedConfigGenerator,
 )
 from dbt.clients.jinja import get_rendered
-from dbt.common.dataclass_schema import ValidationError
+from dbt_common.dataclass_schema import ValidationError
 from dbt_semantic_interfaces.type_enums import (
     AggregationType,
     ConversionCalculationType,

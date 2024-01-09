@@ -15,9 +15,9 @@ from typing import (
 from typing_extensions import Protocol
 
 from dbt.adapters.base.column import Column
-from dbt.common.clients.jinja import MacroProtocol
+from dbt_common.clients.jinja import MacroProtocol
 from dbt.adapters.factory import get_adapter, get_adapter_package_names, get_adapter_type_names
-from dbt.common.clients import agate_helper
+from dbt_common.clients import agate_helper
 from dbt.clients.jinja import get_rendered, MacroGenerator, MacroStack
 from dbt.config import RuntimeConfig, Project
 from dbt.constants import SECRET_ENV_PREFIX, DEFAULT_ENV_PLACEHOLDER
@@ -43,8 +43,8 @@ from dbt.contracts.graph.nodes import (
 )
 from dbt.contracts.graph.metrics import MetricReference, ResolvedMetricReference
 from dbt.contracts.graph.unparsed import NodeVersion
-from dbt.common.events.functions import get_metadata_vars
-from dbt.common.exceptions import (
+from dbt_common.events.functions import get_metadata_vars
+from dbt_common.exceptions import (
     DbtInternalError,
     DbtRuntimeError,
     DbtValidationError,
@@ -76,7 +76,7 @@ from dbt.config import IsFQNResource
 from dbt.node_types import NodeType, ModelLanguage
 
 from dbt.utils import MultiDict, args_to_dict
-from dbt.common.utils import merge, AttrDict, cast_to_str
+from dbt_common.utils import merge, AttrDict, cast_to_str
 from dbt import selected_resources
 
 import agate

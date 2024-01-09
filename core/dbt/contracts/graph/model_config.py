@@ -2,10 +2,10 @@ from dataclasses import field, dataclass
 from typing import Any, List, Optional, Dict, Union, Type
 from typing_extensions import Annotated
 
-from dbt.common.contracts.config.base import BaseConfig, MergeBehavior, CompareBehavior
-from dbt.common.contracts.config.materialization import OnConfigurationChangeOption
-from dbt.common.contracts.config.metadata import Metadata, ShowBehavior
-from dbt.common.dataclass_schema import (
+from dbt_common.contracts.config.base import BaseConfig, MergeBehavior, CompareBehavior
+from dbt_common.contracts.config.materialization import OnConfigurationChangeOption
+from dbt_common.contracts.config.metadata import Metadata, ShowBehavior
+from dbt_common.dataclass_schema import (
     dbtClassMixin,
     ValidationError,
 )

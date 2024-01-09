@@ -8,7 +8,7 @@ from isodate import tzinfo
 import os
 from shutil import rmtree
 from tempfile import mkdtemp
-from dbt.common.clients import agate_helper
+from dbt_common.clients import agate_helper
 
 SAMPLE_CSV_DATA = """a,b,c,d,e,f,g
 1,n,test,3.2,20180806T11:33:29.320Z,True,NULL

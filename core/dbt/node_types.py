@@ -1,6 +1,6 @@
 from typing import List
 
-from dbt.common.dataclass_schema import StrEnum
+from dbt_common.dataclass_schema import StrEnum
 
 
 class AccessType(StrEnum):

@@ -2,7 +2,7 @@ import pytest
 
 from pathlib import Path
 
-from dbt.common.exceptions import CompilationError
+from dbt_common.exceptions import CompilationError
 from dbt.exceptions import ParsingError
 
 from dbt.tests.util import (

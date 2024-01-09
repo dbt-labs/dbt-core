@@ -21,7 +21,8 @@ import time
 
 from dbt.context.manifest import generate_query_header_context
 from dbt.contracts.graph.semantic_manifest import SemanticManifest
-from dbt.common.events.base_types import EventLevel
+from dbt_common.events.base_types import EventLevel
+import dbt_common.utils
 import json
 import pprint
 from dbt.mp_context import get_mp_context
@@ -43,9 +44,9 @@ from dbt.constants import (
     PARTIAL_PARSE_FILE_NAME,
     SEMANTIC_MANIFEST_FILE_NAME,
 )
-from dbt.common.helper_types import PathSet
-from dbt.common.events.functions import fire_event, get_invocation_id, warn_or_error
-from dbt.common.events.types import (
+from dbt_common.helper_types import PathSet
+from dbt_common.events.functions import fire_event, get_invocation_id, warn_or_error
+from dbt_common.events.types import (
     Note,
 )
 from dbt.events.types import (
@@ -67,7 +68,7 @@ from dbt.logger import DbtProcessState
 from dbt.node_types import NodeType, AccessType
 from dbt.clients.jinja import get_rendered, MacroStack
 from dbt.clients.jinja_static import statically_extract_macro_calls
-from dbt.common.clients.system import (
+from dbt_common.clients.system import (
     make_directory,
     path_exists,
     read_json,
@@ -129,7 +130,7 @@ from dbt.parser.snapshots import SnapshotParser
 from dbt.parser.sources import SourcePatcher
 from dbt.version import __version__
 
-from dbt.common.dataclass_schema import StrEnum, dbtClassMixin
+from dbt_common.dataclass_schema import StrEnum, dbtClassMixin
 from dbt import plugins
 
 from dbt_semantic_interfaces.enum_extension import assert_values_exhausted
@@ -1518,7 +1519,7 @@ def _process_refs(
                 unique_id=node.unique_id,
                 ref_unique_id=target_model.unique_id,
                 access=AccessType.Private,
-                scope=dbt.common.utils.cast_to_str(target_model.group),
+                scope=dbt_common.utils.cast_to_str(target_model.group),
             )
         elif manifest.is_invalid_protected_ref(node, target_model, dependencies):
             raise dbt.exceptions.DbtReferenceError(

@@ -1,5 +1,5 @@
 import dbt.flags
-import dbt.common.ui
+import dbt_common.ui
 
 import json
 import logging
@@ -13,7 +13,7 @@ from typing import Optional, List, ContextManager, Callable, Dict, Any, Set
 
 import logbook
 from dbt.constants import SECRET_ENV_PREFIX
-from dbt.common.dataclass_schema import dbtClassMixin
+from dbt_common.dataclass_schema import dbtClassMixin
 
 STDOUT_LOG_FORMAT = "{record.message}"
 DEBUG_LOG_FORMAT = "{record.time:%Y-%m-%d %H:%M:%S.%f%z} ({record.thread_name}): {record.message}"
@@ -315,9 +315,9 @@ initialized = False
 
 
 def make_log_dir_if_missing(log_dir):
-    import dbt.common.clients.system
+    import dbt_common.clients.system
 
-    dbt.common.clients.system.make_directory(log_dir)
+    dbt_common.clients.system.make_directory(log_dir)
 
 
 class DebugWarnings(logbook.compat.redirected_warnings):
@@ -519,6 +519,6 @@ def timestamped_line(msg: str) -> str:
 
 def print_timestamped_line(msg: str, use_color: Optional[str] = None):
     if use_color is not None:
-        msg = dbt.common.ui.color(msg, use_color)
+        msg = dbt_common.ui.color(msg, use_color)
 
     GLOBAL_LOGGER.info(timestamped_line(msg))

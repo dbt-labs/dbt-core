@@ -53,7 +53,7 @@ from dbt.artifacts.base import (
     get_artifact_schema_version,
 )
 from dbt.contracts.util import SourceKey
-from dbt.common.dataclass_schema import dbtClassMixin
+from dbt_common.dataclass_schema import dbtClassMixin
 
 from dbt.exceptions import (
     CompilationError,
@@ -61,15 +61,16 @@ from dbt.exceptions import (
     AmbiguousResourceNameRefError,
 )
 from dbt.adapters.exceptions import DuplicateMacroInPackageError, DuplicateMaterializationNameError
-from dbt.common.helper_types import PathSet
-from dbt.common.events.functions import fire_event
-from dbt.common.events.contextvars import get_node_info
+from dbt_common.helper_types import PathSet
+from dbt_common.events.functions import fire_event
+from dbt_common.events.contextvars import get_node_info
 from dbt.events.types import MergedFromState, UnpinnedRefNewVersionAvailable
 from dbt.node_types import NodeType, AccessType
 from dbt.flags import get_flags
 from dbt.mp_context import get_mp_context
 from dbt import tracking
-import dbt.common.utils
+import dbt_common.utils
+import dbt_common.exceptions
 
 
 NodeEdgeMap = Dict[str, List[str]]
@@ -121,7 +122,7 @@ class DocLookup(dbtClassMixin):
 
     def perform_lookup(self, unique_id: UniqueID, manifest) -> Documentation:
         if unique_id not in manifest.docs:
-            raise dbt.exceptions.DbtInternalError(
+            raise dbt_common.exceptions.DbtInternalError(
                 f"Doc {unique_id} found in cache but not found in manifest"
             )
         return manifest.docs[unique_id]
@@ -154,7 +155,7 @@ class SourceLookup(dbtClassMixin):
 
     def perform_lookup(self, unique_id: UniqueID, manifest: "Manifest") -> SourceDefinition:
         if unique_id not in manifest.sources:
-            raise dbt.exceptions.DbtInternalError(
+            raise dbt_common.exceptions.DbtInternalError(
                 f"Source {unique_id} found in cache but not found in manifest"
             )
         return manifest.sources[unique_id]
@@ -253,7 +254,7 @@ class RefableLookup(dbtClassMixin):
         if unique_id in manifest.nodes:
             node = manifest.nodes[unique_id]
         else:
-            raise dbt.exceptions.DbtInternalError(
+            raise dbt_common.exceptions.DbtInternalError(
                 f"Node {unique_id} found in cache but not found in manifest"
             )
         return node
@@ -302,7 +303,7 @@ class MetricLookup(dbtClassMixin):
 
     def perform_lookup(self, unique_id: UniqueID, manifest: "Manifest") -> Metric:
         if unique_id not in manifest.metrics:
-            raise dbt.exceptions.DbtInternalError(
+            raise dbt_common.exceptions.DbtInternalError(
                 f"Metric {unique_id} found in cache but not found in manifest"
             )
         return manifest.metrics[unique_id]
@@ -337,7 +338,7 @@ class SavedQueryLookup(dbtClassMixin):
 
     def perform_lookup(self, unique_id: UniqueID, manifest: "Manifest") -> SavedQuery:
         if unique_id not in manifest.saved_queries:
-            raise dbt.exceptions.DbtInternalError(
+            raise dbt_common.exceptions.DbtInternalError(
                 f"SavedQUery {unique_id} found in cache but not found in manifest"
             )
         return manifest.saved_queries[unique_id]
@@ -392,7 +393,7 @@ class SemanticModelByMeasureLookup(dbtClassMixin):
         ):
             return disabled_semantic_model[0]
         else:
-            raise dbt.exceptions.DbtInternalError(
+            raise dbt_common.exceptions.DbtInternalError(
                 f"Semantic model `{unique_id}` found in cache but not found in manifest"
             )
 
@@ -891,7 +892,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         adapter_type: str,
         specificity: int,
     ) -> CandidateList:
-        full_name = dbt.common.utils.get_materialization_macro_name(
+        full_name = dbt_common.utils.get_materialization_macro_name(
             materialization_name=materialization_name,
             adapter_type=adapter_type,
             with_prefix=False,
@@ -1054,7 +1055,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             return self.saved_queries[unique_id]
         else:
             # something terrible has happened
-            raise dbt.exceptions.DbtInternalError(
+            raise dbt_common.exceptions.DbtInternalError(
                 "Expected node {} not found in manifest".format(unique_id)
             )
 

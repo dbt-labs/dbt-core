@@ -1,7 +1,7 @@
 import pytest
 
 from dbt.tests.util import run_dbt
-import dbt.exceptions
+import dbt_common.exceptions
 
 
 duplicate_doc_blocks_model_sql = "select 1 as id, 'joe' as first_name"
@@ -31,5 +31,5 @@ class TestDuplicateDocsBlock:
         }
 
     def test_duplicate_doc_ref(self, project):
-        with pytest.raises(dbt.common.exceptions.CompilationError):
+        with pytest.raises(dbt_common.exceptions.CompilationError):
             run_dbt(expect_pass=False)

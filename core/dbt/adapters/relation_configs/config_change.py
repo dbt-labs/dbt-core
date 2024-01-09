@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from typing import Hashable
 
 from dbt.adapters.relation_configs.config_base import RelationConfigBase
-from dbt.common.dataclass_schema import StrEnum
+from dbt_common.dataclass_schema import StrEnum
 
 
 class RelationConfigChangeAction(StrEnum):

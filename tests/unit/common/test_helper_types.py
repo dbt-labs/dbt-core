@@ -1,7 +1,7 @@
 import pytest
 
-from dbt.common.helper_types import IncludeExclude, WarnErrorOptions
-from dbt.common.dataclass_schema import ValidationError
+from dbt_common.helper_types import IncludeExclude, WarnErrorOptions
+from dbt_common.dataclass_schema import ValidationError
 
 
 class TestIncludeExclude:

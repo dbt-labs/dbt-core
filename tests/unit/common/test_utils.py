@@ -1,7 +1,7 @@
 import unittest
 
 import dbt.exceptions
-import dbt.common.utils
+import dbt_common.utils
 
 
 class TestDeepMerge(unittest.TestCase):
@@ -16,7 +16,7 @@ class TestDeepMerge(unittest.TestCase):
         ]
 
         for case in cases:
-            actual = dbt.common.utils.deep_merge(*case["args"])
+            actual = dbt_common.utils.deep_merge(*case["args"])
             self.assertEqual(
                 case["expected"],
                 actual,
@@ -38,7 +38,7 @@ class TestMerge(unittest.TestCase):
         ]
 
         for case in cases:
-            actual = dbt.common.utils.deep_merge(*case["args"])
+            actual = dbt_common.utils.deep_merge(*case["args"])
             self.assertEqual(
                 case["expected"],
                 actual,
@@ -91,10 +91,10 @@ class TestDeepMap(unittest.TestCase):
                 },
             ],
         }
-        actual = dbt.common.utils.deep_map_render(self.intify_all, self.input_value)
+        actual = dbt_common.utils.deep_map_render(self.intify_all, self.input_value)
         self.assertEqual(actual, expected)
 
-        actual = dbt.common.utils.deep_map_render(self.intify_all, expected)
+        actual = dbt_common.utils.deep_map_render(self.intify_all, expected)
         self.assertEqual(actual, expected)
 
     @staticmethod
@@ -123,21 +123,21 @@ class TestDeepMap(unittest.TestCase):
                 },
             ],
         }
-        actual = dbt.common.utils.deep_map_render(self.special_keypath, self.input_value)
+        actual = dbt_common.utils.deep_map_render(self.special_keypath, self.input_value)
         self.assertEqual(actual, expected)
 
-        actual = dbt.common.utils.deep_map_render(self.special_keypath, expected)
+        actual = dbt_common.utils.deep_map_render(self.special_keypath, expected)
         self.assertEqual(actual, expected)
 
     def test__noop(self):
-        actual = dbt.common.utils.deep_map_render(lambda x, _: x, self.input_value)
+        actual = dbt_common.utils.deep_map_render(lambda x, _: x, self.input_value)
         self.assertEqual(actual, self.input_value)
 
     def test_trivial(self):
         cases = [[], {}, 1, "abc", None, True]
         for case in cases:
-            result = dbt.common.utils.deep_map_render(lambda x, _: x, case)
+            result = dbt_common.utils.deep_map_render(lambda x, _: x, case)
             self.assertEqual(result, case)
 
         with self.assertRaises(dbt.exceptions.DbtConfigError):
-            dbt.common.utils.deep_map_render(lambda x, _: x, {"foo": object()})
+            dbt_common.utils.deep_map_render(lambda x, _: x, {"foo": object()})

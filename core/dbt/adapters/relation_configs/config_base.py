@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Union, Dict
 
 import agate
-from dbt.common.utils import filter_null_values
+from dbt_common.utils import filter_null_values
 
 
 """

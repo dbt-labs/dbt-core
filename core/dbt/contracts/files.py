@@ -6,7 +6,7 @@ from mashumaro.types import SerializableType
 from typing import List, Optional, Union, Dict, Any
 
 from dbt.constants import MAXIMUM_SEED_SIZE
-from dbt.common.dataclass_schema import dbtClassMixin, StrEnum
+from dbt_common.dataclass_schema import dbtClassMixin, StrEnum
 
 from .util import SourceKey
 

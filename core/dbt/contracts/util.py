@@ -1,9 +1,9 @@
 import dataclasses
 from typing import List, Any, Tuple
 
-from dbt.common.dataclass_schema import ValidatedStringMixin, ValidationError
+from dbt_common.dataclass_schema import ValidatedStringMixin, ValidationError
 
-from dbt.common.contracts.util import Replaceable
+from dbt_common.contracts.util import Replaceable
 
 
 SourceKey = Tuple[str, str]

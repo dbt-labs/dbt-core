@@ -1,7 +1,7 @@
 import unittest
 
-from dbt.common.clients.jinja import extract_toplevel_blocks
-from dbt.common.exceptions import CompilationError
+from dbt_common.clients.jinja import extract_toplevel_blocks
+from dbt_common.exceptions import CompilationError
 
 
 class TestBlockLexer(unittest.TestCase):

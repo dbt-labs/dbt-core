@@ -7,11 +7,11 @@ import pickle
 from collections import defaultdict
 from typing import List, Dict, Any, Tuple, Optional
 
-from dbt.common.invocation import get_invocation_id
+from dbt_common.invocation import get_invocation_id
 from dbt.flags import get_flags
 from dbt.adapters.factory import get_adapter
 from dbt.clients import jinja
-from dbt.common.clients.system import make_directory
+from dbt_common.clients.system import make_directory
 from dbt.context.providers import generate_runtime_model_context
 from dbt.contracts.graph.manifest import Manifest, UniqueID
 from dbt.contracts.graph.nodes import (
@@ -28,12 +28,12 @@ from dbt.exceptions import (
     DbtRuntimeError,
 )
 from dbt.graph import Graph
-from dbt.common.events.functions import fire_event
-from dbt.common.events.types import Note
-from dbt.common.events.contextvars import get_node_info
+from dbt_common.events.functions import fire_event
+from dbt_common.events.types import Note
+from dbt_common.events.contextvars import get_node_info
 from dbt.events.types import WritingInjectedSQLForNode, FoundStats
 from dbt.node_types import NodeType, ModelLanguage
-from dbt.common.events.format import pluralize
+from dbt_common.events.format import pluralize
 import dbt.tracking
 import sqlparse
 

@@ -14,9 +14,9 @@ from dbt.adapters.exceptions.cache import (
     TruncatedModelNameCausedCollisionError,
     NoneRelationFoundError,
 )
-from dbt.common.events.functions import fire_event, fire_event_if
+from dbt_common.events.functions import fire_event, fire_event_if
 from dbt.adapters.events.types import CacheAction, CacheDumpGraph
-from dbt.common.utils.formatting import lowercase
+from dbt_common.utils.formatting import lowercase
 
 
 def dot_separated(key: _ReferenceKey) -> str:

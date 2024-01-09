@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional, List, Any, Dict, Sequence
 
-from dbt.common.dataclass_schema import dbtClassMixin
+from dbt_common.dataclass_schema import dbtClassMixin
 
 from dbt.contracts.graph.nodes import ResultNode
 from dbt.artifacts.results import TimingInfo, ExecutionResult

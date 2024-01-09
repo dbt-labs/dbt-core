@@ -1,7 +1,7 @@
 from enum import Enum
 from typing import List
 
-from dbt.common.exceptions import DbtInternalError
+from dbt_common.exceptions import DbtInternalError
 
 
 class Command(Enum):
