@@ -50,7 +50,7 @@ setup(
         # dbt-core uses these packages deeply, throughout the codebase, and there have been breaking changes in past patch releases (even though these are major-version-one).
         # Pin to the patch or minor version, and bump in each new minor version of dbt-core.
         "agate~=1.7.0",
-        # "Jinja2~=3.1.2",  TODO: not imported anywhere?
+        "Jinja2~=3.1.2",
         "mashumaro[msgpack]~=3.9",
         # ----
         # Legacy: This package has not been updated since 2019, and it is unused in dbt's logging system (since v1.0)
@@ -60,14 +60,12 @@ setup(
         # dbt-core uses these packages in standard ways. Pin to the major version, and check compatibility
         # with major versions in each new minor version of dbt-core.
         "click>=8.0.2,<9",
-        "networkx>=2.3,<4",  # TODO: used in dbt_core
+        "networkx>=2.3,<4",
         # ----
         # These packages are major-version-0. Keep upper bounds on upcoming minor versions (which could have breaking changes)
         # and check compatibility / bump in each new minor version of dbt-core.
-        "pathspec>=0.9,<0.12",  # TODO: used in dbt_core
-        # "isodate>=0.6,<0.7",  # TODO: doesnt seem used
-        # ----
-        "sqlparse>=0.2.3,<0.5",  # TODO: used in dbt_core
+        "pathspec>=0.9,<0.12",
+        "sqlparse>=0.2.3,<0.5",
         # ----
         # These are major-version-0 packages also maintained by dbt-labs. Accept patches.
         "dbt-extractor~=0.5.0",
@@ -77,17 +75,17 @@ setup(
         # ----
         # Expect compatibility with all new versions of these packages, so lower bounds only.
         # "jsonschema>=3.0", # TODO: looks like we only use machumaro.jsonschema in core now?
-        "packaging>20.9",  # TODO: used in dbt_core
-        "protobuf>=4.0.0",  # TODO: used in dbt_core
-        "pytz>=2015.7",  # TODO: used in dbt_core
-        # "pyyaml>=6.0",  # TODO: not used in core but referenced in check_linyaml.py
-        "typing-extensions>=4.4",  # TODO: not used directly but is for python future compatibility
+        "packaging>20.9",
+        "protobuf>=4.0.0",
+        "pytz>=2015.7",
+        "pyyaml>=6.0",
+        "typing-extensions>=4.4",
         # ----
         # Match snowflake-connector-python, to ensure compatibility in dbt-snowflake
-        # "cffi>=1.9,<2.0.0",  TODO: move these to common since they're for snowflake compatibility?
+        # "cffi>=1.9,<2.0.0",  TODO: move these to adapters since they're for snowflake compatibility?
         # "idna>=2.5,<4",
         # "requests<3.0.0",
-        # "urllib3~=1.0",  TODO: also used in logger.py and defined in dev-req.
+        # "urllib3~=1.0",  TODO: also referenced in logger.py.
         # ----
     ],
     zip_safe=False,
