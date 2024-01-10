@@ -74,18 +74,11 @@ setup(
         "dbt-common @ git+https://github.com/dbt-labs/dbt-common.git@copy-code-from-dbt-core#egg=dbt",
         # ----
         # Expect compatibility with all new versions of these packages, so lower bounds only.
-        # "jsonschema>=3.0", # TODO: looks like we only use machumaro.jsonschema in core now?
         "packaging>20.9",
         "protobuf>=4.0.0",
         "pytz>=2015.7",
         "pyyaml>=6.0",
         "typing-extensions>=4.4",
-        # ----
-        # Match snowflake-connector-python, to ensure compatibility in dbt-snowflake
-        # "cffi>=1.9,<2.0.0",  TODO: move these to adapters since they're for snowflake compatibility?
-        # "idna>=2.5,<4",
-        # "requests<3.0.0",
-        # "urllib3~=1.0",  TODO: also referenced in logger.py.
         # ----
     ],
     zip_safe=False,
