@@ -31,7 +31,7 @@ from dbt.exceptions import (
     scrub_secrets,
     env_secrets,
 )
-from dbt.common.exceptions.cache import CacheInconsistencyError
+from dbt.adapters.exceptions.cache import CacheInconsistencyError
 
 
 def warn(msg, node=None):

@@ -7,7 +7,7 @@ from dbt.adapters.reference_keys import (
     _make_ref_key_dict,
     _ReferenceKey,
 )
-from dbt.common.exceptions.cache import (
+from dbt.adapters.exceptions.cache import (
     NewNameAlreadyInCacheError,
     ReferencedLinkNotCachedError,
     DependentLinkNotCachedError,
