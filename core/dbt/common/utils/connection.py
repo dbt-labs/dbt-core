@@ -1,7 +1,7 @@
 import time
 
 from dbt.common.events.types import RecordRetryException, RetryExternalCall
-from dbt.exceptions import ConnectionError
+from dbt.common.exceptions import ConnectionError
 from tarfile import ReadError
 
 import requests

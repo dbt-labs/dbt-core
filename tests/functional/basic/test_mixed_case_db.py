@@ -16,7 +16,6 @@ def models():
 def dbt_profile_data(unique_schema):
 
     return {
-        "config": {"send_anonymous_usage_stats": False},
         "test": {
             "outputs": {
                 "default": {

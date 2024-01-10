@@ -9,7 +9,6 @@ class TestDisabledConfigs(BaseConfigProject):
     @pytest.fixture(scope="class")
     def dbt_profile_data(self, unique_schema):
         return {
-            "config": {"send_anonymous_usage_stats": False},
             "test": {
                 "outputs": {
                     "default": {

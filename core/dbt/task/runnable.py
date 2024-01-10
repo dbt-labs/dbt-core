@@ -26,8 +26,8 @@ from dbt.contracts.results import (
 from dbt.contracts.state import PreviousState
 from dbt.common.events.contextvars import log_contextvars, task_contextvars
 from dbt.common.events.functions import fire_event, warn_or_error
-from dbt.common.events.types import (
-    Formatting,
+from dbt.common.events.types import Formatting
+from dbt.events.types import (
     LogCancelLine,
     DefaultSelector,
     NodeStart,

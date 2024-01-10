@@ -154,7 +154,7 @@ def make_symlink(source: str, link_path: str) -> None:
     """
     if not supports_symlinks():
         # TODO: why not import these at top?
-        raise dbt.exceptions.SymbolicLinkError()
+        raise dbt.common.exceptions.SymbolicLinkError()
 
     os.symlink(source, link_path)
 
@@ -345,7 +345,7 @@ def _handle_posix_cwd_error(exc: OSError, cwd: str, cmd: List[str]) -> NoReturn:
         message = "Not a directory"
     else:
         message = "Unknown OSError: {} - cwd".format(str(exc))
-    raise dbt.exceptions.WorkingDirectoryError(cwd, cmd, message)
+    raise dbt.common.exceptions.WorkingDirectoryError(cwd, cmd, message)
 
 
 def _handle_posix_cmd_error(exc: OSError, cwd: str, cmd: List[str]) -> NoReturn:
@@ -355,7 +355,7 @@ def _handle_posix_cmd_error(exc: OSError, cwd: str, cmd: List[str]) -> NoReturn:
         message = "User does not have permissions for this command"
     else:
         message = "Unknown OSError: {} - cmd".format(str(exc))
-    raise dbt.exceptions.ExecutableError(cwd, cmd, message)
+    raise dbt.common.exceptions.ExecutableError(cwd, cmd, message)
 
 
 def _handle_posix_error(exc: OSError, cwd: str, cmd: List[str]) -> NoReturn:
@@ -392,16 +392,16 @@ def _handle_windows_error(exc: OSError, cwd: str, cmd: List[str]) -> NoReturn:
             "Could not find command, ensure it is in the user's PATH "
             "and that the user has permissions to run it"
         )
-        cls = dbt.exceptions.ExecutableError
+        cls = dbt.common.exceptions.ExecutableError
     elif exc.errno == errno.ENOEXEC:
         message = "Command was not executable, ensure it is valid"
-        cls = dbt.exceptions.ExecutableError
+        cls = dbt.common.exceptions.ExecutableError
     elif exc.errno == errno.ENOTDIR:
         message = (
             "Unable to cd: path does not exist, user does not have"
             " permissions, or not a directory"
         )
-        cls = dbt.exceptions.WorkingDirectoryError
+        cls = dbt.common.exceptions.WorkingDirectoryError
     else:
         message = 'Unknown error: {} (errno={}: "{}")'.format(
             str(exc), exc.errno, errno.errorcode.get(exc.errno, "<Unknown!>")
@@ -421,7 +421,7 @@ def _interpret_oserror(exc: OSError, cwd: str, cmd: List[str]) -> NoReturn:
         _handle_posix_error(exc, cwd, cmd)
 
     # this should not be reachable, raise _something_ at least!
-    raise dbt.exceptions.DbtInternalError(
+    raise dbt.common.exceptions.DbtInternalError(
         "Unhandled exception in _interpret_oserror: {}".format(exc)
     )
 
@@ -455,7 +455,7 @@ def run_cmd(cwd: str, cmd: List[str], env: Optional[Dict[str, Any]] = None) -> T
 
     if proc.returncode != 0:
         fire_event(SystemReportReturnCode(returncode=proc.returncode))
-        raise dbt.exceptions.CommandResultError(cwd, cmd, proc.returncode, out, err)
+        raise dbt.common.exceptions.CommandResultError(cwd, cmd, proc.returncode, out, err)
 
     return out, err
 

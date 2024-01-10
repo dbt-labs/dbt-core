@@ -81,6 +81,25 @@ class ConfigTargetPathDeprecation(DBTDeprecation):
     _event = "ConfigTargetPathDeprecation"
 
 
+class CollectFreshnessReturnSignature(DBTDeprecation):
+    _name = "collect-freshness-return-signature"
+    _event = "CollectFreshnessReturnSignature"
+
+
+class ProjectFlagsMovedDeprecation(DBTDeprecation):
+    _name = "project-flags-moved"
+    _event = "ProjectFlagsMovedDeprecation"
+
+    def show(self, *args, **kwargs) -> None:
+        if self.name not in active_deprecations:
+            event = self.event(**kwargs)
+            # We can't do warn_or_error because the ProjectFlags
+            # is where that is set up and we're just reading it.
+            dbt.common.events.functions.fire_event(event)
+            self.track_deprecation_warn()
+            active_deprecations.add(self.name)
+
+
 def renamed_env_var(old_name: str, new_name: str):
     class EnvironmentVariableRenamed(DBTDeprecation):
         _name = f"environment-variable-renamed:{old_name}"
@@ -118,6 +137,8 @@ deprecations_list: List[DBTDeprecation] = [
     ExposureNameDeprecation(),
     ConfigLogPathDeprecation(),
     ConfigTargetPathDeprecation(),
+    CollectFreshnessReturnSignature(),
+    ProjectFlagsMovedDeprecation(),
 ]
 
 deprecations: Dict[str, DBTDeprecation] = {d.name: d for d in deprecations_list}

@@ -27,7 +27,7 @@ from dbt.contracts.graph.unparsed import (
     Time,
 )
 from dbt.common.events.functions import warn_or_error, fire_event
-from dbt.common.events.types import UnusedTables, FreshnessConfigProblem
+from dbt.events.types import UnusedTables, FreshnessConfigProblem
 
 from dbt.common.exceptions import DbtInternalError
 from dbt.node_types import NodeType

@@ -1,7 +1,7 @@
 import functools
 import pytest
 from requests.exceptions import RequestException
-from dbt.exceptions import ConnectionError
+from dbt.common.exceptions import ConnectionError
 from dbt.common.utils.connection import connection_exception_retry
 
 

@@ -3,7 +3,7 @@ from .run import ModelRunner, RunTask
 from dbt.common.exceptions import DbtInternalError
 from dbt.common.events.functions import fire_event
 from dbt.common.events.base_types import EventLevel
-from dbt.common.events.types import LogSnapshotResult
+from dbt.events.types import LogSnapshotResult
 from dbt.graph import ResourceTypeSelector
 from dbt.node_types import NodeType
 from dbt.contracts.results import NodeStatus

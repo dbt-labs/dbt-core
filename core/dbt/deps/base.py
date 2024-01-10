@@ -9,7 +9,7 @@ from typing import List, Optional, Generic, TypeVar, Dict
 from dbt.common.clients import system
 from dbt.contracts.project import ProjectPackageMetadata
 from dbt.common.events.functions import fire_event
-from dbt.common.events.types import DepsSetDownloadDirectory
+from dbt.events.types import DepsSetDownloadDirectory
 from dbt.common.utils.connection import connection_exception_retry
 
 DOWNLOADS_PATH = None

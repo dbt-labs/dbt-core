@@ -118,7 +118,7 @@ def deep_map_render(func: Callable[[Any, Tuple[Union[str, int], ...]], Any], val
     iterable over the __getitem__ keys needed to get to it.
 
     :raises: If there are cycles in the value, raises a
-        dbt.exceptions.RecursionException
+        dbt.common.exceptions.RecursionError
     """
     try:
         return _deep_map_render(func, value, ())

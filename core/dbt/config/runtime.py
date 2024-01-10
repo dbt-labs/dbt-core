@@ -21,10 +21,10 @@ from dbt.adapters.contracts.relation import ComponentName
 from dbt.flags import get_flags
 from dbt.config.project import load_raw_project
 from dbt.contracts.graph.manifest import ManifestMetadata
-from dbt.contracts.project import Configuration, UserConfig
+from dbt.contracts.project import Configuration
 from dbt.common.dataclass_schema import ValidationError
 from dbt.common.events.functions import warn_or_error
-from dbt.common.events.types import UnusedResourceConfigPath
+from dbt.events.types import UnusedResourceConfigPath
 from dbt.exceptions import (
     ConfigContractBrokenError,
     DbtProjectError,
@@ -179,7 +179,6 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             profile_env_vars=profile.profile_env_vars,
             profile_name=profile.profile_name,
             target_name=profile.target_name,
-            user_config=profile.user_config,
             threads=profile.threads,
             credentials=profile.credentials,
             args=args,
@@ -434,7 +433,6 @@ class UnsetCredentials(Credentials):
 class UnsetProfile(Profile):
     def __init__(self):
         self.credentials = UnsetCredentials()
-        self.user_config = UserConfig()  # This will be read in _get_rendered_profile
         self.profile_name = ""
         self.target_name = ""
         self.threads = -1

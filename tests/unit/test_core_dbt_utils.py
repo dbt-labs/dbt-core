@@ -2,7 +2,7 @@ import requests
 import tarfile
 import unittest
 
-from dbt.exceptions import ConnectionError
+from dbt.common.exceptions import ConnectionError
 from dbt.common.utils.connection import connection_exception_retry
 
 

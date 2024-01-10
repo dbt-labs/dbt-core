@@ -8,7 +8,7 @@ from dbt.contracts.project import (
     LocalPackage,
 )
 from dbt.common.events.functions import fire_event
-from dbt.common.events.types import DepsCreatingLocalSymlink, DepsSymlinkNotAvailable
+from dbt.events.types import DepsCreatingLocalSymlink, DepsSymlinkNotAvailable
 from dbt.config.project import PartialProject, Project
 from dbt.config.renderer import PackageRenderer
 

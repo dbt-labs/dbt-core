@@ -10,10 +10,7 @@ from dbt.common.events.functions import (
     fire_event,
     warn_or_error,
 )
-from dbt.common.events.types import (
-    NoNodesSelected,
-    ListCmdOut,
-)
+from dbt.events.types import NoNodesSelected, ListCmdOut
 from dbt.common.exceptions import DbtRuntimeError, DbtInternalError
 from dbt.common.events.contextvars import task_contextvars
 

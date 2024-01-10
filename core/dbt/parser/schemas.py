@@ -44,7 +44,7 @@ from dbt.exceptions import (
 )
 from dbt.common.exceptions import DbtValidationError
 from dbt.common.events.functions import warn_or_error
-from dbt.common.events.types import (
+from dbt.events.types import (
     MacroNotFoundForPatch,
     NoNodeForYamlKey,
     ValidationWarning,

@@ -119,12 +119,17 @@ class BaseConfigTest(unittest.TestCase):
     """
 
     def setUp(self):
+        # Write project
+        self.project_dir = normalize(tempfile.mkdtemp())
         self.default_project_data = {
             "version": "0.0.1",
             "name": "my_test_project",
             "profile": "default",
-            "config-version": 2,
         }
+        self.write_project(self.default_project_data)
+
+        # Write profile
+        self.profiles_dir = normalize(tempfile.mkdtemp())
         self.default_profile_data = {
             "default": {
                 "outputs": {
@@ -176,6 +181,8 @@ class BaseConfigTest(unittest.TestCase):
             },
             "empty_profile_data": {},
         }
+        self.write_profile(self.default_profile_data)
+
         self.args = Namespace(
             profiles_dir=self.profiles_dir,
             cli_vars={},
@@ -202,13 +209,6 @@ class BaseConfigTest(unittest.TestCase):
             return raises_nothing()
         else:
             return self.assertRaises(exc)
-
-
-class BaseFileTest(BaseConfigTest):
-    def setUp(self):
-        self.project_dir = normalize(tempfile.mkdtemp())
-        self.profiles_dir = normalize(tempfile.mkdtemp())
-        super().setUp()
 
     def tearDown(self):
         try:
@@ -248,11 +248,6 @@ class BaseFileTest(BaseConfigTest):
 
 
 class TestProfile(BaseConfigTest):
-    def setUp(self):
-        self.profiles_dir = "/invalid-path"
-        self.project_dir = "/invalid-project-path"
-        super().setUp()
-
     def from_raw_profiles(self):
         renderer = empty_profile_renderer()
         return dbt.config.Profile.from_raw_profiles(self.default_profile_data, "default", renderer)
@@ -262,8 +257,6 @@ class TestProfile(BaseConfigTest):
         self.assertEqual(profile.profile_name, "default")
         self.assertEqual(profile.target_name, "postgres")
         self.assertEqual(profile.threads, 7)
-        self.assertTrue(profile.user_config.send_anonymous_usage_stats)
-        self.assertIsNone(profile.user_config.use_colors)
         self.assertTrue(isinstance(profile.credentials, PostgresCredentials))
         self.assertEqual(profile.credentials.type, "postgres")
         self.assertEqual(profile.credentials.host, "postgres-db-hostname")
@@ -272,29 +265,6 @@ class TestProfile(BaseConfigTest):
         self.assertEqual(profile.credentials.password, "db_pass")
         self.assertEqual(profile.credentials.schema, "postgres-schema")
         self.assertEqual(profile.credentials.database, "postgres-db-name")
-
-    def test_config_override(self):
-        self.default_profile_data["config"] = {
-            "send_anonymous_usage_stats": False,
-            "use_colors": False,
-        }
-        profile = self.from_raw_profiles()
-        self.assertEqual(profile.profile_name, "default")
-        self.assertEqual(profile.target_name, "postgres")
-        self.assertFalse(profile.user_config.send_anonymous_usage_stats)
-        self.assertFalse(profile.user_config.use_colors)
-
-    def test_partial_config_override(self):
-        self.default_profile_data["config"] = {
-            "send_anonymous_usage_stats": False,
-            "printer_width": 60,
-        }
-        profile = self.from_raw_profiles()
-        self.assertEqual(profile.profile_name, "default")
-        self.assertEqual(profile.target_name, "postgres")
-        self.assertFalse(profile.user_config.send_anonymous_usage_stats)
-        self.assertIsNone(profile.user_config.use_colors)
-        self.assertEqual(profile.user_config.printer_width, 60)
 
     def test_missing_type(self):
         del self.default_profile_data["default"]["outputs"]["postgres"]["type"]
@@ -337,7 +307,7 @@ class TestProfile(BaseConfigTest):
             }
         )
         with self.assertRaises(dbt.exceptions.DbtProjectError) as exc:
-            project_from_config_norender(self.default_project_data)
+            project_from_config_norender(self.default_project_data, project_root=self.project_dir)
 
         self.assertIn("source-paths and model-paths", str(exc.exception))
         self.assertIn("cannot both be defined.", str(exc.exception))
@@ -403,11 +373,7 @@ class TestProfile(BaseConfigTest):
         self.assertIn("Could not convert value 'hello' into type 'number'", str(exc.exception))
 
 
-class TestProfileFile(BaseFileTest):
-    def setUp(self):
-        super().setUp()
-        self.write_profile(self.default_profile_data)
-
+class TestProfileFile(BaseConfigTest):
     def from_raw_profile_info(self, raw_profile=None, profile_name="default", **kwargs):
         if raw_profile is None:
             raw_profile = self.default_profile_data["default"]
@@ -438,8 +404,6 @@ class TestProfileFile(BaseFileTest):
         self.assertEqual(profile.profile_name, "default")
         self.assertEqual(profile.target_name, "postgres")
         self.assertEqual(profile.threads, 7)
-        self.assertTrue(profile.user_config.send_anonymous_usage_stats)
-        self.assertIsNone(profile.user_config.use_colors)
         self.assertTrue(isinstance(profile.credentials, PostgresCredentials))
         self.assertEqual(profile.credentials.type, "postgres")
         self.assertEqual(profile.credentials.host, "postgres-db-hostname")
@@ -464,8 +428,6 @@ class TestProfileFile(BaseFileTest):
         self.assertEqual(profile.profile_name, "other")
         self.assertEqual(profile.target_name, "other-postgres")
         self.assertEqual(profile.threads, 3)
-        self.assertTrue(profile.user_config.send_anonymous_usage_stats)
-        self.assertIsNone(profile.user_config.use_colors)
         self.assertTrue(isinstance(profile.credentials, PostgresCredentials))
         self.assertEqual(profile.credentials.type, "postgres")
         self.assertEqual(profile.credentials.host, "other-postgres-db-hostname")
@@ -485,8 +447,6 @@ class TestProfileFile(BaseFileTest):
         self.assertEqual(profile.profile_name, "default")
         self.assertEqual(profile.target_name, "with-vars")
         self.assertEqual(profile.threads, 1)
-        self.assertTrue(profile.user_config.send_anonymous_usage_stats)
-        self.assertIsNone(profile.user_config.use_colors)
         self.assertEqual(profile.credentials.type, "postgres")
         self.assertEqual(profile.credentials.host, "env-postgres-host")
         self.assertEqual(profile.credentials.port, 6543)
@@ -505,8 +465,6 @@ class TestProfileFile(BaseFileTest):
         self.assertEqual(profile.profile_name, "default")
         self.assertEqual(profile.target_name, "with-vars")
         self.assertEqual(profile.threads, 1)
-        self.assertTrue(profile.user_config.send_anonymous_usage_stats)
-        self.assertIsNone(profile.user_config.use_colors)
         self.assertEqual(profile.credentials.type, "postgres")
         self.assertEqual(profile.credentials.host, "env-postgres-host")
         self.assertEqual(profile.credentials.port, 6543)
@@ -537,8 +495,6 @@ class TestProfileFile(BaseFileTest):
         self.assertEqual(profile.profile_name, "default")
         self.assertEqual(profile.target_name, "cli-and-env-vars")
         self.assertEqual(profile.threads, 1)
-        self.assertTrue(profile.user_config.send_anonymous_usage_stats)
-        self.assertIsNone(profile.user_config.use_colors)
         self.assertEqual(profile.credentials.type, "postgres")
         self.assertEqual(profile.credentials.host, "cli-postgres-host")
         self.assertEqual(profile.credentials.port, 6543)
@@ -567,18 +523,19 @@ class TestProfileFile(BaseFileTest):
 
 
 def project_from_config_norender(
-    cfg, packages=None, path="/invalid-root-path", verify_version=False
+    cfg, packages=None, project_root="/invalid-root-path", verify_version=False
 ):
     if packages is None:
         packages = {}
     partial = dbt.config.project.PartialProject.from_dicts(
-        path,
+        project_root,
         project_dict=cfg,
         packages_dict=packages,
         selectors_dict={},
         verify_version=verify_version,
     )
-    # no rendering
+    # no rendering ... Why?
+    partial.project_dict["project-root"] = project_root
     rendered = dbt.config.project.RenderComponents(
         project_dict=partial.project_dict,
         packages_dict=partial.packages_dict,
@@ -590,14 +547,14 @@ def project_from_config_norender(
 def project_from_config_rendered(
     cfg,
     packages=None,
-    path="/invalid-root-path",
+    project_root="/invalid-root-path",
     verify_version=False,
     packages_specified_path=PACKAGES_FILE_NAME,
 ):
     if packages is None:
         packages = {}
     partial = dbt.config.project.PartialProject.from_dicts(
-        path,
+        project_root,
         project_dict=cfg,
         packages_dict=packages,
         selectors_dict={},
@@ -608,18 +565,14 @@ def project_from_config_rendered(
 
 
 class TestProject(BaseConfigTest):
-    def setUp(self):
-        self.profiles_dir = "/invalid-profiles-path"
-        self.project_dir = "/invalid-root-path"
-        super().setUp()
-        self.default_project_data["project-root"] = self.project_dir
-
     def test_defaults(self):
-        project = project_from_config_norender(self.default_project_data)
+        project = project_from_config_norender(
+            self.default_project_data, project_root=self.project_dir
+        )
         self.assertEqual(project.project_name, "my_test_project")
         self.assertEqual(project.version, "0.0.1")
         self.assertEqual(project.profile_name, "default")
-        self.assertEqual(project.project_root, "/invalid-root-path")
+        self.assertEqual(project.project_root, self.project_dir)
         self.assertEqual(project.model_paths, ["models"])
         self.assertEqual(project.macro_paths, ["macros"])
         self.assertEqual(project.seed_paths, ["seeds"])
@@ -645,30 +598,38 @@ class TestProject(BaseConfigTest):
         str(project)
 
     def test_eq(self):
-        project = project_from_config_norender(self.default_project_data)
-        other = project_from_config_norender(self.default_project_data)
+        project = project_from_config_norender(
+            self.default_project_data, project_root=self.project_dir
+        )
+        other = project_from_config_norender(
+            self.default_project_data, project_root=self.project_dir
+        )
         self.assertEqual(project, other)
 
     def test_neq(self):
-        project = project_from_config_norender(self.default_project_data)
+        project = project_from_config_norender(
+            self.default_project_data, project_root=self.project_dir
+        )
         self.assertNotEqual(project, object())
 
     def test_implicit_overrides(self):
         self.default_project_data.update(
             {
                 "model-paths": ["other-models"],
-                "target-path": "other-target",
             }
         )
-        project = project_from_config_norender(self.default_project_data)
+        project = project_from_config_norender(
+            self.default_project_data, project_root=self.project_dir
+        )
         self.assertEqual(
             set(project.docs_paths),
             set(["other-models", "seeds", "snapshots", "analyses", "macros"]),
         )
-        self.assertEqual(project.clean_targets, ["other-target"])
 
     def test_hashed_name(self):
-        project = project_from_config_norender(self.default_project_data)
+        project = project_from_config_norender(
+            self.default_project_data, project_root=self.project_dir
+        )
         self.assertEqual(project.hashed_name(), "754cd47eac1d6f50a5f7cd399ec43da4")
 
     def test_all_overrides(self):
@@ -682,7 +643,6 @@ class TestProject(BaseConfigTest):
                 "analysis-paths": ["other-analyses"],
                 "docs-paths": ["docs"],
                 "asset-paths": ["other-assets"],
-                "target-path": "other-target",
                 "clean-targets": ["another-target"],
                 "packages-install-path": "other-dbt_packages",
                 "quoting": {"identifier": False},
@@ -731,11 +691,12 @@ class TestProject(BaseConfigTest):
                 {"git": "git@example.com:dbt-labs/dbt-utils.git", "revision": "test-rev"},
             ],
         }
-        project = project_from_config_norender(self.default_project_data, packages=packages)
+        project = project_from_config_norender(
+            self.default_project_data, project_root=self.project_dir, packages=packages
+        )
         self.assertEqual(project.project_name, "my_test_project")
         self.assertEqual(project.version, "0.0.1")
         self.assertEqual(project.profile_name, "default")
-        self.assertEqual(project.project_root, "/invalid-root-path")
         self.assertEqual(project.model_paths, ["other-models"])
         self.assertEqual(project.macro_paths, ["other-macros"])
         self.assertEqual(project.seed_paths, ["other-seeds"])
@@ -743,7 +704,6 @@ class TestProject(BaseConfigTest):
         self.assertEqual(project.analysis_paths, ["other-analyses"])
         self.assertEqual(project.docs_paths, ["docs"])
         self.assertEqual(project.asset_paths, ["other-assets"])
-        self.assertEqual(project.target_path, "other-target")
         self.assertEqual(project.clean_targets, ["another-target"])
         self.assertEqual(project.packages_install_path, "other-dbt_packages")
         self.assertEqual(project.quoting, {"identifier": False})
@@ -822,11 +782,12 @@ class TestProject(BaseConfigTest):
     def test_invalid_project_name(self):
         self.default_project_data["name"] = "invalid-project-name"
         with self.assertRaises(dbt.exceptions.DbtProjectError) as exc:
-            project_from_config_norender(self.default_project_data)
+            project_from_config_norender(self.default_project_data, project_root=self.project_dir)
 
         self.assertIn("invalid-project-name", str(exc.exception))
 
     def test_no_project(self):
+        os.remove(os.path.join(self.project_dir, "dbt_project.yml"))
         renderer = empty_project_renderer()
         with self.assertRaises(dbt.exceptions.DbtProjectError) as exc:
             dbt.config.Project.from_project_root(self.project_dir, renderer)
@@ -836,12 +797,12 @@ class TestProject(BaseConfigTest):
     def test_invalid_version(self):
         self.default_project_data["require-dbt-version"] = "hello!"
         with self.assertRaises(dbt.exceptions.DbtProjectError):
-            project_from_config_norender(self.default_project_data)
+            project_from_config_norender(self.default_project_data, project_root=self.project_dir)
 
     def test_unsupported_version(self):
         self.default_project_data["require-dbt-version"] = ">99999.0.0"
         # allowed, because the RuntimeConfig checks, not the Project itself
-        project_from_config_norender(self.default_project_data)
+        project_from_config_norender(self.default_project_data, project_root=self.project_dir)
 
     def test_none_values(self):
         self.default_project_data.update(
@@ -891,7 +852,9 @@ class TestProject(BaseConfigTest):
                 "query-comment": None,
             }
         )
-        project = project_from_config_norender(self.default_project_data)
+        project = project_from_config_norender(
+            self.default_project_data, project_root=self.project_dir
+        )
         self.assertEqual(project.query_comment.comment, "")
         self.assertEqual(project.query_comment.append, False)
 
@@ -900,12 +863,16 @@ class TestProject(BaseConfigTest):
                 "query-comment": "",
             }
         )
-        project = project_from_config_norender(self.default_project_data)
+        project = project_from_config_norender(
+            self.default_project_data, project_root=self.project_dir
+        )
         self.assertEqual(project.query_comment.comment, "")
         self.assertEqual(project.query_comment.append, False)
 
     def test_default_query_comment(self):
-        project = project_from_config_norender(self.default_project_data)
+        project = project_from_config_norender(
+            self.default_project_data, project_root=self.project_dir
+        )
         self.assertEqual(project.query_comment, QueryComment())
 
     def test_default_query_comment_append(self):
@@ -914,7 +881,9 @@ class TestProject(BaseConfigTest):
                 "query-comment": {"append": True},
             }
         )
-        project = project_from_config_norender(self.default_project_data)
+        project = project_from_config_norender(
+            self.default_project_data, project_root=self.project_dir
+        )
         self.assertEqual(project.query_comment.comment, DEFAULT_QUERY_COMMENT)
         self.assertEqual(project.query_comment.append, True)
 
@@ -924,7 +893,9 @@ class TestProject(BaseConfigTest):
                 "query-comment": {"comment": "run by user test", "append": True},
             }
         )
-        project = project_from_config_norender(self.default_project_data)
+        project = project_from_config_norender(
+            self.default_project_data, project_root=self.project_dir
+        )
         self.assertEqual(project.query_comment.comment, "run by user test")
         self.assertEqual(project.query_comment.append, True)
 
@@ -946,17 +917,13 @@ class TestProject(BaseConfigTest):
         assert git_package.git == "{{ env_var('some_package') }}"
 
 
-class TestProjectFile(BaseFileTest):
-    def setUp(self):
-        super().setUp()
-        self.write_project(self.default_project_data)
-        # and after the fact, add the project root
-        self.default_project_data["project-root"] = self.project_dir
-
+class TestProjectFile(BaseConfigTest):
     def test_from_project_root(self):
         renderer = empty_project_renderer()
         project = dbt.config.Project.from_project_root(self.project_dir, renderer)
-        from_config = project_from_config_norender(self.default_project_data)
+        from_config = project_from_config_norender(
+            self.default_project_data, project_root=self.project_dir
+        )
         self.assertEqual(project, from_config)
         self.assertEqual(project.version, "0.0.1")
         self.assertEqual(project.project_name, "my_test_project")
@@ -973,12 +940,7 @@ class InheritsFromConfiguredTask(ConfiguredTask):
         pass
 
 
-class TestConfiguredTask(BaseFileTest):
-    def setUp(self):
-        super().setUp()
-        self.write_project(self.default_project_data)
-        self.write_profile(self.default_profile_data)
-
+class TestConfiguredTask(BaseConfigTest):
     def tearDown(self):
         super().tearDown()
         # These tests will change the directory to the project path,
@@ -997,15 +959,13 @@ class TestConfiguredTask(BaseFileTest):
             InheritsFromConfiguredTask.from_args(self.args)
 
 
-class TestVariableProjectFile(BaseFileTest):
+class TestVariableProjectFile(BaseConfigTest):
     def setUp(self):
         super().setUp()
         self.default_project_data["version"] = "{{ var('cli_version') }}"
         self.default_project_data["name"] = "blah"
         self.default_project_data["profile"] = "{{ env_var('env_value_profile') }}"
         self.write_project(self.default_project_data)
-        # and after the fact, add the project root
-        self.default_project_data["project-root"] = self.project_dir
 
     def test_cli_and_env_vars(self):
         renderer = dbt.config.renderer.DbtProjectYamlRenderer(None, {"cli_version": "0.1.2"})
@@ -1022,15 +982,11 @@ class TestVariableProjectFile(BaseFileTest):
 
 
 class TestRuntimeConfig(BaseConfigTest):
-    def setUp(self):
-        self.profiles_dir = "/invalid-profiles-path"
-        self.project_dir = "/invalid-root-path"
-        super().setUp()
-        self.default_project_data["project-root"] = self.project_dir
-
     def get_project(self):
         return project_from_config_norender(
-            self.default_project_data, verify_version=self.args.version_check
+            self.default_project_data,
+            project_root=self.project_dir,
+            verify_version=self.args.version_check,
         )
 
     def get_profile(self):
@@ -1078,14 +1034,6 @@ class TestRuntimeConfig(BaseConfigTest):
 
         # to make sure nothing terrible happens
         str(config)
-
-    def test_validate_fails(self):
-        project = self.get_project()
-        profile = self.get_profile()
-        # invalid - must be boolean
-        profile.user_config.use_colors = 100
-        with self.assertRaises(dbt.exceptions.DbtProjectError):
-            dbt.config.RuntimeConfig.from_parts(project, profile, {})
 
     def test_supported_version(self):
         self.default_project_data["require-dbt-version"] = ">0.0.0"
@@ -1210,7 +1158,9 @@ class TestRuntimeConfigWithConfigs(BaseConfigTest):
         }
 
     def get_project(self):
-        return project_from_config_norender(self.default_project_data, verify_version=True)
+        return project_from_config_norender(
+            self.default_project_data, project_root=self.project_dir, verify_version=True
+        )
 
     def get_profile(self):
         renderer = empty_profile_renderer()
@@ -1242,14 +1192,7 @@ class TestRuntimeConfigWithConfigs(BaseConfigTest):
             assert expected_msg in msg
 
 
-class TestRuntimeConfigFiles(BaseFileTest):
-    def setUp(self):
-        super().setUp()
-        self.write_profile(self.default_profile_data)
-        self.write_project(self.default_project_data)
-        # and after the fact, add the project root
-        self.default_project_data["project-root"] = self.project_dir
-
+class TestRuntimeConfigFiles(BaseConfigTest):
     def test_from_args(self):
         with temp_cd(self.project_dir):
             config = dbt.config.RuntimeConfig.from_args(self.args)
@@ -1279,7 +1222,7 @@ class TestRuntimeConfigFiles(BaseFileTest):
         self.assertEqual(config.project_name, "my_test_project")
 
 
-class TestVariableRuntimeConfigFiles(BaseFileTest):
+class TestVariableRuntimeConfigFiles(BaseConfigTest):
     def setUp(self):
         super().setUp()
         self.default_project_data.update(
@@ -1311,9 +1254,6 @@ class TestVariableRuntimeConfigFiles(BaseFileTest):
             }
         )
         self.write_project(self.default_project_data)
-        self.write_profile(self.default_profile_data)
-        # and after the fact, add the project root
-        self.default_project_data["project-root"] = self.project_dir
 
     def test_cli_and_env_vars(self):
         self.args.target = "cli-and-env-vars"
@@ -1387,3 +1327,30 @@ class TestVarLookups(unittest.TestCase):
         for node, key, expected_value in expected:
             value = vars_provider.vars_for(node, "postgres").get(key)
             assert value == expected_value
+
+
+class TestMultipleProjectFlags(BaseConfigTest):
+    def setUp(self):
+        super().setUp()
+
+        self.default_project_data.update(
+            {
+                "flags": {
+                    "send_anonymous_usage_data": False,
+                }
+            }
+        )
+        self.write_project(self.default_project_data)
+
+        self.default_profile_data.update(
+            {
+                "config": {
+                    "send_anonymous_usage_data": False,
+                }
+            }
+        )
+        self.write_profile(self.default_profile_data)
+
+    def test_setting_multiple_flags(self):
+        with pytest.raises(dbt.exceptions.DbtProjectError):
+            set_from_args(self.args, None)

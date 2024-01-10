@@ -12,7 +12,7 @@ from dbt.contracts.util import (
 )
 from dbt.common.exceptions import DbtInternalError
 from dbt.common.events.functions import fire_event
-from dbt.common.events.types import TimingInfoCollected
+from dbt.events.types import TimingInfoCollected
 from dbt.common.events.contextvars import get_node_info
 from dbt.common.events.helpers import datetime_to_json_string
 from dbt.logger import TimingProcessor

@@ -19,15 +19,13 @@ from dbt.common.events.functions import (
     LOG_VERSION,
 )
 from dbt.events.logging import setup_event_logger
-from dbt.common.events.types import (
-    CommandCompleted,
+from dbt.events.types import (
     MainReportVersion,
     MainReportArgs,
     MainTrackingUserState,
-    ResourceReport,
 )
 from dbt.common.events.helpers import get_json_string_utcnow
-from dbt.common.events.types import MainEncounteredError, MainStackTrace
+from dbt.events.types import CommandCompleted, MainEncounteredError, MainStackTrace, ResourceReport
 from dbt.common.exceptions import DbtBaseException as DbtException
 from dbt.exceptions import DbtProjectError, FailFastError
 from dbt.parser.manifest import ManifestLoader, write_manifest
