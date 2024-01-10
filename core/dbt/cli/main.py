@@ -631,12 +631,12 @@ def run(ctx, **kwargs):
 @p.target
 @p.state
 @p.threads
+@p.full_refresh
 @requires.postflight
 @requires.preflight
 @requires.profile
 @requires.project
 @requires.runtime_config
-@requires.manifest
 def retry(ctx, **kwargs):
     """Retry the nodes that failed in the previous run."""
     task = RetryTask(

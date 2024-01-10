@@ -24,6 +24,7 @@ from dbt.contracts.graph.semantic_manifest import SemanticManifest
 from dbt.common.events.base_types import EventLevel
 import json
 import pprint
+from dbt.mp_context import get_mp_context
 import msgpack
 
 import dbt.exceptions
@@ -35,6 +36,7 @@ from dbt.adapters.factory import (
     get_adapter,
     get_relation_class_by_name,
     get_adapter_package_names,
+    register_adapter,
 )
 from dbt.constants import (
     MANIFEST_FILE_NAME,
@@ -75,7 +77,7 @@ from dbt.config import Project, RuntimeConfig
 from dbt.context.docs import generate_runtime_docs_context
 from dbt.context.macro_resolver import MacroResolver, TestMacroNamespace
 from dbt.context.configured import generate_macro_context
-from dbt.context.providers import ParseProvider
+from dbt.context.providers import ParseProvider, generate_runtime_macro_context
 from dbt.contracts.files import FileHash, ParseFileType, SchemaSourceFile
 from dbt.parser.read_files import (
     ReadFilesFromFileSystem,
@@ -281,7 +283,6 @@ class ManifestLoader:
         reset: bool = False,
         write_perf_info=False,
     ) -> Manifest:
-
         adapter = get_adapter(config)  # type: ignore
         # reset is set in a TaskManager load_manifest call, since
         # the config and adapter may be persistent.
@@ -593,7 +594,6 @@ class ManifestLoader:
                 node.depends_on
                 for resolved_ref in resolved_model_refs:
                     if resolved_ref.deprecation_date:
-
                         if resolved_ref.deprecation_date < datetime.datetime.now().astimezone():
                             event_cls = DeprecatedReference
                         else:
@@ -1738,7 +1738,6 @@ def _process_sources_for_metric(manifest: Manifest, current_project: str, metric
 
 
 def _process_sources_for_node(manifest: Manifest, current_project: str, node: ManifestNode):
-
     if isinstance(node, SeedNode):
         return
 
@@ -1780,7 +1779,6 @@ def process_macro(config: RuntimeConfig, manifest: Manifest, macro: Macro) -> No
 # This is called in task.rpc.sql_commands when a "dynamic" node is
 # created in the manifest, in 'add_refs'
 def process_node(config: RuntimeConfig, manifest: Manifest, node: ManifestNode):
-
     _process_sources_for_node(manifest, config.project_name, node)
     _process_refs(manifest, config.project_name, node, config.dependencies)
     ctx = generate_runtime_docs_context(config, node, manifest, config.project_name)
@@ -1798,3 +1796,21 @@ def write_manifest(manifest: Manifest, target_path: str):
     manifest.write(path)
 
     write_semantic_manifest(manifest=manifest, target_path=target_path)
+
+
+def parse_manifest(runtime_config, write_perf_info, write, write_json):
+    register_adapter(runtime_config, get_mp_context())
+    adapter = get_adapter(runtime_config)
+    adapter.set_macro_context_generator(generate_runtime_macro_context)
+    manifest = ManifestLoader.get_full_manifest(
+        runtime_config,
+        write_perf_info=write_perf_info,
+    )
+
+    if write and write_json:
+        write_manifest(manifest, runtime_config.project_target_path)
+        pm = plugins.get_plugin_manager(runtime_config.project_name)
+        plugin_artifacts = pm.get_manifest_artifacts(manifest)
+        for path, plugin_artifact in plugin_artifacts.items():
+            plugin_artifact.write(path)
+    return manifest

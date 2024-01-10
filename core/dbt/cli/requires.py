@@ -1,8 +1,7 @@
 import dbt.tracking
 from dbt.common.invocation import reset_invocation_id
-from dbt.mp_context import get_mp_context
 from dbt.version import installed as installed_version
-from dbt.adapters.factory import adapter_management, register_adapter, get_adapter
+from dbt.adapters.factory import adapter_management
 from dbt.flags import set_flags, get_flag_dict
 from dbt.cli.exceptions import (
     ExceptionExit,
@@ -11,7 +10,6 @@ from dbt.cli.exceptions import (
 from dbt.cli.flags import Flags
 from dbt.config import RuntimeConfig
 from dbt.config.runtime import load_project, load_profile, UnsetProfile
-from dbt.context.providers import generate_runtime_macro_context
 
 from dbt.common.events.base_types import EventLevel
 from dbt.common.events.functions import (
@@ -28,11 +26,11 @@ from dbt.common.events.helpers import get_json_string_utcnow
 from dbt.events.types import CommandCompleted, MainEncounteredError, MainStackTrace, ResourceReport
 from dbt.common.exceptions import DbtBaseException as DbtException
 from dbt.exceptions import DbtProjectError, FailFastError
-from dbt.parser.manifest import ManifestLoader, write_manifest
+from dbt.parser.manifest import parse_manifest
 from dbt.profiler import profiler
 from dbt.tracking import active_user, initialize_from_flags, track_run
 from dbt.common.utils import cast_dict_to_dict_of_strings
-from dbt.plugins import set_up_plugin_manager, get_plugin_manager
+from dbt.plugins import set_up_plugin_manager
 
 from click import Context
 from functools import update_wrapper
@@ -273,25 +271,12 @@ def manifest(*args0, write=True, write_perf_info=False):
                 raise DbtProjectError("profile, project, and runtime_config required for manifest")
 
             runtime_config = ctx.obj["runtime_config"]
-            register_adapter(runtime_config, get_mp_context())
-            adapter = get_adapter(runtime_config)
-            adapter.set_macro_context_generator(generate_runtime_macro_context)
 
             # a manifest has already been set on the context, so don't overwrite it
             if ctx.obj.get("manifest") is None:
-                manifest = ManifestLoader.get_full_manifest(
-                    runtime_config,
-                    write_perf_info=write_perf_info,
+                ctx.obj["manifest"] = parse_manifest(
+                    runtime_config, write_perf_info, write, ctx.obj["flags"].write_json
                 )
-
-                ctx.obj["manifest"] = manifest
-                if write and ctx.obj["flags"].write_json:
-                    write_manifest(manifest, runtime_config.project_target_path)
-                    pm = get_plugin_manager(runtime_config.project_name)
-                    plugin_artifacts = pm.get_manifest_artifacts(manifest)
-                    for path, plugin_artifact in plugin_artifacts.items():
-                        plugin_artifact.write(path)
-
             return func(*args, **kwargs)
 
         return update_wrapper(wrapper, func)

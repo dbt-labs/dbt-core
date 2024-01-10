@@ -28,6 +28,7 @@ if os.name != "nt":
 FLAGS_DEFAULTS = {
     "INDIRECT_SELECTION": "eager",
     "TARGET_PATH": None,
+    "WARN_ERROR": None,
     # Cli args without project_flags or env var option.
     "FULL_REFRESH": False,
     "STRICT_MODE": False,
@@ -84,7 +85,6 @@ class Flags:
     def __init__(
         self, ctx: Optional[Context] = None, project_flags: Optional[ProjectFlags] = None
     ) -> None:
-
         # Set the default flags.
         for key, value in FLAGS_DEFAULTS.items():
             object.__setattr__(self, key, value)
@@ -126,7 +126,6 @@ class Flags:
                 # respected over DBT_PRINT or --print.
                 new_name: Union[str, None] = None
                 if param_name in DEPRECATED_PARAMS:
-
                     # Deprecated env vars can only be set via env var.
                     # We use the deprecated option in click to serialize the value
                     # from the env var string.
@@ -346,7 +345,6 @@ def command_params(command: CliCommand, args_dict: Dict[str, Any]) -> CommandPar
     default_args = set([x.lower() for x in FLAGS_DEFAULTS.keys()])
 
     res = command.to_list()
-
     for k, v in args_dict.items():
         k = k.lower()
         # if a "which" value exists in the args dict, it should match the command provided
@@ -358,7 +356,9 @@ def command_params(command: CliCommand, args_dict: Dict[str, Any]) -> CommandPar
             continue
 
         # param was assigned from defaults and should not be included
-        if k not in (cmd_args | prnt_args) - default_args:
+        if k not in (cmd_args | prnt_args) or (
+            k in default_args and v == FLAGS_DEFAULTS[k.upper()]
+        ):
             continue
 
         # if the param is in parent args, it should come before the arg name

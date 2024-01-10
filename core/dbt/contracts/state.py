@@ -9,6 +9,16 @@ from dbt.events.types import WarnStateTargetEqual
 from dbt.exceptions import IncompatibleSchemaError
 
 
+def load_result_state(results_path) -> Optional[RunResultsArtifact]:
+    if results_path.exists() and results_path.is_file():
+        try:
+            return RunResultsArtifact.read_and_check_versions(str(results_path))
+        except IncompatibleSchemaError as exc:
+            exc.add_filename(str(results_path))
+            raise
+    return None
+
+
 class PreviousState:
     def __init__(self, state_path: Path, target_path: Path, project_root: Path) -> None:
         self.state_path: Path = state_path
@@ -32,12 +42,7 @@ class PreviousState:
                 raise
 
         results_path = self.project_root / self.state_path / "run_results.json"
-        if results_path.exists() and results_path.is_file():
-            try:
-                self.results = RunResultsArtifact.read_and_check_versions(str(results_path))
-            except IncompatibleSchemaError as exc:
-                exc.add_filename(str(results_path))
-                raise
+        self.results = load_result_state(results_path)
 
         sources_path = self.project_root / self.state_path / "sources.json"
         if sources_path.exists() and sources_path.is_file():
