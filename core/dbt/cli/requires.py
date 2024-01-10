@@ -1,6 +1,5 @@
 import dbt.tracking
 from dbt_common.invocation import reset_invocation_id
-from dbt.mp_context import get_mp_context
 from dbt.version import installed as installed_version
 from dbt.adapters.factory import adapter_management
 from dbt.flags import set_flags, get_flag_dict
