@@ -179,6 +179,12 @@ python3 -m pytest tests/functional/sources
 
 > See [pytest usage docs](https://docs.pytest.org/en/6.2.x/usage.html) for an overview of useful command-line options.
 
+### Unit, Integration, Functional?
+
+Here are some general rules for adding tests:
+* unit tests (`tests/unit`) don’t need to access a database; "pure Python" tests should be written as unit tests
+* functional tests (`tests/functional`) cover anything that interacts with a database, namely adapter
+
 ## Debugging
 
 1. The logs for a `dbt run` have stack traces and other information for debugging errors (in `logs/dbt.log` in your project directory).
@@ -220,6 +226,6 @@ Automated tests run via GitHub Actions. If you're a first-time contributor, all 
 
 Once all tests are passing and your PR has been approved, a `dbt-core` maintainer will merge your changes into the active development branch. And that's it! Happy developing :tada:
 
-Sometimes, the content license agreement auto-check bot doesn't find a user's entry in its roster. If you need to force a rerun, add `@cla-bot check` in a comment on the pull request.
-
 ## Troubleshooting Tips
+
+Sometimes, the content license agreement auto-check bot doesn't find a user's entry in its roster. If you need to force a rerun, add `@cla-bot check` in a comment on the pull request.
