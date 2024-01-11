@@ -2,7 +2,6 @@ import dataclasses
 from typing import List, Any, Tuple
 
 from dbt_common.dataclass_schema import ValidatedStringMixin, ValidationError
-
 from dbt_common.contracts.util import Replaceable
 
 
