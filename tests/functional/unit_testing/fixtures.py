@@ -656,7 +656,7 @@ UNION ALL
 SELECT 'gmail.com' AS tld
 """
 
-test_my_model_external_nodes_sql = """
+valid_emails_sql = """
 WITH
 accounts AS (
   SELECT user_id, email, email_top_level_domain

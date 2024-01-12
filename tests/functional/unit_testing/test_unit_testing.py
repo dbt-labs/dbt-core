@@ -19,7 +19,7 @@ from fixtures import (
     event_sql,
     test_my_model_incremental_yml,
     test_my_model_yml_invalid,
-    test_my_model_external_nodes_sql,
+    valid_emails_sql,
     top_level_domains_sql,
 )
 
@@ -262,10 +262,10 @@ class TestUnitTestInvalidInputConfiguration:
         run_dbt(["test"], expect_pass=False)
 
 
-test_unit_test_with_external_nodes_yml = """
+unit_test_ext_node_yml = """
 unit_tests:
-  - name: test_unit_test_with_external_nodes
-    model: test_my_model_external_nodes
+  - name: unit_test_ext_node
+    model: valid_emails
     given:
       - input: ref('external_package', 'external_model')
         rows:
@@ -300,12 +300,12 @@ class TestUnitTestExternalNode:
     def models(self):
         return {
             "top_level_domains.sql": top_level_domains_sql,
-            "test_my_model_external_nodes.sql": test_my_model_external_nodes_sql,
-            "test_unit_test_with_external_nodes.yml": test_unit_test_with_external_nodes_yml,
+            "valid_emails.sql": valid_emails_sql,
+            "unit_test_ext_node.yml": unit_test_ext_node_yml,
         }
 
     @mock.patch("dbt.plugins.get_plugin_manager")
-    def test_unit_test_external_nodes(
+    def test_unit_test_ext_nodes(
         self,
         get_plugin_manager,
         project,
@@ -316,5 +316,5 @@ class TestUnitTestExternalNode:
         external_nodes.add_model(external_model_node)
         get_plugin_manager.return_value.get_nodes.return_value = external_nodes
 
-        results = run_dbt(["test", "--select", "test_my_model_external_nodes"], expect_pass=True)
+        results = run_dbt(["test", "--select", "valid_emails"], expect_pass=True)
         assert len(results) == 1
