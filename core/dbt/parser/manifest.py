@@ -107,6 +107,7 @@ from dbt.contracts.graph.nodes import (
     ResultNode,
     ModelNode,
     NodeRelation,
+    UnitTestDefinition,
 )
 from dbt.contracts.graph.unparsed import NodeVersion
 from dbt.artifacts.base import Writable
@@ -534,6 +535,7 @@ class ManifestLoader:
             start_process = time.perf_counter()
             self.process_sources(self.root_project.project_name)
             self.process_refs(self.root_project.project_name, self.root_project.dependencies)
+            self.process_unit_tests(self.root_project.project_name)
             self.process_docs(self.root_project)
             self.process_metrics(self.root_project)
             self.process_saved_queries(self.root_project)
@@ -1227,6 +1229,25 @@ class ManifestLoader:
                 continue
             _process_sources_for_exposure(self.manifest, current_project, exposure)
 
+    # Loops through all nodes, for each element in
+    # 'unit_test' array finds the node and updates the
+    # 'depends_on.nodes' array with the unique id
+    def process_unit_tests(self, current_project: str):
+        models_to_versions = None
+        unit_test_unique_ids = list(self.manifest.unit_tests.keys())
+        for unit_test_unique_id in unit_test_unique_ids:
+            if unit_test_unique_id in self.manifest.unit_tests:
+                unit_test = self.manifest.unit_tests[unit_test_unique_id]
+            else:
+                continue
+            if unit_test.created_at < self.started_at:
+                continue
+            if not models_to_versions:
+                models_to_versions = _build_model_names_to_versions(self.manifest)
+            _process_models_for_unit_test(
+                self.manifest, current_project, unit_test, models_to_versions
+            )
+
     def cleanup_disabled(self):
         # make sure the nodes are in the manifest.nodes or the disabled dict,
         # correctly now that the schema files are also parsed
@@ -1341,6 +1362,21 @@ def invalid_target_fail_unless_test(
             target_version=target_version,
             disabled=disabled,
         )
+
+
+def _build_model_names_to_versions(manifest: Manifest) -> Dict[str, Dict]:
+    model_names_to_versions: Dict[str, Dict] = {}
+    for node in manifest.nodes.values():
+        if node.resource_type != NodeType.Model:
+            continue
+        if not node.is_versioned:
+            continue
+        if node.package_name not in model_names_to_versions:
+            model_names_to_versions[node.package_name] = {}
+        if node.name not in model_names_to_versions[node.package_name]:
+            model_names_to_versions[node.package_name][node.name] = []
+        model_names_to_versions[node.package_name][node.name].append(node.unique_id)
+    return model_names_to_versions
 
 
 def _check_resource_uniqueness(
@@ -1754,7 +1790,7 @@ def _process_sources_for_node(manifest: Manifest, current_project: str, node: Ma
         )
 
         if target_source is None or isinstance(target_source, Disabled):
-            # this folows the same pattern as refs
+            # this follows the same pattern as refs
             node.config.enabled = False
             invalid_target_fail_unless_test(
                 node=node,
@@ -1765,6 +1801,42 @@ def _process_sources_for_node(manifest: Manifest, current_project: str, node: Ma
             continue
         target_source_id = target_source.unique_id
         node.depends_on.add_node(target_source_id)
+
+
+def _process_models_for_unit_test(
+    manifest: Manifest, current_project: str, unit_test_def: UnitTestDefinition, models_to_versions
+):
+
+    # The UnitTestDefinition should only have one "depends_on" at this point,
+    # the one that's found by the "model" field.
+    target_model_id = unit_test_def.depends_on.nodes[0]
+    target_model = manifest.nodes[target_model_id]
+    assert isinstance(target_model, ModelNode)
+    # unit_test_versions = unit_test_def.versions
+    # We're setting up unit tests for versioned models, so if
+    # the model isn't version, we don't need to do anything
+    if not target_model.is_versioned:
+        return
+    versioned_models = []
+    if (
+        target_model.package_name in models_to_versions
+        and target_model.name in models_to_versions[target_model.package_name]
+    ):
+        versioned_models = models_to_versions[target_model.package_name][target_model.name]
+
+    if versioned_models and unit_test_def.versions is None:
+        # Create unit test definitions that match the model versions
+        original_unit_test_def = manifest.unit_tests.pop(unit_test_def.unique_id)
+        original_unit_test_dict = original_unit_test_def.to_dict()
+        for versioned_model_unique_id in versioned_models:
+            versioned_model = manifest.nodes[versioned_model_unique_id]
+            assert isinstance(versioned_model, ModelNode)
+            versioned_unit_test_unique_id = f"{NodeType.Unit}.{unit_test_def.package_name}.{unit_test_def.model}.{unit_test_def.name}_v{versioned_model.version}"
+            new_unit_test_def = UnitTestDefinition.from_dict(original_unit_test_dict)
+            new_unit_test_def.unique_id = versioned_unit_test_unique_id
+            new_unit_test_def.depends_on.nodes[0] = versioned_model_unique_id
+            # fqn?
+            manifest.unit_tests[versioned_unit_test_unique_id] = new_unit_test_def
 
 
 # This is called in task.rpc.sql_commands when a "dynamic" node is

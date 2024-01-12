@@ -55,9 +55,13 @@ class UnitTestManifestLoader:
 
     def parse_unit_test_case(self, test_case: UnitTestDefinition):
         # Create unit test node based on the node being tested
-        tested_node = self.manifest.ref_lookup.perform_lookup(
-            f"model.{test_case.package_name}.{test_case.model}", self.manifest
-        )
+        # TODO: Does this work if nodes are versioned?
+        # unique_id = self.manifest.ref_lookup.get_unique_id(
+        #   key=test_case.model, package=test_case.package_name, version=version
+        # )
+        # The test_node has already been resolved and is in depends_on.nodes
+        tested_node_unique_id = test_case.depends_on.nodes[0]
+        tested_node = self.manifest.nodes[tested_node_unique_id]
         assert isinstance(tested_node, ModelNode)
 
         # Create UnitTestNode based on model being tested. Since selection has
@@ -253,6 +257,7 @@ class UnitTestParser(YamlReader):
                 fqn=unit_test_fqn,
                 config=unit_test_config,
                 schema=tested_model_node.schema,
+                versions=unit_test.versions,
             )
 
             # Check that format and type of rows matches for each given input,
