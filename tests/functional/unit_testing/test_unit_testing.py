@@ -285,16 +285,24 @@ unit_tests:
         - {user_id: 4, is_valid_email_address: true}
 """
 
+external_node_seed_csv = """user_id,email,email_top_level_domain
+1,"example@example.com","example.com"
+"""
+
 
 class TestUnitTestExternalNode:
     @pytest.fixture(scope="class")
-    def external_model_node(self):
+    def external_model_node(self, unique_schema):
         return ModelNodeArgs(
             name="external_model",
             package_name="external_package",
-            identifier="test_identifier",
-            schema="test_schema",
+            identifier="external_node_seed",
+            schema=unique_schema,
         )
+
+    @pytest.fixture(scope="class")
+    def seeds(self):
+        return {"external_node_seed.csv": external_node_seed_csv}
 
     @pytest.fixture(scope="class")
     def models(self):
@@ -316,5 +324,7 @@ class TestUnitTestExternalNode:
         external_nodes.add_model(external_model_node)
         get_plugin_manager.return_value.get_nodes.return_value = external_nodes
 
+        # `seed` need so a table exists for `external_model` to point to
+        run_dbt(["seed"], expect_pass=True)
         results = run_dbt(["test", "--select", "valid_emails"], expect_pass=True)
         assert len(results) == 1
