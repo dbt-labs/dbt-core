@@ -15,12 +15,14 @@ pytest
 pytest-cov
 pytest-csv
 pytest-dotenv
+pytest-logbook
 pytest-mock
 pytest-split
 pytest-xdist
 sphinx
 tox>=3.13
 twine
+types-colorama
 types-docutils
 types-PyYAML
 types-freezegun

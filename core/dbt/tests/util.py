@@ -3,21 +3,23 @@ import os
 import shutil
 import yaml
 import json
+import warnings
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 from contextlib import contextmanager
 from dbt.adapters.factory import Adapter
 
 from dbt.cli.main import dbtRunner
+from dbt.logger import log_manager
 from dbt.contracts.graph.manifest import Manifest
-from dbt_common.events.functions import (
+from dbt.common.events.functions import (
     fire_event,
     capture_stdout_logs,
     stop_capture_stdout_logs,
     reset_metadata_vars,
 )
-from dbt_common.events.base_types import EventLevel
-from dbt_common.events.types import Note
+from dbt.common.events.base_types import EventLevel
+from dbt.common.events.types import Note
 from dbt.adapters.base.relation import BaseRelation
 
 # =============================================================================
@@ -71,9 +73,15 @@ def run_dbt(
     args: Optional[List[str]] = None,
     expect_pass: bool = True,
 ):
+    # Ignore logbook warnings
+    warnings.filterwarnings("ignore", category=DeprecationWarning, module="logbook")
+
     # reset global vars
     reset_metadata_vars()
 
+    # The logger will complain about already being initialized if
+    # we don't do this.
+    log_manager.reset_handlers()
     if args is None:
         args = ["run"]
 

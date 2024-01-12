@@ -5,7 +5,7 @@ from .queue import GraphQueue
 from .selector_methods import MethodManager
 from .selector_spec import SelectionCriteria, SelectionSpec, IndirectSelection
 
-from dbt_common.events.functions import fire_event, warn_or_error
+from dbt.common.events.functions import fire_event, warn_or_error
 from dbt.events.types import SelectorReportInvalidSelector, NoNodesForSelectionCriteria
 from dbt.node_types import NodeType
 from dbt.exceptions import (

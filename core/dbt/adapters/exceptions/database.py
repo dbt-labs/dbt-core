@@ -1,6 +1,6 @@
 from typing import Any
 
-from dbt_common.exceptions import NotImplementedError, CompilationError
+from dbt.common.exceptions import NotImplementedError, CompilationError
 
 
 class UnexpectedDbReferenceError(NotImplementedError):

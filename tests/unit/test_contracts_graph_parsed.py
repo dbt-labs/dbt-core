@@ -52,7 +52,7 @@ from dbt.contracts.graph.unparsed import (
 from dbt import flags
 from argparse import Namespace
 
-from dbt_common.dataclass_schema import ValidationError
+from dbt.common.dataclass_schema import ValidationError
 from dbt_semantic_interfaces.type_enums import MetricType
 from .utils import (
     ContractTestCase,

@@ -25,7 +25,7 @@ from typing import (
 import agate
 
 import dbt.adapters.exceptions
-import dbt_common.exceptions.base
+import dbt.common.exceptions.base
 from dbt.adapters.contracts.connection import (
     Connection,
     Identifier,
@@ -38,7 +38,7 @@ from dbt.adapters.base.query_headers import (
     MacroQueryStringSetter,
 )
 from dbt.adapters.events.logging import AdapterLogger
-from dbt_common.events.functions import fire_event
+from dbt.common.events.functions import fire_event
 from dbt.adapters.events.types import (
     NewConnection,
     ConnectionReused,
@@ -49,8 +49,8 @@ from dbt.adapters.events.types import (
     Rollback,
     RollbackFailed,
 )
-from dbt_common.events.contextvars import get_node_info
-from dbt_common.utils import cast_to_str
+from dbt.common.events.contextvars import get_node_info
+from dbt.common.utils import cast_to_str
 
 SleepTime = Union[int, float]  # As taken by time.sleep.
 AdapterHandle = Any  # Adapter connection handle objects can be any class.
@@ -99,7 +99,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
     def set_thread_connection(self, conn: Connection) -> None:
         key = self.get_thread_identifier()
         if key in self.thread_connections:
-            raise dbt_common.exceptions.DbtInternalError(
+            raise dbt.common.exceptions.DbtInternalError(
                 "In set_thread_connection, existing connection exists for {}"
             )
         self.thread_connections[key] = conn
@@ -139,7 +139,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         :return: A context manager that handles exceptions raised by the
             underlying database.
         """
-        raise dbt_common.exceptions.base.NotImplementedError(
+        raise dbt.common.exceptions.base.NotImplementedError(
             "`exception_handler` is not implemented for this adapter!"
         )
 
@@ -275,7 +275,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def cancel_open(self) -> Optional[List[str]]:
         """Cancel all open connections on the adapter. (passable)"""
-        raise dbt_common.exceptions.base.NotImplementedError(
+        raise dbt.common.exceptions.base.NotImplementedError(
             "`cancel_open` is not implemented for this adapter!"
         )
 
@@ -290,7 +290,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         This should be thread-safe, or hold the lock if necessary. The given
         connection should not be in either in_use or available.
         """
-        raise dbt_common.exceptions.base.NotImplementedError(
+        raise dbt.common.exceptions.base.NotImplementedError(
             "`open` is not implemented for this adapter!"
         )
 
@@ -324,14 +324,14 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def begin(self) -> None:
         """Begin a transaction. (passable)"""
-        raise dbt_common.exceptions.base.NotImplementedError(
+        raise dbt.common.exceptions.base.NotImplementedError(
             "`begin` is not implemented for this adapter!"
         )
 
     @abc.abstractmethod
     def commit(self) -> None:
         """Commit a transaction. (passable)"""
-        raise dbt_common.exceptions.base.NotImplementedError(
+        raise dbt.common.exceptions.base.NotImplementedError(
             "`commit` is not implemented for this adapter!"
         )
 
@@ -369,7 +369,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
     def _rollback(cls, connection: Connection) -> None:
         """Roll back the given connection."""
         if connection.transaction_open is False:
-            raise dbt_common.exceptions.DbtInternalError(
+            raise dbt.common.exceptions.DbtInternalError(
                 f"Tried to rollback transaction on connection "
                 f'"{connection.name}", but it does not have one open!'
             )
@@ -420,7 +420,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         :return: A tuple of the query status and results (empty if fetch=False).
         :rtype: Tuple[AdapterResponse, agate.Table]
         """
-        raise dbt_common.exceptions.base.NotImplementedError(
+        raise dbt.common.exceptions.base.NotImplementedError(
             "`execute` is not implemented for this adapter!"
         )
 
@@ -432,7 +432,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
 
         See https://github.com/dbt-labs/dbt-core/issues/8396 for more information.
         """
-        raise dbt_common.exceptions.base.NotImplementedError(
+        raise dbt.common.exceptions.base.NotImplementedError(
             "`add_select_query` is not implemented for this adapter!"
         )
 
@@ -440,6 +440,6 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
     def data_type_code_to_name(cls, type_code: Union[int, str]) -> str:
         """Get the string representation of the data type from the type_code."""
         # https://peps.python.org/pep-0249/#type-objects
-        raise dbt_common.exceptions.base.NotImplementedError(
+        raise dbt.common.exceptions.base.NotImplementedError(
             "`data_type_code_to_name` is not implemented for this adapter!"
         )

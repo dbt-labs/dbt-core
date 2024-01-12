@@ -23,7 +23,7 @@ from typing import (
 from multiprocessing.context import SpawnContext
 
 from dbt.adapters.capability import Capability, CapabilityDict
-from dbt_common.contracts.constraints import (
+from dbt.common.contracts.constraints import (
     ColumnLevelConstraint,
     ConstraintType,
     ModelLevelConstraint,
@@ -44,7 +44,7 @@ from dbt.adapters.exceptions import (
     QuoteConfigTypeError,
 )
 
-from dbt_common.exceptions import (
+from dbt.common.exceptions import (
     NotImplementedError,
     DbtInternalError,
     DbtRuntimeError,
@@ -58,15 +58,15 @@ from dbt.adapters.protocol import (
     AdapterConfig,
     MacroContextGeneratorCallable,
 )
-from dbt_common.clients.agate_helper import (
+from dbt.common.clients.agate_helper import (
     empty_table,
     get_column_value_uncased,
     merge_tables,
     table_from_rows,
     Integer,
 )
-from dbt_common.clients.jinja import CallableMacroGenerator
-from dbt_common.events.functions import fire_event, warn_or_error
+from dbt.common.clients.jinja import CallableMacroGenerator
+from dbt.common.events.functions import fire_event, warn_or_error
 from dbt.adapters.events.types import (
     CacheMiss,
     ListRelations,
@@ -76,7 +76,7 @@ from dbt.adapters.events.types import (
     ConstraintNotSupported,
     ConstraintNotEnforced,
 )
-from dbt_common.utils import filter_null_values, executor, cast_to_str, AttrDict
+from dbt.common.utils import filter_null_values, executor, cast_to_str, AttrDict
 
 from dbt.adapters.contracts.relation import RelationConfig
 from dbt.adapters.base.connections import (

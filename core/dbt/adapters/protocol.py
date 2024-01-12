@@ -18,8 +18,8 @@ import agate
 from dbt.adapters.contracts.connection import Connection, AdapterRequiredConfig, AdapterResponse
 from dbt.adapters.contracts.macros import MacroResolverProtocol
 from dbt.adapters.contracts.relation import Policy, HasQuoting, RelationConfig
-from dbt_common.contracts.config.base import BaseConfig
-from dbt_common.clients.jinja import MacroProtocol
+from dbt.common.contracts.config.base import BaseConfig
+from dbt.common.clients.jinja import MacroProtocol
 
 
 @dataclass

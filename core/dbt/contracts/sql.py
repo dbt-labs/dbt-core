@@ -3,12 +3,13 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional, List, Any, Dict, Sequence
 
-from dbt_common.dataclass_schema import dbtClassMixin
+from dbt.common.dataclass_schema import dbtClassMixin
 
 from dbt.contracts.graph.nodes import ResultNode
 from dbt.artifacts.results import TimingInfo, ExecutionResult
 from dbt.artifacts.run import RunResult, RunResultsArtifact, RunExecutionResult
 from dbt.artifacts.base import VersionedSchema, schema_version
+from dbt.logger import LogMessage
 
 
 TaskTags = Optional[Dict[str, Any]]
@@ -18,7 +19,12 @@ TaskID = uuid.UUID
 
 
 @dataclass
-class RemoteCompileResultMixin(VersionedSchema):
+class RemoteResult(VersionedSchema):
+    logs: List[LogMessage]
+
+
+@dataclass
+class RemoteCompileResultMixin(RemoteResult):
     raw_code: str
     compiled_code: str
     node: ResultNode
@@ -37,7 +43,7 @@ class RemoteCompileResult(RemoteCompileResultMixin):
 
 @dataclass
 @schema_version("remote-execution-result", 1)
-class RemoteExecutionResult(ExecutionResult):
+class RemoteExecutionResult(ExecutionResult, RemoteResult):
     results: Sequence[RunResult]
     args: Dict[str, Any] = field(default_factory=dict)
     generated_at: datetime = field(default_factory=datetime.utcnow)
@@ -55,12 +61,14 @@ class RemoteExecutionResult(ExecutionResult):
     def from_local_result(
         cls,
         base: RunExecutionResult,
+        logs: List[LogMessage],
     ) -> "RemoteExecutionResult":
         return cls(
             generated_at=base.generated_at,
             results=base.results,
             elapsed_time=base.elapsed_time,
             args=base.args,
+            logs=logs,
         )
 
 

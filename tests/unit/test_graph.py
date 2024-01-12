@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 
 from dbt.adapters.postgres import Plugin as PostgresPlugin
 from dbt.adapters.factory import reset_adapters, register_adapter
+import dbt.common.clients.system
 import dbt.compilation
 import dbt.exceptions
 import dbt.flags

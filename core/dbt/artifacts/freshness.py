@@ -4,8 +4,8 @@ from datetime import datetime
 
 from dbt.artifacts.results import ExecutionResult, FreshnessStatus, NodeResult, TimingInfo
 from dbt.artifacts.base import ArtifactMixin, VersionedSchema, schema_version, BaseArtifactMetadata
-from dbt_common.dataclass_schema import dbtClassMixin, StrEnum
-from dbt_common.exceptions import DbtInternalError
+from dbt.common.dataclass_schema import dbtClassMixin, StrEnum
+from dbt.common.exceptions import DbtInternalError
 
 from dbt.contracts.graph.unparsed import FreshnessThreshold
 from dbt.contracts.graph.nodes import SourceDefinition

@@ -53,6 +53,10 @@ setup(
         "Jinja2~=3.1.2",
         "mashumaro[msgpack]~=3.9",
         # ----
+        # Legacy: This package has not been updated since 2019, and it is unused in dbt's logging system (since v1.0)
+        # The dependency here will be removed along with the removal of 'legacy logging', in a future release of dbt-core
+        "logbook>=1.5,<1.6",
+        # ----
         # dbt-core uses these packages in standard ways. Pin to the major version, and check compatibility
         # with major versions in each new minor version of dbt-core.
         "click>=8.0.2,<9",
@@ -60,21 +64,30 @@ setup(
         # ----
         # These packages are major-version-0. Keep upper bounds on upcoming minor versions (which could have breaking changes)
         # and check compatibility / bump in each new minor version of dbt-core.
+        "colorama>=0.3.9,<0.5",
         "pathspec>=0.9,<0.12",
+        "isodate>=0.6,<0.7",
+        # ----
         "sqlparse>=0.2.3,<0.5",
         # ----
         # These are major-version-0 packages also maintained by dbt-labs. Accept patches.
         "dbt-extractor~=0.5.0",
         "minimal-snowplow-tracker~=0.0.2",
         "dbt-semantic-interfaces~=0.5.0a2",
-        "dbt-common @ git+https://github.com/dbt-labs/dbt-common.git#egg=dbt",
         # ----
         # Expect compatibility with all new versions of these packages, so lower bounds only.
+        "jsonschema>=3.0",
         "packaging>20.9",
         "protobuf>=4.0.0",
         "pytz>=2015.7",
         "pyyaml>=6.0",
         "typing-extensions>=4.4",
+        # ----
+        # Match snowflake-connector-python, to ensure compatibility in dbt-snowflake
+        "cffi>=1.9,<2.0.0",
+        "idna>=2.5,<4",
+        "requests<3.0.0",
+        "urllib3~=1.0",
         # ----
     ],
     zip_safe=False,

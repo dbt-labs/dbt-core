@@ -7,10 +7,10 @@ from dbt.adapters.events.types import (
     AdapterEventWarning,
     AdapterEventError,
 )
-from dbt_common.events import get_event_manager
-from dbt_common.events.contextvars import get_node_info
-from dbt_common.events.event_handler import set_package_logging
-from dbt_common.events.functions import fire_event
+from dbt.common.events import get_event_manager
+from dbt.common.events.contextvars import get_node_info
+from dbt.common.events.event_handler import set_package_logging
+from dbt.common.events.functions import fire_event
 
 
 @dataclass

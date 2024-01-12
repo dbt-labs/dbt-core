@@ -5,11 +5,11 @@ import time
 from dbt.context.providers import generate_runtime_model_context
 from dbt.contracts.graph.nodes import SeedNode
 from dbt.artifacts.run import RunResult, RunStatus
-from dbt_common.events.base_types import EventLevel
-from dbt_common.events.functions import fire_event
-from dbt_common.events.types import Note
+from dbt.common.events.base_types import EventLevel
+from dbt.common.events.functions import fire_event
+from dbt.common.events.types import Note
 from dbt.events.types import ShowNode
-from dbt_common.exceptions import DbtRuntimeError
+from dbt.common.exceptions import DbtRuntimeError
 from dbt.task.compile import CompileTask, CompileRunner
 from dbt.task.seed import SeedRunner
 

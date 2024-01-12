@@ -5,9 +5,9 @@ from typing import Dict, List, Any, Optional, Tuple, Set, Iterable
 import agate
 from itertools import chain
 
-import dbt_common.utils.formatting
-from dbt_common.dataclass_schema import ValidationError
-from dbt_common.clients.system import load_file_contents
+import dbt.common.utils.formatting
+from dbt.common.dataclass_schema import ValidationError
+from dbt.common.clients.system import load_file_contents
 
 from dbt.task.docs import DOCS_INDEX_FILE_PATH
 from dbt.task.compile import CompileTask
@@ -27,11 +27,11 @@ from dbt.artifacts.catalog import (
     ColumnMetadata,
     CatalogArtifact,
 )
-from dbt_common.exceptions import DbtInternalError
+from dbt.common.exceptions import DbtInternalError
 from dbt.exceptions import AmbiguousCatalogMatchError
 from dbt.graph import ResourceTypeSelector
 from dbt.node_types import NodeType
-from dbt_common.events.functions import fire_event
+from dbt.common.events.functions import fire_event
 from dbt.adapters.events.types import (
     WriteCatalogFailure,
     CatalogWritten,
@@ -90,7 +90,7 @@ class Catalog(Dict[CatalogKey, CatalogTable]):
                 str(data["table_name"]),
             )
         except KeyError as exc:
-            raise dbt_common.exceptions.CompilationError(
+            raise dbt.common.exceptions.CompilationError(
                 "Catalog information missing required key {} (got {})".format(exc, data)
             )
         table: CatalogTable
@@ -184,7 +184,7 @@ def format_stats(stats: PrimitiveDict) -> StatsDict:
 
 
 def mapping_key(node: ResultNode) -> CatalogKey:
-    dkey = dbt_common.utils.formatting.lowercase(node.database)
+    dkey = dbt.common.utils.formatting.lowercase(node.database)
     return CatalogKey(dkey, node.schema.lower(), node.identifier.lower())
 
 

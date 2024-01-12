@@ -4,7 +4,6 @@ from typing import Optional, Set, List, Dict, ClassVar
 import dbt.tracking
 
 from dbt.events import types as core_types
-from dbt_common.events.functions import warn_or_error, fire_event
 
 
 class DBTDeprecation:
@@ -37,7 +36,7 @@ class DBTDeprecation:
     def show(self, *args, **kwargs) -> None:
         if self.name not in active_deprecations:
             event = self.event(**kwargs)
-            warn_or_error(event)
+            dbt.common.events.functions.warn_or_error(event)
             self.track_deprecation_warn()
             active_deprecations.add(self.name)
 
@@ -96,7 +95,7 @@ class ProjectFlagsMovedDeprecation(DBTDeprecation):
             event = self.event(**kwargs)
             # We can't do warn_or_error because the ProjectFlags
             # is where that is set up and we're just reading it.
-            fire_event(event)
+            dbt.common.events.functions.fire_event(event)
             self.track_deprecation_warn()
             active_deprecations.add(self.name)
 

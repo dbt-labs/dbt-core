@@ -1,7 +1,7 @@
 import functools
 from typing import Any, Dict, List
 import requests
-from dbt_common.events.functions import fire_event
+from dbt.common.events.functions import fire_event
 from dbt.events.types import (
     RegistryProgressGETRequest,
     RegistryProgressGETResponse,
@@ -13,9 +13,9 @@ from dbt.events.types import (
     RegistryResponseExtraNestedKeys,
 )
 from dbt.utils import memoized
-from dbt_common.utils.connection import connection_exception_retry
+from dbt.common.utils.connection import connection_exception_retry
 from dbt import deprecations
-from dbt_common import semver
+from dbt.common import semver
 import os
 
 if os.getenv("DBT_PACKAGE_HUB_URL"):

@@ -28,7 +28,7 @@ from dbt.exceptions import (
     TestNameNotStringError,
     UnexpectedTestNamePatternError,
 )
-from dbt_common.exceptions.macros import UndefinedMacroError
+from dbt.common.exceptions.macros import UndefinedMacroError
 from dbt.parser.common import Testable
 from dbt.utils import md5
 

@@ -4,7 +4,7 @@ from itertools import chain
 from pathlib import Path
 from typing import Set, List, Dict, Iterator, Tuple, Any, Union, Type, Optional, Callable
 
-from dbt_common.dataclass_schema import StrEnum
+from dbt.common.dataclass_schema import StrEnum
 
 from .graph import UniqueId
 
@@ -23,12 +23,12 @@ from dbt.contracts.graph.nodes import (
 )
 from dbt.contracts.graph.unparsed import UnparsedVersion
 from dbt.contracts.state import PreviousState
-from dbt_common.exceptions import (
+from dbt.common.exceptions import (
     DbtInternalError,
     DbtRuntimeError,
 )
 from dbt.node_types import NodeType
-from dbt_common.events.contextvars import get_project_root
+from dbt.common.events.contextvars import get_project_root
 
 
 SELECTOR_GLOB = "*"

@@ -90,6 +90,12 @@ empty = click.option(
     is_flag=True,
 )
 
+enable_legacy_logger = click.option(
+    "--enable-legacy-logger/--no-enable-legacy-logger",
+    envvar="DBT_ENABLE_LEGACY_LOGGER",
+    hidden=True,
+)
+
 exclude = click.option(
     "--exclude",
     envvar=None,

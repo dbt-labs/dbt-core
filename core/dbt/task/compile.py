@@ -3,11 +3,11 @@ from typing import AbstractSet, Optional
 
 from dbt.contracts.graph.manifest import WritableManifest
 from dbt.artifacts.run import RunStatus, RunResult
-from dbt_common.events.base_types import EventLevel
-from dbt_common.events.functions import fire_event
-from dbt_common.events.types import Note
+from dbt.common.events.base_types import EventLevel
+from dbt.common.events.functions import fire_event
+from dbt.common.events.types import Note
 from dbt.events.types import ParseInlineNodeError, CompiledNode
-from dbt_common.exceptions import (
+from dbt.common.exceptions import (
     CompilationError,
     DbtInternalError,
     DbtBaseException as DbtException,

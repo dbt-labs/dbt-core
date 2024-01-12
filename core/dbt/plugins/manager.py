@@ -5,7 +5,7 @@ from types import ModuleType
 from typing import Dict, List, Callable, Mapping
 
 from dbt.contracts.graph.manifest import Manifest
-from dbt_common.exceptions import DbtRuntimeError
+from dbt.common.exceptions import DbtRuntimeError
 from dbt.plugins.contracts import PluginArtifacts
 from dbt.plugins.manifest import PluginNodes
 import dbt.tracking

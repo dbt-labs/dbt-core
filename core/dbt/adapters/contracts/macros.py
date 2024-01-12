@@ -1,7 +1,7 @@
 from typing import Optional
 from typing_extensions import Protocol
 
-from dbt_common.clients.jinja import MacroProtocol
+from dbt.common.clients.jinja import MacroProtocol
 
 
 class MacroResolverProtocol(Protocol):

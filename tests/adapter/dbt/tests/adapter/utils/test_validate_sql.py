@@ -42,7 +42,7 @@ class BaseValidateSqlMethod:
     def expected_exception(self) -> Type[Exception]:
         """Returns the Exception type thrown by a failed query.
 
-        Defaults to dbt_common.exceptions.DbtRuntimeError because that is the most common
+        Defaults to dbt.common.exceptions.DbtRuntimeError because that is the most common
         base exception for adapters to throw."""
         return DbtRuntimeError
 

@@ -3,7 +3,7 @@ import threading
 import time
 from typing import List, Dict, Any, Iterable, Set, Tuple, Optional, AbstractSet
 
-from dbt_common.dataclass_schema import dbtClassMixin
+from dbt.common.dataclass_schema import dbtClassMixin
 
 from .compile import CompileRunner, CompileTask
 
@@ -26,21 +26,28 @@ from dbt.exceptions import (
     DbtInternalError,
     DbtRuntimeError,
 )
-from dbt_common.exceptions import DbtValidationError
+from dbt.common.exceptions import DbtValidationError
 from dbt.adapters.exceptions import MissingMaterializationError
 from dbt.adapters.events.types import (
     DatabaseErrorRunningHook,
     HooksRunning,
     FinishedRunningStats,
 )
-from dbt_common.events.functions import fire_event, get_invocation_id
-from dbt_common.events.types import Formatting
-from dbt_common.events.base_types import EventLevel
+from dbt.common.events.functions import fire_event, get_invocation_id
+from dbt.common.events.types import Formatting
+from dbt.common.events.base_types import EventLevel
 from dbt.events.types import (
     LogModelResult,
     LogStartLine,
     LogHookEndLine,
     LogHookStartLine,
+)
+from dbt.logger import (
+    TextOnly,
+    HookMetadata,
+    UniqueID,
+    TimestampNamed,
+    DbtModelState,
 )
 from dbt.graph import ResourceTypeSelector
 from dbt.hooks import get_hook_dict
@@ -346,8 +353,12 @@ class RunTask(CompileTask):
             return
         num_hooks = len(ordered_hooks)
 
-        fire_event(Formatting(""))
+        with TextOnly():
+            fire_event(Formatting(""))
         fire_event(HooksRunning(num_hooks=num_hooks, hook_type=hook_type))
+
+        startctx = TimestampNamed("node_started_at")
+        finishctx = TimestampNamed("node_finished_at")
 
         for idx, hook in enumerate(ordered_hooks, start=1):
             hook.update_event_status(
@@ -356,42 +367,47 @@ class RunTask(CompileTask):
             sql = self.get_hook_sql(adapter, hook, idx, num_hooks, extra_context)
 
             hook_text = "{}.{}.{}".format(hook.package_name, hook_type, hook.index)
-            fire_event(
-                LogHookStartLine(
-                    statement=hook_text,
-                    index=idx,
-                    total=num_hooks,
-                    node_info=hook.node_info,
-                )
-            )
+            hook_meta_ctx = HookMetadata(hook, self.index_offset(idx))
+            with UniqueID(hook.unique_id):
+                with hook_meta_ctx, startctx:
+                    fire_event(
+                        LogHookStartLine(
+                            statement=hook_text,
+                            index=idx,
+                            total=num_hooks,
+                            node_info=hook.node_info,
+                        )
+                    )
 
-            with Timer() as timer:
-                if len(sql.strip()) > 0:
-                    response, _ = adapter.execute(sql, auto_begin=False, fetch=False)
-                    status = response._message
-                else:
-                    status = "OK"
+                with Timer() as timer:
+                    if len(sql.strip()) > 0:
+                        response, _ = adapter.execute(sql, auto_begin=False, fetch=False)
+                        status = response._message
+                    else:
+                        status = "OK"
 
-            self.ran_hooks.append(hook)
-            hook.update_event_status(finished_at=datetime.utcnow().isoformat())
-            hook.update_event_status(node_status=RunStatus.Success)
-            fire_event(
-                LogHookEndLine(
-                    statement=hook_text,
-                    status=status,
-                    index=idx,
-                    total=num_hooks,
-                    execution_time=timer.elapsed,
-                    node_info=hook.node_info,
-                )
-            )
+                self.ran_hooks.append(hook)
+                hook.update_event_status(finished_at=datetime.utcnow().isoformat())
+                with finishctx, DbtModelState({"node_status": "passed"}):
+                    hook.update_event_status(node_status=RunStatus.Success)
+                    fire_event(
+                        LogHookEndLine(
+                            statement=hook_text,
+                            status=status,
+                            index=idx,
+                            total=num_hooks,
+                            execution_time=timer.elapsed,
+                            node_info=hook.node_info,
+                        )
+                    )
             # `_event_status` dict is only used for logging.  Make sure
             # it gets deleted when we're done with it
             hook.clear_event_status()
 
         self._total_executed += len(ordered_hooks)
 
-        fire_event(Formatting(""))
+        with TextOnly():
+            fire_event(Formatting(""))
 
     def safe_run_hooks(
         self, adapter, hook_type: RunHookType, extra_context: Dict[str, Any]
@@ -421,7 +437,8 @@ class RunTask(CompileTask):
         if execution_time is not None:
             execution = utils.humanize_execution_time(execution_time=execution_time)
 
-        fire_event(Formatting(""))
+        with TextOnly():
+            fire_event(Formatting(""))
         fire_event(
             FinishedRunningStats(
                 stat_line=stat_line, execution=execution, execution_time=execution_time

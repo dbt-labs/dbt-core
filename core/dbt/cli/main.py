@@ -19,7 +19,7 @@ from dbt.cli.exceptions import (
 from dbt.contracts.graph.manifest import Manifest
 from dbt.artifacts.catalog import CatalogArtifact
 from dbt.artifacts.run import RunExecutionResult
-from dbt_common.events.base_types import EventMsg
+from dbt.common.events.base_types import EventMsg
 from dbt.task.build import BuildTask
 from dbt.task.clean import CleanTask
 from dbt.task.clone import CloneTask
@@ -122,6 +122,7 @@ def global_flags(func):
     @p.cache_selected_only
     @p.debug
     @p.deprecated_print
+    @p.enable_legacy_logger
     @p.fail_fast
     @p.log_cache_events
     @p.log_file_max_bytes

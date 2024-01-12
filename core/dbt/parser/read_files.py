@@ -2,7 +2,7 @@ import os
 import pathspec  # type: ignore
 import pathlib
 from dataclasses import dataclass, field
-from dbt_common.clients.system import load_file_contents
+from dbt.common.clients.system import load_file_contents
 from dbt.contracts.files import (
     FilePath,
     ParseFileType,
@@ -12,13 +12,13 @@ from dbt.contracts.files import (
     SchemaSourceFile,
 )
 from dbt.config import Project
-from dbt_common.dataclass_schema import dbtClassMixin
+from dbt.common.dataclass_schema import dbtClassMixin
 from dbt.parser.schemas import yaml_from_file, schema_file_keys
 from dbt.exceptions import ParsingError
 from dbt.parser.search import filesystem_search
 from typing import Optional, Dict, List, Mapping, MutableMapping
 from dbt.events.types import InputFileDiffError
-from dbt_common.events.functions import fire_event
+from dbt.common.events.functions import fire_event
 from typing import Protocol
 
 

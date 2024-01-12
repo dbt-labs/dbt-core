@@ -7,7 +7,7 @@ from multiprocessing.dummy import Pool as ThreadPool
 from pathlib import Path
 from typing import AbstractSet, Optional, Dict, List, Set, Tuple, Iterable
 
-import dbt_common.utils.formatting
+import dbt.common.utils.formatting
 import dbt.exceptions
 import dbt.tracking
 import dbt.utils
@@ -18,9 +18,9 @@ from dbt.contracts.graph.nodes import ResultNode
 from dbt.artifacts.results import NodeStatus, RunningStatus, RunStatus, BaseResult
 from dbt.artifacts.run import RunExecutionResult, RunResult
 from dbt.contracts.state import PreviousState
-from dbt_common.events.contextvars import task_contextvars
-from dbt_common.events.functions import fire_event, warn_or_error
-from dbt_common.events.types import Formatting
+from dbt.common.events.contextvars import log_contextvars, task_contextvars
+from dbt.common.events.functions import fire_event, warn_or_error
+from dbt.common.events.types import Formatting
 from dbt.events.types import (
     LogCancelLine,
     DefaultSelector,
@@ -36,9 +36,18 @@ from dbt.exceptions import (
     DbtRuntimeError,
     FailFastError,
 )
-from dbt_common.exceptions import NotImplementedError
+from dbt.common.exceptions import NotImplementedError
 from dbt.flags import get_flags
 from dbt.graph import GraphQueue, NodeSelector, SelectionSpec, parse_difference, UniqueId
+from dbt.logger import (
+    DbtProcessState,
+    TextOnly,
+    UniqueID,
+    TimestampNamed,
+    DbtModelState,
+    ModelMetadata,
+    NodeCount,
+)
 from dbt.parser.manifest import write_manifest
 from dbt.task.base import ConfiguredTask, BaseRunner
 from .printer import (
@@ -47,6 +56,7 @@ from .printer import (
 )
 
 RESULT_FILE_NAME = "run_results.json"
+RUNNING_STATE = DbtProcessState("running")
 
 
 class GraphRunnableTask(ConfiguredTask):
@@ -173,27 +183,36 @@ class GraphRunnableTask(ConfiguredTask):
         return cls(self.config, adapter, node, run_count, num_nodes)
 
     def call_runner(self, runner: BaseRunner) -> RunResult:
-        runner.node.update_event_status(
-            started_at=datetime.utcnow().isoformat(), node_status=RunningStatus.Started
-        )
+        uid_context = UniqueID(runner.node.unique_id)
+        with RUNNING_STATE, uid_context, log_contextvars(node_info=runner.node.node_info):
+            startctx = TimestampNamed("node_started_at")
+            index = self.index_offset(runner.node_index)
+            runner.node.update_event_status(
+                started_at=datetime.utcnow().isoformat(), node_status=RunningStatus.Started
+            )
+            extended_metadata = ModelMetadata(runner.node, index)
 
-        fire_event(
-            NodeStart(
-                node_info=runner.node.node_info,
-            )
-        )
-        try:
-            result = runner.run_with_hooks(self.manifest)
-        finally:
-            fire_event(
-                NodeFinished(
-                    node_info=runner.node.node_info,
-                    run_result=result.to_msg_dict(),
+            with startctx, extended_metadata:
+                fire_event(
+                    NodeStart(
+                        node_info=runner.node.node_info,
+                    )
                 )
-            )
-        # `_event_status` dict is only used for logging.  Make sure
-        # it gets deleted when we're done with it
-        runner.node.clear_event_status()
+            status: Dict[str, str] = {}
+            try:
+                result = runner.run_with_hooks(self.manifest)
+            finally:
+                finishctx = TimestampNamed("finished_at")
+                with finishctx, DbtModelState(status):
+                    fire_event(
+                        NodeFinished(
+                            node_info=runner.node.node_info,
+                            run_result=result.to_msg_dict(),
+                        )
+                    )
+            # `_event_status` dict is only used for logging.  Make sure
+            # it gets deleted when we're done with it
+            runner.node.clear_event_status()
 
         fail_fast = get_flags().FAIL_FAST
 
@@ -320,12 +339,15 @@ class GraphRunnableTask(ConfiguredTask):
         num_threads = self.config.threads
         target_name = self.config.target_name
 
-        fire_event(
-            ConcurrencyLine(
-                num_threads=num_threads, target_name=target_name, node_count=self.num_nodes
+        # following line can be removed when legacy logger is removed
+        with NodeCount(self.num_nodes):
+            fire_event(
+                ConcurrencyLine(
+                    num_threads=num_threads, target_name=target_name, node_count=self.num_nodes
+                )
             )
-        )
-        fire_event(Formatting(""))
+        with TextOnly():
+            fire_event(Formatting(""))
 
         pool = ThreadPool(num_threads)
         try:
@@ -442,7 +464,8 @@ class GraphRunnableTask(ConfiguredTask):
                 )
 
             if len(self._flattened_nodes) == 0:
-                fire_event(Formatting(""))
+                with TextOnly():
+                    fire_event(Formatting(""))
                 warn_or_error(NothingToDo())
                 result = self.get_result(
                     results=[],
@@ -450,7 +473,8 @@ class GraphRunnableTask(ConfiguredTask):
                     elapsed_time=0.0,
                 )
             else:
-                fire_event(Formatting(""))
+                with TextOnly():
+                    fire_event(Formatting(""))
                 selected_uids = frozenset(n.unique_id for n in self._flattened_nodes)
                 result = self.execute_with_hooks(selected_uids)
 
@@ -519,7 +543,7 @@ class GraphRunnableTask(ConfiguredTask):
         def list_schemas(db_only: BaseRelation) -> List[Tuple[Optional[str], str]]:
             # the database can be None on some warehouses that don't support it
             database_quoted: Optional[str]
-            db_lowercase = dbt_common.utils.formatting.lowercase(db_only.database)
+            db_lowercase = dbt.common.utils.formatting.lowercase(db_only.database)
             if db_only.database is None:
                 database_quoted = None
             else:
@@ -541,7 +565,7 @@ class GraphRunnableTask(ConfiguredTask):
         list_futures = []
         create_futures = []
 
-        with dbt_common.utils.executor(self.config) as tpe:
+        with dbt.common.utils.executor(self.config) as tpe:
             for req in required_databases:
                 if req.database is None:
                     name = "list_schemas"
@@ -559,7 +583,7 @@ class GraphRunnableTask(ConfiguredTask):
                     # skip this
                     continue
                 db: Optional[str] = info.database
-                db_lower: Optional[str] = dbt_common.utils.formatting.lowercase(db)
+                db_lower: Optional[str] = dbt.common.utils.formatting.lowercase(db)
                 schema: str = info.schema
 
                 db_schema = (db_lower, schema.lower())

@@ -9,8 +9,7 @@ import yaml
 from pathlib import Path
 from unittest import mock
 
-import dbt_common.semver as semver
-import dbt_common.exceptions
+import dbt.common.semver as semver
 import dbt.config
 import dbt.exceptions
 
@@ -198,7 +197,7 @@ class TestMissingDependency(object):
 
     def test_missing_dependency(self, project):
         # dbt should raise a runtime exception
-        with pytest.raises(dbt_common.exceptions.DbtRuntimeError):
+        with pytest.raises(dbt.common.exceptions.DbtRuntimeError):
             run_dbt(["compile"])
 
 
@@ -348,7 +347,7 @@ class TestSimpleDependencyDuplicateName(BaseDependencyTest):
 
     def test_local_dependency_same_name_sneaky(self, prepare_dependencies, project):
         shutil.copytree("duplicate_dependency", "./dbt_packages/duplicate_dependency")
-        with pytest.raises(dbt_common.exceptions.CompilationError):
+        with pytest.raises(dbt.common.exceptions.CompilationError):
             run_dbt(["compile"])
 
         # needed to avoid compilation errors from duplicate package names in test autocleanup

@@ -22,8 +22,8 @@ from dbt.flags import get_flags
 from dbt.config.project import load_raw_project
 from dbt.contracts.graph.manifest import ManifestMetadata
 from dbt.contracts.project import Configuration
-from dbt_common.dataclass_schema import ValidationError
-from dbt_common.events.functions import warn_or_error
+from dbt.common.dataclass_schema import ValidationError
+from dbt.common.events.functions import warn_or_error
 from dbt.events.types import UnusedResourceConfigPath
 from dbt.exceptions import (
     ConfigContractBrokenError,
@@ -32,7 +32,7 @@ from dbt.exceptions import (
     DbtRuntimeError,
     UninstalledPackagesFoundError,
 )
-from dbt_common.helper_types import DictDefaultEmptyStr, FQNPath, PathSet
+from dbt.common.helper_types import DictDefaultEmptyStr, FQNPath, PathSet
 from .profile import Profile
 from .project import Project
 from .renderer import DbtProjectYamlRenderer, ProfileRenderer

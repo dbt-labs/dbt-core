@@ -10,13 +10,13 @@ import jinja2.nodes
 import jinja2.parser
 import jinja2.sandbox
 
-from dbt_common.clients.jinja import (
+from dbt.common.clients.jinja import (
     render_template,
     get_template,
     CallableMacroGenerator,
     MacroProtocol,
 )
-from dbt_common.utils import deep_map_render
+from dbt.common.utils import deep_map_render
 from dbt.contracts.graph.nodes import GenericTestNode
 
 from dbt.exceptions import (
