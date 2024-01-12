@@ -29,13 +29,8 @@ from dbt.exceptions import DbtProjectError, FailFastError
 from dbt.parser.manifest import parse_manifest
 from dbt.profiler import profiler
 from dbt.tracking import active_user, initialize_from_flags, track_run
-<<<<<<< HEAD
-from dbt.common.utils import cast_dict_to_dict_of_strings
-from dbt.plugins import set_up_plugin_manager
-=======
 from dbt_common.utils import cast_dict_to_dict_of_strings
-from dbt.plugins import set_up_plugin_manager, get_plugin_manager
->>>>>>> 14fe6a596 (update imports from dbt.common to dbt_common)
+from dbt.plugins import set_up_plugin_manager
 
 from click import Context
 from functools import update_wrapper
