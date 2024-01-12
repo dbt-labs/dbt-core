@@ -141,7 +141,8 @@ class GraphRunnableTask(ConfiguredTask):
         )
         # We're rewriting the manifest because it's been mutated during merge_from_artifact.
         # This is to reflect which nodes had been deferred to (= replaced with) their counterparts.
-        write_manifest(self.manifest, self.config.project_target_path)
+        if self.args.write_json:
+            write_manifest(self.manifest, self.config.project_target_path)
 
     def get_graph_queue(self) -> GraphQueue:
         selector = self.get_node_selector()
