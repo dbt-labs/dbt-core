@@ -1,7 +1,7 @@
 from dbt.contracts.util import Replaceable, Mergeable, list_str, Identifier
-from dbt.contracts.connection import QueryComment, UserConfigContract
-from dbt.helper_types import NoValue
-from dbt.dataclass_schema import (
+from dbt.adapters.contracts.connection import QueryComment
+from dbt.common.helper_types import NoValue
+from dbt.common.dataclass_schema import (
     dbtClassMixin,
     ValidationError,
     ExtensibleDbtClassMixin,
@@ -283,7 +283,7 @@ class Project(dbtClassMixin, Replaceable):
 
 
 @dataclass
-class UserConfig(ExtensibleDbtClassMixin, Replaceable, UserConfigContract):
+class ProjectFlags(ExtensibleDbtClassMixin, Replaceable):
     cache_selected_only: Optional[bool] = None
     debug: Optional[bool] = None
     fail_fast: Optional[bool] = None
@@ -310,7 +310,6 @@ class UserConfig(ExtensibleDbtClassMixin, Replaceable, UserConfigContract):
 class ProfileConfig(dbtClassMixin, Replaceable):
     profile_name: str
     target_name: str
-    user_config: UserConfig
     threads: int
     # TODO: make this a dynamic union of some kind?
     credentials: Optional[Dict[str, Any]]

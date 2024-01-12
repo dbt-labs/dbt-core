@@ -2,6 +2,17 @@ import datetime
 import re
 
 from dbt import deprecations
+from dbt.common.contracts.config.properties import (
+    AdditionalPropertiesAllowed,
+    AdditionalPropertiesMixin,
+)
+from dbt.common.exceptions import DbtInternalError, CompilationError
+from dbt.common.dataclass_schema import (
+    dbtClassMixin,
+    StrEnum,
+    ExtensibleDbtClassMixin,
+    ValidationError,
+)
 from dbt.node_types import NodeType
 from dbt.contracts.graph.semantic_models import (
     Defaults,
@@ -9,16 +20,15 @@ from dbt.contracts.graph.semantic_models import (
     MeasureAggregationParameters,
 )
 from dbt.contracts.util import (
-    AdditionalPropertiesMixin,
     Mergeable,
     Replaceable,
 )
 
 # trigger the PathEncoder
-import dbt.helper_types  # noqa:F401
-from dbt.exceptions import CompilationError, ParsingError, DbtInternalError
+import dbt.common.helper_types  # noqa:F401
+from dbt.exceptions import ParsingError
 
-from dbt.dataclass_schema import dbtClassMixin, StrEnum, ExtensibleDbtClassMixin, ValidationError
+from dbt_semantic_interfaces.type_enums import ConversionCalculationType
 
 from dataclasses import dataclass, field
 from datetime import timedelta
@@ -143,7 +153,7 @@ class UnparsedVersion(dbtClassMixin):
     constraints: List[Dict[str, Any]] = field(default_factory=list)
     docs: Docs = field(default_factory=Docs)
     tests: Optional[List[TestDef]] = None
-    columns: Sequence[Union[dbt.helper_types.IncludeExclude, UnparsedColumn]] = field(
+    columns: Sequence[Union[dbt.common.helper_types.IncludeExclude, UnparsedColumn]] = field(
         default_factory=list
     )
     deprecation_date: Optional[datetime.datetime] = None
@@ -155,7 +165,7 @@ class UnparsedVersion(dbtClassMixin):
             return str(self.v) < str(other.v)
 
     @property
-    def include_exclude(self) -> dbt.helper_types.IncludeExclude:
+    def include_exclude(self) -> dbt.common.helper_types.IncludeExclude:
         return self._include_exclude
 
     @property
@@ -168,10 +178,10 @@ class UnparsedVersion(dbtClassMixin):
 
     def __post_init__(self):
         has_include_exclude = False
-        self._include_exclude = dbt.helper_types.IncludeExclude(include="*")
+        self._include_exclude = dbt.common.helper_types.IncludeExclude(include="*")
         self._unparsed_columns = []
         for column in self.columns:
-            if isinstance(column, dbt.helper_types.IncludeExclude):
+            if isinstance(column, dbt.common.helper_types.IncludeExclude):
                 if not has_include_exclude:
                     self._include_exclude = column
                     has_include_exclude = True
@@ -291,8 +301,8 @@ class FreshnessThreshold(dbtClassMixin, Mergeable):
     error_after: Optional[Time] = field(default_factory=Time)
     filter: Optional[str] = None
 
-    def status(self, age: float) -> "dbt.contracts.results.FreshnessStatus":
-        from dbt.contracts.results import FreshnessStatus
+    def status(self, age: float) -> "dbt.artifacts.results.FreshnessStatus":
+        from dbt.artifacts.results import FreshnessStatus
 
         if self.error_after and self.error_after.exceeded(age):
             return FreshnessStatus.Error
@@ -303,11 +313,6 @@ class FreshnessThreshold(dbtClassMixin, Mergeable):
 
     def __bool__(self):
         return bool(self.warn_after) or bool(self.error_after)
-
-
-@dataclass
-class AdditionalPropertiesAllowed(AdditionalPropertiesMixin, ExtensibleDbtClassMixin):
-    _extra: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -598,6 +603,24 @@ class UnparsedMetricInput(dbtClassMixin):
 
 
 @dataclass
+class ConstantPropertyInput(dbtClassMixin):
+    base_property: str
+    conversion_property: str
+
+
+@dataclass
+class UnparsedConversionTypeParams(dbtClassMixin):
+    base_measure: Union[UnparsedMetricInputMeasure, str]
+    conversion_measure: Union[UnparsedMetricInputMeasure, str]
+    entity: str
+    calculation: str = (
+        ConversionCalculationType.CONVERSION_RATE.value
+    )  # ConversionCalculationType Enum
+    window: Optional[str] = None
+    constant_properties: Optional[List[ConstantPropertyInput]] = None
+
+
+@dataclass
 class UnparsedMetricTypeParams(dbtClassMixin):
     measure: Optional[Union[UnparsedMetricInputMeasure, str]] = None
     numerator: Optional[Union[UnparsedMetricInput, str]] = None
@@ -606,6 +629,7 @@ class UnparsedMetricTypeParams(dbtClassMixin):
     window: Optional[str] = None
     grain_to_date: Optional[str] = None  # str is really a TimeGranularity Enum
     metrics: Optional[List[Union[UnparsedMetricInput, str]]] = None
+    conversion_type_params: Optional[UnparsedConversionTypeParams] = None
 
 
 @dataclass

@@ -9,16 +9,16 @@ from dbt.adapters.sql import SQLAdapter
 from dbt.adapters.postgres import PostgresConnectionManager
 from dbt.adapters.postgres.column import PostgresColumn
 from dbt.adapters.postgres import PostgresRelation
-from dbt.dataclass_schema import dbtClassMixin, ValidationError
-from dbt.contracts.graph.nodes import ConstraintType
-from dbt.exceptions import (
+from dbt.common.contracts.constraints import ConstraintType
+from dbt.common.dataclass_schema import dbtClassMixin, ValidationError
+from dbt.common.exceptions import DbtRuntimeError
+from dbt.adapters.exceptions import (
     CrossDbReferenceProhibitedError,
     IndexConfigNotDictError,
     IndexConfigError,
-    DbtRuntimeError,
     UnexpectedDbReferenceError,
 )
-import dbt.utils
+from dbt.common.utils import encoding as dbt_encoding
 
 
 GET_RELATIONS_MACRO_NAME = "postgres__get_relations"
@@ -38,7 +38,7 @@ class PostgresIndexConfig(dbtClassMixin):
         now = datetime.utcnow().isoformat()
         inputs = self.columns + [relation.render(), str(self.unique), str(self.type), now]
         string = "_".join(inputs)
-        return dbt.utils.md5(string)
+        return dbt_encoding.md5(string)
 
     @classmethod
     def parse(cls, raw_index) -> Optional["PostgresIndexConfig"]:

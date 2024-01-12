@@ -3,7 +3,8 @@ from typing import Type
 import pytest
 
 from dbt.adapters.base.impl import BaseAdapter
-from dbt.exceptions import DbtRuntimeError, InvalidConnectionError
+from dbt.exceptions import DbtRuntimeError
+from dbt.adapters.exceptions import InvalidConnectionError
 
 
 class BaseValidateSqlMethod:
@@ -41,7 +42,7 @@ class BaseValidateSqlMethod:
     def expected_exception(self) -> Type[Exception]:
         """Returns the Exception type thrown by a failed query.
 
-        Defaults to dbt.exceptions.DbtRuntimeError because that is the most common
+        Defaults to dbt.common.exceptions.DbtRuntimeError because that is the most common
         base exception for adapters to throw."""
         return DbtRuntimeError
 

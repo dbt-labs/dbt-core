@@ -15,7 +15,11 @@ from dbt.deps.resolver import resolve_lock_packages, resolve_packages
 from dbt.deps.registry import RegistryPinnedPackage
 from dbt.contracts.project import Package
 
-from dbt.events.functions import fire_event
+
+from dbt.common.events.functions import fire_event
+from dbt.common.events.types import (
+    Formatting,
+)
 from dbt.events.types import (
     DepsAddPackage,
     DepsFoundDuplicatePackage,
@@ -27,9 +31,8 @@ from dbt.events.types import (
     DepsStartPackageInstall,
     DepsUpdateAvailable,
     DepsUpToDate,
-    Formatting,
 )
-from dbt.clients import system
+from dbt.common.clients import system
 
 from dbt.task.base import BaseTask, move_to_nearest_project_dir
 
@@ -220,8 +223,9 @@ class DepsTask(BaseTask):
             if previous_hash != current_hash:
                 self.lock()
 
-        # Early return when dry run or lock only.
-        if self.args.dry_run or self.args.lock:
+        # Early return when 'dbt deps --lock'
+        # Just resolve packages and write lock file, don't actually install packages
+        if self.args.lock:
             return
 
         if system.path_exists(self.project.packages_install_path):

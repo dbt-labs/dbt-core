@@ -90,6 +90,17 @@ class BaseAdapterMethod:
             "name": "adapter_methods",
         }
 
+    @pytest.fixture(autouse=True)
+    def clean_up(self, project):
+        yield
+        with project.adapter.connection_named("__test"):
+            relation = project.adapter.Relation.create(
+                database=project.database, schema=project.test_schema
+            )
+            project.adapter.drop_schema(relation)
+
+    pass
+
     # snowflake need all tables in CAP name
     @pytest.fixture(scope="class")
     def equal_tables(self):

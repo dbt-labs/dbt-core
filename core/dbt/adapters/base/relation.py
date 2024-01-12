@@ -2,8 +2,8 @@ from collections.abc import Hashable
 from dataclasses import dataclass, field
 from typing import Optional, TypeVar, Any, Type, Dict, Iterator, Tuple, Set, Union, FrozenSet
 
-from dbt.contracts.graph.nodes import SourceDefinition, ManifestNode, ResultNode, ParsedNode
-from dbt.contracts.relation import (
+from dbt.adapters.contracts.relation import (
+    RelationConfig,
     RelationType,
     ComponentName,
     HasQuoting,
@@ -11,15 +11,11 @@ from dbt.contracts.relation import (
     Policy,
     Path,
 )
-from dbt.exceptions import (
-    ApproximateMatchError,
-    DbtInternalError,
-    MultipleDatabasesNotAllowedError,
-)
-from dbt.node_types import NodeType
-from dbt.utils import filter_null_values, deep_merge, classproperty
+from dbt.adapters.exceptions import MultipleDatabasesNotAllowedError, ApproximateMatchError
+from dbt.common.utils import filter_null_values, deep_merge
+from dbt.adapters.utils import classproperty
 
-import dbt.exceptions
+import dbt.common.exceptions
 
 
 Self = TypeVar("Self", bound="BaseRelation")
@@ -101,7 +97,7 @@ class BaseRelation(FakeAPIObject, Hashable):
 
         if not search:
             # nothing was passed in
-            raise dbt.exceptions.DbtRuntimeError(
+            raise dbt.common.exceptions.DbtRuntimeError(
                 "Tried to match relation, but no search path was passed!"
             )
 
@@ -210,80 +206,50 @@ class BaseRelation(FakeAPIObject, Hashable):
             identifier=identifier,
         )
 
-    @classmethod
-    def create_from_source(cls: Type[Self], source: SourceDefinition, **kwargs: Any) -> Self:
-        source_quoting = source.quoting.to_dict(omit_none=True)
-        source_quoting.pop("column", None)
-        quote_policy = deep_merge(
-            cls.get_default_quote_policy().to_dict(omit_none=True),
-            source_quoting,
-            kwargs.get("quote_policy", {}),
-        )
-
-        return cls.create(
-            database=source.database,
-            schema=source.schema,
-            identifier=source.identifier,
-            quote_policy=quote_policy,
-            **kwargs,
-        )
-
     @staticmethod
     def add_ephemeral_prefix(name: str):
         return f"__dbt__cte__{name}"
 
     @classmethod
-    def create_ephemeral_from_node(
+    def create_ephemeral_from(
         cls: Type[Self],
-        config: HasQuoting,
-        node: ManifestNode,
+        relation_config: RelationConfig,
         limit: Optional[int],
     ) -> Self:
         # Note that ephemeral models are based on the name.
-        identifier = cls.add_ephemeral_prefix(node.name)
-        return cls.create(type=cls.CTE, identifier=identifier, limit=limit).quote(identifier=False)
-
-    @classmethod
-    def create_from_node(
-        cls: Type[Self],
-        config: HasQuoting,
-        node,
-        quote_policy: Optional[Dict[str, bool]] = None,
-        **kwargs: Any,
-    ) -> Self:
-        if quote_policy is None:
-            quote_policy = {}
-
-        quote_policy = dbt.utils.merge(config.quoting, quote_policy)
-
+        identifier = cls.add_ephemeral_prefix(relation_config.name)
         return cls.create(
-            database=node.database,
-            schema=node.schema,
-            identifier=node.alias,
-            quote_policy=quote_policy,
-            **kwargs,
-        )
+            type=cls.CTE,
+            identifier=identifier,
+            limit=limit,
+        ).quote(identifier=False)
 
     @classmethod
     def create_from(
         cls: Type[Self],
-        config: HasQuoting,
-        node: ResultNode,
+        quoting: HasQuoting,
+        relation_config: RelationConfig,
         **kwargs: Any,
     ) -> Self:
-        if node.resource_type == NodeType.Source:
-            if not isinstance(node, SourceDefinition):
-                raise DbtInternalError(
-                    "type mismatch, expected SourceDefinition but got {}".format(type(node))
-                )
-            return cls.create_from_source(node, **kwargs)
-        else:
-            # Can't use ManifestNode here because of parameterized generics
-            if not isinstance(node, (ParsedNode)):
-                raise DbtInternalError(
-                    f"type mismatch, expected ManifestNode but got {type(node)}"
-                )
-            return cls.create_from_node(config, node, **kwargs)
+        quote_policy = kwargs.pop("quote_policy", {})
+
+        config_quoting = relation_config.quoting_dict
+        config_quoting.pop("column", None)
+        # precedence: kwargs quoting > relation config quoting > base quoting > default quoting
+        quote_policy = deep_merge(
+            cls.get_default_quote_policy().to_dict(omit_none=True),
+            quoting.quoting,
+            config_quoting,
+            quote_policy,
+        )
+
+        return cls.create(
+            database=relation_config.database,
+            schema=relation_config.schema,
+            identifier=relation_config.identifier,
+            quote_policy=quote_policy,
+            **kwargs,
+        )
 
     @classmethod
     def create(
@@ -394,7 +360,7 @@ class InformationSchema(BaseRelation):
 
     def __post_init__(self):
         if not isinstance(self.information_schema_view, (type(None), str)):
-            raise dbt.exceptions.CompilationError(
+            raise dbt.common.exceptions.CompilationError(
                 "Got an invalid name: {}".format(self.information_schema_view)
             )
 

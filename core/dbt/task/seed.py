@@ -5,20 +5,19 @@ from .printer import (
     print_run_end_messages,
 )
 
-from dbt.contracts.results import RunStatus
-from dbt.exceptions import DbtInternalError
+from dbt.artifacts.results import RunStatus, NodeStatus
+from dbt.common.exceptions import DbtInternalError
 from dbt.graph import ResourceTypeSelector
 from dbt.logger import TextOnly
-from dbt.events.functions import fire_event
+from dbt.common.events.functions import fire_event
+from dbt.common.events.types import Formatting
+from dbt.common.events.base_types import EventLevel
 from dbt.events.types import (
     SeedHeader,
-    Formatting,
     LogSeedResult,
     LogStartLine,
 )
-from dbt.events.base_types import EventLevel
 from dbt.node_types import NodeType
-from dbt.contracts.results import NodeStatus
 
 
 class SeedRunner(ModelRunner):

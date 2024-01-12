@@ -20,10 +20,9 @@ from dbt.contracts.project import (
 )
 from dbt.config.project import PartialProject
 from dbt.contracts.project import PackageConfig
-from dbt.semver import VersionSpecifier
+from dbt.common.semver import VersionSpecifier
 from dbt.version import get_installed_version
-
-from dbt.dataclass_schema import ValidationError
+from dbt.common.dataclass_schema import ValidationError
 from dbt.flags import set_from_args
 from argparse import Namespace
 
@@ -48,8 +47,8 @@ class TestTarballPackage(unittest.TestCase):
     @mock.patch("dbt.config.project.PartialProject.from_project_root")
     @mock.patch("os.listdir")
     @mock.patch("dbt.deps.tarball.get_downloads_path")
-    @mock.patch("dbt.clients.system.untar_package")
-    @mock.patch("dbt.clients.system.download")
+    @mock.patch("dbt.common.clients.system.untar_package")
+    @mock.patch("dbt.common.clients.system.download")
     def test_fetch_metadata(
         self,
         mock_download,
@@ -88,8 +87,8 @@ class TestTarballPackage(unittest.TestCase):
     @mock.patch("dbt.config.project.PartialProject.from_project_root")
     @mock.patch("os.listdir")
     @mock.patch("dbt.deps.tarball.get_downloads_path")
-    @mock.patch("dbt.clients.system.untar_package")
-    @mock.patch("dbt.clients.system.download")
+    @mock.patch("dbt.common.clients.system.untar_package")
+    @mock.patch("dbt.common.clients.system.download")
     def test_fetch_metadata_fails_on_incorrect_tar_folder_structure(
         self,
         mock_download,
@@ -813,7 +812,6 @@ class TestPackageSpec(unittest.TestCase):
         self.assertEqual(resolved[0].version, "0.1.4a1")
 
     def test_validation_error_when_version_is_missing_from_package_config(self):
-
         packages_data = {"packages": [{"package": "dbt-labs-test/b", "version": None}]}
 
         with self.assertRaises(ValidationError) as exc:
@@ -823,7 +821,6 @@ class TestPackageSpec(unittest.TestCase):
         assert msg in str(exc.exception)
 
     def test_validation_error_when_namespace_is_missing_from_package_config(self):
-
         packages_data = {"packages": [{"package": "dbt-labs", "version": "1.0.0"}]}
 
         with self.assertRaises(ValidationError) as exc:

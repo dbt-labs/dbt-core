@@ -8,20 +8,18 @@ from typing import (
     Generic,
     TypeVar,
     Tuple,
-    Dict,
     Any,
+    Dict,
 )
 from typing_extensions import Protocol
 
 import agate
 
-from dbt.contracts.connection import Connection, AdapterRequiredConfig, AdapterResponse
-from dbt.contracts.graph.nodes import ResultNode, ManifestNode
-from dbt.contracts.graph.model_config import BaseConfig
-from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.relation import Policy, HasQuoting
-
-from dbt.graph import Graph
+from dbt.adapters.contracts.connection import Connection, AdapterRequiredConfig, AdapterResponse
+from dbt.adapters.contracts.macros import MacroResolverProtocol
+from dbt.adapters.contracts.relation import Policy, HasQuoting, RelationConfig
+from dbt.common.contracts.config.base import BaseConfig
+from dbt.common.clients.jinja import MacroProtocol
 
 
 @dataclass
@@ -46,20 +44,9 @@ class RelationProtocol(Protocol):
         ...
 
     @classmethod
-    def create_from(cls: Type[Self], config: HasQuoting, node: ResultNode) -> Self:
-        ...
-
-
-class CompilerProtocol(Protocol):
-    def compile(self, manifest: Manifest, write=True) -> Graph:
-        ...
-
-    def compile_node(
-        self,
-        node: ManifestNode,
-        manifest: Manifest,
-        extra_context: Optional[Dict[str, Any]] = None,
-    ) -> ManifestNode:
+    def create_from(
+        cls: Type[Self], quoting: HasQuoting, relation_config: RelationConfig, **kwargs: Any
+    ) -> Self:
         ...
 
 
@@ -67,7 +54,17 @@ AdapterConfig_T = TypeVar("AdapterConfig_T", bound=AdapterConfig)
 ConnectionManager_T = TypeVar("ConnectionManager_T", bound=ConnectionManagerProtocol)
 Relation_T = TypeVar("Relation_T", bound=RelationProtocol)
 Column_T = TypeVar("Column_T", bound=ColumnProtocol)
-Compiler_T = TypeVar("Compiler_T", bound=CompilerProtocol)
+
+
+class MacroContextGeneratorCallable(Protocol):
+    def __call__(
+        self,
+        macro_protocol: MacroProtocol,
+        config: AdapterRequiredConfig,
+        macro_resolver: MacroResolverProtocol,
+        package_name: Optional[str],
+    ) -> Dict[str, Any]:
+        ...
 
 
 # TODO CT-211
@@ -78,7 +75,6 @@ class AdapterProtocol(  # type: ignore[misc]
         ConnectionManager_T,
         Relation_T,
         Column_T,
-        Compiler_T,
     ],
 ):
     # N.B. Technically these are ClassVars, but mypy doesn't support putting type vars in a
@@ -93,11 +89,26 @@ class AdapterProtocol(  # type: ignore[misc]
     def __init__(self, config: AdapterRequiredConfig) -> None:
         ...
 
+    def set_macro_resolver(self, macro_resolver: MacroResolverProtocol) -> None:
+        ...
+
+    def get_macro_resolver(self) -> Optional[MacroResolverProtocol]:
+        ...
+
+    def clear_macro_resolver(self) -> None:
+        ...
+
+    def set_macro_context_generator(
+        self,
+        macro_context_generator: MacroContextGeneratorCallable,
+    ) -> None:
+        ...
+
     @classmethod
     def type(cls) -> str:
         pass
 
-    def set_query_header(self, manifest: Manifest) -> None:
+    def set_query_header(self, query_header_context: Dict[str, Any]) -> None:
         ...
 
     @staticmethod
@@ -152,7 +163,4 @@ class AdapterProtocol(  # type: ignore[misc]
     def execute(
         self, sql: str, auto_begin: bool = False, fetch: bool = False
     ) -> Tuple[AdapterResponse, agate.Table]:
-        ...
-
-    def get_compiler(self) -> Compiler_T:
         ...

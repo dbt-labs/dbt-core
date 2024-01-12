@@ -4,12 +4,10 @@ from contextlib import contextmanager
 from datetime import datetime
 from enum import Enum
 import time
-from itertools import chain
 from typing import (
     Any,
     Callable,
     Dict,
-    Iterable,
     Iterator,
     List,
     Mapping,
@@ -19,45 +17,57 @@ from typing import (
     Type,
     TypedDict,
     Union,
+    FrozenSet,
+    Iterable,
 )
+from multiprocessing.context import SpawnContext
 
 from dbt.adapters.capability import Capability, CapabilityDict
-from dbt.contracts.graph.nodes import ColumnLevelConstraint, ConstraintType, ModelLevelConstraint
+from dbt.common.contracts.constraints import (
+    ColumnLevelConstraint,
+    ConstraintType,
+    ModelLevelConstraint,
+)
+from dbt.adapters.contracts.macros import MacroResolverProtocol
 
 import agate
 import pytz
 
-from dbt.exceptions import (
+from dbt.adapters.exceptions import (
+    SnapshotTargetIncompleteError,
+    SnapshotTargetNotSnapshotTableError,
+    NullRelationDropAttemptedError,
+    NullRelationCacheAttemptedError,
+    RelationReturnedMultipleResultsError,
+    UnexpectedNonTimestampError,
+    RenameToNoneAttemptedError,
+    QuoteConfigTypeError,
+)
+
+from dbt.common.exceptions import (
+    NotImplementedError,
     DbtInternalError,
     DbtRuntimeError,
     DbtValidationError,
+    UnexpectedNullError,
     MacroArgTypeError,
     MacroResultError,
-    NotImplementedError,
-    NullRelationCacheAttemptedError,
-    NullRelationDropAttemptedError,
-    QuoteConfigTypeError,
-    RelationReturnedMultipleResultsError,
-    RenameToNoneAttemptedError,
-    SnapshotTargetIncompleteError,
-    SnapshotTargetNotSnapshotTableError,
-    UnexpectedNonTimestampError,
-    UnexpectedNullError,
 )
 
-from dbt.adapters.protocol import AdapterConfig
-from dbt.clients.agate_helper import (
+from dbt.adapters.protocol import (
+    AdapterConfig,
+    MacroContextGeneratorCallable,
+)
+from dbt.common.clients.agate_helper import (
     empty_table,
     get_column_value_uncased,
     merge_tables,
     table_from_rows,
     Integer,
 )
-from dbt.clients.jinja import MacroGenerator
-from dbt.contracts.graph.manifest import Manifest, MacroManifest
-from dbt.contracts.graph.nodes import ResultNode
-from dbt.events.functions import fire_event, warn_or_error
-from dbt.events.types import (
+from dbt.common.clients.jinja import CallableMacroGenerator
+from dbt.common.events.functions import fire_event, warn_or_error
+from dbt.adapters.events.types import (
     CacheMiss,
     ListRelations,
     CodeExecution,
@@ -66,9 +76,14 @@ from dbt.events.types import (
     ConstraintNotSupported,
     ConstraintNotEnforced,
 )
-from dbt.utils import filter_null_values, executor, cast_to_str, AttrDict
+from dbt.common.utils import filter_null_values, executor, cast_to_str, AttrDict
 
-from dbt.adapters.base.connections import Connection, AdapterResponse, BaseConnectionManager
+from dbt.adapters.contracts.relation import RelationConfig
+from dbt.adapters.base.connections import (
+    Connection,
+    AdapterResponse,
+    BaseConnectionManager,
+)
 from dbt.adapters.base.meta import AdapterMeta, available
 from dbt.adapters.base.relation import (
     ComponentName,
@@ -79,7 +94,8 @@ from dbt.adapters.base.relation import (
 from dbt.adapters.base import Column as BaseColumn
 from dbt.adapters.base import Credentials
 from dbt.adapters.cache import RelationsCache, _make_ref_key_dict
-from dbt import deprecations
+from dbt.adapters.events.types import CollectFreshnessReturnSignature
+
 
 GET_CATALOG_MACRO_NAME = "get_catalog"
 GET_CATALOG_RELATIONS_MACRO_NAME = "get_catalog_relations"
@@ -101,11 +117,13 @@ def _expect_row_value(key: str, row: agate.Row):
     return row[key]
 
 
-def _catalog_filter_schemas(manifest: Manifest) -> Callable[[agate.Row], bool]:
+def _catalog_filter_schemas(
+    used_schemas: FrozenSet[Tuple[str, str]]
+) -> Callable[[agate.Row], bool]:
     """Return a function that takes a row and decides if the row should be
     included in the catalog output.
     """
-    schemas = frozenset((d.lower(), s.lower()) for d, s in manifest.get_used_schemas())
+    schemas = frozenset((d.lower(), s.lower()) for d, s in used_schemas)
 
     def test(row: agate.Row) -> bool:
         table_database = _expect_row_value("table_database", row)
@@ -242,11 +260,31 @@ class BaseAdapter(metaclass=AdapterMeta):
     # implementations to indicate adapter support for optional capabilities.
     _capabilities = CapabilityDict({})
 
-    def __init__(self, config) -> None:
+    def __init__(self, config, mp_context: SpawnContext) -> None:
         self.config = config
-        self.cache = RelationsCache()
-        self.connections = self.ConnectionManager(config)
-        self._macro_manifest_lazy: Optional[MacroManifest] = None
+        self.cache = RelationsCache(log_cache_events=config.log_cache_events)
+        self.connections = self.ConnectionManager(config, mp_context)
+        self._macro_resolver: Optional[MacroResolverProtocol] = None
+        self._macro_context_generator: Optional[MacroContextGeneratorCallable] = None
+
+    ###
+    # Methods to set / access a macro resolver
+    ###
+    def set_macro_resolver(self, macro_resolver: MacroResolverProtocol) -> None:
+        self._macro_resolver = macro_resolver
+
+    def get_macro_resolver(self) -> Optional[MacroResolverProtocol]:
+        return self._macro_resolver
+
+    def clear_macro_resolver(self) -> None:
+        if self._macro_resolver is not None:
+            self._macro_resolver = None
+
+    def set_macro_context_generator(
+        self,
+        macro_context_generator: MacroContextGeneratorCallable,
+    ) -> None:
+        self._macro_context_generator = macro_context_generator
 
     ###
     # Methods that pass through to the connection manager
@@ -276,21 +314,16 @@ class BaseAdapter(metaclass=AdapterMeta):
         return conn.name
 
     @contextmanager
-    def connection_named(self, name: str, node: Optional[ResultNode] = None) -> Iterator[None]:
+    def connection_named(self, name: str, query_header_context: Any = None) -> Iterator[None]:
         try:
             if self.connections.query_header is not None:
-                self.connections.query_header.set(name, node)
+                self.connections.query_header.set(name, query_header_context)
             self.acquire_connection(name)
             yield
         finally:
             self.release_connection()
             if self.connections.query_header is not None:
                 self.connections.query_header.reset()
-
-    @contextmanager
-    def connection_for(self, node: ResultNode) -> Iterator[None]:
-        with self.connection_named(node.unique_id, node):
-            yield
 
     @available.parse(lambda *a, **k: ("", empty_table()))
     def execute(
@@ -364,39 +397,6 @@ class BaseAdapter(metaclass=AdapterMeta):
         """
         return cls.ConnectionManager.TYPE
 
-    @property
-    def _macro_manifest(self) -> MacroManifest:
-        if self._macro_manifest_lazy is None:
-            return self.load_macro_manifest()
-        return self._macro_manifest_lazy
-
-    def check_macro_manifest(self) -> Optional[MacroManifest]:
-        """Return the internal manifest (used for executing macros) if it's
-        been initialized, otherwise return None.
-        """
-        return self._macro_manifest_lazy
-
-    def load_macro_manifest(self, base_macros_only=False) -> MacroManifest:
-        # base_macros_only is for the test framework
-        if self._macro_manifest_lazy is None:
-            # avoid a circular import
-            from dbt.parser.manifest import ManifestLoader
-
-            manifest = ManifestLoader.load_macros(
-                self.config,
-                self.connections.set_query_header,
-                base_macros_only=base_macros_only,
-            )
-            # TODO CT-211
-            self._macro_manifest_lazy = manifest  # type: ignore[assignment]
-        # TODO CT-211
-        return self._macro_manifest_lazy  # type: ignore[return-value]
-
-    def clear_macro_manifest(self):
-        if self._macro_manifest_lazy is not None:
-            self._macro_manifest_lazy = None
-
-    ###
     # Caching methods
     ###
     def _schema_is_cached(self, database: Optional[str], schema: str) -> bool:
@@ -414,18 +414,16 @@ class BaseAdapter(metaclass=AdapterMeta):
         else:
             return True
 
-    def _get_cache_schemas(self, manifest: Manifest) -> Set[BaseRelation]:
+    def _get_cache_schemas(self, relation_configs: Iterable[RelationConfig]) -> Set[BaseRelation]:
         """Get the set of schema relations that the cache logic needs to
-        populate. This means only executable nodes are included.
+        populate.
         """
-        # the cache only cares about executable nodes
         return {
-            self.Relation.create_from(self.config, node).without_identifier()
-            for node in manifest.nodes.values()
-            if (node.is_relational and not node.is_ephemeral_model and not node.is_external_node)
+            self.Relation.create_from(quoting=self.config, relation_config=relation_config)
+            for relation_config in relation_configs
         }
 
-    def _get_catalog_schemas(self, manifest: Manifest) -> SchemaSearchMap:
+    def _get_catalog_schemas(self, relation_configs: Iterable[RelationConfig]) -> SchemaSearchMap:
         """Get a mapping of each node's "information_schema" relations to a
         set of all schemas expected in that information_schema.
 
@@ -435,7 +433,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         lowercase strings.
         """
         info_schema_name_map = SchemaSearchMap()
-        relations = self._get_catalog_relations(manifest)
+        relations = self._get_catalog_relations(relation_configs)
         for relation in relations:
             info_schema_name_map.add(relation)
         # result is a map whose keys are information_schema Relations without
@@ -456,28 +454,25 @@ class BaseAdapter(metaclass=AdapterMeta):
 
         return relations_by_info_schema
 
-    def _get_catalog_relations(self, manifest: Manifest) -> List[BaseRelation]:
-
-        nodes = chain(
-            [
-                node
-                for node in manifest.nodes.values()
-                if (node.is_relational and not node.is_ephemeral_model)
-            ],
-            manifest.sources.values(),
-        )
-
-        relations = [self.Relation.create_from(self.config, n) for n in nodes]
+    def _get_catalog_relations(
+        self, relation_configs: Iterable[RelationConfig]
+    ) -> List[BaseRelation]:
+        relations = [
+            self.Relation.create_from(quoting=self.config, relation_config=relation_config)
+            for relation_config in relation_configs
+        ]
         return relations
 
     def _relations_cache_for_schemas(
-        self, manifest: Manifest, cache_schemas: Optional[Set[BaseRelation]] = None
+        self,
+        relation_configs: Iterable[RelationConfig],
+        cache_schemas: Optional[Set[BaseRelation]] = None,
     ) -> None:
         """Populate the relations cache for the given schemas. Returns an
         iterable of the schemas populated, as strings.
         """
         if not cache_schemas:
-            cache_schemas = self._get_cache_schemas(manifest)
+            cache_schemas = self._get_cache_schemas(relation_configs)
         with executor(self.config) as tpe:
             futures: List[Future[List[BaseRelation]]] = []
             for cache_schema in cache_schemas:
@@ -506,7 +501,7 @@ class BaseAdapter(metaclass=AdapterMeta):
 
     def set_relations_cache(
         self,
-        manifest: Manifest,
+        relation_configs: Iterable[RelationConfig],
         clear: bool = False,
         required_schemas: Optional[Set[BaseRelation]] = None,
     ) -> None:
@@ -516,7 +511,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         with self.cache.lock:
             if clear:
                 self.cache.clear()
-            self._relations_cache_for_schemas(manifest, required_schemas)
+            self._relations_cache_for_schemas(relation_configs, required_schemas)
 
     @available
     def cache_added(self, relation: Optional[BaseRelation]) -> str:
@@ -1051,11 +1046,10 @@ class BaseAdapter(metaclass=AdapterMeta):
     def execute_macro(
         self,
         macro_name: str,
-        manifest: Optional[Manifest] = None,
+        macro_resolver: Optional[MacroResolverProtocol] = None,
         project: Optional[str] = None,
         context_override: Optional[Dict[str, Any]] = None,
         kwargs: Optional[Dict[str, Any]] = None,
-        text_only_columns: Optional[Iterable[str]] = None,
     ) -> AttrDict:
         """Look macro_name up in the manifest and execute its results.
 
@@ -1075,13 +1069,14 @@ class BaseAdapter(metaclass=AdapterMeta):
         if context_override is None:
             context_override = {}
 
-        if manifest is None:
-            # TODO CT-211
-            manifest = self._macro_manifest  # type: ignore[assignment]
-        # TODO CT-211
-        macro = manifest.find_macro_by_name(  # type: ignore[union-attr]
-            macro_name, self.config.project_name, project
-        )
+        resolver = macro_resolver or self._macro_resolver
+        if resolver is None:
+            raise DbtInternalError("Macro resolver was None when calling execute_macro!")
+
+        if self._macro_context_generator is None:
+            raise DbtInternalError("Macro context generator was None when calling execute_macro!")
+
+        macro = resolver.find_macro_by_name(macro_name, self.config.project_name, project)
         if macro is None:
             if project is None:
                 package_name = "any package"
@@ -1093,27 +1088,20 @@ class BaseAdapter(metaclass=AdapterMeta):
                     macro_name, package_name
                 )
             )
-        # This causes a reference cycle, as generate_runtime_macro_context()
-        # ends up calling get_adapter, so the import has to be here.
-        from dbt.context.providers import generate_runtime_macro_context
 
-        macro_context = generate_runtime_macro_context(
-            # TODO CT-211
-            macro=macro,
-            config=self.config,
-            manifest=manifest,  # type: ignore[arg-type]
-            package_name=project,
-        )
+        macro_context = self._macro_context_generator(macro, self.config, resolver, project)
         macro_context.update(context_override)
 
-        macro_function = MacroGenerator(macro, macro_context)
+        macro_function = CallableMacroGenerator(macro, macro_context)
 
         with self.connections.exception_handler(f"macro {macro_name}"):
             result = macro_function(**kwargs)
         return result
 
     @classmethod
-    def _catalog_filter_table(cls, table: agate.Table, manifest: Manifest) -> agate.Table:
+    def _catalog_filter_table(
+        cls, table: agate.Table, used_schemas: FrozenSet[Tuple[str, str]]
+    ) -> agate.Table:
         """Filter the table as appropriate for catalog entries. Subclasses can
         override this to change filtering rules on a per-adapter basis.
         """
@@ -1123,50 +1111,41 @@ class BaseAdapter(metaclass=AdapterMeta):
             table.column_names,
             text_only_columns=["table_database", "table_schema", "table_name"],
         )
-        return table.where(_catalog_filter_schemas(manifest))
+        return table.where(_catalog_filter_schemas(used_schemas))
 
     def _get_one_catalog(
         self,
         information_schema: InformationSchema,
         schemas: Set[str],
-        manifest: Manifest,
+        used_schemas: FrozenSet[Tuple[str, str]],
     ) -> agate.Table:
         kwargs = {"information_schema": information_schema, "schemas": schemas}
-        table = self.execute_macro(
-            GET_CATALOG_MACRO_NAME,
-            kwargs=kwargs,
-            # pass in the full manifest so we get any local project
-            # overrides
-            manifest=manifest,
-        )
+        table = self.execute_macro(GET_CATALOG_MACRO_NAME, kwargs=kwargs)
 
-        results = self._catalog_filter_table(table, manifest)  # type: ignore[arg-type]
+        results = self._catalog_filter_table(table, used_schemas)  # type: ignore[arg-type]
         return results
 
     def _get_one_catalog_by_relations(
         self,
         information_schema: InformationSchema,
         relations: List[BaseRelation],
-        manifest: Manifest,
+        used_schemas: FrozenSet[Tuple[str, str]],
     ) -> agate.Table:
 
         kwargs = {
             "information_schema": information_schema,
             "relations": relations,
         }
-        table = self.execute_macro(
-            GET_CATALOG_RELATIONS_MACRO_NAME,
-            kwargs=kwargs,
-            # pass in the full manifest, so we get any local project
-            # overrides
-            manifest=manifest,
-        )
+        table = self.execute_macro(GET_CATALOG_RELATIONS_MACRO_NAME, kwargs=kwargs)
 
-        results = self._catalog_filter_table(table, manifest)  # type: ignore[arg-type]
+        results = self._catalog_filter_table(table, used_schemas)  # type: ignore[arg-type]
         return results
 
     def get_filtered_catalog(
-        self, manifest: Manifest, relations: Optional[Set[BaseRelation]] = None
+        self,
+        relation_configs: Iterable[RelationConfig],
+        used_schemas: FrozenSet[Tuple[str, str]],
+        relations: Optional[Set[BaseRelation]] = None,
     ):
         catalogs: agate.Table
         if (
@@ -1175,11 +1154,11 @@ class BaseAdapter(metaclass=AdapterMeta):
             or not self.supports(Capability.SchemaMetadataByRelations)
         ):
             # Do it the traditional way. We get the full catalog.
-            catalogs, exceptions = self.get_catalog(manifest)
+            catalogs, exceptions = self.get_catalog(relation_configs, used_schemas)
         else:
             # Do it the new way. We try to save time by selecting information
             # only for the exact set of relations we are interested in.
-            catalogs, exceptions = self.get_catalog_by_relations(manifest, relations)
+            catalogs, exceptions = self.get_catalog_by_relations(used_schemas, relations)
 
         if relations and catalogs:
             relation_map = {
@@ -1207,16 +1186,20 @@ class BaseAdapter(metaclass=AdapterMeta):
     def row_matches_relation(self, row: agate.Row, relations: Set[BaseRelation]):
         pass
 
-    def get_catalog(self, manifest: Manifest) -> Tuple[agate.Table, List[Exception]]:
+    def get_catalog(
+        self,
+        relation_configs: Iterable[RelationConfig],
+        used_schemas: FrozenSet[Tuple[str, str]],
+    ) -> Tuple[agate.Table, List[Exception]]:
         with executor(self.config) as tpe:
             futures: List[Future[agate.Table]] = []
-            schema_map: SchemaSearchMap = self._get_catalog_schemas(manifest)
+            schema_map: SchemaSearchMap = self._get_catalog_schemas(relation_configs)
             for info, schemas in schema_map.items():
                 if len(schemas) == 0:
                     continue
                 name = ".".join([str(info.database), "information_schema"])
                 fut = tpe.submit_connected(
-                    self, name, self._get_one_catalog, info, schemas, manifest
+                    self, name, self._get_one_catalog, info, schemas, used_schemas
                 )
                 futures.append(fut)
 
@@ -1224,7 +1207,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         return catalogs, exceptions
 
     def get_catalog_by_relations(
-        self, manifest: Manifest, relations: Set[BaseRelation]
+        self, used_schemas: FrozenSet[Tuple[str, str]], relations: Set[BaseRelation]
     ) -> Tuple[agate.Table, List[Exception]]:
         with executor(self.config) as tpe:
             futures: List[Future[agate.Table]] = []
@@ -1238,7 +1221,7 @@ class BaseAdapter(metaclass=AdapterMeta):
                     self._get_one_catalog_by_relations,
                     info_schema,
                     relations,
-                    manifest,
+                    used_schemas,
                 )
                 futures.append(fut)
 
@@ -1254,7 +1237,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         source: BaseRelation,
         loaded_at_field: str,
         filter: Optional[str],
-        manifest: Optional[Manifest] = None,
+        macro_resolver: Optional[MacroResolverProtocol] = None,
     ) -> Tuple[Optional[AdapterResponse], FreshnessResponse]:
         """Calculate the freshness of sources in dbt, and return it"""
         kwargs: Dict[str, Any] = {
@@ -1270,9 +1253,11 @@ class BaseAdapter(metaclass=AdapterMeta):
             AttrDict,  # current: contains AdapterResponse + agate.Table
             agate.Table,  # previous: just table
         ]
-        result = self.execute_macro(FRESHNESS_MACRO_NAME, kwargs=kwargs, manifest=manifest)
+        result = self.execute_macro(
+            FRESHNESS_MACRO_NAME, kwargs=kwargs, macro_resolver=macro_resolver
+        )
         if isinstance(result, agate.Table):
-            deprecations.warn("collect-freshness-return-signature")
+            warn_or_error(CollectFreshnessReturnSignature())
             adapter_response = None
             table = result
         else:
@@ -1300,14 +1285,14 @@ class BaseAdapter(metaclass=AdapterMeta):
     def calculate_freshness_from_metadata(
         self,
         source: BaseRelation,
-        manifest: Optional[Manifest] = None,
+        macro_resolver: Optional[MacroResolverProtocol] = None,
     ) -> Tuple[Optional[AdapterResponse], FreshnessResponse]:
         kwargs: Dict[str, Any] = {
             "information_schema": source.information_schema_only(),
             "relations": [source],
         }
         result = self.execute_macro(
-            GET_RELATION_LAST_MODIFIED_MACRO_NAME, kwargs=kwargs, manifest=manifest
+            GET_RELATION_LAST_MODIFIED_MACRO_NAME, kwargs=kwargs, macro_resolver=macro_resolver
         )
         adapter_response, table = result.response, result.table  # type: ignore[attr-defined]
 
@@ -1360,11 +1345,6 @@ class BaseAdapter(metaclass=AdapterMeta):
         The second parameter is the value returned by pre_mdoel_hook.
         """
         pass
-
-    def get_compiler(self):
-        from dbt.compilation import Compiler
-
-        return Compiler(self.config)
 
     # Methods used in adapter tests
     def update_column_sql(
@@ -1485,7 +1465,7 @@ class BaseAdapter(metaclass=AdapterMeta):
 
         strategy = strategy.replace("+", "_")
         macro_name = f"get_incremental_{strategy}_sql"
-        # The model_context should have MacroGenerator callable objects for all macros
+        # The model_context should have callable objects for all macros
         if macro_name not in model_context:
             raise DbtRuntimeError(
                 'dbt could not find an incremental strategy macro with the name "{}" in {}'.format(

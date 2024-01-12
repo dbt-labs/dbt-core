@@ -1,9 +1,8 @@
 import abc
 from functools import wraps
 from typing import Callable, Optional, Any, FrozenSet, Dict, Set
-
-from dbt.deprecations import warn, renamed_method
-
+from dbt.common.events.functions import warn_or_error
+from dbt.adapters.events.types import AdapterDeprecationWarning
 
 Decorator = Callable[[Any], Callable]
 
@@ -62,11 +61,12 @@ class _Available:
 
         def wrapper(func):
             func_name = func.__name__
-            renamed_method(func_name, supported_name)
 
             @wraps(func)
             def inner(*args, **kwargs):
-                warn("adapter:{}".format(func_name))
+                warn_or_error(
+                    AdapterDeprecationWarning(old_name=func_name, new_name=supported_name)
+                )
                 return func(*args, **kwargs)
 
             if parse_replacement:

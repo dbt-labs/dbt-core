@@ -33,6 +33,17 @@ class BaseGenericTests:
             "schema_table.yml": generic_test_table_yml,
         }
 
+    @pytest.fixture(autouse=True)
+    def clean_up(self, project):
+        yield
+        with project.adapter.connection_named("__test"):
+            relation = project.adapter.Relation.create(
+                database=project.database, schema=project.test_schema
+            )
+            project.adapter.drop_schema(relation)
+
+    pass
+
     def test_generic_tests(self, project):
         # seed command
         results = run_dbt(["seed"])

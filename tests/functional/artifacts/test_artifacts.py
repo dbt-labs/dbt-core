@@ -17,7 +17,8 @@ from tests.functional.artifacts.expected_run_results import (
 )
 
 from dbt.contracts.graph.manifest import WritableManifest
-from dbt.contracts.results import RunResultsArtifact, RunStatus
+from dbt.artifacts.results import RunStatus
+from dbt.artifacts.run import RunResultsArtifact
 
 models__schema_yml = """
 version: 2

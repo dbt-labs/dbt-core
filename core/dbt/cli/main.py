@@ -17,26 +17,24 @@ from dbt.cli.exceptions import (
     DbtUsageException,
 )
 from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.results import (
-    CatalogArtifact,
-    RunExecutionResult,
-)
-from dbt.events.base_types import EventMsg
+from dbt.artifacts.catalog import CatalogArtifact
+from dbt.artifacts.run import RunExecutionResult
+from dbt.common.events.base_types import EventMsg
 from dbt.task.build import BuildTask
 from dbt.task.clean import CleanTask
 from dbt.task.clone import CloneTask
 from dbt.task.compile import CompileTask
 from dbt.task.debug import DebugTask
 from dbt.task.deps import DepsTask
+from dbt.task.docs.generate import GenerateTask
+from dbt.task.docs.serve import ServeTask
 from dbt.task.freshness import FreshnessTask
-from dbt.task.generate import GenerateTask
 from dbt.task.init import InitTask
 from dbt.task.list import ListTask
 from dbt.task.retry import RetryTask
 from dbt.task.run import RunTask
 from dbt.task.run_operation import RunOperationTask
 from dbt.task.seed import SeedTask
-from dbt.task.serve import ServeTask
 from dbt.task.show import ShowTask
 from dbt.task.snapshot import SnapshotTask
 from dbt.task.test import TestTask
@@ -436,7 +434,6 @@ def debug(ctx, **kwargs):
 @p.target
 @p.vars
 @p.source
-@p.dry_run
 @p.lock
 @p.upgrade
 @p.add_package
@@ -461,12 +458,6 @@ def deps(ctx, **kwargs):
             raise BadOptionUsage(
                 message=f"Version is required in --add-package when a package when source is {flags.SOURCE}",
                 option_name="--add-package",
-            )
-    else:
-        if flags.DRY_RUN:
-            raise BadOptionUsage(
-                message="Invalid flag `--dry-run` when not using `--add-package`.",
-                option_name="--dry-run",
             )
     task = DepsTask(flags, ctx.obj["project"])
     results = task.run()
@@ -608,12 +599,12 @@ def run(ctx, **kwargs):
 @p.profile
 @p.target
 @p.threads
+@p.full_refresh
 @requires.postflight
 @requires.preflight
 @requires.profile
 @requires.project
 @requires.runtime_config
-@requires.manifest
 def retry(ctx, **kwargs):
     """Retry the nodes that failed in the previous run."""
     task = RetryTask(

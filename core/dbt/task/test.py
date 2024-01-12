@@ -2,8 +2,8 @@ from distutils.util import strtobool
 
 from dataclasses import dataclass
 from dbt.utils import _coerce_decimal
-from dbt.events.format import pluralize
-from dbt.dataclass_schema import dbtClassMixin
+from dbt.common.events.format import pluralize
+from dbt.common.dataclass_schema import dbtClassMixin
 import threading
 from typing import Dict, Any
 
@@ -14,10 +14,12 @@ from dbt.contracts.graph.nodes import (
     TestNode,
 )
 from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.results import TestStatus, PrimitiveDict, RunResult
+from dbt.artifacts.results import TestStatus
+from dbt.artifacts.run import RunResult
+from dbt.artifacts.catalog import PrimitiveDict
 from dbt.context.providers import generate_runtime_model_context
 from dbt.clients.jinja import MacroGenerator
-from dbt.events.functions import fire_event
+from dbt.common.events.functions import fire_event
 from dbt.events.types import (
     LogTestResult,
     LogStartLine,
@@ -25,8 +27,8 @@ from dbt.events.types import (
 from dbt.exceptions import (
     DbtInternalError,
     BooleanError,
-    MissingMaterializationError,
 )
+from ..adapters.exceptions import MissingMaterializationError
 from dbt.graph import (
     ResourceTypeSelector,
 )

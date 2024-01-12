@@ -1,13 +1,13 @@
 import agate
 from typing import Any, Optional, Tuple, Type, List
 
-from dbt.contracts.connection import Connection, AdapterResponse
-from dbt.exceptions import RelationTypeNullError
+from dbt.adapters.contracts.connection import Connection, AdapterResponse
+from dbt.adapters.events.types import ColTypeChange, SchemaCreation, SchemaDrop
+from dbt.adapters.exceptions import RelationTypeNullError
 from dbt.adapters.base import BaseAdapter, available
 from dbt.adapters.cache import _make_ref_key_dict
 from dbt.adapters.sql import SQLConnectionManager
-from dbt.events.functions import fire_event
-from dbt.events.types import ColTypeChange, SchemaCreation, SchemaDrop
+from dbt.common.events.functions import fire_event
 
 
 from dbt.adapters.base.relation import BaseRelation

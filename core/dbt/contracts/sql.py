@@ -3,17 +3,12 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional, List, Any, Dict, Sequence
 
-from dbt.dataclass_schema import dbtClassMixin
+from dbt.common.dataclass_schema import dbtClassMixin
 
 from dbt.contracts.graph.nodes import ResultNode
-from dbt.contracts.results import (
-    RunResult,
-    RunResultsArtifact,
-    TimingInfo,
-    ExecutionResult,
-    RunExecutionResult,
-)
-from dbt.contracts.util import VersionedSchema, schema_version
+from dbt.artifacts.results import TimingInfo, ExecutionResult
+from dbt.artifacts.run import RunResult, RunResultsArtifact, RunExecutionResult
+from dbt.artifacts.base import VersionedSchema, schema_version
 from dbt.logger import LogMessage
 
 

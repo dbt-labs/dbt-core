@@ -77,11 +77,16 @@ class TestProjectDbtCloudConfig:
         conf = yaml.safe_load(
             Path(os.path.join(project.project_root, "dbt_project.yml")).read_text()
         )
-        assert conf == {"name": "test", "profile": "test"}
+        assert conf == {
+            "name": "test",
+            "profile": "test",
+            "flags": {"send_anonymous_usage_stats": False},
+        }
 
         config = {
             "name": "test",
             "profile": "test",
+            "flags": {"send_anonymous_usage_stats": False},
             "dbt-cloud": {
                 "account_id": "123",
                 "application": "test",

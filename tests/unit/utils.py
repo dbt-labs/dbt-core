@@ -10,7 +10,7 @@ from unittest import TestCase
 
 import agate
 import pytest
-from dbt.dataclass_schema import ValidationError
+from dbt.common.dataclass_schema import ValidationError
 from dbt.config.project import PartialProject
 
 
@@ -253,7 +253,7 @@ def generate_name_macros(package):
 
 class TestAdapterConversions(TestCase):
     def _get_tester_for(self, column_type):
-        from dbt.clients import agate_helper
+        from dbt.common.clients import agate_helper
 
         if column_type is agate.TimeDelta:  # dbt never makes this!
             return agate.TimeDelta()

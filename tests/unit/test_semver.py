@@ -2,8 +2,8 @@ import unittest
 import itertools
 
 from typing import List
-from dbt.exceptions import VersionsNotCompatibleError
-from dbt.semver import (
+from dbt.common.exceptions import VersionsNotCompatibleError
+from dbt.common.semver import (
     VersionSpecifier,
     UnboundedVersionSpecifier,
     VersionRange,
