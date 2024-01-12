@@ -64,7 +64,7 @@ class UnitTestManifestLoader:
         # already been done, we don't have to care about fields that are necessary
         # for selection.
         # Note: no depends_on, that's added later using input nodes
-        name = f"{test_case.model}__{test_case.name}"
+        name = test_case.name
         unit_test_node = UnitTestNode(
             name=name,
             resource_type=NodeType.Unit,
@@ -134,7 +134,7 @@ class UnitTestManifestLoader:
                 NodeType.Seed,
                 NodeType.Snapshot,
             ):
-                input_name = f"{unit_test_node.name}__{original_input_node.name}"
+                input_name = original_input_node.name
                 input_node = ModelNode(
                     **common_fields,
                     unique_id=f"model.{test_case.package_name}.{input_name}",
@@ -145,7 +145,7 @@ class UnitTestManifestLoader:
                 # We are reusing the database/schema/identifier from the original source,
                 # but that shouldn't matter since this acts as an ephemeral model which just
                 # wraps a CTE around the unit test node.
-                input_name = f"{unit_test_node.name}__{original_input_node.search_name}__{original_input_node.name}"
+                input_name = original_input_node.name
                 input_node = UnitTestSourceDefinition(
                     **common_fields,
                     unique_id=f"model.{test_case.package_name}.{input_name}",
