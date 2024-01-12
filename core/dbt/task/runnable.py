@@ -139,7 +139,8 @@ class GraphRunnableTask(ConfiguredTask):
             selected=selected_uids,
             favor_state=bool(self.args.favor_state),
         )
-        # TODO: is it wrong to write the manifest here? I think it's right...
+        # We're rewriting the manifest because it's been mutated during merge_from_artifact.
+        # This is to reflect which nodes had been deferred to (= replaced with) their counterparts.
         write_manifest(self.manifest, self.config.project_target_path)
 
     def get_graph_queue(self) -> GraphQueue:

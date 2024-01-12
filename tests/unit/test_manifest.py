@@ -1019,7 +1019,7 @@ class MixedManifestTest(unittest.TestCase):
                 self.assertEqual(frozenset(node), REQUIRED_PARSED_NODE_KEYS)
         self.assertEqual(compiled_count, 2)
 
-    def test_add_from_artifact(self):
+    def test_merge_from_artifact(self):
         original_nodes = deepcopy(self.nested_nodes)
         other_nodes = deepcopy(self.nested_nodes)
 
