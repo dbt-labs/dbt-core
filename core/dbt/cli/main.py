@@ -130,6 +130,7 @@ def global_flags(func):
     @p.enable_legacy_logger
     @p.fail_fast
     @p.favor_state
+    @p.indirect_selection
     @p.log_cache_events
     @p.log_file_max_bytes
     @p.log_format
@@ -188,7 +189,6 @@ def cli(ctx, **kwargs):
 @p.exclude
 @p.full_refresh
 @p.include_saved_query
-@p.indirect_selection
 @p.profile
 @p.profiles_dir
 @p.project_dir
@@ -324,7 +324,6 @@ def docs_serve(ctx, **kwargs):
 @p.exclude
 @p.full_refresh
 @p.show_output_format
-@p.indirect_selection
 @p.introspect
 @p.profile
 @p.profiles_dir
@@ -366,7 +365,6 @@ def compile(ctx, **kwargs):
 @p.full_refresh
 @p.show_output_format
 @p.show_limit
-@p.indirect_selection
 @p.introspect
 @p.profile
 @p.profiles_dir
@@ -493,7 +491,6 @@ def init(ctx, **kwargs):
 @click.pass_context
 @global_flags
 @p.exclude
-@p.indirect_selection
 @p.models
 @p.output
 @p.output_keys
@@ -805,7 +802,6 @@ cli.commands["source"].add_command(snapshot_freshness, "snapshot-freshness")  # 
 @click.pass_context
 @global_flags
 @p.exclude
-@p.indirect_selection
 @p.profile
 @p.profiles_dir
 @p.project_dir
