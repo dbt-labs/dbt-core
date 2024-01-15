@@ -235,7 +235,7 @@ jobs:
           git push origin ${{ matrix.target-branch }}
           git branch --set-upstream-to=origin/${{ matrix.target-branch }} ${{ matrix.target-branch }}
 
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: baseline
           path: performance/baselines/${{ needs.set-variables.outputs.release_id }}
