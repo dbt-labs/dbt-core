@@ -85,6 +85,8 @@ from .model_config import (
     SavedQueryConfig,
 )
 
+from dbt.artifacts.nodes import BaseArtifactNode, Documentation as DocumentationArtifact
+
 
 # =====================================================================
 # This contains the classes for all of the nodes and node-like objects
@@ -110,15 +112,8 @@ from .model_config import (
 
 
 @dataclass
-class BaseNode(dbtClassMixin, Replaceable):
+class BaseNode(BaseArtifactNode):
     """All nodes or node-like objects in this file should have this as a base class"""
-
-    name: str
-    resource_type: NodeType
-    package_name: str
-    path: str
-    original_file_path: str
-    unique_id: str
 
     @property
     def search_name(self):
@@ -1094,10 +1089,7 @@ class Macro(BaseNode):
 
 
 @dataclass
-class Documentation(BaseNode):
-    block_contents: str
-    resource_type: Literal[NodeType.Documentation]
-
+class Documentation(DocumentationArtifact, BaseNode):
     @property
     def search_name(self):
         return self.name
