@@ -83,15 +83,21 @@ class UnitTestResultData(dbtClassMixin):
 class TestRunner(CompileRunner):
     _ANSI_ESCAPE = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
 
+    def describe_node_name(self):
+        if self.node.resource_type == NodeType.Unit:
+            return f"{self.node.model}::{self.node.name}"
+        else:
+            return self.node.name
+
     def describe_node(self):
-        return f"{self.node.resource_type} {self.node.name}"
+        return f"{self.node.resource_type} {self.describe_node_name()}"
 
     def print_result_line(self, result):
         model = result.node
 
         fire_event(
             LogTestResult(
-                name=model.name,
+                name=self.describe_node_name(),
                 status=str(result.status),
                 index=self.node_index,
                 num_models=self.num_nodes,
