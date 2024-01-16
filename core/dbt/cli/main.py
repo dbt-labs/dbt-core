@@ -19,7 +19,7 @@ from dbt.cli.exceptions import (
 from dbt.contracts.graph.manifest import Manifest
 from dbt.artifacts.catalog import CatalogArtifact
 from dbt.artifacts.run import RunExecutionResult
-from dbt.common.events.base_types import EventMsg
+from dbt_common.events.base_types import EventMsg
 from dbt.task.build import BuildTask
 from dbt.task.clean import CleanTask
 from dbt.task.clone import CloneTask

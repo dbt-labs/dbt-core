@@ -2,11 +2,13 @@ from distutils.util import strtobool
 
 import agate
 import daff
+import io
+import json
 import re
 from dataclasses import dataclass
 from dbt.utils import _coerce_decimal
-from dbt.common.events.format import pluralize
-from dbt.common.dataclass_schema import dbtClassMixin
+from dbt_common.events.format import pluralize
+from dbt_common.dataclass_schema import dbtClassMixin
 import threading
 from typing import Dict, Any, Optional, Union, List
 
@@ -20,8 +22,7 @@ from dbt.artifacts.run import RunResult
 from dbt.artifacts.catalog import PrimitiveDict
 from dbt.context.providers import generate_runtime_model_context
 from dbt.clients.jinja import MacroGenerator
-from dbt.common.clients.agate_helper import list_rows_from_table, json_rows_from_table
-from dbt.common.events.functions import fire_event
+from dbt_common.events.functions import fire_event
 from dbt.events.types import (
     LogTestResult,
     LogStartLine,
@@ -37,7 +38,7 @@ from dbt.graph import (
 from dbt.node_types import NodeType
 from dbt.parser.unit_tests import UnitTestManifestLoader
 from dbt.flags import get_flags
-from dbt.common.ui import green, red
+from dbt_common.ui import green, red
 
 
 @dataclass
@@ -374,3 +375,22 @@ class TestTask(RunTask):
 
     def get_runner_type(self, _):
         return TestRunner
+
+
+# This was originally in agate_helper, but that was moved out into dbt_common
+def json_rows_from_table(table: agate.Table) -> List[Dict[str, Any]]:
+    "Convert a table to a list of row dict objects"
+    output = io.StringIO()
+    table.to_json(path=output)  # type: ignore
+
+    return json.loads(output.getvalue())
+
+
+# This was originally in agate_helper, but that was moved out into dbt_common
+def list_rows_from_table(table: agate.Table) -> List[Any]:
+    "Convert a table to a list of lists, where the first element represents the header"
+    rows = [[col.name for col in table.columns]]
+    for row in table.rows:
+        rows.append(list(row.values()))
+
+    return rows

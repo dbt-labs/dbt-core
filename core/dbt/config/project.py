@@ -22,7 +22,7 @@ from dbt.constants import (
     PACKAGE_LOCK_HASH_KEY,
     DBT_PROJECT_FILE_NAME,
 )
-from dbt.common.clients.system import path_exists, load_file_contents
+from dbt_common.clients.system import path_exists, load_file_contents
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.adapters.contracts.connection import QueryComment
 from dbt.exceptions import (
@@ -31,10 +31,10 @@ from dbt.exceptions import (
     ProjectContractError,
     DbtRuntimeError,
 )
-from dbt.common.exceptions import SemverError
+from dbt_common.exceptions import SemverError
 from dbt.graph import SelectionSpec
-from dbt.common.helper_types import NoValue
-from dbt.common.semver import VersionSpecifier, versions_compatible
+from dbt_common.helper_types import NoValue
+from dbt_common.semver import VersionSpecifier, versions_compatible
 from dbt.version import get_installed_version
 from dbt.utils import MultiDict, md5, coerce_dict_str
 from dbt.node_types import NodeType
@@ -45,7 +45,7 @@ from dbt.contracts.project import (
     ProjectFlags,
 )
 from dbt.contracts.project import PackageConfig, ProjectPackageMetadata
-from dbt.common.dataclass_schema import ValidationError
+from dbt_common.dataclass_schema import ValidationError
 from .renderer import DbtProjectYamlRenderer, PackageRenderer
 from .selectors import (
     selector_config_from_data,

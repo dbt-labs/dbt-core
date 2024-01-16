@@ -2,9 +2,9 @@ from typing import Dict, Union, Optional, NamedTuple, Any, List
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from dbt.common.dataclass_schema import dbtClassMixin
-from dbt.common.utils.formatting import lowercase
-from dbt.common.contracts.util import Replaceable
+from dbt_common.dataclass_schema import dbtClassMixin
+from dbt_common.utils.formatting import lowercase
+from dbt_common.contracts.util import Replaceable
 from dbt.artifacts.base import ArtifactMixin, BaseArtifactMetadata, schema_version
 
 Primitive = Union[bool, str, float, None]

@@ -2,13 +2,13 @@ from pathlib import Path
 from shutil import rmtree
 
 from dbt import deprecations
-from dbt.common.events.functions import fire_event
+from dbt_common.events.functions import fire_event
 from dbt.events.types import (
     CheckCleanPath,
     ConfirmCleanPath,
     FinishedCleanPaths,
 )
-from dbt.common.exceptions import DbtRuntimeError
+from dbt_common.exceptions import DbtRuntimeError
 from dbt.task.base import (
     BaseTask,
     move_to_nearest_project_dir,

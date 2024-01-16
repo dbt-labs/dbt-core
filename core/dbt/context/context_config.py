@@ -6,8 +6,8 @@ from typing import List, Iterator, Dict, Any, TypeVar, Generic, Optional
 from dbt.adapters.factory import get_config_class_by_name
 from dbt.config import RuntimeConfig, Project, IsFQNResource
 from dbt.contracts.graph.model_config import get_config_for
-from dbt.common.contracts.config.base import BaseConfig, _listify
-from dbt.common.exceptions import DbtInternalError
+from dbt_common.contracts.config.base import BaseConfig, _listify
+from dbt_common.exceptions import DbtInternalError
 from dbt.node_types import NodeType
 from dbt.utils import fqn_search
 

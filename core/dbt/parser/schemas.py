@@ -6,8 +6,8 @@ from typing import Any, Callable, Dict, Generic, Iterable, List, Optional, Type,
 from dataclasses import dataclass, field
 
 from dbt import deprecations
-from dbt.common.contracts.constraints import ConstraintType, ModelLevelConstraint
-from dbt.common.dataclass_schema import ValidationError, dbtClassMixin
+from dbt_common.contracts.constraints import ConstraintType, ModelLevelConstraint
+from dbt_common.dataclass_schema import ValidationError, dbtClassMixin
 
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.parser.schema_renderer import SchemaYamlRenderer
@@ -43,8 +43,8 @@ from dbt.exceptions import (
     YamlParseListError,
     InvalidAccessTypeError,
 )
-from dbt.common.exceptions import DbtValidationError
-from dbt.common.events.functions import warn_or_error
+from dbt_common.exceptions import DbtValidationError
+from dbt_common.events.functions import warn_or_error
 from dbt.events.types import (
     MacroNotFoundForPatch,
     NoNodeForYamlKey,
@@ -64,7 +64,7 @@ from dbt.parser.common import (
     trimmed,
 )
 from dbt.utils import coerce_dict_str
-from dbt.common.utils import deep_merge
+from dbt_common.utils import deep_merge
 
 
 schema_file_keys = (

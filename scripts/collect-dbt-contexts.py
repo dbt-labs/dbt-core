@@ -4,7 +4,7 @@ import inspect
 import json
 from dataclasses import dataclass
 from typing import List, Optional, Iterable, Union, Dict, Any
-from dbt.common.dataclass_schema import dbtClassMixin
+from dbt_common.dataclass_schema import dbtClassMixin
 
 
 from dbt.context.base import BaseContext

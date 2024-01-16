@@ -21,7 +21,8 @@ from dbt.adapters.postgres import PostgresCredentials
 from dbt.adapters.contracts.connection import QueryComment, DEFAULT_QUERY_COMMENT
 from dbt.contracts.project import PackageConfig, LocalPackage, GitPackage
 from dbt.node_types import NodeType
-from dbt.common.semver import VersionSpecifier
+from dbt_common.semver import VersionSpecifier
+import dbt_common.exceptions
 from dbt.task.base import ConfiguredTask
 
 from dbt.flags import set_from_args
@@ -955,7 +956,7 @@ class TestConfiguredTask(BaseConfigTest):
 
     def test_configured_task_dir_change_with_bad_path(self):
         self.args.project_dir = "bad_path"
-        with self.assertRaises(dbt.common.exceptions.DbtRuntimeError):
+        with self.assertRaises(dbt_common.exceptions.DbtRuntimeError):
             InheritsFromConfiguredTask.from_args(self.args)
 
 

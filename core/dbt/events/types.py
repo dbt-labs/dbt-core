@@ -1,9 +1,9 @@
 import json
 
 from dbt.constants import MAXIMUM_SEED_SIZE_NAME, PIN_PACKAGE_URL
-from dbt.common.ui import warning_tag, line_wrap_message, green, yellow, red
-from dbt.common.events.base_types import EventLevel
-from dbt.common.events.format import (
+from dbt_common.ui import warning_tag, line_wrap_message, green, yellow, red
+from dbt_common.events.base_types import EventLevel
+from dbt_common.events.format import (
     format_fancy_output_line,
     timestamp_to_datetime_string,
     pluralize,
