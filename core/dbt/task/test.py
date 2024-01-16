@@ -27,11 +27,9 @@ from dbt.events.types import (
     LogTestResult,
     LogStartLine,
 )
-from dbt.exceptions import (
-    DbtInternalError,
-    BooleanError,
-)
-from ..adapters.exceptions import MissingMaterializationError
+from dbt.exceptions import DbtInternalError, BooleanError
+from dbt.common.exceptions import DbtBaseException, DbtRuntimeError
+from dbt.adapters.exceptions import MissingMaterializationError
 from dbt.graph import (
     ResourceTypeSelector,
 )
@@ -213,7 +211,13 @@ class TestRunner(CompileRunner):
         # generate materialization macro
         macro_func = MacroGenerator(materialization_macro, context)
         # execute materialization macro
-        macro_func()
+        try:
+            macro_func()
+        except DbtBaseException as e:
+            raise DbtRuntimeError(
+                f"During unit test execution of {self.describe_node_name()}, dbt could not build the 'actual' result for comparison against 'expected' given the unit test definition:\n {e}"
+            )
+
         # load results from context
         # could eventually be returned directly by materialization
         result = context["load_result"]("main")

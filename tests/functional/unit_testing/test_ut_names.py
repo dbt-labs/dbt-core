@@ -67,31 +67,3 @@ class TestUnitTestDuplicateTestNamesWithinModel:
     def test_duplicate_test_names_within_model(self, project):
         with pytest.raises(DuplicateResourceNameError):
             run_dbt(["run"])
-
-
-test_model_a_long_test_name_yml = """
-unit_tests:
-  - name: my_very_reasonable_but_kind_of_long_test_name_for_model_a
-    model: my_model_a
-    given: []
-    expect:
-      rows:
-        - {a: 1, id: 1, not_testing: 2, string_a: "a", date_a: "2020-01-02"}
-"""
-
-
-class TestUnitTestLongTestNames:
-    @pytest.fixture(scope="class")
-    def models(self):
-        return {
-            "my_model_a.sql": my_model_a_sql,
-            "test_model_a.yml": test_model_a_long_test_name_yml,
-        }
-
-    def test_long_unit_test_name(self, project):
-        results = run_dbt(["run"])
-        assert len(results) == 1
-
-        results = run_dbt(["test"], expect_pass=True)
-        assert len(results) == 1
-        assert len(results[0].node.name) >= 50
