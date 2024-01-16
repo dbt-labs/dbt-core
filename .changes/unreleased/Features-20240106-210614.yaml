@@ -1,0 +1,6 @@
+kind: Features
+body: Add --columns and --truncate flags for dbt show
+time: 2024-01-06T21:06:14.998544+01:00
+custom:
+  Author: touchmarine
+  Issue: "9345"

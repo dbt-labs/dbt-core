@@ -85,13 +85,24 @@ class ShowTask(CompileTask):
 
         for result in matched_results:
             table = result.agate_table
+            if self.args.columns:
+                table = table.select(self.args.columns)
 
             # Hack to get Agate table output as string
             output = io.StringIO()
             if self.args.output == "json":
                 table.to_json(path=output)
             else:
-                table.print_table(output=output, max_rows=None)
+                if self.args.truncate:
+                    table.print_table(output=output, max_rows=None)
+                else:
+                    table.print_table(
+                        output=output,
+                        max_rows=None,
+                        max_columns=None,
+                        max_column_width=None,
+                        max_precision=None,
+                    )
 
             node_name = result.node.name
 

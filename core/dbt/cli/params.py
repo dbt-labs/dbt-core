@@ -39,6 +39,16 @@ introspect = click.option(
     default=True,
 )
 
+columns = click.option(
+    "--columns",
+    envvar=None,
+    help="Space-delimited list of columns returned by dbt show",
+    type=tuple,
+    cls=MultiOption,
+    multiple=True,
+    default=[],
+)
+
 compile_docs = click.option(
     "--compile/--no-compile",
     envvar=None,
@@ -596,6 +606,16 @@ threads = click.option(
     help="Specify number of threads to use while executing models. Overrides settings in profiles.yml.",
     default=None,
     type=click.INT,
+)
+
+truncate = click.option(
+    "--truncate/--no-truncate",
+    envvar=None,
+    help=(
+        "Truncate the columns returned by dbt show "
+        "(number of columns, width of columns, and max precision of numbers)"
+    ),
+    default=True,
 )
 
 use_experimental_parser = click.option(
