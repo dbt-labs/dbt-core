@@ -1,6 +1,6 @@
 import dbt.tracking
 from dbt.version import installed as installed_version
-from dbt.adapters.factory import adapter_management
+from dbt.adapters.factory import adapter_management, register_adapter
 from dbt.flags import set_flags, get_flag_dict
 from dbt.cli.exceptions import (
     ExceptionExit,
@@ -21,7 +21,7 @@ from dbt.events.types import (
 from dbt.events.helpers import get_json_string_utcnow
 from dbt.events.types import MainEncounteredError, MainStackTrace
 from dbt.exceptions import Exception as DbtException, DbtProjectError, FailFastError
-from dbt.parser.manifest import parse_manifest, register_adapter
+from dbt.parser.manifest import parse_manifest
 from dbt.profiler import profiler
 from dbt.tracking import active_user, initialize_from_flags, track_run
 from dbt.utils import cast_dict_to_dict_of_strings
