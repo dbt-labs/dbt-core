@@ -71,7 +71,7 @@ setup(
         "dbt-extractor~=0.5.0",
         "minimal-snowplow-tracker~=0.0.2",
         "dbt-semantic-interfaces~=0.5.0a2",
-        "dbt-common @ git+https://github.com/dbt-labs/dbt-common.git#egg=dbt",
+        "dbt-common~=0.0.1",
         # ----
         # Expect compatibility with all new versions of these packages, so lower bounds only.
         "packaging>20.9",
