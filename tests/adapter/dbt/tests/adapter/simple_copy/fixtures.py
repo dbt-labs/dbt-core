@@ -4,7 +4,7 @@ models:
 - name: disabled
   columns:
   - name: id
-    tests:
+    data_tests:
     - unique
 """
 

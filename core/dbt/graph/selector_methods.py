@@ -4,7 +4,7 @@ from itertools import chain
 from pathlib import Path
 from typing import Set, List, Dict, Iterator, Tuple, Any, Union, Type, Optional, Callable
 
-from dbt.common.dataclass_schema import StrEnum
+from dbt_common.dataclass_schema import StrEnum
 
 from .graph import UniqueId
 
@@ -18,17 +18,18 @@ from dbt.contracts.graph.nodes import (
     ResultNode,
     ManifestNode,
     ModelNode,
+    UnitTestDefinition,
     SavedQuery,
     SemanticModel,
 )
 from dbt.contracts.graph.unparsed import UnparsedVersion
 from dbt.contracts.state import PreviousState
-from dbt.common.exceptions import (
+from dbt_common.exceptions import (
     DbtInternalError,
     DbtRuntimeError,
 )
 from dbt.node_types import NodeType
-from dbt.common.events.contextvars import get_project_root
+from dbt_common.events.contextvars import get_project_root
 
 
 SELECTOR_GLOB = "*"
@@ -101,7 +102,9 @@ def is_selected_node(fqn: List[str], node_selector: str, is_versioned: bool) -> 
     return True
 
 
-SelectorTarget = Union[SourceDefinition, ManifestNode, Exposure, Metric]
+SelectorTarget = Union[
+    SourceDefinition, ManifestNode, Exposure, Metric, SemanticModel, UnitTestDefinition
+]
 
 
 class SelectorMethod(metaclass=abc.ABCMeta):
@@ -148,6 +151,21 @@ class SelectorMethod(metaclass=abc.ABCMeta):
                 continue
             yield unique_id, metric
 
+    def unit_tests(
+        self, included_nodes: Set[UniqueId]
+    ) -> Iterator[Tuple[UniqueId, UnitTestDefinition]]:
+        for unique_id, unit_test in self.manifest.unit_tests.items():
+            unique_id = UniqueId(unique_id)
+            if unique_id not in included_nodes:
+                continue
+            yield unique_id, unit_test
+
+    def parsed_and_unit_nodes(self, included_nodes: Set[UniqueId]):
+        yield from chain(
+            self.parsed_nodes(included_nodes),
+            self.unit_tests(included_nodes),
+        )
+
     def semantic_model_nodes(
         self, included_nodes: Set[UniqueId]
     ) -> Iterator[Tuple[UniqueId, SemanticModel]]:
@@ -176,6 +194,7 @@ class SelectorMethod(metaclass=abc.ABCMeta):
             self.source_nodes(included_nodes),
             self.exposure_nodes(included_nodes),
             self.metric_nodes(included_nodes),
+            self.unit_tests(included_nodes),
             self.semantic_model_nodes(included_nodes),
         )
 
@@ -192,6 +211,7 @@ class SelectorMethod(metaclass=abc.ABCMeta):
             self.parsed_nodes(included_nodes),
             self.exposure_nodes(included_nodes),
             self.metric_nodes(included_nodes),
+            self.unit_tests(included_nodes),
             self.semantic_model_nodes(included_nodes),
             self.saved_query_nodes(included_nodes),
         )
@@ -519,30 +539,37 @@ class TestNameSelectorMethod(SelectorMethod):
     __test__ = False
 
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
-        for node, real_node in self.parsed_nodes(included_nodes):
-            if real_node.resource_type == NodeType.Test and hasattr(real_node, "test_metadata"):
-                if fnmatch(real_node.test_metadata.name, selector):  # type: ignore[union-attr]
-                    yield node
+        for unique_id, node in self.parsed_and_unit_nodes(included_nodes):
+            if node.resource_type == NodeType.Test and hasattr(node, "test_metadata"):
+                if fnmatch(node.test_metadata.name, selector):  # type: ignore[union-attr]
+                    yield unique_id
+            elif node.resource_type == NodeType.Unit:
+                if fnmatch(node.name, selector):
+                    yield unique_id
 
 
 class TestTypeSelectorMethod(SelectorMethod):
     __test__ = False
 
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
-        search_type: Type
+        search_types: List[Any]
         # continue supporting 'schema' + 'data' for backwards compatibility
         if selector in ("generic", "schema"):
-            search_type = GenericTestNode
-        elif selector in ("singular", "data"):
-            search_type = SingularTestNode
+            search_types = [GenericTestNode]
+        elif selector in ("data"):
+            search_types = [GenericTestNode, SingularTestNode]
+        elif selector in ("singular"):
+            search_types = [SingularTestNode]
+        elif selector in ("unit"):
+            search_types = [UnitTestDefinition]
         else:
             raise DbtRuntimeError(
-                f'Invalid test type selector {selector}: expected "generic" or ' '"singular"'
+                f'Invalid test type selector {selector}: expected "generic", "singular", "unit", or "data"'
             )
 
-        for node, real_node in self.parsed_nodes(included_nodes):
-            if isinstance(real_node, search_type):
-                yield node
+        for unique_id, node in self.parsed_and_unit_nodes(included_nodes):
+            if isinstance(node, tuple(search_types)):
+                yield unique_id
 
 
 class StateSelectorMethod(SelectorMethod):
@@ -618,7 +645,9 @@ class StateSelectorMethod(SelectorMethod):
     def check_modified_content(
         self, old: Optional[SelectorTarget], new: SelectorTarget, adapter_type: str
     ) -> bool:
-        if isinstance(new, (SourceDefinition, Exposure, Metric, SemanticModel)):
+        if isinstance(
+            new, (SourceDefinition, Exposure, Metric, SemanticModel, UnitTestDefinition)
+        ):
             # these all overwrite `same_contents`
             different_contents = not new.same_contents(old)  # type: ignore
         else:
@@ -698,17 +727,21 @@ class StateSelectorMethod(SelectorMethod):
 
         manifest: WritableManifest = self.previous_state.manifest
 
-        for node, real_node in self.all_nodes(included_nodes):
+        for unique_id, node in self.all_nodes(included_nodes):
             previous_node: Optional[SelectorTarget] = None
 
-            if node in manifest.nodes:
-                previous_node = manifest.nodes[node]
-            elif node in manifest.sources:
-                previous_node = manifest.sources[node]
-            elif node in manifest.exposures:
-                previous_node = manifest.exposures[node]
-            elif node in manifest.metrics:
-                previous_node = manifest.metrics[node]
+            if unique_id in manifest.nodes:
+                previous_node = manifest.nodes[unique_id]
+            elif unique_id in manifest.sources:
+                previous_node = manifest.sources[unique_id]
+            elif unique_id in manifest.exposures:
+                previous_node = manifest.exposures[unique_id]
+            elif unique_id in manifest.metrics:
+                previous_node = manifest.metrics[unique_id]
+            elif unique_id in manifest.semantic_models:
+                previous_node = manifest.semantic_models[unique_id]
+            elif unique_id in manifest.unit_tests:
+                previous_node = manifest.unit_tests[unique_id]
 
             keyword_args = {}
             if checker.__name__ in [
@@ -718,8 +751,8 @@ class StateSelectorMethod(SelectorMethod):
             ]:
                 keyword_args["adapter_type"] = adapter_type  # type: ignore
 
-            if checker(previous_node, real_node, **keyword_args):  # type: ignore
-                yield node
+            if checker(previous_node, node, **keyword_args):  # type: ignore
+                yield unique_id
 
 
 class ResultSelectorMethod(SelectorMethod):

@@ -22,8 +22,8 @@ from dbt.flags import get_flags
 from dbt.config.project import load_raw_project
 from dbt.contracts.graph.manifest import ManifestMetadata
 from dbt.contracts.project import Configuration
-from dbt.common.dataclass_schema import ValidationError
-from dbt.common.events.functions import warn_or_error
+from dbt_common.dataclass_schema import ValidationError
+from dbt_common.events.functions import warn_or_error
 from dbt.events.types import UnusedResourceConfigPath
 from dbt.exceptions import (
     ConfigContractBrokenError,
@@ -32,7 +32,7 @@ from dbt.exceptions import (
     DbtRuntimeError,
     UninstalledPackagesFoundError,
 )
-from dbt.common.helper_types import DictDefaultEmptyStr, FQNPath, PathSet
+from dbt_common.helper_types import DictDefaultEmptyStr, FQNPath, PathSet
 from .profile import Profile
 from .project import Project
 from .renderer import DbtProjectYamlRenderer, ProfileRenderer
@@ -166,7 +166,8 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             selectors=project.selectors,
             query_comment=project.query_comment,
             sources=project.sources,
-            tests=project.tests,
+            data_tests=project.data_tests,
+            unit_tests=project.unit_tests,
             metrics=project.metrics,
             semantic_models=project.semantic_models,
             saved_queries=project.saved_queries,
@@ -324,7 +325,8 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             "seeds": self._get_config_paths(self.seeds),
             "snapshots": self._get_config_paths(self.snapshots),
             "sources": self._get_config_paths(self.sources),
-            "tests": self._get_config_paths(self.tests),
+            "data_tests": self._get_config_paths(self.data_tests),
+            "unit_tests": self._get_config_paths(self.unit_tests),
             "metrics": self._get_config_paths(self.metrics),
             "semantic_models": self._get_config_paths(self.semantic_models),
             "saved_queries": self._get_config_paths(self.saved_queries),

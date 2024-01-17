@@ -2,10 +2,10 @@ from dataclasses import field, dataclass
 from typing import Any, List, Optional, Dict, Union, Type
 from typing_extensions import Annotated
 
-from dbt.common.contracts.config.base import BaseConfig, MergeBehavior, CompareBehavior
-from dbt.common.contracts.config.materialization import OnConfigurationChangeOption
-from dbt.common.contracts.config.metadata import Metadata, ShowBehavior
-from dbt.common.dataclass_schema import (
+from dbt_common.contracts.config.base import BaseConfig, MergeBehavior, CompareBehavior
+from dbt_common.contracts.config.materialization import OnConfigurationChangeOption
+from dbt_common.contracts.config.metadata import Metadata, ShowBehavior
+from dbt_common.dataclass_schema import (
     dbtClassMixin,
     ValidationError,
 )
@@ -228,6 +228,11 @@ class ModelConfig(NodeConfig):
 
 
 @dataclass
+class UnitTestNodeConfig(NodeConfig):
+    expected_rows: List[Dict[str, Any]] = field(default_factory=list)
+
+
+@dataclass
 class SeedConfig(NodeConfig):
     materialized: str = "seed"
     delimiter: str = ","
@@ -399,6 +404,18 @@ class SnapshotConfig(EmptySnapshotConfig):
         return self.from_dict(data)
 
 
+@dataclass
+class UnitTestConfig(BaseConfig):
+    tags: Union[str, List[str]] = field(
+        default_factory=list_str,
+        metadata=metas(ShowBehavior.Hide, MergeBehavior.Append, CompareBehavior.Exclude),
+    )
+    meta: Dict[str, Any] = field(
+        default_factory=dict,
+        metadata=MergeBehavior.Update.meta(),
+    )
+
+
 RESOURCE_TYPES: Dict[NodeType, Type[BaseConfig]] = {
     NodeType.Metric: MetricConfig,
     NodeType.SemanticModel: SemanticModelConfig,
@@ -409,6 +426,7 @@ RESOURCE_TYPES: Dict[NodeType, Type[BaseConfig]] = {
     NodeType.Test: TestConfig,
     NodeType.Model: NodeConfig,
     NodeType.Snapshot: SnapshotConfig,
+    NodeType.Unit: UnitTestConfig,
 }
 
 

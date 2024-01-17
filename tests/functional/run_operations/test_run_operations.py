@@ -3,7 +3,7 @@ import os
 import pytest
 import yaml
 
-from dbt.common.exceptions import DbtInternalError
+from dbt_common.exceptions import DbtInternalError
 from dbt.tests.util import (
     check_table_does_exist,
     run_dbt,

@@ -2,7 +2,7 @@ from typing import Iterable, List
 
 import jinja2
 
-from dbt.common.clients import jinja
+from dbt_common.clients import jinja
 from dbt.clients.jinja import get_supported_languages
 from dbt.contracts.graph.unparsed import UnparsedMacro
 from dbt.contracts.graph.nodes import Macro
@@ -11,7 +11,7 @@ from dbt.exceptions import ParsingError
 from dbt.node_types import NodeType
 from dbt.parser.base import BaseParser
 from dbt.parser.search import FileBlock, filesystem_search
-from dbt.common.utils import MACRO_PREFIX
+from dbt_common.utils import MACRO_PREFIX
 
 
 class MacroParser(BaseParser[Macro]):
@@ -49,7 +49,7 @@ class MacroParser(BaseParser[Macro]):
                 t
                 for t in jinja.extract_toplevel_blocks(
                     base_node.raw_code,
-                    allowed_blocks={"macro", "materialization", "test"},
+                    allowed_blocks={"macro", "materialization", "test", "data_test"},
                     collect_raw_data=False,
                 )
                 if isinstance(t, jinja.BlockTag)

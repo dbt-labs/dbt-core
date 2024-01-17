@@ -383,6 +383,17 @@ message ConfigTargetPathDeprecationMsg {
     ConfigTargetPathDeprecation data = 2;
 }
 
+// D012
+message TestsConfigDeprecation {
+    string deprecated_path = 1;
+    string exp_path = 2;
+}
+
+message TestsConfigDeprecationMsg {
+    CoreEventInfo info = 1;
+    TestsConfigDeprecation data = 2;
+}
+
 // D013
 message ProjectFlagsMovedDeprecation {
 }

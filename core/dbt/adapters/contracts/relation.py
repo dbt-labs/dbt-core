@@ -6,11 +6,11 @@ from typing import (
 )
 from typing_extensions import Protocol
 
-from dbt.common.dataclass_schema import dbtClassMixin, StrEnum
+from dbt_common.dataclass_schema import dbtClassMixin, StrEnum
 
-from dbt.common.contracts.util import Replaceable
-from dbt.common.exceptions import CompilationError, DataclassNotDictError
-from dbt.common.utils import deep_merge
+from dbt_common.contracts.util import Replaceable
+from dbt_common.exceptions import CompilationError, DataclassNotDictError
+from dbt_common.utils import deep_merge
 
 
 class RelationType(StrEnum):

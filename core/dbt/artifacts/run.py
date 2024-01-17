@@ -19,7 +19,7 @@ from dbt.artifacts.results import (
     ResultNode,
     ExecutionResult,
 )
-from dbt.common.clients.system import write_json
+from dbt_common.clients.system import write_json
 
 
 @dataclass

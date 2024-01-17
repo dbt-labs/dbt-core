@@ -22,7 +22,7 @@ models__test_cast_bool_to_text_yml = """
 version: 2
 models:
   - name: test_cast_bool_to_text
-    tests:
+    data_tests:
       - assert_equal:
           actual: actual
           expected: expected

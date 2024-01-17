@@ -16,21 +16,21 @@ from typing_extensions import Protocol, Annotated
 from mashumaro.jsonschema.annotations import Pattern
 
 from dbt.adapters.utils import translate_aliases
-from dbt.common.exceptions import DbtInternalError
-from dbt.common.dataclass_schema import (
+from dbt_common.exceptions import DbtInternalError
+from dbt_common.dataclass_schema import (
     dbtClassMixin,
     StrEnum,
     ExtensibleDbtClassMixin,
     ValidatedStringMixin,
 )
-from dbt.common.contracts.util import Replaceable
-from dbt.common.utils import md5
+from dbt_common.contracts.util import Replaceable
+from dbt_common.utils import md5
 
-from dbt.common.events.functions import fire_event
+from dbt_common.events.functions import fire_event
 from dbt.adapters.events.types import NewConnectionOpening
 
 # TODO: this is a very bad dependency - shared global state
-from dbt.common.events.contextvars import get_node_info
+from dbt_common.events.contextvars import get_node_info
 
 
 class Identifier(ValidatedStringMixin):

@@ -1,9 +1,9 @@
 import json
 
 from dbt.constants import MAXIMUM_SEED_SIZE_NAME, PIN_PACKAGE_URL
-from dbt.common.ui import warning_tag, line_wrap_message, green, yellow, red
-from dbt.common.events.base_types import EventLevel
-from dbt.common.events.format import (
+from dbt_common.ui import warning_tag, line_wrap_message, green, yellow, red
+from dbt_common.events.base_types import EventLevel
+from dbt_common.events.format import (
     format_fancy_output_line,
     timestamp_to_datetime_string,
     pluralize,
@@ -384,6 +384,18 @@ class ConfigTargetPathDeprecation(WarnLevel):
             f"and will no longer be supported in a future version of dbt-core. "
             f"If you wish to write dbt {output} to a custom directory, please use "
             f"the {cli_flag} CLI flag or {env_var} env var instead."
+        )
+        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+
+
+class TestsConfigDeprecation(WarnLevel):
+    def code(self) -> str:
+        return "D012"
+
+    def message(self) -> str:
+        description = (
+            f"The `{self.deprecated_path}` config has been renamed to `{self.exp_path}`. "
+            "Please update your `dbt_project.yml` configuration to reflect this change."
         )
         return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
 

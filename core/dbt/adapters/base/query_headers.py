@@ -3,7 +3,7 @@ from typing import Optional, Callable, Dict, Any
 
 from dbt.adapters.clients.jinja import QueryStringGenerator
 from dbt.adapters.contracts.connection import AdapterRequiredConfig, QueryComment
-from dbt.common.exceptions import DbtRuntimeError
+from dbt_common.exceptions import DbtRuntimeError
 
 
 class QueryHeaderContextWrapper:

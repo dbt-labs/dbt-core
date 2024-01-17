@@ -58,7 +58,7 @@ models__test_datediff_yml = """
 version: 2
 models:
   - name: test_datediff
-    tests:
+    data_tests:
       - assert_equal:
           actual: actual
           expected: expected

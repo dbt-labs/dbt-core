@@ -10,13 +10,13 @@ import jinja2.nodes
 import jinja2.parser
 import jinja2.sandbox
 
-from dbt.common.clients.jinja import (
+from dbt_common.clients.jinja import (
     render_template,
     get_template,
     CallableMacroGenerator,
     MacroProtocol,
 )
-from dbt.common.utils import deep_map_render
+from dbt_common.utils import deep_map_render
 from dbt.contracts.graph.nodes import GenericTestNode
 
 from dbt.exceptions import (
@@ -82,6 +82,26 @@ class MacroGenerator(CallableMacroGenerator):
     def __call__(self, *args, **kwargs):
         with self.track_call():
             return self.call_macro(*args, **kwargs)
+
+
+class UnitTestMacroGenerator(MacroGenerator):
+    # this makes UnitTestMacroGenerator objects callable like functions
+    def __init__(
+        self,
+        macro_generator: MacroGenerator,
+        call_return_value: Any,
+    ) -> None:
+        super().__init__(
+            macro_generator.macro,
+            macro_generator.context,
+            macro_generator.node,
+            macro_generator.stack,
+        )
+        self.call_return_value = call_return_value
+
+    def __call__(self, *args, **kwargs):
+        with self.track_call():
+            return self.call_return_value
 
 
 # performance note: Local benmcharking (so take it with a big grain of salt!)

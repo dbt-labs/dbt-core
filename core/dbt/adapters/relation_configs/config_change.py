@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from typing import Hashable
 
 from dbt.adapters.relation_configs.config_base import RelationConfigBase
-from dbt.common.dataclass_schema import StrEnum
+from dbt_common.dataclass_schema import StrEnum
 
 
 class RelationConfigChangeAction(StrEnum):
@@ -12,7 +12,7 @@ class RelationConfigChangeAction(StrEnum):
     drop = "drop"
 
 
-@dataclass(frozen=True, eq=True, unsafe_hash=True)
+@dataclass(frozen=True, eq=True, unsafe_hash=True)  # type: ignore
 class RelationConfigChange(RelationConfigBase, ABC):
     action: RelationConfigChangeAction
     context: Hashable  # this is usually a RelationConfig, e.g. IndexConfig, but shouldn't be limited

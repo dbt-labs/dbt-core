@@ -8,12 +8,12 @@ import json
 import os
 from pathlib import PosixPath, WindowsPath
 
-from dbt.common.utils import md5
-from dbt.common.exceptions import (
+from dbt_common.utils import md5
+from dbt_common.exceptions import (
     RecursionError,
 )
 from dbt.exceptions import DuplicateAliasError
-from dbt.common.helper_types import WarnErrorOptions
+from dbt_common.helper_types import WarnErrorOptions
 from dbt import flags
 from enum import Enum
 from typing import (

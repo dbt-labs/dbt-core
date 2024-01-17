@@ -1,7 +1,7 @@
 from typing import List, Mapping, Any
 
-from dbt.common.exceptions import CompilationError, DbtDatabaseError
-from dbt.common.ui import line_wrap_message
+from dbt_common.exceptions import CompilationError, DbtDatabaseError
+from dbt_common.ui import line_wrap_message
 
 
 class MissingConfigError(CompilationError):

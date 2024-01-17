@@ -31,7 +31,7 @@ models:
     columns:
       - name: id
         description: The id value
-        tests:
+        data_tests:
           - unique
           - not_null
 

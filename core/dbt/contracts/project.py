@@ -1,7 +1,8 @@
+from dbt import deprecations
 from dbt.contracts.util import Replaceable, Mergeable, list_str, Identifier
 from dbt.adapters.contracts.connection import QueryComment
-from dbt.common.helper_types import NoValue
-from dbt.common.dataclass_schema import (
+from dbt_common.helper_types import NoValue
+from dbt_common.dataclass_schema import (
     dbtClassMixin,
     ValidationError,
     ExtensibleDbtClassMixin,
@@ -194,7 +195,7 @@ class Project(dbtClassMixin, Replaceable):
     source_paths: Optional[List[str]] = None
     model_paths: Optional[List[str]] = None
     macro_paths: Optional[List[str]] = None
-    data_paths: Optional[List[str]] = None
+    data_paths: Optional[List[str]] = None  # deprecated
     seed_paths: Optional[List[str]] = None
     test_paths: Optional[List[str]] = None
     analysis_paths: Optional[List[str]] = None
@@ -216,7 +217,9 @@ class Project(dbtClassMixin, Replaceable):
     snapshots: Dict[str, Any] = field(default_factory=dict)
     analyses: Dict[str, Any] = field(default_factory=dict)
     sources: Dict[str, Any] = field(default_factory=dict)
-    tests: Dict[str, Any] = field(default_factory=dict)
+    tests: Dict[str, Any] = field(default_factory=dict)  # deprecated
+    data_tests: Dict[str, Any] = field(default_factory=dict)
+    unit_tests: Dict[str, Any] = field(default_factory=dict)
     metrics: Dict[str, Any] = field(default_factory=dict)
     semantic_models: Dict[str, Any] = field(default_factory=dict)
     saved_queries: Dict[str, Any] = field(default_factory=dict)
@@ -279,6 +282,14 @@ class Project(dbtClassMixin, Replaceable):
         if "dbt_cloud" in data and not isinstance(data["dbt_cloud"], dict):
             raise ValidationError(
                 f"Invalid dbt_cloud config. Expected a 'dict' but got '{type(data['dbt_cloud'])}'"
+            )
+        if data.get("tests", None) and data.get("data_tests", None):
+            raise ValidationError(
+                "Invalid project config: cannot have both 'tests' and 'data_tests' defined"
+            )
+        if "tests" in data:
+            deprecations.warn(
+                "project-test-config", deprecated_path="tests", exp_path="data_tests"
             )
 
 

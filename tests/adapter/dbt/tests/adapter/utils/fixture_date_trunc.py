@@ -33,7 +33,7 @@ models__test_date_trunc_yml = """
 version: 2
 models:
   - name: test_date_trunc
-    tests:
+    data_tests:
       - assert_equal:
           actual: actual
           expected: expected

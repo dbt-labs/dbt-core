@@ -1,6 +1,6 @@
 from typing import List
 
-from dbt.common.dataclass_schema import StrEnum
+from dbt_common.dataclass_schema import StrEnum
 
 
 class AccessType(StrEnum):
@@ -35,6 +35,8 @@ class NodeType(StrEnum):
     Group = "group"
     SavedQuery = "saved_query"
     SemanticModel = "semantic_model"
+    Unit = "unit_test"
+    Fixture = "fixture"
 
     @classmethod
     def executable(cls) -> List["NodeType"]:

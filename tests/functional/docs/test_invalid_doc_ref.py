@@ -1,7 +1,7 @@
 import pytest
 
 from dbt.tests.util import run_dbt
-import dbt.exceptions
+import dbt_common.exceptions
 
 
 invalid_doc_ref_model_sql = "select 1 as id, 'joe' as first_name"
@@ -43,5 +43,5 @@ class TestInvalidDocRef:
 
     def test_invalid_doc_ref(self, project):
         # The run should fail since we could not find the docs reference.
-        with pytest.raises(dbt.common.exceptions.CompilationError):
+        with pytest.raises(dbt_common.exceptions.CompilationError):
             run_dbt(expect_pass=False)

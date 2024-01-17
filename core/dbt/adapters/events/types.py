@@ -1,5 +1,5 @@
 from dbt.adapters.events.base_types import WarnLevel, InfoLevel, ErrorLevel, DebugLevel
-from dbt.common.ui import line_wrap_message, warning_tag
+from dbt_common.ui import line_wrap_message, warning_tag
 
 
 def format_adapter_message(name, base_msg, args) -> str:

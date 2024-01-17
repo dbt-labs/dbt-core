@@ -5,7 +5,7 @@ from typing import Iterable
 from dbt.contracts.graph.manifest import SourceFile
 from dbt.contracts.graph.nodes import SqlNode, Macro
 from dbt.contracts.graph.unparsed import UnparsedMacro
-from dbt.common.exceptions import DbtInternalError
+from dbt_common.exceptions import DbtInternalError
 from dbt.node_types import NodeType
 from dbt.parser.base import SimpleSQLParser
 from dbt.parser.macros import MacroParser

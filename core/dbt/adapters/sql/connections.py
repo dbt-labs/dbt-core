@@ -5,13 +5,13 @@ from typing import List, Optional, Tuple, Any, Iterable, Dict
 import agate
 
 from dbt.adapters.events.types import ConnectionUsed, SQLQuery, SQLCommit, SQLQueryStatus
-import dbt.common.clients.agate_helper
-import dbt.common.exceptions
+import dbt_common.clients.agate_helper
+import dbt_common.exceptions
 from dbt.adapters.base import BaseConnectionManager
 from dbt.adapters.contracts.connection import Connection, ConnectionState, AdapterResponse
-from dbt.common.events.functions import fire_event
-from dbt.common.events.contextvars import get_node_info
-from dbt.common.utils import cast_to_str
+from dbt_common.events.functions import fire_event
+from dbt_common.events.contextvars import get_node_info
+from dbt_common.utils import cast_to_str
 
 
 class SQLConnectionManager(BaseConnectionManager):
@@ -27,7 +27,7 @@ class SQLConnectionManager(BaseConnectionManager):
     @abc.abstractmethod
     def cancel(self, connection: Connection):
         """Cancel the given connection."""
-        raise dbt.common.exceptions.base.NotImplementedError(
+        raise dbt_common.exceptions.base.NotImplementedError(
             "`cancel` is not implemented for this adapter!"
         )
 
@@ -95,7 +95,7 @@ class SQLConnectionManager(BaseConnectionManager):
     @abc.abstractmethod
     def get_response(cls, cursor: Any) -> AdapterResponse:
         """Get the status of the cursor."""
-        raise dbt.common.exceptions.base.NotImplementedError(
+        raise dbt_common.exceptions.base.NotImplementedError(
             "`get_response` is not implemented for this adapter!"
         )
 
@@ -131,7 +131,7 @@ class SQLConnectionManager(BaseConnectionManager):
                 rows = cursor.fetchall()
             data = cls.process_results(column_names, rows)
 
-        return dbt.common.clients.agate_helper.table_from_data_flat(data, column_names)
+        return dbt_common.clients.agate_helper.table_from_data_flat(data, column_names)
 
     def execute(
         self, sql: str, auto_begin: bool = False, fetch: bool = False, limit: Optional[int] = None
@@ -142,7 +142,7 @@ class SQLConnectionManager(BaseConnectionManager):
         if fetch:
             table = self.get_result_from_cursor(cursor, limit)
         else:
-            table = dbt.common.clients.agate_helper.empty_table()
+            table = dbt_common.clients.agate_helper.empty_table()
         return response, table
 
     def add_begin_query(self):
@@ -158,7 +158,7 @@ class SQLConnectionManager(BaseConnectionManager):
     def begin(self):
         connection = self.get_thread_connection()
         if connection.transaction_open is True:
-            raise dbt.common.exceptions.DbtInternalError(
+            raise dbt_common.exceptions.DbtInternalError(
                 'Tried to begin a new transaction on connection "{}", but '
                 "it already had one open!".format(connection.name)
             )
@@ -171,7 +171,7 @@ class SQLConnectionManager(BaseConnectionManager):
     def commit(self):
         connection = self.get_thread_connection()
         if connection.transaction_open is False:
-            raise dbt.common.exceptions.DbtInternalError(
+            raise dbt_common.exceptions.DbtInternalError(
                 'Tried to commit transaction on connection "{}", but '
                 "it does not have one open!".format(connection.name)
             )

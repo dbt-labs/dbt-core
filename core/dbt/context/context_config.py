@@ -6,8 +6,8 @@ from typing import List, Iterator, Dict, Any, TypeVar, Generic, Optional
 from dbt.adapters.factory import get_config_class_by_name
 from dbt.config import RuntimeConfig, Project, IsFQNResource
 from dbt.contracts.graph.model_config import get_config_for
-from dbt.common.contracts.config.base import BaseConfig, _listify
-from dbt.common.exceptions import DbtInternalError
+from dbt_common.contracts.config.base import BaseConfig, _listify
+from dbt_common.exceptions import DbtInternalError
 from dbt.node_types import NodeType
 from dbt.utils import fqn_search
 
@@ -44,7 +44,7 @@ class UnrenderedConfig(ConfigSource):
         elif resource_type == NodeType.Source:
             model_configs = unrendered.get("sources")
         elif resource_type == NodeType.Test:
-            model_configs = unrendered.get("tests")
+            model_configs = unrendered.get("data_tests")
         elif resource_type == NodeType.Metric:
             model_configs = unrendered.get("metrics")
         elif resource_type == NodeType.SemanticModel:
@@ -53,6 +53,8 @@ class UnrenderedConfig(ConfigSource):
             model_configs = unrendered.get("saved_queries")
         elif resource_type == NodeType.Exposure:
             model_configs = unrendered.get("exposures")
+        elif resource_type == NodeType.Unit:
+            model_configs = unrendered.get("unit_tests")
         else:
             model_configs = unrendered.get("models")
         if model_configs is None:
@@ -73,7 +75,7 @@ class RenderedConfig(ConfigSource):
         elif resource_type == NodeType.Source:
             model_configs = self.project.sources
         elif resource_type == NodeType.Test:
-            model_configs = self.project.tests
+            model_configs = self.project.data_tests
         elif resource_type == NodeType.Metric:
             model_configs = self.project.metrics
         elif resource_type == NodeType.SemanticModel:
@@ -82,6 +84,8 @@ class RenderedConfig(ConfigSource):
             model_configs = self.project.saved_queries
         elif resource_type == NodeType.Exposure:
             model_configs = self.project.exposures
+        elif resource_type == NodeType.Unit:
+            model_configs = self.project.unit_tests
         else:
             model_configs = self.project.models
         return model_configs

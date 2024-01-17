@@ -8,8 +8,8 @@ from dbt.contracts.files import (
     parse_file_type_to_parser,
     SchemaSourceFile,
 )
-from dbt.common.events.functions import fire_event
-from dbt.common.events.base_types import EventLevel
+from dbt_common.events.functions import fire_event
+from dbt_common.events.base_types import EventLevel
 from dbt.events.types import (
     PartialParsingEnabled,
     PartialParsingFile,
@@ -280,6 +280,10 @@ class PartialParsing:
         if saved_source_file.parse_file_type == ParseFileType.Documentation:
             self.delete_doc_node(saved_source_file)
 
+        # fixtures
+        if saved_source_file.parse_file_type == ParseFileType.Fixture:
+            self.delete_fixture_node(saved_source_file)
+
         fire_event(PartialParsingFile(operation="deleted", file_id=file_id))
 
     # Updates for non-schema files
@@ -293,6 +297,8 @@ class PartialParsing:
             self.update_macro_in_saved(new_source_file, old_source_file)
         elif new_source_file.parse_file_type == ParseFileType.Documentation:
             self.update_doc_in_saved(new_source_file, old_source_file)
+        elif new_source_file.parse_file_type == ParseFileType.Fixture:
+            self.update_fixture_in_saved(new_source_file, old_source_file)
         else:
             raise Exception(f"Invalid parse_file_type in source_file {file_id}")
         fire_event(PartialParsingFile(operation="updated", file_id=file_id))
@@ -374,6 +380,13 @@ class PartialParsing:
         if self.already_scheduled_for_parsing(old_source_file):
             return
         self.delete_doc_node(old_source_file)
+        self.saved_files[new_source_file.file_id] = deepcopy(new_source_file)
+        self.add_to_pp_files(new_source_file)
+
+    def update_fixture_in_saved(self, new_source_file, old_source_file):
+        if self.already_scheduled_for_parsing(old_source_file):
+            return
+        self.delete_fixture_node(old_source_file)
         self.saved_files[new_source_file.file_id] = deepcopy(new_source_file)
         self.add_to_pp_files(new_source_file)
 
@@ -579,6 +592,20 @@ class PartialParsing:
         # Remove the file object
         self.saved_manifest.files.pop(source_file.file_id)
 
+    def delete_fixture_node(self, source_file):
+        # remove fixtures from the "fixtures" dictionary
+        fixture_unique_id = source_file.fixture
+        self.saved_manifest.fixtures.pop(fixture_unique_id)
+        unit_tests = source_file.unit_tests.copy()
+        for unique_id in unit_tests:
+            unit_test = self.saved_manifest.unit_tests.pop(unique_id)
+            # schedule unit_test for parsing
+            self._schedule_for_parsing(
+                "unit_tests", unit_test, unit_test.name, self.delete_schema_unit_test
+            )
+            source_file.unit_tests.remove(unique_id)
+        self.saved_manifest.files.pop(source_file.file_id)
+
     # Schema files -----------------------
     # Changed schema files
     def change_schema_file(self, file_id):
@@ -608,7 +635,7 @@ class PartialParsing:
         self.saved_manifest.files.pop(file_id)
 
     # For each key in a schema file dictionary, process the changed, deleted, and added
-    # elemnts for the key lists
+    # elements for the key lists
     def handle_schema_file_changes(self, schema_file, saved_yaml_dict, new_yaml_dict):
         # loop through comparing previous dict_from_yaml with current dict_from_yaml
         # Need to do the deleted/added/changed thing, just like the files lists
@@ -681,6 +708,7 @@ class PartialParsing:
         handle_change("metrics", self.delete_schema_metric)
         handle_change("groups", self.delete_schema_group)
         handle_change("semantic_models", self.delete_schema_semantic_model)
+        handle_change("unit_tests", self.delete_schema_unit_test)
         handle_change("saved_queries", self.delete_schema_saved_query)
 
     def _handle_element_change(
@@ -938,6 +966,17 @@ class PartialParsing:
             elif unique_id in self.saved_manifest.disabled:
                 self.delete_disabled(unique_id, schema_file.file_id)
 
+    def delete_schema_unit_test(self, schema_file, unit_test_dict):
+        unit_test_name = unit_test_dict["name"]
+        unit_tests = schema_file.unit_tests.copy()
+        for unique_id in unit_tests:
+            if unique_id in self.saved_manifest.unit_tests:
+                unit_test = self.saved_manifest.unit_tests[unique_id]
+                if unit_test.name == unit_test_name:
+                    self.saved_manifest.unit_tests.pop(unique_id)
+                    schema_file.unit_tests.remove(unique_id)
+            # No disabled unit tests yet
+
     def get_schema_element(self, elem_list, elem_name):
         for element in elem_list:
             if "name" in element and element["name"] == elem_name:
@@ -1009,6 +1048,8 @@ class PartialParsing:
         # Create a list of file_ids for source_files that need to be reparsed, and
         # a dictionary of file_ids to yaml_keys to names.
         for source_file in self.saved_files.values():
+            if source_file.parse_file_type == ParseFileType.Fixture:
+                continue
             file_id = source_file.file_id
             if not source_file.env_vars:
                 continue

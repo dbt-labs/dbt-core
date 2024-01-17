@@ -1,25 +1,28 @@
 from distutils.util import strtobool
 
+import agate
+import daff
+import io
+import json
+import re
 from dataclasses import dataclass
 from dbt.utils import _coerce_decimal
-from dbt.common.events.format import pluralize
-from dbt.common.dataclass_schema import dbtClassMixin
+from dbt_common.events.format import pluralize
+from dbt_common.dataclass_schema import dbtClassMixin
 import threading
-from typing import Dict, Any
+from typing import Dict, Any, Optional, Union, List
 
 from .compile import CompileRunner
 from .run import RunTask
 
-from dbt.contracts.graph.nodes import (
-    TestNode,
-)
+from dbt.contracts.graph.nodes import TestNode, UnitTestDefinition, UnitTestNode
 from dbt.contracts.graph.manifest import Manifest
 from dbt.artifacts.results import TestStatus
 from dbt.artifacts.run import RunResult
 from dbt.artifacts.catalog import PrimitiveDict
 from dbt.context.providers import generate_runtime_model_context
 from dbt.clients.jinja import MacroGenerator
-from dbt.common.events.functions import fire_event
+from dbt_common.events.functions import fire_event
 from dbt.events.types import (
     LogTestResult,
     LogStartLine,
@@ -33,7 +36,16 @@ from dbt.graph import (
     ResourceTypeSelector,
 )
 from dbt.node_types import NodeType
+from dbt.parser.unit_tests import UnitTestManifestLoader
 from dbt.flags import get_flags
+from dbt_common.ui import green, red
+
+
+@dataclass
+class UnitTestDiff(dbtClassMixin):
+    actual: List[Dict[str, Any]]
+    expected: List[Dict[str, Any]]
+    rendered: str
 
 
 @dataclass
@@ -61,10 +73,18 @@ class TestResultData(dbtClassMixin):
         return bool(field)
 
 
+@dataclass
+class UnitTestResultData(dbtClassMixin):
+    should_error: bool
+    adapter_response: Dict[str, Any]
+    diff: Optional[UnitTestDiff] = None
+
+
 class TestRunner(CompileRunner):
+    _ANSI_ESCAPE = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+
     def describe_node(self):
-        node_name = self.node.name
-        return "test {}".format(node_name)
+        return f"{self.node.resource_type} {self.node.name}"
 
     def print_result_line(self, result):
         model = result.node
@@ -95,16 +115,16 @@ class TestRunner(CompileRunner):
     def before_execute(self):
         self.print_start_line()
 
-    def execute_test(self, test: TestNode, manifest: Manifest) -> TestResultData:
-        context = generate_runtime_model_context(test, self.config, manifest)
+    def execute_data_test(self, data_test: TestNode, manifest: Manifest) -> TestResultData:
+        context = generate_runtime_model_context(data_test, self.config, manifest)
 
         materialization_macro = manifest.find_materialization_macro_by_name(
-            self.config.project_name, test.get_materialization(), self.adapter.type()
+            self.config.project_name, data_test.get_materialization(), self.adapter.type()
         )
 
         if materialization_macro is None:
             raise MissingMaterializationError(
-                materialization=test.get_materialization(), adapter_type=self.adapter.type()
+                materialization=data_test.get_materialization(), adapter_type=self.adapter.type()
             )
 
         if "config" not in context:
@@ -123,14 +143,14 @@ class TestRunner(CompileRunner):
         num_rows = len(table.rows)
         if num_rows != 1:
             raise DbtInternalError(
-                f"dbt internally failed to execute {test.unique_id}: "
+                f"dbt internally failed to execute {data_test.unique_id}: "
                 f"Returned {num_rows} rows, but expected "
                 f"1 row"
             )
         num_cols = len(table.columns)
         if num_cols != 3:
             raise DbtInternalError(
-                f"dbt internally failed to execute {test.unique_id}: "
+                f"dbt internally failed to execute {data_test.unique_id}: "
                 f"Returned {num_cols} columns, but expected "
                 f"3 columns"
             )
@@ -145,9 +165,87 @@ class TestRunner(CompileRunner):
         TestResultData.validate(test_result_dct)
         return TestResultData.from_dict(test_result_dct)
 
-    def execute(self, test: TestNode, manifest: Manifest):
-        result = self.execute_test(test, manifest)
+    def build_unit_test_manifest_from_test(
+        self, unit_test_def: UnitTestDefinition, manifest: Manifest
+    ) -> Manifest:
+        # build a unit test manifest with only the test from this UnitTestDefinition
+        loader = UnitTestManifestLoader(manifest, self.config, {unit_test_def.unique_id})
+        return loader.load()
 
+    def execute_unit_test(
+        self, unit_test_def: UnitTestDefinition, manifest: Manifest
+    ) -> UnitTestResultData:
+
+        unit_test_manifest = self.build_unit_test_manifest_from_test(unit_test_def, manifest)
+
+        # The unit test node and definition have the same unique_id
+        unit_test_node = unit_test_manifest.nodes[unit_test_def.unique_id]
+        assert isinstance(unit_test_node, UnitTestNode)
+
+        # Compile the node
+        unit_test_node = self.compiler.compile_node(unit_test_node, unit_test_manifest, {})
+
+        # generate_runtime_unit_test_context not strictly needed - this is to run the 'unit'
+        # materialization, not compile the node.compiled_code
+        context = generate_runtime_model_context(unit_test_node, self.config, unit_test_manifest)
+
+        materialization_macro = unit_test_manifest.find_materialization_macro_by_name(
+            self.config.project_name, unit_test_node.get_materialization(), self.adapter.type()
+        )
+
+        if materialization_macro is None:
+            raise MissingMaterializationError(
+                materialization=unit_test_node.get_materialization(),
+                adapter_type=self.adapter.type(),
+            )
+
+        if "config" not in context:
+            raise DbtInternalError(
+                "Invalid materialization context generated, missing config: {}".format(context)
+            )
+
+        # generate materialization macro
+        macro_func = MacroGenerator(materialization_macro, context)
+        # execute materialization macro
+        macro_func()
+        # load results from context
+        # could eventually be returned directly by materialization
+        result = context["load_result"]("main")
+        adapter_response = result["response"].to_dict(omit_none=True)
+        table = result["table"]
+        actual = self._get_unit_test_agate_table(table, "actual")
+        expected = self._get_unit_test_agate_table(table, "expected")
+
+        # generate diff, if exists
+        should_error, diff = False, None
+        daff_diff = self._get_daff_diff(expected, actual)
+        if daff_diff.hasDifference():
+            should_error = True
+            rendered = self._render_daff_diff(daff_diff)
+            rendered = f"\n\n{red('expected')} differs from {green('actual')}:\n\n{rendered}\n"
+
+            diff = UnitTestDiff(
+                actual=json_rows_from_table(actual),
+                expected=json_rows_from_table(expected),
+                rendered=rendered,
+            )
+
+        return UnitTestResultData(
+            diff=diff,
+            should_error=should_error,
+            adapter_response=adapter_response,
+        )
+
+    def execute(self, test: Union[TestNode, UnitTestDefinition], manifest: Manifest):
+        if isinstance(test, UnitTestDefinition):
+            unit_test_result = self.execute_unit_test(test, manifest)
+            return self.build_unit_test_run_result(test, unit_test_result)
+        else:
+            # Note: manifest here is a normal manifest
+            test_result = self.execute_data_test(test, manifest)
+            return self.build_test_run_result(test, test_result)
+
+    def build_test_run_result(self, test: TestNode, result: TestResultData) -> RunResult:
         severity = test.config.severity.upper()
         thread_id = threading.current_thread().name
         num_errors = pluralize(result.failures, "result")
@@ -169,8 +267,33 @@ class TestRunner(CompileRunner):
         else:
             status = TestStatus.Pass
 
-        return RunResult(
+        run_result = RunResult(
             node=test,
+            status=status,
+            timing=[],
+            thread_id=thread_id,
+            execution_time=0,
+            message=message,
+            adapter_response=result.adapter_response,
+            failures=failures,
+        )
+        return run_result
+
+    def build_unit_test_run_result(
+        self, test: UnitTestDefinition, result: UnitTestResultData
+    ) -> RunResult:
+        thread_id = threading.current_thread().name
+
+        status = TestStatus.Pass
+        message = None
+        failures = 0
+        if result.should_error:
+            status = TestStatus.Fail
+            message = result.diff.rendered if result.diff else None
+            failures = 1
+
+        return RunResult(
+            node=test,  # type: ignore
             status=status,
             timing=[],
             thread_id=thread_id,
@@ -183,6 +306,41 @@ class TestRunner(CompileRunner):
     def after_execute(self, result):
         self.print_result_line(result)
 
+    def _get_unit_test_agate_table(self, result_table, actual_or_expected: str):
+        unit_test_table = result_table.where(
+            lambda row: row["actual_or_expected"] == actual_or_expected
+        )
+        columns = list(unit_test_table.columns.keys())
+        columns.remove("actual_or_expected")
+        return unit_test_table.select(columns)
+
+    def _get_daff_diff(
+        self, expected: agate.Table, actual: agate.Table, ordered: bool = False
+    ) -> daff.TableDiff:
+
+        expected_daff_table = daff.PythonTableView(list_rows_from_table(expected))
+        actual_daff_table = daff.PythonTableView(list_rows_from_table(actual))
+
+        alignment = daff.Coopy.compareTables(expected_daff_table, actual_daff_table).align()
+        result = daff.PythonTableView([])
+
+        flags = daff.CompareFlags()
+        flags.ordered = ordered
+
+        diff = daff.TableDiff(alignment, flags)
+        diff.hilite(result)
+        return diff
+
+    def _render_daff_diff(self, daff_diff: daff.TableDiff) -> str:
+        result = daff.PythonTableView([])
+        daff_diff.hilite(result)
+        rendered = daff.TerminalDiffRender().render(result)
+        # strip colors if necessary
+        if not self.config.args.use_colors:
+            rendered = self._ANSI_ESCAPE.sub("", rendered)
+
+        return rendered
+
 
 class TestSelector(ResourceTypeSelector):
     def __init__(self, graph, manifest, previous_state) -> None:
@@ -190,7 +348,7 @@ class TestSelector(ResourceTypeSelector):
             graph=graph,
             manifest=manifest,
             previous_state=previous_state,
-            resource_types=[NodeType.Test],
+            resource_types=[NodeType.Test, NodeType.Unit],
         )
 
 
@@ -217,3 +375,22 @@ class TestTask(RunTask):
 
     def get_runner_type(self, _):
         return TestRunner
+
+
+# This was originally in agate_helper, but that was moved out into dbt_common
+def json_rows_from_table(table: agate.Table) -> List[Dict[str, Any]]:
+    "Convert a table to a list of row dict objects"
+    output = io.StringIO()
+    table.to_json(path=output)  # type: ignore
+
+    return json.loads(output.getvalue())
+
+
+# This was originally in agate_helper, but that was moved out into dbt_common
+def list_rows_from_table(table: agate.Table) -> List[Any]:
+    "Convert a table to a list of lists, where the first element represents the header"
+    rows = [[col.name for col in table.columns]]
+    for row in table.rows:
+        rows.append(list(row.values()))
+
+    return rows

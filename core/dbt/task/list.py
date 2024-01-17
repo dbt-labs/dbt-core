@@ -6,13 +6,13 @@ from dbt.graph import ResourceTypeSelector
 from dbt.task.runnable import GraphRunnableTask
 from dbt.task.test import TestSelector
 from dbt.node_types import NodeType
-from dbt.common.events.functions import (
+from dbt_common.events.functions import (
     fire_event,
     warn_or_error,
 )
 from dbt.events.types import NoNodesSelected, ListCmdOut
-from dbt.common.exceptions import DbtRuntimeError, DbtInternalError
-from dbt.common.events.contextvars import task_contextvars
+from dbt_common.exceptions import DbtRuntimeError, DbtInternalError
+from dbt_common.events.contextvars import task_contextvars
 
 
 class ListTask(GraphRunnableTask):
