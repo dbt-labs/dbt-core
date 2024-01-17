@@ -28,7 +28,7 @@ from dbt.events.types import (
     LogStartLine,
 )
 from dbt.exceptions import DbtInternalError, BooleanError
-from dbt.common.exceptions import DbtBaseException, DbtRuntimeError
+from dbt_common.exceptions import DbtBaseException, DbtRuntimeError
 from dbt.adapters.exceptions import MissingMaterializationError
 from dbt.graph import (
     ResourceTypeSelector,

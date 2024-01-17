@@ -632,3 +632,14 @@ unit_tests:
       rows:
         - {a: 1, id: 1, not_testing: 2, string_a: "a", date_a: "2020-01-02"}
 """
+
+
+test_model_a_with_bad_test_name_yml = """
+unit_tests:
+  - name: !!my_test_name
+    model: my_model_a
+    given: []
+    expect:
+      rows:
+        - {a: 1, id: 1, not_testing: 2, string_a: "a", date_a: "2020-01-02"}
+"""
