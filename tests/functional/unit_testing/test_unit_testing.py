@@ -7,6 +7,7 @@ from dbt.tests.util import (
 from dbt.contracts.results import NodeStatus
 from dbt.exceptions import DuplicateResourceNameError, ParsingError
 from fixtures import (
+    my_model_sql,
     my_model_vars_sql,
     my_model_a_sql,
     my_model_b_sql,
@@ -15,6 +16,7 @@ from fixtures import (
     my_incremental_model_sql,
     event_sql,
     test_my_model_incremental_yml,
+    test_my_model_yml_invalid,
 )
 
 
@@ -237,3 +239,20 @@ class TestUnitTestNonexistentSeed:
             ParsingError, match="Unable to find seed 'test.my_second_favorite_seed' for unit tests"
         ):
             run_dbt(["test", "--select", "my_new_model"], expect_pass=False)
+
+
+class TestUnitTestInvalidInputConfiguration:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_model.sql": my_model_sql,
+            "my_model_a.sql": my_model_a_sql,
+            "my_model_b.sql": my_model_b_sql,
+            "test_my_model.yml": test_my_model_yml_invalid,
+        }
+
+    def test_invalid_input_configuration(self, project):
+        results = run_dbt(["run"])
+        assert len(results) == 3
+
+        run_dbt(["test"], expect_pass=False)

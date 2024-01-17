@@ -1,14 +1,13 @@
 import pytest
 
 from dbt.tests.util import run_dbt, run_dbt_and_capture
-from dbt.exceptions import DuplicateResourceNameError, DbtRuntimeError
+from dbt.exceptions import DuplicateResourceNameError
 
 from fixtures import (
     my_model_a_sql,
     my_model_b_sql,
     test_model_a_b_yml,
     test_model_a_with_duplicate_test_name_yml,
-    test_model_a_with_bad_test_name_yml,
 )
 
 
@@ -68,16 +67,3 @@ class TestUnitTestDuplicateTestNamesWithinModel:
     def test_duplicate_test_names_within_model(self, project):
         with pytest.raises(DuplicateResourceNameError):
             run_dbt(["run"])
-
-
-class TestUnitTestBadTestName:
-    @pytest.fixture(scope="class")
-    def models(self):
-        return {
-            "my_model_a.sql": my_model_a_sql,
-            "test_model_a.yml": test_model_a_with_bad_test_name_yml,
-        }
-
-    def test_duplicate_test_names_bad_name(self, project):
-        with pytest.raises(DbtRuntimeError):
-            run_dbt(["test"])
