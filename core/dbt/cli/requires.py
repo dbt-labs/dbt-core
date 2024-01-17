@@ -21,7 +21,7 @@ from dbt.events.types import (
 from dbt.events.helpers import get_json_string_utcnow
 from dbt.events.types import MainEncounteredError, MainStackTrace
 from dbt.exceptions import Exception as DbtException, DbtProjectError, FailFastError
-from dbt.parser.manifest import parse_manifest
+from dbt.parser.manifest import parse_manifest, register_adapter
 from dbt.profiler import profiler
 from dbt.tracking import active_user, initialize_from_flags, track_run
 from dbt.utils import cast_dict_to_dict_of_strings
@@ -271,6 +271,8 @@ def manifest(*args0, write=True, write_perf_info=False):
                 ctx.obj["manifest"] = parse_manifest(
                     runtime_config, write_perf_info, write, ctx.obj["flags"].write_json
                 )
+            else:
+                register_adapter(runtime_config)
             return func(*args, **kwargs)
 
         return update_wrapper(wrapper, func)
