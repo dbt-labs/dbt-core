@@ -6,13 +6,13 @@ from datetime import datetime
 
 
 from dbt.contracts.graph.nodes import CompiledNode
-from dbt.artifacts.base import (
+from dbt.artifacts.schemas.base import (
     BaseArtifactMetadata,
     ArtifactMixin,
     schema_version,
     get_artifact_schema_version,
 )
-from dbt.artifacts.results import (
+from dbt.artifacts.schemas.results import (
     BaseResult,
     NodeResult,
     RunStatus,

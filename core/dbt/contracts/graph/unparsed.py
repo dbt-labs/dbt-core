@@ -301,8 +301,8 @@ class FreshnessThreshold(dbtClassMixin, Mergeable):
     error_after: Optional[Time] = field(default_factory=Time)
     filter: Optional[str] = None
 
-    def status(self, age: float) -> "dbt.artifacts.results.FreshnessStatus":
-        from dbt.artifacts.results import FreshnessStatus
+    def status(self, age: float) -> "dbt.artifacts.schemas.results.FreshnessStatus":
+        from dbt.artifacts.schemas.results import FreshnessStatus
 
         if self.error_after and self.error_after.exceeded(age):
             return FreshnessStatus.Error

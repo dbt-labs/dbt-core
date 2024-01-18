@@ -91,7 +91,7 @@ from .model_config import (
     SavedQueryConfig,
 )
 
-from dbt.artifacts.contracts import BaseArtifactNode, Documentation as DocumentationContract
+from dbt.artifacts.resources import BaseArtifactNode, Documentation as DocumentationContract
 
 
 # =====================================================================

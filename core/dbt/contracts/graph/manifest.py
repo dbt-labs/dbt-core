@@ -45,7 +45,7 @@ from dbt.contracts.graph.unparsed import SourcePatch, NodeVersion, UnparsedVersi
 from dbt.contracts.files import SourceFile, SchemaSourceFile, FileHash, AnySourceFile
 
 # to preserve import paths
-from dbt.artifacts.manifest import WritableManifest, ManifestMetadata, UniqueID
+from dbt.artifacts.schemas.manifest import WritableManifest, ManifestMetadata, UniqueID
 
 from dbt.contracts.util import SourceKey
 from dbt.common.dataclass_schema import dbtClassMixin

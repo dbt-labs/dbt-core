@@ -9,7 +9,7 @@ from .printer import (
 )
 from .runnable import GraphRunnableTask
 
-from dbt.artifacts.freshness import (
+from dbt.artifacts.schemas.freshness import (
     FreshnessResult,
     PartialSourceFreshnessResult,
     SourceFreshnessResult,

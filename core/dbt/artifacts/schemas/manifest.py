@@ -2,14 +2,14 @@ from dataclasses import dataclass, field
 from typing import Mapping, Iterable, Tuple, Optional, Dict, List, Any
 from uuid import UUID
 
-from dbt.artifacts.base import (
+from dbt.artifacts.schemas.base import (
     BaseArtifactMetadata,
     ArtifactMixin,
     schema_version,
     get_artifact_schema_version,
 )
-from dbt.artifacts.upgrades import upgrade_manifest_json
-from dbt.artifacts.contracts import Documentation
+from dbt.artifacts.schemas.upgrades import upgrade_manifest_json
+from dbt.artifacts.resources import Documentation
 
 # TODO: remove usage of dbt modules other than dbt.artifacts
 from dbt import tracking

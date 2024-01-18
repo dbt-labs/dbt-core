@@ -5,7 +5,7 @@ from datetime import datetime
 from dbt.common.dataclass_schema import dbtClassMixin
 from dbt.common.utils.formatting import lowercase
 from dbt.common.contracts.util import Replaceable
-from dbt.artifacts.base import ArtifactMixin, BaseArtifactMetadata, schema_version
+from dbt.artifacts.schemas.base import ArtifactMixin, BaseArtifactMetadata, schema_version
 
 Primitive = Union[bool, str, float, None]
 PrimitiveDict = Dict[str, Primitive]

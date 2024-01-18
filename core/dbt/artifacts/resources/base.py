@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from dbt.common.dataclass_schema import dbtClassMixin
 from dbt.common.contracts.util import Replaceable
 
-from dbt.artifacts.contracts.types import NodeType
+from dbt.artifacts.resources.types import NodeType
 
 
 @dataclass
