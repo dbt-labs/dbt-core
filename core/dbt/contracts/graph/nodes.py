@@ -85,7 +85,7 @@ from .model_config import (
     SavedQueryConfig,
 )
 
-from dbt.artifacts.nodes import BaseArtifactNode, Documentation as DocumentationArtifact
+from dbt.artifacts.contracts import BaseArtifactNode, Documentation as DocumentationContract
 
 
 # =====================================================================
@@ -1089,7 +1089,7 @@ class Macro(BaseNode):
 
 
 @dataclass
-class Documentation(DocumentationArtifact, BaseNode):
+class Documentation(DocumentationContract, BaseNode):
     @property
     def search_name(self):
         return self.name

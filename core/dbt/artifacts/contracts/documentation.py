@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 from typing import Literal
 
-from dbt.artifacts.nodes.base import BaseArtifactNode
-from dbt.artifacts.nodes.types import NodeType
+from dbt.artifacts.contracts.base import BaseArtifactNode
+from dbt.artifacts.contracts.types import NodeType
 
 
 @dataclass
