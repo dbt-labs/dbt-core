@@ -139,7 +139,7 @@ class UnitTestManifestLoader:
                     package_name=original_input_node.package_name,
                     unique_id=f"model.{original_input_node.package_name}.{input_name}",
                     name=input_name,
-                    path=original_input_node.path,
+                    path=original_input_node.path or f"{input_name}.sql",
                 )
             elif original_input_node.resource_type == NodeType.Source:
                 # We are reusing the database/schema/identifier from the original source,
