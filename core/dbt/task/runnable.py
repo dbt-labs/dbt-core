@@ -127,9 +127,24 @@ class GraphRunnableTask(ConfiguredTask):
     def get_node_selector(self) -> NodeSelector:
         raise NotImplementedError(f"get_node_selector not implemented for task {type(self)}")
 
-    @abstractmethod
     def defer_to_manifest(self, adapter, selected_uids: AbstractSet[str]):
-        raise NotImplementedError(f"defer_to_manifest not implemented for task {type(self)}")
+        deferred_manifest = self._get_deferred_manifest()
+        if deferred_manifest is None:
+            return
+        if self.manifest is None:
+            raise DbtInternalError(
+                "Expected to defer to manifest, but there is no runtime manifest to defer from!"
+            )
+        self.manifest.merge_from_artifact(
+            adapter=adapter,
+            other=deferred_manifest,
+            selected=selected_uids,
+            favor_state=bool(self.args.favor_state),
+        )
+        # We're rewriting the manifest because it's been mutated during merge_from_artifact.
+        # This is to reflect which nodes had been deferred to (= replaced with) their counterparts.
+        if self.args.write_json:
+            write_manifest(self.manifest, self.config.project_target_path)
 
     def get_graph_queue(self) -> GraphQueue:
         selector = self.get_node_selector()
@@ -622,7 +637,7 @@ class GraphRunnableTask(ConfiguredTask):
     def task_end_messages(self, results):
         print_run_end_messages(results)
 
-    def _get_deferred_manifest(self) -> Optional[WritableManifest]:
+    def _get_previous_state(self) -> Optional[WritableManifest]:
         state = self.previous_defer_state or self.previous_state
         if not state:
             raise DbtRuntimeError(
@@ -632,3 +647,6 @@ class GraphRunnableTask(ConfiguredTask):
         if not state.manifest:
             raise DbtRuntimeError(f'Could not find manifest in --state path: "{state}"')
         return state.manifest
+
+    def _get_deferred_manifest(self) -> Optional[WritableManifest]:
+        return self._get_previous_state() if self.args.defer else None

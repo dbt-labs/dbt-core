@@ -1356,7 +1356,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             node.package_name != target_model.package_name and restrict_package_access
         )
 
-    # Called by RunTask.defer_to_manifest
+    # Called by GraphRunnableTask.defer_to_manifest
     def merge_from_artifact(
         self,
         adapter,
@@ -1385,6 +1385,13 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
                 merged.add(unique_id)
                 self.nodes[unique_id] = node.replace(deferred=True)
 
+            # for all other nodes, add 'defer_relation'
+            elif current and node.resource_type in refables and not node.is_ephemeral:
+                defer_relation = DeferRelation(
+                    node.database, node.schema, node.alias, node.relation_name
+                )
+                self.nodes[unique_id] = current.replace(defer_relation=defer_relation)
+
         # Rebuild the flat_graph, which powers the 'graph' context variable,
         # now that we've deferred some nodes
         self.build_flat_graph()
@@ -1392,25 +1399,6 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         # log up to 5 items
         sample = list(islice(merged, 5))
         fire_event(MergedFromState(num_merged=len(merged), sample=sample))
-
-    # Called by CloneTask.defer_to_manifest
-    def add_from_artifact(
-        self,
-        other: "WritableManifest",
-    ) -> None:
-        """Update this manifest by *adding* information about each node's location
-        in the other manifest.
-
-        Only non-ephemeral refable nodes are examined.
-        """
-        refables = set(NodeType.refable())
-        for unique_id, node in other.nodes.items():
-            current = self.nodes.get(unique_id)
-            if current and (node.resource_type in refables and not node.is_ephemeral):
-                defer_relation = DeferRelation(
-                    node.database, node.schema, node.alias, node.relation_name
-                )
-                self.nodes[unique_id] = current.replace(defer_relation=defer_relation)
 
     # Methods that were formerly in ParseResult
 

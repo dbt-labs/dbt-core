@@ -1,15 +1,15 @@
 import threading
-from typing import AbstractSet, Any, List, Iterable, Set
+from typing import AbstractSet, Any, List, Iterable, Set, Optional
 
 from dbt.adapters.base import BaseRelation
 from dbt.clients.jinja import MacroGenerator
 from dbt.context.providers import generate_runtime_model_context
+from dbt.contracts.graph.manifest import WritableManifest
 from dbt.artifacts.run import RunStatus, RunResult
 from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_common.exceptions import DbtInternalError, CompilationError
 from dbt.graph import ResourceTypeSelector
 from dbt.node_types import NodeType
-from dbt.parser.manifest import write_manifest
 from dbt.task.base import BaseRunner
 from dbt.task.run import _validate_materialization_relations_dict
 from dbt.task.runnable import GraphRunnableTask
@@ -94,6 +94,11 @@ class CloneTask(GraphRunnableTask):
     def raise_on_first_error(self):
         return False
 
+    def _get_deferred_manifest(self) -> Optional[WritableManifest]:
+        # Unlike other commands, 'clone' always requires a state manifest
+        # Load previous state, regardless of whether --defer flag has been set
+        return self._get_previous_state()
+
     def get_model_schemas(self, adapter, selected_uids: Iterable[str]) -> Set[BaseRelation]:
         if self.manifest is None:
             raise DbtInternalError("manifest was None in get_model_schemas")
@@ -154,17 +159,3 @@ class CloneTask(GraphRunnableTask):
 
     def get_runner_type(self, _):
         return CloneRunner
-
-    # Note that this is different behavior from --defer with other commands, which *merge*
-    # selected nodes from this manifest + unselected nodes from the other manifest
-    def defer_to_manifest(self, adapter, selected_uids: AbstractSet[str]):
-        deferred_manifest = self._get_deferred_manifest()
-        if deferred_manifest is None:
-            return
-        if self.manifest is None:
-            raise DbtInternalError(
-                "Expected to defer to manifest, but there is no runtime manifest to defer from!"
-            )
-        self.manifest.add_from_artifact(other=deferred_manifest)
-        # TODO: is it wrong to write the manifest here? I think it's right...
-        write_manifest(self.manifest, self.config.target_path)

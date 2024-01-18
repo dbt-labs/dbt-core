@@ -171,10 +171,6 @@ class FreshnessSelector(ResourceTypeSelector):
 
 
 class FreshnessTask(GraphRunnableTask):
-    def defer_to_manifest(self, adapter, selected_uids):
-        # freshness don't defer
-        return
-
     def result_path(self):
         if self.args.output:
             return os.path.realpath(self.args.output)
