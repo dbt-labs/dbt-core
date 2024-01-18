@@ -34,7 +34,7 @@ from dbt.events.types import (
 
 from dbt.include.starter_project import PACKAGE_PATH as starter_project_directory
 
-from dbt.adapters.include.global_project import PROJECT_NAME as GLOBAL_PROJECT_NAME
+from dbt.include.global_project import PROJECT_NAME as GLOBAL_PROJECT_NAME
 
 from dbt.task.base import BaseTask, move_to_nearest_project_dir
 
