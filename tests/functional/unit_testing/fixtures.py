@@ -1,3 +1,5 @@
+import pytest
+
 my_model_vars_sql = """
 SELECT
 a+b as c,
@@ -679,3 +681,42 @@ SELECT
   CASE WHEN joined.tld IS NULL THEN FALSE ELSE TRUE END AS is_valid_email_address
 from joined
 """
+
+external_package__accounts_seed_csv = """user_id,email,email_top_level_domain
+1,"example@example.com","example.com"
+"""
+
+external_package__external_model_sql = """
+SELECT user_id, email, email_top_level_domain FROM {{ ref('accounts_seed') }}
+"""
+
+
+external_package_project_yml = """
+name: external_package
+version: '1.0'
+config-version: 2
+
+model-paths: ["models"]    # paths to models
+analysis-paths: ["analyses"] # path with analysis files which are compiled, but not run
+target-path: "target"      # path for compiled code
+clean-targets: ["target"]  # directories removed by the clean task
+test-paths: ["tests"]       # where to store test results
+seed-paths: ["seeds"]       # load CSVs from this directory with `dbt seed`
+macro-paths: ["macros"]    # where to find macros
+
+profile: user
+
+models:
+    external_package:
+"""
+
+
+@pytest.fixture(scope="class")
+def external_package():
+    return {
+        "dbt_project.yml": external_package_project_yml,
+        "seeds": {"accounts_seed.csv": external_package__accounts_seed_csv},
+        "models": {
+            "external_model.sql": external_package__external_model_sql,
+        },
+    }
