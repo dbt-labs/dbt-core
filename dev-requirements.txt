@@ -1,4 +1,4 @@
-git+https://github.com/dbt-labs/dbt-adapters.git@fixInit
+git+https://github.com/dbt-labs/dbt-adapters.git
 black==23.3.0
 bumpversion
 ddtrace==2.1.7
