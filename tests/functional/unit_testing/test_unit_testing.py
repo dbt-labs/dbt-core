@@ -326,5 +326,7 @@ class TestUnitTestExternalNode:
 
         # `seed` need so a table exists for `external_model` to point to
         run_dbt(["seed"], expect_pass=True)
+        # `run` needed to ensure `top_level_domains` exists in database for column getting step
+        run_dbt(["run"], expect_pass=True)
         results = run_dbt(["test", "--select", "valid_emails"], expect_pass=True)
         assert len(results) == 1
