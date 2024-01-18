@@ -30,7 +30,7 @@ from dbt.artifacts.catalog import (
 from dbt.common.exceptions import DbtInternalError
 from dbt.exceptions import AmbiguousCatalogMatchError
 from dbt.graph import ResourceTypeSelector
-from dbt.node_types import NodeType
+from dbt.node_types import EXECUTABLE_NODE_TYPES
 from dbt.common.events.functions import fire_event
 from dbt.adapters.events.types import (
     WriteCatalogFailure,
@@ -342,7 +342,7 @@ class GenerateTask(CompileTask):
             graph=self.graph,
             manifest=self.manifest,
             previous_state=self.previous_state,
-            resource_types=NodeType.executable(),
+            resource_types=EXECUTABLE_NODE_TYPES,
         )
 
     def get_catalog_results(

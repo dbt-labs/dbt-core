@@ -14,7 +14,7 @@ from dbt.common.exceptions import (
 )
 
 from dbt.graph import ResourceTypeSelector
-from dbt.node_types import NodeType
+from dbt.node_types import NodeType, EXECUTABLE_NODE_TYPES
 from dbt.parser.manifest import write_manifest, process_node
 from dbt.parser.sql import SqlBlockParser
 from dbt.task.base import BaseRunner
@@ -56,7 +56,7 @@ class CompileTask(GraphRunnableTask):
         if getattr(self.args, "inline", None):
             resource_types = [NodeType.SqlOperation]
         else:
-            resource_types = NodeType.executable()
+            resource_types = EXECUTABLE_NODE_TYPES
 
         if self.manifest is None or self.graph is None:
             raise DbtInternalError("manifest and graph must be set to get perform node selection")

@@ -60,7 +60,7 @@ from dbt.common.helper_types import PathSet
 from dbt.common.events.functions import fire_event
 from dbt.common.events.contextvars import get_node_info
 from dbt.events.types import MergedFromState, UnpinnedRefNewVersionAvailable
-from dbt.node_types import NodeType, AccessType
+from dbt.node_types import NodeType, AccessType, REFABLE_NODE_TYPES, VERSIONED_NODE_TYPES
 from dbt.mp_context import get_mp_context
 import dbt.common.utils
 
@@ -153,8 +153,8 @@ class SourceLookup(dbtClassMixin):
 
 class RefableLookup(dbtClassMixin):
     # model, seed, snapshot
-    _lookup_types: ClassVar[set] = set(NodeType.refable())
-    _versioned_types: ClassVar[set] = set(NodeType.versioned())
+    _lookup_types: ClassVar[set] = set(REFABLE_NODE_TYPES)
+    _versioned_types: ClassVar[set] = set(VERSIONED_NODE_TYPES)
 
     def __init__(self, manifest: "Manifest") -> None:
         self.storage: Dict[str, Dict[PackageName, UniqueID]] = {}
@@ -1292,7 +1292,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
 
         Only non-ephemeral refable nodes are examined.
         """
-        refables = set(NodeType.refable())
+        refables = set(REFABLE_NODE_TYPES)
         merged = set()
         for unique_id, node in other.nodes.items():
             current = self.nodes.get(unique_id)
@@ -1326,7 +1326,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
 
         Only non-ephemeral refable nodes are examined.
         """
-        refables = set(NodeType.refable())
+        refables = set(REFABLE_NODE_TYPES)
         for unique_id, node in other.nodes.items():
             current = self.nodes.get(unique_id)
             if current and (node.resource_type in refables and not node.is_ephemeral):

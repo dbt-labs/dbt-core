@@ -1,5 +1,3 @@
-from typing import List
-
 from dbt.common.dataclass_schema import StrEnum
 
 
@@ -35,34 +33,6 @@ class NodeType(StrEnum):
     Group = "group"
     SavedQuery = "saved_query"
     SemanticModel = "semantic_model"
-
-    @classmethod
-    def executable(cls) -> List["NodeType"]:
-        return [
-            cls.Model,
-            cls.Test,
-            cls.Snapshot,
-            cls.Analysis,
-            cls.Operation,
-            cls.Seed,
-            cls.Documentation,
-            cls.RPCCall,
-            cls.SqlOperation,
-        ]
-
-    @classmethod
-    def refable(cls) -> List["NodeType"]:
-        return [
-            cls.Model,
-            cls.Seed,
-            cls.Snapshot,
-        ]
-
-    @classmethod
-    def versioned(cls) -> List["NodeType"]:
-        return [
-            cls.Model,
-        ]
 
     def pluralize(self) -> str:
         if self is self.Analysis:

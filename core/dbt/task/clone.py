@@ -8,7 +8,7 @@ from dbt.artifacts.run import RunStatus, RunResult
 from dbt.common.dataclass_schema import dbtClassMixin
 from dbt.common.exceptions import DbtInternalError, CompilationError
 from dbt.graph import ResourceTypeSelector
-from dbt.node_types import NodeType
+from dbt.node_types import NodeType, REFABLE_NODE_TYPES
 from dbt.parser.manifest import write_manifest
 from dbt.task.base import BaseRunner
 from dbt.task.run import _validate_materialization_relations_dict
@@ -128,15 +128,15 @@ class CloneTask(GraphRunnableTask):
     @property
     def resource_types(self):
         if not self.args.resource_types:
-            return NodeType.refable()
+            return REFABLE_NODE_TYPES
 
         values = set(self.args.resource_types)
 
         if "all" in values:
             values.remove("all")
-            values.update(NodeType.refable())
+            values.update(REFABLE_NODE_TYPES)
 
-        values = [NodeType(val) for val in values if val in NodeType.refable()]
+        values = [NodeType(val) for val in values if val in REFABLE_NODE_TYPES]
 
         return list(values)
 
