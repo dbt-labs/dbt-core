@@ -1,4 +1,5 @@
 import pytest
+from unittest import mock
 from dbt.tests.util import (
     run_dbt,
     write_file,
@@ -6,6 +7,7 @@ from dbt.tests.util import (
 )
 from dbt.contracts.results import NodeStatus
 from dbt.exceptions import DuplicateResourceNameError, ParsingError
+from dbt.plugins.manifest import PluginNodes, ModelNodeArgs
 from dbt.tests.fixtures.project import write_project_files
 from fixtures import (  # noqa: F401
     my_model_sql,
@@ -20,6 +22,7 @@ from fixtures import (  # noqa: F401
     test_my_model_yml_invalid,
     valid_emails_sql,
     top_level_domains_sql,
+    external_package__accounts_seed_csv,
     external_package,
 )
 
@@ -286,7 +289,7 @@ unit_tests:
 """
 
 
-class TestUnitTestExternalNode:
+class TestUnitTestExternalPackageNode:
     @pytest.fixture(scope="class", autouse=True)
     def setUp(self, project_root, external_package):  # noqa: F811
         write_project_files(project_root, "external_package", external_package)
@@ -309,6 +312,48 @@ class TestUnitTestExternalNode:
     ):
         # `deps` to install the external package
         run_dbt(["deps"], expect_pass=True)
+        # `seed` need so a table exists for `external_model` to point to
+        run_dbt(["seed"], expect_pass=True)
+        # `run` needed to ensure `top_level_domains` exists in database for column getting step
+        run_dbt(["run"], expect_pass=True)
+        results = run_dbt(["test", "--select", "valid_emails"], expect_pass=True)
+        assert len(results) == 1
+
+
+class TestUnitTestExternalProjectNode:
+    @pytest.fixture(scope="class")
+    def external_model_node(self, unique_schema):
+        return ModelNodeArgs(
+            name="external_model",
+            package_name="external_package",
+            identifier="external_node_seed",
+            schema=unique_schema,
+        )
+
+    @pytest.fixture(scope="class")
+    def seeds(self):
+        return {"external_node_seed.csv": external_package__accounts_seed_csv}
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "top_level_domains.sql": top_level_domains_sql,
+            "valid_emails.sql": valid_emails_sql,
+            "unit_test_ext_node.yml": unit_test_ext_node_yml,
+        }
+
+    @mock.patch("dbt.plugins.get_plugin_manager")
+    def test_unit_test_ext_nodes(
+        self,
+        get_plugin_manager,
+        project,
+        external_model_node,
+    ):
+        # initial plugin - one external model
+        external_nodes = PluginNodes()
+        external_nodes.add_model(external_model_node)
+        get_plugin_manager.return_value.get_nodes.return_value = external_nodes
+
         # `seed` need so a table exists for `external_model` to point to
         run_dbt(["seed"], expect_pass=True)
         # `run` needed to ensure `top_level_domains` exists in database for column getting step
