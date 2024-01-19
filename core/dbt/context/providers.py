@@ -60,7 +60,6 @@ from dbt.exceptions import (
     MetricArgsError,
     MissingConfigError,
     OperationsCannotRefEphemeralNodesError,
-    PackageNotInDepsError,
     ParsingError,
     RefBadContextError,
     RefArgsError,
@@ -638,10 +637,8 @@ class ModelConfiguredVar(Var):
         package_name = self._node.package_name
 
         if package_name != self._config.project_name:
-            if package_name not in dependencies:
-                # I don't think this is actually reachable
-                raise PackageNotInDepsError(package_name, node=self._node)
-            yield dependencies[package_name]
+            if package_name in dependencies:
+                yield dependencies[package_name]
         yield self._config
 
     def _generate_merged(self) -> Mapping[str, Any]:
