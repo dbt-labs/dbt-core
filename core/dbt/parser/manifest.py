@@ -1858,6 +1858,7 @@ def _process_models_for_unit_test(
             new_unit_test_def = UnitTestDefinition.from_dict(original_unit_test_dict)
             new_unit_test_def.unique_id = versioned_unit_test_unique_id
             new_unit_test_def.depends_on.nodes[0] = versioned_model_unique_id
+            new_unit_test_def.version = versioned_model.version
             schema_file.unit_tests.append(versioned_unit_test_unique_id)
             # fqn?
             manifest.unit_tests[versioned_unit_test_unique_id] = new_unit_test_def

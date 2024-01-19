@@ -69,6 +69,8 @@ class UnitTestManifestLoader:
         # for selection.
         # Note: no depends_on, that's added later using input nodes
         name = test_case.name
+        if tested_node.is_versioned:
+            name = name + f"_v{tested_node.version}"
         unit_test_node = UnitTestNode(
             name=name,
             resource_type=NodeType.Unit,

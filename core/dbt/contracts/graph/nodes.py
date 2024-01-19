@@ -1076,6 +1076,7 @@ class UnitTestDefinition(NodeInfoMixin, GraphNode, UnitTestDefinitionMandatory):
     schema: Optional[str] = None
     created_at: float = field(default_factory=lambda: time.time())
     versions: Optional[UnitTestNodeVersions] = None
+    version: Optional[NodeVersion] = None
 
     @property
     def build_path(self):
