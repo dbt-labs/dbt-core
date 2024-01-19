@@ -1,6 +1,6 @@
 import pytest
 from dbt.tests.util import run_dbt, get_unique_ids_in_results
-from dbt.exceptions import YamlParseDictError
+from dbt.exceptions import YamlParseDictError, ParsingError
 
 from tests.functional.unit_testing.fixtures import (
     my_model_versioned_yml,
@@ -8,11 +8,13 @@ from tests.functional.unit_testing.fixtures import (
     test_my_model_exclude_versions_yml,
     test_my_model_include_versions_yml,
     test_my_model_include_exclude_versions_yml,
+    test_my_model_include_unversioned_yml,
     my_model_v1_sql,
     my_model_v2_sql,
     my_model_v3_sql,
     my_model_a_sql,
     my_model_b_sql,
+    my_model_sql,
 )
 
 
@@ -105,7 +107,7 @@ class TestIncludeVersionSpecified:
         assert sorted(expected_ids) == sorted(unique_ids)
 
 
-# test with an include and exclude version specified, should get ValidationError
+# test with an include and exclude version specified, should raise an error
 class TestIncludeExcludeSpecified:
     @pytest.fixture(scope="class")
     def models(self):
@@ -125,6 +127,20 @@ class TestIncludeExcludeSpecified:
 
 
 # test with an include for an unversioned model, should error
+class TestIncludeUnversioned:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_model_a.sql": my_model_a_sql,
+            "my_model_b.sql": my_model_b_sql,
+            "my_model.sql": my_model_sql,
+            "unit_tests.yml": test_my_model_include_unversioned_yml,
+        }
+
+    def test_include_unversioned(self, project):
+        with pytest.raises(ParsingError):
+            run_dbt(["parse"])
+
 
 # partial parsing test: test with no version specified, then add an exclude version, then switch to include version and make sure the right unit tests are generated for each
 

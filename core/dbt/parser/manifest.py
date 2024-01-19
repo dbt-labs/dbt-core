@@ -1816,7 +1816,17 @@ def _process_models_for_unit_test(
     # We're setting up unit tests for versioned models, so if
     # the model isn't versioned, we don't need to do anything
     if not target_model.is_versioned:
-        return
+        if unit_test_def.versions and (
+            unit_test_def.versions.include or unit_test_def.versions.exclude
+        ):
+            # If model is  not versioned, we should not have an include or exclude
+            msg = (
+                f"Unit test '{unit_test_def.name}' should not have a versions include or exclude "
+                f"when referencing non-versioned model '{target_model.name}'"
+            )
+            raise dbt.exceptions.ParsingError(msg)
+        else:
+            return
     versioned_models = []
     if (
         target_model.package_name in models_to_versions

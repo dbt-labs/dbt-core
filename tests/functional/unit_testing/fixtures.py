@@ -834,3 +834,23 @@ unit_tests:
           1,2,3
           3,2,5
 """
+
+test_my_model_include_unversioned_yml = """
+unit_tests:
+  - name: test_my_model
+    model: my_model
+    versions:
+      include:
+        - 2
+    given:
+      - input: ref('my_model_a')
+        rows:
+          - {id: 1, a: 1}
+      - input: ref('my_model_b')
+        rows:
+          - {id: 1, b: 2}
+          - {id: 2, b: 2}
+    expect:
+      rows:
+        - {c: 2}
+"""
