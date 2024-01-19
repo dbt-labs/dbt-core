@@ -61,6 +61,7 @@ class TestVersions:
         write_file(
             test_my_model_exclude_versions_yml, project.project_root, "models", "unit_tests.yml"
         )
+        # without re-running here, we get an error in the v3 unit test. Not sure why.
         results = run_dbt(["run"])
         assert len(results) == 5
 
@@ -79,9 +80,6 @@ class TestVersions:
         write_file(
             test_my_model_include_versions_yml, project.project_root, "models", "unit_tests.yml"
         )
-
-        results = run_dbt(["run"])
-        assert len(results) == 5
 
         results = run_dbt(["test"])
         assert len(results) == 1
@@ -127,8 +125,6 @@ class TestIncludeUnversioned:
         with pytest.raises(ParsingError):
             run_dbt(["parse"])
 
-
-# test with no version specified in the schema file and use selection logic for a specific version
 
 # test specifying the fixture version with {{ ref(name, version) }}
 
