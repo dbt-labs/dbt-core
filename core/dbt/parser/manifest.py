@@ -1828,6 +1828,9 @@ def _process_models_for_unit_test(
         # Create unit test definitions that match the model versions
         original_unit_test_def = manifest.unit_tests.pop(unit_test_def.unique_id)
         original_unit_test_dict = original_unit_test_def.to_dict()
+        schema_file = manifest.files[original_unit_test_def.file_id]
+        assert isinstance(schema_file, SchemaSourceFile)
+        schema_file.unit_tests.remove(original_unit_test_def.unique_id)
         for versioned_model_unique_id in versioned_models:
             versioned_model = manifest.nodes[versioned_model_unique_id]
             assert isinstance(versioned_model, ModelNode)
@@ -1835,6 +1838,7 @@ def _process_models_for_unit_test(
             new_unit_test_def = UnitTestDefinition.from_dict(original_unit_test_dict)
             new_unit_test_def.unique_id = versioned_unit_test_unique_id
             new_unit_test_def.depends_on.nodes[0] = versioned_model_unique_id
+            schema_file.unit_tests.append(versioned_unit_test_unique_id)
             # fqn?
             manifest.unit_tests[versioned_unit_test_unique_id] = new_unit_test_def
 

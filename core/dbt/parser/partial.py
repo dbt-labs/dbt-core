@@ -456,6 +456,11 @@ class PartialParsing:
                     self.delete_macro_file(source_file)
                     self.saved_files[file_id] = deepcopy(self.new_files[file_id])
                     self.add_to_pp_files(self.saved_files[file_id])
+            elif unique_id in self.saved_manifest.unit_tests:
+                unit_test = self.saved_manifest.unit_tests[unique_id]
+                self._schedule_for_parsing(
+                    "unit_tests", unit_test, unit_test.name, self.delete_unit_test
+                )
 
     def _schedule_for_parsing(self, dict_key: str, element, name, delete: Callable) -> None:
         file_id = element.file_id
