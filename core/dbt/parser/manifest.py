@@ -1814,7 +1814,7 @@ def _process_models_for_unit_test(
     assert isinstance(target_model, ModelNode)
     # unit_test_versions = unit_test_def.versions
     # We're setting up unit tests for versioned models, so if
-    # the model isn't version, we don't need to do anything
+    # the model isn't versioned, we don't need to do anything
     if not target_model.is_versioned:
         return
     versioned_models = []
@@ -1824,14 +1824,34 @@ def _process_models_for_unit_test(
     ):
         versioned_models = models_to_versions[target_model.package_name][target_model.name]
 
-    if versioned_models and unit_test_def.versions is None:
+    versions_to_test = []
+    if unit_test_def.versions is None:
+        versions_to_test = versioned_models
+    elif unit_test_def.versions.exclude:
+        for model_unique_id in versioned_models:
+            model = manifest.nodes[model_unique_id]
+            assert isinstance(model, ModelNode)
+            if model.version in unit_test_def.versions.exclude:
+                continue
+            else:
+                versions_to_test.append(model.unique_id)
+    elif unit_test_def.versions.include:
+        for model_unique_id in versioned_models:
+            model = manifest.nodes[model_unique_id]
+            assert isinstance(model, ModelNode)
+            if model.version in unit_test_def.versions.include:
+                versions_to_test.append(model.unique_id)
+            else:
+                continue
+
+    if versions_to_test:
         # Create unit test definitions that match the model versions
         original_unit_test_def = manifest.unit_tests.pop(unit_test_def.unique_id)
         original_unit_test_dict = original_unit_test_def.to_dict()
         schema_file = manifest.files[original_unit_test_def.file_id]
         assert isinstance(schema_file, SchemaSourceFile)
         schema_file.unit_tests.remove(original_unit_test_def.unique_id)
-        for versioned_model_unique_id in versioned_models:
+        for versioned_model_unique_id in versions_to_test:
             versioned_model = manifest.nodes[versioned_model_unique_id]
             assert isinstance(versioned_model, ModelNode)
             versioned_unit_test_unique_id = f"{NodeType.Unit}.{unit_test_def.package_name}.{unit_test_def.model}.{unit_test_def.name}_v{versioned_model.version}"
