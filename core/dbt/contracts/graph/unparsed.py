@@ -837,6 +837,6 @@ class UnparsedUnitTest(dbtClassMixin):
     @classmethod
     def validate(cls, data):
         super(UnparsedUnitTest, cls).validate(data)
-        if data.get("version", None):
-            if data["version"].get("include") and data["version"].get("exclude"):
+        if data.get("versions", None):
+            if data["versions"].get("include") and data["versions"].get("exclude"):
                 raise ValidationError("Unit tests can not both include and exclude versions.")

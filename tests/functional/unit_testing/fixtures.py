@@ -804,3 +804,33 @@ unit_tests:
           1,2,3
           3,2,5
 """
+
+test_my_model_include_exclude_versions_yml = """
+unit_tests:
+  - name: test_my_model
+    model: my_model
+    versions:
+      include:
+        - 2
+      exclude:
+        - 3
+    given:
+      - input: ref('my_model_a')
+        format: csv
+        rows: |
+          id,a
+          1,1
+          2,3
+      - input: ref('my_model_b')
+        format: csv
+        rows: |
+          id,b
+          1,2
+          2,2
+    expect:
+      format: csv
+      rows: |
+          a,b,c
+          1,2,3
+          3,2,5
+"""

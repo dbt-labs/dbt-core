@@ -1,11 +1,13 @@
 import pytest
 from dbt.tests.util import run_dbt, get_unique_ids_in_results
+from dbt.exceptions import YamlParseDictError
 
 from tests.functional.unit_testing.fixtures import (
     my_model_versioned_yml,
     test_my_model_all_versions_yml,
     test_my_model_exclude_versions_yml,
     test_my_model_include_versions_yml,
+    test_my_model_include_exclude_versions_yml,
     my_model_v1_sql,
     my_model_v2_sql,
     my_model_v3_sql,
@@ -104,6 +106,23 @@ class TestIncludeVersionSpecified:
 
 
 # test with an include and exclude version specified, should get ValidationError
+class TestIncludeExcludeSpecified:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_model_a.sql": my_model_a_sql,
+            "my_model_b.sql": my_model_b_sql,
+            "my_model_v1.sql": my_model_v1_sql,
+            "my_model_v2.sql": my_model_v2_sql,
+            "my_model_v3.sql": my_model_v3_sql,
+            "schema.yml": my_model_versioned_yml,
+            "unit_tests.yml": test_my_model_include_exclude_versions_yml,
+        }
+
+    def test_include_exclude_specified(self, project):
+        with pytest.raises(YamlParseDictError):
+            run_dbt(["parse"])
+
 
 # test with an include for an unversioned model, should error
 
