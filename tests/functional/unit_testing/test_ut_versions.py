@@ -50,6 +50,12 @@ class TestVersions:
         ]
         assert sorted(expected_ids) == sorted(unique_ids)
 
+        # Select tests for a single versioned model
+        results = run_dbt(["test", "--select", "my_model.v2"])
+        assert len(results) == 1
+        unique_ids = get_unique_ids_in_results(results)
+        assert unique_ids == ["unit_test.test.my_model.test_my_model_v2"]
+
         # with an exclude version specified, should create a separate unit test
         # for each version except the excluded version (v2)
         write_file(
