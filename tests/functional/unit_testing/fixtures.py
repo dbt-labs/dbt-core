@@ -598,3 +598,54 @@ unit_tests:
       format: csv
       fixture: test_my_model_basic_fixture
 """
+
+test_model_a_b_yml = """
+unit_tests:
+  - name: my_test_name
+    model: my_model_a
+    given: []
+    expect:
+      rows:
+        - {a: 1, id: 1, not_testing: 2, string_a: "a", date_a: "2020-01-02"}
+
+  - name: my_test_name
+    model: my_model_b
+    given: []
+    expect:
+      rows:
+        - {b: 2, id: 1, c: 2, string_b: "b"}
+"""
+
+test_model_a_with_duplicate_test_name_yml = """
+unit_tests:
+  - name: my_test_name
+    model: my_model_a
+    given: []
+    expect:
+      rows:
+        - {a: 1, id: 1, not_testing: 2, string_a: "a", date_a: "2020-01-02"}
+
+  - name: my_test_name
+    model: my_model_a
+    given: []
+    expect:
+      rows:
+        - {a: 1, id: 1, not_testing: 2, string_a: "a", date_a: "2020-01-02"}
+"""
+
+test_my_model_yml_invalid = """
+unit_tests:
+  - name: test_my_model
+    model: my_model
+    given:
+      - input: ref('my_model_a')
+        rows:
+          - {id: 1, a: "a"}
+      - input: ref('my_model_b')
+        rows:
+          - {id: 1, b: 2}
+          - {id: 2, b: 2}
+    expect:
+      rows:
+        - {c: 3}
+"""
