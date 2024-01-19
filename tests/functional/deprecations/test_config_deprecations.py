@@ -6,8 +6,9 @@ from dbt.tests.util import run_dbt, update_config_file
 from dbt.tests.fixtures.project import write_project_files
 
 from tests.functional.deprecations.fixtures import (
+    macros__custom_test_sql,
     models_trivial__model_sql,
-    old_tests_yaml,
+    old_tests_yml,
     local_dependency__dbt_project_yml,
     local_dependency__schema_yml,
     local_dependency__seed_csv,
@@ -28,14 +29,14 @@ class TestTestsConfigDeprecation:
     def project_config_update(self, unique_schema):
         return {"tests": {"enabled": "true"}}
 
-    def test_tests_config(self, project):
+    def test_project_tests_config(self, project):
         deprecations.reset_deprecations()
         assert deprecations.active_deprecations == set()
         run_dbt(["parse"])
         expected = {"project-test-config"}
         assert expected == deprecations.active_deprecations
 
-    def test_tests_config_fail(self, project):
+    def test_project_tests_config_fail(self, project):
         deprecations.reset_deprecations()
         assert deprecations.active_deprecations == set()
         with pytest.raises(CompilationError) as exc:
@@ -48,16 +49,24 @@ class TestTestsConfigDeprecation:
 class TestSchemaTestDeprecation:
     @pytest.fixture(scope="class")
     def models(self):
-        return {"model.sql": models_trivial__model_sql, "schema.yml": old_tests_yaml}
+        return {
+            "model.sql": models_trivial__model_sql,
+            "versioned_model.sql": models_trivial__model_sql,
+            "schema.yml": old_tests_yml,
+        }
 
-    def test_tests_config(self, project):
+    @pytest.fixture(scope="class")
+    def macros(self):
+        return {"custom.sql": macros__custom_test_sql}
+
+    def test_generic_tests_config(self, project):
         deprecations.reset_deprecations()
         assert deprecations.active_deprecations == set()
         run_dbt(["parse"])
         expected = {"project-test-config"}
         assert expected == deprecations.active_deprecations
 
-    def test_schema_tests_fail(self, project):
+    def test_generic_tests_fail(self, project):
         deprecations.reset_deprecations()
         assert deprecations.active_deprecations == set()
         with pytest.raises(CompilationError) as exc:
@@ -66,11 +75,19 @@ class TestSchemaTestDeprecation:
         expected_msg = "The `tests` config has been renamed to `data_tests`"
         assert expected_msg in exc_str
 
+    def test_generic_data_test_parsing(self, project):
+        results = run_dbt(["list", "--resource-type", "test"])
+        assert len(results) == 4
+
 
 class TestSourceSchemaTestDeprecation:
     @pytest.fixture(scope="class")
     def models(self):
         return {"schema.yml": sources_old_tests_yaml}
+
+    @pytest.fixture(scope="class")
+    def macros(self):
+        return {"custom.sql": macros__custom_test_sql}
 
     @pytest.fixture(scope="class")
     def seeds(self):
@@ -81,15 +98,14 @@ class TestSourceSchemaTestDeprecation:
     def test_source_tests_config(self, project):
         deprecations.reset_deprecations()
         assert deprecations.active_deprecations == set()
-        run_dbt(["seed"])
         run_dbt(["parse"])
         expected = {"project-test-config"}
         assert expected == deprecations.active_deprecations
 
-    def test_schema_tests(self, project):
+    def test_generic_data_tests(self, project):
         run_dbt(["seed"])
         results = run_dbt(["test"])
-        assert len(results) == 1
+        assert len(results) == 2
 
 
 # test for failure with test and data_tests in the same file

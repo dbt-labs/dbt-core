@@ -412,6 +412,7 @@ class SourceTablePatch(dbtClassMixin):
     external: Optional[ExternalTable] = None
     tags: Optional[List[str]] = None
     data_tests: Optional[List[TestDef]] = None
+    tests: Optional[List[TestDef]] = None  # back compat for previous name of 'data_tests'
     columns: Optional[Sequence[UnparsedColumn]] = None
 
     def to_patch_dict(self) -> Dict[str, Any]:
