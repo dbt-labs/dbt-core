@@ -797,7 +797,7 @@ class MacroMethods:
 
         return macros_by_name
 
-    def get_macros_by_package(self) -> Dict[str, Dict[str, List[Macro]]]:
+    def get_macros_by_package(self) -> Dict[str, Dict[str, Macro]]:
         if self._macros_by_package is None:
             # The by-package mapping doesn't exist yet (perhaps because the manifest
             # was deserialized), so we build it.
