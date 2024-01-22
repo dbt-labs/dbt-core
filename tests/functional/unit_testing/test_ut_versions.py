@@ -9,12 +9,14 @@ from tests.functional.unit_testing.fixtures import (
     test_my_model_include_versions_yml,
     test_my_model_include_exclude_versions_yml,
     test_my_model_include_unversioned_yml,
+    test_my_model_version_ref_yml,
     my_model_v1_sql,
     my_model_v2_sql,
     my_model_v3_sql,
     my_model_a_sql,
     my_model_b_sql,
     my_model_sql,
+    my_model_version_ref_sql,
 )
 
 
@@ -127,5 +129,33 @@ class TestIncludeUnversioned:
 
 
 # test specifying the fixture version with {{ ref(name, version) }}
+class TestVersionedFixture:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_model_a.sql": my_model_a_sql,
+            "my_model_b.sql": my_model_b_sql,
+            "my_model_v1.sql": my_model_v1_sql,
+            "my_model_v2.sql": my_model_v2_sql,
+            "my_model_v3.sql": my_model_v3_sql,
+            "my_model_version_ref.sql": my_model_version_ref_sql,
+            "schema.yml": my_model_versioned_yml,
+            "unit_tests.yml": test_my_model_version_ref_yml,
+        }
+
+    def test_versioned_fixture(self, project):
+        results = run_dbt(["run"])
+        assert len(results) == 6
+
+        results = run_dbt(["test"])
+        assert len(results) == 1
+
+        unique_ids = get_unique_ids_in_results(results)
+        # v2 model should be only one included
+        expected_ids = [
+            "unit_test.test.my_model.test_my_model_v2",
+        ]
+        assert expected_ids == unique_ids
+
 
 # test changing the model versions and getting an error for the unit test referencing an old version

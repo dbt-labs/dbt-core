@@ -854,3 +854,20 @@ unit_tests:
       rows:
         - {c: 2}
 """
+
+my_model_version_ref_sql = """
+   select * from {{ ref('my_model', version=2) }}
+"""
+
+test_my_model_version_ref_yml = """
+unit_tests:
+  - name: test_my_model_version_ref
+    model: my_model_version_ref
+    given:
+      - input: ref('my_model_version_ref', version=2)
+        rows:
+          - {c: 2}
+    expect:
+      rows:
+        - {c: 2}
+"""
