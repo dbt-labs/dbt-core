@@ -775,7 +775,7 @@ class MacroMethods:
 
         return candidates
 
-    def get_macros_by_name(self) -> Mapping[str, List[Macro]]:
+    def get_macros_by_name(self) -> Dict[str, List[Macro]]:
         if self._macros_by_name is None:
             # The by-name mapping doesn't exist yet (perhaps because the manifest
             # was deserialized), so we build it.
@@ -784,10 +784,11 @@ class MacroMethods:
         return self._macros_by_name
 
     @staticmethod
-    def _build_macros_by_name(macros: Mapping[str, Macro]) -> MutableMapping[str, List[Macro]]:
+    def _build_macros_by_name(macros: Mapping[str, Macro]) -> Dict[str, List[Macro]]:
         # Convert a macro dictionary keyed on unique id to a flattened version
-        # keyed on macro name for faster lookup by name.
-        macros_by_name = {}
+        # keyed on macro name for faster lookup by name. Since macro names are
+        # not necessarily unique, the dict value is a list.
+        macros_by_name: Dict[str, List[Macro]] = {}
         for macro in macros.values():
             if macro.name not in macros_by_name:
                 macros_by_name[macro.name] = []
@@ -805,10 +806,10 @@ class MacroMethods:
         return self._macros_by_package
 
     @staticmethod
-    def _build_macros_by_package(macros: Mapping[str, Macro]) -> MutableMapping[str, List[Macro]]:
+    def _build_macros_by_package(macros: Mapping[str, Macro]) -> Dict[str, Dict[str, Macro]]:
         # Convert a macro dictionary keyed on unique id to a flattened version
         # keyed on package name for faster lookup by name.
-        macros_by_package = {}
+        macros_by_package: Dict[str, Dict[str, Macro]] = {}
         for macro in macros.values():
             if macro.package_name not in macros_by_package:
                 macros_by_package[macro.package_name] = {}
@@ -892,11 +893,11 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         default_factory=get_mp_context().Lock,
         metadata={"serialize": lambda x: None, "deserialize": lambda x: None},
     )
-    _macros_by_name: Mapping[str, List[Macro]] = field(
+    _macros_by_name: Optional[Dict[str, List[Macro]]] = field(
         default=None,
         metadata={"serialize": lambda x: None, "deserialize": lambda x: None},
     )
-    _macros_by_package: Mapping[str, Mapping[str, Macro]] = field(
+    _macros_by_package: Optional[Dict[str, Dict[str, Macro]]] = field(
         default=None,
         metadata={"serialize": lambda x: None, "deserialize": lambda x: None},
     )
@@ -1637,8 +1638,8 @@ class MacroManifest(MacroMethods):
         # This is returned by the 'graph' context property
         # in the ProviderContext class.
         self.flat_graph: Dict[str, Any] = {}
-        self._macros_by_name: Dict[str, List[Macro]] = None
-        self._macros_by_package: Mapping[str, Mapping[str, Macro]] = None
+        self._macros_by_name: Optional[Dict[str, List[Macro]]] = None
+        self._macros_by_package: Optional[Dict[str, Dict[str, Macro]]] = None
 
 
 AnyManifest = Union[Manifest, MacroManifest]
