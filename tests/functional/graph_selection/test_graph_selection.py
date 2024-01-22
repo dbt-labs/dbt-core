@@ -157,7 +157,6 @@ class TestGraphSelection(SelectionFixtures):
             ]
             #           ["list", "--project-dir", str(project.project_root), "--select", "models/test/subdir*"]
         )
-        print(f"--- results: {results}")
         assert len(results) == 1
 
     def test_locally_qualified_name_model_with_dots(self, project):

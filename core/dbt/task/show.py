@@ -4,11 +4,12 @@ import time
 
 from dbt.context.providers import generate_runtime_model_context
 from dbt.contracts.graph.nodes import SeedNode
-from dbt.contracts.results import RunResult, RunStatus
-from dbt.events.base_types import EventLevel
-from dbt.events.functions import fire_event
-from dbt.events.types import ShowNode, Note
-from dbt.exceptions import DbtRuntimeError
+from dbt.artifacts.run import RunResult, RunStatus
+from dbt_common.events.base_types import EventLevel
+from dbt_common.events.functions import fire_event
+from dbt_common.events.types import Note
+from dbt.events.types import ShowNode
+from dbt_common.exceptions import DbtRuntimeError
 from dbt.task.compile import CompileTask, CompileRunner
 from dbt.task.seed import SeedRunner
 
@@ -27,7 +28,7 @@ class ShowRunner(CompileRunner):
         model_context = generate_runtime_model_context(compiled_node, self.config, manifest)
         compiled_node.compiled_code = self.adapter.execute_macro(
             macro_name="get_show_sql",
-            manifest=manifest,
+            macro_resolver=manifest,
             context_override=model_context,
             kwargs={
                 "compiled_code": model_context["compiled_code"],

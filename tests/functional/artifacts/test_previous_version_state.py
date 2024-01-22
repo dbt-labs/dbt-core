@@ -4,9 +4,9 @@ import shutil
 
 import pytest
 
-from dbt.contracts.util import get_artifact_schema_version
+from dbt.artifacts.base import get_artifact_schema_version
 from dbt.contracts.graph.manifest import WritableManifest
-from dbt.contracts.results import RunResultsArtifact
+from dbt.artifacts.run import RunResultsArtifact
 from dbt.exceptions import IncompatibleSchemaError
 from dbt.tests.util import run_dbt, get_manifest
 
@@ -128,12 +128,12 @@ version: 2
 models:
   - name: my_model
     description: "Example model"
-    tests:
+    data_tests:
       - check_nothing
       - disabled_check_nothing
     columns:
      - name: id
-       tests:
+       data_tests:
        - not_null
 
 semantic_models:
@@ -262,8 +262,8 @@ seeds:
 
 
 class TestPreviousVersionState:
-    CURRENT_EXPECTED_MANIFEST_VERSION = 11
-    CURRENT_EXPECTED_RUN_RESULTS_VERSION = 5
+    CURRENT_EXPECTED_MANIFEST_VERSION = 12
+    CURRENT_EXPECTED_RUN_RESULTS_VERSION = 6
 
     @pytest.fixture(scope="class")
     def models(self):

@@ -35,7 +35,8 @@ from dbt.contracts.graph.unparsed import (
     Owner,
     MaturityType,
 )
-from dbt.events.functions import reset_metadata_vars
+import dbt_common.invocation
+from dbt_common.events.functions import reset_metadata_vars
 from dbt.exceptions import AmbiguousResourceNameRefError
 from dbt.flags import set_from_args
 from dbt.node_types import NodeType
@@ -374,7 +375,7 @@ class ManifestTest(unittest.TestCase):
             saved_queries={},
         )
 
-        invocation_id = dbt.events.functions.EVENT_MANAGER.invocation_id
+        invocation_id = dbt_common.invocation._INVOCATION_ID
         self.assertEqual(
             manifest.writable_manifest().to_dict(omit_none=True),
             {
@@ -390,7 +391,7 @@ class ManifestTest(unittest.TestCase):
                 "group_map": {},
                 "metadata": {
                     "generated_at": "2018-02-14T09:15:13Z",
-                    "dbt_schema_version": "https://schemas.getdbt.com/dbt/manifest/v11.json",
+                    "dbt_schema_version": "https://schemas.getdbt.com/dbt/manifest/v12.json",
                     "dbt_version": dbt.version.__version__,
                     "env": {ENV_KEY_NAME: "value"},
                     "invocation_id": invocation_id,
@@ -398,6 +399,7 @@ class ManifestTest(unittest.TestCase):
                 "docs": {},
                 "disabled": {},
                 "semantic_models": {},
+                "unit_tests": {},
                 "saved_queries": {},
             },
         )
@@ -511,7 +513,7 @@ class ManifestTest(unittest.TestCase):
     @mock.patch.object(tracking, "active_user")
     def test_metadata(self, mock_user):
         mock_user.id = "cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf"
-        dbt.events.functions.EVENT_MANAGER.invocation_id = "01234567-0123-0123-0123-0123456789ab"
+        dbt_common.invocation._INVOCATION_ID = "01234567-0123-0123-0123-0123456789ab"
         set_from_args(Namespace(SEND_ANONYMOUS_USAGE_STATS=False), None)
         now = datetime.utcnow()
         self.assertEqual(
@@ -534,7 +536,7 @@ class ManifestTest(unittest.TestCase):
     @freezegun.freeze_time("2018-02-14T09:15:13Z")
     def test_no_nodes_with_metadata(self, mock_user):
         mock_user.id = "cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf"
-        dbt.events.functions.EVENT_MANAGER.invocation_id = "01234567-0123-0123-0123-0123456789ab"
+        dbt_common.invocation._INVOCATION_ID = "01234567-0123-0123-0123-0123456789ab"
         set_from_args(Namespace(SEND_ANONYMOUS_USAGE_STATS=False), None)
         metadata = ManifestMetadata(
             project_id="098f6bcd4621d373cade4e832627b4f6",
@@ -571,7 +573,7 @@ class ManifestTest(unittest.TestCase):
                 "docs": {},
                 "metadata": {
                     "generated_at": "2018-02-14T09:15:13Z",
-                    "dbt_schema_version": "https://schemas.getdbt.com/dbt/manifest/v11.json",
+                    "dbt_schema_version": "https://schemas.getdbt.com/dbt/manifest/v12.json",
                     "dbt_version": dbt.version.__version__,
                     "project_id": "098f6bcd4621d373cade4e832627b4f6",
                     "user_id": "cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf",
@@ -582,6 +584,7 @@ class ManifestTest(unittest.TestCase):
                 },
                 "disabled": {},
                 "semantic_models": {},
+                "unit_tests": {},
                 "saved_queries": {},
             },
         )
@@ -913,7 +916,7 @@ class MixedManifestTest(unittest.TestCase):
                 "group_map": {},
                 "metadata": {
                     "generated_at": "2018-02-14T09:15:13Z",
-                    "dbt_schema_version": "https://schemas.getdbt.com/dbt/manifest/v11.json",
+                    "dbt_schema_version": "https://schemas.getdbt.com/dbt/manifest/v12.json",
                     "dbt_version": dbt.version.__version__,
                     "invocation_id": "01234567-0123-0123-0123-0123456789ab",
                     "env": {ENV_KEY_NAME: "value"},
@@ -921,6 +924,7 @@ class MixedManifestTest(unittest.TestCase):
                 "docs": {},
                 "disabled": {},
                 "semantic_models": {},
+                "unit_tests": {},
                 "saved_queries": {},
             },
         )
@@ -1019,7 +1023,7 @@ class MixedManifestTest(unittest.TestCase):
                 self.assertEqual(frozenset(node), REQUIRED_PARSED_NODE_KEYS)
         self.assertEqual(compiled_count, 2)
 
-    def test_add_from_artifact(self):
+    def test_merge_from_artifact(self):
         original_nodes = deepcopy(self.nested_nodes)
         other_nodes = deepcopy(self.nested_nodes)
 
@@ -1041,7 +1045,8 @@ class MixedManifestTest(unittest.TestCase):
 
         original_manifest = Manifest(nodes=original_nodes)
         other_manifest = Manifest(nodes=other_nodes)
-        original_manifest.add_from_artifact(other_manifest.writable_manifest())
+        adapter = mock.MagicMock()
+        original_manifest.merge_from_artifact(adapter, other_manifest.writable_manifest(), {})
 
         # new node added should not be in original manifest
         assert "model.root.nested2" not in original_manifest.nodes
@@ -1241,25 +1246,24 @@ FindMaterializationSpec = namedtuple("FindMaterializationSpec", "macros,adapter_
 
 def _materialization_parameter_sets():
     # inject the plugins used for materialization parameter tests
-    with mock.patch("dbt.adapters.base.plugin.project_name_from_path") as get_name:
-        get_name.return_value = "foo"
-        FooPlugin = AdapterPlugin(
-            adapter=mock.MagicMock(),
-            credentials=mock.MagicMock(),
-            include_path="/path/to/root/plugin",
-        )
-        FooPlugin.adapter.type.return_value = "foo"
-        inject_plugin(FooPlugin)
+    FooPlugin = AdapterPlugin(
+        adapter=mock.MagicMock(),
+        credentials=mock.MagicMock(),
+        include_path="/path/to/root/plugin",
+        project_name="foo",
+    )
+    FooPlugin.adapter.type.return_value = "foo"
+    inject_plugin(FooPlugin)
 
-        get_name.return_value = "bar"
-        BarPlugin = AdapterPlugin(
-            adapter=mock.MagicMock(),
-            credentials=mock.MagicMock(),
-            include_path="/path/to/root/plugin",
-            dependencies=["foo"],
-        )
-        BarPlugin.adapter.type.return_value = "bar"
-        inject_plugin(BarPlugin)
+    BarPlugin = AdapterPlugin(
+        adapter=mock.MagicMock(),
+        credentials=mock.MagicMock(),
+        include_path="/path/to/root/plugin",
+        dependencies=["foo"],
+        project_name="bar",
+    )
+    BarPlugin.adapter.type.return_value = "bar"
+    inject_plugin(BarPlugin)
 
     sets = [
         FindMaterializationSpec(macros=[], adapter_type="foo", expected=None),

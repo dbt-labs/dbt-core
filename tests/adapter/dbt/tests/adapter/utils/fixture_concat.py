@@ -38,7 +38,7 @@ models__test_concat_yml = """
 version: 2
 models:
   - name: test_concat
-    tests:
+    data_tests:
       - assert_equal:
           actual: actual
           expected: expected

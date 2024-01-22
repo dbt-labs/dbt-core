@@ -2,6 +2,17 @@ import datetime
 import re
 
 from dbt import deprecations
+from dbt_common.contracts.config.properties import (
+    AdditionalPropertiesAllowed,
+    AdditionalPropertiesMixin,
+)
+from dbt_common.exceptions import DbtInternalError, CompilationError
+from dbt_common.dataclass_schema import (
+    dbtClassMixin,
+    StrEnum,
+    ExtensibleDbtClassMixin,
+    ValidationError,
+)
 from dbt.node_types import NodeType
 from dbt.contracts.graph.semantic_models import (
     Defaults,
@@ -9,16 +20,15 @@ from dbt.contracts.graph.semantic_models import (
     MeasureAggregationParameters,
 )
 from dbt.contracts.util import (
-    AdditionalPropertiesMixin,
     Mergeable,
     Replaceable,
 )
 
 # trigger the PathEncoder
-import dbt.helper_types  # noqa:F401
-from dbt.exceptions import CompilationError, ParsingError, DbtInternalError
+import dbt_common.helper_types  # noqa:F401
+from dbt.exceptions import ParsingError
 
-from dbt.dataclass_schema import dbtClassMixin, StrEnum, ExtensibleDbtClassMixin, ValidationError
+from dbt_semantic_interfaces.type_enums import ConversionCalculationType
 
 from dataclasses import dataclass, field
 from datetime import timedelta
@@ -95,6 +105,7 @@ TestDef = Union[Dict[str, Any], str]
 
 @dataclass
 class HasColumnAndTestProps(HasColumnProps):
+    data_tests: List[TestDef] = field(default_factory=list)
     tests: List[TestDef] = field(default_factory=list)
 
 
@@ -142,8 +153,8 @@ class UnparsedVersion(dbtClassMixin):
     config: Dict[str, Any] = field(default_factory=dict)
     constraints: List[Dict[str, Any]] = field(default_factory=list)
     docs: Docs = field(default_factory=Docs)
-    tests: Optional[List[TestDef]] = None
-    columns: Sequence[Union[dbt.helper_types.IncludeExclude, UnparsedColumn]] = field(
+    data_tests: Optional[List[TestDef]] = None
+    columns: Sequence[Union[dbt_common.helper_types.IncludeExclude, UnparsedColumn]] = field(
         default_factory=list
     )
     deprecation_date: Optional[datetime.datetime] = None
@@ -155,7 +166,7 @@ class UnparsedVersion(dbtClassMixin):
             return str(self.v) < str(other.v)
 
     @property
-    def include_exclude(self) -> dbt.helper_types.IncludeExclude:
+    def include_exclude(self) -> dbt_common.helper_types.IncludeExclude:
         return self._include_exclude
 
     @property
@@ -168,10 +179,10 @@ class UnparsedVersion(dbtClassMixin):
 
     def __post_init__(self):
         has_include_exclude = False
-        self._include_exclude = dbt.helper_types.IncludeExclude(include="*")
+        self._include_exclude = dbt_common.helper_types.IncludeExclude(include="*")
         self._unparsed_columns = []
         for column in self.columns:
-            if isinstance(column, dbt.helper_types.IncludeExclude):
+            if isinstance(column, dbt_common.helper_types.IncludeExclude):
                 if not has_include_exclude:
                     self._include_exclude = column
                     has_include_exclude = True
@@ -245,7 +256,11 @@ class UnparsedModelUpdate(UnparsedNodeUpdate):
                 f"get_tests_for_version called for version '{version}' not in version map"
             )
         unparsed_version = self._version_map[version]
-        return unparsed_version.tests if unparsed_version.tests is not None else self.tests
+        return (
+            unparsed_version.data_tests
+            if unparsed_version.data_tests is not None
+            else self.data_tests
+        )
 
 
 @dataclass
@@ -291,8 +306,8 @@ class FreshnessThreshold(dbtClassMixin, Mergeable):
     error_after: Optional[Time] = field(default_factory=Time)
     filter: Optional[str] = None
 
-    def status(self, age: float) -> "dbt.contracts.results.FreshnessStatus":
-        from dbt.contracts.results import FreshnessStatus
+    def status(self, age: float) -> "dbt.artifacts.results.FreshnessStatus":  # type: ignore # noqa F821
+        from dbt.artifacts.results import FreshnessStatus
 
         if self.error_after and self.error_after.exceeded(age):
             return FreshnessStatus.Error
@@ -303,11 +318,6 @@ class FreshnessThreshold(dbtClassMixin, Mergeable):
 
     def __bool__(self):
         return bool(self.warn_after) or bool(self.error_after)
-
-
-@dataclass
-class AdditionalPropertiesAllowed(AdditionalPropertiesMixin, ExtensibleDbtClassMixin):
-    _extra: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -398,7 +408,7 @@ class SourceTablePatch(dbtClassMixin):
     freshness: Optional[FreshnessThreshold] = field(default_factory=FreshnessThreshold)
     external: Optional[ExternalTable] = None
     tags: Optional[List[str]] = None
-    tests: Optional[List[TestDef]] = None
+    data_tests: Optional[List[TestDef]] = None
     columns: Optional[Sequence[UnparsedColumn]] = None
 
     def to_patch_dict(self) -> Dict[str, Any]:
@@ -598,6 +608,24 @@ class UnparsedMetricInput(dbtClassMixin):
 
 
 @dataclass
+class ConstantPropertyInput(dbtClassMixin):
+    base_property: str
+    conversion_property: str
+
+
+@dataclass
+class UnparsedConversionTypeParams(dbtClassMixin):
+    base_measure: Union[UnparsedMetricInputMeasure, str]
+    conversion_measure: Union[UnparsedMetricInputMeasure, str]
+    entity: str
+    calculation: str = (
+        ConversionCalculationType.CONVERSION_RATE.value
+    )  # ConversionCalculationType Enum
+    window: Optional[str] = None
+    constant_properties: Optional[List[ConstantPropertyInput]] = None
+
+
+@dataclass
 class UnparsedMetricTypeParams(dbtClassMixin):
     measure: Optional[Union[UnparsedMetricInputMeasure, str]] = None
     numerator: Optional[Union[UnparsedMetricInput, str]] = None
@@ -606,6 +634,7 @@ class UnparsedMetricTypeParams(dbtClassMixin):
     window: Optional[str] = None
     grain_to_date: Optional[str] = None  # str is really a TimeGranularity Enum
     metrics: Optional[List[Union[UnparsedMetricInput, str]]] = None
+    conversion_type_params: Optional[UnparsedConversionTypeParams] = None
 
 
 @dataclass
@@ -759,3 +788,41 @@ def normalize_date(d: Optional[datetime.date]) -> Optional[datetime.datetime]:
         dt = dt.astimezone()
 
     return dt
+
+
+class UnitTestFormat(StrEnum):
+    CSV = "csv"
+    Dict = "dict"
+
+
+@dataclass
+class UnitTestInputFixture(dbtClassMixin):
+    input: str
+    rows: Optional[Union[str, List[Dict[str, Any]]]] = None
+    format: UnitTestFormat = UnitTestFormat.Dict
+    fixture: Optional[str] = None
+
+
+@dataclass
+class UnitTestOutputFixture(dbtClassMixin):
+    rows: Optional[Union[str, List[Dict[str, Any]]]] = None
+    format: UnitTestFormat = UnitTestFormat.Dict
+    fixture: Optional[str] = None
+
+
+@dataclass
+class UnitTestOverrides(dbtClassMixin):
+    macros: Dict[str, Any] = field(default_factory=dict)
+    vars: Dict[str, Any] = field(default_factory=dict)
+    env_vars: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class UnparsedUnitTest(dbtClassMixin):
+    name: str
+    model: str  # name of the model being unit tested
+    given: Sequence[UnitTestInputFixture]
+    expect: UnitTestOutputFixture
+    description: str = ""
+    overrides: Optional[UnitTestOverrides] = None
+    config: Dict[str, Any] = field(default_factory=dict)

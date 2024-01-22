@@ -1,6 +1,6 @@
 import pytest
 from dbt.tests.util import run_dbt, check_relations_equal
-from dbt.contracts.results import RunStatus
+from dbt.artifacts.results import RunStatus
 from collections import namedtuple
 from pathlib import Path
 
@@ -343,6 +343,17 @@ class BaseIncrementalUniqueKey:
             "seed.csv": seeds__seed_csv,
             "add_new_rows.sql": seeds__add_new_rows_sql,
         }
+
+    @pytest.fixture(autouse=True)
+    def clean_up(self, project):
+        yield
+        with project.adapter.connection_named("__test"):
+            relation = project.adapter.Relation.create(
+                database=project.database, schema=project.test_schema
+            )
+            project.adapter.drop_schema(relation)
+
+    pass
 
     def update_incremental_model(self, incremental_model):
         """update incremental model after the seed table has been updated"""

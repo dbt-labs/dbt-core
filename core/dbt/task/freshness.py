@@ -9,26 +9,26 @@ from .printer import (
 )
 from .runnable import GraphRunnableTask
 
-from dbt.contracts.results import (
+from dbt.artifacts.freshness import (
     FreshnessResult,
     PartialSourceFreshnessResult,
     SourceFreshnessResult,
     FreshnessStatus,
 )
-from dbt.exceptions import DbtRuntimeError, DbtInternalError
-from dbt.events.functions import fire_event
+from dbt_common.exceptions import DbtRuntimeError, DbtInternalError
+from dbt_common.events.functions import fire_event
+from dbt_common.events.types import Note
 from dbt.events.types import (
     FreshnessCheckComplete,
     LogStartLine,
     LogFreshnessResult,
-    Note,
 )
 from dbt.node_types import NodeType
 
 from dbt.adapters.capability import Capability
-from dbt.contracts.connection import AdapterResponse
+from dbt.adapters.contracts.connection import AdapterResponse
 from dbt.contracts.graph.nodes import SourceDefinition
-from dbt.events.base_types import EventLevel
+from dbt_common.events.base_types import EventLevel
 from dbt.graph import ResourceTypeSelector
 
 RESULT_FILE_NAME = "sources.json"
@@ -99,9 +99,9 @@ class FreshnessRunner(BaseRunner):
         return result
 
     def execute(self, compiled_node, manifest):
-        relation = self.adapter.Relation.create_from_source(compiled_node)
+        relation = self.adapter.Relation.create_from(self.config, compiled_node)
         # given a Source, calculate its freshness.
-        with self.adapter.connection_for(compiled_node):
+        with self.adapter.connection_named(compiled_node.unique_id, compiled_node):
             self.adapter.clear_transaction()
             adapter_response: Optional[AdapterResponse] = None
             freshness = None
@@ -111,7 +111,7 @@ class FreshnessRunner(BaseRunner):
                     relation,
                     compiled_node.loaded_at_field,
                     compiled_node.freshness.filter,
-                    manifest=manifest,
+                    macro_resolver=manifest,
                 )
 
                 status = compiled_node.freshness.status(freshness["age"])
@@ -126,7 +126,7 @@ class FreshnessRunner(BaseRunner):
 
                 adapter_response, freshness = self.adapter.calculate_freshness_from_metadata(
                     relation,
-                    manifest=manifest,
+                    macro_resolver=manifest,
                 )
 
                 status = compiled_node.freshness.status(freshness["age"])
@@ -171,10 +171,6 @@ class FreshnessSelector(ResourceTypeSelector):
 
 
 class FreshnessTask(GraphRunnableTask):
-    def defer_to_manifest(self, adapter, selected_uids):
-        # freshness don't defer
-        return
-
     def result_path(self):
         if self.args.output:
             return os.path.realpath(self.args.output)

@@ -5,7 +5,9 @@ from abc import ABCMeta, abstractmethod
 from typing import Any, Callable, Dict, Generic, Iterable, List, Optional, Type, TypeVar
 from dataclasses import dataclass, field
 
-from dbt.dataclass_schema import ValidationError, dbtClassMixin
+from dbt import deprecations
+from dbt_common.contracts.constraints import ConstraintType, ModelLevelConstraint
+from dbt_common.dataclass_schema import ValidationError, dbtClassMixin
 
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.parser.schema_renderer import SchemaYamlRenderer
@@ -17,9 +19,7 @@ from dbt.contracts.graph.nodes import (
     ParsedNodePatch,
     ParsedMacroPatch,
     UnpatchedSourceDefinition,
-    ConstraintType,
     ModelNode,
-    ModelLevelConstraint,
 )
 from dbt.contracts.graph.unparsed import (
     HasColumnDocs,
@@ -38,13 +38,13 @@ from dbt.exceptions import (
     JSONValidationError,
     DbtInternalError,
     ParsingError,
-    DbtValidationError,
     YamlLoadError,
     YamlParseDictError,
     YamlParseListError,
     InvalidAccessTypeError,
 )
-from dbt.events.functions import warn_or_error
+from dbt_common.exceptions import DbtValidationError
+from dbt_common.events.functions import warn_or_error
 from dbt.events.types import (
     MacroNotFoundForPatch,
     NoNodeForYamlKey,
@@ -63,7 +63,8 @@ from dbt.parser.common import (
     ParserRef,
     trimmed,
 )
-from dbt.utils import coerce_dict_str, deep_merge
+from dbt.utils import coerce_dict_str
+from dbt_common.utils import deep_merge
 
 
 schema_file_keys = (
@@ -138,6 +139,11 @@ class SchemaParser(SimpleParser[YamlBlock, ModelNode]):
         self.render_ctx = generate_schema_yml_context(
             self.root_project, self.project.project_name, self.schema_yaml_vars
         )
+
+    # This is unnecessary, but mypy was requiring it. Clean up parser code so
+    # we don't have to do this.
+    def parse_from_dict(self, dct):
+        pass
 
     @classmethod
     def get_compiled_path(cls, block: FileBlock) -> str:
@@ -226,6 +232,12 @@ class SchemaParser(SimpleParser[YamlBlock, ModelNode]):
                 semantic_model_parser = SemanticModelParser(self, yaml_block)
                 semantic_model_parser.parse()
 
+            if "unit_tests" in dct:
+                from dbt.parser.unit_tests import UnitTestParser
+
+                unit_test_parser = UnitTestParser(self, yaml_block)
+                unit_test_parser.parse()
+
             if "saved_queries" in dct:
                 from dbt.parser.schema_yaml_readers import SavedQueryParser
 
@@ -251,12 +263,13 @@ class ParseResult:
 
 
 # abstract base class (ABCMeta)
-# Four subclasses: MetricParser, ExposureParser, GroupParser, SourceParser, PatchParser
+# Many subclasses: MetricParser, ExposureParser, GroupParser, SourceParser,
+# PatchParser, SemanticModelParser, SavedQueryParser, UnitTestParser
 class YamlReader(metaclass=ABCMeta):
     def __init__(self, schema_parser: SchemaParser, yaml: YamlBlock, key: str) -> None:
         self.schema_parser = schema_parser
         # key: models, seeds, snapshots, sources, macros,
-        # analyses, exposures
+        # analyses, exposures, unit_tests
         self.key = key
         self.yaml = yaml
         self.schema_yaml_vars = SchemaYamlVars()
@@ -304,10 +317,10 @@ class YamlReader(metaclass=ABCMeta):
             if coerce_dict_str(entry) is None:
                 raise YamlParseListError(path, self.key, data, "expected a dict with string keys")
 
-            if "name" not in entry:
+            if "name" not in entry and "model" not in entry:
                 raise ParsingError("Entry did not contain a name")
 
-            # Render the data (except for tests and descriptions).
+            # Render the data (except for tests, data_tests and descriptions).
             # See the SchemaYamlRenderer
             entry = self.render_entry(entry)
             if self.schema_yaml_vars.env_vars:
@@ -477,6 +490,8 @@ class PatchParser(YamlReader, Generic[NonSourceTarget, Parsed]):
                     self.normalize_group_attribute(data, path)
                     self.normalize_contract_attribute(data, path)
                     self.normalize_access_attribute(data, path)
+                # `tests` has been deprecated, convert to `data_tests` here if present
+                self.validate_data_tests(data)
                 node = self._target_type().from_dict(data)
             except (ValidationError, JSONValidationError) as exc:
                 raise YamlParseDictError(path, self.key, data, exc)
@@ -513,6 +528,21 @@ class PatchParser(YamlReader, Generic[NonSourceTarget, Parsed]):
 
     def normalize_access_attribute(self, data, path):
         return self.normalize_attribute(data, path, "access")
+
+    def validate_data_tests(self, data):
+        if data.get("columns"):
+            for column in data["columns"]:
+                if "tests" in column and "data_tests" in column:
+                    raise ValidationError(
+                        "Invalid test config: cannot have both 'tests' and 'data_tests' defined"
+                    )
+                if "tests" in column:
+                    deprecations.warn(
+                        "project-test-config",
+                        deprecated_path="tests",
+                        exp_path="data_tests",
+                    )
+                    column["data_tests"] = column.pop("tests")
 
     def patch_node_config(self, node, patch):
         # Get the ContextConfig that's used in calculating the config

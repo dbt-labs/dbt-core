@@ -2,8 +2,8 @@ from dataclasses import dataclass, field
 from typing import Set, FrozenSet
 
 import agate
-from dbt.dataclass_schema import StrEnum
-from dbt.exceptions import DbtRuntimeError
+from dbt_common.dataclass_schema import StrEnum
+from dbt_common.exceptions import DbtRuntimeError
 from dbt.adapters.relation_configs import (
     RelationConfigBase,
     RelationConfigValidationMixin,

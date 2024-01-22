@@ -22,7 +22,7 @@ models:
     columns:
       - name: id
         description: The user ID number
-        tests:
+        data_tests:
           - unique
           - not_null
       - name: first_name
@@ -33,7 +33,7 @@ models:
         description: The user's IP address
       - name: updated_at
         description: The last time this user's email was updated
-    tests:
+    data_tests:
       - test.nothing
 
   - name: second_model
@@ -427,6 +427,18 @@ class BaseDocsGenerate(BaseGenerateProject):
             table_type="BASE TABLE",
             model_stats=no_stats(),
         )
+
+    @pytest.fixture(autouse=True)
+    def clean_up(self, project):
+        yield
+        with project.adapter.connection_named("__test"):
+            alternate_schema = f"{project.test_schema}_test"
+            relation = project.adapter.Relation.create(
+                database=project.database, schema=alternate_schema
+            )
+            project.adapter.drop_schema(relation)
+
+    pass
 
     # Test "--no-compile" flag works and produces no manifest.json
     def test_run_and_generate_no_compile(self, project, expected_catalog):

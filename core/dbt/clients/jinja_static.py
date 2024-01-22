@@ -1,6 +1,7 @@
 import jinja2
-from dbt.clients.jinja import get_environment
-from dbt.exceptions import MacroNamespaceNotStringError, MacroNameNotStringError
+from dbt_common.clients.jinja import get_environment
+from dbt.exceptions import MacroNamespaceNotStringError
+from dbt_common.exceptions.macros import MacroNameNotStringError
 
 
 def statically_extract_macro_calls(string, ctx, db_wrapper=None):

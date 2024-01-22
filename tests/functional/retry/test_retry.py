@@ -126,7 +126,10 @@ class TestRetry:
         write_file(models__sample_model, "models", "sample_model.sql")
 
     def test_warn_error(self, project):
-        # Regular build
+        # Our test command should succeed when run normally...
+        results = run_dbt(["build", "--select", "second_model"])
+
+        # ...but it should fail when run with warn-error, due to a warning...
         results = run_dbt(["--warn-error", "build", "--select", "second_model"], expect_pass=False)
 
         expected_statuses = {
@@ -291,3 +294,36 @@ class TestRetryOverridePath:
         run_dbt(["run", "--project-dir", "proj_location_1"], expect_pass=False)
         move(proj_location_1, proj_location_2)
         run_dbt(["retry", "--project-dir", "proj_location_2"], expect_pass=False)
+
+
+class TestRetryVars:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "sample_model.sql": "select {{ var('myvar_a', '1') + var('myvar_b', '2') }} as mycol",
+        }
+
+    def test_retry(self, project):
+        # pass because default vars works
+        run_dbt(["run"])
+        run_dbt(["run", "--vars", '{"myvar_a": "12", "myvar_b": "3 4"}'], expect_pass=False)
+        # fail because vars are invalid, this shows that the last passed vars are being used
+        # instead of using the default vars
+        run_dbt(["retry"], expect_pass=False)
+        results = run_dbt(["retry", "--vars", '{"myvar_a": "12", "myvar_b": "34"}'])
+        assert len(results) == 1
+
+
+class TestRetryFullRefresh:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "sample_model.sql": "{% if flags.FULL_REFRESH %} this is invalid sql {% else %} select 1 as mycol {% endif %}",
+        }
+
+    def test_retry(self, project):
+        # This run should fail with invalid sql...
+        run_dbt(["run", "--full-refresh"], expect_pass=False)
+        # ...and so should this one, since the effect of the full-refresh parameter should persist.
+        results = run_dbt(["retry"], expect_pass=False)
+        assert len(results) == 1

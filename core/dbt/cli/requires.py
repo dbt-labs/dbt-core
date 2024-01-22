@@ -1,6 +1,7 @@
 import dbt.tracking
+from dbt_common.invocation import reset_invocation_id
 from dbt.version import installed as installed_version
-from dbt.adapters.factory import adapter_management, register_adapter
+from dbt.adapters.factory import adapter_management
 from dbt.flags import set_flags, get_flag_dict
 from dbt.cli.exceptions import (
     ExceptionExit,
@@ -9,23 +10,27 @@ from dbt.cli.exceptions import (
 from dbt.cli.flags import Flags
 from dbt.config import RuntimeConfig
 from dbt.config.runtime import load_project, load_profile, UnsetProfile
-from dbt.events.base_types import EventLevel
-from dbt.events.functions import fire_event, LOG_VERSION, set_invocation_id, setup_event_logger
+
+from dbt_common.events.base_types import EventLevel
+from dbt_common.events.functions import (
+    fire_event,
+    LOG_VERSION,
+)
+from dbt.events.logging import setup_event_logger
 from dbt.events.types import (
-    CommandCompleted,
     MainReportVersion,
     MainReportArgs,
     MainTrackingUserState,
-    ResourceReport,
 )
-from dbt.events.helpers import get_json_string_utcnow
-from dbt.events.types import MainEncounteredError, MainStackTrace
-from dbt.exceptions import Exception as DbtException, DbtProjectError, FailFastError
-from dbt.parser.manifest import ManifestLoader, write_manifest
+from dbt_common.events.helpers import get_json_string_utcnow
+from dbt.events.types import CommandCompleted, MainEncounteredError, MainStackTrace, ResourceReport
+from dbt_common.exceptions import DbtBaseException as DbtException
+from dbt.exceptions import DbtProjectError, FailFastError
+from dbt.parser.manifest import parse_manifest
 from dbt.profiler import profiler
 from dbt.tracking import active_user, initialize_from_flags, track_run
-from dbt.utils import cast_dict_to_dict_of_strings
-from dbt.plugins import set_up_plugin_manager, get_plugin_manager
+from dbt_common.utils import cast_dict_to_dict_of_strings
+from dbt.plugins import set_up_plugin_manager
 
 from click import Context
 from functools import update_wrapper
@@ -45,9 +50,11 @@ def preflight(func):
         ctx.obj["flags"] = flags
         set_flags(flags)
 
+        # Reset invocation_id for each 'invocation' of a dbt command (can happen multiple times in a single process)
+        reset_invocation_id()
+
         # Logging
         callbacks = ctx.obj.get("callbacks", [])
-        set_invocation_id()
         setup_event_logger(flags=flags, callbacks=callbacks)
 
         # Tracking
@@ -264,23 +271,12 @@ def manifest(*args0, write=True, write_perf_info=False):
                 raise DbtProjectError("profile, project, and runtime_config required for manifest")
 
             runtime_config = ctx.obj["runtime_config"]
-            register_adapter(runtime_config)
 
             # a manifest has already been set on the context, so don't overwrite it
             if ctx.obj.get("manifest") is None:
-                manifest = ManifestLoader.get_full_manifest(
-                    runtime_config,
-                    write_perf_info=write_perf_info,
+                ctx.obj["manifest"] = parse_manifest(
+                    runtime_config, write_perf_info, write, ctx.obj["flags"].write_json
                 )
-
-                ctx.obj["manifest"] = manifest
-                if write and ctx.obj["flags"].write_json:
-                    write_manifest(manifest, runtime_config.project_target_path)
-                    pm = get_plugin_manager(runtime_config.project_name)
-                    plugin_artifacts = pm.get_manifest_artifacts(manifest)
-                    for path, plugin_artifact in plugin_artifacts.items():
-                        plugin_artifact.write(path)
-
             return func(*args, **kwargs)
 
         return update_wrapper(wrapper, func)

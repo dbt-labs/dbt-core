@@ -53,19 +53,19 @@ models:
   - name: fine_model
     columns:
       - name: id
-        tests:
+        data_tests:
           - unique
           - not_null
 
   - name: problematic_model
     columns:
       - name: id
-        tests:
+        data_tests:
           - unique:
               store_failures: true
           - not_null
       - name: first_name
-        tests:
+        data_tests:
           # test truncation of really long test name
           - accepted_values:
               values:
@@ -83,7 +83,7 @@ models:
   - name: fine_model_but_with_a_no_good_very_long_name
     columns:
       - name: quite_long_column_name
-        tests:
+        data_tests:
           # test truncation of really long test name with builtin
           - unique
 """

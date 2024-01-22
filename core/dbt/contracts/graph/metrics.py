@@ -5,7 +5,7 @@ from typing import Any, Dict, Iterator, List
 
 
 DERIVED_METRICS = [MetricType.DERIVED, MetricType.RATIO]
-BASE_METRICS = [MetricType.SIMPLE, MetricType.CUMULATIVE]
+BASE_METRICS = [MetricType.SIMPLE, MetricType.CUMULATIVE, MetricType.CONVERSION]
 
 
 class MetricReference(object):

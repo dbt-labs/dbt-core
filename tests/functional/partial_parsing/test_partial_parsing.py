@@ -134,7 +134,7 @@ class TestModels:
         assert model_three_node.description == "The third model"
         schema_file = manifest.files[schema_file_id]
         assert type(schema_file).__name__ == "SchemaSourceFile"
-        assert len(schema_file.tests) == 1
+        assert len(schema_file.data_tests) == 1
         tests = schema_file.get_all_test_ids()
         assert tests == ["test.test.unique_model_three_id.6776ac8160"]
         unique_test_id = tests[0]

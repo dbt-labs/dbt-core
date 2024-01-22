@@ -42,33 +42,43 @@ from dbt.contracts.graph.nodes import (
     SemanticModel,
     SourceDefinition,
     UnpatchedSourceDefinition,
+    UnitTestDefinition,
+    UnitTestFileFixture,
 )
 from dbt.contracts.graph.unparsed import SourcePatch, NodeVersion, UnparsedVersion
 from dbt.contracts.graph.manifest_upgrade import upgrade_manifest_json
-from dbt.contracts.files import SourceFile, SchemaSourceFile, FileHash, AnySourceFile
-from dbt.contracts.util import (
+from dbt.contracts.files import (
+    SourceFile,
+    SchemaSourceFile,
+    FileHash,
+    AnySourceFile,
+    FixtureSourceFile,
+)
+from dbt.artifacts.base import (
     BaseArtifactMetadata,
-    SourceKey,
     ArtifactMixin,
     schema_version,
     get_artifact_schema_version,
 )
-from dbt.dataclass_schema import dbtClassMixin
+from dbt.contracts.util import SourceKey
+from dbt_common.dataclass_schema import dbtClassMixin
+
 from dbt.exceptions import (
     CompilationError,
     DuplicateResourceNameError,
-    DuplicateMacroInPackageError,
-    DuplicateMaterializationNameError,
     AmbiguousResourceNameRefError,
 )
-from dbt.helper_types import PathSet
-from dbt.events.functions import fire_event
+from dbt.adapters.exceptions import DuplicateMacroInPackageError, DuplicateMaterializationNameError
+from dbt_common.helper_types import PathSet
+from dbt_common.events.functions import fire_event
+from dbt_common.events.contextvars import get_node_info
 from dbt.events.types import MergedFromState, UnpinnedRefNewVersionAvailable
-from dbt.events.contextvars import get_node_info
 from dbt.node_types import NodeType, AccessType
-from dbt.flags import get_flags, MP_CONTEXT
+from dbt.flags import get_flags
+from dbt.mp_context import get_mp_context
 from dbt import tracking
-import dbt.utils
+import dbt_common.utils
+import dbt_common.exceptions
 
 
 NodeEdgeMap = Dict[str, List[str]]
@@ -120,7 +130,7 @@ class DocLookup(dbtClassMixin):
 
     def perform_lookup(self, unique_id: UniqueID, manifest) -> Documentation:
         if unique_id not in manifest.docs:
-            raise dbt.exceptions.DbtInternalError(
+            raise dbt_common.exceptions.DbtInternalError(
                 f"Doc {unique_id} found in cache but not found in manifest"
             )
         return manifest.docs[unique_id]
@@ -153,7 +163,7 @@ class SourceLookup(dbtClassMixin):
 
     def perform_lookup(self, unique_id: UniqueID, manifest: "Manifest") -> SourceDefinition:
         if unique_id not in manifest.sources:
-            raise dbt.exceptions.DbtInternalError(
+            raise dbt_common.exceptions.DbtInternalError(
                 f"Source {unique_id} found in cache but not found in manifest"
             )
         return manifest.sources[unique_id]
@@ -252,7 +262,7 @@ class RefableLookup(dbtClassMixin):
         if unique_id in manifest.nodes:
             node = manifest.nodes[unique_id]
         else:
-            raise dbt.exceptions.DbtInternalError(
+            raise dbt_common.exceptions.DbtInternalError(
                 f"Node {unique_id} found in cache but not found in manifest"
             )
         return node
@@ -301,7 +311,7 @@ class MetricLookup(dbtClassMixin):
 
     def perform_lookup(self, unique_id: UniqueID, manifest: "Manifest") -> Metric:
         if unique_id not in manifest.metrics:
-            raise dbt.exceptions.DbtInternalError(
+            raise dbt_common.exceptions.DbtInternalError(
                 f"Metric {unique_id} found in cache but not found in manifest"
             )
         return manifest.metrics[unique_id]
@@ -336,7 +346,7 @@ class SavedQueryLookup(dbtClassMixin):
 
     def perform_lookup(self, unique_id: UniqueID, manifest: "Manifest") -> SavedQuery:
         if unique_id not in manifest.saved_queries:
-            raise dbt.exceptions.DbtInternalError(
+            raise dbt_common.exceptions.DbtInternalError(
                 f"SavedQUery {unique_id} found in cache but not found in manifest"
             )
         return manifest.saved_queries[unique_id]
@@ -391,7 +401,7 @@ class SemanticModelByMeasureLookup(dbtClassMixin):
         ):
             return disabled_semantic_model[0]
         else:
-            raise dbt.exceptions.DbtInternalError(
+            raise dbt_common.exceptions.DbtInternalError(
                 f"Semantic model `{unique_id}` found in cache but not found in manifest"
             )
 
@@ -799,7 +809,9 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     disabled: MutableMapping[str, List[GraphMemberNode]] = field(default_factory=dict)
     env_vars: MutableMapping[str, str] = field(default_factory=dict)
     semantic_models: MutableMapping[str, SemanticModel] = field(default_factory=dict)
+    unit_tests: MutableMapping[str, UnitTestDefinition] = field(default_factory=dict)
     saved_queries: MutableMapping[str, SavedQuery] = field(default_factory=dict)
+    fixtures: MutableMapping[str, UnitTestFileFixture] = field(default_factory=dict)
 
     _doc_lookup: Optional[DocLookup] = field(
         default=None, metadata={"serialize": lambda x: None, "deserialize": lambda x: None}
@@ -830,7 +842,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         metadata={"serialize": lambda x: None, "deserialize": lambda x: None},
     )
     _lock: Lock = field(
-        default_factory=MP_CONTEXT.Lock,
+        default_factory=get_mp_context().Lock,
         metadata={"serialize": lambda x: None, "deserialize": lambda x: None},
     )
 
@@ -842,7 +854,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
 
     @classmethod
     def __post_deserialize__(cls, obj):
-        obj._lock = MP_CONTEXT.Lock()
+        obj._lock = get_mp_context().Lock()
         return obj
 
     def build_flat_graph(self):
@@ -890,7 +902,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         adapter_type: str,
         specificity: int,
     ) -> CandidateList:
-        full_name = dbt.utils.get_materialization_macro_name(
+        full_name = dbt_common.utils.get_materialization_macro_name(
             materialization_name=materialization_name,
             adapter_type=adapter_type,
             with_prefix=False,
@@ -960,6 +972,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             files={k: _deepcopy(v) for k, v in self.files.items()},
             state_check=_deepcopy(self.state_check),
             semantic_models={k: _deepcopy(v) for k, v in self.semantic_models.items()},
+            unit_tests={k: _deepcopy(v) for k, v in self.unit_tests.items()},
             saved_queries={k: _deepcopy(v) for k, v in self.saved_queries.items()},
         )
         copy.build_flat_graph()
@@ -1030,6 +1043,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             parent_map=self.parent_map,
             group_map=self.group_map,
             semantic_models=self.semantic_models,
+            unit_tests=self.unit_tests,
             saved_queries=self.saved_queries,
         )
 
@@ -1049,11 +1063,13 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             return self.metrics[unique_id]
         elif unique_id in self.semantic_models:
             return self.semantic_models[unique_id]
+        elif unique_id in self.unit_tests:
+            return self.unit_tests[unique_id]
         elif unique_id in self.saved_queries:
             return self.saved_queries[unique_id]
         else:
             # something terrible has happened
-            raise dbt.exceptions.DbtInternalError(
+            raise dbt_common.exceptions.DbtInternalError(
                 "Expected node {} not found in manifest".format(unique_id)
             )
 
@@ -1340,7 +1356,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             node.package_name != target_model.package_name and restrict_package_access
         )
 
-    # Called by RunTask.defer_to_manifest
+    # Called by GraphRunnableTask.defer_to_manifest
     def merge_from_artifact(
         self,
         adapter,
@@ -1369,6 +1385,13 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
                 merged.add(unique_id)
                 self.nodes[unique_id] = node.replace(deferred=True)
 
+            # for all other nodes, add 'defer_relation'
+            elif current and node.resource_type in refables and not node.is_ephemeral:
+                defer_relation = DeferRelation(
+                    node.database, node.schema, node.alias, node.relation_name
+                )
+                self.nodes[unique_id] = current.replace(defer_relation=defer_relation)
+
         # Rebuild the flat_graph, which powers the 'graph' context variable,
         # now that we've deferred some nodes
         self.build_flat_graph()
@@ -1376,25 +1399,6 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         # log up to 5 items
         sample = list(islice(merged, 5))
         fire_event(MergedFromState(num_merged=len(merged), sample=sample))
-
-    # Called by CloneTask.defer_to_manifest
-    def add_from_artifact(
-        self,
-        other: "WritableManifest",
-    ) -> None:
-        """Update this manifest by *adding* information about each node's location
-        in the other manifest.
-
-        Only non-ephemeral refable nodes are examined.
-        """
-        refables = set(NodeType.refable())
-        for unique_id, node in other.nodes.items():
-            current = self.nodes.get(unique_id)
-            if current and (node.resource_type in refables and not node.is_ephemeral):
-                defer_relation = DeferRelation(
-                    node.database, node.schema, node.alias, node.relation_name
-                )
-                self.nodes[unique_id] = current.replace(defer_relation=defer_relation)
 
     # Methods that were formerly in ParseResult
 
@@ -1438,6 +1442,8 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
                 source_file.exposures.append(node.unique_id)
             if isinstance(node, Group):
                 source_file.groups.append(node.unique_id)
+        elif isinstance(source_file, FixtureSourceFile):
+            pass
         else:
             source_file.nodes.append(node.unique_id)
 
@@ -1480,6 +1486,8 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
                 source_file.semantic_models.append(node.unique_id)
             if isinstance(node, Exposure):
                 source_file.exposures.append(node.unique_id)
+        elif isinstance(source_file, FixtureSourceFile):
+            pass
         else:
             source_file.nodes.append(node.unique_id)
 
@@ -1492,6 +1500,18 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         _check_duplicates(semantic_model, self.semantic_models)
         self.semantic_models[semantic_model.unique_id] = semantic_model
         source_file.semantic_models.append(semantic_model.unique_id)
+
+    def add_unit_test(self, source_file: SchemaSourceFile, unit_test: UnitTestDefinition):
+        if unit_test.unique_id in self.unit_tests:
+            raise DuplicateResourceNameError(unit_test, self.unit_tests[unit_test.unique_id])
+        self.unit_tests[unit_test.unique_id] = unit_test
+        source_file.unit_tests.append(unit_test.unique_id)
+
+    def add_fixture(self, source_file: FixtureSourceFile, fixture: UnitTestFileFixture):
+        if fixture.unique_id in self.fixtures:
+            raise DuplicateResourceNameError(fixture, self.fixtures[fixture.unique_id])
+        self.fixtures[fixture.unique_id] = fixture
+        source_file.fixture = fixture.unique_id
 
     def add_saved_query(self, source_file: SchemaSourceFile, saved_query: SavedQuery) -> None:
         _check_duplicates(saved_query, self.saved_queries)
@@ -1525,6 +1545,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             self.disabled,
             self.env_vars,
             self.semantic_models,
+            self.unit_tests,
             self.saved_queries,
             self._doc_lookup,
             self._source_lookup,
@@ -1550,7 +1571,7 @@ AnyManifest = Union[Manifest, MacroManifest]
 
 
 @dataclass
-@schema_version("manifest", 11)
+@schema_version("manifest", 12)
 class WritableManifest(ArtifactMixin):
     nodes: Mapping[UniqueID, ManifestNode] = field(
         metadata=dict(description=("The nodes defined in the dbt project and its dependencies"))
@@ -1607,6 +1628,11 @@ class WritableManifest(ArtifactMixin):
             description="Metadata about the manifest",
         )
     )
+    unit_tests: Mapping[UniqueID, UnitTestDefinition] = field(
+        metadata=dict(
+            description="The unit tests defined in the project",
+        )
+    )
 
     @classmethod
     def compatible_previous_versions(cls) -> Iterable[Tuple[str, int]]:
@@ -1618,6 +1644,7 @@ class WritableManifest(ArtifactMixin):
             ("manifest", 8),
             ("manifest", 9),
             ("manifest", 10),
+            ("manifest", 11),
         ]
 
     @classmethod

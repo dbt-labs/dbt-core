@@ -23,6 +23,8 @@ class TestDbtRunner:
     def test_command_mutually_exclusive_option(self, dbt: dbtRunner) -> None:
         res = dbt.invoke(["--warn-error", "--warn-error-options", '{"include": "all"}', "deps"])
         assert type(res.exception) == DbtUsageException
+        res = dbt.invoke(["deps", "--warn-error", "--warn-error-options", '{"include": "all"}'])
+        assert type(res.exception) == DbtUsageException
 
     def test_invalid_command(self, dbt: dbtRunner) -> None:
         res = dbt.invoke(["invalid-command"])

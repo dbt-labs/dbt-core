@@ -1,6 +1,6 @@
 import pytest
 from dbt.tests.util import run_dbt, check_relations_equal, relation_from_name
-from dbt.contracts.results import RunStatus
+from dbt.artifacts.results import RunStatus
 from dbt.tests.adapter.basic.files import (
     seeds_base_csv,
     seeds_added_csv,
@@ -22,6 +22,17 @@ class BaseIncremental:
     @pytest.fixture(scope="class")
     def seeds(self):
         return {"base.csv": seeds_base_csv, "added.csv": seeds_added_csv}
+
+    @pytest.fixture(autouse=True)
+    def clean_up(self, project):
+        yield
+        with project.adapter.connection_named("__test"):
+            relation = project.adapter.Relation.create(
+                database=project.database, schema=project.test_schema
+            )
+            project.adapter.drop_schema(relation)
+
+    pass
 
     def test_incremental(self, project):
         # seed command

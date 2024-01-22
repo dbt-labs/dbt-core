@@ -341,7 +341,7 @@ seeds:
 - name: example_seed
   columns:
   - name: new_col
-    tests:
+    data_tests:
     - not_null
 """
 
@@ -351,7 +351,7 @@ snapshots:
 - name: example_snapshot
   columns:
   - name: new_col
-    tests:
+    data_tests:
     - not_null
 """
 

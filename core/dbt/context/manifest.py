@@ -1,7 +1,7 @@
 from typing import List
 
 from dbt.clients.jinja import MacroStack
-from dbt.contracts.connection import AdapterRequiredConfig
+from dbt.adapters.contracts.connection import AdapterRequiredConfig
 from dbt.contracts.graph.manifest import Manifest
 from dbt.context.macro_resolver import TestMacroNamespace
 from .base import contextproperty

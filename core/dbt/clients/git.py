@@ -1,8 +1,8 @@
 import re
 import os.path
 
-from dbt.clients.system import run_cmd, rmdir
-from dbt.events.functions import fire_event
+from dbt_common.clients.system import run_cmd, rmdir
+from dbt_common.events.functions import fire_event
 from dbt.events.types import (
     GitSparseCheckoutSubdirectory,
     GitProgressCheckoutRevision,

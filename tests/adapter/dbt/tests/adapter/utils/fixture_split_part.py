@@ -50,7 +50,7 @@ models__test_split_part_yml = """
 version: 2
 models:
   - name: test_split_part
-    tests:
+    data_tests:
       - assert_equal:
           actual: actual
           expected: expected

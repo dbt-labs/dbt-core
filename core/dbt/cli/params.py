@@ -83,13 +83,12 @@ deprecated_defer = click.option(
     hidden=True,
 )
 
-dry_run = click.option(
-    "--dry-run",
-    envvar=None,
-    help="Option to run `dbt deps --add-package` without updating package-lock.yml file.",
+empty = click.option(
+    "--empty/--no-empty",
+    envvar="DBT_EMPTY",
+    help="If specified, limit input refs and sources to zero rows.",
     is_flag=True,
 )
-
 
 enable_legacy_logger = click.option(
     "--enable-legacy-logger/--no-enable-legacy-logger",
