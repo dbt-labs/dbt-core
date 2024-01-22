@@ -151,7 +151,7 @@ class MacroNamespaceBuilder:
             self.add_macro(macro, ctx)
 
     def build_namespace(
-        self, macros_by_package: Dict[str, Macro], ctx: Dict[str, Any]
+        self, macros_by_package: Dict[str, Dict[str, Macro]], ctx: Dict[str, Any]
     ) -> MacroNamespace:
         for package in macros_by_package.values():
             self.add_macros(package.values(), ctx)
