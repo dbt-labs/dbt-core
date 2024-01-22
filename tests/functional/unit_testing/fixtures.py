@@ -864,7 +864,7 @@ unit_tests:
   - name: test_my_model_version_ref
     model: my_model_version_ref
     given:
-      - input: ref('my_model_version_ref', version=2)
+      - input: ref('my_model', version=2)
         rows:
           - {c: 2}
     expect:

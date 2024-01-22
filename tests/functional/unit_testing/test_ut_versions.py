@@ -152,9 +152,7 @@ class TestVersionedFixture:
 
         unique_ids = get_unique_ids_in_results(results)
         # v2 model should be only one included
-        expected_ids = [
-            "unit_test.test.my_model.test_my_model_v2",
-        ]
+        expected_ids = ["unit_test.test.my_model_version_ref.test_my_model_version_ref"]
         assert expected_ids == unique_ids
 
 

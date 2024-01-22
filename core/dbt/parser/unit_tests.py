@@ -147,6 +147,12 @@ class UnitTestManifestLoader:
                     name=input_name,
                     path=original_input_node.path,
                 )
+                if (
+                    original_input_node.resource_type == NodeType.Model
+                    and original_input_node.version
+                ):
+                    input_node.version = original_input_node.version
+
             elif original_input_node.resource_type == NodeType.Source:
                 # We are reusing the database/schema/identifier from the original source,
                 # but that shouldn't matter since this acts as an ephemeral model which just
@@ -218,6 +224,9 @@ class UnitTestManifestLoader:
                 )
             else:
                 raise InvalidUnitTestGivenInput(input=input)
+
+        if not original_input_node:
+            raise InvalidUnitTestGivenInput(input=input)
 
         return original_input_node
 
