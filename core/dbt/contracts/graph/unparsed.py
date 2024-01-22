@@ -106,7 +106,9 @@ TestDef = Union[Dict[str, Any], str]
 @dataclass
 class HasColumnAndTestProps(HasColumnProps):
     data_tests: List[TestDef] = field(default_factory=list)
-    tests: List[TestDef] = field(default_factory=list)
+    tests: List[TestDef] = field(
+        default_factory=list
+    )  # back compat for previous name of 'data_tests'
 
 
 @dataclass
@@ -154,6 +156,7 @@ class UnparsedVersion(dbtClassMixin):
     constraints: List[Dict[str, Any]] = field(default_factory=list)
     docs: Docs = field(default_factory=Docs)
     data_tests: Optional[List[TestDef]] = None
+    tests: Optional[List[TestDef]] = None  # back compat for previous name of 'data_tests'
     columns: Sequence[Union[dbt_common.helper_types.IncludeExclude, UnparsedColumn]] = field(
         default_factory=list
     )
@@ -409,6 +412,7 @@ class SourceTablePatch(dbtClassMixin):
     external: Optional[ExternalTable] = None
     tags: Optional[List[str]] = None
     data_tests: Optional[List[TestDef]] = None
+    tests: Optional[List[TestDef]] = None  # back compat for previous name of 'data_tests'
     columns: Optional[Sequence[UnparsedColumn]] = None
 
     def to_patch_dict(self) -> Dict[str, Any]:
