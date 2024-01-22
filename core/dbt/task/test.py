@@ -232,7 +232,7 @@ class TestRunner(CompileRunner):
         if daff_diff.hasDifference():
             should_error = True
             rendered = self._render_daff_diff(daff_diff)
-            rendered = f"\n\n{red('expected')} differs from {green('actual')}:\n\n{rendered}\n"
+            rendered = f"\n\n{green('actual')} differs from {red('expected')}:\n\n{rendered}\n"
 
             diff = UnitTestDiff(
                 actual=json_rows_from_table(actual),

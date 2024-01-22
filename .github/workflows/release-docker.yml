@@ -36,7 +36,7 @@ jobs:
       latest: ${{ steps.latest.outputs.latest }}
       minor_latest: ${{ steps.latest.outputs.minor_latest }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Split version
         id: version
         run: |

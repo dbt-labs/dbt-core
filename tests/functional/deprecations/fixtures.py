@@ -10,6 +10,13 @@ models_trivial__model_sql = """
 select 1 as id
 """
 
+macros__custom_test_sql = """
+{% test custom(model) %}
+  select * from {{ model }}
+  limit 0
+{% endtest %}
+"""
+
 
 bad_name_yaml = """
 version: 2
@@ -44,13 +51,26 @@ models:
          - unique
 """
 
-old_tests_yaml = """
+old_tests_yml = """
 models:
   - name: model
+    tests:
+      - custom
     columns:
-     - name: id
-       tests:
-         - not_null
+      - name: id
+        tests:
+          - not_null
+
+  - name: versioned_model
+    tests:
+      - custom
+    versions:
+      - v: 1
+        tests:
+        columns:
+          - name: id
+            tests:
+              - not_null
 """
 
 sources_old_tests_yaml = """
@@ -59,6 +79,8 @@ sources:
     schema: "{{ var('schema_override', target.schema) }}"
     tables:
       - name: "seed"
+        tests:
+          - custom
         columns:
           - name: id
             tests:

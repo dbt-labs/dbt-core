@@ -1,3 +1,5 @@
+import pytest
+
 my_model_vars_sql = """
 SELECT
 a+b as c,
@@ -649,3 +651,72 @@ unit_tests:
       rows:
         - {c: 3}
 """
+
+top_level_domains_sql = """
+SELECT 'example.com' AS tld
+UNION ALL
+SELECT 'gmail.com' AS tld
+"""
+
+valid_emails_sql = """
+WITH
+accounts AS (
+  SELECT user_id, email, email_top_level_domain
+  FROM {{ ref('external_package', 'external_model')}}
+),
+top_level_domains AS (
+  SELECT tld FROM {{ ref('top_level_domains')}}
+),
+joined AS (
+  SELECT
+    accounts.user_id as user_id,
+    top_level_domains.tld as tld
+  FROM accounts
+  LEFT OUTER JOIN top_level_domains
+    ON   accounts.email_top_level_domain = top_level_domains.tld
+)
+
+SELECT
+  joined.user_id as user_id,
+  CASE WHEN joined.tld IS NULL THEN FALSE ELSE TRUE END AS is_valid_email_address
+from joined
+"""
+
+external_package__accounts_seed_csv = """user_id,email,email_top_level_domain
+1,"example@example.com","example.com"
+"""
+
+external_package__external_model_sql = """
+SELECT user_id, email, email_top_level_domain FROM {{ ref('accounts_seed') }}
+"""
+
+
+external_package_project_yml = """
+name: external_package
+version: '1.0'
+config-version: 2
+
+model-paths: ["models"]    # paths to models
+analysis-paths: ["analyses"] # path with analysis files which are compiled, but not run
+target-path: "target"      # path for compiled code
+clean-targets: ["target"]  # directories removed by the clean task
+test-paths: ["tests"]       # where to store test results
+seed-paths: ["seeds"]       # load CSVs from this directory with `dbt seed`
+macro-paths: ["macros"]    # where to find macros
+
+profile: user
+
+models:
+    external_package:
+"""
+
+
+@pytest.fixture(scope="class")
+def external_package():
+    return {
+        "dbt_project.yml": external_package_project_yml,
+        "seeds": {"accounts_seed.csv": external_package__accounts_seed_csv},
+        "models": {
+            "external_model.sql": external_package__external_model_sql,
+        },
+    }
