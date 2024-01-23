@@ -482,7 +482,7 @@ def process_models_for_unit_test(
 
     if not versions_to_test:
         msg = (
-            f"Unit test '{unit_test_def.name}' referenced a version of '{target_model.name} "
+            f"Unit test '{unit_test_def.name}' referenced a version of '{target_model.name}' "
             "which was not found."
         )
         raise ParsingError(msg)
