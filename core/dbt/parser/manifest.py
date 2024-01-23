@@ -107,7 +107,6 @@ from dbt.contracts.graph.nodes import (
     ResultNode,
     ModelNode,
     NodeRelation,
-    UnitTestDefinition,
 )
 from dbt.contracts.graph.unparsed import NodeVersion
 from dbt.artifacts.base import Writable
@@ -130,6 +129,7 @@ from dbt.parser.search import FileBlock
 from dbt.parser.seeds import SeedParser
 from dbt.parser.snapshots import SnapshotParser
 from dbt.parser.sources import SourcePatcher
+from dbt.parser.unit_tests import process_models_for_unit_test
 from dbt.version import __version__
 
 from dbt_common.dataclass_schema import StrEnum, dbtClassMixin
@@ -1246,7 +1246,7 @@ class ManifestLoader:
                 continue
             if not models_to_versions:
                 models_to_versions = _build_model_names_to_versions(self.manifest)
-            _process_models_for_unit_test(
+            process_models_for_unit_test(
                 self.manifest, current_project, unit_test, models_to_versions
             )
 
@@ -1803,83 +1803,6 @@ def _process_sources_for_node(manifest: Manifest, current_project: str, node: Ma
             continue
         target_source_id = target_source.unique_id
         node.depends_on.add_node(target_source_id)
-
-
-def _process_models_for_unit_test(
-    manifest: Manifest, current_project: str, unit_test_def: UnitTestDefinition, models_to_versions
-):
-
-    # The UnitTestDefinition should only have one "depends_on" at this point,
-    # the one that's found by the "model" field.
-    target_model_id = unit_test_def.depends_on.nodes[0]
-    target_model = manifest.nodes[target_model_id]
-    assert isinstance(target_model, ModelNode)
-    # unit_test_versions = unit_test_def.versions
-    # We're setting up unit tests for versioned models, so if
-    # the model isn't versioned, we don't need to do anything
-    if not target_model.is_versioned:
-        if unit_test_def.versions and (
-            unit_test_def.versions.include or unit_test_def.versions.exclude
-        ):
-            # If model is  not versioned, we should not have an include or exclude
-            msg = (
-                f"Unit test '{unit_test_def.name}' should not have a versions include or exclude "
-                f"when referencing non-versioned model '{target_model.name}'"
-            )
-            raise dbt.exceptions.ParsingError(msg)
-        else:
-            return
-    versioned_models = []
-    if (
-        target_model.package_name in models_to_versions
-        and target_model.name in models_to_versions[target_model.package_name]
-    ):
-        versioned_models = models_to_versions[target_model.package_name][target_model.name]
-
-    versions_to_test = []
-    if unit_test_def.versions is None:
-        versions_to_test = versioned_models
-    elif unit_test_def.versions.exclude:
-        for model_unique_id in versioned_models:
-            model = manifest.nodes[model_unique_id]
-            assert isinstance(model, ModelNode)
-            if model.version in unit_test_def.versions.exclude:
-                continue
-            else:
-                versions_to_test.append(model.unique_id)
-    elif unit_test_def.versions.include:
-        for model_unique_id in versioned_models:
-            model = manifest.nodes[model_unique_id]
-            assert isinstance(model, ModelNode)
-            if model.version in unit_test_def.versions.include:
-                versions_to_test.append(model.unique_id)
-            else:
-                continue
-
-    if not versions_to_test:
-        msg = (
-            f"Unit test '{unit_test_def.name}' referenced a version of '{target_model.name} "
-            "which was not found."
-        )
-        raise dbt.exceptions.ParsingError(msg)
-    else:
-        # Create unit test definitions that match the model versions
-        original_unit_test_def = manifest.unit_tests.pop(unit_test_def.unique_id)
-        original_unit_test_dict = original_unit_test_def.to_dict()
-        schema_file = manifest.files[original_unit_test_def.file_id]
-        assert isinstance(schema_file, SchemaSourceFile)
-        schema_file.unit_tests.remove(original_unit_test_def.unique_id)
-        for versioned_model_unique_id in versions_to_test:
-            versioned_model = manifest.nodes[versioned_model_unique_id]
-            assert isinstance(versioned_model, ModelNode)
-            versioned_unit_test_unique_id = f"{NodeType.Unit}.{unit_test_def.package_name}.{unit_test_def.model}.{unit_test_def.name}_v{versioned_model.version}"
-            new_unit_test_def = UnitTestDefinition.from_dict(original_unit_test_dict)
-            new_unit_test_def.unique_id = versioned_unit_test_unique_id
-            new_unit_test_def.depends_on.nodes[0] = versioned_model_unique_id
-            new_unit_test_def.version = versioned_model.version
-            schema_file.unit_tests.append(versioned_unit_test_unique_id)
-            # fqn?
-            manifest.unit_tests[versioned_unit_test_unique_id] = new_unit_test_def
 
 
 # This is called in task.rpc.sql_commands when a "dynamic" node is
