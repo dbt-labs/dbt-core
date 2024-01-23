@@ -1,4 +1,3 @@
-from collections import ChainMap
 from typing import List
 
 from dbt.clients.jinja import MacroStack
