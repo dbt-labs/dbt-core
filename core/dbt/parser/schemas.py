@@ -530,19 +530,36 @@ class PatchParser(YamlReader, Generic[NonSourceTarget, Parsed]):
         return self.normalize_attribute(data, path, "access")
 
     def validate_data_tests(self, data):
-        if data.get("columns"):
-            for column in data["columns"]:
-                if "tests" in column and "data_tests" in column:
+        # Rename 'tests' -> 'data_tests' at both model-level and column-level
+        # Raise a validation error if the user has defined both names
+        def validate_and_rename(data):
+            if data.get("tests"):
+                if "tests" in data and "data_tests" in data:
                     raise ValidationError(
                         "Invalid test config: cannot have both 'tests' and 'data_tests' defined"
                     )
-                if "tests" in column:
-                    deprecations.warn(
-                        "project-test-config",
-                        deprecated_path="tests",
-                        exp_path="data_tests",
-                    )
-                    column["data_tests"] = column.pop("tests")
+                deprecations.warn(
+                    "project-test-config",
+                    deprecated_path="tests",
+                    exp_path="data_tests",
+                )
+                data["data_tests"] = data.pop("tests")
+
+        # model-level tests
+        validate_and_rename(data)
+
+        # column-level tests
+        if data.get("columns"):
+            for column in data["columns"]:
+                validate_and_rename(column)
+
+        # versioned models
+        if data.get("versions"):
+            for version in data["versions"]:
+                validate_and_rename(version)
+                if version.get("columns"):
+                    for column in version["columns"]:
+                        validate_and_rename(column)
 
     def patch_node_config(self, node, patch):
         # Get the ContextConfig that's used in calculating the config
