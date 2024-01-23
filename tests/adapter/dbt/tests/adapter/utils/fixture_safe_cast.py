@@ -26,7 +26,7 @@ models__test_safe_cast_yml = """
 version: 2
 models:
   - name: test_safe_cast
-    tests:
+    data_tests:
       - assert_equal:
           actual: actual
           expected: expected

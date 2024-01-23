@@ -2,7 +2,7 @@ import os
 import pathspec  # type: ignore
 import pathlib
 from dataclasses import dataclass, field
-from dbt.common.clients.system import load_file_contents
+from dbt_common.clients.system import load_file_contents
 from dbt.contracts.files import (
     FilePath,
     ParseFileType,
@@ -10,15 +10,16 @@ from dbt.contracts.files import (
     FileHash,
     AnySourceFile,
     SchemaSourceFile,
+    FixtureSourceFile,
 )
 from dbt.config import Project
-from dbt.common.dataclass_schema import dbtClassMixin
+from dbt_common.dataclass_schema import dbtClassMixin
 from dbt.parser.schemas import yaml_from_file, schema_file_keys
 from dbt.exceptions import ParsingError
 from dbt.parser.search import filesystem_search
 from typing import Optional, Dict, List, Mapping, MutableMapping
 from dbt.events.types import InputFileDiffError
-from dbt.common.events.functions import fire_event
+from dbt_common.events.functions import fire_event
 from typing import Protocol
 
 
@@ -46,7 +47,13 @@ def load_source_file(
     saved_files,
 ) -> Optional[AnySourceFile]:
 
-    sf_cls = SchemaSourceFile if parse_file_type == ParseFileType.Schema else SourceFile
+    if parse_file_type == ParseFileType.Schema:
+        sf_cls = SchemaSourceFile
+    elif parse_file_type == ParseFileType.Fixture:
+        sf_cls = FixtureSourceFile  # type:ignore[assignment]
+    else:
+        sf_cls = SourceFile  # type:ignore[assignment]
+
     source_file = sf_cls(
         path=path,
         checksum=FileHash.empty(),
@@ -421,6 +428,11 @@ def get_file_types_for_project(project):
             "paths": project.all_source_paths,
             "extensions": [".yml", ".yaml"],
             "parser": "SchemaParser",
+        },
+        ParseFileType.Fixture: {
+            "paths": project.fixture_paths,
+            "extensions": [".csv"],
+            "parser": "FixtureParser",
         },
     }
     return file_types

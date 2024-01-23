@@ -1,4 +1,5 @@
 import abc
+from copy import deepcopy
 import os
 from typing import (
     Callable,
@@ -15,10 +16,10 @@ from typing import (
 from typing_extensions import Protocol
 
 from dbt.adapters.base.column import Column
-from dbt.common.clients.jinja import MacroProtocol
+from dbt_common.clients.jinja import MacroProtocol
 from dbt.adapters.factory import get_adapter, get_adapter_package_names, get_adapter_type_names
-from dbt.common.clients import agate_helper
-from dbt.clients.jinja import get_rendered, MacroGenerator, MacroStack
+from dbt_common.clients import agate_helper
+from dbt.clients.jinja import get_rendered, MacroGenerator, MacroStack, UnitTestMacroGenerator
 from dbt.config import RuntimeConfig, Project
 from dbt.constants import SECRET_ENV_PREFIX, DEFAULT_ENV_PLACEHOLDER
 from dbt.context.base import contextmember, contextproperty, Var
@@ -40,11 +41,12 @@ from dbt.contracts.graph.nodes import (
     RefArgs,
     AccessType,
     SemanticModel,
+    UnitTestNode,
 )
 from dbt.contracts.graph.metrics import MetricReference, ResolvedMetricReference
 from dbt.contracts.graph.unparsed import NodeVersion
-from dbt.common.events.functions import get_metadata_vars
-from dbt.common.exceptions import (
+from dbt_common.events.functions import get_metadata_vars
+from dbt_common.exceptions import (
     DbtInternalError,
     DbtRuntimeError,
     DbtValidationError,
@@ -65,7 +67,6 @@ from dbt.exceptions import (
     MacroResultAlreadyLoadedError,
     MetricArgsError,
     OperationsCannotRefEphemeralNodesError,
-    PackageNotInDepsError,
     ParsingError,
     RefBadContextError,
     RefArgsError,
@@ -76,7 +77,7 @@ from dbt.config import IsFQNResource
 from dbt.node_types import NodeType, ModelLanguage
 
 from dbt.utils import MultiDict, args_to_dict
-from dbt.common.utils import merge, AttrDict, cast_to_str
+from dbt_common.utils import merge, AttrDict, cast_to_str
 from dbt import selected_resources
 
 import agate
@@ -568,6 +569,16 @@ class OperationRefResolver(RuntimeRefResolver):
             return super().create_relation(target_model)
 
 
+class RuntimeUnitTestRefResolver(RuntimeRefResolver):
+    def resolve(
+        self,
+        target_name: str,
+        target_package: Optional[str] = None,
+        target_version: Optional[NodeVersion] = None,
+    ) -> RelationProxy:
+        return super().resolve(target_name, target_package, target_version)
+
+
 # `source` implementations
 class ParseSourceResolver(BaseSourceResolver):
     def resolve(self, source_name: str, table_name: str):
@@ -593,6 +604,29 @@ class RuntimeSourceResolver(BaseSourceResolver):
                 disabled=(isinstance(target_source, Disabled)),
             )
         return self.Relation.create_from(self.config, target_source, limit=self.resolve_limit)
+
+
+class RuntimeUnitTestSourceResolver(BaseSourceResolver):
+    def resolve(self, source_name: str, table_name: str):
+        target_source = self.manifest.resolve_source(
+            source_name,
+            table_name,
+            self.current_project,
+            self.model.package_name,
+        )
+        if target_source is None or isinstance(target_source, Disabled):
+            raise TargetNotFoundError(
+                node=self.model,
+                target_name=f"{source_name}.{table_name}",
+                target_kind="source",
+                disabled=(isinstance(target_source, Disabled)),
+            )
+        # For unit tests, this isn't a "real" source, it's a ModelNode taking
+        # the place of a source. We don't really need to return the relation here,
+        # we just need to set_cte, but skipping it confuses typing. We *do* need
+        # the relation in the "this" property.
+        self.model.set_cte(target_source.unique_id, None)
+        return self.Relation.create_ephemeral_from(target_source)
 
 
 # metric` implementations
@@ -640,10 +674,8 @@ class ModelConfiguredVar(Var):
         package_name = self._node.package_name
 
         if package_name != self._config.project_name:
-            if package_name not in dependencies:
-                # I don't think this is actually reachable
-                raise PackageNotInDepsError(package_name, node=self._node)
-            yield dependencies[package_name]
+            if package_name in dependencies:
+                yield dependencies[package_name]
         yield self._config
 
     def _generate_merged(self) -> Mapping[str, Any]:
@@ -670,6 +702,22 @@ class ParseVar(ModelConfiguredVar):
 
 class RuntimeVar(ModelConfiguredVar):
     pass
+
+
+class UnitTestVar(RuntimeVar):
+    def __init__(
+        self,
+        context: Dict[str, Any],
+        config: RuntimeConfig,
+        node: Resource,
+    ) -> None:
+        config_copy = None
+        assert isinstance(node, UnitTestNode)
+        if node.overrides and node.overrides.vars:
+            config_copy = deepcopy(config)
+            config_copy.cli_vars.update(node.overrides.vars)
+
+        super().__init__(context, config_copy or config, node=node)
 
 
 # Providers
@@ -710,6 +758,16 @@ class RuntimeProvider(Provider):
     Var = RuntimeVar
     ref = RuntimeRefResolver
     source = RuntimeSourceResolver
+    metric = RuntimeMetricResolver
+
+
+class RuntimeUnitTestProvider(Provider):
+    execute = True
+    Config = RuntimeConfigObject
+    DatabaseWrapper = RuntimeDatabaseWrapper
+    Var = UnitTestVar
+    ref = RuntimeUnitTestRefResolver
+    source = RuntimeUnitTestSourceResolver
     metric = RuntimeMetricResolver
 
 
@@ -1384,7 +1442,7 @@ class ModelContext(ProviderContext):
 
     @contextproperty()
     def pre_hooks(self) -> List[Dict[str, Any]]:
-        if self.model.resource_type in [NodeType.Source, NodeType.Test]:
+        if self.model.resource_type in [NodeType.Source, NodeType.Test, NodeType.Unit]:
             return []
         # TODO CT-211
         return [
@@ -1393,7 +1451,7 @@ class ModelContext(ProviderContext):
 
     @contextproperty()
     def post_hooks(self) -> List[Dict[str, Any]]:
-        if self.model.resource_type in [NodeType.Source, NodeType.Test]:
+        if self.model.resource_type in [NodeType.Source, NodeType.Test, NodeType.Unit]:
             return []
         # TODO CT-211
         return [
@@ -1406,7 +1464,8 @@ class ModelContext(ProviderContext):
         if self.model.language == ModelLanguage.sql:  # type: ignore[union-attr]
             # If the model is deferred and the adapter doesn't support zero-copy cloning, then select * from the prod
             # relation
-            if getattr(self.model, "defer_relation", None):
+            # TODO: avoid routing on args.which if possible
+            if getattr(self.model, "defer_relation", None) and self.config.args.which == "clone":
                 # TODO https://github.com/dbt-labs/dbt-core/issues/7976
                 return f"select * from {self.model.defer_relation.relation_name or str(self.defer_relation)}"  # type: ignore[union-attr]
             elif getattr(self.model, "extra_ctes_injected", None):
@@ -1486,6 +1545,33 @@ class ModelContext(ProviderContext):
             return None
 
 
+class UnitTestContext(ModelContext):
+    model: UnitTestNode
+
+    @contextmember()
+    def env_var(self, var: str, default: Optional[str] = None) -> str:
+        """The env_var() function. Return the overriden unit test environment variable named 'var'.
+
+        If there is no unit test override, return the environment variable named 'var'.
+
+        If there is no such environment variable set, return the default.
+
+        If the default is None, raise an exception for an undefined variable.
+        """
+        if self.model.overrides and var in self.model.overrides.env_vars:
+            return self.model.overrides.env_vars[var]
+        else:
+            return super().env_var(var, default)
+
+    @contextproperty()
+    def this(self) -> Optional[str]:
+        if self.model.this_input_node_unique_id:
+            this_node = self.manifest.expect(self.model.this_input_node_unique_id)
+            self.model.set_cte(this_node.unique_id, None)  # type: ignore
+            return self.adapter.Relation.add_ephemeral_prefix(this_node.name)
+        return None
+
+
 # This is called by '_context_for', used in 'render_with_context'
 def generate_parser_model_context(
     model: ManifestNode,
@@ -1528,6 +1614,24 @@ def generate_runtime_macro_context(
 ) -> Dict[str, Any]:
     ctx = MacroContext(macro, config, manifest, OperationProvider(), package_name)
     return ctx.to_dict()
+
+
+def generate_runtime_unit_test_context(
+    unit_test: UnitTestNode,
+    config: RuntimeConfig,
+    manifest: Manifest,
+) -> Dict[str, Any]:
+    ctx = UnitTestContext(unit_test, config, manifest, RuntimeUnitTestProvider(), None)
+    ctx_dict = ctx.to_dict()
+
+    if unit_test.overrides and unit_test.overrides.macros:
+        for macro_name, macro_value in unit_test.overrides.macros.items():
+            context_value = ctx_dict.get(macro_name)
+            if isinstance(context_value, MacroGenerator):
+                ctx_dict[macro_name] = UnitTestMacroGenerator(context_value, macro_value)
+            else:
+                ctx_dict[macro_name] = macro_value
+    return ctx_dict
 
 
 class ExposureRefResolver(BaseResolver):

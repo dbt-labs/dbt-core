@@ -9,23 +9,18 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Type, Union
 
 from dbt.compilation import Compiler
-import dbt.common.exceptions.base
+import dbt_common.exceptions.base
 import dbt.exceptions
 from dbt import tracking
 from dbt.config import RuntimeConfig, Project
 from dbt.config.profile import read_profile
 from dbt.constants import DBT_PROJECT_FILE_NAME
 from dbt.contracts.graph.manifest import Manifest
-from dbt.artifacts.schemas.results import (
-    TimingInfo,
-    collect_timing_info,
-    NodeStatus,
-    RunningStatus,
-    RunStatus,
-)
+from dbt.artifacts.schemas.results import TimingInfo, collect_timing_info
+from dbt.artifacts.schemas.results import NodeStatus, RunningStatus, RunStatus
 from dbt.artifacts.schemas.run import RunResult
-from dbt.common.events.contextvars import get_node_info
-from dbt.common.events.functions import fire_event
+from dbt_common.events.contextvars import get_node_info
+from dbt_common.events.functions import fire_event
 from dbt.events.types import (
     SkippingDetails,
     NodeCompiling,
@@ -37,7 +32,7 @@ from dbt.events.types import (
     LogDebugStackTrace,
     LogSkipBecauseError,
 )
-from dbt.common.exceptions import (
+from dbt_common.exceptions import (
     DbtRuntimeError,
     DbtInternalError,
     CompilationError,
@@ -106,17 +101,17 @@ class BaseTask(metaclass=ABCMeta):
             fire_event(LogDbtProjectError(exc=str(exc)))
 
             tracking.track_invalid_invocation(args=args, result_type=exc.result_type)
-            raise dbt.common.exceptions.DbtRuntimeError("Could not run dbt") from exc
+            raise dbt_common.exceptions.DbtRuntimeError("Could not run dbt") from exc
         except dbt.exceptions.DbtProfileError as exc:
             all_profile_names = list(read_profiles(get_flags().PROFILES_DIR).keys())
             fire_event(LogDbtProfileError(exc=str(exc), profiles=all_profile_names))
             tracking.track_invalid_invocation(args=args, result_type=exc.result_type)
-            raise dbt.common.exceptions.DbtRuntimeError("Could not run dbt") from exc
+            raise dbt_common.exceptions.DbtRuntimeError("Could not run dbt") from exc
         return cls(args, config, *pargs, **kwargs)
 
     @abstractmethod
     def run(self):
-        raise dbt.common.exceptions.base.NotImplementedError("Not Implemented")
+        raise dbt_common.exceptions.base.NotImplementedError("Not Implemented")
 
     def interpret_results(self, results):
         return True
@@ -131,7 +126,7 @@ def get_nearest_project_dir(project_dir: Optional[str]) -> Path:
         if project_file.is_file():
             return cur_dir
         else:
-            raise dbt.common.exceptions.DbtRuntimeError(
+            raise dbt_common.exceptions.DbtRuntimeError(
                 "fatal: Invalid --project-dir flag. Not a dbt project. "
                 "Missing dbt_project.yml file"
             )
@@ -141,7 +136,7 @@ def get_nearest_project_dir(project_dir: Optional[str]) -> Path:
     if project_file.is_file():
         return cur_dir
     else:
-        raise dbt.common.exceptions.DbtRuntimeError(
+        raise dbt_common.exceptions.DbtRuntimeError(
             "fatal: Not a dbt project (or any of the parent directories). "
             "Missing dbt_project.yml file"
         )
@@ -312,7 +307,7 @@ class BaseRunner(metaclass=ABCMeta):
             with collect_timing_info("compile", ctx.timing.append):
                 # if we fail here, we still have a compiled node to return
                 # this has the benefit of showing a build path for the errant
-                # model
+                # model.  This calls the 'compile' method in CompileTask
                 ctx.node = self.compile(manifest)
 
             # for ephemeral nodes, we only want to compile, not run

@@ -5,7 +5,7 @@ from .queue import GraphQueue
 from .selector_methods import MethodManager
 from .selector_spec import SelectionCriteria, SelectionSpec, IndirectSelection
 
-from dbt.common.events.functions import fire_event, warn_or_error
+from dbt_common.events.functions import fire_event, warn_or_error
 from dbt.events.types import SelectorReportInvalidSelector, NoNodesForSelectionCriteria
 from dbt.node_types import NodeType
 from dbt.exceptions import (
@@ -31,6 +31,8 @@ def can_select_indirectly(node):
     """
     if node.resource_type == NodeType.Test:
         return True
+    elif node.resource_type == NodeType.Unit:
+        return True
     else:
         return False
 
@@ -46,8 +48,8 @@ class NodeSelector(MethodManager):
         include_empty_nodes: bool = False,
     ) -> None:
         super().__init__(manifest, previous_state)
-        self.full_graph = graph
-        self.include_empty_nodes = include_empty_nodes
+        self.full_graph: Graph = graph
+        self.include_empty_nodes: bool = include_empty_nodes
 
         # build a subgraph containing only non-empty, enabled nodes and enabled
         # sources.
@@ -171,9 +173,12 @@ class NodeSelector(MethodManager):
         elif unique_id in self.manifest.semantic_models:
             semantic_model = self.manifest.semantic_models[unique_id]
             return semantic_model.config.enabled
+        elif unique_id in self.manifest.unit_tests:
+            return True
         elif unique_id in self.manifest.saved_queries:
             saved_query = self.manifest.saved_queries[unique_id]
             return saved_query.config.enabled
+
         node = self.manifest.nodes[unique_id]
 
         if self.include_empty_nodes:
@@ -199,6 +204,8 @@ class NodeSelector(MethodManager):
             node = self.manifest.metrics[unique_id]
         elif unique_id in self.manifest.semantic_models:
             node = self.manifest.semantic_models[unique_id]
+        elif unique_id in self.manifest.unit_tests:
+            node = self.manifest.unit_tests[unique_id]
         elif unique_id in self.manifest.saved_queries:
             node = self.manifest.saved_queries[unique_id]
         else:
@@ -246,8 +253,13 @@ class NodeSelector(MethodManager):
             )
 
         for unique_id in self.graph.select_successors(selected):
-            if unique_id in self.manifest.nodes:
-                node = self.manifest.nodes[unique_id]
+            if unique_id in self.manifest.nodes or unique_id in self.manifest.unit_tests:
+                if unique_id in self.manifest.nodes:
+                    node = self.manifest.nodes[unique_id]
+                elif unique_id in self.manifest.unit_tests:
+                    node = self.manifest.unit_tests[unique_id]  # type: ignore
+                # Test nodes that are not selected themselves, but whose parents are selected.
+                # (Does not include unit tests because they can only have one parent.)
                 if can_select_indirectly(node):
                     # should we add it in directly?
                     if indirect_selection == IndirectSelection.Eager or set(
@@ -315,8 +327,11 @@ class NodeSelector(MethodManager):
         """Returns a queue over nodes in the graph that tracks progress of
         dependecies.
         """
+        # Filtering hapens in get_selected
         selected_nodes = self.get_selected(spec)
+        # Save to global variable
         selected_resources.set_selected_resources(selected_nodes)
+        # Construct a new graph using the selected_nodes
         new_graph = self.full_graph.get_subset_graph(selected_nodes)
         # should we give a way here for consumers to mutate the graph?
         return GraphQueue(new_graph.graph, self.manifest, selected_nodes)

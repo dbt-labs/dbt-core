@@ -1,4 +1,3 @@
-import itertools
 import unittest
 import os
 from typing import Set, Dict, Any
@@ -18,9 +17,9 @@ from dbt.contracts.graph.nodes import (
 from dbt.config.project import VarProvider
 from dbt.context import base, providers, docs, manifest, macros
 from dbt.contracts.files import FileHash
-from dbt.common.events.functions import reset_metadata_vars
+from dbt_common.events.functions import reset_metadata_vars
 from dbt.node_types import NodeType
-import dbt.exceptions
+import dbt_common.exceptions
 from .utils import (
     config_from_parts_or_dicts,
     inject_adapter,
@@ -91,7 +90,7 @@ class TestVar(unittest.TestCase):
         var = providers.RuntimeVar(self.context, self.config, self.model)
 
         self.assertEqual(var("foo", "bar"), "bar")
-        with self.assertRaises(dbt.common.exceptions.CompilationError):
+        with self.assertRaises(dbt_common.exceptions.CompilationError):
             var("foo")
 
     def test_parser_var_default_something(self):
@@ -317,10 +316,21 @@ def mock_macro(name, package_name):
 
 def mock_manifest(config):
     manifest_macros = {}
+    macros_by_package = {}
     for name in ["macro_a", "macro_b"]:
         macro = mock_macro(name, config.project_name)
         manifest_macros[macro.unique_id] = macro
-    return mock.MagicMock(macros=manifest_macros)
+        if macro.package_name not in macros_by_package:
+            macros_by_package[macro.package_name] = {}
+        macro_package = macros_by_package[macro.package_name]
+        macro_package[macro.name] = macro
+
+    def gmbp():
+        return macros_by_package
+
+    m = mock.MagicMock(macros=manifest_macros)
+    m.get_macros_by_package = gmbp
+    return m
 
 
 def mock_model():
@@ -459,7 +469,7 @@ def test_macro_namespace_duplicates(config_postgres, manifest_fx):
     mn.add_macros(manifest_fx.macros.values(), {})
 
     # same pkg, same name: error
-    with pytest.raises(dbt.common.exceptions.CompilationError):
+    with pytest.raises(dbt_common.exceptions.CompilationError):
         mn.add_macro(mock_macro("macro_a", "root"), {})
 
     # different pkg, same name: no error
@@ -469,15 +479,19 @@ def test_macro_namespace_duplicates(config_postgres, manifest_fx):
 def test_macro_namespace(config_postgres, manifest_fx):
     mn = macros.MacroNamespaceBuilder("root", "search", MacroStack(), ["dbt_postgres", "dbt"])
 
+    mbp = manifest_fx.get_macros_by_package()
     dbt_macro = mock_macro("some_macro", "dbt")
+    mbp["dbt"] = {"some_macro": dbt_macro}
+
     # same namespace, same name, different pkg!
     pg_macro = mock_macro("some_macro", "dbt_postgres")
+    mbp["dbt_postgres"] = {"some_macro": pg_macro}
+
     # same name, different package
     package_macro = mock_macro("some_macro", "root")
+    mbp["root"]["some_macro"] = package_macro
 
-    all_macros = itertools.chain(manifest_fx.macros.values(), [dbt_macro, pg_macro, package_macro])
-
-    namespace = mn.build_namespace(all_macros, {})
+    namespace = mn.build_namespace(mbp, {})
     dct = dict(namespace)
     for result in [dct, namespace]:
         assert "dbt" in result

@@ -13,7 +13,7 @@ models:
   - name: my_model
     columns:
       - name: fun
-        tests:
+        data_tests:
           - not_null
 """
 

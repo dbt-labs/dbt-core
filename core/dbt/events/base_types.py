@@ -1,5 +1,5 @@
 # Aliasing common Level classes in order to make custom, but not overly-verbose versions that have PROTO_TYPES_MODULE set to the core-specific generated types_pb2 module
-from dbt.common.events.base_types import (
+from dbt_common.events.base_types import (
     BaseEvent,
     DynamicLevel as CommonDyanicLevel,
     TestLevel as CommonTestLevel,

@@ -1,5 +1,5 @@
 from typing import Dict, Any
-from dbt.common.clients.jinja import BaseMacroGenerator, get_environment
+from dbt_common.clients.jinja import BaseMacroGenerator, get_environment
 
 
 class QueryStringGenerator(BaseMacroGenerator):

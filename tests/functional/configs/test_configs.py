@@ -1,4 +1,4 @@
-from dbt.common.dataclass_schema import ValidationError
+from dbt_common.dataclass_schema import ValidationError
 import pytest
 import os
 
@@ -71,7 +71,7 @@ class TestTargetConfigs(BaseConfigProject):
 
 class TestInvalidTestsMaterializationProj(object):
     def test_tests_materialization_proj_config(self, project):
-        config_patch = {"tests": {"materialized": "table"}}
+        config_patch = {"data_tests": {"materialized": "table"}}
         update_config_file(config_patch, project.project_root, "dbt_project.yml")
         tests_dir = os.path.join(project.project_root, "tests")
         write_file("select * from foo", tests_dir, "test.sql")

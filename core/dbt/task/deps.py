@@ -16,8 +16,8 @@ from dbt.deps.registry import RegistryPinnedPackage
 from dbt.contracts.project import Package
 
 
-from dbt.common.events.functions import fire_event
-from dbt.common.events.types import (
+from dbt_common.events.functions import fire_event
+from dbt_common.events.types import (
     Formatting,
 )
 from dbt.events.types import (
@@ -32,7 +32,7 @@ from dbt.events.types import (
     DepsUpdateAvailable,
     DepsUpToDate,
 )
-from dbt.common.clients import system
+from dbt_common.clients import system
 
 from dbt.task.base import BaseTask, move_to_nearest_project_dir
 

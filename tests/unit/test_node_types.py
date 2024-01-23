@@ -17,7 +17,9 @@ node_type_pluralizations = {
     NodeType.Metric: "metrics",
     NodeType.Group: "groups",
     NodeType.SemanticModel: "semantic_models",
+    NodeType.Unit: "unit_tests",
     NodeType.SavedQuery: "saved_queries",
+    NodeType.Fixture: "fixtures",
 }
 
 

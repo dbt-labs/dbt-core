@@ -24,6 +24,7 @@ from dbt.contracts.graph.nodes import (
     SavedQuery,
     SemanticModel,
     SourceDefinition,
+    UnitTestDefinition,
 )
 
 
@@ -140,6 +141,11 @@ class WritableManifest(ArtifactMixin):
     metadata: ManifestMetadata = field(
         metadata=dict(
             description="Metadata about the manifest",
+        )
+    )
+    unit_tests: Mapping[UniqueID, UnitTestDefinition] = field(
+        metadata=dict(
+            description="The unit tests defined in the project",
         )
     )
 

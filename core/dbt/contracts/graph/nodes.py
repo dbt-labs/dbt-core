@@ -7,14 +7,15 @@ import hashlib
 from mashumaro.types import SerializableType
 from typing import Optional, Union, List, Dict, Any, Sequence, Tuple, Iterator, Literal
 
-from dbt.common.contracts.constraints import (
+from dbt import deprecations
+from dbt_common.contracts.constraints import (
     ColumnLevelConstraint,
     ConstraintType,
     ModelLevelConstraint,
 )
-from dbt.common.dataclass_schema import dbtClassMixin, ExtensibleDbtClassMixin
+from dbt_common.dataclass_schema import dbtClassMixin, ExtensibleDbtClassMixin
 
-from dbt.common.clients.system import write_file
+from dbt_common.clients.system import write_file
 from dbt.contracts.files import FileHash
 from dbt.contracts.graph.saved_queries import Export, QueryParams
 from dbt.contracts.graph.semantic_models import (
@@ -40,13 +41,16 @@ from dbt.contracts.graph.unparsed import (
     UnparsedSourceDefinition,
     UnparsedSourceTableDefinition,
     UnparsedColumn,
+    UnitTestOverrides,
+    UnitTestInputFixture,
+    UnitTestOutputFixture,
 )
 from dbt.contracts.graph.node_args import ModelNodeArgs
 from dbt.contracts.graph.semantic_layer_common import WhereFilterIntersection
 from dbt.contracts.util import Replaceable
-from dbt.common.contracts.config.properties import AdditionalPropertiesMixin
-from dbt.common.events.functions import warn_or_error
-from dbt.exceptions import ParsingError, ContractBreakingChangeError
+from dbt_common.contracts.config.properties import AdditionalPropertiesMixin
+from dbt_common.events.functions import warn_or_error
+from dbt.exceptions import ParsingError, ContractBreakingChangeError, ValidationError
 from dbt.events.types import (
     SeedIncreased,
     SeedExceedsLimitSamePath,
@@ -54,7 +58,7 @@ from dbt.events.types import (
     SeedExceedsLimitChecksumChanged,
     UnversionedBreakingChange,
 )
-from dbt.common.events.contextvars import set_log_contextvars
+from dbt_common.events.contextvars import set_log_contextvars
 from dbt.flags import get_flags
 from dbt.node_types import (
     ModelLanguage,
@@ -88,6 +92,8 @@ from .model_config import (
     EmptySnapshotConfig,
     SnapshotConfig,
     SemanticModelConfig,
+    UnitTestConfig,
+    UnitTestNodeConfig,
     SavedQueryConfig,
 )
 
@@ -1034,6 +1040,84 @@ class GenericTestNode(TestShouldStoreFailures, CompiledNode, HasTestMetadata):
         return "generic"
 
 
+@dataclass
+class UnitTestSourceDefinition(ModelNode):
+    source_name: str = "undefined"
+    quoting: Quoting = field(default_factory=Quoting)
+
+    @property
+    def search_name(self):
+        return f"{self.source_name}.{self.name}"
+
+
+@dataclass
+class UnitTestNode(CompiledNode):
+    resource_type: Literal[NodeType.Unit]
+    tested_node_unique_id: Optional[str] = None
+    this_input_node_unique_id: Optional[str] = None
+    overrides: Optional[UnitTestOverrides] = None
+    config: UnitTestNodeConfig = field(default_factory=UnitTestNodeConfig)
+
+
+@dataclass
+class UnitTestDefinitionMandatory:
+    model: str
+    given: Sequence[UnitTestInputFixture]
+    expect: UnitTestOutputFixture
+
+
+@dataclass
+class UnitTestDefinition(NodeInfoMixin, GraphNode, UnitTestDefinitionMandatory):
+    description: str = ""
+    overrides: Optional[UnitTestOverrides] = None
+    depends_on: DependsOn = field(default_factory=DependsOn)
+    config: UnitTestConfig = field(default_factory=UnitTestConfig)
+    checksum: Optional[str] = None
+    schema: Optional[str] = None
+
+    @property
+    def build_path(self):
+        # TODO: is this actually necessary?
+        return self.original_file_path
+
+    @property
+    def compiled_path(self):
+        # TODO: is this actually necessary?
+        return self.original_file_path
+
+    @property
+    def depends_on_nodes(self):
+        return self.depends_on.nodes
+
+    @property
+    def tags(self) -> List[str]:
+        tags = self.config.tags
+        return [tags] if isinstance(tags, str) else tags
+
+    def build_unit_test_checksum(self):
+        # everything except 'description'
+        data = f"{self.model}-{self.given}-{self.expect}-{self.overrides}"
+
+        # include underlying fixture data
+        for input in self.given:
+            if input.fixture:
+                data += f"-{input.rows}"
+
+        self.checksum = hashlib.new("sha256", data.encode("utf-8")).hexdigest()
+
+    def same_contents(self, other: Optional["UnitTestDefinition"]) -> bool:
+        if other is None:
+            return False
+
+        return self.checksum == other.checksum
+
+
+@dataclass
+class UnitTestFileFixture(BaseNode):
+    resource_type: Literal[NodeType.Fixture]
+    rows: Optional[List[Dict[str, Any]]] = None
+
+
 # ====================================
 # Snapshot node
 # ====================================
@@ -1134,6 +1218,40 @@ class UnpatchedSourceDefinition(BaseNode):
     def get_source_representation(self):
         return f'source("{self.source.name}", "{self.table.name}")'
 
+    def validate_data_tests(self):
+        """
+        sources parse tests differently than models, so we need to do some validation
+        here where it's done in the PatchParser for other nodes
+        """
+        # source table-level tests
+        if self.tests and self.data_tests:
+            raise ValidationError(
+                "Invalid test config: cannot have both 'tests' and 'data_tests' defined"
+            )
+        if self.tests:
+            deprecations.warn(
+                "project-test-config",
+                deprecated_path="tests",
+                exp_path="data_tests",
+            )
+            self.data_tests.extend(self.tests)
+            self.tests.clear()
+
+        # column-level tests
+        for column in self.columns:
+            if column.tests and column.data_tests:
+                raise ValidationError(
+                    "Invalid test config: cannot have both 'tests' and 'data_tests' defined"
+                )
+            if column.tests:
+                deprecations.warn(
+                    "project-test-config",
+                    deprecated_path="tests",
+                    exp_path="data_tests",
+                )
+                column.data_tests.extend(column.tests)
+                column.tests.clear()
+
     @property
     def quote_columns(self) -> Optional[bool]:
         result = None
@@ -1148,14 +1266,23 @@ class UnpatchedSourceDefinition(BaseNode):
         return [] if self.table.columns is None else self.table.columns
 
     def get_tests(self) -> Iterator[Tuple[Dict[str, Any], Optional[UnparsedColumn]]]:
-        for test in self.tests:
-            yield normalize_test(test), None
+        self.validate_data_tests()
+        for data_test in self.data_tests:
+            yield normalize_test(data_test), None
 
         for column in self.columns:
-            if column.tests is not None:
-                for test in column.tests:
-                    yield normalize_test(test), column
+            if column.data_tests is not None:
+                for data_test in column.data_tests:
+                    yield normalize_test(data_test), column
 
+    @property
+    def data_tests(self) -> List[TestDef]:
+        if self.table.data_tests is None:
+            return []
+        else:
+            return self.table.data_tests
+
+    # deprecated
     @property
     def tests(self) -> List[TestDef]:
         if self.table.tests is None:
@@ -1286,6 +1413,10 @@ class SourceDefinition(NodeInfoMixin, ParsedSourceMandatory):
     @property
     def search_name(self):
         return f"{self.source_name}.{self.name}"
+
+    @property
+    def group(self):
+        return None
 
 
 # ====================================
@@ -1837,6 +1968,7 @@ ManifestSQLNode = Union[
     SqlNode,
     GenericTestNode,
     SnapshotNode,
+    UnitTestNode,
 ]
 
 # All SQL nodes plus SeedNode (csv files)
@@ -1857,6 +1989,7 @@ GraphMemberNode = Union[
     Metric,
     SavedQuery,
     SemanticModel,
+    UnitTestDefinition,
 ]
 
 # All "nodes" (or node-like objects) in this file
@@ -1867,7 +2000,4 @@ Resource = Union[
     Group,
 ]
 
-TestNode = Union[
-    SingularTestNode,
-    GenericTestNode,
-]
+TestNode = Union[SingularTestNode, GenericTestNode]

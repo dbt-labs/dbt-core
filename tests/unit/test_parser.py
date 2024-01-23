@@ -176,13 +176,14 @@ class BaseParserTest(unittest.TestCase):
         return FileBlock(file=source_file)
 
     def assert_has_manifest_lengths(
-        self, manifest, macros=3, nodes=0, sources=0, docs=0, disabled=0
+        self, manifest, macros=3, nodes=0, sources=0, docs=0, disabled=0, unit_tests=0
     ):
         self.assertEqual(len(manifest.macros), macros)
         self.assertEqual(len(manifest.nodes), nodes)
         self.assertEqual(len(manifest.sources), sources)
         self.assertEqual(len(manifest.docs), docs)
         self.assertEqual(len(manifest.disabled), disabled)
+        self.assertEqual(len(manifest.unit_tests), unit_tests)
 
 
 def assertEqualNodes(node_one, node_two):
@@ -231,7 +232,7 @@ sources:
           description: A description of my table
           columns:
             - name: color
-              tests:
+              data_tests:
                 - not_null:
                     severity: WARN
                 - accepted_values:
@@ -245,7 +246,7 @@ models:
       columns:
         - name: color
           description: The color value
-          tests:
+          data_tests:
             - not_null:
                 severity: WARN
             - accepted_values:
@@ -259,13 +260,13 @@ MULTIPLE_TABLE_VERSIONED_MODEL_TESTS = """
 models:
     - name: my_model
       description: A description of my model
-      tests:
+      data_tests:
         - unique:
             column_name: color
       columns:
         - name: color
           description: The color value
-          tests:
+          data_tests:
             - not_null:
                 severity: WARN
         - name: location_id
@@ -273,7 +274,7 @@ models:
       versions:
         - v: 1
           defined_in: arbitrary_file_name
-          tests: []
+          data_tests: []
           columns:
             - include: '*'
             - name: extra
@@ -352,7 +353,7 @@ sources:
       - name: my_table
         columns:
           - name: id
-            tests:
+            data_tests:
               - not_null
               - unique
 """
@@ -371,8 +372,8 @@ class SchemaParserTest(BaseParserTest):
             manifest=self.manifest,
         )
 
-    def file_block_for(self, data, filename):
-        return super().file_block_for(data, filename, "models")
+    def file_block_for(self, data, filename, searched="models"):
+        return super().file_block_for(data, filename, searched)
 
     def yaml_block_for(self, test_yml: str, filename: str):
         file_block = self.file_block_for(data=test_yml, filename=filename)
@@ -464,7 +465,7 @@ class SchemaParserSourceTest(SchemaParserTest):
 
         file_id = "snowplow://" + normalize("models/test_one.yml")
         self.assertIn(file_id, self.parser.manifest.files)
-        self.assertEqual(self.parser.manifest.files[file_id].tests, {})
+        self.assertEqual(self.parser.manifest.files[file_id].data_tests, {})
         self.assertEqual(
             self.parser.manifest.files[file_id].sources, ["source.snowplow.my_source.my_table"]
         )
@@ -492,7 +493,7 @@ class SchemaParserSourceTest(SchemaParserTest):
         self.assertEqual(table.name, "my_table")
         self.assertIsNone(table.description)
         self.assertEqual(len(table.columns), 1)
-        self.assertEqual(len(table.columns[0].tests), 2)
+        self.assertEqual(len(table.columns[0].data_tests), 2)
 
 
 class SchemaParserModelsTest(SchemaParserTest):

@@ -1,6 +1,6 @@
 from dataclasses import dataclass
-from dbt.common.dataclass_schema import dbtClassMixin
-from dbt.common.contracts.util import Replaceable
+from dbt_common.dataclass_schema import dbtClassMixin
+from dbt_common.contracts.util import Replaceable
 
 from dbt.artifacts.resources.types import NodeType
 

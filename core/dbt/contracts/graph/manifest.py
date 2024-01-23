@@ -40,15 +40,22 @@ from dbt.contracts.graph.nodes import (
     SemanticModel,
     SourceDefinition,
     UnpatchedSourceDefinition,
+    UnitTestDefinition,
+    UnitTestFileFixture,
 )
 from dbt.contracts.graph.unparsed import SourcePatch, NodeVersion, UnparsedVersion
-from dbt.contracts.files import SourceFile, SchemaSourceFile, FileHash, AnySourceFile
 
 # to preserve import paths
 from dbt.artifacts.schemas.manifest import WritableManifest, ManifestMetadata, UniqueID
-
+from dbt.contracts.files import (
+    SourceFile,
+    SchemaSourceFile,
+    FileHash,
+    AnySourceFile,
+    FixtureSourceFile,
+)
 from dbt.contracts.util import SourceKey
-from dbt.common.dataclass_schema import dbtClassMixin
+from dbt_common.dataclass_schema import dbtClassMixin
 
 from dbt.exceptions import (
     CompilationError,
@@ -56,13 +63,14 @@ from dbt.exceptions import (
     AmbiguousResourceNameRefError,
 )
 from dbt.adapters.exceptions import DuplicateMacroInPackageError, DuplicateMaterializationNameError
-from dbt.common.helper_types import PathSet
-from dbt.common.events.functions import fire_event
-from dbt.common.events.contextvars import get_node_info
+from dbt_common.helper_types import PathSet
+from dbt_common.events.functions import fire_event
+from dbt_common.events.contextvars import get_node_info
 from dbt.events.types import MergedFromState, UnpinnedRefNewVersionAvailable
 from dbt.node_types import NodeType, AccessType, REFABLE_NODE_TYPES, VERSIONED_NODE_TYPES
 from dbt.mp_context import get_mp_context
-import dbt.common.utils
+import dbt_common.utils
+import dbt_common.exceptions
 
 
 PackageName = str
@@ -112,7 +120,7 @@ class DocLookup(dbtClassMixin):
 
     def perform_lookup(self, unique_id: UniqueID, manifest) -> Documentation:
         if unique_id not in manifest.docs:
-            raise dbt.exceptions.DbtInternalError(
+            raise dbt_common.exceptions.DbtInternalError(
                 f"Doc {unique_id} found in cache but not found in manifest"
             )
         return manifest.docs[unique_id]
@@ -145,7 +153,7 @@ class SourceLookup(dbtClassMixin):
 
     def perform_lookup(self, unique_id: UniqueID, manifest: "Manifest") -> SourceDefinition:
         if unique_id not in manifest.sources:
-            raise dbt.exceptions.DbtInternalError(
+            raise dbt_common.exceptions.DbtInternalError(
                 f"Source {unique_id} found in cache but not found in manifest"
             )
         return manifest.sources[unique_id]
@@ -244,7 +252,7 @@ class RefableLookup(dbtClassMixin):
         if unique_id in manifest.nodes:
             node = manifest.nodes[unique_id]
         else:
-            raise dbt.exceptions.DbtInternalError(
+            raise dbt_common.exceptions.DbtInternalError(
                 f"Node {unique_id} found in cache but not found in manifest"
             )
         return node
@@ -293,7 +301,7 @@ class MetricLookup(dbtClassMixin):
 
     def perform_lookup(self, unique_id: UniqueID, manifest: "Manifest") -> Metric:
         if unique_id not in manifest.metrics:
-            raise dbt.exceptions.DbtInternalError(
+            raise dbt_common.exceptions.DbtInternalError(
                 f"Metric {unique_id} found in cache but not found in manifest"
             )
         return manifest.metrics[unique_id]
@@ -328,7 +336,7 @@ class SavedQueryLookup(dbtClassMixin):
 
     def perform_lookup(self, unique_id: UniqueID, manifest: "Manifest") -> SavedQuery:
         if unique_id not in manifest.saved_queries:
-            raise dbt.exceptions.DbtInternalError(
+            raise dbt_common.exceptions.DbtInternalError(
                 f"SavedQUery {unique_id} found in cache but not found in manifest"
             )
         return manifest.saved_queries[unique_id]
@@ -383,7 +391,7 @@ class SemanticModelByMeasureLookup(dbtClassMixin):
         ):
             return disabled_semantic_model[0]
         else:
-            raise dbt.exceptions.DbtInternalError(
+            raise dbt_common.exceptions.DbtInternalError(
                 f"Semantic model `{unique_id}` found in cache but not found in manifest"
             )
 
@@ -618,6 +626,8 @@ class MacroMethods:
     def __init__(self):
         self.macros = []
         self.metadata = {}
+        self._macros_by_name = {}
+        self._macros_by_package = {}
 
     def find_macro_by_name(
         self, name: str, root_project_name: str, package: Optional[str]
@@ -686,10 +696,13 @@ class MacroMethods:
         from dbt.adapters.factory import get_adapter_package_names
 
         candidates: CandidateList = CandidateList()
+
+        macros_by_name = self.get_macros_by_name()
+        if name not in macros_by_name:
+            return candidates
+
         packages = set(get_adapter_package_names(self.metadata.adapter_type))
-        for unique_id, macro in self.macros.items():
-            if macro.name != name:
-                continue
+        for macro in macros_by_name[name]:
             candidate = MacroCandidate(
                 locality=_get_locality(macro, root_project_name, packages),
                 macro=macro,
@@ -698,6 +711,49 @@ class MacroMethods:
                 candidates.append(candidate)
 
         return candidates
+
+    def get_macros_by_name(self) -> Dict[str, List[Macro]]:
+        if self._macros_by_name is None:
+            # The by-name mapping doesn't exist yet (perhaps because the manifest
+            # was deserialized), so we build it.
+            self._macros_by_name = self._build_macros_by_name(self.macros)
+
+        return self._macros_by_name
+
+    @staticmethod
+    def _build_macros_by_name(macros: Mapping[str, Macro]) -> Dict[str, List[Macro]]:
+        # Convert a macro dictionary keyed on unique id to a flattened version
+        # keyed on macro name for faster lookup by name. Since macro names are
+        # not necessarily unique, the dict value is a list.
+        macros_by_name: Dict[str, List[Macro]] = {}
+        for macro in macros.values():
+            if macro.name not in macros_by_name:
+                macros_by_name[macro.name] = []
+
+            macros_by_name[macro.name].append(macro)
+
+        return macros_by_name
+
+    def get_macros_by_package(self) -> Dict[str, Dict[str, Macro]]:
+        if self._macros_by_package is None:
+            # The by-package mapping doesn't exist yet (perhaps because the manifest
+            # was deserialized), so we build it.
+            self._macros_by_package = self._build_macros_by_package(self.macros)
+
+        return self._macros_by_package
+
+    @staticmethod
+    def _build_macros_by_package(macros: Mapping[str, Macro]) -> Dict[str, Dict[str, Macro]]:
+        # Convert a macro dictionary keyed on unique id to a flattened version
+        # keyed on package name for faster lookup by name.
+        macros_by_package: Dict[str, Dict[str, Macro]] = {}
+        for macro in macros.values():
+            if macro.package_name not in macros_by_package:
+                macros_by_package[macro.package_name] = {}
+            macros_by_name = macros_by_package[macro.package_name]
+            macros_by_name[macro.name] = macro
+
+        return macros_by_package
 
 
 @dataclass
@@ -738,7 +794,9 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     disabled: MutableMapping[str, List[GraphMemberNode]] = field(default_factory=dict)
     env_vars: MutableMapping[str, str] = field(default_factory=dict)
     semantic_models: MutableMapping[str, SemanticModel] = field(default_factory=dict)
+    unit_tests: MutableMapping[str, UnitTestDefinition] = field(default_factory=dict)
     saved_queries: MutableMapping[str, SavedQuery] = field(default_factory=dict)
+    fixtures: MutableMapping[str, UnitTestFileFixture] = field(default_factory=dict)
 
     _doc_lookup: Optional[DocLookup] = field(
         default=None, metadata={"serialize": lambda x: None, "deserialize": lambda x: None}
@@ -770,6 +828,14 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     )
     _lock: Lock = field(
         default_factory=get_mp_context().Lock,
+        metadata={"serialize": lambda x: None, "deserialize": lambda x: None},
+    )
+    _macros_by_name: Optional[Dict[str, List[Macro]]] = field(
+        default=None,
+        metadata={"serialize": lambda x: None, "deserialize": lambda x: None},
+    )
+    _macros_by_package: Optional[Dict[str, Dict[str, Macro]]] = field(
+        default=None,
         metadata={"serialize": lambda x: None, "deserialize": lambda x: None},
     )
 
@@ -829,7 +895,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         adapter_type: str,
         specificity: int,
     ) -> CandidateList:
-        full_name = dbt.common.utils.get_materialization_macro_name(
+        full_name = dbt_common.utils.get_materialization_macro_name(
             materialization_name=materialization_name,
             adapter_type=adapter_type,
             with_prefix=False,
@@ -899,6 +965,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             files={k: _deepcopy(v) for k, v in self.files.items()},
             state_check=_deepcopy(self.state_check),
             semantic_models={k: _deepcopy(v) for k, v in self.semantic_models.items()},
+            unit_tests={k: _deepcopy(v) for k, v in self.unit_tests.items()},
             saved_queries={k: _deepcopy(v) for k, v in self.saved_queries.items()},
         )
         copy.build_flat_graph()
@@ -969,6 +1036,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             parent_map=self.parent_map,
             group_map=self.group_map,
             semantic_models=self.semantic_models,
+            unit_tests=self.unit_tests,
             saved_queries=self.saved_queries,
         )
 
@@ -988,11 +1056,13 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             return self.metrics[unique_id]
         elif unique_id in self.semantic_models:
             return self.semantic_models[unique_id]
+        elif unique_id in self.unit_tests:
+            return self.unit_tests[unique_id]
         elif unique_id in self.saved_queries:
             return self.saved_queries[unique_id]
         else:
             # something terrible has happened
-            raise dbt.exceptions.DbtInternalError(
+            raise dbt_common.exceptions.DbtInternalError(
                 "Expected node {} not found in manifest".format(unique_id)
             )
 
@@ -1279,7 +1349,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             node.package_name != target_model.package_name and restrict_package_access
         )
 
-    # Called by RunTask.defer_to_manifest
+    # Called by GraphRunnableTask.defer_to_manifest
     def merge_from_artifact(
         self,
         adapter,
@@ -1308,6 +1378,13 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
                 merged.add(unique_id)
                 self.nodes[unique_id] = node.replace(deferred=True)
 
+            # for all other nodes, add 'defer_relation'
+            elif current and node.resource_type in refables and not node.is_ephemeral:
+                defer_relation = DeferRelation(
+                    node.database, node.schema, node.alias, node.relation_name
+                )
+                self.nodes[unique_id] = current.replace(defer_relation=defer_relation)
+
         # Rebuild the flat_graph, which powers the 'graph' context variable,
         # now that we've deferred some nodes
         self.build_flat_graph()
@@ -1316,33 +1393,30 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         sample = list(islice(merged, 5))
         fire_event(MergedFromState(num_merged=len(merged), sample=sample))
 
-    # Called by CloneTask.defer_to_manifest
-    def add_from_artifact(
-        self,
-        other: "WritableManifest",
-    ) -> None:
-        """Update this manifest by *adding* information about each node's location
-        in the other manifest.
-
-        Only non-ephemeral refable nodes are examined.
-        """
-        refables = set(REFABLE_NODE_TYPES)
-        for unique_id, node in other.nodes.items():
-            current = self.nodes.get(unique_id)
-            if current and (node.resource_type in refables and not node.is_ephemeral):
-                defer_relation = DeferRelation(
-                    node.database, node.schema, node.alias, node.relation_name
-                )
-                self.nodes[unique_id] = current.replace(defer_relation=defer_relation)
-
     # Methods that were formerly in ParseResult
-
     def add_macro(self, source_file: SourceFile, macro: Macro):
         if macro.unique_id in self.macros:
             # detect that the macro exists and emit an error
             raise DuplicateMacroInPackageError(macro=macro, macro_mapping=self.macros)
 
         self.macros[macro.unique_id] = macro
+
+        if self._macros_by_name is None:
+            self._macros_by_name = self._build_macros_by_name(self.macros)
+
+        if macro.name not in self._macros_by_name:
+            self._macros_by_name[macro.name] = []
+
+        self._macros_by_name[macro.name].append(macro)
+
+        if self._macros_by_package is None:
+            self._macros_by_package = self._build_macros_by_package(self.macros)
+
+        if macro.package_name not in self._macros_by_package:
+            self._macros_by_package[macro.package_name] = {}
+
+        self._macros_by_package[macro.package_name][macro.name] = macro
+
         source_file.macros.append(macro.unique_id)
 
     def has_file(self, source_file: SourceFile) -> bool:
@@ -1377,6 +1451,8 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
                 source_file.exposures.append(node.unique_id)
             if isinstance(node, Group):
                 source_file.groups.append(node.unique_id)
+        elif isinstance(source_file, FixtureSourceFile):
+            pass
         else:
             source_file.nodes.append(node.unique_id)
 
@@ -1419,6 +1495,8 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
                 source_file.semantic_models.append(node.unique_id)
             if isinstance(node, Exposure):
                 source_file.exposures.append(node.unique_id)
+        elif isinstance(source_file, FixtureSourceFile):
+            pass
         else:
             source_file.nodes.append(node.unique_id)
 
@@ -1431,6 +1509,18 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         _check_duplicates(semantic_model, self.semantic_models)
         self.semantic_models[semantic_model.unique_id] = semantic_model
         source_file.semantic_models.append(semantic_model.unique_id)
+
+    def add_unit_test(self, source_file: SchemaSourceFile, unit_test: UnitTestDefinition):
+        if unit_test.unique_id in self.unit_tests:
+            raise DuplicateResourceNameError(unit_test, self.unit_tests[unit_test.unique_id])
+        self.unit_tests[unit_test.unique_id] = unit_test
+        source_file.unit_tests.append(unit_test.unique_id)
+
+    def add_fixture(self, source_file: FixtureSourceFile, fixture: UnitTestFileFixture):
+        if fixture.unique_id in self.fixtures:
+            raise DuplicateResourceNameError(fixture, self.fixtures[fixture.unique_id])
+        self.fixtures[fixture.unique_id] = fixture
+        source_file.fixture = fixture.unique_id
 
     def add_saved_query(self, source_file: SchemaSourceFile, saved_query: SavedQuery) -> None:
         _check_duplicates(saved_query, self.saved_queries)
@@ -1464,6 +1554,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             self.disabled,
             self.env_vars,
             self.semantic_models,
+            self.unit_tests,
             self.saved_queries,
             self._doc_lookup,
             self._source_lookup,
@@ -1483,6 +1574,8 @@ class MacroManifest(MacroMethods):
         # This is returned by the 'graph' context property
         # in the ProviderContext class.
         self.flat_graph: Dict[str, Any] = {}
+        self._macros_by_name: Optional[Dict[str, List[Macro]]] = None
+        self._macros_by_package: Optional[Dict[str, Dict[str, Macro]]] = None
 
 
 AnyManifest = Union[Manifest, MacroManifest]

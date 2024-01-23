@@ -12,10 +12,10 @@ from dbt.adapters.contracts.relation import (
     Path,
 )
 from dbt.adapters.exceptions import MultipleDatabasesNotAllowedError, ApproximateMatchError
-from dbt.common.utils import filter_null_values, deep_merge
+from dbt_common.utils import filter_null_values, deep_merge
 from dbt.adapters.utils import classproperty
 
-import dbt.common.exceptions
+import dbt_common.exceptions
 
 
 Self = TypeVar("Self", bound="BaseRelation")
@@ -97,7 +97,7 @@ class BaseRelation(FakeAPIObject, Hashable):
 
         if not search:
             # nothing was passed in
-            raise dbt.common.exceptions.DbtRuntimeError(
+            raise dbt_common.exceptions.DbtRuntimeError(
                 "Tried to match relation, but no search path was passed!"
             )
 
@@ -214,7 +214,7 @@ class BaseRelation(FakeAPIObject, Hashable):
     def create_ephemeral_from(
         cls: Type[Self],
         relation_config: RelationConfig,
-        limit: Optional[int],
+        limit: Optional[int] = None,
     ) -> Self:
         # Note that ephemeral models are based on the name.
         identifier = cls.add_ephemeral_prefix(relation_config.name)
@@ -360,7 +360,7 @@ class InformationSchema(BaseRelation):
 
     def __post_init__(self):
         if not isinstance(self.information_schema_view, (type(None), str)):
-            raise dbt.common.exceptions.CompilationError(
+            raise dbt_common.exceptions.CompilationError(
                 "Got an invalid name: {}".format(self.information_schema_view)
             )
 

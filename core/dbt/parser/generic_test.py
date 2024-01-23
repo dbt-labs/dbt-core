@@ -3,14 +3,14 @@ from typing import Iterable, List
 import jinja2
 
 from dbt.exceptions import ParsingError
-from dbt.common.clients import jinja
+from dbt_common.clients import jinja
 from dbt.contracts.graph.nodes import GenericTestNode, Macro
 from dbt.contracts.graph.unparsed import UnparsedMacro
 from dbt.contracts.files import SourceFile
 from dbt.node_types import NodeType
 from dbt.parser.base import BaseParser
 from dbt.parser.search import FileBlock
-from dbt.common.utils import MACRO_PREFIX
+from dbt_common.utils import MACRO_PREFIX
 
 
 class GenericTestParser(BaseParser[GenericTestNode]):
@@ -43,7 +43,7 @@ class GenericTestParser(BaseParser[GenericTestNode]):
                 t
                 for t in jinja.extract_toplevel_blocks(
                     base_node.raw_code,
-                    allowed_blocks={"test"},
+                    allowed_blocks={"test", "data_test"},
                     collect_raw_data=False,
                 )
                 if isinstance(t, jinja.BlockTag)

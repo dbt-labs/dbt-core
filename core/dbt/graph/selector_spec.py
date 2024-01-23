@@ -2,12 +2,12 @@ import os
 import re
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
-from dbt.common.dataclass_schema import StrEnum, dbtClassMixin
+from dbt_common.dataclass_schema import StrEnum, dbtClassMixin
 
 from typing import Set, Iterator, List, Optional, Dict, Union, Any, Iterable, Tuple
 from .graph import UniqueId
 from .selector_methods import MethodName
-from dbt.common.exceptions import DbtRuntimeError
+from dbt_common.exceptions import DbtRuntimeError
 from dbt.exceptions import InvalidSelectorError
 
 
@@ -100,6 +100,7 @@ class SelectionCriteria:
         except ValueError as exc:
             raise InvalidSelectorError(f"'{method_parts[0]}' is not a valid method name") from exc
 
+        # Following is for cases like config.severity and config.materialized
         method_arguments: List[str] = method_parts[1:]
 
         return method_name, method_arguments

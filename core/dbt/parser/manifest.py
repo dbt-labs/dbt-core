@@ -21,7 +21,8 @@ import time
 
 from dbt.context.manifest import generate_query_header_context
 from dbt.contracts.graph.semantic_manifest import SemanticManifest
-from dbt.common.events.base_types import EventLevel
+from dbt_common.events.base_types import EventLevel
+import dbt_common.utils
 import json
 import pprint
 from dbt.mp_context import get_mp_context
@@ -43,9 +44,9 @@ from dbt.constants import (
     PARTIAL_PARSE_FILE_NAME,
     SEMANTIC_MANIFEST_FILE_NAME,
 )
-from dbt.common.helper_types import PathSet
-from dbt.common.events.functions import fire_event, get_invocation_id, warn_or_error
-from dbt.common.events.types import (
+from dbt_common.helper_types import PathSet
+from dbt_common.events.functions import fire_event, get_invocation_id, warn_or_error
+from dbt_common.events.types import (
     Note,
 )
 from dbt.events.types import (
@@ -67,7 +68,7 @@ from dbt.logger import DbtProcessState
 from dbt.node_types import NodeType, AccessType
 from dbt.clients.jinja import get_rendered, MacroStack
 from dbt.clients.jinja_static import statically_extract_macro_calls
-from dbt.common.clients.system import (
+from dbt_common.clients.system import (
     make_directory,
     path_exists,
     read_json,
@@ -119,6 +120,7 @@ from dbt.parser.analysis import AnalysisParser
 from dbt.parser.generic_test import GenericTestParser
 from dbt.parser.singular_test import SingularTestParser
 from dbt.parser.docs import DocumentationParser
+from dbt.parser.fixtures import FixtureParser
 from dbt.parser.hooks import HookParser
 from dbt.parser.macros import MacroParser
 from dbt.parser.models import ModelParser
@@ -129,7 +131,7 @@ from dbt.parser.snapshots import SnapshotParser
 from dbt.parser.sources import SourcePatcher
 from dbt.version import __version__
 
-from dbt.common.dataclass_schema import StrEnum, dbtClassMixin
+from dbt_common.dataclass_schema import StrEnum, dbtClassMixin
 from dbt import plugins
 
 from dbt_semantic_interfaces.enum_extension import assert_values_exhausted
@@ -475,6 +477,7 @@ class ManifestLoader:
                 SeedParser,
                 DocumentationParser,
                 HookParser,
+                FixtureParser,
             ]
             for project in self.all_projects.values():
                 if project.project_name not in project_parser_files:
@@ -1518,7 +1521,7 @@ def _process_refs(
                 unique_id=node.unique_id,
                 ref_unique_id=target_model.unique_id,
                 access=AccessType.Private,
-                scope=dbt.common.utils.cast_to_str(target_model.group),
+                scope=dbt_common.utils.cast_to_str(target_model.group),
             )
         elif manifest.is_invalid_protected_ref(node, target_model, dependencies):
             raise dbt.exceptions.DbtReferenceError(
@@ -1791,8 +1794,9 @@ def write_semantic_manifest(manifest: Manifest, target_path: str) -> None:
     semantic_manifest.write_json_to_file(path)
 
 
-def write_manifest(manifest: Manifest, target_path: str):
-    path = os.path.join(target_path, MANIFEST_FILE_NAME)
+def write_manifest(manifest: Manifest, target_path: str, which: Optional[str] = None):
+    file_name = MANIFEST_FILE_NAME
+    path = os.path.join(target_path, file_name)
     manifest.write(path)
 
     write_semantic_manifest(manifest=manifest, target_path=target_path)

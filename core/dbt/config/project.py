@@ -22,7 +22,7 @@ from dbt.constants import (
     PACKAGE_LOCK_HASH_KEY,
     DBT_PROJECT_FILE_NAME,
 )
-from dbt.common.clients.system import path_exists, load_file_contents
+from dbt_common.clients.system import path_exists, load_file_contents
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.adapters.contracts.connection import QueryComment
 from dbt.exceptions import (
@@ -31,10 +31,10 @@ from dbt.exceptions import (
     ProjectContractError,
     DbtRuntimeError,
 )
-from dbt.common.exceptions import SemverError
+from dbt_common.exceptions import SemverError
 from dbt.graph import SelectionSpec
-from dbt.common.helper_types import NoValue
-from dbt.common.semver import VersionSpecifier, versions_compatible
+from dbt_common.helper_types import NoValue
+from dbt_common.semver import VersionSpecifier, versions_compatible
 from dbt.version import get_installed_version
 from dbt.utils import MultiDict, md5, coerce_dict_str
 from dbt.node_types import NodeType
@@ -45,7 +45,7 @@ from dbt.contracts.project import (
     ProjectFlags,
 )
 from dbt.contracts.project import PackageConfig, ProjectPackageMetadata
-from dbt.common.dataclass_schema import ValidationError
+from dbt_common.dataclass_schema import ValidationError
 from .renderer import DbtProjectYamlRenderer, PackageRenderer
 from .selectors import (
     selector_config_from_data,
@@ -443,7 +443,8 @@ class PartialProject(RenderComponents):
         seeds: Dict[str, Any]
         snapshots: Dict[str, Any]
         sources: Dict[str, Any]
-        tests: Dict[str, Any]
+        data_tests: Dict[str, Any]
+        unit_tests: Dict[str, Any]
         metrics: Dict[str, Any]
         semantic_models: Dict[str, Any]
         saved_queries: Dict[str, Any]
@@ -456,7 +457,10 @@ class PartialProject(RenderComponents):
         seeds = cfg.seeds
         snapshots = cfg.snapshots
         sources = cfg.sources
-        tests = cfg.tests
+        # the `tests` config is deprecated but still allowed. Copy it into
+        # `data_tests` to simplify logic throughout the rest of the system.
+        data_tests = cfg.data_tests if "data_tests" in rendered.project_dict else cfg.tests
+        unit_tests = cfg.unit_tests
         metrics = cfg.metrics
         semantic_models = cfg.semantic_models
         saved_queries = cfg.saved_queries
@@ -517,7 +521,8 @@ class PartialProject(RenderComponents):
             selectors=selectors,
             query_comment=query_comment,
             sources=sources,
-            tests=tests,
+            data_tests=data_tests,
+            unit_tests=unit_tests,
             metrics=metrics,
             semantic_models=semantic_models,
             saved_queries=saved_queries,
@@ -632,7 +637,8 @@ class Project:
     seeds: Dict[str, Any]
     snapshots: Dict[str, Any]
     sources: Dict[str, Any]
-    tests: Dict[str, Any]
+    data_tests: Dict[str, Any]
+    unit_tests: Dict[str, Any]
     metrics: Dict[str, Any]
     semantic_models: Dict[str, Any]
     saved_queries: Dict[str, Any]
@@ -665,6 +671,13 @@ class Project:
         for test_path in self.test_paths:
             generic_test_paths.append(os.path.join(test_path, "generic"))
         return generic_test_paths
+
+    @property
+    def fixture_paths(self):
+        fixture_paths = []
+        for test_path in self.test_paths:
+            fixture_paths.append(os.path.join(test_path, "fixtures"))
+        return fixture_paths
 
     def __str__(self):
         cfg = self.to_project_config(with_packages=True)
@@ -710,7 +723,8 @@ class Project:
                 "seeds": self.seeds,
                 "snapshots": self.snapshots,
                 "sources": self.sources,
-                "tests": self.tests,
+                "data_tests": self.data_tests,
+                "unit_tests": self.unit_tests,
                 "metrics": self.metrics,
                 "semantic-models": self.semantic_models,
                 "saved-queries": self.saved_queries,

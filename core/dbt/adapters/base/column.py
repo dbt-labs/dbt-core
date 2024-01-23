@@ -2,7 +2,7 @@ from dataclasses import dataclass
 import re
 from typing import Dict, ClassVar, Any, Optional
 
-from dbt.common.exceptions import DbtRuntimeError
+from dbt_common.exceptions import DbtRuntimeError
 
 
 @dataclass

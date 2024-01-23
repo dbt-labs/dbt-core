@@ -1,5 +1,5 @@
 import dbt.flags
-import dbt.common.ui
+import dbt_common.ui
 
 import json
 import logging
@@ -11,21 +11,9 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional, List, ContextManager, Callable, Dict, Any, Set
 
-import colorama
 import logbook
 from dbt.constants import SECRET_ENV_PREFIX
-from dbt.common.dataclass_schema import dbtClassMixin
-
-# Colorama is needed for colored logs on Windows because we're using logger.info
-# intead of print(). If the Windows env doesn't have a TERM var set or it is set to None
-# (i.e. in the case of Git Bash on Windows- this emulates Unix), then it's safe to initialize
-# Colorama with wrapping turned on which allows us to strip ANSI sequences from stdout.
-# You can safely initialize Colorama for any OS and the coloring stays the same except
-# when piped to anoter process for Linux and MacOS, then it loses the coloring. To combat
-# that, we will just initialize Colorama when needed on Windows using a non-Unix terminal.
-
-if sys.platform == "win32" and (not os.getenv("TERM") or os.getenv("TERM") == "None"):
-    colorama.init(wrap=True)
+from dbt_common.dataclass_schema import dbtClassMixin
 
 STDOUT_LOG_FORMAT = "{record.message}"
 DEBUG_LOG_FORMAT = "{record.time:%Y-%m-%d %H:%M:%S.%f%z} ({record.thread_name}): {record.message}"
@@ -327,9 +315,9 @@ initialized = False
 
 
 def make_log_dir_if_missing(log_dir):
-    import dbt.common.clients.system
+    import dbt_common.clients.system
 
-    dbt.common.clients.system.make_directory(log_dir)
+    dbt_common.clients.system.make_directory(log_dir)
 
 
 class DebugWarnings(logbook.compat.redirected_warnings):
@@ -531,6 +519,6 @@ def timestamped_line(msg: str) -> str:
 
 def print_timestamped_line(msg: str, use_color: Optional[str] = None):
     if use_color is not None:
-        msg = dbt.common.ui.color(msg, use_color)
+        msg = dbt_common.ui.color(msg, use_color)
 
     GLOBAL_LOGGER.info(timestamped_line(msg))

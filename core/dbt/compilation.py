@@ -7,12 +7,15 @@ import pickle
 from collections import defaultdict
 from typing import List, Dict, Any, Tuple, Optional
 
-from dbt.common.invocation import get_invocation_id
+from dbt_common.invocation import get_invocation_id
 from dbt.flags import get_flags
 from dbt.adapters.factory import get_adapter
 from dbt.clients import jinja
-from dbt.common.clients.system import make_directory
-from dbt.context.providers import generate_runtime_model_context
+from dbt.context.providers import (
+    generate_runtime_model_context,
+    generate_runtime_unit_test_context,
+)
+from dbt_common.clients.system import make_directory
 from dbt.contracts.graph.manifest import Manifest, UniqueID
 from dbt.contracts.graph.nodes import (
     ManifestNode,
@@ -21,6 +24,8 @@ from dbt.contracts.graph.nodes import (
     GraphMemberNode,
     InjectedCTE,
     SeedNode,
+    UnitTestNode,
+    UnitTestDefinition,
 )
 from dbt.exceptions import (
     GraphDependencyNotFoundError,
@@ -28,12 +33,12 @@ from dbt.exceptions import (
     DbtRuntimeError,
 )
 from dbt.graph import Graph
-from dbt.common.events.functions import fire_event
-from dbt.common.events.types import Note
-from dbt.common.events.contextvars import get_node_info
+from dbt_common.events.functions import fire_event
+from dbt_common.events.types import Note
+from dbt_common.events.contextvars import get_node_info
 from dbt.events.types import WritingInjectedSQLForNode, FoundStats
 from dbt.node_types import NodeType, ModelLanguage
-from dbt.common.events.format import pluralize
+from dbt_common.events.format import pluralize
 import dbt.tracking
 import sqlparse
 
@@ -43,7 +48,8 @@ graph_file_name = "graph.gpickle"
 def print_compile_stats(stats):
     names = {
         NodeType.Model: "model",
-        NodeType.Test: "test",
+        NodeType.Test: "data test",
+        NodeType.Unit: "unit test",
         NodeType.Snapshot: "snapshot",
         NodeType.Analysis: "analysis",
         NodeType.Macro: "macro",
@@ -91,6 +97,7 @@ def _generate_stats(manifest: Manifest):
     stats[NodeType.Macro] += len(manifest.macros)
     stats[NodeType.Group] += len(manifest.groups)
     stats[NodeType.SemanticModel] += len(manifest.semantic_models)
+    stats[NodeType.Unit] += len(manifest.unit_tests)
 
     # TODO: should we be counting dimensions + entities?
 
@@ -128,7 +135,7 @@ class Linker:
     def __init__(self, data=None) -> None:
         if data is None:
             data = {}
-        self.graph = nx.DiGraph(**data)
+        self.graph: nx.DiGraph = nx.DiGraph(**data)
 
     def edges(self):
         return self.graph.edges()
@@ -191,6 +198,8 @@ class Linker:
             self.link_node(exposure, manifest)
         for metric in manifest.metrics.values():
             self.link_node(metric, manifest)
+        for unit_test in manifest.unit_tests.values():
+            self.link_node(unit_test, manifest)
         for saved_query in manifest.saved_queries.values():
             self.link_node(saved_query, manifest)
 
@@ -234,6 +243,7 @@ class Linker:
                 # Get all tests that depend on any upstream nodes.
                 upstream_tests = []
                 for upstream_node in upstream_nodes:
+                    # This gets tests with unique_ids starting with "test."
                     upstream_tests += _get_tests_for_node(manifest, upstream_node)
 
                 for upstream_test in upstream_tests:
@@ -291,8 +301,10 @@ class Compiler:
         manifest: Manifest,
         extra_context: Dict[str, Any],
     ) -> Dict[str, Any]:
-
-        context = generate_runtime_model_context(node, self.config, manifest)
+        if isinstance(node, UnitTestNode):
+            context = generate_runtime_unit_test_context(node, self.config, manifest)
+        else:
+            context = generate_runtime_model_context(node, self.config, manifest)
         context.update(extra_context)
 
         if isinstance(node, GenericTestNode):
@@ -460,6 +472,7 @@ class Compiler:
         summaries["_invocation_id"] = get_invocation_id()
         summaries["linked"] = linker.get_graph_summary(manifest)
 
+        # This is only called for the "build" command
         if add_test_edges:
             manifest.build_parent_and_child_maps()
             linker.add_test_edges(manifest)
@@ -526,6 +539,9 @@ class Compiler:
         the node's raw_code into compiled_code, and then calls the
         recursive method to "prepend" the ctes.
         """
+        if isinstance(node, UnitTestDefinition):
+            return node
+
         # Make sure Lexer for sqlparse 0.4.4 is initialized
         from sqlparse.lexer import Lexer  # type: ignore
 

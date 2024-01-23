@@ -1,4 +1,4 @@
-from dbt.common.dataclass_schema import StrEnum
+from dbt_common.dataclass_schema import StrEnum
 
 
 class AccessType(StrEnum):
@@ -33,6 +33,8 @@ class NodeType(StrEnum):
     Group = "group"
     SavedQuery = "saved_query"
     SemanticModel = "semantic_model"
+    Unit = "unit_test"
+    Fixture = "fixture"
 
     def pluralize(self) -> str:
         if self is self.Analysis:

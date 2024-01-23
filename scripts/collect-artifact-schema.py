@@ -10,7 +10,7 @@ from dbt.artifacts.schemas.catalog import CatalogArtifact
 from dbt.artifacts.schemas.run import RunResultsArtifact
 from dbt.artifacts.schemas.freshness import FreshnessExecutionResultArtifact
 from dbt.artifacts.schemas.base import VersionedSchema
-from dbt.common.clients.system import write_file
+from dbt_common.clients.system import write_file
 
 
 @dataclass
