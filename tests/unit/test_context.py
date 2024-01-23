@@ -1,4 +1,3 @@
-import itertools
 import unittest
 import os
 from typing import Set, Dict, Any
