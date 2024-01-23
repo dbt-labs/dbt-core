@@ -459,7 +459,7 @@ class PartialParsing:
             elif unique_id in self.saved_manifest.unit_tests:
                 unit_test = self.saved_manifest.unit_tests[unique_id]
                 self._schedule_for_parsing(
-                    "unit_tests", unit_test, unit_test.name, self.delete_unit_test
+                    "unit_tests", unit_test, unit_test.name, self.delete_schema_unit_test
                 )
 
     def _schedule_for_parsing(self, dict_key: str, element, name, delete: Callable) -> None:
