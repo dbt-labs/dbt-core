@@ -297,6 +297,8 @@ class UnitTestParser(YamlReader):
         model_name = model_name_split[0]
         model_version = model_name_split[1] if len(model_name_split) == 2 else None
 
+        print(f"--- ref_lookup: {model_name}, {package_name}, {model_version}")
+        print(f"--- --- nodes: {self.manifest.nodes.keys()}")
         tested_node = self.manifest.ref_lookup.find(
             model_name, package_name, model_version, self.manifest
         )
