@@ -1,2 +1,4 @@
 from dbt.artifacts.resources.base import BaseArtifactNode
-from dbt.artifacts.resources.documentation import Documentation
+
+# alias to latest resource definitions
+from dbt.artifacts.resources.v1.documentation import Documentation
