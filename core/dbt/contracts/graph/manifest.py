@@ -987,6 +987,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
                 self.metrics.values(),
                 self.semantic_models.values(),
                 self.saved_queries.values(),
+                self.unit_tests.values(),
             )
         )
         forward_edges, backward_edges = build_node_edges(edge_members)

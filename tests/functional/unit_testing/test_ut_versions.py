@@ -4,6 +4,7 @@ from dbt.exceptions import YamlParseDictError, ParsingError
 
 from tests.functional.unit_testing.fixtures import (
     my_model_versioned_yml,
+    my_model_versioned_no_2_yml,
     test_my_model_all_versions_yml,
     test_my_model_exclude_versions_yml,
     test_my_model_include_versions_yml,
@@ -92,6 +93,11 @@ class TestVersions:
         ]
         assert sorted(expected_ids) == sorted(unique_ids)
 
+        # Change to remove version 2 of model and get an error
+        write_file(my_model_versioned_no_2_yml, project.project_root, "models", "schema.yml")
+        with pytest.raises(ParsingError):
+            run_dbt(["test"])
+
 
 # test with an include and exclude version specified, should raise an error
 class TestIncludeExcludeSpecified:
@@ -154,6 +160,3 @@ class TestVersionedFixture:
         # v2 model should be only one included
         expected_ids = ["unit_test.test.my_model_version_ref.test_my_model_version_ref"]
         assert expected_ids == unique_ids
-
-
-# test changing the model versions and getting an error for the unit test referencing an old version

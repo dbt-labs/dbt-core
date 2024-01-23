@@ -1236,6 +1236,8 @@ class ManifestLoader:
         models_to_versions = None
         unit_test_unique_ids = list(self.manifest.unit_tests.keys())
         for unit_test_unique_id in unit_test_unique_ids:
+            # This is because some unit tests will be removed when processing
+            # and the list of unit_test_unique_ids won't have changed
             if unit_test_unique_id in self.manifest.unit_tests:
                 unit_test = self.manifest.unit_tests[unit_test_unique_id]
             else:
@@ -1854,7 +1856,13 @@ def _process_models_for_unit_test(
             else:
                 continue
 
-    if versions_to_test:
+    if not versions_to_test:
+        msg = (
+            f"Unit test '{unit_test_def.name}' referenced a version of '{target_model.name} "
+            "which was not found."
+        )
+        raise dbt.exceptions.ParsingError(msg)
+    else:
         # Create unit test definitions that match the model versions
         original_unit_test_def = manifest.unit_tests.pop(unit_test_def.unique_id)
         original_unit_test_dict = original_unit_test_def.to_dict()

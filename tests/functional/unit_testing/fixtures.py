@@ -726,6 +726,38 @@ models:
             - date_a
 """
 
+my_model_versioned_no_2_yml = """
+models:
+  - name: my_model
+    latest_version: 1
+    access: public
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: a
+        data_type: integer
+      - name: b
+        data_type: integer
+      - name: c
+        data_type: integer
+      - name: string_c
+        data_type: string
+      - name: not_testing
+        data_type: integer
+      - name: date_a
+        data_type: date
+    versions:
+      - v: 1
+      - v: 3
+        # now exclude another column
+        columns:
+          - include: all
+            exclude:
+            - not_testing
+            - date_a
+"""
+
 test_my_model_all_versions_yml = """
 unit_tests:
   - name: test_my_model
