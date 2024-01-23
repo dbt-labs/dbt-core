@@ -689,6 +689,8 @@ class MacroMethods:
     def __init__(self):
         self.macros = []
         self.metadata = {}
+        self._macros_by_name = {}
+        self._macros_by_package = {}
 
     def find_macro_by_name(
         self, name: str, root_project_name: str, package: Optional[str]
@@ -757,10 +759,13 @@ class MacroMethods:
         from dbt.adapters.factory import get_adapter_package_names
 
         candidates: CandidateList = CandidateList()
+
+        macros_by_name = self.get_macros_by_name()
+        if name not in macros_by_name:
+            return candidates
+
         packages = set(get_adapter_package_names(self.metadata.adapter_type))
-        for unique_id, macro in self.macros.items():
-            if macro.name != name:
-                continue
+        for macro in macros_by_name[name]:
             candidate = MacroCandidate(
                 locality=_get_locality(macro, root_project_name, packages),
                 macro=macro,
@@ -769,6 +774,49 @@ class MacroMethods:
                 candidates.append(candidate)
 
         return candidates
+
+    def get_macros_by_name(self) -> Dict[str, List[Macro]]:
+        if self._macros_by_name is None:
+            # The by-name mapping doesn't exist yet (perhaps because the manifest
+            # was deserialized), so we build it.
+            self._macros_by_name = self._build_macros_by_name(self.macros)
+
+        return self._macros_by_name
+
+    @staticmethod
+    def _build_macros_by_name(macros: Mapping[str, Macro]) -> Dict[str, List[Macro]]:
+        # Convert a macro dictionary keyed on unique id to a flattened version
+        # keyed on macro name for faster lookup by name. Since macro names are
+        # not necessarily unique, the dict value is a list.
+        macros_by_name: Dict[str, List[Macro]] = {}
+        for macro in macros.values():
+            if macro.name not in macros_by_name:
+                macros_by_name[macro.name] = []
+
+            macros_by_name[macro.name].append(macro)
+
+        return macros_by_name
+
+    def get_macros_by_package(self) -> Dict[str, Dict[str, Macro]]:
+        if self._macros_by_package is None:
+            # The by-package mapping doesn't exist yet (perhaps because the manifest
+            # was deserialized), so we build it.
+            self._macros_by_package = self._build_macros_by_package(self.macros)
+
+        return self._macros_by_package
+
+    @staticmethod
+    def _build_macros_by_package(macros: Mapping[str, Macro]) -> Dict[str, Dict[str, Macro]]:
+        # Convert a macro dictionary keyed on unique id to a flattened version
+        # keyed on package name for faster lookup by name.
+        macros_by_package: Dict[str, Dict[str, Macro]] = {}
+        for macro in macros.values():
+            if macro.package_name not in macros_by_package:
+                macros_by_package[macro.package_name] = {}
+            macros_by_name = macros_by_package[macro.package_name]
+            macros_by_name[macro.name] = macro
+
+        return macros_by_package
 
 
 @dataclass
@@ -843,6 +891,14 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     )
     _lock: Lock = field(
         default_factory=get_mp_context().Lock,
+        metadata={"serialize": lambda x: None, "deserialize": lambda x: None},
+    )
+    _macros_by_name: Optional[Dict[str, List[Macro]]] = field(
+        default=None,
+        metadata={"serialize": lambda x: None, "deserialize": lambda x: None},
+    )
+    _macros_by_package: Optional[Dict[str, Dict[str, Macro]]] = field(
+        default=None,
         metadata={"serialize": lambda x: None, "deserialize": lambda x: None},
     )
 
@@ -1408,6 +1464,23 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             raise DuplicateMacroInPackageError(macro=macro, macro_mapping=self.macros)
 
         self.macros[macro.unique_id] = macro
+
+        if self._macros_by_name is None:
+            self._macros_by_name = self._build_macros_by_name(self.macros)
+
+        if macro.name not in self._macros_by_name:
+            self._macros_by_name[macro.name] = []
+
+        self._macros_by_name[macro.name].append(macro)
+
+        if self._macros_by_package is None:
+            self._macros_by_package = self._build_macros_by_package(self.macros)
+
+        if macro.package_name not in self._macros_by_package:
+            self._macros_by_package[macro.package_name] = {}
+
+        self._macros_by_package[macro.package_name][macro.name] = macro
+
         source_file.macros.append(macro.unique_id)
 
     def has_file(self, source_file: SourceFile) -> bool:
@@ -1565,6 +1638,8 @@ class MacroManifest(MacroMethods):
         # This is returned by the 'graph' context property
         # in the ProviderContext class.
         self.flat_graph: Dict[str, Any] = {}
+        self._macros_by_name: Optional[Dict[str, List[Macro]]] = None
+        self._macros_by_package: Optional[Dict[str, Dict[str, Macro]]] = None
 
 
 AnyManifest = Union[Manifest, MacroManifest]
