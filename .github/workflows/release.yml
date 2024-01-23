@@ -115,7 +115,7 @@ jobs:
       - name: "Capture sha"
         id: set_sha
         run: |
-          echo "starting_sha=$(git rev-parse HEAD) >> $GITHUB_OUTPUT
+          echo "starting_sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
 
   bump-version-generate-changelog:
     name: Bump package version, Generate changelog
