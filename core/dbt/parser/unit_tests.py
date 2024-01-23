@@ -302,7 +302,8 @@ class UnitTestParser(YamlReader):
         )
         if not tested_node:
             raise ParsingError(
-                f"Unable to find model '{package_name}.{unit_test.model}' for unit tests in {self.yaml.path.original_file_path}"
+                f"Unable to find model '{package_name}.{unit_test.model}' for "
+                f"unit test '{unit_test.name}' in {self.yaml.path.original_file_path}"
             )
 
         return tested_node
