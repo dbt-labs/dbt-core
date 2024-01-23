@@ -65,22 +65,12 @@ defaults:
   run:
     shell: bash
 
-env:
-  build_script_path: "scripts/build-dist.sh"
-  env_setup_script_path: "scripts/env-setup.sh"
-  s3_bucket_name: "core-team-artifacts"
-  package_test_command: "dbt --version"
-
 jobs:
   job-setup:
     name: Log Inputs
     runs-on: ubuntu-latest
     outputs:
       starting_sha: ${{ steps.set_sha.outputs.changelog_path }}
-      build_script_path: ${{ steps.set_path.outputs.build_script_path }}
-      env_setup_script_path: ${{ steps.set_path.outputs.env_setup_script_path }}
-      s3_bucket_name: ${{ steps.set_path.outputs.s3_bucket_name }}
-      package_test_command: ${{ steps.set_path.outputs.package_test_command }}
     steps:
       - name: "[DEBUG] Print Variables"
         run: |
@@ -89,19 +79,6 @@ jobs:
           echo The release version number:         ${{ inputs.version_number }}
           echo Test run:                           ${{ inputs.test_run }}
           echo Nightly release:                    ${{ inputs.nightly_release }}
-          echo Env vars
-          echo Build script path:                  ${{ env.build_script_path }}
-          echo Environment setup script path:      ${{ env.env_setup_script_path }}
-          echo AWS S3 bucket name:                 ${{ env.s3_bucket_name }}
-          echo Package test command:               ${{ env.package_test_command }}
-
-      - name: "Set paths"
-        id: set_path
-        run: |
-          echo "build_script_path=${{ env.build_script_path }}" >> $GITHUB_ENV
-          echo "env_setup_script_path=${{ env.env_setup_script_path }}" >> $GITHUB_ENV
-          echo "s3_bucket_name=${{ env.s3_bucket_name }}" >> $GITHUB_ENV
-          echo "package_test_command=${{ env.package_test_command }}" >> $GITHUB_ENV
 
       - name: "Checkout target branch"
         uses: actions/checkout@v4
@@ -127,7 +104,7 @@ jobs:
       sha: ${{ needs.job-setup.outputs.starting_sha }}
       version_number: ${{ inputs.version_number }}
       target_branch: ${{ inputs.target_branch }}
-      env_setup_script_path: ${{ needs.job-setup.outputs.env_setup_script_path }}
+      env_setup_script_path: "scripts/env-setup.sh"
       test_run: ${{ inputs.test_run }}
       nightly_release: ${{ inputs.nightly_release }}
 
@@ -158,9 +135,9 @@ jobs:
       sha: ${{ needs.bump-version-generate-changelog.outputs.final_sha }}
       version_number: ${{ inputs.version_number }}
       changelog_path: ${{ needs.bump-version-generate-changelog.outputs.changelog_path }}
-      build_script_path: ${{ needs.job-setup.outputs.build_script_path }}
-      s3_bucket_name: ${{ needs.job-setup.outputs.s3_bucket_name }}
-      package_test_command: ${{ needs.job-setup.outputs.package_test_command }}
+      build_script_path: "scripts/build-dist.sh"
+      s3_bucket_name: "core-team-artifacts"
+      package_test_command: "dbt --version"
       test_run: ${{ inputs.test_run }}
       nightly_release: ${{ inputs.nightly_release }}
 
