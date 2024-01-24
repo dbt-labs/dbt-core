@@ -7,6 +7,8 @@ from dbt.artifacts.resources.v1.docs import Docs
 from dbt.artifacts.resources.v1.group import Group
 from dbt.artifacts.resources.v1.owner import Owner
 from dbt.artifacts.resources.v1.semantic_layer_components import (
+    FileSlice,
+    SourceFileMetadata,
     WhereFilter,
     WhereFilterIntersection,
 )

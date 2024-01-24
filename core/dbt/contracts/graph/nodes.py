@@ -23,7 +23,6 @@ from dbt.contracts.graph.semantic_models import (
     Dimension,
     Entity,
     Measure,
-    SourceFileMetadata,
 )
 from dbt.contracts.graph.unparsed import (
     ConstantPropertyInput,
@@ -101,6 +100,7 @@ from dbt.artifacts.resources import (
     Documentation as DocumentationResource,
     Macro as MacroResource,
     Group as GroupResource,
+    SourceFileMetadata as SourceFileMetadataResource,
     WhereFilterIntersection as WhereFilterIntersectionResource,
 )
 
@@ -1562,7 +1562,7 @@ class Metric(GraphNode):
     type: MetricType
     type_params: MetricTypeParams
     filter: Optional[WhereFilterIntersectionResource] = None
-    metadata: Optional[SourceFileMetadata] = None
+    metadata: Optional[SourceFileMetadataResource] = None
     resource_type: Literal[NodeType.Metric]
     meta: Dict[str, Any] = field(default_factory=dict)
     tags: List[str] = field(default_factory=list)
@@ -1670,7 +1670,7 @@ class SemanticModel(GraphNode):
     entities: Sequence[Entity] = field(default_factory=list)
     measures: Sequence[Measure] = field(default_factory=list)
     dimensions: Sequence[Dimension] = field(default_factory=list)
-    metadata: Optional[SourceFileMetadata] = None
+    metadata: Optional[SourceFileMetadataResource] = None
     depends_on: DependsOn = field(default_factory=DependsOn)
     refs: List[RefArgs] = field(default_factory=list)
     created_at: float = field(default_factory=lambda: time.time())
@@ -1834,7 +1834,7 @@ class SavedQueryMandatory(GraphNode):
 class SavedQuery(NodeInfoMixin, SavedQueryMandatory):
     description: Optional[str] = None
     label: Optional[str] = None
-    metadata: Optional[SourceFileMetadata] = None
+    metadata: Optional[SourceFileMetadataResource] = None
     config: SavedQueryConfig = field(default_factory=SavedQueryConfig)
     unrendered_config: Dict[str, Any] = field(default_factory=dict)
     group: Optional[str] = None

@@ -21,3 +21,27 @@ class WhereFilterIntersection(dbtClassMixin):
     @property
     def filter_expression_parameter_sets(self) -> Sequence[Tuple[str, FilterCallParameterSets]]:
         raise NotImplementedError
+
+
+@dataclass
+class FileSlice(dbtClassMixin):
+    """Provides file slice level context about what something was created from.
+
+    Implementation of the dbt-semantic-interfaces `FileSlice` protocol
+    """
+
+    filename: str
+    content: str
+    start_line_number: int
+    end_line_number: int
+
+
+@dataclass
+class SourceFileMetadata(dbtClassMixin):
+    """Provides file context about what something was created from.
+
+    Implementation of the dbt-semantic-interfaces `Metadata` protocol
+    """
+
+    repo_file_path: str
+    file_slice: FileSlice

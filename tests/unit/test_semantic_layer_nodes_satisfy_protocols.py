@@ -13,18 +13,20 @@ from dbt.contracts.graph.nodes import (
     SavedQuery,
     SemanticModel,
 )
-from dbt.artifacts.resources import WhereFilter
+from dbt.artifacts.resources import (
+    FileSlice,
+    SourceFileMetadata,
+    WhereFilter,
+)
 from dbt.contracts.graph.semantic_models import (
     Dimension,
     DimensionTypeParams,
     DimensionValidityParams,
     Defaults,
     Entity,
-    FileSlice,
     Measure,
     MeasureAggregationParameters,
     NonAdditiveDimension,
-    SourceFileMetadata,
 )
 from dbt.node_types import NodeType
 from dbt_semantic_interfaces.protocols import (
