@@ -55,11 +55,7 @@ class UnitTestManifestLoader:
 
     def parse_unit_test_case(self, test_case: UnitTestDefinition):
         # Create unit test node based on the node being tested
-        # TODO: Does this work if nodes are versioned?
-        # unique_id = self.manifest.ref_lookup.get_unique_id(
-        #   key=test_case.model, package=test_case.package_name, version=version
-        # )
-        # The test_node has already been resolved and is in depends_on.nodes
+        # The tested_node has already been resolved and is in depends_on.nodes
         tested_node_unique_id = test_case.depends_on.nodes[0]
         tested_node = self.manifest.nodes[tested_node_unique_id]
         assert isinstance(tested_node, ModelNode)
