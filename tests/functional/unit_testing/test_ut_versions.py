@@ -70,9 +70,6 @@ class TestVersions:
         write_file(
             test_my_model_exclude_versions_yml, project.project_root, "models", "unit_tests.yml"
         )
-        # without re-running here, we get an error in the v3 unit test. Not sure why.
-        results = run_dbt(["run"])
-        assert len(results) == 5
 
         results = run_dbt(["test"])
         assert len(results) == 2
