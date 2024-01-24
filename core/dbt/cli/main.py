@@ -608,7 +608,7 @@ def retry(ctx, **kwargs):
     task = RetryTask(
         ctx.obj["flags"],
         ctx.obj["runtime_config"],
-        ctx.obj["manifest"],
+        None,
     )
 
     results = task.run()
