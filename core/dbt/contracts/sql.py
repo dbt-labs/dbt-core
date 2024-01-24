@@ -6,9 +6,9 @@ from typing import Optional, List, Any, Dict, Sequence
 from dbt_common.dataclass_schema import dbtClassMixin
 
 from dbt.contracts.graph.nodes import ResultNode
-from dbt.artifacts.results import TimingInfo, ExecutionResult
-from dbt.artifacts.run import RunResult, RunResultsArtifact, RunExecutionResult
-from dbt.artifacts.base import VersionedSchema, schema_version
+from dbt.artifacts.schemas.results import TimingInfo, ExecutionResult
+from dbt.artifacts.schemas.run import RunResult, RunResultsArtifact, RunExecutionResult
+from dbt.artifacts.schemas.base import VersionedSchema, schema_version
 from dbt.logger import LogMessage
 
 

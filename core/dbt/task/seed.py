@@ -5,7 +5,7 @@ from .printer import (
     print_run_end_messages,
 )
 
-from dbt.artifacts.results import RunStatus, NodeStatus
+from dbt.artifacts.schemas.results import RunStatus, NodeStatus
 from dbt_common.exceptions import DbtInternalError
 from dbt.graph import ResourceTypeSelector
 from dbt.logger import TextOnly

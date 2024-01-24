@@ -9,8 +9,8 @@ import dbt_common.exceptions
 from dbt.adapters.factory import get_adapter
 from dbt.contracts.files import FileHash
 from dbt.contracts.graph.nodes import HookNode
-from dbt.artifacts.results import RunStatus, TimingInfo
-from dbt.artifacts.run import RunResultsArtifact, RunResult
+from dbt.artifacts.schemas.results import RunStatus, TimingInfo
+from dbt.artifacts.schemas.run import RunResultsArtifact, RunResult
 from dbt_common.events.functions import fire_event
 from dbt.events.types import (
     LogDebugStackTrace,

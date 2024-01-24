@@ -2,7 +2,7 @@ from typing import Any, Dict, Iterable, Union, Optional, List, Iterator, Mapping
 
 from dbt.clients.jinja import MacroGenerator, MacroStack
 from dbt.contracts.graph.nodes import Macro
-from dbt.adapters.include.global_project import PROJECT_NAME as GLOBAL_PROJECT_NAME
+from dbt.include.global_project import PROJECT_NAME as GLOBAL_PROJECT_NAME
 from dbt.exceptions import DuplicateMacroNameError, PackageNotFoundForMacroError
 
 

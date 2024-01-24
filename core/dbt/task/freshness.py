@@ -1,15 +1,15 @@
 import os
 import threading
 import time
-from typing import Optional
+from typing import Optional, List
 
 from .base import BaseRunner
 from .printer import (
     print_run_result_error,
 )
-from .runnable import GraphRunnableTask
+from .run import RunTask
 
-from dbt.artifacts.freshness import (
+from dbt.artifacts.schemas.freshness import (
     FreshnessResult,
     PartialSourceFreshnessResult,
     SourceFreshnessResult,
@@ -23,11 +23,12 @@ from dbt.events.types import (
     LogStartLine,
     LogFreshnessResult,
 )
-from dbt.node_types import NodeType
+from dbt.contracts.results import RunStatus
+from dbt.node_types import NodeType, RunHookType
 
 from dbt.adapters.capability import Capability
 from dbt.adapters.contracts.connection import AdapterResponse
-from dbt.contracts.graph.nodes import SourceDefinition
+from dbt.contracts.graph.nodes import SourceDefinition, HookNode
 from dbt_common.events.base_types import EventLevel
 from dbt.graph import ResourceTypeSelector
 
@@ -170,7 +171,7 @@ class FreshnessSelector(ResourceTypeSelector):
         return node.has_freshness
 
 
-class FreshnessTask(GraphRunnableTask):
+class FreshnessTask(RunTask):
     def result_path(self):
         if self.args.output:
             return os.path.realpath(self.args.output)
@@ -200,7 +201,17 @@ class FreshnessTask(GraphRunnableTask):
 
     def task_end_messages(self, results):
         for result in results:
-            if result.status in (FreshnessStatus.Error, FreshnessStatus.RuntimeErr):
+            if result.status in (
+                FreshnessStatus.Error,
+                FreshnessStatus.RuntimeErr,
+                RunStatus.Error,
+            ):
                 print_run_result_error(result)
 
         fire_event(FreshnessCheckComplete())
+
+    def get_hooks_by_type(self, hook_type: RunHookType) -> List[HookNode]:
+        if self.args.source_freshness_run_project_hooks:
+            return super().get_hooks_by_type(hook_type)
+        else:
+            return []

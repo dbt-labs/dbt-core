@@ -6,7 +6,7 @@ from dbt.cli.flags import Flags
 from dbt.flags import set_flags, get_flags
 from dbt.cli.types import Command as CliCommand
 from dbt.config import RuntimeConfig
-from dbt.artifacts.results import NodeStatus
+from dbt.artifacts.schemas.results import NodeStatus
 from dbt.contracts.state import load_result_state
 from dbt_common.exceptions import DbtRuntimeError
 from dbt.graph import GraphQueue

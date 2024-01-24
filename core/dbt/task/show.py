@@ -4,7 +4,7 @@ import time
 
 from dbt.context.providers import generate_runtime_model_context
 from dbt.contracts.graph.nodes import SeedNode
-from dbt.artifacts.run import RunResult, RunStatus
+from dbt.artifacts.schemas.run import RunResult, RunStatus
 from dbt_common.events.base_types import EventLevel
 from dbt_common.events.functions import fire_event
 from dbt_common.events.types import Note

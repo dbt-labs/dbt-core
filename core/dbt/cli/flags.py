@@ -236,8 +236,8 @@ class Flags:
         # Add entire invocation command to flags
         object.__setattr__(self, "INVOCATION_COMMAND", "dbt " + " ".join(sys.argv[1:]))
 
-        # Overwrite default assignments with user config if available.
         if project_flags:
+            # Overwrite default assignments with project flags if available.
             param_assigned_from_default_copy = params_assigned_from_default.copy()
             for param_assigned_from_default in params_assigned_from_default:
                 project_flags_param_value = getattr(
@@ -251,6 +251,13 @@ class Flags:
                     )
                     param_assigned_from_default_copy.remove(param_assigned_from_default)
             params_assigned_from_default = param_assigned_from_default_copy
+
+            # Add project-level flags that are not available as CLI options / env vars
+            for (
+                project_level_flag_name,
+                project_level_flag_value,
+            ) in project_flags.project_only_flags.items():
+                object.__setattr__(self, project_level_flag_name.upper(), project_level_flag_value)
 
         # Set hard coded flags.
         object.__setattr__(self, "WHICH", invoked_subcommand_name or ctx.info_name)

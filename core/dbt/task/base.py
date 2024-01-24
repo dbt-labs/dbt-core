@@ -16,9 +16,9 @@ from dbt.config import RuntimeConfig, Project
 from dbt.config.profile import read_profile
 from dbt.constants import DBT_PROJECT_FILE_NAME
 from dbt.contracts.graph.manifest import Manifest
-from dbt.artifacts.results import TimingInfo, collect_timing_info
-from dbt.artifacts.results import NodeStatus, RunningStatus, RunStatus
-from dbt.artifacts.run import RunResult
+from dbt.artifacts.schemas.results import TimingInfo, collect_timing_info
+from dbt.artifacts.schemas.results import NodeStatus, RunningStatus, RunStatus
+from dbt.artifacts.schemas.run import RunResult
 from dbt_common.events.contextvars import get_node_info
 from dbt_common.events.functions import fire_event
 from dbt.events.types import (

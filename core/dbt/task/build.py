@@ -6,8 +6,8 @@ from .snapshot import SnapshotRunner as snapshot_model_runner
 from .seed import SeedRunner as seed_runner
 from .test import TestRunner as test_runner
 
-from dbt.artifacts.results import NodeStatus, RunStatus
-from dbt.artifacts.run import RunResult
+from dbt.artifacts.schemas.results import NodeStatus, RunStatus
+from dbt.artifacts.schemas.run import RunResult
 from dbt.graph import ResourceTypeSelector, GraphQueue, Graph
 from dbt.node_types import NodeType
 from dbt.task.test import TestSelector

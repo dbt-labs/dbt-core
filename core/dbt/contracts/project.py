@@ -307,6 +307,7 @@ class ProjectFlags(ExtensibleDbtClassMixin, Replaceable):
     populate_cache: Optional[bool] = None
     printer_width: Optional[int] = None
     send_anonymous_usage_stats: bool = DEFAULT_SEND_ANONYMOUS_USAGE_STATS
+    source_freshness_run_project_hooks: bool = False
     static_parser: Optional[bool] = None
     use_colors: Optional[bool] = None
     use_colors_file: Optional[bool] = None
@@ -315,6 +316,10 @@ class ProjectFlags(ExtensibleDbtClassMixin, Replaceable):
     warn_error: Optional[bool] = None
     warn_error_options: Optional[Dict[str, Union[str, List[str]]]] = None
     write_json: Optional[bool] = None
+
+    @property
+    def project_only_flags(self) -> Dict[str, Any]:
+        return {"source_freshness_run_project_hooks": self.source_freshness_run_project_hooks}
 
 
 @dataclass

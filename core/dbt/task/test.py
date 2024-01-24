@@ -17,9 +17,9 @@ from .run import RunTask
 
 from dbt.contracts.graph.nodes import TestNode, UnitTestDefinition, UnitTestNode
 from dbt.contracts.graph.manifest import Manifest
-from dbt.artifacts.results import TestStatus
-from dbt.artifacts.run import RunResult
-from dbt.artifacts.catalog import PrimitiveDict
+from dbt.artifacts.schemas.results import TestStatus
+from dbt.artifacts.schemas.run import RunResult
+from dbt.artifacts.schemas.catalog import PrimitiveDict
 from dbt.context.providers import generate_runtime_model_context
 from dbt.clients.jinja import MacroGenerator
 from dbt_common.events.functions import fire_event

@@ -1,7 +1,7 @@
 from typing import Dict, MutableMapping, Optional
 from dbt.contracts.graph.nodes import Macro
 from dbt.exceptions import DuplicateMacroNameError, PackageNotFoundForMacroError
-from dbt.adapters.include.global_project import PROJECT_NAME as GLOBAL_PROJECT_NAME
+from dbt.include.global_project import PROJECT_NAME as GLOBAL_PROJECT_NAME
 from dbt.clients.jinja import MacroGenerator
 
 MacroNamespace = Dict[str, Macro]

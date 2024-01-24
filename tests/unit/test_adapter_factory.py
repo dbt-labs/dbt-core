@@ -3,7 +3,7 @@ import unittest
 from unittest import mock
 from dbt.adapters.factory import AdapterContainer
 from dbt.adapters.base.plugin import AdapterPlugin
-from dbt.adapters.include.global_project import (
+from dbt.include.global_project import (
     PROJECT_NAME as GLOBAL_PROJECT_NAME,
 )
 

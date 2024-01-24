@@ -4,9 +4,8 @@ import psycopg2
 from psycopg2.extensions import string_types
 
 import dbt_common.exceptions
-from dbt.adapters.base import Credentials
 from dbt.adapters.sql import SQLConnectionManager
-from dbt.adapters.contracts.connection import AdapterResponse
+from dbt.adapters.contracts.connection import AdapterResponse, Credentials
 from dbt.adapters.events.logging import AdapterLogger
 
 from dbt_common.helper_types import Port
