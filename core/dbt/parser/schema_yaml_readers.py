@@ -33,7 +33,10 @@ from dbt.contracts.graph.nodes import (
     ConversionTypeParams,
 )
 from dbt.contracts.graph.saved_queries import Export, ExportConfig, QueryParams
-from dbt.contracts.graph.semantic_layer_common import WhereFilter, WhereFilterIntersection
+from dbt.artifacts.resources import (
+    WhereFilter,
+    WhereFilterIntersection,
+)
 from dbt.contracts.graph.semantic_models import (
     Dimension,
     DimensionTypeParams,

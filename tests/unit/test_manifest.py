@@ -29,7 +29,10 @@ from dbt.contracts.graph.nodes import (
     Group,
     RefArgs,
 )
-from dbt.contracts.graph.semantic_layer_common import WhereFilter, WhereFilterIntersection
+from dbt.artifacts.resources import (
+    WhereFilter,
+    WhereFilterIntersection,
+)
 from dbt.contracts.graph.unparsed import (
     ExposureType,
     Owner,

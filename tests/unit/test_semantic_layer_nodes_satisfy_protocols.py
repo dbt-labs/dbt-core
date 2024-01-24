@@ -13,7 +13,7 @@ from dbt.contracts.graph.nodes import (
     SavedQuery,
     SemanticModel,
 )
-from dbt.contracts.graph.semantic_layer_common import WhereFilter
+from dbt.artifacts.resources import WhereFilter
 from dbt.contracts.graph.semantic_models import (
     Dimension,
     DimensionTypeParams,

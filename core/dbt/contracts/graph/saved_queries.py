@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from dbt.contracts.graph.semantic_layer_common import WhereFilterIntersection
+from dbt.artifacts.resources import WhereFilterIntersection
 from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_semantic_interfaces.type_enums.export_destination_type import ExportDestinationType
 from typing import List, Optional
