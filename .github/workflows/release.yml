@@ -87,7 +87,7 @@ jobs:
 
       # release-prep.yml really shouldn't take in the sha but since core + all adapters
       # depend on it now this workaround lets us not input it manually with risk of error.
-      # The changes always get merged into the head so we can't use a specific commit fo
+      # The changes always get merged into the head so we can't use a specific commit for
       # releases anyways.
       - name: "Capture sha"
         id: set_sha
