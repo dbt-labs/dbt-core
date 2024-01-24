@@ -116,7 +116,9 @@ class UnitTestManifestLoader:
         # or view is created.
         for given in test_case.given:
             # extract the original_input_node from the ref in the "input" key of the given list
-            original_input_node = self._get_original_input_node(given.input, tested_node)
+            original_input_node = self._get_original_input_node(
+                given.input, tested_node, test_case.name
+            )
 
             common_fields = {
                 "resource_type": NodeType.Model,
@@ -182,7 +184,7 @@ class UnitTestManifestLoader:
             rows=rows, column_name_to_data_types=column_name_to_data_types
         )
 
-    def _get_original_input_node(self, input: str, tested_node: ModelNode):
+    def _get_original_input_node(self, input: str, tested_node: ModelNode, test_case_name: str):
         """
         Returns the original input node as defined in the project given an input reference
         and the node being tested.
@@ -223,7 +225,8 @@ class UnitTestManifestLoader:
                 raise InvalidUnitTestGivenInput(input=input)
 
         if not original_input_node:
-            raise InvalidUnitTestGivenInput(input=input)
+            msg = f"Unit test '{test_case_name}' had an input ({input}) which was not found in the manifest."
+            raise ParsingError(msg)
 
         return original_input_node
 

@@ -218,8 +218,8 @@ class TestRunner(CompileRunner):
             macro_func()
         except DbtBaseException as e:
             raise DbtRuntimeError(
-                f"An error occurred during execution of unit test '{unit_test_def.name}'."
-                f"There may be an error in the unit test definition.\n {e}"
+                f"An error occurred during execution of unit test '{unit_test_def.name}'. "
+                f"There may be an error in the unit test definition: check the data types.\n {e}"
             )
 
         # load results from context
