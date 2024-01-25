@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from dbt.artifacts.resources.base import GraphResource
 from dbt.artifacts.resources.v1.semantic_layer_components import WhereFilterIntersection
 from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_semantic_interfaces.type_enums.export_destination_type import ExportDestinationType
@@ -31,3 +32,9 @@ class QueryParams(dbtClassMixin):
     metrics: List[str]
     group_by: List[str]
     where: Optional[WhereFilterIntersection]
+
+
+@dataclass
+class SavedQueryMandatory(GraphResource):
+    query_params: QueryParams
+    exports: List[Export]

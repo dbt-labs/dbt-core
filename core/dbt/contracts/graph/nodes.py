@@ -94,14 +94,13 @@ from .model_config import (
 from dbt.artifacts.resources import (
     BaseResource,
     Docs,
-    Export as ExportResource,
     MacroDependsOn,
     MacroArgument,
     Documentation as DocumentationResource,
     Macro as MacroResource,
     Group as GroupResource,
     GraphResource,
-    QueryParams as QueryParamsResource,
+    SavedQueryMandatory as SavedQueryMandatoryResource,
     SourceFileMetadata as SourceFileMetadataResource,
     WhereFilterIntersection as WhereFilterIntersectionResource,
 )
@@ -1820,18 +1819,12 @@ class SemanticModel(GraphNode):
 
 
 # ====================================
-# SavedQuery and related classes
+# SavedQuery
 # ====================================
 
 
 @dataclass
-class SavedQueryMandatory(GraphNode):
-    query_params: QueryParamsResource
-    exports: List[ExportResource]
-
-
-@dataclass
-class SavedQuery(NodeInfoMixin, SavedQueryMandatory):
+class SavedQuery(NodeInfoMixin, GraphNode, SavedQueryMandatoryResource):
     description: Optional[str] = None
     label: Optional[str] = None
     metadata: Optional[SourceFileMetadataResource] = None

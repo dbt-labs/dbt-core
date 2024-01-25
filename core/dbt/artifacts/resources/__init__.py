@@ -10,6 +10,7 @@ from dbt.artifacts.resources.v1.saved_query import (
     Export,
     ExportConfig,
     QueryParams,
+    SavedQueryMandatory,
 )
 from dbt.artifacts.resources.v1.semantic_layer_components import (
     FileSlice,
