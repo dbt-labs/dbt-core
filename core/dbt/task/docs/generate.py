@@ -13,6 +13,8 @@ from dbt.task.docs import DOCS_INDEX_FILE_PATH
 from dbt.task.compile import CompileTask
 
 from dbt.adapters.factory import get_adapter
+
+from dbt.graph.graph import UniqueId
 from dbt.contracts.graph.nodes import ResultNode
 from dbt.contracts.graph.manifest import Manifest
 from dbt.artifacts.schemas.results import NodeStatus
@@ -112,7 +114,7 @@ class Catalog(Dict[CatalogKey, CatalogTable]):
         table.columns[column.name] = column
 
     def make_unique_id_map(
-        self, manifest: Manifest
+        self, manifest: Manifest, selected_node_ids: Set[UniqueId]
     ) -> Tuple[Dict[str, CatalogTable], Dict[str, CatalogTable]]:
         nodes: Dict[str, CatalogTable] = {}
         sources: Dict[str, CatalogTable] = {}
@@ -123,7 +125,8 @@ class Catalog(Dict[CatalogKey, CatalogTable]):
             key = table.key()
             if key in node_map:
                 unique_id = node_map[key]
-                nodes[unique_id] = table.replace(unique_id=unique_id)
+                if unique_id in selected_node_ids:
+                    nodes[unique_id] = table.replace(unique_id=unique_id)
 
             unique_ids = source_map.get(table.key(), set())
             for unique_id in unique_ids:
@@ -134,7 +137,8 @@ class Catalog(Dict[CatalogKey, CatalogTable]):
                         table.to_dict(omit_none=True),
                     )
                 else:
-                    sources[unique_id] = table.replace(unique_id=unique_id)
+                    if unique_id in selected_node_ids:
+                        sources[unique_id] = table.replace(unique_id=unique_id)
         return nodes, sources
 
 
@@ -238,6 +242,7 @@ class GenerateTask(CompileTask):
         if self.manifest is None:
             raise DbtInternalError("self.manifest was None in run!")
 
+        selected_node_ids: Set[UniqueId] = set()
         if self.args.empty_catalog:
             catalog_table: agate.Table = agate.Table([])
             exceptions: List[Exception] = []
@@ -251,14 +256,18 @@ class GenerateTask(CompileTask):
                     selected_node_ids = self.job_queue.get_selected_nodes()
                     selected_nodes = self._get_nodes_from_ids(self.manifest, selected_node_ids)
 
-                    source_ids = self._get_nodes_from_ids(
+                    source_nodes = self._get_nodes_from_ids(
                         self.manifest, self.manifest.sources.keys()
                     )
-                    selected_nodes.extend(source_ids)
+
+                    selected_node_ids.update(
+                        {UniqueId(unique_id) for unique_id in self.manifest.sources.keys()}
+                    )
+                    selected_nodes.extend(source_nodes)
 
                     relations = {
-                        adapter.Relation.create_from(adapter.config, node_id)
-                        for node_id in selected_nodes
+                        adapter.Relation.create_from(adapter.config, node)
+                        for node in selected_nodes
                     }
 
                 # This generates the catalog as an agate.Table
@@ -285,7 +294,7 @@ class GenerateTask(CompileTask):
         if exceptions:
             errors = [str(e) for e in exceptions]
 
-        nodes, sources = catalog.make_unique_id_map(self.manifest)
+        nodes, sources = catalog.make_unique_id_map(self.manifest, selected_node_ids)
         results = self.get_catalog_results(
             nodes=nodes,
             sources=sources,

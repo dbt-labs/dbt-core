@@ -74,6 +74,7 @@ class TestGenerateSelectLimitsNoMatch(TestBaseGenerate):
         run_dbt(["run"])
         catalog = run_dbt(["docs", "generate", "--select", "my_missing_model"])
         assert len(catalog.nodes) == 0
+        assert len(catalog.sources) == 0
 
 
 class TestGenerateCatalogWithSources(TestBaseGenerate):
@@ -90,11 +91,21 @@ class TestGenerateCatalogWithSources(TestBaseGenerate):
 class TestGenerateSelectSource(TestBaseGenerate):
     def test_select_source(self, project):
         run_dbt(["build"])
-        catalog = run_dbt(["docs", "generate", "--select", "source:test.my_seed.sample_seed"])
 
-        # 2 seeds
-        # TODO: Filtering doesn't work for seeds
-        assert len(catalog.nodes) == 2
         # 2 sources
-        # TODO: Filtering doesn't work for sources
+        catalog = run_dbt(["docs", "generate", "--select", "source:test.my_seed.sample_seed"])
+        # TODO: Filtering doesn't work for sources (should be 1)
+        assert len(catalog.sources) == 2
+
+
+class TestGenerateSelectSeed(TestBaseGenerate):
+    def test_select_seed(self, project):
+        run_dbt(["build"])
+
+        # 2 seeds, 1 selected
+        catalog = run_dbt(["docs", "generate", "--select", "sample_seed"])
+        assert len(catalog.nodes) == 1
+        assert "seed.test.sample_seed" in catalog.nodes
+
+        # TODO: Filtering doesn't work for sources (should be 0)
         assert len(catalog.sources) == 2
