@@ -17,7 +17,6 @@ from dbt_common.dataclass_schema import dbtClassMixin, ExtensibleDbtClassMixin
 
 from dbt_common.clients.system import write_file
 from dbt.contracts.files import FileHash
-from dbt.contracts.graph.saved_queries import Export, QueryParams
 from dbt.contracts.graph.semantic_models import (
     Defaults,
     Dimension,
@@ -95,12 +94,14 @@ from .model_config import (
 from dbt.artifacts.resources import (
     BaseResource,
     Docs,
+    Export as ExportResource,
     MacroDependsOn,
     MacroArgument,
     Documentation as DocumentationResource,
     Macro as MacroResource,
     Group as GroupResource,
     GraphResource,
+    QueryParams as QueryParamsResource,
     SourceFileMetadata as SourceFileMetadataResource,
     WhereFilterIntersection as WhereFilterIntersectionResource,
 )
@@ -1825,8 +1826,8 @@ class SemanticModel(GraphNode):
 
 @dataclass
 class SavedQueryMandatory(GraphNode):
-    query_params: QueryParams
-    exports: List[Export]
+    query_params: QueryParamsResource
+    exports: List[ExportResource]
 
 
 @dataclass

@@ -31,7 +31,7 @@ from dbt.contracts.graph.nodes import (
     UnitTestDefinition,
 )
 from dbt.contracts.graph.manifest import Manifest, ManifestMetadata
-from dbt.contracts.graph.saved_queries import QueryParams
+from dbt.artifacts.resources import QueryParams
 from dbt.contracts.graph.unparsed import (
     ExposureType,
     Owner,

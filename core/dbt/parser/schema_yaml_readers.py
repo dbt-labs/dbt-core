@@ -32,8 +32,10 @@ from dbt.contracts.graph.nodes import (
     SavedQuery,
     ConversionTypeParams,
 )
-from dbt.contracts.graph.saved_queries import Export, ExportConfig, QueryParams
 from dbt.artifacts.resources import (
+    Export,
+    ExportConfig,
+    QueryParams,
     WhereFilter,
     WhereFilterIntersection,
 )
