@@ -4,7 +4,7 @@ from typing import Literal, List, Dict, Optional, Any
 
 from dbt_common.contracts.util import Replaceable
 from dbt_common.dataclass_schema import dbtClassMixin
-from dbt.artifacts.resources.base import BaseArtifactNode
+from dbt.artifacts.resources.base import BaseResource
 from dbt.artifacts.resources.types import NodeType, ModelLanguage
 from dbt.artifacts.resources.v1.docs import Docs
 
@@ -27,7 +27,7 @@ class MacroDependsOn(dbtClassMixin, Replaceable):
 
 
 @dataclass
-class Macro(BaseArtifactNode):
+class Macro(BaseResource):
     macro_sql: str
     resource_type: Literal[NodeType.Macro]
     depends_on: MacroDependsOn = field(default_factory=MacroDependsOn)

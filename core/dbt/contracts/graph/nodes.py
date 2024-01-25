@@ -95,12 +95,13 @@ from .model_config import (
 )
 
 from dbt.artifacts.resources import (
-    BaseArtifactNode,
+    BaseResource,
     Docs,
     MacroDependsOn,
     MacroArgument,
     Documentation as DocumentationResource,
     Macro as MacroResource,
+    Group as GroupResource,
 )
 
 
@@ -128,7 +129,7 @@ from dbt.artifacts.resources import (
 
 
 @dataclass
-class BaseNode(BaseArtifactNode):
+class BaseNode(BaseResource):
     """All nodes or node-like objects in this file should have this as a base class"""
 
     @property
@@ -1642,10 +1643,8 @@ class Metric(GraphNode):
 
 
 @dataclass
-class Group(BaseNode):
-    name: str
-    owner: Owner
-    resource_type: Literal[NodeType.Group]
+class Group(GroupResource, BaseNode):
+    pass
 
 
 # ====================================

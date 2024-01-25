@@ -29,7 +29,7 @@ import dbt_common.helper_types  # noqa:F401
 from dbt.exceptions import ParsingError
 
 from dbt_semantic_interfaces.type_enums import ConversionCalculationType
-from dbt.artifacts.resources import Docs, MacroArgument
+from dbt.artifacts.resources import Docs, MacroArgument, Owner
 
 from dataclasses import dataclass, field
 from datetime import timedelta
@@ -520,12 +520,6 @@ class MaturityType(StrEnum):
     Low = "low"
     Medium = "medium"
     High = "high"
-
-
-@dataclass
-class Owner(AdditionalPropertiesAllowed, Replaceable):
-    email: Optional[str] = None
-    name: Optional[str] = None
 
 
 @dataclass
