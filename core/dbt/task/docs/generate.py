@@ -114,8 +114,13 @@ class Catalog(Dict[CatalogKey, CatalogTable]):
         table.columns[column.name] = column
 
     def make_unique_id_map(
-        self, manifest: Manifest, selected_node_ids: Set[UniqueId]
+        self, manifest: Manifest, selected_node_ids: Optional[Set[UniqueId]] = None
     ) -> Tuple[Dict[str, CatalogTable], Dict[str, CatalogTable]]:
+        """
+        Create mappings between CatalogKeys and CatalogTables for nodes and sources, filteded by selected_node_ids.
+
+        By default, selected_node_ids is None and all nodes and sources defined in the manifest are included in the mappings.
+        """
         nodes: Dict[str, CatalogTable] = {}
         sources: Dict[str, CatalogTable] = {}
 
@@ -125,7 +130,7 @@ class Catalog(Dict[CatalogKey, CatalogTable]):
             key = table.key()
             if key in node_map:
                 unique_id = node_map[key]
-                if unique_id in selected_node_ids:
+                if selected_node_ids is None or unique_id in selected_node_ids:
                     nodes[unique_id] = table.replace(unique_id=unique_id)
 
             unique_ids = source_map.get(table.key(), set())
@@ -137,7 +142,7 @@ class Catalog(Dict[CatalogKey, CatalogTable]):
                         table.to_dict(omit_none=True),
                     )
                 else:
-                    if unique_id in selected_node_ids:
+                    if selected_node_ids is None or unique_id in selected_node_ids:
                         sources[unique_id] = table.replace(unique_id=unique_id)
         return nodes, sources
 
@@ -242,10 +247,11 @@ class GenerateTask(CompileTask):
         if self.manifest is None:
             raise DbtInternalError("self.manifest was None in run!")
 
-        selected_node_ids: Set[UniqueId] = set()
+        selected_node_ids: Optional[Set[UniqueId]] = None
         if self.args.empty_catalog:
             catalog_table: agate.Table = agate.Table([])
             exceptions: List[Exception] = []
+            selected_node_ids = set()
         else:
             adapter = get_adapter(self.config)
             with adapter.connection_named("generate_catalog"):
