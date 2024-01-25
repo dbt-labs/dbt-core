@@ -343,6 +343,7 @@ class GenerateTask(CompileTask):
             manifest=self.manifest,
             previous_state=self.previous_state,
             resource_types=EXECUTABLE_NODE_TYPES,
+            include_empty_nodes=True,
         )
 
     def get_catalog_results(
