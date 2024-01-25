@@ -23,6 +23,7 @@ pytest-xdist
 sphinx
 tox>=3.13
 twine
+types-docutils
 types-PyYAML
 types-Jinja2
 types-mock
