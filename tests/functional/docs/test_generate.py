@@ -95,7 +95,7 @@ class TestGenerateSelectSource(TestBaseGenerate):
         # 2 sources, 1 selected
         catalog = run_dbt(["docs", "generate", "--select", "source:test.my_seed.sample_seed"])
         assert len(catalog.sources) == 1
-        assert "test.my_seed.sample_seed" in catalog.sources
+        assert "source.test.my_seed.sample_seed" in catalog.sources
         # no nodes selected
         assert len(catalog.nodes) == 0
 
