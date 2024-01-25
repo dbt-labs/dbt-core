@@ -32,7 +32,7 @@ from dbt.artifacts.schemas.catalog import (
 from dbt_common.exceptions import DbtInternalError
 from dbt.exceptions import AmbiguousCatalogMatchError
 from dbt.graph import ResourceTypeSelector
-from dbt.node_types import EXECUTABLE_NODE_TYPES
+from dbt.node_types import EXECUTABLE_NODE_TYPES, NodeType
 from dbt_common.events.functions import fire_event
 from dbt.adapters.events.types import (
     WriteCatalogFailure,
@@ -256,14 +256,15 @@ class GenerateTask(CompileTask):
                     selected_node_ids = self.job_queue.get_selected_nodes()
                     selected_nodes = self._get_nodes_from_ids(self.manifest, selected_node_ids)
 
-                    source_nodes = self._get_nodes_from_ids(
-                        self.manifest, self.manifest.sources.keys()
+                    # Source selection is handled separately from main job_queue selection because
+                    # SourceDefinition nodes cannot be safely compiled / run by the CompileRunner / CompileTask,
+                    # but can still be included in the catalog
+                    selected_source_ids = self._get_selected_source_ids()
+                    selected_source_nodes = self._get_nodes_from_ids(
+                        self.manifest, selected_source_ids
                     )
-
-                    selected_node_ids.update(
-                        {UniqueId(unique_id) for unique_id in self.manifest.sources.keys()}
-                    )
-                    selected_nodes.extend(source_nodes)
+                    selected_node_ids.update(selected_source_ids)
+                    selected_nodes.extend(selected_source_nodes)
 
                     relations = {
                         adapter.Relation.create_from(adapter.config, node)
@@ -331,19 +332,6 @@ class GenerateTask(CompileTask):
         fire_event(CatalogWritten(path=os.path.abspath(catalog_path)))
         return results
 
-    @staticmethod
-    def _get_nodes_from_ids(manifest: Manifest, node_ids: Iterable[str]) -> List[ResultNode]:
-        selected: List[ResultNode] = []
-        for unique_id in node_ids:
-            if unique_id in manifest.nodes:
-                node = manifest.nodes[unique_id]
-                if node.is_relational and not node.is_ephemeral_model:
-                    selected.append(node)
-            elif unique_id in manifest.sources:
-                source = manifest.sources[unique_id]
-                selected.append(source)
-        return selected
-
     def get_node_selector(self) -> ResourceTypeSelector:
         if self.manifest is None or self.graph is None:
             raise DbtInternalError("manifest and graph must be set to perform node selection")
@@ -381,3 +369,29 @@ class GenerateTask(CompileTask):
             return True
 
         return super().interpret_results(compile_results)
+
+    @staticmethod
+    def _get_nodes_from_ids(manifest: Manifest, node_ids: Iterable[str]) -> List[ResultNode]:
+        selected: List[ResultNode] = []
+        for unique_id in node_ids:
+            if unique_id in manifest.nodes:
+                node = manifest.nodes[unique_id]
+                if node.is_relational and not node.is_ephemeral_model:
+                    selected.append(node)
+            elif unique_id in manifest.sources:
+                source = manifest.sources[unique_id]
+                selected.append(source)
+        return selected
+
+    def _get_selected_source_ids(self) -> Set[UniqueId]:
+        if self.manifest is None or self.graph is None:
+            raise DbtInternalError("manifest and graph must be set to perform node selection")
+
+        source_selector = ResourceTypeSelector(
+            graph=self.graph,
+            manifest=self.manifest,
+            previous_state=self.previous_state,
+            resource_types=[NodeType.Source],
+        )
+
+        return source_selector.get_graph_queue(self.get_selection_spec()).get_selected_nodes()

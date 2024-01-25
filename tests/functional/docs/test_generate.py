@@ -92,10 +92,12 @@ class TestGenerateSelectSource(TestBaseGenerate):
     def test_select_source(self, project):
         run_dbt(["build"])
 
-        # 2 sources
+        # 2 sources, 1 selected
         catalog = run_dbt(["docs", "generate", "--select", "source:test.my_seed.sample_seed"])
-        # TODO: Filtering doesn't work for sources (should be 1)
-        assert len(catalog.sources) == 2
+        assert len(catalog.sources) == 1
+        assert "test.my_seed.sample_seed" in catalog.sources
+        # no nodes selected
+        assert len(catalog.nodes) == 0
 
 
 class TestGenerateSelectSeed(TestBaseGenerate):
@@ -106,6 +108,5 @@ class TestGenerateSelectSeed(TestBaseGenerate):
         catalog = run_dbt(["docs", "generate", "--select", "sample_seed"])
         assert len(catalog.nodes) == 1
         assert "seed.test.sample_seed" in catalog.nodes
-
-        # TODO: Filtering doesn't work for sources (should be 0)
-        assert len(catalog.sources) == 2
+        # no sources selected
+        assert len(catalog.sources) == 0
