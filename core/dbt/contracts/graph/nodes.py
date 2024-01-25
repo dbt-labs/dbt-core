@@ -1871,12 +1871,18 @@ class SavedQuery(NodeInfoMixin, SavedQueryMandatory):
         return self.group == old.group
 
     def same_exports(self, old: "SavedQuery") -> bool:
+        # TODO: This isn't currently used in `same_contents` (nor called anywhere else)
         if len(self.exports) != len(old.exports):
             return False
 
         # exports should be in the same order, so we zip them for easy iteration
         for (old_export, new_export) in zip(old.exports, self.exports):
-            if not new_export.same_contents(old_export):
+            if not (
+                old_export.name == new_export.name
+                and old_export.config.export_as == new_export.config.export_as
+                and old_export.config.schema_name == new_export.config.schema_name
+                and old_export.config.alias == new_export.config.alias
+            ):
                 return False
 
         return True

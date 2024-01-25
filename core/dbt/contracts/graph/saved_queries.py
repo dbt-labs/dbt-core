@@ -23,26 +23,6 @@ class Export(dbtClassMixin):
     name: str
     config: ExportConfig
 
-    def same_name(self, old: Export) -> bool:
-        return self.name == old.name
-
-    def same_export_as(self, old: Export) -> bool:
-        return self.config.export_as == old.config.export_as
-
-    def same_schema_name(self, old: Export) -> bool:
-        return self.config.schema_name == old.config.schema_name
-
-    def same_alias(self, old: Export) -> bool:
-        return self.config.alias == old.config.alias
-
-    def same_contents(self, old: Export) -> bool:
-        return (
-            self.same_name(old)
-            and self.same_export_as(old)
-            and self.same_schema_name(old)
-            and self.same_alias(old)
-        )
-
 
 @dataclass
 class QueryParams(dbtClassMixin):
