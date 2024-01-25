@@ -100,6 +100,7 @@ from dbt.artifacts.resources import (
     Documentation as DocumentationResource,
     Macro as MacroResource,
     Group as GroupResource,
+    GraphResource,
     SourceFileMetadata as SourceFileMetadataResource,
     WhereFilterIntersection as WhereFilterIntersectionResource,
 )
@@ -170,10 +171,8 @@ class BaseNode(BaseResource):
 
 
 @dataclass
-class GraphNode(BaseNode):
+class GraphNode(GraphResource, BaseNode):
     """Nodes in the DAG. Macro and Documentation don't have fqn."""
-
-    fqn: List[str]
 
     def same_fqn(self, other) -> bool:
         return self.fqn == other.fqn

@@ -1,4 +1,4 @@
-from dbt.artifacts.resources.base import BaseResource
+from dbt.artifacts.resources.base import BaseResource, GraphResource
 
 # alias to latest resource definitions
 from dbt.artifacts.resources.v1.documentation import Documentation
