@@ -88,7 +88,6 @@ from .model_config import (
     SemanticModelConfig,
     UnitTestConfig,
     UnitTestNodeConfig,
-    SavedQueryConfig,
 )
 
 from dbt.artifacts.resources import (
@@ -100,6 +99,7 @@ from dbt.artifacts.resources import (
     Macro as MacroResource,
     Group as GroupResource,
     GraphResource,
+    SavedQueryConfig,
     SavedQueryMandatory as SavedQueryMandatoryResource,
     SourceFileMetadata as SourceFileMetadataResource,
     WhereFilterIntersection as WhereFilterIntersectionResource,

@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from dbt.artifacts.resources.base import GraphResource
 from dbt.artifacts.resources.v1.semantic_layer_components import WhereFilterIntersection
+from dbt_common.contracts.config.base import BaseConfig, CompareBehavior, MergeBehavior
 from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_semantic_interfaces.type_enums.export_destination_type import ExportDestinationType
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 
 @dataclass
@@ -32,6 +33,29 @@ class QueryParams(dbtClassMixin):
     metrics: List[str]
     group_by: List[str]
     where: Optional[WhereFilterIntersection]
+
+
+@dataclass
+class SavedQueryConfig(BaseConfig):
+    """Where config options for SavedQueries are stored.
+
+    This class is much like many other node config classes. It's likely that
+    this class will expand in the direction of what's in the `NodeAndTestConfig`
+    class. It might make sense to clean the various *Config classes into one at
+    some point.
+    """
+
+    enabled: bool = True
+    group: Optional[str] = field(
+        default=None,
+        metadata=CompareBehavior.Exclude.meta(),
+    )
+    meta: Dict[str, Any] = field(
+        default_factory=dict,
+        metadata=MergeBehavior.Update.meta(),
+    )
+    export_as: Optional[ExportDestinationType] = None
+    schema: Optional[str] = None
 
 
 @dataclass

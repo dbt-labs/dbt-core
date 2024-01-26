@@ -2,6 +2,7 @@ from dataclasses import field, dataclass
 from typing import Any, List, Optional, Dict, Union, Type
 from typing_extensions import Annotated
 
+from dbt.artifacts.resources import SavedQueryConfig
 from dbt_common.contracts.config.base import BaseConfig, MergeBehavior, CompareBehavior
 from dbt_common.contracts.config.materialization import OnConfigurationChangeOption
 from dbt_common.contracts.config.metadata import Metadata, ShowBehavior
@@ -14,7 +15,6 @@ from dbt.contracts.graph.utils import validate_color
 from dbt.contracts.util import Replaceable, list_str
 from dbt import hooks
 from dbt.node_types import NodeType, AccessType
-from dbt_semantic_interfaces.type_enums.export_destination_type import ExportDestinationType
 from mashumaro.jsonschema.annotations import Pattern
 
 
@@ -60,29 +60,6 @@ class SemanticModelConfig(BaseConfig):
         default_factory=dict,
         metadata=MergeBehavior.Update.meta(),
     )
-
-
-@dataclass
-class SavedQueryConfig(BaseConfig):
-    """Where config options for SavedQueries are stored.
-
-    This class is much like many other node config classes. It's likely that
-    this class will expand in the direction of what's in the `NodeAndTestConfig`
-    class. It might make sense to clean the various *Config classes into one at
-    some point.
-    """
-
-    enabled: bool = True
-    group: Optional[str] = field(
-        default=None,
-        metadata=CompareBehavior.Exclude.meta(),
-    )
-    meta: Dict[str, Any] = field(
-        default_factory=dict,
-        metadata=MergeBehavior.Update.meta(),
-    )
-    export_as: Optional[ExportDestinationType] = None
-    schema: Optional[str] = None
 
 
 @dataclass
