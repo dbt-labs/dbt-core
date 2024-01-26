@@ -63,5 +63,5 @@ body:
       label: Context
       description: |
         Provide the "why", motivation, and alternative approaches considered -- linking to previous refinement issues, spikes and documentation as appropriate
-      validations:
-        required: false
+    validations:
+      required: false
