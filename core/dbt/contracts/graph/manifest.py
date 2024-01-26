@@ -455,38 +455,40 @@ def _packages_to_search(
         return [current_project, node_package, None]
 
 
-def _sort_values(dct):
+def _sort_values(dct: Dict[str, Set[str]]) -> Dict[str, List[str]]:
     """Given a dictionary, sort each value. This makes output deterministic,
     which helps for tests.
     """
-    return {k: sorted(v) for k, v in dct.items()}
+    return {k: sorted(list(v)) for k, v in dct.items()}
 
 
-def build_node_edges(nodes: List[ManifestNode]):
+def build_node_edges(
+    nodes: List[ManifestNode],
+) -> Tuple[Dict[str, List[str]], Dict[str, List[str]]]:
     """Build the forward and backward edges on the given list of ManifestNodes
     and return them as two separate dictionaries, each mapping unique IDs to
     lists of edges.
     """
-    backward_edges: Dict[str, List[str]] = {}
+    backward_edges: Dict[str, Set[str]] = {}
     # pre-populate the forward edge dict for simplicity
-    forward_edges: Dict[str, List[str]] = {n.unique_id: [] for n in nodes}
+    forward_edges: Dict[str, Set[str]] = {n.unique_id: set() for n in nodes}
     for node in nodes:
-        backward_edges[node.unique_id] = node.depends_on_nodes[:]
+        backward_edges[node.unique_id] = node.depends_on_nodes.copy()
         for unique_id in backward_edges[node.unique_id]:
             if unique_id in forward_edges.keys():
-                forward_edges[unique_id].append(node.unique_id)
+                forward_edges[unique_id].add(node.unique_id)
     return _sort_values(forward_edges), _sort_values(backward_edges)
 
 
 # Build a map of children of macros and generic tests
 def build_macro_edges(nodes: List[Any]):
-    forward_edges: Dict[str, List[str]] = {
-        n.unique_id: [] for n in nodes if n.unique_id.startswith("macro") or n.depends_on_macros
+    forward_edges: Dict[str, Set[str]] = {
+        n.unique_id: set() for n in nodes if n.unique_id.startswith("macro") or n.depends_on_macros
     }
     for node in nodes:
         for unique_id in node.depends_on_macros:
             if unique_id in forward_edges.keys():
-                forward_edges[unique_id].append(node.unique_id)
+                forward_edges[unique_id].add(node.unique_id)
     return _sort_values(forward_edges)
 
 

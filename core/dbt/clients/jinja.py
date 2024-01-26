@@ -71,7 +71,7 @@ class MacroGenerator(CallableMacroGenerator):
             depth = self.stack.depth
             # only mark depth=0 as a dependency, when creating this dependency we don't pass in stack
             if depth == 0 and self.node:
-                self.node.depends_on.add_macro(unique_id)
+                self.node.depends_on.macros.add(unique_id)
             self.stack.push(unique_id)
             try:
                 yield

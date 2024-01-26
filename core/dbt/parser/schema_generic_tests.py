@@ -273,7 +273,7 @@ class SchemaGenericTestParser(SimpleParser):
         )
         # Add the depends_on here so we can limit the macros added
         # to the context in rendering processing
-        node.depends_on.add_macro(macro_unique_id)
+        node.depends_on.macros.add(macro_unique_id)
         if macro_unique_id in ["macro.dbt.test_not_null", "macro.dbt.test_unique"]:
             config_call_dict = builder.get_static_config()
             config._config_call_dict = config_call_dict

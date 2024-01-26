@@ -744,7 +744,7 @@ class ManifestLoader:
                     package_name, macro_name = macro_name.split(".")
                 dep_macro_id = self.macro_resolver.get_macro_id(package_name, macro_name)
                 if dep_macro_id:
-                    macro.depends_on.add_macro(dep_macro_id)  # will check for dupes
+                    macro.depends_on.macros.add(dep_macro_id)  # will check for dupes
 
     def write_manifest_for_partial_parse(self):
         path = os.path.join(self.root_project.project_target_path, PARTIAL_PARSE_FILE_NAME)
@@ -1532,7 +1532,7 @@ def _process_refs(
             )
 
         target_model_id = target_model.unique_id
-        node.depends_on.add_node(target_model_id)
+        node.depends_on.nodes.add(target_model_id)
 
 
 def _process_metric_depends_on(
@@ -1560,7 +1560,7 @@ def _process_metric_depends_on(
                 node=metric,
             )
 
-        metric.depends_on.add_node(target_semantic_model.unique_id)
+        metric.depends_on.nodes.add(target_semantic_model.unique_id)
 
 
 def _process_metric_node(
@@ -1628,7 +1628,7 @@ def _process_metric_node(
                 manifest=manifest, current_project=current_project, metric=target_metric
             )
             metric.type_params.input_measures.extend(target_metric.type_params.input_measures)
-            metric.depends_on.add_node(target_metric.unique_id)
+            metric.depends_on.nodes.add(target_metric.unique_id)
     else:
         assert_values_exhausted(metric.type)
 
@@ -1684,7 +1684,7 @@ def _process_metrics_for_node(
 
         target_metric_id = target_metric.unique_id
 
-        node.depends_on.add_node(target_metric_id)
+        node.depends_on.nodes.add(target_metric_id)
 
 
 def remove_dependent_project_references(manifest, external_node_unique_id):
@@ -1715,7 +1715,7 @@ def _process_sources_for_exposure(manifest: Manifest, current_project: str, expo
             )
             continue
         target_source_id = target_source.unique_id
-        exposure.depends_on.add_node(target_source_id)
+        exposure.depends_on.nodes.add(target_source_id)
 
 
 def _process_sources_for_metric(manifest: Manifest, current_project: str, metric: Metric):
@@ -1737,7 +1737,7 @@ def _process_sources_for_metric(manifest: Manifest, current_project: str, metric
             )
             continue
         target_source_id = target_source.unique_id
-        metric.depends_on.add_node(target_source_id)
+        metric.depends_on.nodes.add(target_source_id)
 
 
 def _process_sources_for_node(manifest: Manifest, current_project: str, node: ManifestNode):
@@ -1764,7 +1764,7 @@ def _process_sources_for_node(manifest: Manifest, current_project: str, node: Ma
             )
             continue
         target_source_id = target_source.unique_id
-        node.depends_on.add_node(target_source_id)
+        node.depends_on.nodes.add(target_source_id)
 
 
 # This is called in task.rpc.sql_commands when a "dynamic" node is
