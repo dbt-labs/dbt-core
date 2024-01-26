@@ -45,7 +45,7 @@ import sqlparse
 graph_file_name = "graph.gpickle"
 
 
-def print_compile_stats(stats):
+def print_compile_stats(stats: Dict[NodeType, int]):
     # create tracking event for resource_counts
     if dbt.tracking.active_user is not None:
         resource_counts = {k.pluralize(): v for k, v in stats.items()}
@@ -64,7 +64,7 @@ def _node_enabled(node: ManifestNode):
         return True
 
 
-def _generate_stats(manifest: Manifest):
+def _generate_stats(manifest: Manifest) -> Dict[NodeType, int]:
     stats: Dict[NodeType, int] = defaultdict(int)
     for node in manifest.nodes.values():
         if _node_enabled(node):
