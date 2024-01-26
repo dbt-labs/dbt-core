@@ -71,8 +71,7 @@ def print_compile_stats(stats):
         dbt.tracking.track_resource_counts(resource_counts)
 
     # do not include resource types that are not actually defined in the project
-    stat_line = ", ".join([pluralize(ct, names.get(t)) for t, ct in stats.items() if t in names])
-
+    stat_line = ", ".join([pluralize(ct, t) for t, ct in stats.items() if t in names])
     fire_event(FoundStats(stat_line=stat_line))
 
 
