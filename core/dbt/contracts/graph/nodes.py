@@ -92,6 +92,7 @@ from .model_config import (
 
 from dbt.artifacts.resources import (
     BaseResource,
+    DependsOn,
     Docs,
     MacroDependsOn,
     MacroArgument,
@@ -252,15 +253,6 @@ class DeferRelation(HasRelationMetadata):
     @property
     def identifier(self):
         return self.alias
-
-
-@dataclass
-class DependsOn(MacroDependsOn):
-    nodes: List[str] = field(default_factory=list)
-
-    def add_node(self, value: str):
-        if value not in self.nodes:
-            self.nodes.append(value)
 
 
 @dataclass
