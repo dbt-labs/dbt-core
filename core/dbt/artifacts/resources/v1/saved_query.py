@@ -1,8 +1,13 @@
 from __future__ import annotations
+import time
 
 from dataclasses import dataclass, field
 from dbt.artifacts.resources.base import GraphResource
-from dbt.artifacts.resources.v1.semantic_layer_components import WhereFilterIntersection
+from dbt.artifacts.resources.v1.components import DependsOn, RefArgs
+from dbt.artifacts.resources.v1.semantic_layer_components import (
+    SourceFileMetadata,
+    WhereFilterIntersection,
+)
 from dbt_common.contracts.config.base import BaseConfig, CompareBehavior, MergeBehavior
 from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_semantic_interfaces.type_enums.export_destination_type import ExportDestinationType
@@ -62,3 +67,24 @@ class SavedQueryConfig(BaseConfig):
 class SavedQueryMandatory(GraphResource):
     query_params: QueryParams
     exports: List[Export]
+
+
+@dataclass
+class SavedQuery(SavedQueryMandatory):
+    description: Optional[str] = None
+    label: Optional[str] = None
+    metadata: Optional[SourceFileMetadata] = None
+    config: SavedQueryConfig = field(default_factory=SavedQueryConfig)
+    unrendered_config: Dict[str, Any] = field(default_factory=dict)
+    group: Optional[str] = None
+    depends_on: DependsOn = field(default_factory=DependsOn)
+    created_at: float = field(default_factory=lambda: time.time())
+    refs: List[RefArgs] = field(default_factory=list)
+
+    @property
+    def metrics(self) -> List[str]:
+        return self.query_params.metrics
+
+    @property
+    def depends_on_nodes(self):
+        return self.depends_on.nodes

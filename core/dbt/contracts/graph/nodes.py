@@ -101,8 +101,7 @@ from dbt.artifacts.resources import (
     Group as GroupResource,
     GraphResource,
     RefArgs as RefArgsResource,
-    SavedQueryConfig,
-    SavedQueryMandatory as SavedQueryMandatoryResource,
+    SavedQuery as SavedQueryResource,
     SourceFileMetadata as SourceFileMetadataResource,
     WhereFilterIntersection as WhereFilterIntersectionResource,
 )
@@ -1796,25 +1795,7 @@ class SemanticModel(GraphNode):
 
 
 @dataclass
-class SavedQuery(NodeInfoMixin, GraphNode, SavedQueryMandatoryResource):
-    description: Optional[str] = None
-    label: Optional[str] = None
-    metadata: Optional[SourceFileMetadataResource] = None
-    config: SavedQueryConfig = field(default_factory=SavedQueryConfig)
-    unrendered_config: Dict[str, Any] = field(default_factory=dict)
-    group: Optional[str] = None
-    depends_on: DependsOn = field(default_factory=DependsOn)
-    created_at: float = field(default_factory=lambda: time.time())
-    refs: List[RefArgsResource] = field(default_factory=list)
-
-    @property
-    def metrics(self) -> List[str]:
-        return self.query_params.metrics
-
-    @property
-    def depends_on_nodes(self):
-        return self.depends_on.nodes
-
+class SavedQuery(NodeInfoMixin, GraphNode, SavedQueryResource):
     def same_metrics(self, old: "SavedQuery") -> bool:
         return self.query_params.metrics == old.query_params.metrics
 

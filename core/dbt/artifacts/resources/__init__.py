@@ -11,6 +11,7 @@ from dbt.artifacts.resources.v1.saved_query import (
     Export,
     ExportConfig,
     QueryParams,
+    SavedQuery,
     SavedQueryConfig,
     SavedQueryMandatory,
 )
