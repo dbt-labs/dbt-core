@@ -1,3 +1,4 @@
+from dbt.artifacts.resources import NodeVersion
 from dbt_common.contracts.constraints import ColumnLevelConstraint, ConstraintType
 from dbt.contracts.graph.unparsed import (
     HasColumnProps,
@@ -8,7 +9,7 @@ from dbt.contracts.graph.unparsed import (
     UnparsedExposure,
     UnparsedModelUpdate,
 )
-from dbt.contracts.graph.unparsed import NodeVersion, HasColumnTests, HasColumnDocs
+from dbt.contracts.graph.unparsed import HasColumnTests, HasColumnDocs
 from dbt.contracts.graph.nodes import UnpatchedSourceDefinition, ColumnInfo
 from dbt.parser.search import FileBlock
 from typing import List, Dict, Any, TypeVar, Generic, Union, Optional

@@ -16,6 +16,7 @@ from typing import (
 from typing_extensions import Protocol
 
 from dbt.adapters.base.column import Column
+from dbt.artifacts.resources import NodeVersion, RefArgs
 from dbt_common.clients.jinja import MacroProtocol
 from dbt.adapters.factory import get_adapter, get_adapter_package_names, get_adapter_type_names
 from dbt_common.clients import agate_helper
@@ -38,13 +39,11 @@ from dbt.contracts.graph.nodes import (
     SourceDefinition,
     Resource,
     ManifestNode,
-    RefArgs,
     AccessType,
     SemanticModel,
     UnitTestNode,
 )
 from dbt.contracts.graph.metrics import MetricReference, ResolvedMetricReference
-from dbt.contracts.graph.unparsed import NodeVersion
 from dbt_common.events.functions import get_metadata_vars
 from dbt_common.exceptions import (
     DbtInternalError,

@@ -33,7 +33,6 @@ from dbt.contracts.graph.unparsed import (
     Owner,
     Quoting,
     TestDef,
-    NodeVersion,
     UnparsedSourceDefinition,
     UnparsedSourceTableDefinition,
     UnparsedColumn,
@@ -98,8 +97,10 @@ from dbt.artifacts.resources import (
     MacroArgument,
     Documentation as DocumentationResource,
     Macro as MacroResource,
+    NodeVersion,
     Group as GroupResource,
     GraphResource,
+    RefArgs as RefArgsResource,
     SavedQueryConfig,
     SavedQueryMandatory as SavedQueryMandatoryResource,
     SourceFileMetadata as SourceFileMetadataResource,
@@ -177,27 +178,6 @@ class GraphNode(GraphResource, BaseNode):
 
     def same_fqn(self, other) -> bool:
         return self.fqn == other.fqn
-
-
-@dataclass
-class RefArgs(dbtClassMixin):
-    name: str
-    package: Optional[str] = None
-    version: Optional[NodeVersion] = None
-
-    @property
-    def positional_args(self) -> List[str]:
-        if self.package:
-            return [self.package, self.name]
-        else:
-            return [self.name]
-
-    @property
-    def keyword_args(self) -> Dict[str, Optional[NodeVersion]]:
-        if self.version:
-            return {"version": self.version}
-        else:
-            return {}
 
 
 @dataclass
@@ -470,7 +450,7 @@ class CompiledNode(ParsedNode):
     so all ManifestNodes except SeedNode."""
 
     language: str = "sql"
-    refs: List[RefArgs] = field(default_factory=list)
+    refs: List[RefArgsResource] = field(default_factory=list)
     sources: List[List[str]] = field(default_factory=list)
     metrics: List[List[str]] = field(default_factory=list)
     depends_on: DependsOn = field(default_factory=DependsOn)
@@ -1411,7 +1391,7 @@ class Exposure(GraphNode):
     unrendered_config: Dict[str, Any] = field(default_factory=dict)
     url: Optional[str] = None
     depends_on: DependsOn = field(default_factory=DependsOn)
-    refs: List[RefArgs] = field(default_factory=list)
+    refs: List[RefArgsResource] = field(default_factory=list)
     sources: List[List[str]] = field(default_factory=list)
     metrics: List[List[str]] = field(default_factory=list)
     created_at: float = field(default_factory=lambda: time.time())
@@ -1561,7 +1541,7 @@ class Metric(GraphNode):
     unrendered_config: Dict[str, Any] = field(default_factory=dict)
     sources: List[List[str]] = field(default_factory=list)
     depends_on: DependsOn = field(default_factory=DependsOn)
-    refs: List[RefArgs] = field(default_factory=list)
+    refs: List[RefArgsResource] = field(default_factory=list)
     metrics: List[List[str]] = field(default_factory=list)
     created_at: float = field(default_factory=lambda: time.time())
     group: Optional[str] = None
@@ -1663,7 +1643,7 @@ class SemanticModel(GraphNode):
     dimensions: Sequence[Dimension] = field(default_factory=list)
     metadata: Optional[SourceFileMetadataResource] = None
     depends_on: DependsOn = field(default_factory=DependsOn)
-    refs: List[RefArgs] = field(default_factory=list)
+    refs: List[RefArgsResource] = field(default_factory=list)
     created_at: float = field(default_factory=lambda: time.time())
     config: SemanticModelConfig = field(default_factory=SemanticModelConfig)
     unrendered_config: Dict[str, Any] = field(default_factory=dict)
@@ -1825,7 +1805,7 @@ class SavedQuery(NodeInfoMixin, GraphNode, SavedQueryMandatoryResource):
     group: Optional[str] = None
     depends_on: DependsOn = field(default_factory=DependsOn)
     created_at: float = field(default_factory=lambda: time.time())
-    refs: List[RefArgs] = field(default_factory=list)
+    refs: List[RefArgsResource] = field(default_factory=list)
 
     @property
     def metrics(self) -> List[str]:

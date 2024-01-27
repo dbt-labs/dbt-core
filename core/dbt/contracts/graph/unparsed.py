@@ -29,7 +29,7 @@ import dbt_common.helper_types  # noqa:F401
 from dbt.exceptions import ParsingError
 
 from dbt_semantic_interfaces.type_enums import ConversionCalculationType
-from dbt.artifacts.resources import Docs, MacroArgument, Owner
+from dbt.artifacts.resources import Docs, MacroArgument, NodeVersion, Owner
 
 from dataclasses import dataclass, field
 from datetime import timedelta
@@ -136,9 +136,6 @@ class HasYamlMetadata(dbtClassMixin):
 @dataclass
 class HasConfig:
     config: Dict[str, Any] = field(default_factory=dict)
-
-
-NodeVersion = Union[str, float]
 
 
 @dataclass

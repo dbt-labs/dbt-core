@@ -27,9 +27,9 @@ from dbt.contracts.graph.nodes import (
     MetricInputMeasure,
     MetricTypeParams,
     Group,
-    RefArgs,
 )
 from dbt.artifacts.resources import (
+    RefArgs,
     WhereFilter,
     WhereFilterIntersection,
 )

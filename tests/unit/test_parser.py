@@ -8,6 +8,7 @@ import yaml
 import dbt.flags
 import dbt.parser
 from dbt import tracking
+from dbt.artifacts.resources import RefArgs
 from dbt.context.context_config import ContextConfig
 from dbt.contracts.files import SourceFile, FileHash, FilePath, SchemaSourceFile
 from dbt.contracts.graph.manifest import Manifest
@@ -20,7 +21,6 @@ from dbt.contracts.graph.nodes import (
     SnapshotNode,
     AnalysisNode,
     UnpatchedSourceDefinition,
-    RefArgs,
 )
 from dbt.exceptions import CompilationError, ParsingError
 from dbt.node_types import NodeType
