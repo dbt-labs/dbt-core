@@ -19,6 +19,15 @@ from dbt_semantic_interfaces.type_enums import (
 from typing import Any, Dict, List, Literal, Optional
 
 
+"""
+The following classes are dataclasses which are used to construct the Metric
+node in dbt-core. Additionally, these classes need to at a minimum support
+what is specified in their protocol definitions in dbt-semantic-interfaces.
+Their protocol definitions can be found here:
+https://github.com/dbt-labs/dbt-semantic-interfaces/blob/main/dbt_semantic_interfaces/protocols/metric.py
+"""
+
+
 @dataclass
 class MetricInputMeasure(dbtClassMixin):
     name: str
