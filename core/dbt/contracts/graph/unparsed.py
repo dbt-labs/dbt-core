@@ -2,6 +2,7 @@ import datetime
 import re
 
 from dbt import deprecations
+from dbt.artifacts.resources import ConstantPropertyInput
 from dbt_common.contracts.config.properties import (
     AdditionalPropertiesAllowed,
     AdditionalPropertiesMixin,
@@ -588,12 +589,6 @@ class UnparsedMetricInput(dbtClassMixin):
     alias: Optional[str] = None
     offset_window: Optional[str] = None
     offset_to_grain: Optional[str] = None  # str is really a TimeGranularity Enum
-
-
-@dataclass
-class ConstantPropertyInput(dbtClassMixin):
-    base_property: str
-    conversion_property: str
 
 
 @dataclass

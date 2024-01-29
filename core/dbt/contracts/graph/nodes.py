@@ -24,7 +24,6 @@ from dbt.contracts.graph.semantic_models import (
     Measure,
 )
 from dbt.contracts.graph.unparsed import (
-    ConstantPropertyInput,
     ExposureType,
     ExternalTable,
     FreshnessThreshold,
@@ -69,7 +68,6 @@ from dbt_semantic_interfaces.references import (
     TimeDimensionReference,
 )
 from dbt_semantic_interfaces.type_enums import (
-    ConversionCalculationType,
     MetricType,
     TimeGranularity,
 )
@@ -91,6 +89,7 @@ from .model_config import (
 
 from dbt.artifacts.resources import (
     BaseResource,
+    ConversionTypeParams as ConversionTypeParamsResource,
     DependsOn,
     Docs,
     MacroDependsOn,
@@ -1466,16 +1465,6 @@ class Exposure(GraphNode):
 
 
 @dataclass
-class ConversionTypeParams(dbtClassMixin):
-    base_measure: MetricInputMeasureResource
-    conversion_measure: MetricInputMeasureResource
-    entity: str
-    calculation: ConversionCalculationType = ConversionCalculationType.CONVERSION_RATE
-    window: Optional[MetricTimeWindowResource] = None
-    constant_properties: Optional[List[ConstantPropertyInput]] = None
-
-
-@dataclass
 class MetricTypeParams(dbtClassMixin):
     measure: Optional[MetricInputMeasureResource] = None
     input_measures: List[MetricInputMeasureResource] = field(default_factory=list)
@@ -1485,7 +1474,7 @@ class MetricTypeParams(dbtClassMixin):
     window: Optional[MetricTimeWindowResource] = None
     grain_to_date: Optional[TimeGranularity] = None
     metrics: Optional[List[MetricInputResource]] = None
-    conversion_type_params: Optional[ConversionTypeParams] = None
+    conversion_type_params: Optional[ConversionTypeParamsResource] = None
 
 
 @dataclass

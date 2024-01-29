@@ -26,9 +26,9 @@ from dbt.contracts.graph.nodes import (
     MetricTypeParams,
     SemanticModel,
     SavedQuery,
-    ConversionTypeParams,
 )
 from dbt.artifacts.resources import (
+    ConversionTypeParams,
     Export,
     ExportConfig,
     MetricInput,

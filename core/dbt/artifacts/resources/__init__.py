@@ -7,6 +7,8 @@ from dbt.artifacts.resources.v1.macro import Macro, MacroDependsOn, MacroArgumen
 from dbt.artifacts.resources.v1.docs import Docs
 from dbt.artifacts.resources.v1.group import Group
 from dbt.artifacts.resources.v1.metric import (
+    ConstantPropertyInput,
+    ConversionTypeParams,
     MetricInput,
     MetricInputMeasure,
     MetricTimeWindow,

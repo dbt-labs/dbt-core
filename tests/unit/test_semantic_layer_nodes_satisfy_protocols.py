@@ -2,8 +2,6 @@ import pytest
 import copy
 
 from dbt.contracts.graph.nodes import (
-    ConstantPropertyInput,
-    ConversionTypeParams,
     Metric,
     MetricTypeParams,
     NodeRelation,
@@ -11,6 +9,8 @@ from dbt.contracts.graph.nodes import (
     SemanticModel,
 )
 from dbt.artifacts.resources import (
+    ConstantPropertyInput,
+    ConversionTypeParams,
     FileSlice,
     MetricInput,
     MetricInputMeasure,
