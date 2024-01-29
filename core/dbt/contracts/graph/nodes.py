@@ -99,6 +99,7 @@ from dbt.artifacts.resources import (
     Documentation as DocumentationResource,
     Macro as MacroResource,
     MetricInputMeasure as MetricInputMeasureResource,
+    MetricTimeWindow as MetricTimeWindowResource,
     NodeVersion,
     Group as GroupResource,
     GraphResource,
@@ -1465,17 +1466,11 @@ class Exposure(GraphNode):
 
 
 @dataclass
-class MetricTimeWindow(dbtClassMixin):
-    count: int
-    granularity: TimeGranularity
-
-
-@dataclass
 class MetricInput(dbtClassMixin):
     name: str
     filter: Optional[WhereFilterIntersectionResource] = None
     alias: Optional[str] = None
-    offset_window: Optional[MetricTimeWindow] = None
+    offset_window: Optional[MetricTimeWindowResource] = None
     offset_to_grain: Optional[TimeGranularity] = None
 
     def as_reference(self) -> DSIMetricReference:
@@ -1491,7 +1486,7 @@ class ConversionTypeParams(dbtClassMixin):
     conversion_measure: MetricInputMeasureResource
     entity: str
     calculation: ConversionCalculationType = ConversionCalculationType.CONVERSION_RATE
-    window: Optional[MetricTimeWindow] = None
+    window: Optional[MetricTimeWindowResource] = None
     constant_properties: Optional[List[ConstantPropertyInput]] = None
 
 
@@ -1502,7 +1497,7 @@ class MetricTypeParams(dbtClassMixin):
     numerator: Optional[MetricInput] = None
     denominator: Optional[MetricInput] = None
     expr: Optional[str] = None
-    window: Optional[MetricTimeWindow] = None
+    window: Optional[MetricTimeWindowResource] = None
     grain_to_date: Optional[TimeGranularity] = None
     metrics: Optional[List[MetricInput]] = None
     conversion_type_params: Optional[ConversionTypeParams] = None

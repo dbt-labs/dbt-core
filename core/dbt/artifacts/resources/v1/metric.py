@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from dbt.artifacts.resources.v1.semantic_layer_components import WhereFilterIntersection
 from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_semantic_interfaces.references import MeasureReference
+from dbt_semantic_interfaces.type_enums import TimeGranularity
 from typing import Optional
 
 
@@ -18,3 +19,9 @@ class MetricInputMeasure(dbtClassMixin):
 
     def post_aggregation_measure_reference(self) -> MeasureReference:
         return MeasureReference(element_name=self.alias or self.name)
+
+
+@dataclass
+class MetricTimeWindow(dbtClassMixin):
+    count: int
+    granularity: TimeGranularity
