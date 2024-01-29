@@ -1,5 +1,7 @@
 import pytest
+from unittest import mock
 
+from dbt.plugins.manifest import PluginNodes, ModelNodeArgs
 from dbt.tests.util import run_dbt, get_manifest
 
 sample_seed = """sample_num,sample_bool
@@ -85,6 +87,28 @@ class TestGenerateCatalogWithSources(TestBaseGenerate):
         assert len(catalog.nodes) == 4
         # 2 sources (only ones that exist)
         assert len(catalog.sources) == 2
+
+
+class TestGenerateCatalogWithExternalNodes(TestBaseGenerate):
+    @mock.patch("dbt.plugins.get_plugin_manager")
+    def test_catalog_with_sources(self, get_plugin_manager, project):
+        project.run_sql("create table {}.external_model (id int)".format(project.test_schema))
+
+        run_dbt(["build"])
+
+        external_nodes = PluginNodes()
+        external_model_node = ModelNodeArgs(
+            name="external_model",
+            package_name="external_package",
+            identifier="external_model",
+            schema=project.test_schema,
+            database="dbt",
+        )
+        external_nodes.add_model(external_model_node)
+        get_plugin_manager.return_value.get_nodes.return_value = external_nodes
+        catalog = run_dbt(["docs", "generate"])
+
+        assert "model.external_package.external_model" in catalog.nodes
 
 
 class TestGenerateSelectSource(TestBaseGenerate):
