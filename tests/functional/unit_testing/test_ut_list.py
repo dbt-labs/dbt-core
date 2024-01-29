@@ -1,6 +1,7 @@
 import pytest
 from dbt.tests.util import run_dbt
 import json
+import os
 
 from fixtures import (  # noqa: F401
     my_model_vars_sql,
@@ -54,7 +55,7 @@ class TestUnitTestList:
             "name": "test_my_model",
             "resource_type": "unit_test",
             "package_name": "test",
-            "original_file_path": "models/test_my_model.yml",
+            "original_file_path": os.path.join("models", "test_my_model.yml"),
             "unique_id": "unit_test.test.my_model.test_my_model",
             "depends_on": {"macros": [], "nodes": ["model.test.my_model"]},
             "config": {"tags": [], "meta": {}},
