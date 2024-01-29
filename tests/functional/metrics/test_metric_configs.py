@@ -1,6 +1,6 @@
 import pytest
+from dbt.artifacts.resources import MetricConfig
 from dbt_common.dataclass_schema import ValidationError
-from dbt.contracts.graph.model_config import MetricConfig
 from dbt.exceptions import CompilationError, ParsingError
 from dbt.tests.util import run_dbt, update_config_file, get_manifest
 

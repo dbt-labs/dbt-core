@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from dbt.artifacts.resources.v1.semantic_layer_components import WhereFilterIntersection
+from dbt_common.contracts.config.base import BaseConfig, CompareBehavior
 from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_semantic_interfaces.references import MeasureReference, MetricReference
 from dbt_semantic_interfaces.type_enums import ConversionCalculationType, TimeGranularity
@@ -69,3 +70,12 @@ class MetricTypeParams(dbtClassMixin):
     grain_to_date: Optional[TimeGranularity] = None
     metrics: Optional[List[MetricInput]] = None
     conversion_type_params: Optional[ConversionTypeParams] = None
+
+
+@dataclass
+class MetricConfig(BaseConfig):
+    enabled: bool = True
+    group: Optional[str] = field(
+        default=None,
+        metadata=CompareBehavior.Exclude.meta(),
+    )

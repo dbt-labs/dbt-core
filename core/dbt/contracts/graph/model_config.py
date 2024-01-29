@@ -2,7 +2,7 @@ from dataclasses import field, dataclass
 from typing import Any, List, Optional, Dict, Union, Type
 from typing_extensions import Annotated
 
-from dbt.artifacts.resources import SavedQueryConfig
+from dbt.artifacts.resources import MetricConfig, SavedQueryConfig
 from dbt_common.contracts.config.base import BaseConfig, MergeBehavior, CompareBehavior
 from dbt_common.contracts.config.materialization import OnConfigurationChangeOption
 from dbt_common.contracts.config.metadata import Metadata, ShowBehavior
@@ -59,15 +59,6 @@ class SemanticModelConfig(BaseConfig):
     meta: Dict[str, Any] = field(
         default_factory=dict,
         metadata=MergeBehavior.Update.meta(),
-    )
-
-
-@dataclass
-class MetricConfig(BaseConfig):
-    enabled: bool = True
-    group: Optional[str] = field(
-        default=None,
-        metadata=CompareBehavior.Exclude.meta(),
     )
 
 
