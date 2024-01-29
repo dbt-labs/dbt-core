@@ -1461,12 +1461,6 @@ class Exposure(GraphNode):
 
 
 @dataclass
-class MetricReference(dbtClassMixin, Replaceable):
-    sql: Optional[Union[str, int]] = None
-    unique_id: Optional[str] = None
-
-
-@dataclass
 class Metric(GraphNode):
     name: str
     description: str
