@@ -4,7 +4,7 @@ import pytest
 from hypothesis import given
 from hypothesis.strategies import builds, lists
 
-from dbt.artifacts.resources import RefArgs
+from dbt.artifacts.resources import MetricInputMeasure, RefArgs
 from dbt.node_types import NodeType, AccessType
 from dbt.contracts.files import FileHash
 from dbt.contracts.graph.model_config import (
@@ -29,7 +29,6 @@ from dbt.contracts.graph.nodes import (
     Exposure,
     Metric,
     MetricTypeParams,
-    MetricInputMeasure,
     SeedNode,
     Docs,
     MacroDependsOn,

@@ -24,11 +24,11 @@ from dbt.contracts.graph.nodes import (
     SourceDefinition,
     Exposure,
     Metric,
-    MetricInputMeasure,
     MetricTypeParams,
     Group,
 )
 from dbt.artifacts.resources import (
+    MetricInputMeasure,
     RefArgs,
     WhereFilter,
     WhereFilterIntersection,

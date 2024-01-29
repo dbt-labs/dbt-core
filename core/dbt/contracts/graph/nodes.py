@@ -98,6 +98,7 @@ from dbt.artifacts.resources import (
     MacroArgument,
     Documentation as DocumentationResource,
     Macro as MacroResource,
+    MetricInputMeasure as MetricInputMeasureResource,
     NodeVersion,
     Group as GroupResource,
     GraphResource,
@@ -1464,21 +1465,6 @@ class Exposure(GraphNode):
 
 
 @dataclass
-class MetricInputMeasure(dbtClassMixin):
-    name: str
-    filter: Optional[WhereFilterIntersectionResource] = None
-    alias: Optional[str] = None
-    join_to_timespine: bool = False
-    fill_nulls_with: Optional[int] = None
-
-    def measure_reference(self) -> MeasureReference:
-        return MeasureReference(element_name=self.name)
-
-    def post_aggregation_measure_reference(self) -> MeasureReference:
-        return MeasureReference(element_name=self.alias or self.name)
-
-
-@dataclass
 class MetricTimeWindow(dbtClassMixin):
     count: int
     granularity: TimeGranularity
@@ -1501,8 +1487,8 @@ class MetricInput(dbtClassMixin):
 
 @dataclass
 class ConversionTypeParams(dbtClassMixin):
-    base_measure: MetricInputMeasure
-    conversion_measure: MetricInputMeasure
+    base_measure: MetricInputMeasureResource
+    conversion_measure: MetricInputMeasureResource
     entity: str
     calculation: ConversionCalculationType = ConversionCalculationType.CONVERSION_RATE
     window: Optional[MetricTimeWindow] = None
@@ -1511,8 +1497,8 @@ class ConversionTypeParams(dbtClassMixin):
 
 @dataclass
 class MetricTypeParams(dbtClassMixin):
-    measure: Optional[MetricInputMeasure] = None
-    input_measures: List[MetricInputMeasure] = field(default_factory=list)
+    measure: Optional[MetricInputMeasureResource] = None
+    input_measures: List[MetricInputMeasureResource] = field(default_factory=list)
     numerator: Optional[MetricInput] = None
     denominator: Optional[MetricInput] = None
     expr: Optional[str] = None
@@ -1558,7 +1544,7 @@ class Metric(GraphNode):
         return self.name
 
     @property
-    def input_measures(self) -> List[MetricInputMeasure]:
+    def input_measures(self) -> List[MetricInputMeasureResource]:
         return self.type_params.input_measures
 
     @property

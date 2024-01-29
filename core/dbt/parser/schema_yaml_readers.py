@@ -24,7 +24,6 @@ from dbt.contracts.graph.nodes import (
     Group,
     Metric,
     MetricInput,
-    MetricInputMeasure,
     MetricTimeWindow,
     MetricTypeParams,
     SemanticModel,
@@ -34,6 +33,7 @@ from dbt.contracts.graph.nodes import (
 from dbt.artifacts.resources import (
     Export,
     ExportConfig,
+    MetricInputMeasure,
     QueryParams,
     SavedQueryConfig,
     WhereFilter,
