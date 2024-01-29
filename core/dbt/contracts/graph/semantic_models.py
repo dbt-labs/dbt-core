@@ -12,31 +12,8 @@ from dbt_semantic_interfaces.type_enums import (
     EntityType,
     TimeGranularity,
 )
+from dbt.artifacts.resources import SourceFileMetadata
 from typing import List, Optional
-
-
-@dataclass
-class FileSlice(dbtClassMixin):
-    """Provides file slice level context about what something was created from.
-
-    Implementation of the dbt-semantic-interfaces `FileSlice` protocol
-    """
-
-    filename: str
-    content: str
-    start_line_number: int
-    end_line_number: int
-
-
-@dataclass
-class SourceFileMetadata(dbtClassMixin):
-    """Provides file context about what something was created from.
-
-    Implementation of the dbt-semantic-interfaces `Metadata` protocol
-    """
-
-    repo_file_path: str
-    file_slice: FileSlice
 
 
 @dataclass

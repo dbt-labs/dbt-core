@@ -2,6 +2,7 @@ import datetime
 import re
 
 from dbt import deprecations
+from dbt.artifacts.resources import ConstantPropertyInput
 from dbt_common.contracts.config.properties import (
     AdditionalPropertiesAllowed,
     AdditionalPropertiesMixin,
@@ -29,6 +30,7 @@ import dbt_common.helper_types  # noqa:F401
 from dbt.exceptions import ParsingError
 
 from dbt_semantic_interfaces.type_enums import ConversionCalculationType
+from dbt.artifacts.resources import Docs, MacroArgument, NodeVersion, Owner
 
 from dataclasses import dataclass, field
 from datetime import timedelta
@@ -84,12 +86,6 @@ class UnparsedRunHook(UnparsedNode):
 
 
 @dataclass
-class Docs(dbtClassMixin, Replaceable):
-    show: bool = True
-    node_color: Optional[str] = None
-
-
-@dataclass
 class HasColumnProps(AdditionalPropertiesMixin, ExtensibleDbtClassMixin, Replaceable):
     name: str
     description: str = ""
@@ -141,9 +137,6 @@ class HasYamlMetadata(dbtClassMixin):
 @dataclass
 class HasConfig:
     config: Dict[str, Any] = field(default_factory=dict)
-
-
-NodeVersion = Union[str, float]
 
 
 @dataclass
@@ -264,13 +257,6 @@ class UnparsedModelUpdate(UnparsedNodeUpdate):
             if unparsed_version.data_tests is not None
             else self.data_tests
         )
-
-
-@dataclass
-class MacroArgument(dbtClassMixin):
-    name: str
-    type: Optional[str] = None
-    description: str = ""
 
 
 @dataclass
@@ -535,12 +521,6 @@ class MaturityType(StrEnum):
 
 
 @dataclass
-class Owner(AdditionalPropertiesAllowed, Replaceable):
-    email: Optional[str] = None
-    name: Optional[str] = None
-
-
-@dataclass
 class UnparsedExposure(dbtClassMixin, Replaceable):
     name: str
     type: ExposureType
@@ -609,12 +589,6 @@ class UnparsedMetricInput(dbtClassMixin):
     alias: Optional[str] = None
     offset_window: Optional[str] = None
     offset_to_grain: Optional[str] = None  # str is really a TimeGranularity Enum
-
-
-@dataclass
-class ConstantPropertyInput(dbtClassMixin):
-    base_property: str
-    conversion_property: str
 
 
 @dataclass
@@ -822,6 +796,12 @@ class UnitTestOverrides(dbtClassMixin):
 
 
 @dataclass
+class UnitTestNodeVersions(dbtClassMixin):
+    include: Optional[List[NodeVersion]] = None
+    exclude: Optional[List[NodeVersion]] = None
+
+
+@dataclass
 class UnparsedUnitTest(dbtClassMixin):
     name: str
     model: str  # name of the model being unit tested
@@ -830,3 +810,11 @@ class UnparsedUnitTest(dbtClassMixin):
     description: str = ""
     overrides: Optional[UnitTestOverrides] = None
     config: Dict[str, Any] = field(default_factory=dict)
+    versions: Optional[UnitTestNodeVersions] = None
+
+    @classmethod
+    def validate(cls, data):
+        super(UnparsedUnitTest, cls).validate(data)
+        if data.get("versions", None):
+            if data["versions"].get("include") and data["versions"].get("exclude"):
+                raise ValidationError("Unit tests can not both include and exclude versions.")

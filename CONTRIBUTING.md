@@ -10,6 +10,7 @@
 6. [Debugging](#debugging)
 7. [Adding or modifying a changelog entry](#adding-or-modifying-a-changelog-entry)
 8. [Submitting a Pull Request](#submitting-a-pull-request)
+9. [Troubleshooting Tips](#troubleshooting-tips)
 
 ## About this document
 
@@ -44,9 +45,7 @@ If you are not a member of the `dbt-labs` GitHub organization, you can contribut
 
 ### dbt Labs contributors
 
-If you are a member of the `dbt-labs` GitHub organization, you will have push access to the `dbt-core` repo. Rather than forking `dbt-core` to make your changes, just clone the repository, check out a new branch, and push directly to that branch. Branch names should be fixed by `CT-XXX/` where:
-* CT stands for 'core team'
-* XXX stands for a JIRA ticket number
+If you are a member of the `dbt-labs` GitHub organization, you will have push access to the `dbt-core` repo. Rather than forking `dbt-core` to make your changes, just clone the repository, check out a new branch, and push directly to that branch.
 
 ## Setting up an environment
 
@@ -226,5 +225,7 @@ Code can be merged into the current development branch `main` by opening a pull 
 Automated tests run via GitHub Actions. If you're a first-time contributor, all tests (including code checks and unit tests) will require a maintainer to approve. Changes in the `dbt-core` repository trigger integration tests against Postgres. dbt Labs also provides CI environments in which to test changes to other adapters, triggered by PRs in those adapters' repositories, as well as periodic maintenance checks of each adapter in concert with the latest `dbt-core` code changes.
 
 Once all tests are passing and your PR has been approved, a `dbt-core` maintainer will merge your changes into the active development branch. And that's it! Happy developing :tada:
+
+## Troubleshooting Tips
 
 Sometimes, the content license agreement auto-check bot doesn't find a user's entry in its roster. If you need to force a rerun, add `@cla-bot check` in a comment on the pull request.

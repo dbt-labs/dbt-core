@@ -9,10 +9,10 @@ from typing import (
     List,
 )
 
+from dbt.artifacts.resources import NodeVersion
 from dbt.clients.jinja import get_rendered, GENERIC_TEST_KWARGS_NAME
 from dbt.contracts.graph.nodes import UnpatchedSourceDefinition
 from dbt.contracts.graph.unparsed import (
-    NodeVersion,
     UnparsedNodeUpdate,
     UnparsedModelUpdate,
 )

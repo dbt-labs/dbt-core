@@ -24,12 +24,15 @@ from dbt.contracts.graph.nodes import (
     SourceDefinition,
     Exposure,
     Metric,
+    Group,
+)
+from dbt.artifacts.resources import (
     MetricInputMeasure,
     MetricTypeParams,
-    Group,
     RefArgs,
+    WhereFilter,
+    WhereFilterIntersection,
 )
-from dbt.contracts.graph.semantic_layer_common import WhereFilter, WhereFilterIntersection
 from dbt.contracts.graph.unparsed import (
     ExposureType,
     Owner,

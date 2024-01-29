@@ -1,6 +1,7 @@
 from csv import DictReader
+from copy import deepcopy
 from pathlib import Path
-from typing import List, Set, Dict, Any
+from typing import List, Set, Dict, Any, Optional
 import os
 from io import StringIO
 import csv
@@ -11,7 +12,7 @@ from dbt import utils
 from dbt.config import RuntimeConfig
 from dbt.context.context_config import ContextConfig
 from dbt.context.providers import generate_parse_exposure, get_rendered
-from dbt.contracts.files import FileHash
+from dbt.contracts.files import FileHash, SchemaSourceFile
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.model_config import UnitTestNodeConfig, ModelConfig
 from dbt.contracts.graph.nodes import (
@@ -55,9 +56,9 @@ class UnitTestManifestLoader:
 
     def parse_unit_test_case(self, test_case: UnitTestDefinition):
         # Create unit test node based on the node being tested
-        tested_node = self.manifest.ref_lookup.perform_lookup(
-            f"model.{test_case.package_name}.{test_case.model}", self.manifest
-        )
+        # The tested_node has already been resolved and is in depends_on.nodes
+        tested_node_unique_id = test_case.depends_on.nodes[0]
+        tested_node = self.manifest.nodes[tested_node_unique_id]
         assert isinstance(tested_node, ModelNode)
 
         # Create UnitTestNode based on model being tested. Since selection has
@@ -65,6 +66,8 @@ class UnitTestManifestLoader:
         # for selection.
         # Note: no depends_on, that's added later using input nodes
         name = test_case.name
+        if tested_node.is_versioned:
+            name = name + f"_v{tested_node.version}"
         unit_test_node = UnitTestNode(
             name=name,
             resource_type=NodeType.Unit,
@@ -74,7 +77,7 @@ class UnitTestManifestLoader:
             unique_id=test_case.unique_id,
             config=UnitTestNodeConfig(
                 materialized="unit",
-                expected_rows=test_case.expect.rows,  # type:ignore
+                expected_rows=deepcopy(test_case.expect.rows),  # type:ignore
             ),
             raw_code=tested_node.raw_code,
             database=tested_node.database,
@@ -114,7 +117,9 @@ class UnitTestManifestLoader:
         # or view is created.
         for given in test_case.given:
             # extract the original_input_node from the ref in the "input" key of the given list
-            original_input_node = self._get_original_input_node(given.input, tested_node)
+            original_input_node = self._get_original_input_node(
+                given.input, tested_node, test_case.name
+            )
 
             common_fields = {
                 "resource_type": NodeType.Model,
@@ -141,6 +146,12 @@ class UnitTestManifestLoader:
                     name=input_name,
                     path=original_input_node.path or f"{input_name}.sql",
                 )
+                if (
+                    original_input_node.resource_type == NodeType.Model
+                    and original_input_node.version
+                ):
+                    input_node.version = original_input_node.version
+
             elif original_input_node.resource_type == NodeType.Source:
                 # We are reusing the database/schema/identifier from the original source,
                 # but that shouldn't matter since this acts as an ephemeral model which just
@@ -174,7 +185,7 @@ class UnitTestManifestLoader:
             rows=rows, column_name_to_data_types=column_name_to_data_types
         )
 
-    def _get_original_input_node(self, input: str, tested_node: ModelNode):
+    def _get_original_input_node(self, input: str, tested_node: ModelNode, test_case_name: str):
         """
         Returns the original input node as defined in the project given an input reference
         and the node being tested.
@@ -214,6 +225,10 @@ class UnitTestManifestLoader:
             else:
                 raise InvalidUnitTestGivenInput(input=input)
 
+        if not original_input_node:
+            msg = f"Unit test '{test_case_name}' had an input ({input}) which was not found in the manifest."
+            raise ParsingError(msg)
+
         return original_input_node
 
 
@@ -225,8 +240,10 @@ class UnitTestParser(YamlReader):
 
     def parse(self) -> ParseResult:
         for data in self.get_key_dicts():
-            unit_test = self._get_unit_test(data)
-            tested_model_node = self._find_tested_model_node(unit_test)
+            unit_test: UnparsedUnitTest = self._get_unit_test(data)
+            tested_model_node = find_tested_model_node(
+                self.manifest, self.project.project_name, unit_test.model
+            )
             unit_test_case_unique_id = (
                 f"{NodeType.Unit}.{self.project.project_name}.{unit_test.model}.{unit_test.name}"
             )
@@ -250,11 +267,15 @@ class UnitTestParser(YamlReader):
                 expect=unit_test.expect,
                 description=unit_test.description,
                 overrides=unit_test.overrides,
-                depends_on=DependsOn(nodes=[tested_model_node.unique_id]),
+                depends_on=DependsOn(),
                 fqn=unit_test_fqn,
                 config=unit_test_config,
-                schema=tested_model_node.schema,
+                versions=unit_test.versions,
             )
+
+            if tested_model_node:
+                unit_test_definition.depends_on.nodes.append(tested_model_node.unique_id)
+                unit_test_definition.schema = tested_model_node.schema
 
             # Check that format and type of rows matches for each given input,
             # convert rows to a list of dictionaries, and add the unique_id of
@@ -274,22 +295,6 @@ class UnitTestParser(YamlReader):
             return UnparsedUnitTest.from_dict(data)
         except (ValidationError, JSONValidationError) as exc:
             raise YamlParseDictError(self.yaml.path, self.key, data, exc)
-
-    def _find_tested_model_node(self, unit_test: UnparsedUnitTest) -> ModelNode:
-        package_name = self.project.project_name
-        model_name_split = unit_test.model.split()
-        model_name = model_name_split[0]
-        model_version = model_name_split[1] if len(model_name_split) == 2 else None
-
-        tested_node = self.manifest.ref_lookup.find(
-            model_name, package_name, model_version, self.manifest
-        )
-        if not tested_node:
-            raise ParsingError(
-                f"Unable to find model '{package_name}.{unit_test.model}' for unit tests in {self.yaml.path.original_file_path}"
-            )
-
-        return tested_node
 
     def _build_unit_test_config(
         self, unit_test_fqn: List[str], config_dict: Dict[str, Any]
@@ -397,3 +402,105 @@ class UnitTestParser(YamlReader):
                 rows.append(row)
 
         return rows
+
+
+def find_tested_model_node(
+    manifest: Manifest, current_project: str, unit_test_model: str
+) -> Optional[ModelNode]:
+    model_name_split = unit_test_model.split()
+    model_name = model_name_split[0]
+    model_version = model_name_split[1] if len(model_name_split) == 2 else None
+
+    tested_node = manifest.ref_lookup.find(model_name, current_project, model_version, manifest)
+    return tested_node
+
+
+# This is called by the ManifestLoader after other processing has been done,
+# so that model versions are available.
+def process_models_for_unit_test(
+    manifest: Manifest, current_project: str, unit_test_def: UnitTestDefinition, models_to_versions
+):
+
+    # If the unit tests doesn't have a depends_on.nodes[0] then we weren't able to resolve
+    # the model, either because versions hadn't been processed yet, or it's not a valid model name
+    if not unit_test_def.depends_on.nodes:
+        tested_node = find_tested_model_node(manifest, current_project, unit_test_def.model)
+        if not tested_node:
+            raise ParsingError(
+                f"Unable to find model '{current_project}.{unit_test_def.model}' for "
+                f"unit test '{unit_test_def.name}' in {unit_test_def.original_file_path}"
+            )
+        unit_test_def.depends_on.nodes.append(tested_node.unique_id)
+        unit_test_def.schema = tested_node.schema
+
+    # The UnitTestDefinition should only have one "depends_on" at this point,
+    # the one that's found by the "model" field.
+    target_model_id = unit_test_def.depends_on.nodes[0]
+    target_model = manifest.nodes[target_model_id]
+    assert isinstance(target_model, ModelNode)
+    # unit_test_versions = unit_test_def.versions
+    # We're setting up unit tests for versioned models, so if
+    # the model isn't versioned, we don't need to do anything
+    if not target_model.is_versioned:
+        if unit_test_def.versions and (
+            unit_test_def.versions.include or unit_test_def.versions.exclude
+        ):
+            # If model is  not versioned, we should not have an include or exclude
+            msg = (
+                f"Unit test '{unit_test_def.name}' should not have a versions include or exclude "
+                f"when referencing non-versioned model '{target_model.name}'"
+            )
+            raise ParsingError(msg)
+        else:
+            return
+    versioned_models = []
+    if (
+        target_model.package_name in models_to_versions
+        and target_model.name in models_to_versions[target_model.package_name]
+    ):
+        versioned_models = models_to_versions[target_model.package_name][target_model.name]
+
+    versions_to_test = []
+    if unit_test_def.versions is None:
+        versions_to_test = versioned_models
+    elif unit_test_def.versions.exclude:
+        for model_unique_id in versioned_models:
+            model = manifest.nodes[model_unique_id]
+            assert isinstance(model, ModelNode)
+            if model.version in unit_test_def.versions.exclude:
+                continue
+            else:
+                versions_to_test.append(model.unique_id)
+    elif unit_test_def.versions.include:
+        for model_unique_id in versioned_models:
+            model = manifest.nodes[model_unique_id]
+            assert isinstance(model, ModelNode)
+            if model.version in unit_test_def.versions.include:
+                versions_to_test.append(model.unique_id)
+            else:
+                continue
+
+    if not versions_to_test:
+        msg = (
+            f"Unit test '{unit_test_def.name}' referenced a version of '{target_model.name}' "
+            "which was not found."
+        )
+        raise ParsingError(msg)
+    else:
+        # Create unit test definitions that match the model versions
+        original_unit_test_def = manifest.unit_tests.pop(unit_test_def.unique_id)
+        original_unit_test_dict = original_unit_test_def.to_dict()
+        schema_file = manifest.files[original_unit_test_def.file_id]
+        assert isinstance(schema_file, SchemaSourceFile)
+        schema_file.unit_tests.remove(original_unit_test_def.unique_id)
+        for versioned_model_unique_id in versions_to_test:
+            versioned_model = manifest.nodes[versioned_model_unique_id]
+            assert isinstance(versioned_model, ModelNode)
+            versioned_unit_test_unique_id = f"{NodeType.Unit}.{unit_test_def.package_name}.{unit_test_def.model}.{unit_test_def.name}_v{versioned_model.version}"
+            new_unit_test_def = UnitTestDefinition.from_dict(original_unit_test_dict)
+            new_unit_test_def.unique_id = versioned_unit_test_unique_id
+            new_unit_test_def.depends_on.nodes[0] = versioned_model_unique_id
+            new_unit_test_def.version = versioned_model.version
+            schema_file.unit_tests.append(versioned_unit_test_unique_id)
+            # fqn?
+            manifest.unit_tests[versioned_unit_test_unique_id] = new_unit_test_def

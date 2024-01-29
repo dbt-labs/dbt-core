@@ -43,9 +43,10 @@ from dbt.contracts.graph.nodes import (
     UnitTestDefinition,
     UnitTestFileFixture,
 )
-from dbt.contracts.graph.unparsed import SourcePatch, NodeVersion, UnparsedVersion
+from dbt.contracts.graph.unparsed import SourcePatch, UnparsedVersion
 
 # to preserve import paths
+from dbt.artifacts.resources import NodeVersion
 from dbt.artifacts.schemas.manifest import WritableManifest, ManifestMetadata, UniqueID
 from dbt.contracts.files import (
     SourceFile,
@@ -980,6 +981,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
                 self.metrics.values(),
                 self.semantic_models.values(),
                 self.saved_queries.values(),
+                self.unit_tests.values(),
             )
         )
         forward_edges, backward_edges = build_node_edges(edge_members)

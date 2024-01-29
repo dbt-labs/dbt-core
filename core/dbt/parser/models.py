@@ -1,6 +1,7 @@
 from copy import deepcopy
+from dbt.artifacts.resources import RefArgs
 from dbt.context.context_config import ContextConfig
-from dbt.contracts.graph.nodes import ModelNode, RefArgs
+from dbt.contracts.graph.nodes import ModelNode
 from dbt_common.events.base_types import EventLevel
 from dbt_common.events.types import Note
 from dbt_common.events.functions import fire_event_if_test
