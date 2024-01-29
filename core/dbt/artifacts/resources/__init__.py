@@ -31,3 +31,13 @@ from dbt.artifacts.resources.v1.semantic_layer_components import (
     WhereFilter,
     WhereFilterIntersection,
 )
+from dbt.artifacts.resources.v1.semantic_model import (
+    Defaults,
+    Dimension,
+    DimensionTypeParams,
+    DimensionValidityParams,
+    Entity,
+    Measure,
+    MeasureAggregationParameters,
+    NonAdditiveDimension,
+)

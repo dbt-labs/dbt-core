@@ -15,7 +15,7 @@ from dbt_common.dataclass_schema import (
     ValidationError,
 )
 from dbt.node_types import NodeType
-from dbt.contracts.graph.semantic_models import (
+from dbt.artifacts.resources import (
     Defaults,
     DimensionValidityParams,
     MeasureAggregationParameters,

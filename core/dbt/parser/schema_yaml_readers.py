@@ -28,24 +28,22 @@ from dbt.contracts.graph.nodes import (
 )
 from dbt.artifacts.resources import (
     ConversionTypeParams,
+    Dimension,
+    DimensionTypeParams,
+    Entity,
     Export,
     ExportConfig,
+    Measure,
     MetricConfig,
     MetricInput,
     MetricInputMeasure,
     MetricTimeWindow,
     MetricTypeParams,
+    NonAdditiveDimension,
     QueryParams,
     SavedQueryConfig,
     WhereFilter,
-    WhereFilterIntersection,
-)
-from dbt.contracts.graph.semantic_models import (
-    Dimension,
-    DimensionTypeParams,
-    Entity,
-    Measure,
-    NonAdditiveDimension,
+    WhereFilterIntersection
 )
 from dbt_common.exceptions import DbtInternalError
 from dbt.exceptions import YamlParseDictError, JSONValidationError

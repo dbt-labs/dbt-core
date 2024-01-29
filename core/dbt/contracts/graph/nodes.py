@@ -17,12 +17,6 @@ from dbt_common.dataclass_schema import dbtClassMixin, ExtensibleDbtClassMixin
 
 from dbt_common.clients.system import write_file
 from dbt.contracts.files import FileHash
-from dbt.contracts.graph.semantic_models import (
-    Defaults,
-    Dimension,
-    Entity,
-    Measure,
-)
 from dbt.contracts.graph.unparsed import (
     ExposureType,
     ExternalTable,
@@ -84,10 +78,14 @@ from .model_config import (
 
 from dbt.artifacts.resources import (
     BaseResource,
+    Defaults as DefaultsResource,
     DependsOn,
+    Dimension as DimensionResource,
     Docs,
+    Entity as EntityResource,
     MacroDependsOn,
     MacroArgument,
+    Measure as MeasureResource,
     Documentation as DocumentationResource,
     Macro as MacroResource,
     Metric as MetricResource,
@@ -98,7 +96,6 @@ from dbt.artifacts.resources import (
     SavedQuery as SavedQueryResource,
     SourceFileMetadata as SourceFileMetadataResource,
 )
-
 
 # =====================================================================
 # This contains the classes for all of the nodes and node-like objects
@@ -1536,10 +1533,10 @@ class SemanticModel(GraphNode):
     node_relation: Optional[NodeRelation]
     description: Optional[str] = None
     label: Optional[str] = None
-    defaults: Optional[Defaults] = None
-    entities: Sequence[Entity] = field(default_factory=list)
-    measures: Sequence[Measure] = field(default_factory=list)
-    dimensions: Sequence[Dimension] = field(default_factory=list)
+    defaults: Optional[DefaultsResource] = None
+    entities: Sequence[EntityResource] = field(default_factory=list)
+    measures: Sequence[MeasureResource] = field(default_factory=list)
+    dimensions: Sequence[DimensionResource] = field(default_factory=list)
     metadata: Optional[SourceFileMetadataResource] = None
     depends_on: DependsOn = field(default_factory=DependsOn)
     refs: List[RefArgsResource] = field(default_factory=list)
@@ -1566,7 +1563,7 @@ class SemanticModel(GraphNode):
         return any([dim.validity_params is not None for dim in self.dimensions])
 
     @property
-    def validity_start_dimension(self) -> Optional[Dimension]:
+    def validity_start_dimension(self) -> Optional[DimensionResource]:
         validity_start_dims = [
             dim for dim in self.dimensions if dim.validity_params and dim.validity_params.is_start
         ]
@@ -1575,7 +1572,7 @@ class SemanticModel(GraphNode):
         return validity_start_dims[0]
 
     @property
-    def validity_end_dimension(self) -> Optional[Dimension]:
+    def validity_end_dimension(self) -> Optional[DimensionResource]:
         validity_end_dims = [
             dim for dim in self.dimensions if dim.validity_params and dim.validity_params.is_end
         ]
@@ -1584,11 +1581,11 @@ class SemanticModel(GraphNode):
         return validity_end_dims[0]
 
     @property
-    def partitions(self) -> List[Dimension]:  # noqa: D
+    def partitions(self) -> List[DimensionResource]:  # noqa: D
         return [dim for dim in self.dimensions or [] if dim.is_partition]
 
     @property
-    def partition(self) -> Optional[Dimension]:
+    def partition(self) -> Optional[DimensionResource]:
         partitions = self.partitions
         if not partitions:
             return None
@@ -1609,7 +1606,7 @@ class SemanticModel(GraphNode):
     def checked_agg_time_dimension_for_measure(
         self, measure_reference: MeasureReference
     ) -> TimeDimensionReference:
-        measure: Optional[Measure] = None
+        measure: Optional[MeasureResource] = None
         for measure in self.measures:
             if measure.reference == measure_reference:
                 measure = measure
