@@ -141,9 +141,8 @@ class Catalog(Dict[CatalogKey, CatalogTable]):
                         sources[unique_id].to_dict(omit_none=True),
                         table.to_dict(omit_none=True),
                     )
-                else:
-                    if selected_node_ids is None or unique_id in selected_node_ids:
-                        sources[unique_id] = table.replace(unique_id=unique_id)
+                elif selected_node_ids is None or unique_id in selected_node_ids:
+                    sources[unique_id] = table.replace(unique_id=unique_id)
         return nodes, sources
 
 
