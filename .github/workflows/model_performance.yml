@@ -92,7 +92,7 @@ jobs:
           ref: main
 
       # attempts to access a previously cached runner
-      - uses: actions/cache@v3
+      - uses: actions/cache@v4
         id: cache
         with:
           path: ${{ env.RUNNER_CACHE_PATH }}
@@ -166,7 +166,7 @@ jobs:
 
       # this was built in the previous job so it will be there.
       - name: Fetch Runner
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         id: cache
         with:
           path: ${{ env.RUNNER_CACHE_PATH }}
