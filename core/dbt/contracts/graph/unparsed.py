@@ -29,6 +29,7 @@ import dbt_common.helper_types  # noqa:F401
 from dbt.exceptions import ParsingError
 
 from dbt_semantic_interfaces.type_enums import ConversionCalculationType
+from dbt.artifacts.resources import Docs, MacroArgument, Owner
 
 from dataclasses import dataclass, field
 from datetime import timedelta
@@ -81,12 +82,6 @@ class UnparsedNode(UnparsedBaseNode, HasCode):
 class UnparsedRunHook(UnparsedNode):
     resource_type: Literal[NodeType.Operation]
     index: Optional[int] = None
-
-
-@dataclass
-class Docs(dbtClassMixin, Replaceable):
-    show: bool = True
-    node_color: Optional[str] = None
 
 
 @dataclass
@@ -264,13 +259,6 @@ class UnparsedModelUpdate(UnparsedNodeUpdate):
             if unparsed_version.data_tests is not None
             else self.data_tests
         )
-
-
-@dataclass
-class MacroArgument(dbtClassMixin):
-    name: str
-    type: Optional[str] = None
-    description: str = ""
 
 
 @dataclass
@@ -532,12 +520,6 @@ class MaturityType(StrEnum):
     Low = "low"
     Medium = "medium"
     High = "high"
-
-
-@dataclass
-class Owner(AdditionalPropertiesAllowed, Replaceable):
-    email: Optional[str] = None
-    name: Optional[str] = None
 
 
 @dataclass

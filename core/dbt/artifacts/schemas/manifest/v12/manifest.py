@@ -9,7 +9,7 @@ from dbt.artifacts.schemas.base import (
     get_artifact_schema_version,
 )
 from dbt.artifacts.schemas.upgrades import upgrade_manifest_json
-from dbt.artifacts.resources import Documentation
+from dbt.artifacts.resources import Documentation, Group, Macro
 
 # TODO: remove usage of dbt modules other than dbt.artifacts
 from dbt import tracking
@@ -17,8 +17,6 @@ from dbt.flags import get_flags
 from dbt.contracts.graph.nodes import (
     Exposure,
     GraphMemberNode,
-    Group,
-    Macro,
     ManifestNode,
     Metric,
     SavedQuery,

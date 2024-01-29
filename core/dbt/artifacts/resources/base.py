@@ -6,7 +6,7 @@ from dbt.artifacts.resources.types import NodeType
 
 
 @dataclass
-class BaseArtifactNode(dbtClassMixin, Replaceable):
+class BaseResource(dbtClassMixin, Replaceable):
     name: str
     resource_type: NodeType
     package_name: str

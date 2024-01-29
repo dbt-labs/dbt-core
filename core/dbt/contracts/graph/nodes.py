@@ -27,12 +27,10 @@ from dbt.contracts.graph.semantic_models import (
 )
 from dbt.contracts.graph.unparsed import (
     ConstantPropertyInput,
-    Docs,
     ExposureType,
     ExternalTable,
     FreshnessThreshold,
     HasYamlMetadata,
-    MacroArgument,
     MaturityType,
     Owner,
     Quoting,
@@ -61,7 +59,6 @@ from dbt.events.types import (
 from dbt_common.events.contextvars import set_log_contextvars
 from dbt.flags import get_flags
 from dbt.node_types import (
-    ModelLanguage,
     NodeType,
     AccessType,
     REFABLE_NODE_TYPES,
@@ -97,7 +94,15 @@ from .model_config import (
     SavedQueryConfig,
 )
 
-from dbt.artifacts.resources import BaseArtifactNode, Documentation as DocumentationContract
+from dbt.artifacts.resources import (
+    BaseResource,
+    Docs,
+    MacroDependsOn,
+    MacroArgument,
+    Documentation as DocumentationResource,
+    Macro as MacroResource,
+    Group as GroupResource,
+)
 
 
 # =====================================================================
@@ -124,7 +129,7 @@ from dbt.artifacts.resources import BaseArtifactNode, Documentation as Documenta
 
 
 @dataclass
-class BaseNode(BaseArtifactNode):
+class BaseNode(BaseResource):
     """All nodes or node-like objects in this file should have this as a base class"""
 
     @property
@@ -238,18 +243,6 @@ class HasRelationMetadata(dbtClassMixin, Replaceable):
             return self.quoting.to_dict(omit_none=True)
         else:
             return {}
-
-
-@dataclass
-class MacroDependsOn(dbtClassMixin, Replaceable):
-    """Used only in the Macro class"""
-
-    macros: List[str] = field(default_factory=list)
-
-    # 'in' on lists is O(n) so this is O(n^2) for # of macros
-    def add_macro(self, value: str):
-        if value not in self.macros:
-            self.macros.append(value)
 
 
 @dataclass
@@ -1149,18 +1142,7 @@ class SnapshotNode(CompiledNode):
 
 
 @dataclass
-class Macro(BaseNode):
-    macro_sql: str
-    resource_type: Literal[NodeType.Macro]
-    depends_on: MacroDependsOn = field(default_factory=MacroDependsOn)
-    description: str = ""
-    meta: Dict[str, Any] = field(default_factory=dict)
-    docs: Docs = field(default_factory=Docs)
-    patch_path: Optional[str] = None
-    arguments: List[MacroArgument] = field(default_factory=list)
-    created_at: float = field(default_factory=lambda: time.time())
-    supported_languages: Optional[List[ModelLanguage]] = None
-
+class Macro(MacroResource, BaseNode):
     def same_contents(self, other: Optional["Macro"]) -> bool:
         if other is None:
             return False
@@ -1179,7 +1161,7 @@ class Macro(BaseNode):
 
 
 @dataclass
-class Documentation(DocumentationContract, BaseNode):
+class Documentation(DocumentationResource, BaseNode):
     @property
     def search_name(self):
         return self.name
@@ -1661,10 +1643,8 @@ class Metric(GraphNode):
 
 
 @dataclass
-class Group(BaseNode):
-    name: str
-    owner: Owner
-    resource_type: Literal[NodeType.Group]
+class Group(GroupResource, BaseNode):
+    pass
 
 
 # ====================================
