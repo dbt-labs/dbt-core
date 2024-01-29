@@ -14,7 +14,6 @@ pre-commit
 protobuf>=4.0.0
 pytest
 pytest-cov
-pytest-csv
 pytest-dotenv
 pytest-logbook
 pytest-mock
