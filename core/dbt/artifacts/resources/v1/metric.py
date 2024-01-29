@@ -115,14 +115,6 @@ class Metric(GraphResource):
     group: Optional[str] = None
 
     @property
-    def depends_on_nodes(self):
-        return self.depends_on.nodes
-
-    @property
-    def search_name(self):
-        return self.name
-
-    @property
     def input_measures(self) -> List[MetricInputMeasure]:
         return self.type_params.input_measures
 

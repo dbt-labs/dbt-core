@@ -1457,6 +1457,14 @@ class Exposure(GraphNode):
 
 @dataclass
 class Metric(GraphNode, MetricResource):
+    @property
+    def depends_on_nodes(self):
+        return self.depends_on.nodes
+
+    @property
+    def search_name(self):
+        return self.name
+
     def same_description(self, old: "Metric") -> bool:
         return self.description == old.description
 
