@@ -113,6 +113,8 @@ class ListTask(GraphRunnableTask):
             elif node.resource_type == NodeType.Unit:
                 assert isinstance(node, UnitTestDefinition)
                 unit_test_selector = ".".join([node.package_name, node.name])
+                if node.version:
+                    unit_test_selector += f"_v{node.version}"
                 yield f"unit_test:{unit_test_selector}"
             else:
                 # everything else is from `fqn`
