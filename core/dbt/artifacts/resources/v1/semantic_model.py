@@ -21,6 +21,14 @@ class Defaults(dbtClassMixin):
     agg_time_dimension: Optional[str] = None
 
 
+@dataclass
+class NodeRelation(dbtClassMixin):
+    alias: str
+    schema_name: str  # TODO: Could this be called simply "schema" so we could reuse StateRelation?
+    database: Optional[str] = None
+    relation_name: Optional[str] = None
+
+
 # ====================================
 # Dimension objects
 # ====================================

@@ -89,6 +89,7 @@ from dbt.artifacts.resources import (
     Documentation as DocumentationResource,
     Macro as MacroResource,
     Metric as MetricResource,
+    NodeRelation as NodeRelationResource,
     NodeVersion,
     Group as GroupResource,
     GraphResource,
@@ -1520,17 +1521,9 @@ class Group(GroupResource, BaseNode):
 
 
 @dataclass
-class NodeRelation(dbtClassMixin):
-    alias: str
-    schema_name: str  # TODO: Could this be called simply "schema" so we could reuse StateRelation?
-    database: Optional[str] = None
-    relation_name: Optional[str] = None
-
-
-@dataclass
 class SemanticModel(GraphNode):
     model: str
-    node_relation: Optional[NodeRelation]
+    node_relation: Optional[NodeRelationResource]
     description: Optional[str] = None
     label: Optional[str] = None
     defaults: Optional[DefaultsResource] = None

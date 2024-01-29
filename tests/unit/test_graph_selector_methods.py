@@ -15,7 +15,6 @@ from dbt.contracts.graph.nodes import (
     Exposure,
     Metric,
     Group,
-    NodeRelation,
     SavedQuery,
     SeedNode,
     SemanticModel,
@@ -32,6 +31,7 @@ from dbt.contracts.graph.manifest import Manifest, ManifestMetadata
 from dbt.artifacts.resources import (
     MetricInputMeasure,
     MetricTypeParams,
+    NodeRelation,
     QueryParams,
 )
 from dbt.contracts.graph.unparsed import (
