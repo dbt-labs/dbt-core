@@ -28,7 +28,7 @@ class MacroDependsOn(dbtClassMixin, Replaceable):
 
 @dataclass
 class Macro(BaseResource):
-    macro_sql: Optional[str]
+    macro_sql: str
     resource_type: Literal[NodeType.Macro]
     depends_on: MacroDependsOn = field(default_factory=MacroDependsOn)
     description: str = ""
