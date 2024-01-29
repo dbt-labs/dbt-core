@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Add test for docs generate catalog with external nodes
+time: 2024-01-29T14:15:43.562681-05:00
+custom:
+  Author: michelleark
+  Issue: "9481"
