@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from dbt.artifacts.resources.v1.semantic_layer_components import WhereFilterIntersection
 from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_semantic_interfaces.references import MeasureReference, MetricReference
@@ -56,3 +56,16 @@ class ConversionTypeParams(dbtClassMixin):
     calculation: ConversionCalculationType = ConversionCalculationType.CONVERSION_RATE
     window: Optional[MetricTimeWindow] = None
     constant_properties: Optional[List[ConstantPropertyInput]] = None
+
+
+@dataclass
+class MetricTypeParams(dbtClassMixin):
+    measure: Optional[MetricInputMeasure] = None
+    input_measures: List[MetricInputMeasure] = field(default_factory=list)
+    numerator: Optional[MetricInput] = None
+    denominator: Optional[MetricInput] = None
+    expr: Optional[str] = None
+    window: Optional[MetricTimeWindow] = None
+    grain_to_date: Optional[TimeGranularity] = None
+    metrics: Optional[List[MetricInput]] = None
+    conversion_type_params: Optional[ConversionTypeParams] = None

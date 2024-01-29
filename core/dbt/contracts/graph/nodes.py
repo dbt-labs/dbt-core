@@ -67,10 +67,7 @@ from dbt_semantic_interfaces.references import (
     SemanticModelReference,
     TimeDimensionReference,
 )
-from dbt_semantic_interfaces.type_enums import (
-    MetricType,
-    TimeGranularity,
-)
+from dbt_semantic_interfaces.type_enums import MetricType
 
 from .model_config import (
     NodeConfig,
@@ -89,7 +86,6 @@ from .model_config import (
 
 from dbt.artifacts.resources import (
     BaseResource,
-    ConversionTypeParams as ConversionTypeParamsResource,
     DependsOn,
     Docs,
     MacroDependsOn,
@@ -98,7 +94,7 @@ from dbt.artifacts.resources import (
     Macro as MacroResource,
     MetricInput as MetricInputResource,
     MetricInputMeasure as MetricInputMeasureResource,
-    MetricTimeWindow as MetricTimeWindowResource,
+    MetricTypeParams as MetricTypeParamsResource,
     NodeVersion,
     Group as GroupResource,
     GraphResource,
@@ -1465,19 +1461,6 @@ class Exposure(GraphNode):
 
 
 @dataclass
-class MetricTypeParams(dbtClassMixin):
-    measure: Optional[MetricInputMeasureResource] = None
-    input_measures: List[MetricInputMeasureResource] = field(default_factory=list)
-    numerator: Optional[MetricInputResource] = None
-    denominator: Optional[MetricInputResource] = None
-    expr: Optional[str] = None
-    window: Optional[MetricTimeWindowResource] = None
-    grain_to_date: Optional[TimeGranularity] = None
-    metrics: Optional[List[MetricInputResource]] = None
-    conversion_type_params: Optional[ConversionTypeParamsResource] = None
-
-
-@dataclass
 class MetricReference(dbtClassMixin, Replaceable):
     sql: Optional[Union[str, int]] = None
     unique_id: Optional[str] = None
@@ -1489,7 +1472,7 @@ class Metric(GraphNode):
     description: str
     label: str
     type: MetricType
-    type_params: MetricTypeParams
+    type_params: MetricTypeParamsResource
     filter: Optional[WhereFilterIntersectionResource] = None
     metadata: Optional[SourceFileMetadataResource] = None
     resource_type: Literal[NodeType.Metric]

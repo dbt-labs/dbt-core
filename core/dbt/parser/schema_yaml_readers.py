@@ -23,7 +23,6 @@ from dbt.contracts.graph.nodes import (
     Exposure,
     Group,
     Metric,
-    MetricTypeParams,
     SemanticModel,
     SavedQuery,
 )
@@ -34,6 +33,7 @@ from dbt.artifacts.resources import (
     MetricInput,
     MetricInputMeasure,
     MetricTimeWindow,
+    MetricTypeParams,
     QueryParams,
     SavedQueryConfig,
     WhereFilter,
