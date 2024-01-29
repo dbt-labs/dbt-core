@@ -2,8 +2,13 @@ from dataclasses import dataclass, field
 from typing import Dict, Any, Sequence, List, Union, Optional
 from datetime import datetime
 
-from dbt.artifacts.results import ExecutionResult, FreshnessStatus, NodeResult, TimingInfo
-from dbt.artifacts.base import ArtifactMixin, VersionedSchema, schema_version, BaseArtifactMetadata
+from dbt.artifacts.schemas.results import ExecutionResult, FreshnessStatus, NodeResult, TimingInfo
+from dbt.artifacts.schemas.base import (
+    ArtifactMixin,
+    VersionedSchema,
+    schema_version,
+    BaseArtifactMetadata,
+)
 from dbt_common.dataclass_schema import dbtClassMixin, StrEnum
 from dbt_common.exceptions import DbtInternalError
 

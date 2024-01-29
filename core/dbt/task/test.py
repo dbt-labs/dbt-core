@@ -17,9 +17,9 @@ from .run import RunTask
 
 from dbt.contracts.graph.nodes import TestNode, UnitTestDefinition, UnitTestNode
 from dbt.contracts.graph.manifest import Manifest
-from dbt.artifacts.results import TestStatus
-from dbt.artifacts.run import RunResult
-from dbt.artifacts.catalog import PrimitiveDict
+from dbt.artifacts.schemas.results import TestStatus
+from dbt.artifacts.schemas.run import RunResult
+from dbt.artifacts.schemas.catalog import PrimitiveDict
 from dbt.context.providers import generate_runtime_model_context
 from dbt.clients.jinja import MacroGenerator
 from dbt_common.events.functions import fire_event
@@ -83,7 +83,10 @@ class TestRunner(CompileRunner):
 
     def describe_node_name(self):
         if self.node.resource_type == NodeType.Unit:
-            return f"{self.node.model}::{self.node.name}"
+            name = f"{self.node.model}::{self.node.name}"
+            if self.node.version is not None:
+                name = name + f"_v{self.node.version}"
+            return name
         else:
             return self.node.name
 
@@ -215,7 +218,8 @@ class TestRunner(CompileRunner):
             macro_func()
         except DbtBaseException as e:
             raise DbtRuntimeError(
-                f"During unit test execution of {self.describe_node_name()}, dbt could not build the 'actual' result for comparison against 'expected' given the unit test definition:\n {e}"
+                f"An error occurred during execution of unit test '{unit_test_def.name}'. "
+                f"There may be an error in the unit test definition: check the data types.\n {e}"
             )
 
         # load results from context

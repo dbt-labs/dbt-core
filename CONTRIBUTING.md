@@ -10,6 +10,7 @@
 6. [Debugging](#debugging)
 7. [Adding or modifying a changelog entry](#adding-or-modifying-a-changelog-entry)
 8. [Submitting a Pull Request](#submitting-a-pull-request)
+9. [Troubleshooting Tips](#troubleshooting-tips)
 
 ## About this document
 
@@ -44,9 +45,7 @@ If you are not a member of the `dbt-labs` GitHub organization, you can contribut
 
 ### dbt Labs contributors
 
-If you are a member of the `dbt-labs` GitHub organization, you will have push access to the `dbt-core` repo. Rather than forking `dbt-core` to make your changes, just clone the repository, check out a new branch, and push directly to that branch. Branch names should be fixed by `CT-XXX/` where:
-* CT stands for 'core team'
-* XXX stands for a JIRA ticket number
+If you are a member of the `dbt-labs` GitHub organization, you will have push access to the `dbt-core` repo. Rather than forking `dbt-core` to make your changes, just clone the repository, check out a new branch, and push directly to that branch.
 
 ## Setting up an environment
 
@@ -221,10 +220,12 @@ You don't need to worry about which `dbt-core` version your change will go into.
 
 ## Submitting a Pull Request
 
-Code can be merged into the current development branch `main` by opening a pull request. A `dbt-core` maintainer will review your PR. They may suggest code revision for style or clarity, or request that you add unit or integration test(s). These are good things! We believe that, with a little bit of help, anyone can contribute high-quality code.
+Code can be merged into the current development branch `main` by opening a pull request. If the proposal looks like it's on the right track, then a `dbt-core` maintainer will triage the PR and label it as `ready_for_review`. From this point, two code reviewers will be assigned with the aim of responding to any updates to the PR within about one week. They may suggest code revision for style or clarity, or request that you add unit or integration test(s). These are good things! We believe that, with a little bit of help, anyone can contribute high-quality code. Once merged, your contribution will be available for the next release of `dbt-core`.
 
 Automated tests run via GitHub Actions. If you're a first-time contributor, all tests (including code checks and unit tests) will require a maintainer to approve. Changes in the `dbt-core` repository trigger integration tests against Postgres. dbt Labs also provides CI environments in which to test changes to other adapters, triggered by PRs in those adapters' repositories, as well as periodic maintenance checks of each adapter in concert with the latest `dbt-core` code changes.
 
 Once all tests are passing and your PR has been approved, a `dbt-core` maintainer will merge your changes into the active development branch. And that's it! Happy developing :tada:
+
+## Troubleshooting Tips
 
 Sometimes, the content license agreement auto-check bot doesn't find a user's entry in its roster. If you need to force a rerun, add `@cla-bot check` in a comment on the pull request.

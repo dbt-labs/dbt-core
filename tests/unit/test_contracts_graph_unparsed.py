@@ -26,7 +26,7 @@ from dbt.contracts.graph.unparsed import (
     UnparsedMetricInputMeasure,
     UnparsedVersion,
 )
-from dbt.artifacts.results import FreshnessStatus
+from dbt.artifacts.schemas.results import FreshnessStatus
 from dbt.node_types import NodeType
 from .utils import ContractTestCase
 

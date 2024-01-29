@@ -15,8 +15,8 @@ from dbt.adapters.base import BaseRelation
 from dbt.adapters.factory import get_adapter
 from dbt.contracts.graph.manifest import WritableManifest
 from dbt.contracts.graph.nodes import ResultNode
-from dbt.artifacts.results import NodeStatus, RunningStatus, RunStatus, BaseResult
-from dbt.artifacts.run import RunExecutionResult, RunResult
+from dbt.artifacts.schemas.results import NodeStatus, RunningStatus, RunStatus, BaseResult
+from dbt.artifacts.schemas.run import RunExecutionResult, RunResult
 from dbt.contracts.state import PreviousState
 from dbt_common.events.contextvars import log_contextvars, task_contextvars
 from dbt_common.events.functions import fire_event, warn_or_error

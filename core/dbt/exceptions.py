@@ -14,7 +14,7 @@ from dbt_common.exceptions import (
     DbtValidationError,
     CommandResultError,
 )
-from dbt.node_types import NodeType, AccessType
+from dbt.node_types import NodeType, AccessType, REFABLE_NODE_TYPES
 
 from dbt_common.dataclass_schema import ValidationError
 
@@ -1273,7 +1273,7 @@ class DuplicateResourceNameError(CompilationError):
 
         action = "looking for"
         # duplicate 'ref' targets
-        if node_type in NodeType.refable():
+        if node_type in REFABLE_NODE_TYPES:
             formatted_name = f'ref("{duped_name}")'
         # duplicate sources
         elif node_type == NodeType.Source:

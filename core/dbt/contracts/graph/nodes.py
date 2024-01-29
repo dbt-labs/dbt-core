@@ -27,12 +27,10 @@ from dbt.contracts.graph.semantic_models import (
 )
 from dbt.contracts.graph.unparsed import (
     ConstantPropertyInput,
-    Docs,
     ExposureType,
     ExternalTable,
     FreshnessThreshold,
     HasYamlMetadata,
-    MacroArgument,
     MaturityType,
     Owner,
     Quoting,
@@ -44,6 +42,7 @@ from dbt.contracts.graph.unparsed import (
     UnitTestOverrides,
     UnitTestInputFixture,
     UnitTestOutputFixture,
+    UnitTestNodeVersions,
 )
 from dbt.contracts.graph.node_args import ModelNodeArgs
 from dbt.contracts.graph.semantic_layer_common import WhereFilterIntersection
@@ -60,7 +59,12 @@ from dbt.events.types import (
 )
 from dbt_common.events.contextvars import set_log_contextvars
 from dbt.flags import get_flags
-from dbt.node_types import ModelLanguage, NodeType, AccessType
+from dbt.node_types import (
+    NodeType,
+    AccessType,
+    REFABLE_NODE_TYPES,
+    VERSIONED_NODE_TYPES,
+)
 from dbt_semantic_interfaces.references import (
     EntityReference,
     MeasureReference,
@@ -91,6 +95,16 @@ from .model_config import (
     SavedQueryConfig,
 )
 
+from dbt.artifacts.resources import (
+    BaseResource,
+    Docs,
+    MacroDependsOn,
+    MacroArgument,
+    Documentation as DocumentationResource,
+    Macro as MacroResource,
+    Group as GroupResource,
+)
+
 
 # =====================================================================
 # This contains the classes for all of the nodes and node-like objects
@@ -116,15 +130,8 @@ from .model_config import (
 
 
 @dataclass
-class BaseNode(dbtClassMixin, Replaceable):
+class BaseNode(BaseResource):
     """All nodes or node-like objects in this file should have this as a base class"""
-
-    name: str
-    resource_type: NodeType
-    package_name: str
-    path: str
-    original_file_path: str
-    unique_id: str
 
     @property
     def search_name(self):
@@ -136,7 +143,7 @@ class BaseNode(dbtClassMixin, Replaceable):
 
     @property
     def is_refable(self):
-        return self.resource_type in NodeType.refable()
+        return self.resource_type in REFABLE_NODE_TYPES
 
     @property
     def should_store_failures(self):
@@ -145,11 +152,11 @@ class BaseNode(dbtClassMixin, Replaceable):
     # will this node map to an object in the database?
     @property
     def is_relational(self):
-        return self.resource_type in NodeType.refable()
+        return self.resource_type in REFABLE_NODE_TYPES
 
     @property
     def is_versioned(self):
-        return self.resource_type in NodeType.versioned() and self.version is not None
+        return self.resource_type in VERSIONED_NODE_TYPES and self.version is not None
 
     @property
     def is_ephemeral(self):
@@ -237,18 +244,6 @@ class HasRelationMetadata(dbtClassMixin, Replaceable):
             return self.quoting.to_dict(omit_none=True)
         else:
             return {}
-
-
-@dataclass
-class MacroDependsOn(dbtClassMixin, Replaceable):
-    """Used only in the Macro class"""
-
-    macros: List[str] = field(default_factory=list)
-
-    # 'in' on lists is O(n) so this is O(n^2) for # of macros
-    def add_macro(self, value: str):
-        if value not in self.macros:
-            self.macros.append(value)
 
 
 @dataclass
@@ -1073,6 +1068,9 @@ class UnitTestDefinition(NodeInfoMixin, GraphNode, UnitTestDefinitionMandatory):
     config: UnitTestConfig = field(default_factory=UnitTestConfig)
     checksum: Optional[str] = None
     schema: Optional[str] = None
+    created_at: float = field(default_factory=lambda: time.time())
+    versions: Optional[UnitTestNodeVersions] = None
+    version: Optional[NodeVersion] = None
 
     @property
     def build_path(self):
@@ -1095,7 +1093,7 @@ class UnitTestDefinition(NodeInfoMixin, GraphNode, UnitTestDefinitionMandatory):
 
     def build_unit_test_checksum(self):
         # everything except 'description'
-        data = f"{self.model}-{self.given}-{self.expect}-{self.overrides}"
+        data = f"{self.model}-{self.versions}-{self.given}-{self.expect}-{self.overrides}"
 
         # include underlying fixture data
         for input in self.given:
@@ -1148,18 +1146,7 @@ class SnapshotNode(CompiledNode):
 
 
 @dataclass
-class Macro(BaseNode):
-    macro_sql: str
-    resource_type: Literal[NodeType.Macro]
-    depends_on: MacroDependsOn = field(default_factory=MacroDependsOn)
-    description: str = ""
-    meta: Dict[str, Any] = field(default_factory=dict)
-    docs: Docs = field(default_factory=Docs)
-    patch_path: Optional[str] = None
-    arguments: List[MacroArgument] = field(default_factory=list)
-    created_at: float = field(default_factory=lambda: time.time())
-    supported_languages: Optional[List[ModelLanguage]] = None
-
+class Macro(MacroResource, BaseNode):
     def same_contents(self, other: Optional["Macro"]) -> bool:
         if other is None:
             return False
@@ -1178,10 +1165,7 @@ class Macro(BaseNode):
 
 
 @dataclass
-class Documentation(BaseNode):
-    block_contents: str
-    resource_type: Literal[NodeType.Documentation]
-
+class Documentation(DocumentationResource, BaseNode):
     @property
     def search_name(self):
         return self.name
@@ -1663,10 +1647,8 @@ class Metric(GraphNode):
 
 
 @dataclass
-class Group(BaseNode):
-    name: str
-    owner: Owner
-    resource_type: Literal[NodeType.Group]
+class Group(GroupResource, BaseNode):
+    pass
 
 
 # ====================================

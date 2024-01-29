@@ -70,7 +70,7 @@ jobs:
     name: Log Inputs
     runs-on: ubuntu-latest
     outputs:
-      starting_sha: ${{ steps.set_sha.outputs.changelog_path }}
+      starting_sha: ${{ steps.set_sha.outputs.starting_sha }}
     steps:
       - name: "[DEBUG] Print Variables"
         run: |

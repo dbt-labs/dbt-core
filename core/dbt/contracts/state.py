@@ -2,8 +2,8 @@ from pathlib import Path
 from typing import Optional
 
 from dbt.contracts.graph.manifest import WritableManifest
-from dbt.artifacts.freshness import FreshnessExecutionResultArtifact
-from dbt.artifacts.run import RunResultsArtifact
+from dbt.artifacts.schemas.freshness import FreshnessExecutionResultArtifact
+from dbt.artifacts.schemas.run import RunResultsArtifact
 from dbt_common.events.functions import fire_event
 from dbt.events.types import WarnStateTargetEqual
 from dbt.exceptions import IncompatibleSchemaError

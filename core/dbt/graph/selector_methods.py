@@ -593,7 +593,7 @@ class StateSelectorMethod(SelectorMethod):
             else:
                 modified.append(uid)
 
-        for uid, macro in old_macros.items():
+        for uid, _ in old_macros.items():
             if uid not in new_macros:
                 modified.append(uid)
 

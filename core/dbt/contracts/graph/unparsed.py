@@ -29,6 +29,7 @@ import dbt_common.helper_types  # noqa:F401
 from dbt.exceptions import ParsingError
 
 from dbt_semantic_interfaces.type_enums import ConversionCalculationType
+from dbt.artifacts.resources import Docs, MacroArgument, Owner
 
 from dataclasses import dataclass, field
 from datetime import timedelta
@@ -81,12 +82,6 @@ class UnparsedNode(UnparsedBaseNode, HasCode):
 class UnparsedRunHook(UnparsedNode):
     resource_type: Literal[NodeType.Operation]
     index: Optional[int] = None
-
-
-@dataclass
-class Docs(dbtClassMixin, Replaceable):
-    show: bool = True
-    node_color: Optional[str] = None
 
 
 @dataclass
@@ -267,13 +262,6 @@ class UnparsedModelUpdate(UnparsedNodeUpdate):
 
 
 @dataclass
-class MacroArgument(dbtClassMixin):
-    name: str
-    type: Optional[str] = None
-    description: str = ""
-
-
-@dataclass
 class UnparsedMacroUpdate(HasConfig, HasColumnProps, HasYamlMetadata):
     arguments: List[MacroArgument] = field(default_factory=list)
 
@@ -309,8 +297,8 @@ class FreshnessThreshold(dbtClassMixin, Mergeable):
     error_after: Optional[Time] = field(default_factory=Time)
     filter: Optional[str] = None
 
-    def status(self, age: float) -> "dbt.artifacts.results.FreshnessStatus":  # type: ignore # noqa F821
-        from dbt.artifacts.results import FreshnessStatus
+    def status(self, age: float) -> "dbt.artifacts.schemas.results.FreshnessStatus":  # type: ignore # noqa F821
+        from dbt.artifacts.schemas.results import FreshnessStatus
 
         if self.error_after and self.error_after.exceeded(age):
             return FreshnessStatus.Error
@@ -532,12 +520,6 @@ class MaturityType(StrEnum):
     Low = "low"
     Medium = "medium"
     High = "high"
-
-
-@dataclass
-class Owner(AdditionalPropertiesAllowed, Replaceable):
-    email: Optional[str] = None
-    name: Optional[str] = None
 
 
 @dataclass
@@ -822,6 +804,12 @@ class UnitTestOverrides(dbtClassMixin):
 
 
 @dataclass
+class UnitTestNodeVersions(dbtClassMixin):
+    include: Optional[List[NodeVersion]] = None
+    exclude: Optional[List[NodeVersion]] = None
+
+
+@dataclass
 class UnparsedUnitTest(dbtClassMixin):
     name: str
     model: str  # name of the model being unit tested
@@ -830,3 +818,11 @@ class UnparsedUnitTest(dbtClassMixin):
     description: str = ""
     overrides: Optional[UnitTestOverrides] = None
     config: Dict[str, Any] = field(default_factory=dict)
+    versions: Optional[UnitTestNodeVersions] = None
+
+    @classmethod
+    def validate(cls, data):
+        super(UnparsedUnitTest, cls).validate(data)
+        if data.get("versions", None):
+            if data["versions"].get("include") and data["versions"].get("exclude"):
+                raise ValidationError("Unit tests can not both include and exclude versions.")

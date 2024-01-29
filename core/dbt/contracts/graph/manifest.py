@@ -20,10 +20,8 @@ from typing import (
     Generic,
     AbstractSet,
     ClassVar,
-    Iterable,
 )
 from typing_extensions import Protocol
-from uuid import UUID
 
 from dbt.contracts.graph.nodes import (
     BaseNode,
@@ -46,19 +44,15 @@ from dbt.contracts.graph.nodes import (
     UnitTestFileFixture,
 )
 from dbt.contracts.graph.unparsed import SourcePatch, NodeVersion, UnparsedVersion
-from dbt.contracts.graph.manifest_upgrade import upgrade_manifest_json
+
+# to preserve import paths
+from dbt.artifacts.schemas.manifest import WritableManifest, ManifestMetadata, UniqueID
 from dbt.contracts.files import (
     SourceFile,
     SchemaSourceFile,
     FileHash,
     AnySourceFile,
     FixtureSourceFile,
-)
-from dbt.artifacts.base import (
-    BaseArtifactMetadata,
-    ArtifactMixin,
-    schema_version,
-    get_artifact_schema_version,
 )
 from dbt.contracts.util import SourceKey
 from dbt_common.dataclass_schema import dbtClassMixin
@@ -73,19 +67,15 @@ from dbt_common.helper_types import PathSet
 from dbt_common.events.functions import fire_event
 from dbt_common.events.contextvars import get_node_info
 from dbt.events.types import MergedFromState, UnpinnedRefNewVersionAvailable
-from dbt.node_types import NodeType, AccessType
-from dbt.flags import get_flags
+from dbt.node_types import NodeType, AccessType, REFABLE_NODE_TYPES, VERSIONED_NODE_TYPES
 from dbt.mp_context import get_mp_context
-from dbt import tracking
 import dbt_common.utils
 import dbt_common.exceptions
 
 
-NodeEdgeMap = Dict[str, List[str]]
 PackageName = str
 DocName = str
 RefName = str
-UniqueID = str
 
 
 def find_unique_id_for_package(storage, key, package: Optional[PackageName]):
@@ -171,8 +161,8 @@ class SourceLookup(dbtClassMixin):
 
 class RefableLookup(dbtClassMixin):
     # model, seed, snapshot
-    _lookup_types: ClassVar[set] = set(NodeType.refable())
-    _versioned_types: ClassVar[set] = set(NodeType.versioned())
+    _lookup_types: ClassVar[set] = set(REFABLE_NODE_TYPES)
+    _versioned_types: ClassVar[set] = set(VERSIONED_NODE_TYPES)
 
     def __init__(self, manifest: "Manifest") -> None:
         self.storage: Dict[str, Dict[PackageName, UniqueID]] = {}
@@ -463,59 +453,6 @@ def _packages_to_search(
         return [current_project, None]
     else:
         return [current_project, node_package, None]
-
-
-@dataclass
-class ManifestMetadata(BaseArtifactMetadata):
-    """Metadata for the manifest."""
-
-    dbt_schema_version: str = field(
-        default_factory=lambda: str(WritableManifest.dbt_schema_version)
-    )
-    project_name: Optional[str] = field(
-        default=None,
-        metadata={
-            "description": "Name of the root project",
-        },
-    )
-    project_id: Optional[str] = field(
-        default=None,
-        metadata={
-            "description": "A unique identifier for the project, hashed from the project name",
-        },
-    )
-    user_id: Optional[UUID] = field(
-        default=None,
-        metadata={
-            "description": "A unique identifier for the user",
-        },
-    )
-    send_anonymous_usage_stats: Optional[bool] = field(
-        default=None,
-        metadata=dict(
-            description=("Whether dbt is configured to send anonymous usage statistics")
-        ),
-    )
-    adapter_type: Optional[str] = field(
-        default=None,
-        metadata=dict(description="The type name of the adapter"),
-    )
-
-    def __post_init__(self):
-        if tracking.active_user is None:
-            return
-
-        if self.user_id is None:
-            self.user_id = tracking.active_user.id
-
-        if self.send_anonymous_usage_stats is None:
-            self.send_anonymous_usage_stats = get_flags().SEND_ANONYMOUS_USAGE_STATS
-
-    @classmethod
-    def default(cls):
-        return cls(
-            dbt_schema_version=str(WritableManifest.dbt_schema_version),
-        )
 
 
 def _sort_values(dct):
@@ -1043,6 +980,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
                 self.metrics.values(),
                 self.semantic_models.values(),
                 self.saved_queries.values(),
+                self.unit_tests.values(),
             )
         )
         forward_edges, backward_edges = build_node_edges(edge_members)
@@ -1425,7 +1363,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
 
         Only non-ephemeral refable nodes are examined.
         """
-        refables = set(NodeType.refable())
+        refables = set(REFABLE_NODE_TYPES)
         merged = set()
         for unique_id, node in other.nodes.items():
             current = self.nodes.get(unique_id)
@@ -1457,7 +1395,6 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         fire_event(MergedFromState(num_merged=len(merged), sample=sample))
 
     # Methods that were formerly in ParseResult
-
     def add_macro(self, source_file: SourceFile, macro: Macro):
         if macro.unique_id in self.macros:
             # detect that the macro exists and emit an error
@@ -1643,101 +1580,6 @@ class MacroManifest(MacroMethods):
 
 
 AnyManifest = Union[Manifest, MacroManifest]
-
-
-@dataclass
-@schema_version("manifest", 12)
-class WritableManifest(ArtifactMixin):
-    nodes: Mapping[UniqueID, ManifestNode] = field(
-        metadata=dict(description=("The nodes defined in the dbt project and its dependencies"))
-    )
-    sources: Mapping[UniqueID, SourceDefinition] = field(
-        metadata=dict(description=("The sources defined in the dbt project and its dependencies"))
-    )
-    macros: Mapping[UniqueID, Macro] = field(
-        metadata=dict(description=("The macros defined in the dbt project and its dependencies"))
-    )
-    docs: Mapping[UniqueID, Documentation] = field(
-        metadata=dict(description=("The docs defined in the dbt project and its dependencies"))
-    )
-    exposures: Mapping[UniqueID, Exposure] = field(
-        metadata=dict(
-            description=("The exposures defined in the dbt project and its dependencies")
-        )
-    )
-    metrics: Mapping[UniqueID, Metric] = field(
-        metadata=dict(description=("The metrics defined in the dbt project and its dependencies"))
-    )
-    groups: Mapping[UniqueID, Group] = field(
-        metadata=dict(description=("The groups defined in the dbt project"))
-    )
-    selectors: Mapping[UniqueID, Any] = field(
-        metadata=dict(description=("The selectors defined in selectors.yml"))
-    )
-    disabled: Optional[Mapping[UniqueID, List[GraphMemberNode]]] = field(
-        metadata=dict(description="A mapping of the disabled nodes in the target")
-    )
-    parent_map: Optional[NodeEdgeMap] = field(
-        metadata=dict(
-            description="A mapping from child nodes to their dependencies",
-        )
-    )
-    child_map: Optional[NodeEdgeMap] = field(
-        metadata=dict(
-            description="A mapping from parent nodes to their dependents",
-        )
-    )
-    group_map: Optional[NodeEdgeMap] = field(
-        metadata=dict(
-            description="A mapping from group names to their nodes",
-        )
-    )
-    saved_queries: Mapping[UniqueID, SavedQuery] = field(
-        metadata=dict(description=("The saved queries defined in the dbt project"))
-    )
-    semantic_models: Mapping[UniqueID, SemanticModel] = field(
-        metadata=dict(description=("The semantic models defined in the dbt project"))
-    )
-    metadata: ManifestMetadata = field(
-        metadata=dict(
-            description="Metadata about the manifest",
-        )
-    )
-    unit_tests: Mapping[UniqueID, UnitTestDefinition] = field(
-        metadata=dict(
-            description="The unit tests defined in the project",
-        )
-    )
-
-    @classmethod
-    def compatible_previous_versions(cls) -> Iterable[Tuple[str, int]]:
-        return [
-            ("manifest", 4),
-            ("manifest", 5),
-            ("manifest", 6),
-            ("manifest", 7),
-            ("manifest", 8),
-            ("manifest", 9),
-            ("manifest", 10),
-            ("manifest", 11),
-        ]
-
-    @classmethod
-    def upgrade_schema_version(cls, data):
-        """This overrides the "upgrade_schema_version" call in VersionedSchema (via
-        ArtifactMixin) to modify the dictionary passed in from earlier versions of the manifest."""
-        manifest_schema_version = get_artifact_schema_version(data)
-        if manifest_schema_version <= 10:
-            data = upgrade_manifest_json(data, manifest_schema_version)
-        return cls.from_dict(data)
-
-    def __post_serialize__(self, dct):
-        for unique_id, node in dct["nodes"].items():
-            if "config_call_dict" in node:
-                del node["config_call_dict"]
-            if "defer_relation" in node:
-                del node["defer_relation"]
-        return dct
 
 
 def _check_duplicates(value: BaseNode, src: Mapping[str, BaseNode]):

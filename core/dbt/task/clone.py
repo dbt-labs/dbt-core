@@ -5,11 +5,11 @@ from dbt.adapters.base import BaseRelation
 from dbt.clients.jinja import MacroGenerator
 from dbt.context.providers import generate_runtime_model_context
 from dbt.contracts.graph.manifest import WritableManifest
-from dbt.artifacts.run import RunStatus, RunResult
+from dbt.artifacts.schemas.run import RunStatus, RunResult
 from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_common.exceptions import DbtInternalError, CompilationError
 from dbt.graph import ResourceTypeSelector
-from dbt.node_types import NodeType
+from dbt.node_types import NodeType, REFABLE_NODE_TYPES
 from dbt.task.base import BaseRunner
 from dbt.task.run import _validate_materialization_relations_dict
 from dbt.task.runnable import GraphRunnableTask
@@ -133,15 +133,15 @@ class CloneTask(GraphRunnableTask):
     @property
     def resource_types(self):
         if not self.args.resource_types:
-            return NodeType.refable()
+            return REFABLE_NODE_TYPES
 
         values = set(self.args.resource_types)
 
         if "all" in values:
             values.remove("all")
-            values.update(NodeType.refable())
+            values.update(REFABLE_NODE_TYPES)
 
-        values = [NodeType(val) for val in values if val in NodeType.refable()]
+        values = [NodeType(val) for val in values if val in REFABLE_NODE_TYPES]
 
         return list(values)
 

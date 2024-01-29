@@ -109,7 +109,7 @@ from dbt.contracts.graph.nodes import (
     NodeRelation,
 )
 from dbt.contracts.graph.unparsed import NodeVersion
-from dbt.artifacts.base import Writable
+from dbt.artifacts.schemas.base import Writable
 from dbt.exceptions import (
     TargetNotFoundError,
     AmbiguousAliasError,
@@ -129,6 +129,7 @@ from dbt.parser.search import FileBlock
 from dbt.parser.seeds import SeedParser
 from dbt.parser.snapshots import SnapshotParser
 from dbt.parser.sources import SourcePatcher
+from dbt.parser.unit_tests import process_models_for_unit_test
 from dbt.version import __version__
 
 from dbt_common.dataclass_schema import StrEnum, dbtClassMixin
@@ -534,6 +535,7 @@ class ManifestLoader:
             start_process = time.perf_counter()
             self.process_sources(self.root_project.project_name)
             self.process_refs(self.root_project.project_name, self.root_project.dependencies)
+            self.process_unit_tests(self.root_project.project_name)
             self.process_docs(self.root_project)
             self.process_metrics(self.root_project)
             self.process_saved_queries(self.root_project)
@@ -1227,6 +1229,27 @@ class ManifestLoader:
                 continue
             _process_sources_for_exposure(self.manifest, current_project, exposure)
 
+    # Loops through all nodes, for each element in
+    # 'unit_test' array finds the node and updates the
+    # 'depends_on.nodes' array with the unique id
+    def process_unit_tests(self, current_project: str):
+        models_to_versions = None
+        unit_test_unique_ids = list(self.manifest.unit_tests.keys())
+        for unit_test_unique_id in unit_test_unique_ids:
+            # This is because some unit tests will be removed when processing
+            # and the list of unit_test_unique_ids won't have changed
+            if unit_test_unique_id in self.manifest.unit_tests:
+                unit_test = self.manifest.unit_tests[unit_test_unique_id]
+            else:
+                continue
+            if unit_test.created_at < self.started_at:
+                continue
+            if not models_to_versions:
+                models_to_versions = _build_model_names_to_versions(self.manifest)
+            process_models_for_unit_test(
+                self.manifest, current_project, unit_test, models_to_versions
+            )
+
     def cleanup_disabled(self):
         # make sure the nodes are in the manifest.nodes or the disabled dict,
         # correctly now that the schema files are also parsed
@@ -1341,6 +1364,21 @@ def invalid_target_fail_unless_test(
             target_version=target_version,
             disabled=disabled,
         )
+
+
+def _build_model_names_to_versions(manifest: Manifest) -> Dict[str, Dict]:
+    model_names_to_versions: Dict[str, Dict] = {}
+    for node in manifest.nodes.values():
+        if node.resource_type != NodeType.Model:
+            continue
+        if not node.is_versioned:
+            continue
+        if node.package_name not in model_names_to_versions:
+            model_names_to_versions[node.package_name] = {}
+        if node.name not in model_names_to_versions[node.package_name]:
+            model_names_to_versions[node.package_name][node.name] = []
+        model_names_to_versions[node.package_name][node.name].append(node.unique_id)
+    return model_names_to_versions
 
 
 def _check_resource_uniqueness(
@@ -1754,7 +1792,7 @@ def _process_sources_for_node(manifest: Manifest, current_project: str, node: Ma
         )
 
         if target_source is None or isinstance(target_source, Disabled):
-            # this folows the same pattern as refs
+            # this follows the same pattern as refs
             node.config.enabled = False
             invalid_target_fail_unless_test(
                 node=node,

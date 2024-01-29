@@ -3,7 +3,7 @@ from typing import Set
 
 import pytest
 
-from dbt.artifacts.results import TestStatus
+from dbt.artifacts.schemas.results import TestStatus
 from dbt.tests.util import run_dbt, check_relation_types
 
 from dbt.tests.adapter.store_test_failures_tests import _files

@@ -17,8 +17,8 @@ from dbt.cli.exceptions import (
     DbtUsageException,
 )
 from dbt.contracts.graph.manifest import Manifest
-from dbt.artifacts.catalog import CatalogArtifact
-from dbt.artifacts.run import RunExecutionResult
+from dbt.artifacts.schemas.catalog import CatalogArtifact
+from dbt.artifacts.schemas.run import RunExecutionResult
 from dbt_common.events.base_types import EventMsg
 from dbt.task.build import BuildTask
 from dbt.task.clean import CleanTask
@@ -602,13 +602,12 @@ def run(ctx, **kwargs):
 @requires.profile
 @requires.project
 @requires.runtime_config
-@requires.manifest
 def retry(ctx, **kwargs):
     """Retry the nodes that failed in the previous run."""
+    # Retry will parse manifest inside the task after we consolidate the flags
     task = RetryTask(
         ctx.obj["flags"],
         ctx.obj["runtime_config"],
-        ctx.obj["manifest"],
     )
 
     results = task.run()
