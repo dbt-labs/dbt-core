@@ -1,4 +1,5 @@
 from csv import DictReader
+from copy import deepcopy
 from pathlib import Path
 from typing import List, Set, Dict, Any
 import os
@@ -74,7 +75,7 @@ class UnitTestManifestLoader:
             unique_id=test_case.unique_id,
             config=UnitTestNodeConfig(
                 materialized="unit",
-                expected_rows=test_case.expect.rows,  # type:ignore
+                expected_rows=deepcopy(test_case.expect.rows),  # type:ignore
             ),
             raw_code=tested_node.raw_code,
             database=tested_node.database,
