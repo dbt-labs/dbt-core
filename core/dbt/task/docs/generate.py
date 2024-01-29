@@ -117,7 +117,7 @@ class Catalog(Dict[CatalogKey, CatalogTable]):
         self, manifest: Manifest, selected_node_ids: Optional[Set[UniqueId]] = None
     ) -> Tuple[Dict[str, CatalogTable], Dict[str, CatalogTable]]:
         """
-        Create mappings between CatalogKeys and CatalogTables for nodes and sources, filteded by selected_node_ids.
+        Create mappings between CatalogKeys and CatalogTables for nodes and sources, filtered by selected_node_ids.
 
         By default, selected_node_ids is None and all nodes and sources defined in the manifest are included in the mappings.
         """
@@ -264,7 +264,7 @@ class GenerateTask(CompileTask):
 
                     # Source selection is handled separately from main job_queue selection because
                     # SourceDefinition nodes cannot be safely compiled / run by the CompileRunner / CompileTask,
-                    # but can still be included in the catalog
+                    # but should still be included in the catalog based on the selection spec
                     selected_source_ids = self._get_selected_source_ids()
                     selected_source_nodes = self._get_nodes_from_ids(
                         self.manifest, selected_source_ids
