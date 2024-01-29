@@ -6,7 +6,11 @@ from dbt.artifacts.resources.v1.documentation import Documentation
 from dbt.artifacts.resources.v1.macro import Macro, MacroDependsOn, MacroArgument
 from dbt.artifacts.resources.v1.docs import Docs
 from dbt.artifacts.resources.v1.group import Group
-from dbt.artifacts.resources.v1.metric import MetricInputMeasure, MetricTimeWindow
+from dbt.artifacts.resources.v1.metric import (
+    MetricInput,
+    MetricInputMeasure,
+    MetricTimeWindow,
+)
 from dbt.artifacts.resources.v1.owner import Owner
 from dbt.artifacts.resources.v1.saved_query import (
     Export,

@@ -5,7 +5,6 @@ from dbt.contracts.graph.nodes import (
     ConstantPropertyInput,
     ConversionTypeParams,
     Metric,
-    MetricInput,
     MetricTypeParams,
     NodeRelation,
     SavedQuery,
@@ -13,6 +12,7 @@ from dbt.contracts.graph.nodes import (
 )
 from dbt.artifacts.resources import (
     FileSlice,
+    MetricInput,
     MetricInputMeasure,
     MetricTimeWindow,
     SourceFileMetadata,

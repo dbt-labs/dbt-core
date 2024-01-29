@@ -68,7 +68,6 @@ from dbt_semantic_interfaces.references import (
     SemanticModelReference,
     TimeDimensionReference,
 )
-from dbt_semantic_interfaces.references import MetricReference as DSIMetricReference
 from dbt_semantic_interfaces.type_enums import (
     ConversionCalculationType,
     MetricType,
@@ -98,6 +97,7 @@ from dbt.artifacts.resources import (
     MacroArgument,
     Documentation as DocumentationResource,
     Macro as MacroResource,
+    MetricInput as MetricInputResource,
     MetricInputMeasure as MetricInputMeasureResource,
     MetricTimeWindow as MetricTimeWindowResource,
     NodeVersion,
@@ -1466,21 +1466,6 @@ class Exposure(GraphNode):
 
 
 @dataclass
-class MetricInput(dbtClassMixin):
-    name: str
-    filter: Optional[WhereFilterIntersectionResource] = None
-    alias: Optional[str] = None
-    offset_window: Optional[MetricTimeWindowResource] = None
-    offset_to_grain: Optional[TimeGranularity] = None
-
-    def as_reference(self) -> DSIMetricReference:
-        return DSIMetricReference(element_name=self.name)
-
-    def post_aggregation_reference(self) -> DSIMetricReference:
-        return DSIMetricReference(element_name=self.alias or self.name)
-
-
-@dataclass
 class ConversionTypeParams(dbtClassMixin):
     base_measure: MetricInputMeasureResource
     conversion_measure: MetricInputMeasureResource
@@ -1494,12 +1479,12 @@ class ConversionTypeParams(dbtClassMixin):
 class MetricTypeParams(dbtClassMixin):
     measure: Optional[MetricInputMeasureResource] = None
     input_measures: List[MetricInputMeasureResource] = field(default_factory=list)
-    numerator: Optional[MetricInput] = None
-    denominator: Optional[MetricInput] = None
+    numerator: Optional[MetricInputResource] = None
+    denominator: Optional[MetricInputResource] = None
     expr: Optional[str] = None
     window: Optional[MetricTimeWindowResource] = None
     grain_to_date: Optional[TimeGranularity] = None
-    metrics: Optional[List[MetricInput]] = None
+    metrics: Optional[List[MetricInputResource]] = None
     conversion_type_params: Optional[ConversionTypeParams] = None
 
 
@@ -1547,7 +1532,7 @@ class Metric(GraphNode):
         return [x.measure_reference() for x in self.input_measures]
 
     @property
-    def input_metrics(self) -> List[MetricInput]:
+    def input_metrics(self) -> List[MetricInputResource]:
         return self.type_params.metrics or []
 
     def same_description(self, old: "Metric") -> bool:
