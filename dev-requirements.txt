@@ -8,9 +8,9 @@ ipdb
 mypy==0.971
 pip-tools
 pre-commit
-pytest
+pytest~=7.4
 pytest-cov
-pytest-csv
+pytest-csv~=3.0
 pytest-dotenv
 pytest-logbook
 pytest-mock
