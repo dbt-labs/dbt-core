@@ -67,7 +67,6 @@ from dbt_semantic_interfaces.references import (
     SemanticModelReference,
     TimeDimensionReference,
 )
-from dbt_semantic_interfaces.type_enums import MetricType
 
 from .model_config import (
     NodeConfig,
@@ -91,17 +90,13 @@ from dbt.artifacts.resources import (
     MacroArgument,
     Documentation as DocumentationResource,
     Macro as MacroResource,
-    MetricConfig,
-    MetricInput as MetricInputResource,
-    MetricInputMeasure as MetricInputMeasureResource,
-    MetricTypeParams as MetricTypeParamsResource,
+    Metric as MetricResource,
     NodeVersion,
     Group as GroupResource,
     GraphResource,
     RefArgs as RefArgsResource,
     SavedQuery as SavedQueryResource,
     SourceFileMetadata as SourceFileMetadataResource,
-    WhereFilterIntersection as WhereFilterIntersectionResource,
 )
 
 
@@ -1461,46 +1456,7 @@ class Exposure(GraphNode):
 
 
 @dataclass
-class Metric(GraphNode):
-    name: str
-    description: str
-    label: str
-    type: MetricType
-    type_params: MetricTypeParamsResource
-    filter: Optional[WhereFilterIntersectionResource] = None
-    metadata: Optional[SourceFileMetadataResource] = None
-    resource_type: Literal[NodeType.Metric]
-    meta: Dict[str, Any] = field(default_factory=dict)
-    tags: List[str] = field(default_factory=list)
-    config: MetricConfig = field(default_factory=MetricConfig)
-    unrendered_config: Dict[str, Any] = field(default_factory=dict)
-    sources: List[List[str]] = field(default_factory=list)
-    depends_on: DependsOn = field(default_factory=DependsOn)
-    refs: List[RefArgsResource] = field(default_factory=list)
-    metrics: List[List[str]] = field(default_factory=list)
-    created_at: float = field(default_factory=lambda: time.time())
-    group: Optional[str] = None
-
-    @property
-    def depends_on_nodes(self):
-        return self.depends_on.nodes
-
-    @property
-    def search_name(self):
-        return self.name
-
-    @property
-    def input_measures(self) -> List[MetricInputMeasureResource]:
-        return self.type_params.input_measures
-
-    @property
-    def measure_references(self) -> List[MeasureReference]:
-        return [x.measure_reference() for x in self.input_measures]
-
-    @property
-    def input_metrics(self) -> List[MetricInputResource]:
-        return self.type_params.metrics or []
-
+class Metric(GraphNode, MetricResource):
     def same_description(self, old: "Metric") -> bool:
         return self.description == old.description
 

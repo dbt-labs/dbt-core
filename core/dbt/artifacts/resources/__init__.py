@@ -9,6 +9,7 @@ from dbt.artifacts.resources.v1.group import Group
 from dbt.artifacts.resources.v1.metric import (
     ConstantPropertyInput,
     ConversionTypeParams,
+    Metric,
     MetricConfig,
     MetricInput,
     MetricInputMeasure,

@@ -1,10 +1,22 @@
+import time
+
 from dataclasses import dataclass, field
-from dbt.artifacts.resources.v1.semantic_layer_components import WhereFilterIntersection
+from dbt.artifacts.resources.base import GraphResource
+from dbt.artifacts.resources.types import NodeType
+from dbt.artifacts.resources.v1.components import DependsOn, RefArgs
+from dbt.artifacts.resources.v1.semantic_layer_components import (
+    SourceFileMetadata,
+    WhereFilterIntersection,
+)
 from dbt_common.contracts.config.base import BaseConfig, CompareBehavior
 from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_semantic_interfaces.references import MeasureReference, MetricReference
-from dbt_semantic_interfaces.type_enums import ConversionCalculationType, TimeGranularity
-from typing import List, Optional
+from dbt_semantic_interfaces.type_enums import (
+    ConversionCalculationType,
+    MetricType,
+    TimeGranularity,
+)
+from typing import Any, Dict, List, Literal, Optional
 
 
 @dataclass
@@ -79,3 +91,45 @@ class MetricConfig(BaseConfig):
         default=None,
         metadata=CompareBehavior.Exclude.meta(),
     )
+
+
+@dataclass
+class Metric(GraphResource):
+    name: str
+    description: str
+    label: str
+    type: MetricType
+    type_params: MetricTypeParams
+    filter: Optional[WhereFilterIntersection] = None
+    metadata: Optional[SourceFileMetadata] = None
+    resource_type: Literal[NodeType.Metric]
+    meta: Dict[str, Any] = field(default_factory=dict)
+    tags: List[str] = field(default_factory=list)
+    config: MetricConfig = field(default_factory=MetricConfig)
+    unrendered_config: Dict[str, Any] = field(default_factory=dict)
+    sources: List[List[str]] = field(default_factory=list)
+    depends_on: DependsOn = field(default_factory=DependsOn)
+    refs: List[RefArgs] = field(default_factory=list)
+    metrics: List[List[str]] = field(default_factory=list)
+    created_at: float = field(default_factory=lambda: time.time())
+    group: Optional[str] = None
+
+    @property
+    def depends_on_nodes(self):
+        return self.depends_on.nodes
+
+    @property
+    def search_name(self):
+        return self.name
+
+    @property
+    def input_measures(self) -> List[MetricInputMeasure]:
+        return self.type_params.input_measures
+
+    @property
+    def measure_references(self) -> List[MeasureReference]:
+        return [x.measure_reference() for x in self.input_measures]
+
+    @property
+    def input_metrics(self) -> List[MetricInput]:
+        return self.type_params.metrics or []
