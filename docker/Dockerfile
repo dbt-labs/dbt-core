@@ -17,7 +17,7 @@ FROM --platform=$build_for python:3.10.7-slim-bullseye as base
 # N.B. dbt-postgres is currently found in the core codebase so a value of dbt-core@<some_version> is correct
 
 ARG dbt_core_ref=dbt-core@v1.8.0a1
-ARG dbt_postgres_ref=dbt-core@v1.8.0a1
+ARG dbt_postgres_ref=dbt-postgres@v1.8.0a1
 ARG dbt_redshift_ref=dbt-redshift@v1.8.0a1
 ARG dbt_bigquery_ref=dbt-bigquery@v1.8.0a1
 ARG dbt_snowflake_ref=dbt-snowflake@v1.8.0a1

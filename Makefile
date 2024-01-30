@@ -86,12 +86,12 @@ test: .env ## Runs unit tests with py and code checks against staged changes.
 	$(DOCKER_CMD) pre-commit run mypy-check --hook-stage manual | grep -v "INFO"
 
 .PHONY: integration
-integration: .env ## Runs postgres integration tests with py-integration
+integration: .env ## Runs core integration tests using postgres with py-integration
 	@\
 	$(CI_FLAGS) $(DOCKER_CMD) tox -e py-integration -- -nauto
 
 .PHONY: integration-fail-fast
-integration-fail-fast: .env ## Runs postgres integration tests with py-integration in "fail fast" mode.
+integration-fail-fast: .env ## Runs core integration tests using postgres with py-integration in "fail fast" mode.
 	@\
 	$(DOCKER_CMD) tox -e py-integration -- -x -nauto
 
