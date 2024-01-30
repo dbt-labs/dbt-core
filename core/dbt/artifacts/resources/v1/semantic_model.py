@@ -23,6 +23,15 @@ from dbt.artifacts.resources import SourceFileMetadata
 from typing import Any, Dict, List, Optional, Sequence
 
 
+"""
+The classes in this file are dataclasses which are used to construct the Semantic
+Model node in dbt-core. Additionally, these classes need to at a minimum support
+what is specified in their protocol definitions in dbt-semantic-interfaces.
+Their protocol definitions can be found here:
+https://github.com/dbt-labs/dbt-semantic-interfaces/blob/main/dbt_semantic_interfaces/protocols/semantic_model.py
+"""
+
+
 @dataclass
 class Defaults(dbtClassMixin):
     agg_time_dimension: Optional[str] = None
@@ -38,6 +47,7 @@ class NodeRelation(dbtClassMixin):
 
 # ====================================
 # Dimension objects
+# Dimension protocols: https://github.com/dbt-labs/dbt-semantic-interfaces/blob/main/dbt_semantic_interfaces/protocols/dimension.py
 # ====================================
 
 
@@ -85,6 +95,7 @@ class Dimension(dbtClassMixin):
 
 # ====================================
 # Entity objects
+# Entity protocols: https://github.com/dbt-labs/dbt-semantic-interfaces/blob/main/dbt_semantic_interfaces/protocols/entity.py
 # ====================================
 
 
@@ -108,6 +119,7 @@ class Entity(dbtClassMixin):
 
 # ====================================
 # Measure objects
+# Measure protocols: https://github.com/dbt-labs/dbt-semantic-interfaces/blob/main/dbt_semantic_interfaces/protocols/measure.py
 # ====================================
 
 
