@@ -1,5 +1,6 @@
 import os
 from contextlib import contextmanager
+from datetime import datetime
 from typing import Optional
 from pathlib import Path
 
@@ -12,3 +13,7 @@ def up_one(return_path: Optional[Path] = None):
         yield
     finally:
         os.chdir(return_path or current_path)
+
+
+def is_aware(dt: datetime) -> bool:
+    return dt.tzinfo is not None and dt.tzinfo.utcoffset(dt) is not None
