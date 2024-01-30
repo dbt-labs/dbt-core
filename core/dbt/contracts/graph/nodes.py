@@ -54,13 +54,6 @@ from dbt.node_types import (
     REFABLE_NODE_TYPES,
     VERSIONED_NODE_TYPES,
 )
-from dbt_semantic_interfaces.references import (
-    EntityReference,
-    MeasureReference,
-    LinkableElementReference,
-    SemanticModelReference,
-    TimeDimensionReference,
-)
 
 from .model_config import (
     NodeConfig,
@@ -77,25 +70,19 @@ from .model_config import (
 
 from dbt.artifacts.resources import (
     BaseResource,
-    Defaults as DefaultsResource,
     DependsOn,
-    Dimension as DimensionResource,
     Docs,
-    Entity as EntityResource,
     MacroDependsOn,
     MacroArgument,
-    Measure as MeasureResource,
     Documentation as DocumentationResource,
     Macro as MacroResource,
     Metric as MetricResource,
-    NodeRelation as NodeRelationResource,
     NodeVersion,
     Group as GroupResource,
     GraphResource,
     RefArgs as RefArgsResource,
     SavedQuery as SavedQueryResource,
-    SemanticModelConfig,
-    SourceFileMetadata as SourceFileMetadataResource,
+    SemanticModel as SemanticModelResource,
 )
 
 # =====================================================================
@@ -1516,78 +1503,12 @@ class Group(GroupResource, BaseNode):
 
 
 # ====================================
-# SemanticModel and related classes
+# SemanticModel node
 # ====================================
 
 
 @dataclass
-class SemanticModel(GraphNode):
-    model: str
-    node_relation: Optional[NodeRelationResource]
-    description: Optional[str] = None
-    label: Optional[str] = None
-    defaults: Optional[DefaultsResource] = None
-    entities: Sequence[EntityResource] = field(default_factory=list)
-    measures: Sequence[MeasureResource] = field(default_factory=list)
-    dimensions: Sequence[DimensionResource] = field(default_factory=list)
-    metadata: Optional[SourceFileMetadataResource] = None
-    depends_on: DependsOn = field(default_factory=DependsOn)
-    refs: List[RefArgsResource] = field(default_factory=list)
-    created_at: float = field(default_factory=lambda: time.time())
-    config: SemanticModelConfig = field(default_factory=SemanticModelConfig)
-    unrendered_config: Dict[str, Any] = field(default_factory=dict)
-    primary_entity: Optional[str] = None
-    group: Optional[str] = None
-
-    @property
-    def entity_references(self) -> List[LinkableElementReference]:
-        return [entity.reference for entity in self.entities]
-
-    @property
-    def dimension_references(self) -> List[LinkableElementReference]:
-        return [dimension.reference for dimension in self.dimensions]
-
-    @property
-    def measure_references(self) -> List[MeasureReference]:
-        return [measure.reference for measure in self.measures]
-
-    @property
-    def has_validity_dimensions(self) -> bool:
-        return any([dim.validity_params is not None for dim in self.dimensions])
-
-    @property
-    def validity_start_dimension(self) -> Optional[DimensionResource]:
-        validity_start_dims = [
-            dim for dim in self.dimensions if dim.validity_params and dim.validity_params.is_start
-        ]
-        if not validity_start_dims:
-            return None
-        return validity_start_dims[0]
-
-    @property
-    def validity_end_dimension(self) -> Optional[DimensionResource]:
-        validity_end_dims = [
-            dim for dim in self.dimensions if dim.validity_params and dim.validity_params.is_end
-        ]
-        if not validity_end_dims:
-            return None
-        return validity_end_dims[0]
-
-    @property
-    def partitions(self) -> List[DimensionResource]:  # noqa: D
-        return [dim for dim in self.dimensions or [] if dim.is_partition]
-
-    @property
-    def partition(self) -> Optional[DimensionResource]:
-        partitions = self.partitions
-        if not partitions:
-            return None
-        return partitions[0]
-
-    @property
-    def reference(self) -> SemanticModelReference:
-        return SemanticModelReference(semantic_model_name=self.name)
-
+class SemanticModel(GraphNode, SemanticModelResource):
     @property
     def depends_on_nodes(self):
         return self.depends_on.nodes
@@ -1595,38 +1516,6 @@ class SemanticModel(GraphNode):
     @property
     def depends_on_macros(self):
         return self.depends_on.macros
-
-    def checked_agg_time_dimension_for_measure(
-        self, measure_reference: MeasureReference
-    ) -> TimeDimensionReference:
-        measure: Optional[MeasureResource] = None
-        for measure in self.measures:
-            if measure.reference == measure_reference:
-                measure = measure
-
-        assert (
-            measure is not None
-        ), f"No measure with name ({measure_reference.element_name}) in semantic_model with name ({self.name})"
-
-        default_agg_time_dimension = (
-            self.defaults.agg_time_dimension if self.defaults is not None else None
-        )
-
-        agg_time_dimension_name = measure.agg_time_dimension or default_agg_time_dimension
-        assert agg_time_dimension_name is not None, (
-            f"Aggregation time dimension for measure {measure.name} on semantic model {self.name} is not set! "
-            "To fix this either specify a default `agg_time_dimension` for the semantic model or define an "
-            "`agg_time_dimension` on the measure directly."
-        )
-        return TimeDimensionReference(element_name=agg_time_dimension_name)
-
-    @property
-    def primary_entity_reference(self) -> Optional[EntityReference]:
-        return (
-            EntityReference(element_name=self.primary_entity)
-            if self.primary_entity is not None
-            else None
-        )
 
     def same_model(self, old: "SemanticModel") -> bool:
         return self.model == old.same_model
