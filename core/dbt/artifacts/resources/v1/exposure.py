@@ -7,3 +7,9 @@ class ExposureType(StrEnum):
     Analysis = "analysis"
     ML = "ml"
     Application = "application"
+
+
+class MaturityType(StrEnum):
+    Low = "low"
+    Medium = "medium"
+    High = "high"

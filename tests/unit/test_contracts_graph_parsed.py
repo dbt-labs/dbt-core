@@ -8,6 +8,7 @@ from dbt.artifacts.resources import (
     Dimension,
     Entity,
     ExposureType,
+    MaturityType,
     Measure,
     MetricInputMeasure,
     MetricTypeParams,
@@ -48,7 +49,6 @@ from dbt.contracts.graph.nodes import (
 )
 from dbt.contracts.graph.unparsed import (
     FreshnessThreshold,
-    MaturityType,
     Quoting,
     Time,
     TimePeriod,

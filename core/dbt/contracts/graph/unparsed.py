@@ -19,6 +19,7 @@ from dbt.artifacts.resources import (
     Defaults,
     DimensionValidityParams,
     ExposureType,
+    MaturityType,
     MeasureAggregationParameters,
 )
 from dbt.contracts.util import (
@@ -505,12 +506,6 @@ class Maturity(StrEnum):
         if not isinstance(other, Maturity):
             return NotImplemented
         return self == other or self < other
-
-
-class MaturityType(StrEnum):
-    Low = "low"
-    Medium = "medium"
-    High = "high"
 
 
 @dataclass
