@@ -41,4 +41,5 @@ from dbt.artifacts.resources.v1.semantic_model import (
     MeasureAggregationParameters,
     NodeRelation,
     NonAdditiveDimension,
+    SemanticModelConfig,
 )

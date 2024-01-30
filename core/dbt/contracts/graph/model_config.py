@@ -2,7 +2,11 @@ from dataclasses import field, dataclass
 from typing import Any, List, Optional, Dict, Union, Type
 from typing_extensions import Annotated
 
-from dbt.artifacts.resources import MetricConfig, SavedQueryConfig
+from dbt.artifacts.resources import (
+    MetricConfig,
+    SavedQueryConfig,
+    SemanticModelConfig,
+)
 from dbt_common.contracts.config.base import BaseConfig, MergeBehavior, CompareBehavior
 from dbt_common.contracts.config.materialization import OnConfigurationChangeOption
 from dbt_common.contracts.config.metadata import Metadata, ShowBehavior
@@ -47,19 +51,6 @@ class Hook(dbtClassMixin, Replaceable):
     sql: str
     transaction: bool = True
     index: Optional[int] = None
-
-
-@dataclass
-class SemanticModelConfig(BaseConfig):
-    enabled: bool = True
-    group: Optional[str] = field(
-        default=None,
-        metadata=CompareBehavior.Exclude.meta(),
-    )
-    meta: Dict[str, Any] = field(
-        default_factory=dict,
-        metadata=MergeBehavior.Update.meta(),
-    )
 
 
 @dataclass

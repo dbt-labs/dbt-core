@@ -1,4 +1,5 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from dbt_common.contracts.config.base import BaseConfig, CompareBehavior, MergeBehavior
 from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_semantic_interfaces.references import (
     DimensionReference,
@@ -13,7 +14,7 @@ from dbt_semantic_interfaces.type_enums import (
     TimeGranularity,
 )
 from dbt.artifacts.resources import SourceFileMetadata
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 
 @dataclass
@@ -133,3 +134,21 @@ class Measure(dbtClassMixin):
     @property
     def reference(self) -> MeasureReference:
         return MeasureReference(element_name=self.name)
+
+
+# ====================================
+# SemanticModel final parts
+# ====================================
+
+
+@dataclass
+class SemanticModelConfig(BaseConfig):
+    enabled: bool = True
+    group: Optional[str] = field(
+        default=None,
+        metadata=CompareBehavior.Exclude.meta(),
+    )
+    meta: Dict[str, Any] = field(
+        default_factory=dict,
+        metadata=MergeBehavior.Update.meta(),
+    )

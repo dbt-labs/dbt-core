@@ -71,7 +71,6 @@ from .model_config import (
     ExposureConfig,
     EmptySnapshotConfig,
     SnapshotConfig,
-    SemanticModelConfig,
     UnitTestConfig,
     UnitTestNodeConfig,
 )
@@ -95,6 +94,7 @@ from dbt.artifacts.resources import (
     GraphResource,
     RefArgs as RefArgsResource,
     SavedQuery as SavedQueryResource,
+    SemanticModelConfig,
     SourceFileMetadata as SourceFileMetadataResource,
 )
 
