@@ -165,7 +165,7 @@ class WritableManifest(ArtifactMixin):
         """This overrides the "upgrade_schema_version" call in VersionedSchema (via
         ArtifactMixin) to modify the dictionary passed in from earlier versions of the manifest."""
         manifest_schema_version = get_artifact_schema_version(data)
-        if manifest_schema_version <= 10:
+        if manifest_schema_version < cls.dbt_schema_version.version:
             data = upgrade_manifest_json(data, manifest_schema_version)
         return cls.from_dict(data)
 
