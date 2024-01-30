@@ -3,7 +3,11 @@ from dbt.artifacts.resources.base import BaseResource, GraphResource
 # alias to latest resource definitions
 from dbt.artifacts.resources.v1.components import DependsOn, NodeVersion, RefArgs
 from dbt.artifacts.resources.v1.documentation import Documentation
-from dbt.artifacts.resources.v1.exposure import ExposureType, MaturityType
+from dbt.artifacts.resources.v1.exposure import (
+    ExposureConfig,
+    ExposureType,
+    MaturityType,
+)
 from dbt.artifacts.resources.v1.macro import Macro, MacroDependsOn, MacroArgument
 from dbt.artifacts.resources.v1.docs import Docs
 from dbt.artifacts.resources.v1.group import Group

@@ -33,6 +33,7 @@ from dbt.artifacts.resources import (
     Entity,
     Export,
     ExportConfig,
+    ExposureConfig,
     Measure,
     MetricConfig,
     MetricInput,
@@ -49,7 +50,6 @@ from dbt_common.exceptions import DbtInternalError
 from dbt.exceptions import YamlParseDictError, JSONValidationError
 from dbt.context.providers import generate_parse_exposure, generate_parse_semantic_models
 
-from dbt.contracts.graph.model_config import ExposureConfig
 from dbt.context.context_config import (
     BaseContextConfigGenerator,
     ContextConfigGenerator,

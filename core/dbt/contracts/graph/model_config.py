@@ -3,6 +3,7 @@ from typing import Any, List, Optional, Dict, Union, Type
 from typing_extensions import Annotated
 
 from dbt.artifacts.resources import (
+    ExposureConfig,
     MetricConfig,
     SavedQueryConfig,
     SemanticModelConfig,
@@ -51,11 +52,6 @@ class Hook(dbtClassMixin, Replaceable):
     sql: str
     transaction: bool = True
     index: Optional[int] = None
-
-
-@dataclass
-class ExposureConfig(BaseConfig):
-    enabled: bool = True
 
 
 @dataclass

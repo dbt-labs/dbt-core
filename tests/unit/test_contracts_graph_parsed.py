@@ -7,6 +7,7 @@ from hypothesis.strategies import builds, lists
 from dbt.artifacts.resources import (
     Dimension,
     Entity,
+    ExposureConfig,
     ExposureType,
     MaturityType,
     Measure,
@@ -23,7 +24,6 @@ from dbt.contracts.graph.model_config import (
     TestConfig,
     SnapshotConfig,
     SourceConfig,
-    ExposureConfig,
     EmptySnapshotConfig,
     Hook,
 )
