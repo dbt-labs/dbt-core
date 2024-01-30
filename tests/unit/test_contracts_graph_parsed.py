@@ -7,6 +7,7 @@ from hypothesis.strategies import builds, lists
 from dbt.artifacts.resources import (
     Dimension,
     Entity,
+    ExposureType,
     Measure,
     MetricInputMeasure,
     MetricTypeParams,
@@ -46,7 +47,6 @@ from dbt.contracts.graph.nodes import (
     SemanticModel,
 )
 from dbt.contracts.graph.unparsed import (
-    ExposureType,
     FreshnessThreshold,
     MaturityType,
     Quoting,

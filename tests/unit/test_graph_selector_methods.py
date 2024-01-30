@@ -29,13 +29,13 @@ from dbt.contracts.graph.nodes import (
 )
 from dbt.contracts.graph.manifest import Manifest, ManifestMetadata
 from dbt.artifacts.resources import (
+    ExposureType,
     MetricInputMeasure,
     MetricTypeParams,
     NodeRelation,
     QueryParams,
 )
 from dbt.contracts.graph.unparsed import (
-    ExposureType,
     Owner,
     UnitTestInputFixture,
     UnitTestOutputFixture,

@@ -27,6 +27,7 @@ from dbt.contracts.graph.nodes import (
     Group,
 )
 from dbt.artifacts.resources import (
+    ExposureType,
     MetricInputMeasure,
     MetricTypeParams,
     RefArgs,
@@ -34,7 +35,6 @@ from dbt.artifacts.resources import (
     WhereFilterIntersection,
 )
 from dbt.contracts.graph.unparsed import (
-    ExposureType,
     Owner,
     MaturityType,
 )

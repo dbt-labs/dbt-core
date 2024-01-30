@@ -31,7 +31,6 @@ from dbt_common.dataclass_schema import dbtClassMixin, ExtensibleDbtClassMixin
 from dbt_common.clients.system import write_file
 from dbt.contracts.files import FileHash
 from dbt.contracts.graph.unparsed import (
-    ExposureType,
     ExternalTable,
     FreshnessThreshold,
     HasYamlMetadata,
@@ -85,6 +84,7 @@ from dbt.artifacts.resources import (
     BaseResource,
     DependsOn,
     Docs,
+    ExposureType,
     MacroDependsOn,
     MacroArgument,
     Documentation as DocumentationResource,

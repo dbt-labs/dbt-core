@@ -18,6 +18,7 @@ from dbt.node_types import NodeType
 from dbt.artifacts.resources import (
     Defaults,
     DimensionValidityParams,
+    ExposureType,
     MeasureAggregationParameters,
 )
 from dbt.contracts.util import (
@@ -504,14 +505,6 @@ class Maturity(StrEnum):
         if not isinstance(other, Maturity):
             return NotImplemented
         return self == other or self < other
-
-
-class ExposureType(StrEnum):
-    Dashboard = "dashboard"
-    Notebook = "notebook"
-    Analysis = "analysis"
-    ML = "ml"
-    Application = "application"
 
 
 class MaturityType(StrEnum):
