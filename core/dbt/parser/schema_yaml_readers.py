@@ -43,7 +43,7 @@ from dbt.artifacts.resources import (
     QueryParams,
     SavedQueryConfig,
     WhereFilter,
-    WhereFilterIntersection
+    WhereFilterIntersection,
 )
 from dbt_common.exceptions import DbtInternalError
 from dbt.exceptions import YamlParseDictError, JSONValidationError
