@@ -13,11 +13,13 @@ from typing import (
     Iterable,
     Mapping,
 )
+
 from typing_extensions import Protocol
 
 from dbt.adapters.base.column import Column
 from dbt.artifacts.resources import NodeVersion, RefArgs
 from dbt_common.clients.jinja import MacroProtocol
+from dbt_common.context import get_invocation_context
 from dbt.adapters.factory import get_adapter, get_adapter_package_names, get_adapter_type_names
 from dbt_common.clients import agate_helper
 from dbt.clients.jinja import get_rendered, MacroGenerator, MacroStack, UnitTestMacroGenerator
@@ -1353,8 +1355,11 @@ class ProviderContext(ManifestContext):
         return_value = None
         if var.startswith(SECRET_ENV_PREFIX):
             raise SecretEnvVarLocationError(var)
-        if var in os.environ:
-            return_value = os.environ[var]
+
+        env = get_invocation_context().env
+
+        if var in env:
+            return_value = env[var]
         elif default is not None:
             return_value = default
 
@@ -1373,7 +1378,7 @@ class ProviderContext(ManifestContext):
                 # reparsing. If the default changes, the file will have been updated and therefore
                 # will be scheduled for reparsing anyways.
                 self.manifest.env_vars[var] = (
-                    return_value if var in os.environ else DEFAULT_ENV_PLACEHOLDER
+                    return_value if var in env else DEFAULT_ENV_PLACEHOLDER
                 )
 
                 # hooks come from dbt_project.yml which doesn't have a real file_id
@@ -1793,8 +1798,10 @@ class TestContext(ProviderContext):
         return_value = None
         if var.startswith(SECRET_ENV_PREFIX):
             raise SecretEnvVarLocationError(var)
-        if var in os.environ:
-            return_value = os.environ[var]
+
+        env = get_invocation_context().env
+        if var in env:
+            return_value = env[var]
         elif default is not None:
             return_value = default
 
@@ -1806,7 +1813,7 @@ class TestContext(ProviderContext):
                 # reparsing. If the default changes, the file will have been updated and therefore
                 # will be scheduled for reparsing anyways.
                 self.manifest.env_vars[var] = (
-                    return_value if var in os.environ else DEFAULT_ENV_PLACEHOLDER
+                    return_value if var in env else DEFAULT_ENV_PLACEHOLDER
                 )
                 # the "model" should only be test nodes, but just in case, check
                 # TODO CT-211

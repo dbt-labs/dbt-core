@@ -3,7 +3,6 @@ import dbt_common.ui
 
 import json
 import logging
-import os
 import sys
 import time
 import warnings
@@ -12,7 +11,8 @@ from datetime import datetime
 from typing import Optional, List, ContextManager, Callable, Dict, Any, Set
 
 import logbook
-from dbt.constants import SECRET_ENV_PREFIX
+
+from dbt_common.context import get_invocation_context
 from dbt_common.dataclass_schema import dbtClassMixin
 
 STDOUT_LOG_FORMAT = "{record.message}"
@@ -20,7 +20,7 @@ DEBUG_LOG_FORMAT = "{record.time:%Y-%m-%d %H:%M:%S.%f%z} ({record.thread_name}):
 
 
 def get_secret_env() -> List[str]:
-    return [v for k, v in os.environ.items() if k.startswith(SECRET_ENV_PREFIX)]
+    return get_invocation_context().env_secrets
 
 
 ExceptionInformation = str
