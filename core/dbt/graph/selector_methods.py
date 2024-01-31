@@ -735,7 +735,7 @@ class StateSelectorMethod(SelectorMethod):
             elif unique_id in manifest.sources:
                 previous_node = manifest.sources[unique_id]
             elif unique_id in manifest.exposures:
-                previous_node = manifest.exposures[unique_id]
+                previous_node = Exposure.from_resource(manifest.exposures[unique_id])
             elif unique_id in manifest.metrics:
                 previous_node = Metric.from_resource(manifest.metrics[unique_id])
             elif unique_id in manifest.semantic_models:

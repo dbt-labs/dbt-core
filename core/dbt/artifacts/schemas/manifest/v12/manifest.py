@@ -11,6 +11,7 @@ from dbt.artifacts.schemas.base import (
 from dbt.artifacts.schemas.upgrades import upgrade_manifest_json
 from dbt.artifacts.resources import (
     Documentation,
+    Exposure,
     Group,
     Macro,
     Metric,
@@ -22,7 +23,6 @@ from dbt.artifacts.resources import (
 from dbt import tracking
 from dbt.flags import get_flags
 from dbt.contracts.graph.nodes import (
-    Exposure,
     GraphMemberNode,
     ManifestNode,
     SourceDefinition,

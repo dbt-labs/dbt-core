@@ -4,6 +4,7 @@ from dbt.artifacts.resources.base import BaseResource, GraphResource
 from dbt.artifacts.resources.v1.components import DependsOn, NodeVersion, RefArgs
 from dbt.artifacts.resources.v1.documentation import Documentation
 from dbt.artifacts.resources.v1.exposure import (
+    Exposure,
     ExposureConfig,
     ExposureType,
     MaturityType,

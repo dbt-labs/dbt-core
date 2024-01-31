@@ -34,7 +34,6 @@ from dbt.contracts.graph.unparsed import (
     ExternalTable,
     FreshnessThreshold,
     HasYamlMetadata,
-    Owner,
     Quoting,
     TestDef,
     UnparsedSourceDefinition,
@@ -82,11 +81,9 @@ from dbt.artifacts.resources import (
     BaseResource,
     DependsOn,
     Docs,
-    ExposureConfig,
-    ExposureType,
+    Exposure as ExposureResource,
     MacroDependsOn,
     MacroArgument,
-    MaturityType,
     Documentation as DocumentationResource,
     Macro as MacroResource,
     Metric as MetricResource,
@@ -1378,24 +1375,7 @@ class SourceDefinition(NodeInfoMixin, ParsedSourceMandatory):
 
 
 @dataclass
-class Exposure(GraphNode[GraphResource]):
-    type: ExposureType
-    owner: Owner
-    resource_type: Literal[NodeType.Exposure]
-    description: str = ""
-    label: Optional[str] = None
-    maturity: Optional[MaturityType] = None
-    meta: Dict[str, Any] = field(default_factory=dict)
-    tags: List[str] = field(default_factory=list)
-    config: ExposureConfig = field(default_factory=ExposureConfig)
-    unrendered_config: Dict[str, Any] = field(default_factory=dict)
-    url: Optional[str] = None
-    depends_on: DependsOn = field(default_factory=DependsOn)
-    refs: List[RefArgsResource] = field(default_factory=list)
-    sources: List[List[str]] = field(default_factory=list)
-    metrics: List[List[str]] = field(default_factory=list)
-    created_at: float = field(default_factory=lambda: time.time())
-
+class Exposure(GraphNode[ExposureResource], ExposureResource):
     @property
     def depends_on_nodes(self):
         return self.depends_on.nodes
