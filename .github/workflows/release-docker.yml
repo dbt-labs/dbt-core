@@ -44,7 +44,7 @@ jobs:
         id: tags
         uses: ./.github/actions/latest-wrangler
         with:
-          package: ${{ inputs.package }}
+          package_name: ${{ inputs.package }}
           new_version: ${{ inputs.version_number }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
 

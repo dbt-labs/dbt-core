@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Tuple
 
 
 def main():
-    package_name: str = os.environ["INPUT_PACKAGE"]
+    package_name: str = os.environ["INPUT_PACKAGE_NAME"]
     new_version: Version = parse(os.environ["INPUT_NEW_VERSION"])
     github_token: str = os.environ["INPUT_GITHUB_TOKEN"]
 
