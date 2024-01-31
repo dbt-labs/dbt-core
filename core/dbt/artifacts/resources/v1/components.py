@@ -1,7 +1,10 @@
 from dataclasses import dataclass, field
 from dbt.artifacts.resources.v1.macro import MacroDependsOn
-from dbt_common.dataclass_schema import dbtClassMixin
-from typing import Dict, List, Optional, Union
+from dbt_common.contracts.config.properties import AdditionalPropertiesMixin
+from dbt_common.contracts.constraints import ColumnLevelConstraint
+from dbt_common.contracts.util import Replaceable
+from dbt_common.dataclass_schema import dbtClassMixin, ExtensibleDbtClassMixin
+from typing import Any, Dict, List, Optional, Union
 
 
 NodeVersion = Union[str, float]
@@ -35,3 +38,17 @@ class RefArgs(dbtClassMixin):
             return {"version": self.version}
         else:
             return {}
+
+
+@dataclass
+class ColumnInfo(AdditionalPropertiesMixin, ExtensibleDbtClassMixin, Replaceable):
+    """Used in all ManifestNodes and SourceDefinition"""
+
+    name: str
+    description: str = ""
+    meta: Dict[str, Any] = field(default_factory=dict)
+    data_type: Optional[str] = None
+    constraints: List[ColumnLevelConstraint] = field(default_factory=list)
+    quote: Optional[bool] = None
+    tags: List[str] = field(default_factory=list)
+    _extra: Dict[str, Any] = field(default_factory=dict)

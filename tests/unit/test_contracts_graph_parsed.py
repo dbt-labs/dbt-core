@@ -5,6 +5,7 @@ from hypothesis import given
 from hypothesis.strategies import builds, lists
 
 from dbt.artifacts.resources import (
+    ColumnInfo,
     Dimension,
     Entity,
     ExposureConfig,
@@ -31,7 +32,6 @@ from dbt.contracts.graph.model_config import (
 from dbt.contracts.graph.nodes import (
     ModelNode,
     DependsOn,
-    ColumnInfo,
     GenericTestNode,
     SnapshotNode,
     IntermediateSnapshotNode,

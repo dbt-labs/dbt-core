@@ -22,11 +22,10 @@ from typing import (
 
 from dbt import deprecations
 from dbt_common.contracts.constraints import (
-    ColumnLevelConstraint,
     ConstraintType,
     ModelLevelConstraint,
 )
-from dbt_common.dataclass_schema import dbtClassMixin, ExtensibleDbtClassMixin
+from dbt_common.dataclass_schema import dbtClassMixin
 
 from dbt_common.clients.system import write_file
 from dbt.contracts.files import FileHash
@@ -46,7 +45,6 @@ from dbt.contracts.graph.unparsed import (
 )
 from dbt.contracts.graph.node_args import ModelNodeArgs
 from dbt.contracts.util import Replaceable
-from dbt_common.contracts.config.properties import AdditionalPropertiesMixin
 from dbt_common.events.functions import warn_or_error
 from dbt.exceptions import ParsingError, ContractBreakingChangeError, ValidationError
 from dbt.events.types import (
@@ -79,6 +77,7 @@ from .model_config import (
 
 from dbt.artifacts.resources import (
     BaseResource,
+    ColumnInfo as ColumnInfoResource,
     DependsOn,
     Docs,
     Exposure as ExposureResource,
@@ -175,20 +174,6 @@ class GraphNode(GraphResource, BaseNode[ResourceTypeT], Generic[ResourceTypeT]):
 
 
 @dataclass
-class ColumnInfo(AdditionalPropertiesMixin, ExtensibleDbtClassMixin, Replaceable):
-    """Used in all ManifestNodes and SourceDefinition"""
-
-    name: str
-    description: str = ""
-    meta: Dict[str, Any] = field(default_factory=dict)
-    data_type: Optional[str] = None
-    constraints: List[ColumnLevelConstraint] = field(default_factory=list)
-    quote: Optional[bool] = None
-    tags: List[str] = field(default_factory=list)
-    _extra: Dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass
 class Contract(dbtClassMixin, Replaceable):
     enforced: bool = False
     alias_types: bool = True
@@ -280,7 +265,7 @@ class NodeInfoMixin:
 class ParsedNode(NodeInfoMixin, ParsedNodeMandatory, SerializableType):
     tags: List[str] = field(default_factory=list)
     description: str = field(default="")
-    columns: Dict[str, ColumnInfo] = field(default_factory=dict)
+    columns: Dict[str, ColumnInfoResource] = field(default_factory=dict)
     meta: Dict[str, Any] = field(default_factory=dict)
     group: Optional[str] = None
     docs: Docs = field(default_factory=Docs)
@@ -1264,7 +1249,7 @@ class SourceDefinition(NodeInfoMixin, ParsedSourceMandatory):
     freshness: Optional[FreshnessThreshold] = None
     external: Optional[ExternalTable] = None
     description: str = ""
-    columns: Dict[str, ColumnInfo] = field(default_factory=dict)
+    columns: Dict[str, ColumnInfoResource] = field(default_factory=dict)
     meta: Dict[str, Any] = field(default_factory=dict)
     source_meta: Dict[str, Any] = field(default_factory=dict)
     tags: List[str] = field(default_factory=list)
@@ -1657,7 +1642,7 @@ class ParsedPatch(HasYamlMetadata, Replaceable):
 # may be empty.
 @dataclass
 class ParsedNodePatch(ParsedPatch):
-    columns: Dict[str, ColumnInfo]
+    columns: Dict[str, ColumnInfoResource]
     access: Optional[str]
     version: Optional[NodeVersion]
     latest_version: Optional[NodeVersion]
