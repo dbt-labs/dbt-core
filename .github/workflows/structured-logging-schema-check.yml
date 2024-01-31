@@ -72,6 +72,12 @@ jobs:
       - name: Run integration tests
         run: tox -e integration -- -nauto
 
+      - name: Archive code coverage results
+        uses: actions/upload-artifact@v4
+        with:
+          name: dbt-log
+          path: dbt-core/dbt-core/logs/dbt.log
+
       # apply our schema tests to every log event from the previous step
       # skips any output that isn't valid json
       - uses: actions-rs/cargo@v1
