@@ -29,6 +29,10 @@ on:
       version_number:
         description: The version number to release as a SemVer (e.g. 1.0.0b1, without `latest` or `v`)
         required: true
+      dry_run:
+        description: Dry Run (don't publish)
+        type: boolean
+        default: false
 
 jobs:
   version_metadata:
@@ -86,7 +90,7 @@ jobs:
           echo Build Arg Value:  ${{ steps.build_arg.outputs.value }}
 
       - name: Build and push `${{ inputs.package }}`
-        if: success() && failure()
+        if: ${{ !inputs.dry_run }}
         uses: docker/build-push-action@v5
         with:
           file: docker/Dockerfile
