@@ -397,7 +397,7 @@ def logs_dir(request, prefix):
 
 
 # This fixture is for customizing tests that need overrides in adapter
-# repos. Example in dbt.tests.adapter.basic.test_base.
+# repos. Example in tests.functional.adapter.basic.test_base.
 @pytest.fixture(scope="class")
 def test_config():
     return {}
