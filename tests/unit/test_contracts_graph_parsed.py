@@ -13,6 +13,7 @@ from dbt.artifacts.resources import (
     Measure,
     MetricInputMeasure,
     MetricTypeParams,
+    Owner,
     RefArgs,
 )
 from dbt.node_types import NodeType, AccessType
@@ -43,7 +44,6 @@ from dbt.contracts.graph.nodes import (
     SourceDefinition,
     Documentation,
     HookNode,
-    Owner,
     TestMetadata,
     SemanticModel,
 )

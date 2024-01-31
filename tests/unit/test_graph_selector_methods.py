@@ -33,10 +33,10 @@ from dbt.artifacts.resources import (
     MetricInputMeasure,
     MetricTypeParams,
     NodeRelation,
+    Owner,
     QueryParams,
 )
 from dbt.contracts.graph.unparsed import (
-    Owner,
     UnitTestInputFixture,
     UnitTestOutputFixture,
 )

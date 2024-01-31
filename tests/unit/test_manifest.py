@@ -31,11 +31,11 @@ from dbt.artifacts.resources import (
     MaturityType,
     MetricInputMeasure,
     MetricTypeParams,
+    Owner,
     RefArgs,
     WhereFilter,
     WhereFilterIntersection,
 )
-from dbt.contracts.graph.unparsed import Owner
 import dbt_common.invocation
 from dbt_common.events.functions import reset_metadata_vars
 from dbt.exceptions import AmbiguousResourceNameRefError
