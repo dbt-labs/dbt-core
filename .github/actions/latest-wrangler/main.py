@@ -17,7 +17,7 @@ def main():
 
 
 def _package_metadata(package_name: str, github_token: str) -> requests.Response:
-    url = (f"https://api.github.com/orgs/dbt-labs/packages/container/{package_name}/versions",)
+    url = f"https://api.github.com/orgs/dbt-labs/packages/container/{package_name}/versions"
     return requests.get(url, auth=("", github_token))
 
 
