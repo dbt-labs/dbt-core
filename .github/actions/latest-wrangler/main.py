@@ -1,7 +1,8 @@
 import os
 from packaging.version import Version, parse
 import requests
-from typing import Any, Dict, List, Tuple
+import sys
+from typing import List
 
 
 def main():
@@ -9,28 +10,22 @@ def main():
     new_version: Version = parse(os.environ["INPUT_NEW_VERSION"])
     github_token: str = os.environ["INPUT_GITHUB_TOKEN"]
 
-    package_metadata, status_code = _package_metadata(package_name, github_token)
-    _process_status_code(status_code, package_metadata["message"])
-    published_versions = _published_versions(package_metadata)
+    response = _package_metadata(package_name, github_token)
+    published_versions = _published_versions(response)
     new_version_tags = _new_version_tags(new_version, published_versions)
     _register_tags(new_version_tags, package_name)
 
 
-def _package_metadata(package_name: str, github_token: str) -> Tuple[Dict[Any, Any], int]:
-    # get package metadata from github
-    package_request = requests.get(
-        f"https://api.github.com/orgs/dbt-labs/packages/container/{package_name}/versions",
-        auth=("", github_token),
-    )
-    package_meta = package_request.json()
-    status_code = package_request.status_code
-    return package_meta, status_code
+def _package_metadata(package_name: str, github_token: str) -> requests.Response:
+    url = (f"https://api.github.com/orgs/dbt-labs/packages/container/{package_name}/versions",)
+    return requests.get(url, auth=("", github_token))
 
 
-def _published_versions(package_meta) -> List[Version]:
+def _published_versions(response: requests.Response) -> List[Version]:
+    package_metadata = response.json()
     return [
         parse(tag)
-        for version in package_meta
+        for version in package_metadata
         for tag in version["metadata"]["container"]["tags"]
         if "latest" not in tag
     ]
@@ -62,13 +57,14 @@ def _register_tags(tags: List[str], package_name: str) -> None:
     fully_qualified_tags = ",".join([f"ghcr.io/dbt-labs/{package_name}:{tag}" for tag in tags])
     github_output = os.environ.get("GITHUB_OUTPUT")
     with open(github_output, "at", encoding="utf-8") as gh_output:
-        print(f"Registering {fully_qualified_tags}")
         gh_output.write(f"fully_qualified_tags={fully_qualified_tags}")
 
 
-def _process_status_code(status_code: int, message: str) -> None:
-    if status_code != 200:
-        print(f"Call to GH API failed: {status_code} {message}")
+def _validate_response(response: requests.Response) -> None:
+    message = response["message"]
+    if response.status_code != 200:
+        print(f"Call to GitHub API failed: {response.status_code} - {message}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
