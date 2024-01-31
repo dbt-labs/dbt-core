@@ -66,16 +66,28 @@ class MacroParser(BaseParser[Macro]):
                 e.add_node(base_node)
                 raise
 
-            macro_nodes = list(ast.find_all(jinja2.nodes.Macro))
+            if (
+                isinstance(ast, jinja2.nodes.Template)
+                and hasattr(ast, "body")
+                and len(ast.body) == 1
+                and isinstance(ast.body[0], jinja2.nodes.Macro)
+            ):
+                # If the top level node in the Template is a Macro, things look
+                # good and this is much faster than traversing the full ast, as
+                # in the following else clause. It's not clear if that traversal
+                # is ever really needed.
+                macro = ast.body[0]
+            else:
+                macro_nodes = list(ast.find_all(jinja2.nodes.Macro))
 
-            if len(macro_nodes) != 1:
-                # things have gone disastrously wrong, we thought we only
-                # parsed one block!
-                raise ParsingError(
-                    f"Found multiple macros in {block.full_block}, expected 1", node=base_node
-                )
+                if len(macro_nodes) != 1:
+                    # things have gone disastrously wrong, we thought we only
+                    # parsed one block!
+                    raise ParsingError(
+                        f"Found multiple macros in {block.full_block}, expected 1", node=base_node
+                    )
 
-            macro = macro_nodes[0]
+                macro = macro_nodes[0]
 
             if not macro.name.startswith(MACRO_PREFIX):
                 continue

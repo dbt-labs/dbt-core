@@ -12,6 +12,7 @@ from dbt.parser.manifest import ManifestLoader
 from dbt_common.exceptions import CompilationError, DbtDatabaseError
 from dbt.context.providers import generate_runtime_macro_context
 import dbt.flags as flags
+from dbt_common.tests import enable_test_caching
 from dbt.config.runtime import RuntimeConfig
 from dbt.adapters.factory import get_adapter, register_adapter, reset_adapters, get_adapter_by_type
 from dbt_common.events.event_manager_client import cleanup_event_logger
@@ -517,6 +518,7 @@ def project(
     # Logbook warnings are ignored so we don't have to fork logbook to support python 3.10.
     # This _only_ works for tests in `tests/` that use the project fixture.
     warnings.filterwarnings("ignore", category=DeprecationWarning, module="logbook")
+    enable_test_caching()
     log_flags = Namespace(
         LOG_PATH=logs_dir,
         LOG_FORMAT="json",
