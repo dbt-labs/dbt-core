@@ -76,7 +76,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: dbt-log
-          path: dbt-core/dbt-core/logs/dbt.log
+          path: dbt-core/logs/dbt.log
 
       # apply our schema tests to every log event from the previous step
       # skips any output that isn't valid json
