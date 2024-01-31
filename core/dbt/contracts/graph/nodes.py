@@ -148,6 +148,10 @@ class BaseNode(BaseResource):
     def get_materialization(self):
         return self.config.materialized
 
+    @classmethod
+    def from_resource(cls, resource_instance: BaseResource):
+        return cls.from_dict(resource_instance.to_dict())
+
 
 @dataclass
 class GraphNode(GraphResource, BaseNode):
