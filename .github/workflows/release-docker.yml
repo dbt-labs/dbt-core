@@ -16,10 +16,18 @@ on:
   workflow_dispatch:
     inputs:
       package:
-        description: The package to release. _One_ of [dbt-core, dbt-redshift, dbt-bigquery, dbt-snowflake, dbt-spark, dbt-postgres]
+        description: The package to release
+        type: choice
+        options:
+          - dbt-core
+          - dbt-bigquery
+          - dbt-postgres
+          - dbt-redshift
+          - dbt-snowflake
+          - dbt-spark
         required: true
       version_number:
-        description: The release version number (i.e. 1.0.0b1). Do not include `latest` tags or a leading `v`!
+        description: The version number to release as a SemVer (e.g. 1.0.0b1, without `latest` or `v`)
         required: true
 
 jobs:
@@ -68,7 +76,17 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push `${{ inputs.package }}:${{ tag }}`
+      - name: Log publishing configuration
+        shell: bash
+        run: |
+          echo Package:          ${{ inputs.package }}
+          echo Version:          ${{ inputs.version_number }}
+          echo Tags:             ${{ needs.version_metadata.outputs.fully_qualified_tags }}
+          echo Build Arg Name:   ${{ steps.build_arg.outputs.name }}
+          echo Build Arg Value:  ${{ steps.build_arg.outputs.value }}
+
+      - name: Build and push `${{ inputs.package }}`
+        if: success() && failure()
         uses: docker/build-push-action@v5
         with:
           file: docker/Dockerfile
