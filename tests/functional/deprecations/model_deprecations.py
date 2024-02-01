@@ -53,7 +53,7 @@ class TestModelDeprecationWarning:
             run_dbt(["--warn-error-options", '{"include": ["DeprecatedModel"]}', "parse"])
 
 
-class TestReferenceDeprecatingWarning:
+class TestUpcomingReferenceDeprecatingWarning:
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -81,7 +81,7 @@ class TestReferenceDeprecatingWarning:
             )
 
 
-class TestReferenceDeprecatedWarning:
+class TestDeprecatedReferenceWarning:
     @pytest.fixture(scope="class")
     def models(self):
         return {

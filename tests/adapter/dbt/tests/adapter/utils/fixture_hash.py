@@ -37,7 +37,7 @@ models__test_hash_yml = """
 version: 2
 models:
   - name: test_hash
-    tests:
+    data_tests:
       - assert_equal:
           actual: actual
           expected: expected

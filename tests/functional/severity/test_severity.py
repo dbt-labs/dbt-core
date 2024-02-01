@@ -16,14 +16,14 @@ sources:
       - name: sample_seed
         columns:
           - name: email
-            tests:
+            data_tests:
               - not_null:
                   severity: "{{ 'error' if var('strict', false) else 'warn' }}"
 models:
   - name: sample_model
     columns:
       - name: email
-        tests:
+        data_tests:
           - not_null:
               severity: "{{ 'error' if var('strict', false) else 'warn' }}"
 """

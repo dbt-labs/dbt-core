@@ -55,7 +55,7 @@ models__test_bool_or_yml = """
 version: 2
 models:
   - name: test_bool_or
-    tests:
+    data_tests:
       - assert_equal:
           actual: actual
           expected: expected

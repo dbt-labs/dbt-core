@@ -6,7 +6,6 @@ from unittest.mock import MagicMock, patch
 
 from dbt.adapters.postgres import Plugin as PostgresPlugin
 from dbt.adapters.factory import reset_adapters, register_adapter
-import dbt.common.clients.system
 import dbt.compilation
 import dbt.exceptions
 import dbt.flags
@@ -17,6 +16,7 @@ import dbt.parser.manifest
 from dbt import tracking
 from dbt.contracts.files import SourceFile, FileHash, FilePath
 from dbt.contracts.graph.manifest import MacroManifest, ManifestStateCheck
+from dbt.contracts.project import ProjectFlags
 from dbt.graph import NodeSelector, parse_difference
 from dbt.events.logging import setup_event_logger
 from dbt.mp_context import get_mp_context
@@ -131,7 +131,7 @@ class GraphTest(unittest.TestCase):
         cfg.update(extra_cfg)
 
         config = config_from_parts_or_dicts(project=cfg, profile=self.profile)
-        dbt.flags.set_from_args(Namespace(), config)
+        dbt.flags.set_from_args(Namespace(), ProjectFlags())
         setup_event_logger(dbt.flags.get_flags())
         object.__setattr__(dbt.flags.get_flags(), "PARTIAL_PARSE", False)
         return config

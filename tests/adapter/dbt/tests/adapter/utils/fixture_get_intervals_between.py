@@ -13,7 +13,7 @@ models__test_get_intervals_between_yml = """
 version: 2
 models:
   - name: test_get_intervals_between
-    tests:
+    data_tests:
       - assert_equal:
           actual: intervals
           expected: expected

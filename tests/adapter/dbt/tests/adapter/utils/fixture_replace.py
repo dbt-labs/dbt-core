@@ -32,7 +32,7 @@ models__test_replace_yml = """
 version: 2
 models:
   - name: test_replace
-    tests:
+    data_tests:
       - assert_equal:
           actual: actual
           expected: expected

@@ -2,7 +2,7 @@ from typing import Any, Dict, Iterable, Union, Optional, List, Iterator, Mapping
 
 from dbt.clients.jinja import MacroGenerator, MacroStack
 from dbt.contracts.graph.nodes import Macro
-from dbt.adapters.include.global_project import PROJECT_NAME as GLOBAL_PROJECT_NAME
+from dbt.include.global_project import PROJECT_NAME as GLOBAL_PROJECT_NAME
 from dbt.exceptions import DuplicateMacroNameError, PackageNotFoundForMacroError
 
 
@@ -67,7 +67,6 @@ class MacroNamespace(Mapping):
         raise KeyError(key)
 
     def get_from_package(self, package_name: Optional[str], name: str) -> Optional[MacroGenerator]:
-        pkg: FlatNamespace
         if package_name is None:
             return self.get(name)
         elif package_name == GLOBAL_PROJECT_NAME:
@@ -125,7 +124,7 @@ class MacroNamespaceBuilder:
             raise DuplicateMacroNameError(macro_func.macro, macro, macro.package_name)
         hierarchy[macro.package_name][macro.name] = macro_func
 
-    def add_macro(self, macro: Macro, ctx: Dict[str, Any]):
+    def add_macro(self, macro: Macro, ctx: Dict[str, Any]) -> None:
         macro_name: str = macro.name
 
         # MacroGenerator is in clients/jinja.py
@@ -147,12 +146,15 @@ class MacroNamespaceBuilder:
             elif macro.package_name == self.root_package:
                 self.globals[macro_name] = macro_func
 
-    def add_macros(self, macros: Iterable[Macro], ctx: Dict[str, Any]):
+    def add_macros(self, macros: Iterable[Macro], ctx: Dict[str, Any]) -> None:
         for macro in macros:
             self.add_macro(macro, ctx)
 
-    def build_namespace(self, macros: Iterable[Macro], ctx: Dict[str, Any]) -> MacroNamespace:
-        self.add_macros(macros, ctx)
+    def build_namespace(
+        self, macros_by_package: Dict[str, Dict[str, Macro]], ctx: Dict[str, Any]
+    ) -> MacroNamespace:
+        for package in macros_by_package.values():
+            self.add_macros(package.values(), ctx)
 
         # Iterate in reverse-order and overwrite: the packages that are first
         # in the list are the ones we want to "win".

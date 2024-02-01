@@ -19,6 +19,8 @@ name: Check Changelog Entry
 on:
   pull_request_target:
     types: [opened, reopened, labeled, unlabeled, synchronize]
+    paths-ignore: ['.changes/**', '.github/**', 'tests/**', '**.md', '**.yml']
+
   workflow_dispatch:
 
 defaults:

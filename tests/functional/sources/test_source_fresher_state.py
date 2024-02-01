@@ -4,7 +4,7 @@ import shutil
 import pytest
 from datetime import datetime, timedelta
 
-from dbt.common.exceptions import DbtInternalError
+from dbt_common.exceptions import DbtInternalError
 
 
 from dbt.tests.util import AnyStringWith, AnyFloat

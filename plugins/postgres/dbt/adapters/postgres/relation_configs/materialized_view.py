@@ -10,7 +10,7 @@ from dbt.adapters.relation_configs import (
     RelationConfigValidationRule,
 )
 from dbt.adapters.contracts.relation import RelationConfig
-from dbt.common.exceptions import DbtRuntimeError
+from dbt_common.exceptions import DbtRuntimeError
 
 from dbt.adapters.postgres.relation_configs.constants import MAX_CHARACTERS_IN_IDENTIFIER
 from dbt.adapters.postgres.relation_configs.index import (

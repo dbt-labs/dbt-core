@@ -13,12 +13,12 @@ from dbt.cli.resolvers import default_log_path, default_project_dir
 from dbt.cli.types import Command as CliCommand
 from dbt.config.project import read_project_flags
 from dbt.contracts.project import ProjectFlags
-from dbt.common import ui
-from dbt.common.events import functions
-from dbt.common.exceptions import DbtInternalError
-from dbt.common.clients import jinja
+from dbt_common import ui
+from dbt_common.events import functions
+from dbt_common.exceptions import DbtInternalError
+from dbt_common.clients import jinja
 from dbt.deprecations import renamed_env_var
-from dbt.common.helper_types import WarnErrorOptions
+from dbt_common.helper_types import WarnErrorOptions
 from dbt.events import ALL_EVENT_NAMES
 
 if os.name != "nt":
@@ -113,6 +113,7 @@ class Flags:
         def _assign_params(
             ctx: Context,
             params_assigned_from_default: set,
+            params_assigned_from_user: set,
             deprecated_env_vars: Dict[str, Callable],
         ):
             """Recursively adds all click params to flag object"""
@@ -178,15 +179,30 @@ class Flags:
                     object.__setattr__(self, flag_name, param_value)
 
                 # Track default assigned params.
-                if is_default:
+                # For flags that are accepted at both 'parent' and 'child' levels,
+                # we need to track user-provided and default values across both,
+                # to support detection of mutually exclusive flags later on.
+                if not is_default:
+                    params_assigned_from_user.add(param_name)
+                    if param_name in params_assigned_from_default:
+                        params_assigned_from_default.remove(param_name)
+                if is_default and param_name not in params_assigned_from_user:
                     params_assigned_from_default.add(param_name)
 
             if ctx.parent:
-                _assign_params(ctx.parent, params_assigned_from_default, deprecated_env_vars)
+                _assign_params(
+                    ctx.parent,
+                    params_assigned_from_default,
+                    params_assigned_from_user,
+                    deprecated_env_vars,
+                )
 
+        params_assigned_from_user = set()  # type: Set[str]
         params_assigned_from_default = set()  # type: Set[str]
         deprecated_env_vars: Dict[str, Callable] = {}
-        _assign_params(ctx, params_assigned_from_default, deprecated_env_vars)
+        _assign_params(
+            ctx, params_assigned_from_default, params_assigned_from_user, deprecated_env_vars
+        )
 
         # Set deprecated_env_var_warnings to be fired later after events have been init.
         object.__setattr__(
@@ -203,7 +219,10 @@ class Flags:
             invoked_subcommand.ignore_unknown_options = True
             invoked_subcommand_ctx = invoked_subcommand.make_context(None, sys.argv)
             _assign_params(
-                invoked_subcommand_ctx, params_assigned_from_default, deprecated_env_vars
+                invoked_subcommand_ctx,
+                params_assigned_from_default,
+                params_assigned_from_user,
+                deprecated_env_vars,
             )
 
         if not project_flags:
@@ -217,8 +236,8 @@ class Flags:
         # Add entire invocation command to flags
         object.__setattr__(self, "INVOCATION_COMMAND", "dbt " + " ".join(sys.argv[1:]))
 
-        # Overwrite default assignments with user config if available.
         if project_flags:
+            # Overwrite default assignments with project flags if available.
             param_assigned_from_default_copy = params_assigned_from_default.copy()
             for param_assigned_from_default in params_assigned_from_default:
                 project_flags_param_value = getattr(
@@ -232,6 +251,13 @@ class Flags:
                     )
                     param_assigned_from_default_copy.remove(param_assigned_from_default)
             params_assigned_from_default = param_assigned_from_default_copy
+
+            # Add project-level flags that are not available as CLI options / env vars
+            for (
+                project_level_flag_name,
+                project_level_flag_value,
+            ) in project_flags.project_only_flags.items():
+                object.__setattr__(self, project_level_flag_name.upper(), project_level_flag_value)
 
         # Set hard coded flags.
         object.__setattr__(self, "WHICH", invoked_subcommand_name or ctx.info_name)
@@ -378,7 +404,11 @@ def command_params(command: CliCommand, args_dict: Dict[str, Any]) -> CommandPar
         if k == "macro" and command == CliCommand.RUN_OPERATION:
             add_fn(v)
         # None is a Singleton, False is a Flyweight, only one instance of each.
-        elif v is None or v is False:
+        elif (v is None or v is False) and k not in (
+            # These are None by default but they do not support --no-{flag}
+            "defer_state",
+            "log_format",
+        ):
             add_fn(f"--no-{spinal_cased}")
         elif v is True:
             add_fn(f"--{spinal_cased}")

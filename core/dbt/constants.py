@@ -1,4 +1,4 @@
-# TODO: remove SECRET_ENV_PREFIX and import from dbt.common
+# TODO: remove SECRET_ENV_PREFIX and import from dbt_common
 SECRET_ENV_PREFIX = "DBT_ENV_SECRET_"
 DEFAULT_ENV_PLACEHOLDER = "DBT_DEFAULT_PLACEHOLDER"
 

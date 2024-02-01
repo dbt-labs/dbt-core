@@ -6141,6 +6141,813 @@
           },
           {
             "type": "object",
+            "title": "UnitTestNode",
+            "properties": {
+              "database": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "schema": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "resource_type": {
+                "const": "unit_test"
+              },
+              "package_name": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "original_file_path": {
+                "type": "string"
+              },
+              "unique_id": {
+                "type": "string"
+              },
+              "fqn": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "alias": {
+                "type": "string"
+              },
+              "checksum": {
+                "type": "object",
+                "title": "FileHash",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "checksum": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "name",
+                  "checksum"
+                ]
+              },
+              "config": {
+                "type": "object",
+                "title": "UnitTestNodeConfig",
+                "properties": {
+                  "_extra": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    }
+                  },
+                  "enabled": {
+                    "type": "boolean",
+                    "default": true
+                  },
+                  "alias": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "schema": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "database": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "tags": {
+                    "anyOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "meta": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    }
+                  },
+                  "group": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "materialized": {
+                    "type": "string",
+                    "default": "view"
+                  },
+                  "incremental_strategy": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "persist_docs": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    }
+                  },
+                  "post-hook": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "title": "Hook",
+                      "properties": {
+                        "sql": {
+                          "type": "string"
+                        },
+                        "transaction": {
+                          "type": "boolean",
+                          "default": true
+                        },
+                        "index": {
+                          "anyOf": [
+                            {
+                              "type": "integer"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null
+                        }
+                      },
+                      "additionalProperties": false,
+                      "required": [
+                        "sql"
+                      ]
+                    }
+                  },
+                  "pre-hook": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "title": "Hook",
+                      "properties": {
+                        "sql": {
+                          "type": "string"
+                        },
+                        "transaction": {
+                          "type": "boolean",
+                          "default": true
+                        },
+                        "index": {
+                          "anyOf": [
+                            {
+                              "type": "integer"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null
+                        }
+                      },
+                      "additionalProperties": false,
+                      "required": [
+                        "sql"
+                      ]
+                    }
+                  },
+                  "quoting": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    }
+                  },
+                  "column_types": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    }
+                  },
+                  "full_refresh": {
+                    "anyOf": [
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "unique_key": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "on_schema_change": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": "ignore"
+                  },
+                  "on_configuration_change": {
+                    "enum": [
+                      "apply",
+                      "continue",
+                      "fail"
+                    ]
+                  },
+                  "grants": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    }
+                  },
+                  "packages": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "docs": {
+                    "type": "object",
+                    "title": "Docs",
+                    "properties": {
+                      "show": {
+                        "type": "boolean",
+                        "default": true
+                      },
+                      "node_color": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "contract": {
+                    "type": "object",
+                    "title": "ContractConfig",
+                    "properties": {
+                      "enforced": {
+                        "type": "boolean",
+                        "default": false
+                      },
+                      "alias_types": {
+                        "type": "boolean",
+                        "default": true
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "expected_rows": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "additionalProperties": true
+              },
+              "_event_status": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                }
+              },
+              "tags": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "description": {
+                "type": "string",
+                "default": ""
+              },
+              "columns": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "object",
+                  "title": "ColumnInfo",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string",
+                      "default": ""
+                    },
+                    "meta": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      }
+                    },
+                    "data_type": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
+                    },
+                    "constraints": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "title": "ColumnLevelConstraint",
+                        "properties": {
+                          "type": {
+                            "enum": [
+                              "check",
+                              "not_null",
+                              "unique",
+                              "primary_key",
+                              "foreign_key",
+                              "custom"
+                            ]
+                          },
+                          "name": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
+                          },
+                          "expression": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
+                          },
+                          "warn_unenforced": {
+                            "type": "boolean",
+                            "default": true
+                          },
+                          "warn_unsupported": {
+                            "type": "boolean",
+                            "default": true
+                          }
+                        },
+                        "additionalProperties": false,
+                        "required": [
+                          "type"
+                        ]
+                      }
+                    },
+                    "quote": {
+                      "anyOf": [
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
+                    },
+                    "tags": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "_extra": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "additionalProperties": true,
+                  "required": [
+                    "name"
+                  ]
+                },
+                "propertyNames": {
+                  "type": "string"
+                }
+              },
+              "meta": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                }
+              },
+              "group": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "docs": {
+                "type": "object",
+                "title": "Docs",
+                "properties": {
+                  "show": {
+                    "type": "boolean",
+                    "default": true
+                  },
+                  "node_color": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  }
+                },
+                "additionalProperties": false
+              },
+              "patch_path": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "build_path": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "deferred": {
+                "type": "boolean",
+                "default": false
+              },
+              "unrendered_config": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                }
+              },
+              "created_at": {
+                "type": "number"
+              },
+              "config_call_dict": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                }
+              },
+              "relation_name": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "raw_code": {
+                "type": "string",
+                "default": ""
+              },
+              "language": {
+                "type": "string",
+                "default": "sql"
+              },
+              "refs": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "title": "RefArgs",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "package": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
+                    },
+                    "version": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "name"
+                  ]
+                }
+              },
+              "sources": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "metrics": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "depends_on": {
+                "type": "object",
+                "title": "DependsOn",
+                "properties": {
+                  "macros": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "nodes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "additionalProperties": false
+              },
+              "compiled_path": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "compiled": {
+                "type": "boolean",
+                "default": false
+              },
+              "compiled_code": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "extra_ctes_injected": {
+                "type": "boolean",
+                "default": false
+              },
+              "extra_ctes": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "title": "InjectedCTE",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "sql": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "id",
+                    "sql"
+                  ]
+                }
+              },
+              "_pre_injected_sql": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "contract": {
+                "type": "object",
+                "title": "Contract",
+                "properties": {
+                  "enforced": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "alias_types": {
+                    "type": "boolean",
+                    "default": true
+                  },
+                  "checksum": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  }
+                },
+                "additionalProperties": false
+              },
+              "tested_node_unique_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "this_input_node_unique_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "overrides": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "title": "UnitTestOverrides",
+                    "properties": {
+                      "macros": {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        }
+                      },
+                      "vars": {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        }
+                      },
+                      "env_vars": {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "database",
+              "schema",
+              "name",
+              "resource_type",
+              "package_name",
+              "path",
+              "original_file_path",
+              "unique_id",
+              "fqn",
+              "alias",
+              "checksum"
+            ]
+          },
+          {
+            "type": "object",
             "title": "SeedNode",
             "properties": {
               "database": {
@@ -15016,6 +15823,813 @@
                 },
                 {
                   "type": "object",
+                  "title": "UnitTestNode",
+                  "properties": {
+                    "database": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "schema": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "resource_type": {
+                      "const": "unit_test"
+                    },
+                    "package_name": {
+                      "type": "string"
+                    },
+                    "path": {
+                      "type": "string"
+                    },
+                    "original_file_path": {
+                      "type": "string"
+                    },
+                    "unique_id": {
+                      "type": "string"
+                    },
+                    "fqn": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "alias": {
+                      "type": "string"
+                    },
+                    "checksum": {
+                      "type": "object",
+                      "title": "FileHash",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "checksum": {
+                          "type": "string"
+                        }
+                      },
+                      "additionalProperties": false,
+                      "required": [
+                        "name",
+                        "checksum"
+                      ]
+                    },
+                    "config": {
+                      "type": "object",
+                      "title": "UnitTestNodeConfig",
+                      "properties": {
+                        "_extra": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          }
+                        },
+                        "enabled": {
+                          "type": "boolean",
+                          "default": true
+                        },
+                        "alias": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null
+                        },
+                        "schema": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null
+                        },
+                        "database": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null
+                        },
+                        "tags": {
+                          "anyOf": [
+                            {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            {
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        "meta": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          }
+                        },
+                        "group": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null
+                        },
+                        "materialized": {
+                          "type": "string",
+                          "default": "view"
+                        },
+                        "incremental_strategy": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null
+                        },
+                        "persist_docs": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          }
+                        },
+                        "post-hook": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "title": "Hook",
+                            "properties": {
+                              "sql": {
+                                "type": "string"
+                              },
+                              "transaction": {
+                                "type": "boolean",
+                                "default": true
+                              },
+                              "index": {
+                                "anyOf": [
+                                  {
+                                    "type": "integer"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "default": null
+                              }
+                            },
+                            "additionalProperties": false,
+                            "required": [
+                              "sql"
+                            ]
+                          }
+                        },
+                        "pre-hook": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "title": "Hook",
+                            "properties": {
+                              "sql": {
+                                "type": "string"
+                              },
+                              "transaction": {
+                                "type": "boolean",
+                                "default": true
+                              },
+                              "index": {
+                                "anyOf": [
+                                  {
+                                    "type": "integer"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "default": null
+                              }
+                            },
+                            "additionalProperties": false,
+                            "required": [
+                              "sql"
+                            ]
+                          }
+                        },
+                        "quoting": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          }
+                        },
+                        "column_types": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          }
+                        },
+                        "full_refresh": {
+                          "anyOf": [
+                            {
+                              "type": "boolean"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null
+                        },
+                        "unique_key": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null
+                        },
+                        "on_schema_change": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": "ignore"
+                        },
+                        "on_configuration_change": {
+                          "enum": [
+                            "apply",
+                            "continue",
+                            "fail"
+                          ]
+                        },
+                        "grants": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          }
+                        },
+                        "packages": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "docs": {
+                          "type": "object",
+                          "title": "Docs",
+                          "properties": {
+                            "show": {
+                              "type": "boolean",
+                              "default": true
+                            },
+                            "node_color": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ],
+                              "default": null
+                            }
+                          },
+                          "additionalProperties": false
+                        },
+                        "contract": {
+                          "type": "object",
+                          "title": "ContractConfig",
+                          "properties": {
+                            "enforced": {
+                              "type": "boolean",
+                              "default": false
+                            },
+                            "alias_types": {
+                              "type": "boolean",
+                              "default": true
+                            }
+                          },
+                          "additionalProperties": false
+                        },
+                        "expected_rows": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      },
+                      "additionalProperties": true
+                    },
+                    "_event_status": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      }
+                    },
+                    "tags": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "description": {
+                      "type": "string",
+                      "default": ""
+                    },
+                    "columns": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "object",
+                        "title": "ColumnInfo",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string",
+                            "default": ""
+                          },
+                          "meta": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            }
+                          },
+                          "data_type": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
+                          },
+                          "constraints": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "title": "ColumnLevelConstraint",
+                              "properties": {
+                                "type": {
+                                  "enum": [
+                                    "check",
+                                    "not_null",
+                                    "unique",
+                                    "primary_key",
+                                    "foreign_key",
+                                    "custom"
+                                  ]
+                                },
+                                "name": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ],
+                                  "default": null
+                                },
+                                "expression": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ],
+                                  "default": null
+                                },
+                                "warn_unenforced": {
+                                  "type": "boolean",
+                                  "default": true
+                                },
+                                "warn_unsupported": {
+                                  "type": "boolean",
+                                  "default": true
+                                }
+                              },
+                              "additionalProperties": false,
+                              "required": [
+                                "type"
+                              ]
+                            }
+                          },
+                          "quote": {
+                            "anyOf": [
+                              {
+                                "type": "boolean"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
+                          },
+                          "tags": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "_extra": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "additionalProperties": true,
+                        "required": [
+                          "name"
+                        ]
+                      },
+                      "propertyNames": {
+                        "type": "string"
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      }
+                    },
+                    "group": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
+                    },
+                    "docs": {
+                      "type": "object",
+                      "title": "Docs",
+                      "properties": {
+                        "show": {
+                          "type": "boolean",
+                          "default": true
+                        },
+                        "node_color": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    "patch_path": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
+                    },
+                    "build_path": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
+                    },
+                    "deferred": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "unrendered_config": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      }
+                    },
+                    "created_at": {
+                      "type": "number"
+                    },
+                    "config_call_dict": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      }
+                    },
+                    "relation_name": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
+                    },
+                    "raw_code": {
+                      "type": "string",
+                      "default": ""
+                    },
+                    "language": {
+                      "type": "string",
+                      "default": "sql"
+                    },
+                    "refs": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "title": "RefArgs",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "package": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
+                          },
+                          "version": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
+                          }
+                        },
+                        "additionalProperties": false,
+                        "required": [
+                          "name"
+                        ]
+                      }
+                    },
+                    "sources": {
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "metrics": {
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "depends_on": {
+                      "type": "object",
+                      "title": "DependsOn",
+                      "properties": {
+                        "macros": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "nodes": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    "compiled_path": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
+                    },
+                    "compiled": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "compiled_code": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
+                    },
+                    "extra_ctes_injected": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "extra_ctes": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "title": "InjectedCTE",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "sql": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": false,
+                        "required": [
+                          "id",
+                          "sql"
+                        ]
+                      }
+                    },
+                    "_pre_injected_sql": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
+                    },
+                    "contract": {
+                      "type": "object",
+                      "title": "Contract",
+                      "properties": {
+                        "enforced": {
+                          "type": "boolean",
+                          "default": false
+                        },
+                        "alias_types": {
+                          "type": "boolean",
+                          "default": true
+                        },
+                        "checksum": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    "tested_node_unique_id": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
+                    },
+                    "this_input_node_unique_id": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
+                    },
+                    "overrides": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "title": "UnitTestOverrides",
+                          "properties": {
+                            "macros": {
+                              "type": "object",
+                              "propertyNames": {
+                                "type": "string"
+                              }
+                            },
+                            "vars": {
+                              "type": "object",
+                              "propertyNames": {
+                                "type": "string"
+                              }
+                            },
+                            "env_vars": {
+                              "type": "object",
+                              "propertyNames": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "database",
+                    "schema",
+                    "name",
+                    "resource_type",
+                    "package_name",
+                    "path",
+                    "original_file_path",
+                    "unique_id",
+                    "fqn",
+                    "alias",
+                    "checksum"
+                  ]
+                },
+                {
+                  "type": "object",
                   "title": "SeedNode",
                   "properties": {
                     "database": {
@@ -17566,7 +19180,9 @@
                         "metric",
                         "group",
                         "saved_query",
-                        "semantic_model"
+                        "semantic_model",
+                        "unit_test",
+                        "fixture"
                       ]
                     },
                     "package_name": {
@@ -17951,7 +19567,9 @@
                         "metric",
                         "group",
                         "saved_query",
-                        "semantic_model"
+                        "semantic_model",
+                        "unit_test",
+                        "fixture"
                       ]
                     },
                     "package_name": {
@@ -18634,6 +20252,286 @@
                     "model",
                     "node_relation"
                   ]
+                },
+                {
+                  "type": "object",
+                  "title": "UnitTestDefinition",
+                  "properties": {
+                    "model": {
+                      "type": "string"
+                    },
+                    "given": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "title": "UnitTestInputFixture",
+                        "properties": {
+                          "input": {
+                            "type": "string"
+                          },
+                          "rows": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "propertyNames": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
+                          },
+                          "format": {
+                            "enum": [
+                              "csv",
+                              "dict"
+                            ],
+                            "default": "dict"
+                          },
+                          "fixture": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
+                          }
+                        },
+                        "additionalProperties": false,
+                        "required": [
+                          "input"
+                        ]
+                      }
+                    },
+                    "expect": {
+                      "type": "object",
+                      "title": "UnitTestOutputFixture",
+                      "properties": {
+                        "rows": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null
+                        },
+                        "format": {
+                          "enum": [
+                            "csv",
+                            "dict"
+                          ],
+                          "default": "dict"
+                        },
+                        "fixture": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "resource_type": {
+                      "enum": [
+                        "model",
+                        "analysis",
+                        "test",
+                        "snapshot",
+                        "operation",
+                        "seed",
+                        "rpc",
+                        "sql_operation",
+                        "doc",
+                        "source",
+                        "macro",
+                        "exposure",
+                        "metric",
+                        "group",
+                        "saved_query",
+                        "semantic_model",
+                        "unit_test",
+                        "fixture"
+                      ]
+                    },
+                    "package_name": {
+                      "type": "string"
+                    },
+                    "path": {
+                      "type": "string"
+                    },
+                    "original_file_path": {
+                      "type": "string"
+                    },
+                    "unique_id": {
+                      "type": "string"
+                    },
+                    "fqn": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "_event_status": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      }
+                    },
+                    "description": {
+                      "type": "string",
+                      "default": ""
+                    },
+                    "overrides": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "title": "UnitTestOverrides",
+                          "properties": {
+                            "macros": {
+                              "type": "object",
+                              "propertyNames": {
+                                "type": "string"
+                              }
+                            },
+                            "vars": {
+                              "type": "object",
+                              "propertyNames": {
+                                "type": "string"
+                              }
+                            },
+                            "env_vars": {
+                              "type": "object",
+                              "propertyNames": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
+                    },
+                    "depends_on": {
+                      "type": "object",
+                      "title": "DependsOn",
+                      "properties": {
+                        "macros": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "nodes": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    "config": {
+                      "type": "object",
+                      "title": "UnitTestConfig",
+                      "properties": {
+                        "_extra": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          }
+                        },
+                        "tags": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          ]
+                        },
+                        "meta": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "additionalProperties": true
+                    },
+                    "checksum": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
+                    },
+                    "schema": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "model",
+                    "given",
+                    "expect",
+                    "name",
+                    "resource_type",
+                    "package_name",
+                    "path",
+                    "original_file_path",
+                    "unique_id",
+                    "fqn"
+                  ]
                 }
               ]
             }
@@ -18734,7 +20632,9 @@
               "metric",
               "group",
               "saved_query",
-              "semantic_model"
+              "semantic_model",
+              "unit_test",
+              "fixture"
             ]
           },
           "package_name": {
@@ -19126,7 +21026,9 @@
               "metric",
               "group",
               "saved_query",
-              "semantic_model"
+              "semantic_model",
+              "unit_test",
+              "fixture"
             ]
           },
           "package_name": {
@@ -19813,6 +21715,293 @@
       "propertyNames": {
         "type": "string"
       }
+    },
+    "unit_tests": {
+      "type": "object",
+      "description": "The unit tests defined in the project",
+      "additionalProperties": {
+        "type": "object",
+        "title": "UnitTestDefinition",
+        "properties": {
+          "model": {
+            "type": "string"
+          },
+          "given": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "title": "UnitTestInputFixture",
+              "properties": {
+                "input": {
+                  "type": "string"
+                },
+                "rows": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                },
+                "format": {
+                  "enum": [
+                    "csv",
+                    "dict"
+                  ],
+                  "default": "dict"
+                },
+                "fixture": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "input"
+              ]
+            }
+          },
+          "expect": {
+            "type": "object",
+            "title": "UnitTestOutputFixture",
+            "properties": {
+              "rows": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "format": {
+                "enum": [
+                  "csv",
+                  "dict"
+                ],
+                "default": "dict"
+              },
+              "fixture": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              }
+            },
+            "additionalProperties": false
+          },
+          "name": {
+            "type": "string"
+          },
+          "resource_type": {
+            "enum": [
+              "model",
+              "analysis",
+              "test",
+              "snapshot",
+              "operation",
+              "seed",
+              "rpc",
+              "sql_operation",
+              "doc",
+              "source",
+              "macro",
+              "exposure",
+              "metric",
+              "group",
+              "saved_query",
+              "semantic_model",
+              "unit_test",
+              "fixture"
+            ]
+          },
+          "package_name": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "original_file_path": {
+            "type": "string"
+          },
+          "unique_id": {
+            "type": "string"
+          },
+          "fqn": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "_event_status": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "description": {
+            "type": "string",
+            "default": ""
+          },
+          "overrides": {
+            "anyOf": [
+              {
+                "type": "object",
+                "title": "UnitTestOverrides",
+                "properties": {
+                  "macros": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    }
+                  },
+                  "vars": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    }
+                  },
+                  "env_vars": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "depends_on": {
+            "type": "object",
+            "title": "DependsOn",
+            "properties": {
+              "macros": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "nodes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          "config": {
+            "type": "object",
+            "title": "UnitTestConfig",
+            "properties": {
+              "_extra": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                }
+              },
+              "tags": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                ]
+              },
+              "meta": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                }
+              }
+            },
+            "additionalProperties": true
+          },
+          "checksum": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "schema": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "model",
+          "given",
+          "expect",
+          "name",
+          "resource_type",
+          "package_name",
+          "path",
+          "original_file_path",
+          "unique_id",
+          "fqn"
+        ]
+      },
+      "propertyNames": {
+        "type": "string"
+      }
     }
   },
   "additionalProperties": false,
@@ -19831,7 +22020,8 @@
     "child_map",
     "group_map",
     "saved_queries",
-    "semantic_models"
+    "semantic_models",
+    "unit_tests"
   ],
   "$id": "https://schemas.getdbt.com/dbt/manifest/v12.json"
 }

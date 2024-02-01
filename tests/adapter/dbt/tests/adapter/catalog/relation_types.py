@@ -1,4 +1,4 @@
-from dbt.artifacts.catalog import CatalogArtifact
+from dbt.artifacts.schemas.catalog import CatalogArtifact
 from dbt.tests.util import run_dbt
 import pytest
 

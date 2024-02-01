@@ -10,7 +10,7 @@ version: 2
 
 models:
   - name: model_a
-    tests:
+    data_tests:
       - self_referential
 
 """
@@ -140,13 +140,13 @@ models:
     columns:
       - name: id
         quote: true
-        tests:
+        data_tests:
           - unique
   - name: uppercase
     columns:
       - name: id
         quote: true
-        tests:
+        data_tests:
           - unique
 
 """
@@ -204,11 +204,11 @@ version: 2
 
 models:
     - name: model_a
-      tests:
+      data_tests:
         - type_one
         - type_two
     - name: model_c
-      tests:
+      data_tests:
         - call_pkg_macro
         - test_utils.dispatch
 
@@ -366,11 +366,11 @@ version: 2
 
 models:
     - name: model_a
-      tests:
+      data_tests:
         - type_one
         - type_two
     - name: model_c
-      tests:
+      data_tests:
         - call_pkg_macro
         - local_utils.dispatch
         - my_datediff
@@ -398,12 +398,12 @@ models:
 - name: base
   columns:
   - name: extension_id
-    tests:
+    data_tests:
     - not_null
 - name: base_extension
   columns:
   - name: id
-    tests:
+    data_tests:
     - not_null
 
 """
@@ -423,7 +423,7 @@ models:
 - name: model_a
   columns:
   - name: id
-    tests:
+    data_tests:
     - not_null:
         config:
           where: "1=1"
@@ -444,7 +444,7 @@ models:
 - name: model_a
   columns:
   - name: id
-    tests:
+    data_tests:
     - not_null:
         config:
           where: "id = (select id from {{ ref('model_a') }} limit 1)"
@@ -462,7 +462,7 @@ models:
 - name: model_a
   columns:
   - name: id
-    tests:
+    data_tests:
     - not_null:
         name: not_null_where_1_equals_1
         config:
@@ -484,7 +484,7 @@ models:
 - name: model_a
   columns:
   - name: id
-    tests:
+    data_tests:
     - name: not_null_where_1_equals_1
       test_name: not_null
       config:
@@ -525,7 +525,7 @@ models:
   columns:
     - name: Id
       quote: true
-      tests:
+      data_tests:
         - unique
         - not_null
 
@@ -545,7 +545,7 @@ version: 2
 
 models:
   - name: model
-    tests:
+    data_tests:
       - equivalent:
           value: "{{ var('myvar', 'baz') }}-bar"
 
@@ -565,7 +565,7 @@ models:
       columns:
         - name: id
           description: "The number of responses for this favorite color - purple will be null"
-          tests:
+          data_tests:
             - not_null:
                 error_if: '>1'
                 warn_if: '>1'
@@ -575,7 +575,7 @@ models:
       columns:
         - name: id
           description: "The number of responses for this favorite color - purple will be null"
-          tests:
+          data_tests:
             - not_null:
                 error_if: '>1'
 
@@ -584,7 +584,7 @@ models:
       columns:
         - name: id
           description: "The number of responses for this favorite color - purple will be null"
-          tests:
+          data_tests:
             - not_null:
                 error_if: '>1'
 
@@ -616,32 +616,32 @@ models:
       columns:
         - name: id
           description: "The ID"
-          tests:
+          data_tests:
             - not_null
             - unique
           tags:
             - table_id
         - name: first_name
           description: "The user's first name"
-          tests:
+          data_tests:
             - not_null
           tags:
             - table_first_name
         - name: ip_address
           description: "The user's IP address"
-          tests:
+          data_tests:
             - not_null
         - name: updated_at
           description: "The update time of the user"
-          tests:
+          data_tests:
             - not_null
         - name: email
           description: "The user's email address"
-          tests:
+          data_tests:
             - unique
         - name: favorite_color
           description: "The user's favorite color"
-          tests:
+          data_tests:
             - accepted_values: {
                 values: ['blue', 'green'],
                 quote: true,
@@ -651,7 +651,7 @@ models:
             - table_favorite_color
         - name: fav_number
           description: "The user's favorite number"
-          tests:
+          data_tests:
             - accepted_values:
                 values: [3.14159265]
                 quote: false
@@ -664,7 +664,7 @@ models:
       columns:
         - name: favorite_color_copy
           description: "The favorite color"
-          tests:
+          data_tests:
             - not_null
             - unique
             - accepted_values: { values: ['blue', 'green'] }
@@ -673,7 +673,7 @@ models:
             - table_favorite_color
         - name: count
           description: "The number of responses for this favorite color"
-          tests:
+          data_tests:
             - not_null
 
 # all of these constraints will fail
@@ -682,14 +682,14 @@ models:
       columns:
         - name: id
           description: "The user ID"
-          tests:
+          data_tests:
             - not_null
             - unique
           tags:
             - xfail
         - name: favorite_color
           description: "The user's favorite color"
-          tests:
+          data_tests:
             - accepted_values: { values: ['blue', 'green'] }
           tags:
             - xfail
@@ -700,7 +700,7 @@ models:
       columns:
         - name: favorite_color
           description: "The favorite color"
-          tests:
+          data_tests:
             - accepted_values: { values: ['red'] }
             - relationships: { field: favorite_color, to: ref('table_copy') }
           tags:
@@ -712,7 +712,7 @@ models:
       columns:
         - name: favorite_color
           description: "The favorite color"
-          tests:
+          data_tests:
             - accepted_values: { values: ['red'] }
             - relationships: { field: favorite_color, to: ref('table_copy') }
 
@@ -722,7 +722,7 @@ models:
       columns:
         - name: id
           description: "The user ID"
-          tests:
+          data_tests:
             - relationships: { field: id, to: ref('table_failure_copy') }
           tags:
             - xfail
@@ -818,11 +818,11 @@ models:
     columns:
       - name: id
         description: "The ID"
-        tests:
+        data_tests:
           - not_null
           - unique
       - name: favorite_color
-        tests:
+        data_tests:
           # this is missing a "-" and is malformed
           accepted_values: { values: ['blue', 'green'] }
 
@@ -832,14 +832,14 @@ models:
     columns:
       - name: favorite_color
         description: "The favorite color"
-        tests:
+        data_tests:
           - not_null
           - unique
           - accepted_values: { values: ['blue', 'green'] }
           - relationships: { field: favorite_color, to: ref('table_copy') }
       - name: count
         description: "The number of responses for this favorite color"
-        tests:
+        data_tests:
           - not_null
 
 """
@@ -878,7 +878,7 @@ models:
       columns:
         - name: id
           description: "The number of responses for this favorite color - purple will be null"
-          tests:
+          data_tests:
             - not_null
 
 
@@ -898,7 +898,7 @@ models:
   - name: table_copy
     description: "A copy of the table"
     # passes
-    tests:
+    data_tests:
       - where
       - error_if
       - warn_if
@@ -906,21 +906,21 @@ models:
       - fail_calc
     columns:
       - name: id
-        tests:
+        data_tests:
           # relationships with where
           - relationships:
               to: ref('table_copy')  # itself
               field: id
               where: 1=1
   - name: table_copy_another_one
-    tests:
+    data_tests:
       - where:  # test override + weird quoting
           config:
             where: "\\"favorite_color\\" = 'red'"
   - name: "table.copy.with.dots"
     description: "A copy of the table with a gross name"
     # passes, see https://github.com/dbt-labs/dbt-core/issues/3857
-    tests:
+    data_tests:
       - where
 
 """
@@ -952,7 +952,7 @@ version: 2
 
 models:
   - name: model
-    tests:
+    data_tests:
       - equivalent:
           value: "{{ var('myvar', 'baz') }}-bar"
 
@@ -971,18 +971,18 @@ models:
     description: "A copy of the table"
     columns:
       - name: email
-        tests:
+        data_tests:
           - not_null
       - name: id
         description: "The ID"
-        tests:
+        data_tests:
           - unique
       - name: favorite_color
-        tests:
+        data_tests:
           - every_value_is_blue
           - rejected_values: { values: ['orange', 'purple'] }
     # passes
-    tests:
+    data_tests:
       - local_dep.equality: { compare_model: ref('table_copy') }
 
 """
@@ -1010,7 +1010,7 @@ models:
           description: "The favorite color"
         - name: count
           description: "The number of responses for this favorite color - purple will be null"
-          tests:
+          data_tests:
             - not_null:
                 error_if: '>1'
                 warn_if: '>1'
@@ -1022,7 +1022,7 @@ models:
           description: "The favorite color"
         - name: count
           description: "The number of responses for this favorite color - purple will be null"
-          tests:
+          data_tests:
             - not_null:
                 error_if: '>1'
 
@@ -1033,7 +1033,7 @@ models:
           description: "The favorite color"
         - name: count
           description: "The number of responses for this favorite color - purple will be null"
-          tests:
+          data_tests:
             - not_null:
                 error_if: '>1'
 
@@ -1152,7 +1152,7 @@ models:
     - name: ephemeral
       columns:
           - name: id
-            tests:
+            data_tests:
                 - unique
 
 """
@@ -1173,14 +1173,14 @@ models:
     columns:
       - name: Id
         quote: true
-        tests:
+        data_tests:
           - unique
           - not_null
   - name: model_again
     quote_columns: true
     columns:
       - name: Id
-        tests:
+        data_tests:
           - unique
           - not_null
   - name: model_noquote
@@ -1188,7 +1188,7 @@ models:
     columns:
       - name: Id
         quote: false
-        tests:
+        data_tests:
           - unique
           - not_null
 
@@ -1205,7 +1205,7 @@ sources:
         columns:
           - name: Id
             quote: true
-            tests:
+            data_tests:
               - unique
   - name: my_source_2
     schema: "{{ target.schema }}"
@@ -1218,13 +1218,13 @@ sources:
           column: true
         columns:
           - name: Id
-            tests:
+            data_tests:
               - unique
       # this should result in column quoting = false
       - name: model_noquote
         columns:
           - name: Id
-            tests:
+            data_tests:
               - unique
 
 
@@ -1270,6 +1270,6 @@ macro_resolution_order_models__config_yml = """
 version: 2
 models:
   - name: my_model
-    tests:
+    data_tests:
       - my_custom_test
 """

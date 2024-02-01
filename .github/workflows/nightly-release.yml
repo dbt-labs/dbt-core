@@ -33,21 +33,14 @@ jobs:
     runs-on: ubuntu-latest
 
     outputs:
-      commit_sha: ${{ steps.resolve-commit-sha.outputs.release_commit }}
       version_number: ${{ steps.nightly-release-version.outputs.number }}
       release_branch: ${{ steps.release-branch.outputs.name }}
 
     steps:
       - name: "Checkout ${{ github.repository }} Branch ${{ env.RELEASE_BRANCH }}"
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: ${{ env.RELEASE_BRANCH }}
-
-      - name: "Resolve Commit To Release"
-        id: resolve-commit-sha
-        run: |
-          commit_sha=$(git rev-parse HEAD)
-          echo "release_commit=$commit_sha" >> $GITHUB_OUTPUT
 
       - name: "Get Current Version Number"
         id: version-number-sources
@@ -88,7 +81,6 @@ jobs:
     steps:
       - name: "[DEBUG] Log Outputs"
         run: |
-          echo commit_sha    : ${{ needs.aggregate-release-data.outputs.commit_sha }}
           echo version_number: ${{ needs.aggregate-release-data.outputs.version_number }}
           echo release_branch: ${{ needs.aggregate-release-data.outputs.release_branch }}
 
@@ -97,13 +89,8 @@ jobs:
 
     uses: ./.github/workflows/release.yml
     with:
-      sha: ${{ needs.aggregate-release-data.outputs.commit_sha }}
       target_branch: ${{ needs.aggregate-release-data.outputs.release_branch }}
       version_number: ${{ needs.aggregate-release-data.outputs.version_number }}
-      build_script_path: "scripts/build-dist.sh"
-      env_setup_script_path: "scripts/env-setup.sh"
-      s3_bucket_name: "core-team-artifacts"
-      package_test_command: "dbt --version"
       test_run: true
       nightly_release: true
     secrets: inherit

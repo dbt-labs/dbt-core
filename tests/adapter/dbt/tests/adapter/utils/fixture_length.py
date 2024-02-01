@@ -28,7 +28,7 @@ models__test_length_yml = """
 version: 2
 models:
   - name: test_length
-    tests:
+    data_tests:
       - assert_equal:
           actual: actual
           expected: expected

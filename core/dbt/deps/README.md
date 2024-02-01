@@ -16,7 +16,7 @@ Defines the base classes of `PinnedPackage` and `UnpinnedPackage`.
 
 `downloads_directory` sets the directory packages will be downloaded to.
 
-`_install` has retry logic if the download or untarring process hit exceptions (see `dbt.common.utils.connection_exception_retry`).
+`_install` has retry logic if the download or untarring process hit exceptions (see `dbt_common.utils.connection_exception_retry`).
 
 ## `git.py`
 

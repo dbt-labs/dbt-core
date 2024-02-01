@@ -1,98 +1,71 @@
 import os
-import sys
+from packaging.version import Version, parse
 import requests
-from distutils.util import strtobool
-from typing import Union
-from packaging.version import parse, Version
+import sys
+from typing import List
 
-if __name__ == "__main__":
 
-    # get inputs
-    package = os.environ["INPUT_PACKAGE"]
-    new_version = parse(os.environ["INPUT_NEW_VERSION"])
-    gh_token = os.environ["INPUT_GH_TOKEN"]
-    halt_on_missing = strtobool(os.environ.get("INPUT_HALT_ON_MISSING", "False"))
+def main():
+    package_name: str = os.environ["INPUT_PACKAGE_NAME"]
+    new_version: Version = parse(os.environ["INPUT_NEW_VERSION"])
+    github_token: str = os.environ["INPUT_GITHUB_TOKEN"]
 
-    # get package metadata from github
-    package_request = requests.get(
-        f"https://api.github.com/orgs/dbt-labs/packages/container/{package}/versions",
-        auth=("", gh_token),
-    )
-    package_meta = package_request.json()
+    response = _package_metadata(package_name, github_token)
+    published_versions = _published_versions(response)
+    new_version_tags = _new_version_tags(new_version, published_versions)
+    _register_tags(new_version_tags, package_name)
 
-    # Log info if we don't get a 200
-    if package_request.status_code != 200:
-        print(f"Call to GH API failed: {package_request.status_code} {package_meta['message']}")
 
-    # Make an early exit if there is no matching package in github
-    if package_request.status_code == 404:
-        if halt_on_missing:
-            sys.exit(1)
-        # everything is the latest if the package doesn't exist
-        github_output = os.environ.get("GITHUB_OUTPUT")
-        with open(github_output, "at", encoding="utf-8") as gh_output:
-            gh_output.write("latest=True")
-            gh_output.write("minor_latest=True")
-        sys.exit(0)
+def _package_metadata(package_name: str, github_token: str) -> requests.Response:
+    url = f"https://api.github.com/orgs/dbt-labs/packages/container/{package_name}/versions"
+    return requests.get(url, auth=("", github_token))
 
-    # TODO: verify package meta is "correct"
-    # https://github.com/dbt-labs/dbt-core/issues/4640
 
-    # map versions and tags
-    version_tag_map = {
-        version["id"]: version["metadata"]["container"]["tags"] for version in package_meta
-    }
+def _published_versions(response: requests.Response) -> List[Version]:
+    package_metadata = response.json()
+    return [
+        parse(tag)
+        for version in package_metadata
+        for tag in version["metadata"]["container"]["tags"]
+        if "latest" not in tag
+    ]
 
-    # is pre-release
-    pre_rel = True if any(x in str(new_version) for x in ["a", "b", "rc"]) else False
 
-    # semver of current latest
-    for version, tags in version_tag_map.items():
-        if "latest" in tags:
-            # N.B. This seems counterintuitive, but we expect any version tagged
-            # 'latest' to have exactly three associated tags:
-            # latest, major.minor.latest, and major.minor.patch.
-            # Subtracting everything that contains the string 'latest' gets us
-            # the major.minor.patch which is what's needed for comparison.
-            current_latest = parse([tag for tag in tags if "latest" not in tag][0])
-        else:
-            current_latest = False
+def _new_version_tags(new_version: Version, published_versions: List[Version]) -> List[str]:
+    # the package version is always a tag
+    tags = [str(new_version)]
 
-    # semver of current_minor_latest
-    for version, tags in version_tag_map.items():
-        if f"{new_version.major}.{new_version.minor}.latest" in tags:
-            # Similar to above, only now we expect exactly two tags:
-            # major.minor.patch and major.minor.latest
-            current_minor_latest = parse([tag for tag in tags if "latest" not in tag][0])
-        else:
-            current_minor_latest = False
+    # pre-releases don't get tagged with `latest`
+    if new_version.is_prerelease:
+        return tags
 
-    def is_latest(
-        pre_rel: bool, new_version: Version, remote_latest: Union[bool, Version]
-    ) -> bool:
-        """Determine if a given contaier should be tagged 'latest' based on:
-         - it's pre-release status
-         - it's version
-         - the version of a previously identified container tagged 'latest'
+    if new_version > max(published_versions):
+        tags.append("latest")
 
-        :param pre_rel: Wether or not the version of the new container is a pre-release
-        :param new_version: The version of the new container
-        :param remote_latest: The version of the previously identified container that's
-            already tagged latest or False
-        """
-        # is a pre-release = not latest
-        if pre_rel:
-            return False
-        # + no latest tag found = is latest
-        if not remote_latest:
-            return True
-        # + if remote version is lower than current = is latest, else not latest
-        return True if remote_latest <= new_version else False
+    published_patches = [
+        version
+        for version in published_versions
+        if version.major == new_version.major and version.minor == new_version.minor
+    ]
+    if new_version > max(published_patches):
+        tags.append(f"{new_version.major}.{new_version.minor}.latest")
 
-    latest = is_latest(pre_rel, new_version, current_latest)
-    minor_latest = is_latest(pre_rel, new_version, current_minor_latest)
+    return tags
 
+
+def _register_tags(tags: List[str], package_name: str) -> None:
+    fully_qualified_tags = ",".join([f"ghcr.io/dbt-labs/{package_name}:{tag}" for tag in tags])
     github_output = os.environ.get("GITHUB_OUTPUT")
     with open(github_output, "at", encoding="utf-8") as gh_output:
-        gh_output.write(f"latest={latest}")
-        gh_output.write(f"minor_latest={minor_latest}")
+        gh_output.write(f"fully_qualified_tags={fully_qualified_tags}")
+
+
+def _validate_response(response: requests.Response) -> None:
+    message = response["message"]
+    if response.status_code != 200:
+        print(f"Call to GitHub API failed: {response.status_code} - {message}")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

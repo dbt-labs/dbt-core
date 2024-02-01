@@ -101,7 +101,7 @@ models:
             - type: primary_key
             - type: check
               expression: (id > 0)
-        tests:
+        data_tests:
           - unique
       - name: color
         data_type: string
@@ -127,7 +127,7 @@ models:
             - type: primary_key
             - type: check
               expression: (id > 0)
-        tests:
+        data_tests:
           - unique
       - name: color
         data_type: string
@@ -155,7 +155,7 @@ models:
             - type: check
               warn_unsupported: False
               expression: (id > 0)
-        tests:
+        data_tests:
           - unique
       - name: color
         data_type: text
@@ -179,7 +179,7 @@ models:
             - type: primary_key
             - type: check
               expression: (id > 0)
-        tests:
+        data_tests:
           - unique
       - name: color
         data_type: text
@@ -197,7 +197,7 @@ models:
             - type: primary_key
             - type: check
               expression: (id > 0)
-        tests:
+        data_tests:
           - unique
       - name: color
         data_type: text
@@ -228,7 +228,7 @@ models:
           - type: primary_key
           - type: check
             expression: (id > 0)
-        tests:
+        data_tests:
           - unique
       - name: color
         data_type: text
@@ -250,7 +250,7 @@ models:
           - type: primary_key
           - type: check
             expression: (id > 0)
-        tests:
+        data_tests:
           - unique
       - name: color
       - name: date_day

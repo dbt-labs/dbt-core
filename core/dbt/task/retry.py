@@ -6,9 +6,9 @@ from dbt.cli.flags import Flags
 from dbt.flags import set_flags, get_flags
 from dbt.cli.types import Command as CliCommand
 from dbt.config import RuntimeConfig
-from dbt.artifacts.results import NodeStatus
+from dbt.artifacts.schemas.results import NodeStatus
 from dbt.contracts.state import load_result_state
-from dbt.common.exceptions import DbtRuntimeError
+from dbt_common.exceptions import DbtRuntimeError
 from dbt.graph import GraphQueue
 from dbt.task.base import ConfiguredTask
 from dbt.task.build import BuildTask
@@ -63,7 +63,7 @@ CMD_DICT = {
 
 
 class RetryTask(ConfiguredTask):
-    def __init__(self, args, config, manifest) -> None:
+    def __init__(self, args, config) -> None:
         # load previous run results
         state_path = args.state or config.target_path
         self.previous_results = load_result_state(

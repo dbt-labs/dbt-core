@@ -3,7 +3,7 @@ from unittest import mock
 import pytest
 
 import string
-import dbt.exceptions
+import dbt_common.exceptions
 import dbt.graph.selector as graph_selector
 import dbt.graph.cli as graph_cli
 from dbt.node_types import NodeType
@@ -214,5 +214,5 @@ invalid_specs = [
 
 @pytest.mark.parametrize("invalid", invalid_specs, ids=lambda k: str(k))
 def test_invalid_specs(invalid):
-    with pytest.raises(dbt.common.exceptions.DbtRuntimeError):
+    with pytest.raises(dbt_common.exceptions.DbtRuntimeError):
         graph_selector.SelectionCriteria.from_single_spec(invalid)

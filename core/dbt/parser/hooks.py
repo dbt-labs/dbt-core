@@ -4,7 +4,7 @@ from typing import Iterable, Iterator, Union, List, Tuple
 from dbt.context.context_config import ContextConfig
 from dbt.contracts.files import FilePath
 from dbt.contracts.graph.nodes import HookNode
-from dbt.common.exceptions import DbtInternalError
+from dbt_common.exceptions import DbtInternalError
 from dbt.node_types import NodeType, RunHookType
 from dbt.parser.base import SimpleParser
 from dbt.parser.search import FileBlock

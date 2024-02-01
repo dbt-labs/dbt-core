@@ -1,5 +1,5 @@
-import dbt.common.exceptions.base
-import dbt.exceptions
+import dbt_common.exceptions.base
+import dbt_common.exceptions
 from typing import Any, Dict, Optional
 import yaml
 
@@ -61,4 +61,4 @@ def load_yaml_text(contents, path=None):
         else:
             error = str(e)
 
-        raise dbt.common.exceptions.base.DbtValidationError(error)
+        raise dbt_common.exceptions.base.DbtValidationError(error)

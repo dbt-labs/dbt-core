@@ -32,7 +32,7 @@ models__test_get_powers_of_two_yml = """
 version: 2
 models:
   - name: test_powers_of_two
-    tests:
+    data_tests:
       - assert_equal:
           actual: actual
           expected: expected

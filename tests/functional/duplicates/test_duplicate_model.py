@@ -50,7 +50,7 @@ models:
       alias: table_model_local_dep
     columns:
       - name: id
-        tests:
+        data_tests:
           - unique
 """
 

@@ -11,7 +11,7 @@ sources:
         identifier: "{{ var('seed_name', 'invalid') }}"
         columns:
           - name: id
-            tests:
+            data_tests:
               - unique:
                   enabled: "{{ var('enabled_direct', None) | as_native }}"
               - accepted_values:
@@ -23,7 +23,7 @@ models:
   - name: model
     columns:
       - name: id
-        tests:
+        data_tests:
           - unique
           - accepted_values:
               values: [1,2,3,4]

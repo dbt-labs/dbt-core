@@ -3,7 +3,7 @@ import pathlib
 import pytest
 import re
 
-from dbt.common.exceptions import DbtRuntimeError, DbtBaseException as DbtException
+from dbt_common.exceptions import DbtRuntimeError, DbtBaseException as DbtException
 from dbt.tests.util import run_dbt, run_dbt_and_capture, read_file
 from tests.functional.compile.fixtures import (
     first_model_sql,

@@ -9,7 +9,7 @@ models:
 - name: test_vars
   columns:
   - name: field
-    tests:
+    data_tests:
     - accepted_values:
         values:
         - override

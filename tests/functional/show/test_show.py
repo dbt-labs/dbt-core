@@ -1,6 +1,6 @@
 import pytest
 
-from dbt.common.exceptions import DbtRuntimeError, DbtBaseException as DbtException
+from dbt_common.exceptions import DbtRuntimeError, DbtBaseException as DbtException
 from dbt.tests.util import run_dbt_and_capture, run_dbt
 from tests.functional.show.fixtures import (
     models__second_ephemeral_model,

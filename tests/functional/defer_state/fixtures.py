@@ -67,7 +67,7 @@ models:
   - name: view_model
     columns:
       - name: id
-        tests:
+        data_tests:
           - unique:
               severity: error
           - not_null
@@ -82,7 +82,7 @@ models:
     columns:
       - name: id
         data_type: integer
-        tests:
+        data_tests:
           - unique:
               severity: error
           - not_null
@@ -100,7 +100,7 @@ models:
     columns:
       - name: id
         data_type: integer
-        tests:
+        data_tests:
           - unique:
               severity: error
           - not_null
@@ -118,7 +118,7 @@ models:
     columns:
       - name: id
         data_type: integer
-        tests:
+        data_tests:
           - unique:
               severity: error
           - not_null
@@ -136,7 +136,7 @@ models:
     columns:
       - name: id
         data_type: integer
-        tests:
+        data_tests:
           - unique:
               severity: error
           - not_null
@@ -154,7 +154,7 @@ models:
     columns:
       - name: id
         data_type: integer
-        tests:
+        data_tests:
           - unique:
               severity: error
           - not_null
@@ -174,7 +174,7 @@ models:
     columns:
       - name: id
         data_type: integer
-        tests:
+        data_tests:
           - unique:
               severity: error
           - not_null
@@ -194,7 +194,7 @@ models:
     columns:
       - name: id
         data_type: integer
-        tests:
+        data_tests:
           - unique:
               severity: error
           - not_null
@@ -214,7 +214,7 @@ models:
     columns:
       - name: id
         data_type: integer
-        tests:
+        data_tests:
           - unique:
               severity: error
           - not_null
@@ -228,7 +228,7 @@ models:
   - name: view_model
     columns:
       - name: id
-        tests:
+        data_tests:
           - unique:
               severity: error
           - not_null
@@ -245,7 +245,7 @@ models:
         constraints:
           - type: not_null
         data_type: integer
-        tests:
+        data_tests:
           - unique:
               severity: error
           - not_null
@@ -259,7 +259,7 @@ models:
   - name: view_model
     columns:
       - name: id
-        tests:
+        data_tests:
           - unique:
               severity: error
           - not_null
@@ -274,7 +274,7 @@ models:
     columns:
       - name: id
         data_type: integer
-        tests:
+        data_tests:
           - unique:
               severity: error
           - not_null
@@ -288,7 +288,7 @@ models:
   - name: view_model
     columns:
       - name: id
-        tests:
+        data_tests:
           - unique:
               severity: error
           - not_null
@@ -302,7 +302,7 @@ models:
         constraints:
           - type: not_null
         data_type: integer
-        tests:
+        data_tests:
           - unique:
               severity: error
           - not_null

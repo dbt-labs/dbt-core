@@ -659,7 +659,14 @@ class TestList:
         }
 
         results = self.run_dbt_ls(
-            ["--resource-type", "test", "--resource-type", "model", "--exclude", "unique_outer_id"]
+            [
+                "--resource-type",
+                "test",
+                "--resource-type",
+                "model",
+                "--exclude",
+                "unique_outer_id",
+            ]
         )
         assert set(results) == {
             "test.ephemeral",

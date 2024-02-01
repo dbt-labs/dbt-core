@@ -25,19 +25,19 @@ models:
   - name: int_eph_first
     columns:
       - name: first_column
-        tests:
+        data_tests:
           - not_null
       - name: second_column
-        tests:
+        data_tests:
           - not_null
 
   - name: fct_eph_first
     columns:
       - name: first_column
-        tests:
+        data_tests:
           - not_null
       - name: second_column
-        tests:
+        data_tests:
           - not_null
 
 """

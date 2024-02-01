@@ -14,17 +14,17 @@ models:
 - name: complex_model
   columns:
   - name: var_1
-    tests:
+    data_tests:
     - accepted_values:
         values:
         - abc
   - name: var_2
-    tests:
+    data_tests:
     - accepted_values:
         values:
         - def
   - name: var_3
-    tests:
+    data_tests:
     - accepted_values:
         values:
         - jkl
@@ -43,7 +43,7 @@ models:
 - name: simple_model
   columns:
   - name: simple
-    tests:
+    data_tests:
     - accepted_values:
         values:
         - abc

@@ -1,7 +1,7 @@
 import functools
 from typing import Optional
 
-from dbt.common.events.functions import warn_or_error
+from dbt_common.events.functions import warn_or_error
 from dbt.events.types import InternalDeprecation
 
 

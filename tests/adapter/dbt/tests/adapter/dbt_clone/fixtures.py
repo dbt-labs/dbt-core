@@ -40,7 +40,7 @@ models:
   - name: view_model
     columns:
       - name: id
-        tests:
+        data_tests:
           - unique:
               severity: error
           - not_null

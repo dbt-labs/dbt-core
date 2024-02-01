@@ -32,7 +32,7 @@ models__test_last_day_yml = """
 version: 2
 models:
   - name: test_last_day
-    tests:
+    data_tests:
       - assert_equal:
           actual: actual
           expected: expected

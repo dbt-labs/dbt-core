@@ -41,8 +41,6 @@ jobs:
         include:
           - label: "dependencies"
             changie_kind: "Dependencies"
-          - label: "snyk"
-            changie_kind: "Security"
     runs-on: ubuntu-latest
 
     steps:

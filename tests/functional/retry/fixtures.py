@@ -11,7 +11,7 @@ models:
   - name: sample_model
     columns:
       - name: foo
-        tests:
+        data_tests:
           - accepted_values:
               values: [3]
               quote: false
@@ -20,7 +20,7 @@ models:
   - name: second_model
     columns:
       - name: bar
-        tests:
+        data_tests:
           - accepted_values:
               values: [3]
               quote: false
@@ -29,7 +29,7 @@ models:
   - name: union_model
     columns:
       - name: sum3
-        tests:
+        data_tests:
           - accepted_values:
               values: [3]
               quote: false
@@ -55,6 +55,6 @@ models:
   - name: some_model
     columns:
       - name: id
-        tests:
+        data_tests:
           - not_null
 """

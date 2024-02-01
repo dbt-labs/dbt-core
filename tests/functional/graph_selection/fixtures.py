@@ -33,20 +33,20 @@ models:
     group: emails_group
     columns:
     - name: email
-      tests:
+      data_tests:
       - not_null:
           severity: warn
   - name: users
     group: users_group
     columns:
     - name: id
-      tests:
+      data_tests:
       - unique
   - name: users_rollup
     group: users_rollup_group
     columns:
     - name: gender
-      tests:
+      data_tests:
       - unique
   - name: versioned
     latest_version: 2

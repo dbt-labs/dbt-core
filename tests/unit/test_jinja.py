@@ -5,7 +5,7 @@ import yaml
 
 from dbt.clients.jinja import get_rendered
 from dbt.clients.jinja import get_template
-from dbt.common.exceptions import JinjaRenderingError
+from dbt_common.exceptions import JinjaRenderingError
 
 
 @contextmanager

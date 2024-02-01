@@ -17,8 +17,8 @@ from tests.functional.artifacts.expected_run_results import (
 )
 
 from dbt.contracts.graph.manifest import WritableManifest
-from dbt.artifacts.results import RunStatus
-from dbt.artifacts.run import RunResultsArtifact
+from dbt.artifacts.schemas.results import RunStatus
+from dbt.artifacts.schemas.run import RunResultsArtifact
 
 models__schema_yml = """
 version: 2
@@ -31,7 +31,7 @@ models:
     columns:
       - name: id
         description: The user ID number
-        tests:
+        data_tests:
           - unique
           - not_null
       - name: first_name
@@ -42,7 +42,7 @@ models:
         description: The user's IP address
       - name: updated_at
         description: The last time this user's email was updated
-    tests:
+    data_tests:
       - test.nothing
 
   - name: second_model
@@ -369,13 +369,13 @@ models:
       meta:
         color: blue
         size: large
-    tests:
+    data_tests:
       - unique:
           column_name: count
     columns:
       - name: first_name
         description: "The first name being summarized"
-        tests:
+        data_tests:
           - unique
       - name: ct
         description: "The number of instances of the first name"
@@ -388,7 +388,7 @@ models:
           materialized: view
           meta:
             color: red
-        tests: []
+        data_tests: []
         columns:
           - include: '*'
             exclude: ['ct']
@@ -470,6 +470,7 @@ def verify_manifest(project, expected_manifest, start_time, manifest_schema_path
         "exposures",
         "selectors",
         "semantic_models",
+        "unit_tests",
         "saved_queries",
     }
 

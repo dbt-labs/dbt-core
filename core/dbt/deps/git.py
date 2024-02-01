@@ -2,7 +2,7 @@ import os
 from typing import List, Optional, Dict
 
 from dbt.clients import git
-from dbt.common.clients import system
+from dbt_common.clients import system
 from dbt.config.project import PartialProject, Project
 from dbt.config.renderer import PackageRenderer
 from dbt.contracts.project import (
@@ -10,9 +10,9 @@ from dbt.contracts.project import (
     GitPackage,
 )
 from dbt.deps.base import PinnedPackage, UnpinnedPackage, get_downloads_path
-from dbt.common.exceptions import ExecutableError
+from dbt_common.exceptions import ExecutableError
 from dbt.exceptions import MultipleVersionGitDepsError
-from dbt.common.events.functions import fire_event, warn_or_error, scrub_secrets, env_secrets
+from dbt_common.events.functions import fire_event, warn_or_error, scrub_secrets, env_secrets
 from dbt.events.types import EnsureGitInstalled, DepsUnpinned, DepsScrubbedPackageName
 from dbt.utils import md5
 

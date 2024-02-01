@@ -68,7 +68,7 @@ class StoreTestFailuresBase:
                 "quote_columns": False,
                 "test": self.column_type_overrides(),
             },
-            "tests": {"+schema": TEST_AUDIT_SCHEMA_SUFFIX},
+            "data_tests": {"+schema": TEST_AUDIT_SCHEMA_SUFFIX},
         }
 
     def column_type_overrides(self):

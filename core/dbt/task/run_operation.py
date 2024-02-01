@@ -5,19 +5,19 @@ from datetime import datetime
 
 import agate
 
-import dbt.common.exceptions
+import dbt_common.exceptions
 from dbt.adapters.factory import get_adapter
 from dbt.contracts.files import FileHash
 from dbt.contracts.graph.nodes import HookNode
-from dbt.artifacts.results import RunStatus, TimingInfo
-from dbt.artifacts.run import RunResultsArtifact, RunResult
-from dbt.common.events.functions import fire_event
+from dbt.artifacts.schemas.results import RunStatus, TimingInfo
+from dbt.artifacts.schemas.run import RunResultsArtifact, RunResult
+from dbt_common.events.functions import fire_event
 from dbt.events.types import (
     LogDebugStackTrace,
     RunningOperationCaughtError,
     RunningOperationUncaughtError,
 )
-from dbt.common.exceptions import DbtInternalError
+from dbt_common.exceptions import DbtInternalError
 from dbt.node_types import NodeType
 from dbt.task.base import ConfiguredTask
 
@@ -57,7 +57,7 @@ class RunOperationTask(ConfiguredTask):
 
         try:
             self._run_unsafe(package_name, macro_name)
-        except dbt.common.exceptions.DbtBaseException as exc:
+        except dbt_common.exceptions.DbtBaseException as exc:
             fire_event(RunningOperationCaughtError(exc=str(exc)))
             fire_event(LogDebugStackTrace(exc_info=traceback.format_exc()))
             success = False

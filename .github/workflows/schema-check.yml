@@ -42,12 +42,12 @@ jobs:
           python-version: 3.8
 
       - name: Checkout dbt repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
             path: ${{ env.DBT_REPO_DIRECTORY }}
 
       - name: Checkout schemas.getdbt.com repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: dbt-labs/schemas.getdbt.com
           ref: 'main'

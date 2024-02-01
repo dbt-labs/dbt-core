@@ -4,7 +4,7 @@ from dbt.node_types import NodeType
 node_type_pluralizations = {
     NodeType.Model: "models",
     NodeType.Analysis: "analyses",
-    NodeType.Test: "tests",
+    NodeType.Test: "data_tests",
     NodeType.Snapshot: "snapshots",
     NodeType.Operation: "operations",
     NodeType.Seed: "seeds",
@@ -17,7 +17,9 @@ node_type_pluralizations = {
     NodeType.Metric: "metrics",
     NodeType.Group: "groups",
     NodeType.SemanticModel: "semantic_models",
+    NodeType.Unit: "unit_tests",
     NodeType.SavedQuery: "saved_queries",
+    NodeType.Fixture: "fixtures",
 }
 
 

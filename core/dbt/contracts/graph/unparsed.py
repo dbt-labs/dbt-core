@@ -2,21 +2,24 @@ import datetime
 import re
 
 from dbt import deprecations
-from dbt.common.contracts.config.properties import (
+from dbt.artifacts.resources import ConstantPropertyInput
+from dbt_common.contracts.config.properties import (
     AdditionalPropertiesAllowed,
     AdditionalPropertiesMixin,
 )
-from dbt.common.exceptions import DbtInternalError, CompilationError
-from dbt.common.dataclass_schema import (
+from dbt_common.exceptions import DbtInternalError, CompilationError
+from dbt_common.dataclass_schema import (
     dbtClassMixin,
     StrEnum,
     ExtensibleDbtClassMixin,
     ValidationError,
 )
 from dbt.node_types import NodeType
-from dbt.contracts.graph.semantic_models import (
+from dbt.artifacts.resources import (
     Defaults,
     DimensionValidityParams,
+    ExposureType,
+    MaturityType,
     MeasureAggregationParameters,
 )
 from dbt.contracts.util import (
@@ -25,10 +28,11 @@ from dbt.contracts.util import (
 )
 
 # trigger the PathEncoder
-import dbt.common.helper_types  # noqa:F401
+import dbt_common.helper_types  # noqa:F401
 from dbt.exceptions import ParsingError
 
 from dbt_semantic_interfaces.type_enums import ConversionCalculationType
+from dbt.artifacts.resources import Docs, MacroArgument, NodeVersion, Owner
 
 from dataclasses import dataclass, field
 from datetime import timedelta
@@ -84,12 +88,6 @@ class UnparsedRunHook(UnparsedNode):
 
 
 @dataclass
-class Docs(dbtClassMixin, Replaceable):
-    show: bool = True
-    node_color: Optional[str] = None
-
-
-@dataclass
 class HasColumnProps(AdditionalPropertiesMixin, ExtensibleDbtClassMixin, Replaceable):
     name: str
     description: str = ""
@@ -105,7 +103,10 @@ TestDef = Union[Dict[str, Any], str]
 
 @dataclass
 class HasColumnAndTestProps(HasColumnProps):
-    tests: List[TestDef] = field(default_factory=list)
+    data_tests: List[TestDef] = field(default_factory=list)
+    tests: List[TestDef] = field(
+        default_factory=list
+    )  # back compat for previous name of 'data_tests'
 
 
 @dataclass
@@ -140,9 +141,6 @@ class HasConfig:
     config: Dict[str, Any] = field(default_factory=dict)
 
 
-NodeVersion = Union[str, float]
-
-
 @dataclass
 class UnparsedVersion(dbtClassMixin):
     v: NodeVersion
@@ -152,8 +150,9 @@ class UnparsedVersion(dbtClassMixin):
     config: Dict[str, Any] = field(default_factory=dict)
     constraints: List[Dict[str, Any]] = field(default_factory=list)
     docs: Docs = field(default_factory=Docs)
-    tests: Optional[List[TestDef]] = None
-    columns: Sequence[Union[dbt.common.helper_types.IncludeExclude, UnparsedColumn]] = field(
+    data_tests: Optional[List[TestDef]] = None
+    tests: Optional[List[TestDef]] = None  # back compat for previous name of 'data_tests'
+    columns: Sequence[Union[dbt_common.helper_types.IncludeExclude, UnparsedColumn]] = field(
         default_factory=list
     )
     deprecation_date: Optional[datetime.datetime] = None
@@ -165,7 +164,7 @@ class UnparsedVersion(dbtClassMixin):
             return str(self.v) < str(other.v)
 
     @property
-    def include_exclude(self) -> dbt.common.helper_types.IncludeExclude:
+    def include_exclude(self) -> dbt_common.helper_types.IncludeExclude:
         return self._include_exclude
 
     @property
@@ -178,10 +177,10 @@ class UnparsedVersion(dbtClassMixin):
 
     def __post_init__(self):
         has_include_exclude = False
-        self._include_exclude = dbt.common.helper_types.IncludeExclude(include="*")
+        self._include_exclude = dbt_common.helper_types.IncludeExclude(include="*")
         self._unparsed_columns = []
         for column in self.columns:
-            if isinstance(column, dbt.common.helper_types.IncludeExclude):
+            if isinstance(column, dbt_common.helper_types.IncludeExclude):
                 if not has_include_exclude:
                     self._include_exclude = column
                     has_include_exclude = True
@@ -255,14 +254,11 @@ class UnparsedModelUpdate(UnparsedNodeUpdate):
                 f"get_tests_for_version called for version '{version}' not in version map"
             )
         unparsed_version = self._version_map[version]
-        return unparsed_version.tests if unparsed_version.tests is not None else self.tests
-
-
-@dataclass
-class MacroArgument(dbtClassMixin):
-    name: str
-    type: Optional[str] = None
-    description: str = ""
+        return (
+            unparsed_version.data_tests
+            if unparsed_version.data_tests is not None
+            else self.data_tests
+        )
 
 
 @dataclass
@@ -301,8 +297,8 @@ class FreshnessThreshold(dbtClassMixin, Mergeable):
     error_after: Optional[Time] = field(default_factory=Time)
     filter: Optional[str] = None
 
-    def status(self, age: float) -> "dbt.artifacts.results.FreshnessStatus":
-        from dbt.artifacts.results import FreshnessStatus
+    def status(self, age: float) -> "dbt.artifacts.schemas.results.FreshnessStatus":  # type: ignore # noqa F821
+        from dbt.artifacts.schemas.results import FreshnessStatus
 
         if self.error_after and self.error_after.exceeded(age):
             return FreshnessStatus.Error
@@ -403,7 +399,8 @@ class SourceTablePatch(dbtClassMixin):
     freshness: Optional[FreshnessThreshold] = field(default_factory=FreshnessThreshold)
     external: Optional[ExternalTable] = None
     tags: Optional[List[str]] = None
-    tests: Optional[List[TestDef]] = None
+    data_tests: Optional[List[TestDef]] = None
+    tests: Optional[List[TestDef]] = None  # back compat for previous name of 'data_tests'
     columns: Optional[Sequence[UnparsedColumn]] = None
 
     def to_patch_dict(self) -> Dict[str, Any]:
@@ -511,26 +508,6 @@ class Maturity(StrEnum):
         return self == other or self < other
 
 
-class ExposureType(StrEnum):
-    Dashboard = "dashboard"
-    Notebook = "notebook"
-    Analysis = "analysis"
-    ML = "ml"
-    Application = "application"
-
-
-class MaturityType(StrEnum):
-    Low = "low"
-    Medium = "medium"
-    High = "high"
-
-
-@dataclass
-class Owner(AdditionalPropertiesAllowed, Replaceable):
-    email: Optional[str] = None
-    name: Optional[str] = None
-
-
 @dataclass
 class UnparsedExposure(dbtClassMixin, Replaceable):
     name: str
@@ -600,12 +577,6 @@ class UnparsedMetricInput(dbtClassMixin):
     alias: Optional[str] = None
     offset_window: Optional[str] = None
     offset_to_grain: Optional[str] = None  # str is really a TimeGranularity Enum
-
-
-@dataclass
-class ConstantPropertyInput(dbtClassMixin):
-    base_property: str
-    conversion_property: str
 
 
 @dataclass
@@ -783,3 +754,55 @@ def normalize_date(d: Optional[datetime.date]) -> Optional[datetime.datetime]:
         dt = dt.astimezone()
 
     return dt
+
+
+class UnitTestFormat(StrEnum):
+    CSV = "csv"
+    Dict = "dict"
+
+
+@dataclass
+class UnitTestInputFixture(dbtClassMixin):
+    input: str
+    rows: Optional[Union[str, List[Dict[str, Any]]]] = None
+    format: UnitTestFormat = UnitTestFormat.Dict
+    fixture: Optional[str] = None
+
+
+@dataclass
+class UnitTestOutputFixture(dbtClassMixin):
+    rows: Optional[Union[str, List[Dict[str, Any]]]] = None
+    format: UnitTestFormat = UnitTestFormat.Dict
+    fixture: Optional[str] = None
+
+
+@dataclass
+class UnitTestOverrides(dbtClassMixin):
+    macros: Dict[str, Any] = field(default_factory=dict)
+    vars: Dict[str, Any] = field(default_factory=dict)
+    env_vars: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class UnitTestNodeVersions(dbtClassMixin):
+    include: Optional[List[NodeVersion]] = None
+    exclude: Optional[List[NodeVersion]] = None
+
+
+@dataclass
+class UnparsedUnitTest(dbtClassMixin):
+    name: str
+    model: str  # name of the model being unit tested
+    given: Sequence[UnitTestInputFixture]
+    expect: UnitTestOutputFixture
+    description: str = ""
+    overrides: Optional[UnitTestOverrides] = None
+    config: Dict[str, Any] = field(default_factory=dict)
+    versions: Optional[UnitTestNodeVersions] = None
+
+    @classmethod
+    def validate(cls, data):
+        super(UnparsedUnitTest, cls).validate(data)
+        if data.get("versions", None):
+            if data["versions"].get("include") and data["versions"].get("exclude"):
+                raise ValidationError("Unit tests can not both include and exclude versions.")

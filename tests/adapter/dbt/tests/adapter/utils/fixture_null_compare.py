@@ -9,7 +9,7 @@ MODELS__TEST_MIXED_NULL_COMPARE_YML = """
 version: 2
 models:
   - name: test_mixed_null_compare
-    tests:
+    data_tests:
       - assert_equal:
           actual: actual
           expected: expected
@@ -27,7 +27,7 @@ MODELS__TEST_NULL_COMPARE_YML = """
 version: 2
 models:
   - name: test_null_compare
-    tests:
+    data_tests:
       - assert_equal:
           actual: actual
           expected: expected

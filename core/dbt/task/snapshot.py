@@ -1,13 +1,13 @@
 from .run import ModelRunner, RunTask
 
-from dbt.common.exceptions import DbtInternalError
-from dbt.common.events.functions import fire_event
-from dbt.common.events.base_types import EventLevel
+from dbt_common.exceptions import DbtInternalError
+from dbt_common.events.functions import fire_event
+from dbt_common.events.base_types import EventLevel
 from dbt.events.types import LogSnapshotResult
 from dbt.graph import ResourceTypeSelector
 from dbt.node_types import NodeType
-from dbt.artifacts.results import NodeStatus
-from dbt.common.utils import cast_dict_to_dict_of_strings
+from dbt.artifacts.schemas.results import NodeStatus
+from dbt_common.utils import cast_dict_to_dict_of_strings
 
 
 class SnapshotRunner(ModelRunner):

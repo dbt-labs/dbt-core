@@ -1,4 +1,5 @@
 import pytest
+from click.testing import CliRunner
 
 models__schema_yml = """
 version: 2
@@ -6,12 +7,12 @@ models:
   - name: sample_model
     columns:
       - name: sample_num
-        tests:
+        data_tests:
           - accepted_values:
               values: [1, 2]
           - not_null
       - name: sample_bool
-        tests:
+        data_tests:
           - not_null
           - unique
 """
@@ -51,6 +52,10 @@ select 1
 
 
 class BaseConfigProject:
+    @pytest.fixture()
+    def runner(self):
+        return CliRunner()
+
     @pytest.fixture(scope="class")
     def project_config_update(self):
         return {

@@ -9,8 +9,8 @@ from dbt.cli.flags import Flags
 from dbt.cli.main import cli
 from dbt.cli.types import Command
 from dbt.contracts.project import ProjectFlags
-from dbt.common.exceptions import DbtInternalError
-from dbt.common.helper_types import WarnErrorOptions
+from dbt_common.exceptions import DbtInternalError
+from dbt_common.helper_types import WarnErrorOptions
 from dbt.tests.util import rm_file, write_file
 
 
@@ -365,6 +365,14 @@ class TestFlags:
         flags_b = Flags(child_context_b)
 
         assert flags_a.USE_COLORS == flags_b.USE_COLORS
+
+    def test_set_project_only_flags(self, project_flags, run_context):
+        flags = Flags(run_context, project_flags)
+
+        for project_only_flag, project_only_flag_value in project_flags.project_only_flags.items():
+            assert getattr(flags, project_only_flag) == project_only_flag_value
+            # sanity check: ensure project_only_flag is not part of the click context
+            assert project_only_flag not in run_context.params
 
     def _create_flags_from_dict(self, cmd, d):
         write_file("", "profiles.yml")

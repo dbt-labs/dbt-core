@@ -53,7 +53,7 @@ models__test_any_value_yml = """
 version: 2
 models:
   - name: test_any_value
-    tests:
+    data_tests:
       - assert_equal:
           actual: actual
           expected: expected

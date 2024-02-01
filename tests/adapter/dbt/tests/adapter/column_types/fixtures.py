@@ -99,7 +99,7 @@ schema_yml = """
 version: 2
 models:
   - name: model
-    tests:
+    data_tests:
       - is_type:
           column_map:
             smallint_col: ['integer', 'number']

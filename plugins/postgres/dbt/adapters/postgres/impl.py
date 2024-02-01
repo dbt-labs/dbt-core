@@ -9,16 +9,16 @@ from dbt.adapters.sql import SQLAdapter
 from dbt.adapters.postgres import PostgresConnectionManager
 from dbt.adapters.postgres.column import PostgresColumn
 from dbt.adapters.postgres import PostgresRelation
-from dbt.common.contracts.constraints import ConstraintType
-from dbt.common.dataclass_schema import dbtClassMixin, ValidationError
-from dbt.common.exceptions import DbtRuntimeError
+from dbt_common.contracts.constraints import ConstraintType
+from dbt_common.dataclass_schema import dbtClassMixin, ValidationError
+from dbt_common.exceptions import DbtRuntimeError
 from dbt.adapters.exceptions import (
     CrossDbReferenceProhibitedError,
     IndexConfigNotDictError,
     IndexConfigError,
     UnexpectedDbReferenceError,
 )
-from dbt.common.utils import encoding as dbt_encoding
+from dbt_common.utils import encoding as dbt_encoding
 
 
 GET_RELATIONS_MACRO_NAME = "postgres__get_relations"

@@ -1,7 +1,7 @@
 import pytest
-from dbt.common.dataclass_schema import ValidationError
 
-from dbt.contracts.graph.model_config import ExposureConfig
+from dbt.artifacts.resources import ExposureConfig
+from dbt_common.dataclass_schema import ValidationError
 
 from dbt.tests.util import run_dbt, update_config_file, get_manifest
 from tests.functional.exposures.fixtures import (

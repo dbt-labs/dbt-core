@@ -7,9 +7,9 @@ import requests
 
 from typing import Iterator, List, Optional, Tuple
 
-import dbt.common.semver as semver
+import dbt_common.semver as semver
 
-from dbt.common.ui import green, red, yellow
+from dbt_common.ui import green, red, yellow
 
 PYPI_VERSION_URL = "https://pypi.org/pypi/dbt-core/json"
 

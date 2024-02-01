@@ -28,7 +28,7 @@ models__test_right_yml = """
 version: 2
 models:
   - name: test_right
-    tests:
+    data_tests:
       - assert_equal:
           actual: actual
           expected: expected

@@ -4,7 +4,7 @@ import io
 import agate
 from typing import Any, Dict, List, Mapping, Optional, Union
 
-from dbt.common.exceptions import (
+from dbt_common.exceptions import (
     DbtRuntimeError,
     CompilationError,
     DbtInternalError,
@@ -14,9 +14,9 @@ from dbt.common.exceptions import (
     DbtValidationError,
     CommandResultError,
 )
-from dbt.node_types import NodeType, AccessType
+from dbt.node_types import NodeType, AccessType, REFABLE_NODE_TYPES
 
-from dbt.common.dataclass_schema import ValidationError
+from dbt_common.dataclass_schema import ValidationError
 
 
 class ContractBreakingChangeError(DbtRuntimeError):
@@ -712,6 +712,12 @@ class InvalidAccessTypeError(ParsingError):
         super().__init__(msg=msg)
 
 
+class InvalidUnitTestGivenInput(ParsingError):
+    def __init__(self, input: str) -> None:
+        msg = f"Unit test given inputs must be either a 'ref', 'source' or 'this' call. Got: '{input}'."
+        super().__init__(msg=msg)
+
+
 class SameKeyNestedError(CompilationError):
     def __init__(self) -> None:
         msg = "Test cannot have the same key at the top-level and in config"
@@ -1267,7 +1273,7 @@ class DuplicateResourceNameError(CompilationError):
 
         action = "looking for"
         # duplicate 'ref' targets
-        if node_type in NodeType.refable():
+        if node_type in REFABLE_NODE_TYPES:
             formatted_name = f'ref("{duped_name}")'
         # duplicate sources
         elif node_type == NodeType.Source:
@@ -1345,7 +1351,7 @@ class ContractError(CompilationError):
 
     def get_mismatches(self) -> agate.Table:
         # avoid a circular import
-        from dbt.common.clients.agate_helper import table_from_data_flat
+        from dbt_common.clients.agate_helper import table_from_data_flat
 
         column_names = ["column_name", "definition_type", "contract_type", "mismatch_reason"]
         # list of mismatches

@@ -400,3 +400,85 @@ class TestMetadataFreshnessFails:
         runner.invoke(["parse"])
 
         assert got_warning
+
+
+class TestHooksInSourceFreshness(SuccessfulSourceFreshnessTest):
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "config-version": 2,
+            "on-run-start": ["{{ log('on-run-start hooks called') }}"],
+            "on-run-end": ["{{ log('on-run-end hooks called') }}"],
+            "flags": {
+                "source_freshness_run_project_hooks": True,
+            },
+        }
+
+    def test_hooks_do_run_for_source_freshness(
+        self,
+        project,
+    ):
+        _, log_output = self.run_dbt_and_capture_with_vars(
+            project,
+            [
+                "source",
+                "freshness",
+            ],
+            expect_pass=False,
+        )
+        assert "on-run-start" in log_output
+        assert "on-run-end" in log_output
+
+
+class TestHooksInSourceFreshnessDisabled(SuccessfulSourceFreshnessTest):
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "config-version": 2,
+            "on-run-start": ["{{ log('on-run-start hooks called') }}"],
+            "on-run-end": ["{{ log('on-run-end hooks called') }}"],
+            "flags": {
+                "source_freshness_run_project_hooks": False,
+            },
+        }
+
+    def test_hooks_do_run_for_source_freshness(
+        self,
+        project,
+    ):
+        _, log_output = self.run_dbt_and_capture_with_vars(
+            project,
+            [
+                "source",
+                "freshness",
+            ],
+            expect_pass=False,
+        )
+        assert "on-run-start" not in log_output
+        assert "on-run-end" not in log_output
+
+
+class TestHooksInSourceFreshnessDefault(SuccessfulSourceFreshnessTest):
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "config-version": 2,
+            "on-run-start": ["{{ log('on-run-start hooks called') }}"],
+            "on-run-end": ["{{ log('on-run-end hooks called') }}"],
+        }
+
+    def test_hooks_do_run_for_source_freshness(
+        self,
+        project,
+    ):
+        _, log_output = self.run_dbt_and_capture_with_vars(
+            project,
+            [
+                "source",
+                "freshness",
+            ],
+            expect_pass=False,
+        )
+        # default behaviour - no hooks run in source freshness
+        assert "on-run-start" not in log_output
+        assert "on-run-end" not in log_output

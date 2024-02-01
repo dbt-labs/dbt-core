@@ -1,82 +1,26 @@
 from typing import List
 
-from dbt.common.dataclass_schema import StrEnum
+# preserving import path during dbt/artifacts refactor
+from dbt.artifacts.resources.types import NodeType, AccessType, RunHookType, ModelLanguage  # noqa
 
+EXECUTABLE_NODE_TYPES: List["NodeType"] = [
+    NodeType.Model,
+    NodeType.Test,
+    NodeType.Snapshot,
+    NodeType.Analysis,
+    NodeType.Operation,
+    NodeType.Seed,
+    NodeType.Documentation,
+    NodeType.RPCCall,
+    NodeType.SqlOperation,
+]
 
-class AccessType(StrEnum):
-    Private = "private"
-    Protected = "protected"
-    Public = "public"
+REFABLE_NODE_TYPES: List["NodeType"] = [
+    NodeType.Model,
+    NodeType.Seed,
+    NodeType.Snapshot,
+]
 
-    @classmethod
-    def is_valid(cls, item):
-        try:
-            cls(item)
-        except ValueError:
-            return False
-        return True
-
-
-class NodeType(StrEnum):
-    Model = "model"
-    Analysis = "analysis"
-    Test = "test"
-    Snapshot = "snapshot"
-    Operation = "operation"
-    Seed = "seed"
-    # TODO: rm?
-    RPCCall = "rpc"
-    SqlOperation = "sql_operation"
-    Documentation = "doc"
-    Source = "source"
-    Macro = "macro"
-    Exposure = "exposure"
-    Metric = "metric"
-    Group = "group"
-    SavedQuery = "saved_query"
-    SemanticModel = "semantic_model"
-
-    @classmethod
-    def executable(cls) -> List["NodeType"]:
-        return [
-            cls.Model,
-            cls.Test,
-            cls.Snapshot,
-            cls.Analysis,
-            cls.Operation,
-            cls.Seed,
-            cls.Documentation,
-            cls.RPCCall,
-            cls.SqlOperation,
-        ]
-
-    @classmethod
-    def refable(cls) -> List["NodeType"]:
-        return [
-            cls.Model,
-            cls.Seed,
-            cls.Snapshot,
-        ]
-
-    @classmethod
-    def versioned(cls) -> List["NodeType"]:
-        return [
-            cls.Model,
-        ]
-
-    def pluralize(self) -> str:
-        if self is self.Analysis:
-            return "analyses"
-        elif self is self.SavedQuery:
-            return "saved_queries"
-        return f"{self}s"
-
-
-class RunHookType(StrEnum):
-    Start = "on-run-start"
-    End = "on-run-end"
-
-
-class ModelLanguage(StrEnum):
-    python = "python"
-    sql = "sql"
+VERSIONED_NODE_TYPES: List["NodeType"] = [
+    NodeType.Model,
+]

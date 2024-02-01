@@ -33,7 +33,7 @@ sources:
       - name: "seed"
         columns:
           - name: id
-            tests:
+            data_tests:
               - unique
 
 """
@@ -67,7 +67,7 @@ sources:
       - name: raw_customers
         columns:
           - name: id
-            tests:
+            data_tests:
               - not_null:
                   severity: "{{ 'error' if target.name == 'prod' else 'warn' }}"
               - unique
@@ -80,7 +80,7 @@ seeds:
     description: "Raw customer data"
     columns:
       - name: id
-        tests:
+        data_tests:
           - unique
           - not_null
       - name: first_name
@@ -140,7 +140,7 @@ sources:
       - name: raw_customers
         columns:
           - name: id
-            tests:
+            data_tests:
               - not_null:
                   severity: "{{ 'error' if target.name == 'prod' else 'warn' }}"
               - unique
@@ -154,7 +154,7 @@ seeds:
     description: "Raw customer data"
     columns:
       - name: id
-        tests:
+        data_tests:
           - unique
           - not_null
       - name: first_name
@@ -194,7 +194,7 @@ sources:
       - name: "seed"
         columns:
           - name: id
-            tests:
+            data_tests:
               - unique
               - not_null
 
@@ -209,7 +209,7 @@ sources:
       - name: raw_customers
         columns:
           - name: id
-            tests:
+            data_tests:
               - not_null:
                   severity: "{{ env_var('ENV_VAR_SEVERITY') }}"
               - unique
@@ -258,7 +258,7 @@ sources:
       - name: raw_customers
         columns:
           - name: id
-            tests:
+            data_tests:
               - not_null:
                   severity: "{{ 'error' if target.name == 'prod' else 'warn' }}"
               - unique
@@ -279,7 +279,7 @@ sources:
       - name: raw_customers
         columns:
           - name: id
-            tests:
+            data_tests:
               - not_null:
                   severity: "{{ 'error' if target.name == 'prod' else 'warn' }}"
               - unique
@@ -315,7 +315,7 @@ sources:
       - name: raw_customers
         columns:
           - name: id
-            tests:
+            data_tests:
               - not_null:
                   severity: "{{ 'error' if target.name == 'prod' else 'warn' }}"
               - unique
@@ -369,7 +369,7 @@ models:
     - name: model_one
       config:
         materialized: "{{ env_var('TEST_SCHEMA_VAR') }}"
-      tests:
+      data_tests:
         - check_color:
             column_name: fun
             color: "env_var('ENV_VAR_COLOR')"
@@ -407,7 +407,7 @@ models:
     - name: model_one
       config:
         materialized: "{{ env_var('TEST_SCHEMA_VAR') }}"
-      tests:
+      data_tests:
         - check_color:
             column_name: fun
             color: "env_var('ENV_VAR_COLOR')"
@@ -670,7 +670,7 @@ models:
       description: "The third model"
       columns:
         - name: id
-          tests:
+          data_tests:
             - not_null
 
 """
@@ -696,7 +696,7 @@ models:
         enabled: false
       columns:
         - name: id
-          tests:
+          data_tests:
             - unique
 
 """
@@ -713,7 +713,7 @@ models:
     description: "Some order data"
     columns:
       - name: id
-        tests:
+        data_tests:
           - unique
           - is_odd
 
@@ -773,7 +773,7 @@ models:
       description: "The third model"
       columns:
         - name: id
-          tests:
+          data_tests:
             - unique
 
 """
@@ -795,7 +795,7 @@ models:
       description: "The first model"
     - name: model_three
       description: "The third model"
-      tests:
+      data_tests:
           - unique
 macros:
     - name: do_something
@@ -837,7 +837,7 @@ models:
   - name: model_color
     columns:
       - name: fun
-        tests:
+        data_tests:
           - unique:
               enabled: "{{ env_var('ENV_VAR_ENABLED', True) }}"
 
@@ -880,7 +880,7 @@ macros_schema_yml = """
 
 models:
     - name: model_a
-      tests:
+      data_tests:
         - type_one
         - type_two
 
@@ -974,7 +974,7 @@ models:
         enabled: true
       columns:
         - name: id
-          tests:
+          data_tests:
             - unique
 
 """
@@ -1019,7 +1019,7 @@ models:
     description: "Some order data"
     columns:
       - name: id
-        tests:
+        data_tests:
           - unique
 
 """

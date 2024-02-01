@@ -2,7 +2,7 @@ import pytest
 from dbt.tests.util import run_dbt, get_manifest, read_file
 import json
 import os
-from dbt.common.events.functions import fire_event
+from dbt_common.events.functions import fire_event
 from dbt.events.types import InvalidOptionYAML
 
 

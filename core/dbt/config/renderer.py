@@ -4,15 +4,15 @@ import os
 from datetime import date
 
 from dbt.clients.jinja import get_rendered
-from dbt.common.clients.jinja import catch_jinja
+from dbt_common.clients.jinja import catch_jinja
 from dbt.constants import SECRET_ENV_PREFIX, DEPENDENCIES_FILE_NAME
 from dbt.context.target import TargetContext
 from dbt.context.secret import SecretContext, SECRET_PLACEHOLDER
 from dbt.context.base import BaseContext
 from dbt.adapters.contracts.connection import HasCredentials
 from dbt.exceptions import DbtProjectError
-from dbt.common.exceptions import CompilationError, RecursionError
-from dbt.common.utils import deep_map_render
+from dbt_common.exceptions import CompilationError, RecursionError
+from dbt_common.utils import deep_map_render
 
 
 Keypath = Tuple[Union[str, int], ...]
@@ -164,7 +164,7 @@ class DbtProjectYamlRenderer(BaseRenderer):
         if first == "vars":
             return False
 
-        if first in {"seeds", "models", "snapshots", "tests"}:
+        if first in {"seeds", "models", "snapshots", "tests", "data_tests"}:
             keypath_parts = {(k.lstrip("+ ") if isinstance(k, str) else k) for k in keypath}
             # model-level hooks
             late_rendered_hooks = {"pre-hook", "post-hook", "pre_hook", "post_hook"}

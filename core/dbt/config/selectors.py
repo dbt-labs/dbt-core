@@ -2,18 +2,18 @@ from pathlib import Path
 from copy import deepcopy
 from typing import Dict, Any, Union
 from dbt.clients.yaml_helper import yaml, Loader, Dumper, load_yaml_text  # noqa: F401
-from dbt.common.dataclass_schema import ValidationError
+from dbt_common.dataclass_schema import ValidationError
 
 from .renderer import BaseRenderer
 
-from dbt.common.clients.system import (
+from dbt_common.clients.system import (
     load_file_contents,
     path_exists,
     resolve_path_from_base,
 )
 from dbt.contracts.selection import SelectorFile
 from dbt.exceptions import DbtSelectorsError
-from dbt.common.exceptions import DbtRuntimeError
+from dbt_common.exceptions import DbtRuntimeError
 from dbt.graph import parse_from_selectors_definition, SelectionSpec
 from dbt.graph.selector_spec import SelectionCriteria
 

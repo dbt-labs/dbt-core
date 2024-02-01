@@ -3401,6 +3401,510 @@
         "config"
       ]
     },
+    "UnitTestNodeConfig": {
+      "type": "object",
+      "title": "UnitTestNodeConfig",
+      "properties": {
+        "_extra": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          }
+        },
+        "enabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "alias": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "schema": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "database": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "tags": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "meta": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          }
+        },
+        "group": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "materialized": {
+          "type": "string",
+          "default": "view"
+        },
+        "incremental_strategy": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "persist_docs": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          }
+        },
+        "post-hook": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Hook"
+          }
+        },
+        "pre-hook": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Hook"
+          }
+        },
+        "quoting": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          }
+        },
+        "column_types": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          }
+        },
+        "full_refresh": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "unique_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "on_schema_change": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": "ignore"
+        },
+        "on_configuration_change": {
+          "enum": [
+            "apply",
+            "continue",
+            "fail"
+          ]
+        },
+        "grants": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          }
+        },
+        "packages": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "docs": {
+          "$ref": "#/$defs/Docs"
+        },
+        "contract": {
+          "$ref": "#/$defs/ContractConfig"
+        },
+        "expected_rows": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "UnitTestOverrides": {
+      "type": "object",
+      "title": "UnitTestOverrides",
+      "properties": {
+        "macros": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          }
+        },
+        "vars": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          }
+        },
+        "env_vars": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "UnitTestNode": {
+      "type": "object",
+      "title": "UnitTestNode",
+      "properties": {
+        "database": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "schema": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "resource_type": {
+          "const": "unit_test"
+        },
+        "package_name": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "original_file_path": {
+          "type": "string"
+        },
+        "unique_id": {
+          "type": "string"
+        },
+        "fqn": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "alias": {
+          "type": "string"
+        },
+        "checksum": {
+          "$ref": "#/$defs/FileHash"
+        },
+        "config": {
+          "$ref": "#/$defs/UnitTestNodeConfig"
+        },
+        "_event_status": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          }
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "description": {
+          "type": "string",
+          "default": ""
+        },
+        "columns": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/ColumnInfo"
+          },
+          "propertyNames": {
+            "type": "string"
+          }
+        },
+        "meta": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          }
+        },
+        "group": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "docs": {
+          "$ref": "#/$defs/Docs"
+        },
+        "patch_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "build_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "deferred": {
+          "type": "boolean",
+          "default": false
+        },
+        "unrendered_config": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          }
+        },
+        "created_at": {
+          "type": "number"
+        },
+        "config_call_dict": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          }
+        },
+        "relation_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "raw_code": {
+          "type": "string",
+          "default": ""
+        },
+        "language": {
+          "type": "string",
+          "default": "sql"
+        },
+        "refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RefArgs"
+          }
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "metrics": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "depends_on": {
+          "$ref": "#/$defs/DependsOn"
+        },
+        "compiled_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "compiled": {
+          "type": "boolean",
+          "default": false
+        },
+        "compiled_code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "extra_ctes_injected": {
+          "type": "boolean",
+          "default": false
+        },
+        "extra_ctes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/InjectedCTE"
+          }
+        },
+        "_pre_injected_sql": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "contract": {
+          "$ref": "#/$defs/Contract"
+        },
+        "tested_node_unique_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "this_input_node_unique_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "overrides": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UnitTestOverrides"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "database",
+        "schema",
+        "name",
+        "resource_type",
+        "package_name",
+        "path",
+        "original_file_path",
+        "unique_id",
+        "fqn",
+        "alias",
+        "checksum"
+      ]
+    },
     "SeedConfig": {
       "type": "object",
       "title": "SeedConfig",
@@ -5223,6 +5727,31 @@
           "propertyNames": {
             "type": "string"
           }
+        },
+        "export_as": {
+          "anyOf": [
+            {
+              "enum": [
+                "table",
+                "view"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "schema": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "additionalProperties": true
@@ -5251,7 +5780,8 @@
             "metric",
             "group",
             "saved_query",
-            "semantic_model"
+            "semantic_model",
+            "unit_test"
           ]
         },
         "package_name": {
@@ -5279,6 +5809,12 @@
           "type": "array",
           "items": {
             "$ref": "#/$defs/Export"
+          }
+        },
+        "_event_status": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
           }
         },
         "description": {
@@ -5822,7 +6358,8 @@
             "metric",
             "group",
             "saved_query",
-            "semantic_model"
+            "semantic_model",
+            "unit_test"
           ]
         },
         "package_name": {
@@ -5975,6 +6512,256 @@
         "node_relation"
       ]
     },
+    "UnitTestInputFixture": {
+      "type": "object",
+      "title": "UnitTestInputFixture",
+      "properties": {
+        "input": {
+          "type": "string"
+        },
+        "rows": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "format": {
+          "enum": [
+            "csv",
+            "dict"
+          ],
+          "default": "dict"
+        },
+        "fixture": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "input"
+      ]
+    },
+    "UnitTestOutputFixture": {
+      "type": "object",
+      "title": "UnitTestOutputFixture",
+      "properties": {
+        "rows": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "format": {
+          "enum": [
+            "csv",
+            "dict"
+          ],
+          "default": "dict"
+        },
+        "fixture": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "additionalProperties": false
+    },
+    "UnitTestConfig": {
+      "type": "object",
+      "title": "UnitTestConfig",
+      "properties": {
+        "_extra": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          }
+        },
+        "tags": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "meta": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "UnitTestDefinition": {
+      "type": "object",
+      "title": "UnitTestDefinition",
+      "properties": {
+        "model": {
+          "type": "string"
+        },
+        "given": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/UnitTestInputFixture"
+          }
+        },
+        "expect": {
+          "$ref": "#/$defs/UnitTestOutputFixture"
+        },
+        "name": {
+          "type": "string"
+        },
+        "resource_type": {
+          "enum": [
+            "model",
+            "analysis",
+            "test",
+            "snapshot",
+            "operation",
+            "seed",
+            "rpc",
+            "sql_operation",
+            "doc",
+            "source",
+            "macro",
+            "exposure",
+            "metric",
+            "group",
+            "saved_query",
+            "semantic_model",
+            "unit_test"
+          ]
+        },
+        "package_name": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "original_file_path": {
+          "type": "string"
+        },
+        "unique_id": {
+          "type": "string"
+        },
+        "fqn": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "_event_status": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          }
+        },
+        "description": {
+          "type": "string",
+          "default": ""
+        },
+        "overrides": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UnitTestOverrides"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "depends_on": {
+          "$ref": "#/$defs/DependsOn"
+        },
+        "config": {
+          "$ref": "#/$defs/UnitTestConfig"
+        },
+        "checksum": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "schema": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "model",
+        "given",
+        "expect",
+        "name",
+        "resource_type",
+        "package_name",
+        "path",
+        "original_file_path",
+        "unique_id",
+        "fqn"
+      ]
+    },
     "WritableManifest": {
       "type": "object",
       "title": "WritableManifest",
@@ -6011,6 +6798,9 @@
               },
               {
                 "$ref": "#/$defs/SnapshotNode"
+              },
+              {
+                "$ref": "#/$defs/UnitTestNode"
               },
               {
                 "$ref": "#/$defs/SeedNode"
@@ -6122,6 +6912,9 @@
                       "$ref": "#/$defs/SnapshotNode"
                     },
                     {
+                      "$ref": "#/$defs/UnitTestNode"
+                    },
+                    {
                       "$ref": "#/$defs/SeedNode"
                     },
                     {
@@ -6138,6 +6931,9 @@
                     },
                     {
                       "$ref": "#/$defs/SemanticModel"
+                    },
+                    {
+                      "$ref": "#/$defs/UnitTestDefinition"
                     }
                   ]
                 }
@@ -6230,6 +7026,16 @@
           "propertyNames": {
             "type": "string"
           }
+        },
+        "unit_tests": {
+          "type": "object",
+          "description": "The unit tests defined in the project",
+          "additionalProperties": {
+            "$ref": "#/$defs/UnitTestDefinition"
+          },
+          "propertyNames": {
+            "type": "string"
+          }
         }
       },
       "additionalProperties": false,
@@ -6248,7 +7054,8 @@
         "child_map",
         "group_map",
         "saved_queries",
-        "semantic_models"
+        "semantic_models",
+        "unit_tests"
       ]
     }
   },

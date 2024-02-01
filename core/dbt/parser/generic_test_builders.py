@@ -9,10 +9,10 @@ from typing import (
     List,
 )
 
+from dbt.artifacts.resources import NodeVersion
 from dbt.clients.jinja import get_rendered, GENERIC_TEST_KWARGS_NAME
 from dbt.contracts.graph.nodes import UnpatchedSourceDefinition
 from dbt.contracts.graph.unparsed import (
-    NodeVersion,
     UnparsedNodeUpdate,
     UnparsedModelUpdate,
 )
@@ -28,7 +28,7 @@ from dbt.exceptions import (
     TestNameNotStringError,
     UnexpectedTestNamePatternError,
 )
-from dbt.common.exceptions.macros import UndefinedMacroError
+from dbt_common.exceptions.macros import UndefinedMacroError
 from dbt.parser.common import Testable
 from dbt.utils import md5
 
@@ -110,14 +110,14 @@ class TestBuilder(Generic[Testable]):
 
     def __init__(
         self,
-        test: Dict[str, Any],
+        data_test: Dict[str, Any],
         target: Testable,
         package_name: str,
         render_ctx: Dict[str, Any],
         column_name: Optional[str] = None,
         version: Optional[NodeVersion] = None,
     ) -> None:
-        test_name, test_args = self.extract_test_args(test, column_name)
+        test_name, test_args = self.extract_test_args(data_test, column_name)
         self.args: Dict[str, Any] = test_args
         if "model" in self.args:
             raise TestArgIncludesModelError()
@@ -154,6 +154,7 @@ class TestBuilder(Generic[Testable]):
                 try:
                     value = get_rendered(value, render_ctx, native=True)
                 except UndefinedMacroError as e:
+
                     raise CustomMacroPopulatingConfigValueError(
                         target_name=self.target.name,
                         column_name=column_name,
@@ -195,24 +196,24 @@ class TestBuilder(Generic[Testable]):
         return TypeError('invalid target type "{}"'.format(type(self.target)))
 
     @staticmethod
-    def extract_test_args(test, name=None) -> Tuple[str, Dict[str, Any]]:
-        if not isinstance(test, dict):
-            raise TestTypeError(test)
+    def extract_test_args(data_test, name=None) -> Tuple[str, Dict[str, Any]]:
+        if not isinstance(data_test, dict):
+            raise TestTypeError(data_test)
 
         # If the test is a dictionary with top-level keys, the test name is "test_name"
         # and the rest are arguments
         # {'name': 'my_favorite_test', 'test_name': 'unique', 'config': {'where': '1=1'}}
-        if "test_name" in test.keys():
-            test_name = test.pop("test_name")
-            test_args = test
+        if "test_name" in data_test.keys():
+            test_name = data_test.pop("test_name")
+            test_args = data_test
         # If the test is a nested dictionary with one top-level key, the test name
         # is the dict name, and nested keys are arguments
         # {'unique': {'name': 'my_favorite_test', 'config': {'where': '1=1'}}}
         else:
-            test = list(test.items())
-            if len(test) != 1:
-                raise TestDefinitionDictLengthError(test)
-            test_name, test_args = test[0]
+            data_test = list(data_test.items())
+            if len(data_test) != 1:
+                raise TestDefinitionDictLengthError(data_test)
+            test_name, test_args = data_test[0]
 
         if not isinstance(test_args, dict):
             raise TestArgsNotDictError(test_args)

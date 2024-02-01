@@ -3,7 +3,7 @@ from itertools import product
 import networkx as nx  # type: ignore
 from functools import partial
 
-from dbt.common.exceptions import DbtInternalError
+from dbt_common.exceptions import DbtInternalError
 
 UniqueId = NewType("UniqueId", str)
 
@@ -14,7 +14,7 @@ class Graph:
     """
 
     def __init__(self, graph) -> None:
-        self.graph = graph
+        self.graph: nx.DiGraph = graph
 
     def nodes(self) -> Set[UniqueId]:
         return set(self.graph.nodes())
@@ -83,10 +83,10 @@ class Graph:
         removed nodes are preserved as explicit new edges.
         """
 
-        new_graph = self.graph.copy()
-        include_nodes = set(selected)
+        new_graph: nx.DiGraph = self.graph.copy()
+        include_nodes: Set[UniqueId] = set(selected)
 
-        still_removing = True
+        still_removing: bool = True
         while still_removing:
             nodes_to_remove = list(
                 node
@@ -129,6 +129,8 @@ class Graph:
         return Graph(new_graph)
 
     def subgraph(self, nodes: Iterable[UniqueId]) -> "Graph":
+        # Take the original networkx graph and return a subgraph containing only
+        # the selected unique_id nodes.
         return Graph(self.graph.subgraph(nodes))
 
     def get_dependent_nodes(self, node: UniqueId):

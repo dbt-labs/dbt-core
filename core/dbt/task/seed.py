@@ -5,13 +5,13 @@ from .printer import (
     print_run_end_messages,
 )
 
-from dbt.artifacts.results import RunStatus, NodeStatus
-from dbt.common.exceptions import DbtInternalError
+from dbt.artifacts.schemas.results import RunStatus, NodeStatus
+from dbt_common.exceptions import DbtInternalError
 from dbt.graph import ResourceTypeSelector
 from dbt.logger import TextOnly
-from dbt.common.events.functions import fire_event
-from dbt.common.events.types import Formatting
-from dbt.common.events.base_types import EventLevel
+from dbt_common.events.functions import fire_event
+from dbt_common.events.types import Formatting
+from dbt_common.events.base_types import EventLevel
 from dbt.events.types import (
     SeedHeader,
     LogSeedResult,
@@ -62,10 +62,6 @@ class SeedRunner(ModelRunner):
 
 
 class SeedTask(RunTask):
-    def defer_to_manifest(self, adapter, selected_uids):
-        # seeds don't defer
-        return
-
     def raise_on_first_error(self):
         return False
 

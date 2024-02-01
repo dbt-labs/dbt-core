@@ -3,7 +3,7 @@ import threading
 import time
 from typing import List, Dict, Any, Iterable, Set, Tuple, Optional, AbstractSet
 
-from dbt.common.dataclass_schema import dbtClassMixin
+from dbt_common.dataclass_schema import dbtClassMixin
 
 from .compile import CompileRunner, CompileTask
 
@@ -19,23 +19,23 @@ from dbt.clients.jinja import MacroGenerator
 from dbt.context.providers import generate_runtime_model_context
 from dbt.contracts.graph.model_config import Hook
 from dbt.contracts.graph.nodes import HookNode, ResultNode
-from dbt.artifacts.results import NodeStatus, RunStatus, RunningStatus, BaseResult
-from dbt.artifacts.run import RunResult
+from dbt.artifacts.schemas.results import NodeStatus, RunStatus, RunningStatus, BaseResult
+from dbt.artifacts.schemas.run import RunResult
 from dbt.exceptions import (
     CompilationError,
     DbtInternalError,
     DbtRuntimeError,
 )
-from dbt.common.exceptions import DbtValidationError
+from dbt_common.exceptions import DbtValidationError
 from dbt.adapters.exceptions import MissingMaterializationError
 from dbt.adapters.events.types import (
     DatabaseErrorRunningHook,
     HooksRunning,
     FinishedRunningStats,
 )
-from dbt.common.events.functions import fire_event, get_invocation_id
-from dbt.common.events.types import Formatting
-from dbt.common.events.base_types import EventLevel
+from dbt_common.events.functions import fire_event, get_invocation_id
+from dbt_common.events.types import Formatting
+from dbt_common.events.base_types import EventLevel
 from dbt.events.types import (
     LogModelResult,
     LogStartLine,

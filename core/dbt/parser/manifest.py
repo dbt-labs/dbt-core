@@ -21,7 +21,8 @@ import time
 
 from dbt.context.manifest import generate_query_header_context
 from dbt.contracts.graph.semantic_manifest import SemanticManifest
-from dbt.common.events.base_types import EventLevel
+from dbt_common.events.base_types import EventLevel
+import dbt_common.utils
 import json
 import pprint
 from dbt.mp_context import get_mp_context
@@ -43,9 +44,9 @@ from dbt.constants import (
     PARTIAL_PARSE_FILE_NAME,
     SEMANTIC_MANIFEST_FILE_NAME,
 )
-from dbt.common.helper_types import PathSet
-from dbt.common.events.functions import fire_event, get_invocation_id, warn_or_error
-from dbt.common.events.types import (
+from dbt_common.helper_types import PathSet
+from dbt_common.events.functions import fire_event, get_invocation_id, warn_or_error
+from dbt_common.events.types import (
     Note,
 )
 from dbt.events.types import (
@@ -67,7 +68,7 @@ from dbt.logger import DbtProcessState
 from dbt.node_types import NodeType, AccessType
 from dbt.clients.jinja import get_rendered, MacroStack
 from dbt.clients.jinja_static import statically_extract_macro_calls
-from dbt.common.clients.system import (
+from dbt_common.clients.system import (
     make_directory,
     path_exists,
     read_json,
@@ -105,10 +106,9 @@ from dbt.contracts.graph.nodes import (
     ManifestNode,
     ResultNode,
     ModelNode,
-    NodeRelation,
 )
-from dbt.contracts.graph.unparsed import NodeVersion
-from dbt.artifacts.base import Writable
+from dbt.artifacts.resources import NodeRelation, NodeVersion
+from dbt.artifacts.schemas.base import Writable
 from dbt.exceptions import (
     TargetNotFoundError,
     AmbiguousAliasError,
@@ -119,6 +119,7 @@ from dbt.parser.analysis import AnalysisParser
 from dbt.parser.generic_test import GenericTestParser
 from dbt.parser.singular_test import SingularTestParser
 from dbt.parser.docs import DocumentationParser
+from dbt.parser.fixtures import FixtureParser
 from dbt.parser.hooks import HookParser
 from dbt.parser.macros import MacroParser
 from dbt.parser.models import ModelParser
@@ -127,9 +128,10 @@ from dbt.parser.search import FileBlock
 from dbt.parser.seeds import SeedParser
 from dbt.parser.snapshots import SnapshotParser
 from dbt.parser.sources import SourcePatcher
+from dbt.parser.unit_tests import process_models_for_unit_test
 from dbt.version import __version__
 
-from dbt.common.dataclass_schema import StrEnum, dbtClassMixin
+from dbt_common.dataclass_schema import StrEnum, dbtClassMixin
 from dbt import plugins
 
 from dbt_semantic_interfaces.enum_extension import assert_values_exhausted
@@ -475,6 +477,7 @@ class ManifestLoader:
                 SeedParser,
                 DocumentationParser,
                 HookParser,
+                FixtureParser,
             ]
             for project in self.all_projects.values():
                 if project.project_name not in project_parser_files:
@@ -531,6 +534,7 @@ class ManifestLoader:
             start_process = time.perf_counter()
             self.process_sources(self.root_project.project_name)
             self.process_refs(self.root_project.project_name, self.root_project.dependencies)
+            self.process_unit_tests(self.root_project.project_name)
             self.process_docs(self.root_project)
             self.process_metrics(self.root_project)
             self.process_saved_queries(self.root_project)
@@ -1224,6 +1228,27 @@ class ManifestLoader:
                 continue
             _process_sources_for_exposure(self.manifest, current_project, exposure)
 
+    # Loops through all nodes, for each element in
+    # 'unit_test' array finds the node and updates the
+    # 'depends_on.nodes' array with the unique id
+    def process_unit_tests(self, current_project: str):
+        models_to_versions = None
+        unit_test_unique_ids = list(self.manifest.unit_tests.keys())
+        for unit_test_unique_id in unit_test_unique_ids:
+            # This is because some unit tests will be removed when processing
+            # and the list of unit_test_unique_ids won't have changed
+            if unit_test_unique_id in self.manifest.unit_tests:
+                unit_test = self.manifest.unit_tests[unit_test_unique_id]
+            else:
+                continue
+            if unit_test.created_at < self.started_at:
+                continue
+            if not models_to_versions:
+                models_to_versions = _build_model_names_to_versions(self.manifest)
+            process_models_for_unit_test(
+                self.manifest, current_project, unit_test, models_to_versions
+            )
+
     def cleanup_disabled(self):
         # make sure the nodes are in the manifest.nodes or the disabled dict,
         # correctly now that the schema files are also parsed
@@ -1338,6 +1363,21 @@ def invalid_target_fail_unless_test(
             target_version=target_version,
             disabled=disabled,
         )
+
+
+def _build_model_names_to_versions(manifest: Manifest) -> Dict[str, Dict]:
+    model_names_to_versions: Dict[str, Dict] = {}
+    for node in manifest.nodes.values():
+        if node.resource_type != NodeType.Model:
+            continue
+        if not node.is_versioned:
+            continue
+        if node.package_name not in model_names_to_versions:
+            model_names_to_versions[node.package_name] = {}
+        if node.name not in model_names_to_versions[node.package_name]:
+            model_names_to_versions[node.package_name][node.name] = []
+        model_names_to_versions[node.package_name][node.name].append(node.unique_id)
+    return model_names_to_versions
 
 
 def _check_resource_uniqueness(
@@ -1518,7 +1558,7 @@ def _process_refs(
                 unique_id=node.unique_id,
                 ref_unique_id=target_model.unique_id,
                 access=AccessType.Private,
-                scope=dbt.common.utils.cast_to_str(target_model.group),
+                scope=dbt_common.utils.cast_to_str(target_model.group),
             )
         elif manifest.is_invalid_protected_ref(node, target_model, dependencies):
             raise dbt.exceptions.DbtReferenceError(
@@ -1751,7 +1791,7 @@ def _process_sources_for_node(manifest: Manifest, current_project: str, node: Ma
         )
 
         if target_source is None or isinstance(target_source, Disabled):
-            # this folows the same pattern as refs
+            # this follows the same pattern as refs
             node.config.enabled = False
             invalid_target_fail_unless_test(
                 node=node,
@@ -1791,8 +1831,9 @@ def write_semantic_manifest(manifest: Manifest, target_path: str) -> None:
     semantic_manifest.write_json_to_file(path)
 
 
-def write_manifest(manifest: Manifest, target_path: str):
-    path = os.path.join(target_path, MANIFEST_FILE_NAME)
+def write_manifest(manifest: Manifest, target_path: str, which: Optional[str] = None):
+    file_name = MANIFEST_FILE_NAME
+    path = os.path.join(target_path, file_name)
     manifest.write(path)
 
     write_semantic_manifest(manifest=manifest, target_path=target_path)

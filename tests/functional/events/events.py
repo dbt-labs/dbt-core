@@ -1,7 +1,7 @@
 import os
 
 from dbt.cli.main import dbtRunner
-from dbt.common.events.base_types import EventLevel
+from dbt_common.events.base_types import EventLevel
 
 
 def test_performance_report(project):
