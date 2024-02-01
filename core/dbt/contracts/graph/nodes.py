@@ -4,8 +4,21 @@ import time
 from dataclasses import dataclass, field
 import hashlib
 
+from abc import ABC
 from mashumaro.types import SerializableType
-from typing import Optional, Union, List, Dict, Any, Sequence, Tuple, Iterator, Literal
+from typing import (
+    Optional,
+    Union,
+    List,
+    Dict,
+    Any,
+    Sequence,
+    Tuple,
+    Iterator,
+    Literal,
+    Generic,
+    TypeVar,
+)
 
 from dbt import deprecations
 from dbt_common.contracts.constraints import (
@@ -108,8 +121,11 @@ from dbt.artifacts.resources import (
 # ==================================================
 
 
+ResourceTypeT = TypeVar("ResourceTypeT", bound="BaseResource")
+
+
 @dataclass
-class BaseNode(BaseResource):
+class BaseNode(ABC, Generic[ResourceTypeT], BaseResource):
     """All nodes or node-like objects in this file should have this as a base class"""
 
     @property
@@ -149,12 +165,12 @@ class BaseNode(BaseResource):
         return self.config.materialized
 
     @classmethod
-    def from_resource(cls, resource_instance: BaseResource):
+    def from_resource(cls, resource_instance: ResourceTypeT):
         return cls.from_dict(resource_instance.to_dict())
 
 
 @dataclass
-class GraphNode(GraphResource, BaseNode):
+class GraphNode(GraphResource, BaseNode[ResourceTypeT], Generic[ResourceTypeT]):
     """Nodes in the DAG. Macro and Documentation don't have fqn."""
 
     def same_fqn(self, other) -> bool:
@@ -217,7 +233,7 @@ class DeferRelation(HasRelationMetadata):
 
 
 @dataclass
-class ParsedNodeMandatory(GraphNode, HasRelationMetadata, Replaceable):
+class ParsedNodeMandatory(GraphNode[GraphResource], HasRelationMetadata, Replaceable):
     alias: str
     checksum: FileHash
     config: NodeConfig = field(default_factory=NodeConfig)
@@ -1012,7 +1028,7 @@ class UnitTestDefinitionMandatory:
 
 
 @dataclass
-class UnitTestDefinition(NodeInfoMixin, GraphNode, UnitTestDefinitionMandatory):
+class UnitTestDefinition(NodeInfoMixin, GraphNode[GraphResource], UnitTestDefinitionMandatory):
     description: str = ""
     overrides: Optional[UnitTestOverrides] = None
     depends_on: DependsOn = field(default_factory=DependsOn)
@@ -1229,7 +1245,7 @@ class UnpatchedSourceDefinition(BaseNode):
 
 
 @dataclass
-class ParsedSourceMandatory(GraphNode, HasRelationMetadata):
+class ParsedSourceMandatory(GraphNode[GraphResource], HasRelationMetadata):
     source_name: str
     source_description: str
     loader: str
@@ -1362,7 +1378,7 @@ class SourceDefinition(NodeInfoMixin, ParsedSourceMandatory):
 
 
 @dataclass
-class Exposure(GraphNode):
+class Exposure(GraphNode[GraphResource]):
     type: ExposureType
     owner: Owner
     resource_type: Literal[NodeType.Exposure]
@@ -1445,7 +1461,7 @@ class Exposure(GraphNode):
 
 
 @dataclass
-class Metric(GraphNode, MetricResource):
+class Metric(GraphNode[MetricResource], MetricResource):
     @property
     def depends_on_nodes(self):
         return self.depends_on.nodes
@@ -1512,7 +1528,7 @@ class Group(GroupResource, BaseNode):
 
 
 @dataclass
-class SemanticModel(GraphNode, SemanticModelResource):
+class SemanticModel(GraphNode[SemanticModelResource], SemanticModelResource):
     @property
     def depends_on_nodes(self):
         return self.depends_on.nodes
@@ -1578,7 +1594,7 @@ class SemanticModel(GraphNode, SemanticModelResource):
 
 
 @dataclass
-class SavedQuery(NodeInfoMixin, GraphNode, SavedQueryResource):
+class SavedQuery(NodeInfoMixin, GraphNode[SavedQueryResource], SavedQueryResource):
     def same_metrics(self, old: "SavedQuery") -> bool:
         return self.query_params.metrics == old.query_params.metrics
 
