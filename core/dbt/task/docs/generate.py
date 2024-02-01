@@ -13,6 +13,8 @@ from dbt.task.docs import DOCS_INDEX_FILE_PATH
 from dbt.task.compile import CompileTask
 
 from dbt.adapters.factory import get_adapter
+
+from dbt.graph.graph import UniqueId
 from dbt.contracts.graph.nodes import ResultNode
 from dbt.contracts.graph.manifest import Manifest
 from dbt.artifacts.schemas.results import NodeStatus
@@ -30,7 +32,7 @@ from dbt.artifacts.schemas.catalog import (
 from dbt_common.exceptions import DbtInternalError
 from dbt.exceptions import AmbiguousCatalogMatchError
 from dbt.graph import ResourceTypeSelector
-from dbt.node_types import EXECUTABLE_NODE_TYPES
+from dbt.node_types import EXECUTABLE_NODE_TYPES, NodeType
 from dbt_common.events.functions import fire_event
 from dbt.adapters.events.types import (
     WriteCatalogFailure,
@@ -112,8 +114,13 @@ class Catalog(Dict[CatalogKey, CatalogTable]):
         table.columns[column.name] = column
 
     def make_unique_id_map(
-        self, manifest: Manifest
+        self, manifest: Manifest, selected_node_ids: Optional[Set[UniqueId]] = None
     ) -> Tuple[Dict[str, CatalogTable], Dict[str, CatalogTable]]:
+        """
+        Create mappings between CatalogKeys and CatalogTables for nodes and sources, filtered by selected_node_ids.
+
+        By default, selected_node_ids is None and all nodes and sources defined in the manifest are included in the mappings.
+        """
         nodes: Dict[str, CatalogTable] = {}
         sources: Dict[str, CatalogTable] = {}
 
@@ -123,7 +130,8 @@ class Catalog(Dict[CatalogKey, CatalogTable]):
             key = table.key()
             if key in node_map:
                 unique_id = node_map[key]
-                nodes[unique_id] = table.replace(unique_id=unique_id)
+                if selected_node_ids is None or unique_id in selected_node_ids:
+                    nodes[unique_id] = table.replace(unique_id=unique_id)
 
             unique_ids = source_map.get(table.key(), set())
             for unique_id in unique_ids:
@@ -133,7 +141,7 @@ class Catalog(Dict[CatalogKey, CatalogTable]):
                         sources[unique_id].to_dict(omit_none=True),
                         table.to_dict(omit_none=True),
                     )
-                else:
+                elif selected_node_ids is None or unique_id in selected_node_ids:
                     sources[unique_id] = table.replace(unique_id=unique_id)
         return nodes, sources
 
@@ -238,9 +246,11 @@ class GenerateTask(CompileTask):
         if self.manifest is None:
             raise DbtInternalError("self.manifest was None in run!")
 
+        selected_node_ids: Optional[Set[UniqueId]] = None
         if self.args.empty_catalog:
             catalog_table: agate.Table = agate.Table([])
             exceptions: List[Exception] = []
+            selected_node_ids = set()
         else:
             adapter = get_adapter(self.config)
             with adapter.connection_named("generate_catalog"):
@@ -251,14 +261,19 @@ class GenerateTask(CompileTask):
                     selected_node_ids = self.job_queue.get_selected_nodes()
                     selected_nodes = self._get_nodes_from_ids(self.manifest, selected_node_ids)
 
-                    source_ids = self._get_nodes_from_ids(
-                        self.manifest, self.manifest.sources.keys()
+                    # Source selection is handled separately from main job_queue selection because
+                    # SourceDefinition nodes cannot be safely compiled / run by the CompileRunner / CompileTask,
+                    # but should still be included in the catalog based on the selection spec
+                    selected_source_ids = self._get_selected_source_ids()
+                    selected_source_nodes = self._get_nodes_from_ids(
+                        self.manifest, selected_source_ids
                     )
-                    selected_nodes.extend(source_ids)
+                    selected_node_ids.update(selected_source_ids)
+                    selected_nodes.extend(selected_source_nodes)
 
                     relations = {
-                        adapter.Relation.create_from(adapter.config, node_id)
-                        for node_id in selected_nodes
+                        adapter.Relation.create_from(adapter.config, node)
+                        for node in selected_nodes
                     }
 
                 # This generates the catalog as an agate.Table
@@ -285,7 +300,7 @@ class GenerateTask(CompileTask):
         if exceptions:
             errors = [str(e) for e in exceptions]
 
-        nodes, sources = catalog.make_unique_id_map(self.manifest)
+        nodes, sources = catalog.make_unique_id_map(self.manifest, selected_node_ids)
         results = self.get_catalog_results(
             nodes=nodes,
             sources=sources,
@@ -321,19 +336,6 @@ class GenerateTask(CompileTask):
             fire_event(WriteCatalogFailure(num_exceptions=len(exceptions)))
         fire_event(CatalogWritten(path=os.path.abspath(catalog_path)))
         return results
-
-    @staticmethod
-    def _get_nodes_from_ids(manifest: Manifest, node_ids: Iterable[str]) -> List[ResultNode]:
-        selected: List[ResultNode] = []
-        for unique_id in node_ids:
-            if unique_id in manifest.nodes:
-                node = manifest.nodes[unique_id]
-                if node.is_relational and not node.is_ephemeral_model:
-                    selected.append(node)
-            elif unique_id in manifest.sources:
-                source = manifest.sources[unique_id]
-                selected.append(source)
-        return selected
 
     def get_node_selector(self) -> ResourceTypeSelector:
         if self.manifest is None or self.graph is None:
@@ -373,3 +375,29 @@ class GenerateTask(CompileTask):
             return True
 
         return super().interpret_results(compile_results)
+
+    @staticmethod
+    def _get_nodes_from_ids(manifest: Manifest, node_ids: Iterable[str]) -> List[ResultNode]:
+        selected: List[ResultNode] = []
+        for unique_id in node_ids:
+            if unique_id in manifest.nodes:
+                node = manifest.nodes[unique_id]
+                if node.is_relational and not node.is_ephemeral_model:
+                    selected.append(node)
+            elif unique_id in manifest.sources:
+                source = manifest.sources[unique_id]
+                selected.append(source)
+        return selected
+
+    def _get_selected_source_ids(self) -> Set[UniqueId]:
+        if self.manifest is None or self.graph is None:
+            raise DbtInternalError("manifest and graph must be set to perform node selection")
+
+        source_selector = ResourceTypeSelector(
+            graph=self.graph,
+            manifest=self.manifest,
+            previous_state=self.previous_state,
+            resource_types=[NodeType.Source],
+        )
+
+        return source_selector.get_graph_queue(self.get_selection_spec()).get_selected_nodes()
