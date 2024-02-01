@@ -82,7 +82,6 @@ docker build --tag my-third-party-dbt \
 There are a few special cases worth noting:
 * The `dbt-spark` database adapter comes in three different versions named `PyHive`, `ODBC`, and the default `all`.  If you wish to overide this you can use the `--build-arg` flag with the value of `dbt_spark_version=<version_name>`.  See the [docs](https://docs.getdbt.com/reference/warehouse-profiles/spark-profile) for more information.
 
-* The `dbt-postgres` database adapter is released as part of the `dbt-core` codebase.  If you wish to overide the version used, make sure you use the gitref for `dbt-core`:
 ```
 docker build --tag my_dbt \
   --target dbt-postgres \

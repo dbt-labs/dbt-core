@@ -14,8 +14,6 @@ ARG build_for=linux/amd64
 FROM --platform=$build_for python:3.10.7-slim-bullseye as base
 
 # N.B. The refs updated automagically every release via bumpversion
-# N.B. dbt-postgres is currently found in the core codebase so a value of dbt-core@<some_version> is correct
-
 ARG dbt_core_ref=dbt-core@v1.8.0a1
 ARG dbt_postgres_ref=dbt-postgres@v1.8.0a1
 ARG dbt_redshift_ref=dbt-redshift@v1.8.0a1
