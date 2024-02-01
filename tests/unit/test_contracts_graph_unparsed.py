@@ -18,14 +18,12 @@ from dbt.contracts.graph.unparsed import (
     UnparsedModelUpdate,
     Docs,
     UnparsedExposure,
-    MaturityType,
-    Owner,
-    ExposureType,
     UnparsedMetric,
     UnparsedMetricTypeParams,
     UnparsedMetricInputMeasure,
     UnparsedVersion,
 )
+from dbt.artifacts.resources import ExposureType, MaturityType, Owner
 from dbt.artifacts.schemas.results import FreshnessStatus
 from dbt.node_types import NodeType
 from .utils import ContractTestCase

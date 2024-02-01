@@ -798,6 +798,7 @@ def model(dbt, session):
     a_dict = {'test2': dbt.ref('test2')}
     df5 = {'test2': dbt.ref('test3')}
     df6 = [dbt.ref("test4")]
+    f"{dbt.ref('test5')}"
 
     df = df0.limit(2)
     return df
@@ -859,6 +860,17 @@ python_model_multiple_returns = """
 def model(dbt, session):
     dbt.config(materialized='table')
     return dbt.ref("some_model"), dbt.ref("some_other_model")
+"""
+
+python_model_f_string = """
+# my_python_model.py
+import pandas as pd
+
+def model(dbt, fal):
+    dbt.config(materialized="table")
+    print(f"my var: {dbt.config.get('my_var')}") # Prints "my var: None"
+    df: pd.DataFrame = dbt.ref("some_model")
+    return df
 """
 
 python_model_no_return = """
@@ -985,6 +997,7 @@ class ModelParserTest(BaseParserTest):
                 RefArgs("test2"),
                 RefArgs("test3"),
                 RefArgs("test4"),
+                RefArgs("test5"),
             ],
             sources=[["test", "table1"]],
         )
@@ -1000,6 +1013,14 @@ class ModelParserTest(BaseParserTest):
         self.parser.parse_file(block)
         node = list(self.parser.manifest.nodes.values())[0]
         self.assertEqual(node.config.to_dict()["config_keys_used"], ["param_1", "param_2"])
+
+    def test_python_model_f_string_config(self):
+        block = self.file_block_for(python_model_f_string, "nested/py_model.py")
+        self.parser.manifest.files[block.file.file_id] = block.file
+
+        self.parser.parse_file(block)
+        node = list(self.parser.manifest.nodes.values())[0]
+        self.assertEqual(node.config.to_dict()["config_keys_used"], ["my_var"])
 
     def test_python_model_config_with_defaults(self):
         block = self.file_block_for(python_model_config_with_defaults, "nested/py_model.py")

@@ -9,18 +9,22 @@ from dbt.artifacts.schemas.base import (
     get_artifact_schema_version,
 )
 from dbt.artifacts.schemas.upgrades import upgrade_manifest_json
-from dbt.artifacts.resources import Documentation, Group, Macro
+from dbt.artifacts.resources import (
+    Documentation,
+    Exposure,
+    Group,
+    Macro,
+    Metric,
+    SavedQuery,
+    SemanticModel,
+)
 
 # TODO: remove usage of dbt modules other than dbt.artifacts
 from dbt import tracking
 from dbt.flags import get_flags
 from dbt.contracts.graph.nodes import (
-    Exposure,
     GraphMemberNode,
     ManifestNode,
-    Metric,
-    SavedQuery,
-    SemanticModel,
     SourceDefinition,
     UnitTestDefinition,
 )
@@ -165,7 +169,7 @@ class WritableManifest(ArtifactMixin):
         """This overrides the "upgrade_schema_version" call in VersionedSchema (via
         ArtifactMixin) to modify the dictionary passed in from earlier versions of the manifest."""
         manifest_schema_version = get_artifact_schema_version(data)
-        if manifest_schema_version <= 10:
+        if manifest_schema_version < cls.dbt_schema_version.version:
             data = upgrade_manifest_json(data, manifest_schema_version)
         return cls.from_dict(data)
 

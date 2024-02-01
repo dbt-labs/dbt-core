@@ -28,30 +28,28 @@ from dbt.contracts.graph.nodes import (
 )
 from dbt.artifacts.resources import (
     ConversionTypeParams,
+    Dimension,
+    DimensionTypeParams,
+    Entity,
     Export,
     ExportConfig,
+    ExposureConfig,
+    Measure,
     MetricConfig,
     MetricInput,
     MetricInputMeasure,
     MetricTimeWindow,
     MetricTypeParams,
+    NonAdditiveDimension,
     QueryParams,
     SavedQueryConfig,
     WhereFilter,
     WhereFilterIntersection,
 )
-from dbt.contracts.graph.semantic_models import (
-    Dimension,
-    DimensionTypeParams,
-    Entity,
-    Measure,
-    NonAdditiveDimension,
-)
 from dbt_common.exceptions import DbtInternalError
 from dbt.exceptions import YamlParseDictError, JSONValidationError
 from dbt.context.providers import generate_parse_exposure, generate_parse_semantic_models
 
-from dbt.contracts.graph.model_config import ExposureConfig
 from dbt.context.context_config import (
     BaseContextConfigGenerator,
     ContextConfigGenerator,

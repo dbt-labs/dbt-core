@@ -1,7 +1,6 @@
 import pytest
+from dbt.artifacts.resources import SemanticModelConfig
 from dbt.exceptions import ParsingError
-from dbt.contracts.graph.model_config import SemanticModelConfig
-
 from dbt.tests.util import run_dbt, update_config_file, get_manifest
 
 from tests.functional.semantic_models.fixtures import (

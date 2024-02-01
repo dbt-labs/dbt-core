@@ -15,7 +15,6 @@ from dbt.contracts.graph.nodes import (
     Exposure,
     Metric,
     Group,
-    NodeRelation,
     SavedQuery,
     SeedNode,
     SemanticModel,
@@ -30,13 +29,14 @@ from dbt.contracts.graph.nodes import (
 )
 from dbt.contracts.graph.manifest import Manifest, ManifestMetadata
 from dbt.artifacts.resources import (
+    ExposureType,
     MetricInputMeasure,
     MetricTypeParams,
+    NodeRelation,
+    Owner,
     QueryParams,
 )
 from dbt.contracts.graph.unparsed import (
-    ExposureType,
-    Owner,
     UnitTestInputFixture,
     UnitTestOutputFixture,
 )

@@ -106,9 +106,8 @@ from dbt.contracts.graph.nodes import (
     ManifestNode,
     ResultNode,
     ModelNode,
-    NodeRelation,
 )
-from dbt.artifacts.resources import NodeVersion
+from dbt.artifacts.resources import NodeRelation, NodeVersion
 from dbt.artifacts.schemas.base import Writable
 from dbt.exceptions import (
     TargetNotFoundError,

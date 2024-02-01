@@ -2,8 +2,8 @@ import pytest
 
 from typing import List
 
+from dbt.artifacts.resources import Dimension, Entity, Measure, Defaults
 from dbt.contracts.graph.nodes import SemanticModel
-from dbt.contracts.graph.semantic_models import Dimension, Entity, Measure, Defaults
 from dbt.node_types import NodeType
 from dbt_semantic_interfaces.references import MeasureReference
 from dbt_semantic_interfaces.type_enums import AggregationType, DimensionType, EntityType
