@@ -134,6 +134,12 @@ class PythonParseVisitor(ast.NodeVisitor):
                 for value in obj.values:
                     if isinstance(value, ast.Call):
                         self.visit_Call(value)
+            # support dbt function calls in f-strings
+            elif isinstance(obj, ast.JoinedStr):
+                for value in obj.values:
+                    if isinstance(value, ast.FormattedValue) and isinstance(value.value, ast.Call):
+                        self.visit_Call(value.value)
+
         # visit node.func.value if we are at an call attr
         if isinstance(node.func, ast.Attribute):
             self.attribute_helper(node.func)

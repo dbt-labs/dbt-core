@@ -27,16 +27,14 @@ from dbt.contracts.graph.nodes import (
     Group,
 )
 from dbt.artifacts.resources import (
+    ExposureType,
+    MaturityType,
     MetricInputMeasure,
     MetricTypeParams,
+    Owner,
     RefArgs,
     WhereFilter,
     WhereFilterIntersection,
-)
-from dbt.contracts.graph.unparsed import (
-    ExposureType,
-    Owner,
-    MaturityType,
 )
 import dbt_common.invocation
 from dbt_common.events.functions import reset_metadata_vars

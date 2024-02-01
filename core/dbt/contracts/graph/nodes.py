@@ -4,8 +4,21 @@ import time
 from dataclasses import dataclass, field
 import hashlib
 
+from abc import ABC
 from mashumaro.types import SerializableType
-from typing import Optional, Union, List, Dict, Any, Sequence, Tuple, Iterator, Literal
+from typing import (
+    Optional,
+    Union,
+    List,
+    Dict,
+    Any,
+    Sequence,
+    Tuple,
+    Iterator,
+    Literal,
+    Generic,
+    TypeVar,
+)
 
 from dbt import deprecations
 from dbt_common.contracts.constraints import (
@@ -17,19 +30,10 @@ from dbt_common.dataclass_schema import dbtClassMixin, ExtensibleDbtClassMixin
 
 from dbt_common.clients.system import write_file
 from dbt.contracts.files import FileHash
-from dbt.contracts.graph.semantic_models import (
-    Defaults,
-    Dimension,
-    Entity,
-    Measure,
-)
 from dbt.contracts.graph.unparsed import (
-    ExposureType,
     ExternalTable,
     FreshnessThreshold,
     HasYamlMetadata,
-    MaturityType,
-    Owner,
     Quoting,
     TestDef,
     UnparsedSourceDefinition,
@@ -60,13 +64,6 @@ from dbt.node_types import (
     REFABLE_NODE_TYPES,
     VERSIONED_NODE_TYPES,
 )
-from dbt_semantic_interfaces.references import (
-    EntityReference,
-    MeasureReference,
-    LinkableElementReference,
-    SemanticModelReference,
-    TimeDimensionReference,
-)
 
 from .model_config import (
     NodeConfig,
@@ -74,10 +71,8 @@ from .model_config import (
     SeedConfig,
     TestConfig,
     SourceConfig,
-    ExposureConfig,
     EmptySnapshotConfig,
     SnapshotConfig,
-    SemanticModelConfig,
     UnitTestConfig,
     UnitTestNodeConfig,
 )
@@ -86,6 +81,7 @@ from dbt.artifacts.resources import (
     BaseResource,
     DependsOn,
     Docs,
+    Exposure as ExposureResource,
     MacroDependsOn,
     MacroArgument,
     Documentation as DocumentationResource,
@@ -96,9 +92,8 @@ from dbt.artifacts.resources import (
     GraphResource,
     RefArgs as RefArgsResource,
     SavedQuery as SavedQueryResource,
-    SourceFileMetadata as SourceFileMetadataResource,
+    SemanticModel as SemanticModelResource,
 )
-
 
 # =====================================================================
 # This contains the classes for all of the nodes and node-like objects
@@ -123,8 +118,11 @@ from dbt.artifacts.resources import (
 # ==================================================
 
 
+ResourceTypeT = TypeVar("ResourceTypeT", bound="BaseResource")
+
+
 @dataclass
-class BaseNode(BaseResource):
+class BaseNode(ABC, Generic[ResourceTypeT], BaseResource):
     """All nodes or node-like objects in this file should have this as a base class"""
 
     @property
@@ -163,9 +161,13 @@ class BaseNode(BaseResource):
     def get_materialization(self):
         return self.config.materialized
 
+    @classmethod
+    def from_resource(cls, resource_instance: ResourceTypeT):
+        return cls.from_dict(resource_instance.to_dict())
+
 
 @dataclass
-class GraphNode(GraphResource, BaseNode):
+class GraphNode(GraphResource, BaseNode[ResourceTypeT], Generic[ResourceTypeT]):
     """Nodes in the DAG. Macro and Documentation don't have fqn."""
 
     def same_fqn(self, other) -> bool:
@@ -228,7 +230,7 @@ class DeferRelation(HasRelationMetadata):
 
 
 @dataclass
-class ParsedNodeMandatory(GraphNode, HasRelationMetadata, Replaceable):
+class ParsedNodeMandatory(GraphNode[GraphResource], HasRelationMetadata, Replaceable):
     alias: str
     checksum: FileHash
     config: NodeConfig = field(default_factory=NodeConfig)
@@ -1023,7 +1025,7 @@ class UnitTestDefinitionMandatory:
 
 
 @dataclass
-class UnitTestDefinition(NodeInfoMixin, GraphNode, UnitTestDefinitionMandatory):
+class UnitTestDefinition(NodeInfoMixin, GraphNode[GraphResource], UnitTestDefinitionMandatory):
     description: str = ""
     overrides: Optional[UnitTestOverrides] = None
     depends_on: DependsOn = field(default_factory=DependsOn)
@@ -1240,7 +1242,7 @@ class UnpatchedSourceDefinition(BaseNode):
 
 
 @dataclass
-class ParsedSourceMandatory(GraphNode, HasRelationMetadata):
+class ParsedSourceMandatory(GraphNode[GraphResource], HasRelationMetadata):
     source_name: str
     source_description: str
     loader: str
@@ -1373,24 +1375,7 @@ class SourceDefinition(NodeInfoMixin, ParsedSourceMandatory):
 
 
 @dataclass
-class Exposure(GraphNode):
-    type: ExposureType
-    owner: Owner
-    resource_type: Literal[NodeType.Exposure]
-    description: str = ""
-    label: Optional[str] = None
-    maturity: Optional[MaturityType] = None
-    meta: Dict[str, Any] = field(default_factory=dict)
-    tags: List[str] = field(default_factory=list)
-    config: ExposureConfig = field(default_factory=ExposureConfig)
-    unrendered_config: Dict[str, Any] = field(default_factory=dict)
-    url: Optional[str] = None
-    depends_on: DependsOn = field(default_factory=DependsOn)
-    refs: List[RefArgsResource] = field(default_factory=list)
-    sources: List[List[str]] = field(default_factory=list)
-    metrics: List[List[str]] = field(default_factory=list)
-    created_at: float = field(default_factory=lambda: time.time())
-
+class Exposure(GraphNode[ExposureResource], ExposureResource):
     @property
     def depends_on_nodes(self):
         return self.depends_on.nodes
@@ -1456,7 +1441,7 @@ class Exposure(GraphNode):
 
 
 @dataclass
-class Metric(GraphNode, MetricResource):
+class Metric(GraphNode[MetricResource], MetricResource):
     @property
     def depends_on_nodes(self):
         return self.depends_on.nodes
@@ -1518,86 +1503,12 @@ class Group(GroupResource, BaseNode):
 
 
 # ====================================
-# SemanticModel and related classes
+# SemanticModel node
 # ====================================
 
 
 @dataclass
-class NodeRelation(dbtClassMixin):
-    alias: str
-    schema_name: str  # TODO: Could this be called simply "schema" so we could reuse StateRelation?
-    database: Optional[str] = None
-    relation_name: Optional[str] = None
-
-
-@dataclass
-class SemanticModel(GraphNode):
-    model: str
-    node_relation: Optional[NodeRelation]
-    description: Optional[str] = None
-    label: Optional[str] = None
-    defaults: Optional[Defaults] = None
-    entities: Sequence[Entity] = field(default_factory=list)
-    measures: Sequence[Measure] = field(default_factory=list)
-    dimensions: Sequence[Dimension] = field(default_factory=list)
-    metadata: Optional[SourceFileMetadataResource] = None
-    depends_on: DependsOn = field(default_factory=DependsOn)
-    refs: List[RefArgsResource] = field(default_factory=list)
-    created_at: float = field(default_factory=lambda: time.time())
-    config: SemanticModelConfig = field(default_factory=SemanticModelConfig)
-    unrendered_config: Dict[str, Any] = field(default_factory=dict)
-    primary_entity: Optional[str] = None
-    group: Optional[str] = None
-
-    @property
-    def entity_references(self) -> List[LinkableElementReference]:
-        return [entity.reference for entity in self.entities]
-
-    @property
-    def dimension_references(self) -> List[LinkableElementReference]:
-        return [dimension.reference for dimension in self.dimensions]
-
-    @property
-    def measure_references(self) -> List[MeasureReference]:
-        return [measure.reference for measure in self.measures]
-
-    @property
-    def has_validity_dimensions(self) -> bool:
-        return any([dim.validity_params is not None for dim in self.dimensions])
-
-    @property
-    def validity_start_dimension(self) -> Optional[Dimension]:
-        validity_start_dims = [
-            dim for dim in self.dimensions if dim.validity_params and dim.validity_params.is_start
-        ]
-        if not validity_start_dims:
-            return None
-        return validity_start_dims[0]
-
-    @property
-    def validity_end_dimension(self) -> Optional[Dimension]:
-        validity_end_dims = [
-            dim for dim in self.dimensions if dim.validity_params and dim.validity_params.is_end
-        ]
-        if not validity_end_dims:
-            return None
-        return validity_end_dims[0]
-
-    @property
-    def partitions(self) -> List[Dimension]:  # noqa: D
-        return [dim for dim in self.dimensions or [] if dim.is_partition]
-
-    @property
-    def partition(self) -> Optional[Dimension]:
-        partitions = self.partitions
-        if not partitions:
-            return None
-        return partitions[0]
-
-    @property
-    def reference(self) -> SemanticModelReference:
-        return SemanticModelReference(semantic_model_name=self.name)
-
+class SemanticModel(GraphNode[SemanticModelResource], SemanticModelResource):
     @property
     def depends_on_nodes(self):
         return self.depends_on.nodes
@@ -1605,38 +1516,6 @@ class SemanticModel(GraphNode):
     @property
     def depends_on_macros(self):
         return self.depends_on.macros
-
-    def checked_agg_time_dimension_for_measure(
-        self, measure_reference: MeasureReference
-    ) -> TimeDimensionReference:
-        measure: Optional[Measure] = None
-        for measure in self.measures:
-            if measure.reference == measure_reference:
-                measure = measure
-
-        assert (
-            measure is not None
-        ), f"No measure with name ({measure_reference.element_name}) in semantic_model with name ({self.name})"
-
-        default_agg_time_dimension = (
-            self.defaults.agg_time_dimension if self.defaults is not None else None
-        )
-
-        agg_time_dimension_name = measure.agg_time_dimension or default_agg_time_dimension
-        assert agg_time_dimension_name is not None, (
-            f"Aggregation time dimension for measure {measure.name} on semantic model {self.name} is not set! "
-            "To fix this either specify a default `agg_time_dimension` for the semantic model or define an "
-            "`agg_time_dimension` on the measure directly."
-        )
-        return TimeDimensionReference(element_name=agg_time_dimension_name)
-
-    @property
-    def primary_entity_reference(self) -> Optional[EntityReference]:
-        return (
-            EntityReference(element_name=self.primary_entity)
-            if self.primary_entity is not None
-            else None
-        )
 
     def same_model(self, old: "SemanticModel") -> bool:
         return self.model == old.same_model
@@ -1695,7 +1574,7 @@ class SemanticModel(GraphNode):
 
 
 @dataclass
-class SavedQuery(NodeInfoMixin, GraphNode, SavedQueryResource):
+class SavedQuery(NodeInfoMixin, GraphNode[SavedQueryResource], SavedQueryResource):
     def same_metrics(self, old: "SavedQuery") -> bool:
         return self.query_params.metrics == old.query_params.metrics
 

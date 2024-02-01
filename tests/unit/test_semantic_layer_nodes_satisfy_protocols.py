@@ -3,30 +3,28 @@ import copy
 
 from dbt.contracts.graph.nodes import (
     Metric,
-    NodeRelation,
     SavedQuery,
     SemanticModel,
 )
 from dbt.artifacts.resources import (
     ConstantPropertyInput,
     ConversionTypeParams,
+    Defaults,
+    Dimension,
+    DimensionTypeParams,
+    DimensionValidityParams,
+    Entity,
     FileSlice,
+    Measure,
+    MeasureAggregationParameters,
     MetricInput,
     MetricInputMeasure,
     MetricTimeWindow,
     MetricTypeParams,
+    NodeRelation,
+    NonAdditiveDimension,
     SourceFileMetadata,
     WhereFilter,
-)
-from dbt.contracts.graph.semantic_models import (
-    Dimension,
-    DimensionTypeParams,
-    DimensionValidityParams,
-    Defaults,
-    Entity,
-    Measure,
-    MeasureAggregationParameters,
-    NonAdditiveDimension,
 )
 from dbt.node_types import NodeType
 from dbt_semantic_interfaces.protocols import (

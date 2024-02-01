@@ -18,12 +18,13 @@ second_seed = """sample_num,sample_bool
 
 sample_config = """
 sources:
-  - name: my_seed
+  - name: my_source_schema
     schema: "{{ target.schema }}"
     tables:
-      - name: sample_seed
-      - name: second_seed
-      - name: fake_seed
+      - name: sample_source
+      - name: second_source
+      - name: non_existent_source
+      - name: source_from_seed
 """
 
 
@@ -76,11 +77,18 @@ class TestGenerateSelectLimitsNoMatch(TestBaseGenerate):
         run_dbt(["run"])
         catalog = run_dbt(["docs", "generate", "--select", "my_missing_model"])
         assert len(catalog.nodes) == 0
+        assert len(catalog.sources) == 0
 
 
 class TestGenerateCatalogWithSources(TestBaseGenerate):
     def test_catalog_with_sources(self, project):
+        # populate sources other than non_existent_source
+        project.run_sql("create table {}.sample_source (id int)".format(project.test_schema))
+        project.run_sql("create table {}.second_source (id int)".format(project.test_schema))
+
+        # build nodes
         run_dbt(["build"])
+
         catalog = run_dbt(["docs", "generate"])
 
         # 2 seeds + 2 models
@@ -91,7 +99,7 @@ class TestGenerateCatalogWithSources(TestBaseGenerate):
 
 class TestGenerateCatalogWithExternalNodes(TestBaseGenerate):
     @mock.patch("dbt.plugins.get_plugin_manager")
-    def test_catalog_with_sources(self, get_plugin_manager, project):
+    def test_catalog_with_external_node(self, get_plugin_manager, project):
         project.run_sql("create table {}.external_model (id int)".format(project.test_schema))
 
         run_dbt(["build"])
@@ -112,13 +120,61 @@ class TestGenerateCatalogWithExternalNodes(TestBaseGenerate):
 
 
 class TestGenerateSelectSource(TestBaseGenerate):
+    @pytest.fixture(scope="class")
+    def seeds(self):
+        return {
+            "sample_seed.csv": sample_seed,
+            "second_seed.csv": sample_seed,
+            "source_from_seed.csv": sample_seed,
+        }
+
     def test_select_source(self, project):
         run_dbt(["build"])
-        catalog = run_dbt(["docs", "generate", "--select", "source:test.my_seed.sample_seed"])
 
-        # 2 seeds
-        # TODO: Filtering doesn't work for seeds
-        assert len(catalog.nodes) == 2
-        # 2 sources
-        # TODO: Filtering doesn't work for sources
-        assert len(catalog.sources) == 2
+        project.run_sql("create table {}.sample_source (id int)".format(project.test_schema))
+        project.run_sql("create table {}.second_source (id int)".format(project.test_schema))
+
+        # 2 existing sources, 1 selected
+        catalog = run_dbt(
+            ["docs", "generate", "--select", "source:test.my_source_schema.sample_source"]
+        )
+        assert len(catalog.sources) == 1
+        assert "source.test.my_source_schema.sample_source" in catalog.sources
+        # no nodes selected
+        assert len(catalog.nodes) == 0
+
+        # 2 existing sources sources, 1 selected that has relation as a seed
+        catalog = run_dbt(
+            ["docs", "generate", "--select", "source:test.my_source_schema.source_from_seed"]
+        )
+        assert len(catalog.sources) == 1
+        assert "source.test.my_source_schema.source_from_seed" in catalog.sources
+        # seed with same relation that was not selected not in catalog
+        assert len(catalog.nodes) == 0
+
+
+class TestGenerateSelectSeed(TestBaseGenerate):
+    @pytest.fixture(scope="class")
+    def seeds(self):
+        return {
+            "sample_seed.csv": sample_seed,
+            "second_seed.csv": sample_seed,
+            "source_from_seed.csv": sample_seed,
+        }
+
+    def test_select_seed(self, project):
+        run_dbt(["build"])
+
+        # 3 seeds, 1 selected
+        catalog = run_dbt(["docs", "generate", "--select", "sample_seed"])
+        assert len(catalog.nodes) == 1
+        assert "seed.test.sample_seed" in catalog.nodes
+        # no sources selected
+        assert len(catalog.sources) == 0
+
+        # 3 seeds, 1 selected that has same relation as a source
+        catalog = run_dbt(["docs", "generate", "--select", "source_from_seed"])
+        assert len(catalog.nodes) == 1
+        assert "seed.test.source_from_seed" in catalog.nodes
+        # source with same relation that was not selected not in catalog
+        assert len(catalog.sources) == 0
