@@ -64,7 +64,10 @@
   {% call statement('get_columns_in_relation', fetch_result=True) %}
       select
           column_name,
-          data_type,
+          case
+            when (data_type = 'USER-DEFINED') then concat(udt_schema || '.' || udt_name)
+            else data_type
+          end as data_type,
           character_maximum_length,
           numeric_precision,
           numeric_scale
