@@ -10,7 +10,7 @@ from dbt.context.context_config import (
     ContextConfigGenerator,
     UnrenderedConfigGenerator,
 )
-from dbt.contracts.graph.components import Time
+from dbt.contracts.graph.components import FreshnessThreshold, Time
 from dbt.contracts.graph.manifest import Manifest, SourceKey
 from dbt.contracts.graph.model_config import SourceConfig
 from dbt.contracts.graph.nodes import (
@@ -23,7 +23,6 @@ from dbt.contracts.graph.unparsed import (
     SourcePatch,
     SourceTablePatch,
     UnparsedSourceTableDefinition,
-    FreshnessThreshold,
     UnparsedColumn,
 )
 from dbt_common.events.functions import warn_or_error, fire_event

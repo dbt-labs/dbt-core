@@ -15,7 +15,7 @@ from dbt_common.dataclass_schema import (
     ExtensibleDbtClassMixin,
     ValidationError,
 )
-from dbt.contracts.graph.components import Time
+from dbt.contracts.graph.components import FreshnessThreshold
 from dbt.node_types import NodeType
 from dbt.artifacts.resources import (
     Defaults,
@@ -262,26 +262,6 @@ class UnparsedModelUpdate(UnparsedNodeUpdate):
 @dataclass
 class UnparsedMacroUpdate(HasConfig, HasColumnProps, HasYamlMetadata):
     arguments: List[MacroArgument] = field(default_factory=list)
-
-
-@dataclass
-class FreshnessThreshold(dbtClassMixin, Mergeable):
-    warn_after: Optional[Time] = field(default_factory=Time)
-    error_after: Optional[Time] = field(default_factory=Time)
-    filter: Optional[str] = None
-
-    def status(self, age: float) -> "dbt.artifacts.schemas.results.FreshnessStatus":  # type: ignore # noqa F821
-        from dbt.artifacts.schemas.results import FreshnessStatus
-
-        if self.error_after and self.error_after.exceeded(age):
-            return FreshnessStatus.Error
-        elif self.warn_after and self.warn_after.exceeded(age):
-            return FreshnessStatus.Warn
-        else:
-            return FreshnessStatus.Pass
-
-    def __bool__(self):
-        return bool(self.warn_after) or bool(self.error_after)
 
 
 @dataclass

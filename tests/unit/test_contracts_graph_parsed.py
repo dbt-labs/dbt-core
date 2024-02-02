@@ -21,7 +21,7 @@ from dbt.artifacts.resources import (
 from dbt.artifacts.resources.types import TimePeriod
 from dbt.node_types import NodeType, AccessType
 from dbt.contracts.files import FileHash
-from dbt.contracts.graph.components import Time
+from dbt.contracts.graph.components import FreshnessThreshold, Time
 from dbt.contracts.graph.model_config import (
     ModelConfig,
     NodeConfig,
@@ -50,7 +50,6 @@ from dbt.contracts.graph.nodes import (
     TestMetadata,
     SemanticModel,
 )
-from dbt.contracts.graph.unparsed import FreshnessThreshold
 from dbt import flags
 from argparse import Namespace
 

@@ -2,12 +2,11 @@ from datetime import timedelta
 import pickle
 import pytest
 
-from dbt.contracts.graph.components import Time
+from dbt.contracts.graph.components import FreshnessThreshold, Time
 from dbt.contracts.graph.unparsed import (
     UnparsedNode,
     UnparsedRunHook,
     UnparsedMacro,
-    FreshnessThreshold,
     UnparsedSourceDefinition,
     UnparsedSourceTableDefinition,
     UnparsedDocumentationFile,

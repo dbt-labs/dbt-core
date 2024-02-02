@@ -29,9 +29,9 @@ from dbt_common.dataclass_schema import dbtClassMixin
 
 from dbt_common.clients.system import write_file
 from dbt.contracts.files import FileHash
+from dbt.contracts.graph.components import FreshnessThreshold
 from dbt.contracts.graph.unparsed import (
     ExternalTable,
-    FreshnessThreshold,
     HasYamlMetadata,
     TestDef,
     UnparsedSourceDefinition,

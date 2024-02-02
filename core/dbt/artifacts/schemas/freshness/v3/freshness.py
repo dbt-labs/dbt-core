@@ -12,7 +12,7 @@ from dbt.artifacts.schemas.base import (
 from dbt_common.dataclass_schema import dbtClassMixin, StrEnum
 from dbt_common.exceptions import DbtInternalError
 
-from dbt.contracts.graph.unparsed import FreshnessThreshold
+from dbt.contracts.graph.components import FreshnessThreshold
 from dbt.contracts.graph.nodes import SourceDefinition
 
 
