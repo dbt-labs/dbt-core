@@ -1,8 +1,9 @@
 from dataclasses import dataclass, field
 from datetime import timedelta
-from dbt.artifacts.resources import Time as TimeResource
-from dbt_common.contracts.util import Mergeable
-from dbt_common.dataclass_schema import dbtClassMixin
+from dbt.artifacts.resources import (
+    FreshnessThreshold as FreshnessThresholdResource,
+    Time as TimeResource,
+)
 from typing import Dict, Optional
 
 
@@ -20,10 +21,11 @@ class Time(TimeResource):
 
 
 @dataclass
-class FreshnessThreshold(dbtClassMixin, Mergeable):
+class FreshnessThreshold(FreshnessThresholdResource):
+    # Overriding the FreshnessThresholdResource.warn_after to use Time instead of TimeResource
     warn_after: Optional[Time] = field(default_factory=Time)
+    # Overriding the FreshnessThresholdResource.error_after to use Time instead of TimeResource
     error_after: Optional[Time] = field(default_factory=Time)
-    filter: Optional[str] = None
 
     def status(self, age: float) -> "dbt.artifacts.schemas.results.FreshnessStatus":  # type: ignore # noqa F821
         from dbt.artifacts.schemas.results import FreshnessStatus

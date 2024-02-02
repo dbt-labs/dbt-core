@@ -67,3 +67,10 @@ class Quoting(dbtClassMixin, Mergeable):
 class Time(dbtClassMixin, Mergeable):
     count: Optional[int] = None
     period: Optional[TimePeriod] = None
+
+
+@dataclass
+class FreshnessThreshold(dbtClassMixin, Mergeable):
+    warn_after: Optional[Time] = field(default_factory=Time)
+    error_after: Optional[Time] = field(default_factory=Time)
+    filter: Optional[str] = None

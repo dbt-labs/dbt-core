@@ -4,6 +4,7 @@ from dbt.artifacts.resources.base import BaseResource, GraphResource
 from dbt.artifacts.resources.v1.components import (
     ColumnInfo,
     DependsOn,
+    FreshnessThreshold,
     NodeVersion,
     Quoting,
     RefArgs,
