@@ -9,7 +9,6 @@ from dbt.contracts.graph.unparsed import (
     Time,
     TimePeriod,
     FreshnessThreshold,
-    Quoting,
     UnparsedSourceDefinition,
     UnparsedSourceTableDefinition,
     UnparsedDocumentationFile,
@@ -23,7 +22,7 @@ from dbt.contracts.graph.unparsed import (
     UnparsedMetricInputMeasure,
     UnparsedVersion,
 )
-from dbt.artifacts.resources import ExposureType, MaturityType, Owner
+from dbt.artifacts.resources import ExposureType, MaturityType, Owner, Quoting
 from dbt.artifacts.schemas.results import FreshnessStatus
 from dbt.node_types import NodeType
 from .utils import ContractTestCase

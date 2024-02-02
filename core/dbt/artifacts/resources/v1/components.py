@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from dbt.artifacts.resources.v1.macro import MacroDependsOn
 from dbt_common.contracts.config.properties import AdditionalPropertiesMixin
 from dbt_common.contracts.constraints import ColumnLevelConstraint
-from dbt_common.contracts.util import Replaceable
+from dbt_common.contracts.util import Mergeable, Replaceable
 from dbt_common.dataclass_schema import dbtClassMixin, ExtensibleDbtClassMixin
 from typing import Any, Dict, List, Optional, Union
 
@@ -52,3 +52,11 @@ class ColumnInfo(AdditionalPropertiesMixin, ExtensibleDbtClassMixin, Replaceable
     quote: Optional[bool] = None
     tags: List[str] = field(default_factory=list)
     _extra: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class Quoting(dbtClassMixin, Mergeable):
+    database: Optional[bool] = None
+    schema: Optional[bool] = None
+    identifier: Optional[bool] = None
+    column: Optional[bool] = None

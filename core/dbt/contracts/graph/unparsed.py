@@ -2,7 +2,7 @@ import datetime
 import re
 
 from dbt import deprecations
-from dbt.artifacts.resources import ConstantPropertyInput
+from dbt.artifacts.resources import ConstantPropertyInput, Quoting
 from dbt_common.contracts.config.properties import (
     AdditionalPropertiesAllowed,
     AdditionalPropertiesMixin,
@@ -331,14 +331,6 @@ class ExternalTable(AdditionalPropertiesAllowed, Mergeable):
 
     def __bool__(self):
         return self.location is not None
-
-
-@dataclass
-class Quoting(dbtClassMixin, Mergeable):
-    database: Optional[bool] = None
-    schema: Optional[bool] = None
-    identifier: Optional[bool] = None
-    column: Optional[bool] = None
 
 
 @dataclass

@@ -33,7 +33,6 @@ from dbt.contracts.graph.unparsed import (
     ExternalTable,
     FreshnessThreshold,
     HasYamlMetadata,
-    Quoting,
     TestDef,
     UnparsedSourceDefinition,
     UnparsedSourceTableDefinition,
@@ -89,6 +88,7 @@ from dbt.artifacts.resources import (
     NodeVersion,
     Group as GroupResource,
     GraphResource,
+    Quoting as QuotingResource,
     RefArgs as RefArgsResource,
     SavedQuery as SavedQueryResource,
     SemanticModel as SemanticModelResource,
@@ -986,7 +986,7 @@ class GenericTestNode(TestShouldStoreFailures, CompiledNode, HasTestMetadata):
 @dataclass
 class UnitTestSourceDefinition(ModelNode):
     source_name: str = "undefined"
-    quoting: Quoting = field(default_factory=Quoting)
+    quoting: QuotingResource = field(default_factory=QuotingResource)
 
     @property
     def search_name(self):
@@ -1244,7 +1244,7 @@ class ParsedSourceMandatory(GraphNode[GraphResource], HasRelationMetadata):
 
 @dataclass
 class SourceDefinition(NodeInfoMixin, ParsedSourceMandatory):
-    quoting: Quoting = field(default_factory=Quoting)
+    quoting: QuotingResource = field(default_factory=QuotingResource)
     loaded_at_field: Optional[str] = None
     freshness: Optional[FreshnessThreshold] = None
     external: Optional[ExternalTable] = None

@@ -15,6 +15,7 @@ from dbt.artifacts.resources import (
     MetricInputMeasure,
     MetricTypeParams,
     Owner,
+    Quoting,
     RefArgs,
 )
 from dbt.node_types import NodeType, AccessType
@@ -49,7 +50,6 @@ from dbt.contracts.graph.nodes import (
 )
 from dbt.contracts.graph.unparsed import (
     FreshnessThreshold,
-    Quoting,
     Time,
     TimePeriod,
 )

@@ -5,6 +5,7 @@ from dbt.artifacts.resources.v1.components import (
     ColumnInfo,
     DependsOn,
     NodeVersion,
+    Quoting,
     RefArgs,
 )
 from dbt.artifacts.resources.v1.documentation import Documentation
