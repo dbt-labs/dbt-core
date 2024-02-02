@@ -3,7 +3,6 @@ import re
 
 from dbt import deprecations
 from dbt.artifacts.resources import ConstantPropertyInput, Quoting
-from dbt.artifacts.resources.types import TimePeriod
 from dbt_common.contracts.config.properties import (
     AdditionalPropertiesAllowed,
     AdditionalPropertiesMixin,
@@ -16,6 +15,7 @@ from dbt_common.dataclass_schema import (
     ExtensibleDbtClassMixin,
     ValidationError,
 )
+from dbt.contracts.graph.components import Time
 from dbt.node_types import NodeType
 from dbt.artifacts.resources import (
     Defaults,
@@ -34,7 +34,6 @@ from dbt_semantic_interfaces.type_enums import ConversionCalculationType
 from dbt.artifacts.resources import Docs, MacroArgument, NodeVersion, Owner
 
 from dataclasses import dataclass, field
-from datetime import timedelta
 from pathlib import Path
 from typing import Optional, List, Union, Dict, Any, Sequence, Literal
 
@@ -263,22 +262,6 @@ class UnparsedModelUpdate(UnparsedNodeUpdate):
 @dataclass
 class UnparsedMacroUpdate(HasConfig, HasColumnProps, HasYamlMetadata):
     arguments: List[MacroArgument] = field(default_factory=list)
-
-
-@dataclass
-class Time(dbtClassMixin, Mergeable):
-    count: Optional[int] = None
-    period: Optional[TimePeriod] = None
-
-    def exceeded(self, actual_age: float) -> bool:
-        if self.period is None or self.count is None:
-            return False
-        kwargs: Dict[str, int] = {self.period.plural(): self.count}
-        difference = timedelta(**kwargs).total_seconds()
-        return actual_age > difference
-
-    def __bool__(self):
-        return self.count is not None and self.period is not None
 
 
 @dataclass
