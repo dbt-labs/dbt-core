@@ -417,8 +417,8 @@ class GraphRunnableTask(ConfiguredTask):
         return self.node_results
 
     @staticmethod
-    def _pool_thread_initializer(ci):
-        _INVOCATION_CONTEXT_VAR.set(ci)
+    def _pool_thread_initializer(invocation_context):
+        _INVOCATION_CONTEXT_VAR.set(invocation_context)
 
     def _mark_dependent_errors(
         self, node_id: str, result: RunResult, cause: Optional[RunResult]
