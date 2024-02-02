@@ -7,6 +7,7 @@ from dbt_common.contracts.config.properties import (
     AdditionalPropertiesAllowed,
     AdditionalPropertiesMixin,
 )
+from dbt_common.contracts.util import Mergeable
 from dbt_common.exceptions import DbtInternalError, CompilationError
 from dbt_common.dataclass_schema import (
     dbtClassMixin,
@@ -22,10 +23,7 @@ from dbt.artifacts.resources import (
     MaturityType,
     MeasureAggregationParameters,
 )
-from dbt.contracts.util import (
-    Mergeable,
-    Replaceable,
-)
+from dbt.contracts.util import Replaceable
 
 # trigger the PathEncoder
 import dbt_common.helper_types  # noqa:F401
