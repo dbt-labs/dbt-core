@@ -7,7 +7,6 @@ from dbt.contracts.graph.unparsed import (
     UnparsedRunHook,
     UnparsedMacro,
     Time,
-    TimePeriod,
     FreshnessThreshold,
     UnparsedSourceDefinition,
     UnparsedSourceTableDefinition,
@@ -23,6 +22,7 @@ from dbt.contracts.graph.unparsed import (
     UnparsedVersion,
 )
 from dbt.artifacts.resources import ExposureType, MaturityType, Owner, Quoting
+from dbt.artifacts.resources.types import TimePeriod
 from dbt.artifacts.schemas.results import FreshnessStatus
 from dbt.node_types import NodeType
 from .utils import ContractTestCase

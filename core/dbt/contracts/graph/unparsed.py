@@ -3,6 +3,7 @@ import re
 
 from dbt import deprecations
 from dbt.artifacts.resources import ConstantPropertyInput, Quoting
+from dbt.artifacts.resources.types import TimePeriod
 from dbt_common.contracts.config.properties import (
     AdditionalPropertiesAllowed,
     AdditionalPropertiesMixin,
@@ -262,15 +263,6 @@ class UnparsedModelUpdate(UnparsedNodeUpdate):
 @dataclass
 class UnparsedMacroUpdate(HasConfig, HasColumnProps, HasYamlMetadata):
     arguments: List[MacroArgument] = field(default_factory=list)
-
-
-class TimePeriod(StrEnum):
-    minute = "minute"
-    hour = "hour"
-    day = "day"
-
-    def plural(self) -> str:
-        return str(self) + "s"
 
 
 @dataclass
