@@ -1,3 +1,5 @@
+import os
+
 import dbt.tracking
 from dbt_common.context import set_invocation_context
 from dbt_common.invocation import reset_invocation_id
@@ -47,7 +49,7 @@ def preflight(func):
         assert isinstance(ctx, Context)
         ctx.obj = ctx.obj or {}
 
-        set_invocation_context()
+        set_invocation_context(os.environ)
 
         # Flags
         flags = Flags(ctx)

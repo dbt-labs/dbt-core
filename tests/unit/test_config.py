@@ -26,6 +26,7 @@ import dbt_common.exceptions
 from dbt.task.base import ConfiguredTask
 
 from dbt.flags import set_from_args
+from dbt.tests.util import safe_set_invocation_context
 
 from .utils import normalize
 
@@ -362,9 +363,10 @@ class TestProfile(BaseConfigTest):
 
     def test_invalid_env_vars(self):
         self.env_override["env_value_port"] = "hello"
-        renderer = empty_profile_renderer()
         with mock.patch.dict(os.environ, self.env_override):
             with self.assertRaises(dbt.exceptions.DbtProfileError) as exc:
+                safe_set_invocation_context()
+                renderer = empty_profile_renderer()
                 dbt.config.Profile.from_raw_profile_info(
                     self.default_profile_data["default"],
                     "default",
@@ -442,6 +444,7 @@ class TestProfileFile(BaseConfigTest):
     def test_env_vars(self):
         self.args.target = "with-vars"
         with mock.patch.dict(os.environ, self.env_override):
+            safe_set_invocation_context()  # reset invocation context with new env
             profile = self.from_args()
             from_raw = self.from_raw_profile_info(target_override="with-vars")
 
@@ -460,6 +463,7 @@ class TestProfileFile(BaseConfigTest):
         self.write_profile(self.default_profile_data)
         self.env_override["env_value_target"] = "with-vars"
         with mock.patch.dict(os.environ, self.env_override):
+            safe_set_invocation_context()  # reset invocation context with new env
             profile = self.from_args()
             from_raw = self.from_raw_profile_info(target_override="with-vars")
 
@@ -478,6 +482,7 @@ class TestProfileFile(BaseConfigTest):
         self.args.target = "with-vars"
         with mock.patch.dict(os.environ, self.env_override):
             with self.assertRaises(dbt.exceptions.DbtProfileError) as exc:
+                safe_set_invocation_context()  # reset invocation context with new env
                 self.from_args()
 
         self.assertIn("Could not convert value 'hello' into type 'number'", str(exc.exception))
@@ -487,6 +492,7 @@ class TestProfileFile(BaseConfigTest):
         self.args.vars = {"cli_value_host": "cli-postgres-host"}
         renderer = dbt.config.renderer.ProfileRenderer({"cli_value_host": "cli-postgres-host"})
         with mock.patch.dict(os.environ, self.env_override):
+            safe_set_invocation_context()  # reset invocation context with new env
             profile = self.from_args(renderer=renderer)
             from_raw = self.from_raw_profile_info(
                 target_override="cli-and-env-vars",
@@ -971,6 +977,7 @@ class TestVariableProjectFile(BaseConfigTest):
     def test_cli_and_env_vars(self):
         renderer = dbt.config.renderer.DbtProjectYamlRenderer(None, {"cli_version": "0.1.2"})
         with mock.patch.dict(os.environ, self.env_override):
+            safe_set_invocation_context()  # reset invocation context with new env
             project = dbt.config.Project.from_project_root(
                 self.project_dir,
                 renderer,
@@ -1262,6 +1269,7 @@ class TestVariableRuntimeConfigFiles(BaseConfigTest):
         self.args.project_dir = self.project_dir
         set_from_args(self.args, None)
         with mock.patch.dict(os.environ, self.env_override):
+            safe_set_invocation_context()  # reset invocation context with new env
             config = dbt.config.RuntimeConfig.from_args(self.args)
 
         self.assertEqual(config.version, "0.1.2")

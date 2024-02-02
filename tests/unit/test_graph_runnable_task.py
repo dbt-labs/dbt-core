@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from dbt.task.runnable import GraphRunnableTask
 from typing import AbstractSet, Any, Dict, Optional
 
+from dbt.tests.util import safe_set_invocation_context
+
 
 @dataclass
 class MockArgs:
@@ -46,6 +48,9 @@ class MockRunnableTask(GraphRunnableTask):
 
 
 def test_graph_runnable_task_cancels_connection_on_system_exit():
+
+    safe_set_invocation_context()
+
     task = MockRunnableTask(exception_class=SystemExit)
 
     with pytest.raises(SystemExit):
@@ -56,6 +61,9 @@ def test_graph_runnable_task_cancels_connection_on_system_exit():
 
 
 def test_graph_runnable_task_cancels_connection_on_keyboard_interrupt():
+
+    safe_set_invocation_context()
+
     task = MockRunnableTask(exception_class=KeyboardInterrupt)
 
     with pytest.raises(KeyboardInterrupt):
