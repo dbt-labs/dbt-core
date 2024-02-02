@@ -1,16 +1,11 @@
 from dataclasses import dataclass
 from datetime import timedelta
-from dbt.artifacts.resources.types import TimePeriod
-from dbt_common.contracts.util import Mergeable
-from dbt_common.dataclass_schema import dbtClassMixin
-from typing import Dict, Optional
+from dbt.artifacts.resources import Time as TimeResource
+from typing import Dict
 
 
 @dataclass
-class Time(dbtClassMixin, Mergeable):
-    count: Optional[int] = None
-    period: Optional[TimePeriod] = None
-
+class Time(TimeResource):
     def exceeded(self, actual_age: float) -> bool:
         if self.period is None or self.count is None:
             return False

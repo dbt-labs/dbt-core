@@ -7,6 +7,7 @@ from dbt.artifacts.resources.v1.components import (
     NodeVersion,
     Quoting,
     RefArgs,
+    Time,
 )
 from dbt.artifacts.resources.v1.documentation import Documentation
 from dbt.artifacts.resources.v1.exposure import (

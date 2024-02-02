@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from dbt.artifacts.resources.types import TimePeriod
 from dbt.artifacts.resources.v1.macro import MacroDependsOn
 from dbt_common.contracts.config.properties import AdditionalPropertiesMixin
 from dbt_common.contracts.constraints import ColumnLevelConstraint
@@ -60,3 +61,9 @@ class Quoting(dbtClassMixin, Mergeable):
     schema: Optional[bool] = None
     identifier: Optional[bool] = None
     column: Optional[bool] = None
+
+
+@dataclass
+class Time(dbtClassMixin, Mergeable):
+    count: Optional[int] = None
+    period: Optional[TimePeriod] = None
