@@ -35,7 +35,7 @@ select 3 as id, 'anyway' as msg, 'purple' as color
 seeds__expected_merge_exclude_columns_csv = """id,msg,color
 1,hello,blue
 2,goodbye,green
-3,anyway,purple
+3,NULL,purple
 """
 
 ResultHolder = namedtuple(
@@ -114,3 +114,9 @@ class BaseMergeExcludeColumns:
             update_sql_file=None,
         )
         self.check_scenario_correctness(expected_fields, test_case_fields, project)
+
+
+# https://github.com/dbt-labs/dbt-core/issues/8286
+@pytest.mark.skip(reason="Needs PostgreSQL 15 in CI")
+class TestMergeExcludeColumns(BaseMergeExcludeColumns):
+    pass
