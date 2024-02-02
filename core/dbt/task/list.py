@@ -112,9 +112,7 @@ class ListTask(GraphRunnableTask):
                 yield f"semantic_model:{semantic_model_selector}"
             elif node.resource_type == NodeType.Unit:
                 assert isinstance(node, UnitTestDefinition)
-                unit_test_selector = ".".join([node.package_name, node.name])
-                if node.version:
-                    unit_test_selector += f"_v{node.version}"
+                unit_test_selector = ".".join([node.package_name, node.versioned_name])
                 yield f"unit_test:{unit_test_selector}"
             else:
                 # everything else is from `fqn`

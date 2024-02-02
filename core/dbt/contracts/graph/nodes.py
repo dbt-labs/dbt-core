@@ -1091,6 +1091,13 @@ class UnitTestDefinition(NodeInfoMixin, GraphNode, UnitTestDefinitionMandatory):
         tags = self.config.tags
         return [tags] if isinstance(tags, str) else tags
 
+    @property
+    def versioned_name(self) -> str:
+        versioned_name = self.name
+        if self.version is not None:
+            versioned_name += f"_v{self.version}"
+        return versioned_name
+
     def build_unit_test_checksum(self):
         # everything except 'description'
         data = f"{self.model}-{self.versions}-{self.given}-{self.expect}-{self.overrides}"

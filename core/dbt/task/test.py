@@ -83,9 +83,7 @@ class TestRunner(CompileRunner):
 
     def describe_node_name(self):
         if self.node.resource_type == NodeType.Unit:
-            name = f"{self.node.model}::{self.node.name}"
-            if self.node.version is not None:
-                name = name + f"_v{self.node.version}"
+            name = f"{self.node.model}::{self.node.versioned_name}"
             return name
         else:
             return self.node.name
