@@ -3,12 +3,9 @@ import re
 
 from dbt import deprecations
 from dbt.artifacts.resources import ConstantPropertyInput, Quoting
-from dbt_common.contracts.config.properties import (
-    AdditionalPropertiesAllowed,
-    AdditionalPropertiesMixin,
-)
+from dbt_common.contracts.config.properties import AdditionalPropertiesMixin
 from dbt_common.contracts.util import Mergeable
-from dbt_common.exceptions import DbtInternalError, CompilationError
+from dbt_common.exceptions import DbtInternalError
 from dbt_common.dataclass_schema import (
     dbtClassMixin,
     StrEnum,
@@ -21,6 +18,7 @@ from dbt.artifacts.resources import (
     Defaults,
     DimensionValidityParams,
     ExposureType,
+    ExternalTable,
     MaturityType,
     MeasureAggregationParameters,
 )
@@ -262,30 +260,6 @@ class UnparsedModelUpdate(UnparsedNodeUpdate):
 @dataclass
 class UnparsedMacroUpdate(HasConfig, HasColumnProps, HasYamlMetadata):
     arguments: List[MacroArgument] = field(default_factory=list)
-
-
-@dataclass
-class ExternalPartition(AdditionalPropertiesAllowed, Replaceable):
-    name: str = ""
-    description: str = ""
-    data_type: str = ""
-    meta: Dict[str, Any] = field(default_factory=dict)
-
-    def __post_init__(self):
-        if self.name == "" or self.data_type == "":
-            raise CompilationError("External partition columns must have names and data types")
-
-
-@dataclass
-class ExternalTable(AdditionalPropertiesAllowed, Mergeable):
-    location: Optional[str] = None
-    file_format: Optional[str] = None
-    row_format: Optional[str] = None
-    tbl_properties: Optional[str] = None
-    partitions: Optional[Union[List[str], List[ExternalPartition]]] = None
-
-    def __bool__(self):
-        return self.location is not None
 
 
 @dataclass

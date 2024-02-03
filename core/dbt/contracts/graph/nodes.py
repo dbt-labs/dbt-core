@@ -31,7 +31,6 @@ from dbt_common.clients.system import write_file
 from dbt.contracts.files import FileHash
 from dbt.contracts.graph.components import FreshnessThreshold
 from dbt.contracts.graph.unparsed import (
-    ExternalTable,
     HasYamlMetadata,
     TestDef,
     UnparsedSourceDefinition,
@@ -80,6 +79,7 @@ from dbt.artifacts.resources import (
     DependsOn,
     Docs,
     Exposure as ExposureResource,
+    ExternalTable as ExternalTableResource,
     MacroDependsOn,
     MacroArgument,
     Documentation as DocumentationResource,
@@ -1247,7 +1247,7 @@ class SourceDefinition(NodeInfoMixin, ParsedSourceMandatory):
     quoting: QuotingResource = field(default_factory=QuotingResource)
     loaded_at_field: Optional[str] = None
     freshness: Optional[FreshnessThreshold] = None
-    external: Optional[ExternalTable] = None
+    external: Optional[ExternalTableResource] = None
     description: str = ""
     columns: Dict[str, ColumnInfoResource] = field(default_factory=dict)
     meta: Dict[str, Any] = field(default_factory=dict)
