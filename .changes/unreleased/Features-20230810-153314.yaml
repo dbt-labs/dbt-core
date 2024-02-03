@@ -1,0 +1,6 @@
+kind: Features
+body: Add Postgres adapter configuration to register extra data types
+time: 2023-08-10T15:33:14.254894544-03:00
+custom:
+  Author: gmontanola
+  Issue: '8353'
