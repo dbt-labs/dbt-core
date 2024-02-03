@@ -1,0 +1,6 @@
+kind: Fixes
+body: Support foreign tables in adapter.get_relation
+time: 2023-11-17T11:37:47.263572-07:00
+custom:
+  Author: lialzm
+  Issue: "7663"

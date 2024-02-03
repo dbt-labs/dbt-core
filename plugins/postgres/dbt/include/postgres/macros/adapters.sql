@@ -86,6 +86,14 @@
   {% call statement('list_relations_without_caching', fetch_result=True) -%}
     select
       '{{ schema_relation.database }}' as database,
+      foreign_table_name as name,
+      foreign_table_schema as schema,
+      'table' as type
+    from information_schema.foreign_tables
+    where foreign_table_schema ilike '{{ schema_relation.schema }}'
+    union all
+    select
+      '{{ schema_relation.database }}' as database,
       tablename as name,
       schemaname as schema,
       'table' as type
