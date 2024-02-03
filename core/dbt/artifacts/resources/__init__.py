@@ -61,4 +61,5 @@ from dbt.artifacts.resources.v1.semantic_model import (
 from dbt.artifacts.resources.v1.source_definition import (
     ExternalPartition,
     ExternalTable,
+    SourceConfig,
 )

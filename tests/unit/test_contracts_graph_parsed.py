@@ -17,6 +17,7 @@ from dbt.artifacts.resources import (
     Owner,
     Quoting,
     RefArgs,
+    SourceConfig,
 )
 from dbt.artifacts.resources.types import TimePeriod
 from dbt.node_types import NodeType, AccessType
@@ -28,7 +29,6 @@ from dbt.contracts.graph.model_config import (
     SeedConfig,
     TestConfig,
     SnapshotConfig,
-    SourceConfig,
     EmptySnapshotConfig,
     Hook,
 )

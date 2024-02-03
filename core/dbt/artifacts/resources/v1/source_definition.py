@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from dbt_common.contracts.config.base import BaseConfig
 from dbt_common.contracts.config.properties import AdditionalPropertiesAllowed
 from dbt_common.contracts.util import Mergeable, Replaceable
 from dbt_common.exceptions import CompilationError
@@ -27,3 +28,8 @@ class ExternalTable(AdditionalPropertiesAllowed, Mergeable):
 
     def __bool__(self):
         return self.location is not None
+
+
+@dataclass
+class SourceConfig(BaseConfig):
+    enabled: bool = True

@@ -66,7 +66,6 @@ from .model_config import (
     ModelConfig,
     SeedConfig,
     TestConfig,
-    SourceConfig,
     EmptySnapshotConfig,
     SnapshotConfig,
     UnitTestConfig,
@@ -92,6 +91,7 @@ from dbt.artifacts.resources import (
     RefArgs as RefArgsResource,
     SavedQuery as SavedQueryResource,
     SemanticModel as SemanticModelResource,
+    SourceConfig,
 )
 
 # =====================================================================
