@@ -29,8 +29,17 @@ class PostgresIndexConfig(dbtClassMixin):
     columns: List[str]
     unique: bool = False
     type: Optional[str] = None
+    name: Optional[str] = None
 
     def render(self, relation):
+        # Use the index name if given
+        # Otherwise, generate a unique index name
+        if self.name:
+            return self.name
+        else:
+            return self.default_index_name(relation)
+
+    def default_index_name(self, relation):
         # We append the current timestamp to the index name because otherwise
         # the index will only be created on every other run. See
         # https://github.com/dbt-labs/dbt-core/issues/1945#issuecomment-576714925

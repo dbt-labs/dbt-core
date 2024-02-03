@@ -29,7 +29,7 @@ class PostgresIndexMethod(StrEnum):
 @dataclass(frozen=True, eq=True, unsafe_hash=True)
 class PostgresIndexConfig(RelationConfigBase, RelationConfigValidationMixin):
     """
-    This config fallows the specs found here:
+    This config follows the specs found here:
     https://www.postgresql.org/docs/current/sql-createindex.html
 
     The following parameters are configurable by dbt:
@@ -76,6 +76,7 @@ class PostgresIndexConfig(RelationConfigBase, RelationConfigValidationMixin):
     @classmethod
     def parse_model_node(cls, model_node_entry: dict) -> dict:
         config_dict = {
+            "name": model_node_entry.get("name"),
             "column_names": set(model_node_entry.get("columns", set())),
             "unique": model_node_entry.get("unique"),
             "method": model_node_entry.get("type"),
@@ -98,10 +99,12 @@ class PostgresIndexConfig(RelationConfigBase, RelationConfigValidationMixin):
         Returns: a dictionary that can be passed into `get_create_index_sql()`
         """
         node_config = {
+            "name": self.name,
             "columns": list(self.column_names),
             "unique": self.unique,
-            "type": self.method.value,
+            "type": self.method,
         }
+
         return node_config
 
 
