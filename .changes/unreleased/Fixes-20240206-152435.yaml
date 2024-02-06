@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix conflict with newer versions of Snowplow tracker
+time: 2024-02-06T15:24:35.778891-06:00
+custom:
+  Author: edgarrmondragon akurdyukov
+  Issue: "8719"
