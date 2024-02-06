@@ -2,8 +2,6 @@ from copy import deepcopy
 from dbt.artifacts.resources import RefArgs
 from dbt.context.context_config import ContextConfig
 from dbt.contracts.graph.nodes import ModelNode
-from dbt_common.events.base_types import EventLevel
-from dbt_common.events.types import Note
 from dbt.flags import get_flags
 from dbt.node_types import NodeType, ModelLanguage
 from dbt.parser.base import SimpleSQLParser
