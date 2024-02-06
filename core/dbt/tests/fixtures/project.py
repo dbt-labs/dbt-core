@@ -9,6 +9,7 @@ import yaml
 
 from dbt.mp_context import get_mp_context
 from dbt.parser.manifest import ManifestLoader
+from dbt_common.context import set_invocation_context
 from dbt_common.exceptions import CompilationError, DbtDatabaseError
 from dbt.context.providers import generate_runtime_macro_context
 import dbt.flags as flags
@@ -492,12 +493,23 @@ class TestProjInfo:
         return {model_name: materialization for (model_name, materialization) in result}
 
 
+# Housekeeping that needs to be done before we start setting up any test fixtures.
+@pytest.fixture(scope="class")
+def initialization() -> None:
+    # Create an "invocation context," which dbt application code relies on.
+    set_invocation_context(os.environ)
+
+    # Enable caches used between test runs, for better testing performance.
+    enable_test_caching()
+
+
 # This is the main fixture that is used in all functional tests. It pulls in the other
 # fixtures that are necessary to set up a dbt project, and saves some of the information
 # in a TestProjInfo class, which it returns, so that individual test cases do not have
 # to pull in the other fixtures individually to access their information.
 @pytest.fixture(scope="class")
 def project(
+    initialization,
     clean_up_logging,
     project_root,
     profiles_root,
@@ -518,7 +530,6 @@ def project(
     # Logbook warnings are ignored so we don't have to fork logbook to support python 3.10.
     # This _only_ works for tests in `tests/` that use the project fixture.
     warnings.filterwarnings("ignore", category=DeprecationWarning, module="logbook")
-    enable_test_caching()
     log_flags = Namespace(
         LOG_PATH=logs_dir,
         LOG_FORMAT="json",
