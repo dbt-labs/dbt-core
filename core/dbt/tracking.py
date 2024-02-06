@@ -10,7 +10,7 @@ import logbook
 import pytz
 import requests
 from snowplow_tracker import Emitter, SelfDescribingJson, Subject, Tracker
-from snowplow_tracker import __version__ as snowplow_version # type: ignore
+from snowplow_tracker import __version__ as snowplow_version  # type: ignore
 from snowplow_tracker import logger as sp_logger
 
 from dbt import version as dbt_version
@@ -107,20 +107,11 @@ class TimeoutEmitter(Emitter):
 
 
 emitter = TimeoutEmitter()
-
-# workaround in case real snowplow tracker is in the env
-if snowplow_version == "0.0.2":
-    tracker = Tracker(
-        emitter,
-        namespace="cf",
-        app_id="dbt",
-    )
-else:
-    tracker = Tracker(
-        "cf",
-        emitters=emitter,
-        app_id="dbt",
-    ) # type: ignore
+tracker = Tracker(
+    emitters=emitter,
+    namespace="cf",
+    app_id="dbt",
+)
 
 
 class User:
