@@ -29,7 +29,7 @@ from dbt_common.dataclass_schema import dbtClassMixin
 
 from dbt_common.clients.system import write_file
 from dbt.contracts.files import FileHash
-from dbt.contracts.graph.components import FreshnessThreshold
+from dbt.contracts.graph.components import FreshnessThreshold, HasRelationMetadata
 from dbt.contracts.graph.unparsed import (
     HasYamlMetadata,
     TestDef,
@@ -178,30 +178,6 @@ class Contract(dbtClassMixin, Replaceable):
     enforced: bool = False
     alias_types: bool = True
     checksum: Optional[str] = None
-
-
-# Metrics, exposures,
-@dataclass
-class HasRelationMetadata(dbtClassMixin, Replaceable):
-    database: Optional[str]
-    schema: str
-
-    # Can't set database to None like it ought to be
-    # because it messes up the subclasses and default parameters
-    # so hack it here
-    @classmethod
-    def __pre_deserialize__(cls, data):
-        data = super().__pre_deserialize__(data)
-        if "database" not in data:
-            data["database"] = None
-        return data
-
-    @property
-    def quoting_dict(self) -> Dict[str, bool]:
-        if hasattr(self, "quoting"):
-            return self.quoting.to_dict(omit_none=True)
-        else:
-            return {}
 
 
 @dataclass
