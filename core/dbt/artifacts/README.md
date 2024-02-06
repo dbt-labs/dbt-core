@@ -33,14 +33,14 @@ All existing resources are defined under `dbt/artifacts/resources/v1`.
 ### Non-breaking changes
 
 Freely make incremental, non-breaking changes in-place to the latest major version of any artifact in mantle (via minor or patch bumps). The only changes that are fully forward and backward compatible are: 
-* Adding a new __optional__ field
+* Adding a new field with a default
 * Deleting an __optional__ field
 
 ### Breaking changes
 A breaking change is anything that: 
 * Deletes a required field
 * Changes the name or type of an existing field
-* Makes an optional field required
+* Removes default from a field
 
 These should generally be avoided, and bundled together to aim for as minimal disruption across the integration ecosystem as possible. 
 
