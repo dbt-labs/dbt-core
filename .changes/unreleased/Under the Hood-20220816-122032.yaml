@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: add more information to log line interop test failures
+time: 2022-08-16T12:20:32.119588+01:00
+custom:
+  Author: nathaniel-may
+  Issue: "5658"
+  PR: "5659"
