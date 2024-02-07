@@ -72,4 +72,5 @@ class TestVersionedModelConstraints:
 
         manifest = get_manifest(project.project_root)
         model_node = manifest.nodes["model.test.foo.v1"]
+        assert model_node.contract.enforced is True
         assert len(model_node.constraints) == 1
