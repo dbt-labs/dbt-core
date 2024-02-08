@@ -5,6 +5,7 @@ from dbt.artifacts.resources.v1.components import (
     ColumnInfo,
     DependsOn,
     FreshnessThreshold,
+    HasRelationMetadata,
     NodeVersion,
     Quoting,
     RefArgs,

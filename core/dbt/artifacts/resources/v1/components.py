@@ -74,3 +74,19 @@ class FreshnessThreshold(dbtClassMixin, Mergeable):
     warn_after: Optional[Time] = field(default_factory=Time)
     error_after: Optional[Time] = field(default_factory=Time)
     filter: Optional[str] = None
+
+
+@dataclass
+class HasRelationMetadata(dbtClassMixin, Replaceable):
+    database: Optional[str]
+    schema: str
+
+    # Can't set database to None like it ought to be
+    # because it messes up the subclasses and default parameters
+    # so hack it here
+    @classmethod
+    def __pre_deserialize__(cls, data):
+        data = super().__pre_deserialize__(data)
+        if "database" not in data:
+            data["database"] = None
+        return data
