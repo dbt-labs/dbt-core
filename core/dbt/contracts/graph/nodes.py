@@ -87,6 +87,7 @@ from dbt.artifacts.resources import (
     NodeVersion,
     Group as GroupResource,
     GraphResource,
+    ParsedSourceMandatory as ParsedSourceMandatoryResource,
     Quoting as QuotingResource,
     RefArgs as RefArgsResource,
     SavedQuery as SavedQueryResource,
@@ -1210,16 +1211,9 @@ class UnpatchedSourceDefinition(BaseNode):
 
 
 @dataclass
-class ParsedSourceMandatory(GraphNode[GraphResource], HasRelationMetadata):
-    source_name: str
-    source_description: str
-    loader: str
-    identifier: str
-    resource_type: Literal[NodeType.Source]
-
-
-@dataclass
-class SourceDefinition(NodeInfoMixin, ParsedSourceMandatory):
+class SourceDefinition(
+    NodeInfoMixin, GraphNode[GraphResource], HasRelationMetadata, ParsedSourceMandatoryResource
+):
     quoting: QuotingResource = field(default_factory=QuotingResource)
     loaded_at_field: Optional[str] = None
     freshness: Optional[FreshnessThreshold] = None

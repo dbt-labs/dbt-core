@@ -1,9 +1,12 @@
 from dataclasses import dataclass, field
+from dbt.artifacts.resources.base import GraphResource
+from dbt.artifacts.resources.types import NodeType
+from dbt.artifacts.resources.v1.components import HasRelationMetadata
 from dbt_common.contracts.config.base import BaseConfig
 from dbt_common.contracts.config.properties import AdditionalPropertiesAllowed
 from dbt_common.contracts.util import Mergeable, Replaceable
 from dbt_common.exceptions import CompilationError
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Literal, Optional, Union
 
 
 @dataclass
@@ -33,3 +36,12 @@ class ExternalTable(AdditionalPropertiesAllowed, Mergeable):
 @dataclass
 class SourceConfig(BaseConfig):
     enabled: bool = True
+
+
+@dataclass
+class ParsedSourceMandatory(GraphResource, HasRelationMetadata):
+    source_name: str
+    source_description: str
+    loader: str
+    identifier: str
+    resource_type: Literal[NodeType.Source]
