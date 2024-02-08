@@ -1,7 +1,14 @@
+import time
+
 from dataclasses import dataclass, field
 from dbt.artifacts.resources.base import GraphResource
 from dbt.artifacts.resources.types import NodeType
-from dbt.artifacts.resources.v1.components import HasRelationMetadata
+from dbt.artifacts.resources.v1.components import (
+    ColumnInfo,
+    FreshnessThreshold,
+    HasRelationMetadata,
+    Quoting,
+)
 from dbt_common.contracts.config.base import BaseConfig
 from dbt_common.contracts.config.properties import AdditionalPropertiesAllowed
 from dbt_common.contracts.util import Mergeable, Replaceable
@@ -45,3 +52,21 @@ class ParsedSourceMandatory(GraphResource, HasRelationMetadata):
     loader: str
     identifier: str
     resource_type: Literal[NodeType.Source]
+
+
+@dataclass
+class SourceDefinition(ParsedSourceMandatory):
+    quoting: Quoting = field(default_factory=Quoting)
+    loaded_at_field: Optional[str] = None
+    freshness: Optional[FreshnessThreshold] = None
+    external: Optional[ExternalTable] = None
+    description: str = ""
+    columns: Dict[str, ColumnInfo] = field(default_factory=dict)
+    meta: Dict[str, Any] = field(default_factory=dict)
+    source_meta: Dict[str, Any] = field(default_factory=dict)
+    tags: List[str] = field(default_factory=list)
+    config: SourceConfig = field(default_factory=SourceConfig)
+    patch_path: Optional[str] = None
+    unrendered_config: Dict[str, Any] = field(default_factory=dict)
+    relation_name: Optional[str] = None
+    created_at: float = field(default_factory=lambda: time.time())

@@ -78,7 +78,6 @@ from dbt.artifacts.resources import (
     DependsOn,
     Docs,
     Exposure as ExposureResource,
-    ExternalTable as ExternalTableResource,
     MacroDependsOn,
     MacroArgument,
     Documentation as DocumentationResource,
@@ -87,12 +86,11 @@ from dbt.artifacts.resources import (
     NodeVersion,
     Group as GroupResource,
     GraphResource,
-    ParsedSourceMandatory as ParsedSourceMandatoryResource,
     Quoting as QuotingResource,
     RefArgs as RefArgsResource,
     SavedQuery as SavedQueryResource,
     SemanticModel as SemanticModelResource,
-    SourceConfig,
+    SourceDefinition as SourceDefinitionResource,
 )
 
 # =====================================================================
@@ -1212,22 +1210,13 @@ class UnpatchedSourceDefinition(BaseNode):
 
 @dataclass
 class SourceDefinition(
-    NodeInfoMixin, GraphNode[GraphResource], HasRelationMetadata, ParsedSourceMandatoryResource
+    NodeInfoMixin,
+    GraphNode[SourceDefinitionResource],
+    SourceDefinitionResource,
+    HasRelationMetadata,
 ):
-    quoting: QuotingResource = field(default_factory=QuotingResource)
-    loaded_at_field: Optional[str] = None
+    # Overriding the `freshness` property to use the `FreshnessThreshold` instead of the `FreshnessThresholdResource`
     freshness: Optional[FreshnessThreshold] = None
-    external: Optional[ExternalTableResource] = None
-    description: str = ""
-    columns: Dict[str, ColumnInfoResource] = field(default_factory=dict)
-    meta: Dict[str, Any] = field(default_factory=dict)
-    source_meta: Dict[str, Any] = field(default_factory=dict)
-    tags: List[str] = field(default_factory=list)
-    config: SourceConfig = field(default_factory=SourceConfig)
-    patch_path: Optional[str] = None
-    unrendered_config: Dict[str, Any] = field(default_factory=dict)
-    relation_name: Optional[str] = None
-    created_at: float = field(default_factory=lambda: time.time())
 
     def __post_serialize__(self, dct):
         if "_event_status" in dct:
