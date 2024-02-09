@@ -1,5 +1,5 @@
+from copy import deepcopy
 import pytest
-
 from typing import List
 
 from dbt.artifacts.resources import Dimension, Entity, Measure, Defaults
@@ -79,3 +79,16 @@ def test_checked_agg_time_dimension_for_measure_exception(default_semantic_model
         f"Aggregation time dimension for measure {measure.name} on semantic model {default_semantic_model.name}"
         in str(execinfo.value)
     )
+
+
+def test_semantic_model_same_contents(default_semantic_model: SemanticModel):
+    default_semantic_model_copy = deepcopy(default_semantic_model)
+
+    assert default_semantic_model.same_contents(default_semantic_model_copy)
+
+
+def test_semantic_model_same_contents_update_model(default_semantic_model: SemanticModel):
+    default_semantic_model_copy = deepcopy(default_semantic_model)
+    default_semantic_model_copy.model = "ref('test_another_model')"
+
+    assert not default_semantic_model.same_contents(default_semantic_model_copy)
