@@ -5,12 +5,19 @@ import pytest
 from dbt.cli.exceptions import DbtUsageException
 from dbt.cli.main import dbtRunner
 from dbt.exceptions import DbtProjectError
+from dbt.adapters.factory import reset_adapters, FACTORY
 
 
 class TestDbtRunner:
     @pytest.fixture
     def dbt(self) -> dbtRunner:
         return dbtRunner()
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "models.sql": "select 1 as id",
+        }
 
     def test_group_invalid_option(self, dbt: dbtRunner) -> None:
         res = dbt.invoke(["--invalid-option"])
@@ -72,3 +79,14 @@ class TestDbtRunner:
     def test_invoke_kwargs_and_flags(self, project, dbt):
         res = dbt.invoke(["--log-format=text", "run"], log_format="json")
         assert res.result.args["log_format"] == "json"
+
+    def test_pass_in_manifest(self, project, dbt):
+        result = dbt.invoke(["parse"])
+        manifest = result.result
+
+        reset_adapters()
+        assert len(FACTORY.adapters) == 0
+        result = dbtRunner(manifest=manifest).invoke(["run"])
+        # Check that the adapters are registered again.
+        assert result.success
+        assert len(FACTORY.adapters) == 1

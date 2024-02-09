@@ -72,7 +72,7 @@ setup(
         "dbt-extractor~=0.5.0",
         "minimal-snowplow-tracker~=0.0.2",
         "dbt-semantic-interfaces~=0.5.0a2",
-        "dbt-common~=0.1.0",
+        "dbt-common~=0.1.3",
         "dbt-adapters~=0.1.0a2",
         # ----
         # Expect compatibility with all new versions of these packages, so lower bounds only.

@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix parsing f-strings in python models
+time: 2023-11-28T10:21:11.596121-08:00
+custom:
+  Author: mederka
+  Issue: "6976"

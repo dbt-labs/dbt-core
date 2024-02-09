@@ -7,7 +7,9 @@ from multiprocessing.dummy import Pool as ThreadPool
 from pathlib import Path
 from typing import AbstractSet, Optional, Dict, List, Set, Tuple, Iterable
 
+from dbt_common.context import get_invocation_context, _INVOCATION_CONTEXT_VAR
 import dbt_common.utils.formatting
+
 import dbt.exceptions
 import dbt.tracking
 import dbt.utils
@@ -377,7 +379,7 @@ class GraphRunnableTask(ConfiguredTask):
         with TextOnly():
             fire_event(Formatting(""))
 
-        pool = ThreadPool(num_threads)
+        pool = ThreadPool(num_threads, self._pool_thread_initializer, [get_invocation_context()])
         try:
             self.run_queue(pool)
         except FailFastError as failure:
@@ -413,6 +415,10 @@ class GraphRunnableTask(ConfiguredTask):
         pool.join()
 
         return self.node_results
+
+    @staticmethod
+    def _pool_thread_initializer(invocation_context):
+        _INVOCATION_CONTEXT_VAR.set(invocation_context)
 
     def _mark_dependent_errors(
         self, node_id: str, result: RunResult, cause: Optional[RunResult]

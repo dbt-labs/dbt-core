@@ -1,3 +1,1 @@
 -e ./core
--e ./plugins/postgres
--e ./tests/adapter

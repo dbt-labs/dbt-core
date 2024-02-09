@@ -18,7 +18,7 @@ class AccessType(StrEnum):
 class NodeType(StrEnum):
     Model = "model"
     Analysis = "analysis"
-    Test = "test"
+    Test = "test"  # renamed to 'data_test'; preserved as 'test' here for back-compat
     Snapshot = "snapshot"
     Operation = "operation"
     Seed = "seed"
@@ -41,6 +41,8 @@ class NodeType(StrEnum):
             return "analyses"
         elif self is self.SavedQuery:
             return "saved_queries"
+        elif self is self.Test:
+            return "data_tests"
         return f"{self}s"
 
 

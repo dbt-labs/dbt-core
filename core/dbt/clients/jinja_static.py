@@ -1,36 +1,38 @@
+from typing import Any, Dict, Optional
+
 import jinja2
 from dbt_common.clients.jinja import get_environment
+from dbt_common.tests import test_caching_enabled
 from dbt.exceptions import MacroNamespaceNotStringError
 from dbt_common.exceptions.macros import MacroNameNotStringError
+
+
+_TESTING_MACRO_CACHE: Optional[Dict[str, Any]] = {}
 
 
 def statically_extract_macro_calls(string, ctx, db_wrapper=None):
     # set 'capture_macros' to capture undefined
     env = get_environment(None, capture_macros=True)
-    parsed = env.parse(string)
+
+    global _TESTING_MACRO_CACHE
+    if test_caching_enabled() and string in _TESTING_MACRO_CACHE:
+        parsed = _TESTING_MACRO_CACHE.get(string, None)
+        func_calls = getattr(parsed, "_dbt_cached_calls")
+    else:
+        parsed = env.parse(string)
+        func_calls = tuple(parsed.find_all(jinja2.nodes.Call))
+
+        if test_caching_enabled():
+            _TESTING_MACRO_CACHE[string] = parsed
+            setattr(parsed, "_dbt_cached_calls", func_calls)
 
     standard_calls = ["source", "ref", "config"]
     possible_macro_calls = []
-    for func_call in parsed.find_all(jinja2.nodes.Call):
+    for func_call in func_calls:
         func_name = None
         if hasattr(func_call, "node") and hasattr(func_call.node, "name"):
             func_name = func_call.node.name
         else:
-            # func_call for dbt.current_timestamp macro
-            # Call(
-            #   node=Getattr(
-            #     node=Name(
-            #       name='dbt_utils',
-            #       ctx='load'
-            #     ),
-            #     attr='current_timestamp',
-            #     ctx='load
-            #   ),
-            #   args=[],
-            #   kwargs=[],
-            #   dyn_args=None,
-            #   dyn_kwargs=None
-            # )
             if (
                 hasattr(func_call, "node")
                 and hasattr(func_call.node, "node")

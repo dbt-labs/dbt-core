@@ -45,34 +45,14 @@ import sqlparse
 graph_file_name = "graph.gpickle"
 
 
-def print_compile_stats(stats):
-    names = {
-        NodeType.Model: "model",
-        NodeType.Test: "data test",
-        NodeType.Unit: "unit test",
-        NodeType.Snapshot: "snapshot",
-        NodeType.Analysis: "analysis",
-        NodeType.Macro: "macro",
-        NodeType.Operation: "operation",
-        NodeType.Seed: "seed",
-        NodeType.Source: "source",
-        NodeType.Exposure: "exposure",
-        NodeType.SemanticModel: "semantic model",
-        NodeType.Metric: "metric",
-        NodeType.Group: "group",
-    }
-
-    results = {k: 0 for k in names.keys()}
-    results.update(stats)
-
+def print_compile_stats(stats: Dict[NodeType, int]):
     # create tracking event for resource_counts
     if dbt.tracking.active_user is not None:
-        resource_counts = {k.pluralize(): v for k, v in results.items()}
+        resource_counts = {k.pluralize(): v for k, v in stats.items()}
         dbt.tracking.track_resource_counts(resource_counts)
 
     # do not include resource types that are not actually defined in the project
-    stat_line = ", ".join([pluralize(ct, names.get(t)) for t, ct in stats.items() if t in names])
-
+    stat_line = ", ".join([pluralize(ct, t) for t, ct in stats.items() if ct != 0])
     fire_event(FoundStats(stat_line=stat_line))
 
 
@@ -84,7 +64,7 @@ def _node_enabled(node: ManifestNode):
         return True
 
 
-def _generate_stats(manifest: Manifest):
+def _generate_stats(manifest: Manifest) -> Dict[NodeType, int]:
     stats: Dict[NodeType, int] = defaultdict(int)
     for node in manifest.nodes.values():
         if _node_enabled(node):

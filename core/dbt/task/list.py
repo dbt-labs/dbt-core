@@ -1,6 +1,12 @@
 import json
 
-from dbt.contracts.graph.nodes import Exposure, SourceDefinition, Metric, SemanticModel
+from dbt.contracts.graph.nodes import (
+    Exposure,
+    SourceDefinition,
+    Metric,
+    SemanticModel,
+    UnitTestDefinition,
+)
 from dbt.flags import get_flags
 from dbt.graph import ResourceTypeSelector
 from dbt.task.runnable import GraphRunnableTask
@@ -26,6 +32,7 @@ class ListTask(GraphRunnableTask):
             NodeType.Exposure,
             NodeType.Metric,
             NodeType.SemanticModel,
+            NodeType.Unit,
         )
     )
     ALL_RESOURCE_VALUES = DEFAULT_RESOURCE_VALUES | frozenset((NodeType.Analysis,))
@@ -57,26 +64,28 @@ class ListTask(GraphRunnableTask):
     def _iterate_selected_nodes(self):
         selector = self.get_node_selector()
         spec = self.get_selection_spec()
-        nodes = sorted(selector.get_selected(spec))
-        if not nodes:
+        unique_ids = sorted(selector.get_selected(spec))
+        if not unique_ids:
             warn_or_error(NoNodesSelected())
             return
         if self.manifest is None:
             raise DbtInternalError("manifest is None in _iterate_selected_nodes")
-        for node in nodes:
-            if node in self.manifest.nodes:
-                yield self.manifest.nodes[node]
-            elif node in self.manifest.sources:
-                yield self.manifest.sources[node]
-            elif node in self.manifest.exposures:
-                yield self.manifest.exposures[node]
-            elif node in self.manifest.metrics:
-                yield self.manifest.metrics[node]
-            elif node in self.manifest.semantic_models:
-                yield self.manifest.semantic_models[node]
+        for unique_id in unique_ids:
+            if unique_id in self.manifest.nodes:
+                yield self.manifest.nodes[unique_id]
+            elif unique_id in self.manifest.sources:
+                yield self.manifest.sources[unique_id]
+            elif unique_id in self.manifest.exposures:
+                yield self.manifest.exposures[unique_id]
+            elif unique_id in self.manifest.metrics:
+                yield self.manifest.metrics[unique_id]
+            elif unique_id in self.manifest.semantic_models:
+                yield self.manifest.semantic_models[unique_id]
+            elif unique_id in self.manifest.unit_tests:
+                yield self.manifest.unit_tests[unique_id]
             else:
                 raise DbtRuntimeError(
-                    f'Got an unexpected result from node selection: "{node}"'
+                    f'Got an unexpected result from node selection: "{unique_id}"'
                     f"Expected a source or a node!"
                 )
 
@@ -101,6 +110,10 @@ class ListTask(GraphRunnableTask):
                 assert isinstance(node, SemanticModel)
                 semantic_model_selector = ".".join([node.package_name, node.name])
                 yield f"semantic_model:{semantic_model_selector}"
+            elif node.resource_type == NodeType.Unit:
+                assert isinstance(node, UnitTestDefinition)
+                unit_test_selector = ".".join([node.package_name, node.versioned_name])
+                yield f"unit_test:{unit_test_selector}"
             else:
                 # everything else is from `fqn`
                 yield ".".join(node.fqn)

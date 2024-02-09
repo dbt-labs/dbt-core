@@ -1,3 +1,4 @@
+from contextvars import ContextVar, copy_context
 from io import StringIO
 import os
 import shutil
@@ -12,6 +13,7 @@ from dbt.adapters.factory import Adapter
 from dbt.cli.main import dbtRunner
 from dbt.logger import log_manager
 from dbt.contracts.graph.manifest import Manifest
+from dbt_common.context import _INVOCATION_CONTEXT_VAR, InvocationContext
 from dbt_common.events.functions import (
     fire_event,
     capture_stdout_logs,
@@ -631,3 +633,16 @@ def get_model_file(project, relation: BaseRelation) -> str:
 
 def set_model_file(project, relation: BaseRelation, model_sql: str):
     write_file(model_sql, project.project_root, "models", f"{relation.name}.sql")
+
+
+def safe_set_invocation_context():
+    """In order to deal with a problem with the way the pytest runner interacts
+    with ContextVars, this function provides a mechanism for setting the
+    invocation context reliably, using its name rather than the reference
+    variable, which may have been loaded in a separate context."""
+    invocation_var: Optional[ContextVar] = next(
+        iter([cv for cv in copy_context() if cv.name == _INVOCATION_CONTEXT_VAR.name]), None
+    )
+    if invocation_var is None:
+        invocation_var = _INVOCATION_CONTEXT_VAR
+    invocation_var.set(InvocationContext(os.environ))

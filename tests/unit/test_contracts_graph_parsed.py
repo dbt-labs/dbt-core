@@ -4,6 +4,18 @@ import pytest
 from hypothesis import given
 from hypothesis.strategies import builds, lists
 
+from dbt.artifacts.resources import (
+    Dimension,
+    Entity,
+    ExposureConfig,
+    ExposureType,
+    MaturityType,
+    Measure,
+    MetricInputMeasure,
+    MetricTypeParams,
+    Owner,
+    RefArgs,
+)
 from dbt.node_types import NodeType, AccessType
 from dbt.contracts.files import FileHash
 from dbt.contracts.graph.model_config import (
@@ -13,7 +25,6 @@ from dbt.contracts.graph.model_config import (
     TestConfig,
     SnapshotConfig,
     SourceConfig,
-    ExposureConfig,
     EmptySnapshotConfig,
     Hook,
 )
@@ -27,24 +38,17 @@ from dbt.contracts.graph.nodes import (
     Macro,
     Exposure,
     Metric,
-    MetricTypeParams,
-    MetricInputMeasure,
     SeedNode,
     Docs,
     MacroDependsOn,
     SourceDefinition,
     Documentation,
     HookNode,
-    Owner,
     TestMetadata,
     SemanticModel,
-    RefArgs,
 )
-from dbt.contracts.graph.semantic_models import Dimension, Entity, Measure
 from dbt.contracts.graph.unparsed import (
-    ExposureType,
     FreshnessThreshold,
-    MaturityType,
     Quoting,
     Time,
     TimePeriod,

@@ -1,5 +1,6 @@
-import os
 from typing import Any, Dict, Optional
+
+from dbt_common.context import get_invocation_context
 
 from .base import BaseContext, contextmember
 
@@ -30,24 +31,25 @@ class SecretContext(BaseContext):
         # if this is a 'secret' env var, just return the name of the env var
         # instead of rendering the actual value here, to avoid any risk of
         # Jinja manipulation. it will be subbed out later, in SecretRenderer.render_value
-        if var in os.environ and var.startswith(SECRET_ENV_PREFIX):
+        env = get_invocation_context().env
+        if var in env and var.startswith(SECRET_ENV_PREFIX):
             return SECRET_PLACEHOLDER.format(var)
 
-        elif var in os.environ:
-            return_value = os.environ[var]
+        if var in env:
+            return_value = env[var]
         elif default is not None:
             return_value = default
 
         if return_value is not None:
             # store env vars in the internal manifest to power partial parsing
             # if it's a 'secret' env var, we shouldn't even get here
-            # but just to be safe — don't save secrets
+            # but just to be safe, don't save secrets
             if not var.startswith(SECRET_ENV_PREFIX):
                 # If the environment variable is set from a default, store a string indicating
                 # that so we can skip partial parsing.  Otherwise the file will be scheduled for
                 # reparsing. If the default changes, the file will have been updated and therefore
                 # will be scheduled for reparsing anyways.
-                self.env_vars[var] = return_value if var in os.environ else DEFAULT_ENV_PLACEHOLDER
+                self.env_vars[var] = return_value if var in env else DEFAULT_ENV_PLACEHOLDER
             return return_value
         else:
             raise EnvVarMissingError(var)

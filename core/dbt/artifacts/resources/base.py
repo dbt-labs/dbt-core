@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_common.contracts.util import Replaceable
+from typing import List
 
 from dbt.artifacts.resources.types import NodeType
 
@@ -13,3 +14,8 @@ class BaseResource(dbtClassMixin, Replaceable):
     path: str
     original_file_path: str
     unique_id: str
+
+
+@dataclass
+class GraphResource(BaseResource):
+    fqn: List[str]

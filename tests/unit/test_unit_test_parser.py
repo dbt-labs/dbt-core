@@ -1,5 +1,4 @@
 from dbt.contracts.graph.nodes import UnitTestDefinition, UnitTestConfig, DependsOn, NodeType
-from dbt.exceptions import ParsingError
 from dbt.parser import SchemaParser
 from dbt.parser.unit_tests import UnitTestParser
 
@@ -103,12 +102,6 @@ class UnitTestParserTest(SchemaParserTest):
 
     def file_block_for(self, data, filename):
         return super().file_block_for(data, filename, "unit_tests")
-
-    def test_basic_model_not_found(self):
-        block = self.yaml_block_for(UNIT_TEST_MODEL_NOT_FOUND_SOURCE, "test_my_model.yml")
-
-        with self.assertRaises(ParsingError):
-            UnitTestParser(self.parser, block).parse()
 
     def test_basic(self):
         block = self.yaml_block_for(UNIT_TEST_SOURCE, "test_my_model.yml")

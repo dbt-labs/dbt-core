@@ -2,10 +2,12 @@ import datetime
 import re
 
 from dbt import deprecations
+from dbt.artifacts.resources import ConstantPropertyInput
 from dbt_common.contracts.config.properties import (
     AdditionalPropertiesAllowed,
     AdditionalPropertiesMixin,
 )
+from dbt_common.contracts.util import Mergeable
 from dbt_common.exceptions import DbtInternalError, CompilationError
 from dbt_common.dataclass_schema import (
     dbtClassMixin,
@@ -14,22 +16,21 @@ from dbt_common.dataclass_schema import (
     ValidationError,
 )
 from dbt.node_types import NodeType
-from dbt.contracts.graph.semantic_models import (
+from dbt.artifacts.resources import (
     Defaults,
     DimensionValidityParams,
+    ExposureType,
+    MaturityType,
     MeasureAggregationParameters,
 )
-from dbt.contracts.util import (
-    Mergeable,
-    Replaceable,
-)
+from dbt.contracts.util import Replaceable
 
 # trigger the PathEncoder
 import dbt_common.helper_types  # noqa:F401
 from dbt.exceptions import ParsingError
 
 from dbt_semantic_interfaces.type_enums import ConversionCalculationType
-from dbt.artifacts.resources import Docs, MacroArgument, Owner
+from dbt.artifacts.resources import Docs, MacroArgument, NodeVersion, Owner
 
 from dataclasses import dataclass, field
 from datetime import timedelta
@@ -136,9 +137,6 @@ class HasYamlMetadata(dbtClassMixin):
 @dataclass
 class HasConfig:
     config: Dict[str, Any] = field(default_factory=dict)
-
-
-NodeVersion = Union[str, float]
 
 
 @dataclass
@@ -508,20 +506,6 @@ class Maturity(StrEnum):
         return self == other or self < other
 
 
-class ExposureType(StrEnum):
-    Dashboard = "dashboard"
-    Notebook = "notebook"
-    Analysis = "analysis"
-    ML = "ml"
-    Application = "application"
-
-
-class MaturityType(StrEnum):
-    Low = "low"
-    Medium = "medium"
-    High = "high"
-
-
 @dataclass
 class UnparsedExposure(dbtClassMixin, Replaceable):
     name: str
@@ -591,12 +575,6 @@ class UnparsedMetricInput(dbtClassMixin):
     alias: Optional[str] = None
     offset_window: Optional[str] = None
     offset_to_grain: Optional[str] = None  # str is really a TimeGranularity Enum
-
-
-@dataclass
-class ConstantPropertyInput(dbtClassMixin):
-    base_property: str
-    conversion_property: str
 
 
 @dataclass
@@ -804,6 +782,12 @@ class UnitTestOverrides(dbtClassMixin):
 
 
 @dataclass
+class UnitTestNodeVersions(dbtClassMixin):
+    include: Optional[List[NodeVersion]] = None
+    exclude: Optional[List[NodeVersion]] = None
+
+
+@dataclass
 class UnparsedUnitTest(dbtClassMixin):
     name: str
     model: str  # name of the model being unit tested
@@ -812,3 +796,11 @@ class UnparsedUnitTest(dbtClassMixin):
     description: str = ""
     overrides: Optional[UnitTestOverrides] = None
     config: Dict[str, Any] = field(default_factory=dict)
+    versions: Optional[UnitTestNodeVersions] = None
+
+    @classmethod
+    def validate(cls, data):
+        super(UnparsedUnitTest, cls).validate(data)
+        if data.get("versions", None):
+            if data["versions"].get("include") and data["versions"].get("exclude"):
+                raise ValidationError("Unit tests can not both include and exclude versions.")

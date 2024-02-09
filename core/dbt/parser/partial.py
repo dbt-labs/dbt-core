@@ -1,6 +1,7 @@
 import os
 from copy import deepcopy
 from typing import MutableMapping, Dict, List, Callable
+
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.files import (
     AnySourceFile,
@@ -8,6 +9,7 @@ from dbt.contracts.files import (
     parse_file_type_to_parser,
     SchemaSourceFile,
 )
+from dbt_common.context import get_invocation_context
 from dbt_common.events.functions import fire_event
 from dbt_common.events.base_types import EventLevel
 from dbt.events.types import (
@@ -159,7 +161,8 @@ class PartialParsing:
         deleted = len(deleted) + len(deleted_schema_files)
         changed = len(changed) + len(changed_schema_files)
         event = PartialParsingEnabled(deleted=deleted, added=len(added), changed=changed)
-        if os.environ.get("DBT_PP_TEST"):
+
+        if get_invocation_context().env.get("DBT_PP_TEST"):
             fire_event(event, level=EventLevel.INFO)
         else:
             fire_event(event)
@@ -456,6 +459,11 @@ class PartialParsing:
                     self.delete_macro_file(source_file)
                     self.saved_files[file_id] = deepcopy(self.new_files[file_id])
                     self.add_to_pp_files(self.saved_files[file_id])
+            elif unique_id in self.saved_manifest.unit_tests:
+                unit_test = self.saved_manifest.unit_tests[unique_id]
+                self._schedule_for_parsing(
+                    "unit_tests", unit_test, unit_test.name, self.delete_schema_unit_test
+                )
 
     def _schedule_for_parsing(self, dict_key: str, element, name, delete: Callable) -> None:
         file_id = element.file_id
@@ -839,8 +847,9 @@ class PartialParsing:
                     # if the node's group has changed - need to reparse all referencing nodes to ensure valid ref access
                     if node.group != elem.get("group"):
                         self.schedule_referencing_nodes_for_parsing(node.unique_id)
-                    # if the node's latest version has changed - need to reparse all referencing nodes to ensure correct ref resolution
-                    if node.is_versioned and node.latest_version != elem.get("latest_version"):
+                    # If the latest version has changed or a version has been removed we need to
+                    # reparse referencing nodes.
+                    if node.is_versioned:
                         self.schedule_referencing_nodes_for_parsing(node.unique_id)
             # remove from patches
             schema_file.node_patches.remove(elem_unique_id)

@@ -1,8 +1,9 @@
-import dataclasses
 from typing import List, Any, Tuple
 
 from dbt_common.dataclass_schema import ValidatedStringMixin, ValidationError
-from dbt_common.contracts.util import Replaceable
+
+# Leave imports of `Mergeable` and `Replaceable` to preserve import paths
+from dbt_common.contracts.util import Mergeable, Replaceable  # noqa:F401
 
 
 SourceKey = Tuple[str, str]
@@ -22,22 +23,6 @@ def list_str() -> List[str]:
     Because `list` could be any kind of list, I guess
     """
     return []
-
-
-class Mergeable(Replaceable):
-    def merged(self, *args):
-        """Perform a shallow merge, where the last non-None write wins. This is
-        intended to merge dataclasses that are a collection of optional values.
-        """
-        replacements = {}
-        cls = type(self)
-        for arg in args:
-            for field in dataclasses.fields(cls):
-                value = getattr(arg, field.name)
-                if value is not None:
-                    replacements[field.name] = value
-
-        return self.replace(**replacements)
 
 
 class Identifier(ValidatedStringMixin):

@@ -9,9 +9,11 @@ import yaml
 
 from dbt.mp_context import get_mp_context
 from dbt.parser.manifest import ManifestLoader
+from dbt_common.context import set_invocation_context
 from dbt_common.exceptions import CompilationError, DbtDatabaseError
 from dbt.context.providers import generate_runtime_macro_context
 import dbt.flags as flags
+from dbt_common.tests import enable_test_caching
 from dbt.config.runtime import RuntimeConfig
 from dbt.adapters.factory import get_adapter, register_adapter, reset_adapters, get_adapter_by_type
 from dbt_common.events.event_manager_client import cleanup_event_logger
@@ -397,7 +399,7 @@ def logs_dir(request, prefix):
 
 
 # This fixture is for customizing tests that need overrides in adapter
-# repos. Example in dbt.tests.adapter.basic.test_base.
+# repos. Example in tests.functional.adapter.basic.test_base.
 @pytest.fixture(scope="class")
 def test_config():
     return {}
@@ -491,12 +493,23 @@ class TestProjInfo:
         return {model_name: materialization for (model_name, materialization) in result}
 
 
+# Housekeeping that needs to be done before we start setting up any test fixtures.
+@pytest.fixture(scope="class")
+def initialization() -> None:
+    # Create an "invocation context," which dbt application code relies on.
+    set_invocation_context(os.environ)
+
+    # Enable caches used between test runs, for better testing performance.
+    enable_test_caching()
+
+
 # This is the main fixture that is used in all functional tests. It pulls in the other
 # fixtures that are necessary to set up a dbt project, and saves some of the information
 # in a TestProjInfo class, which it returns, so that individual test cases do not have
 # to pull in the other fixtures individually to access their information.
 @pytest.fixture(scope="class")
 def project(
+    initialization,
     clean_up_logging,
     project_root,
     profiles_root,

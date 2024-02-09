@@ -14,10 +14,7 @@ from dbt.contracts.graph.nodes import (
     ModelNode,
     Exposure,
     Metric,
-    MetricTypeParams,
-    MetricInputMeasure,
     Group,
-    NodeRelation,
     SavedQuery,
     SeedNode,
     SemanticModel,
@@ -31,10 +28,15 @@ from dbt.contracts.graph.nodes import (
     UnitTestDefinition,
 )
 from dbt.contracts.graph.manifest import Manifest, ManifestMetadata
-from dbt.contracts.graph.saved_queries import QueryParams
-from dbt.contracts.graph.unparsed import (
+from dbt.artifacts.resources import (
     ExposureType,
+    MetricInputMeasure,
+    MetricTypeParams,
+    NodeRelation,
     Owner,
+    QueryParams,
+)
+from dbt.contracts.graph.unparsed import (
     UnitTestInputFixture,
     UnitTestOutputFixture,
 )

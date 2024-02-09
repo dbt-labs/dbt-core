@@ -3,10 +3,11 @@ import itertools
 import os
 
 from typing import List, Dict, Optional, Union, Any
+from dbt.artifacts.resources import NodeVersion, RefArgs
 from dbt.parser.base import SimpleParser
 from dbt.parser.generic_test_builders import TestBuilder
 from dbt.parser.search import FileBlock
-from dbt.context.providers import RefArgs, generate_test_context
+from dbt.context.providers import generate_test_context
 from dbt.parser.common import (
     TestBlock,
     Testable,
@@ -15,7 +16,7 @@ from dbt.parser.common import (
     VersionedTestBlock,
     trimmed,
 )
-from dbt.contracts.graph.unparsed import UnparsedNodeUpdate, NodeVersion, UnparsedColumn
+from dbt.contracts.graph.unparsed import UnparsedNodeUpdate, UnparsedColumn
 from dbt.contracts.graph.nodes import (
     GenericTestNode,
     UnpatchedSourceDefinition,

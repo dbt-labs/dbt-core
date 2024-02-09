@@ -24,16 +24,17 @@ from dbt.contracts.graph.nodes import (
     SourceDefinition,
     Exposure,
     Metric,
+    Group,
+)
+from dbt.artifacts.resources import (
+    ExposureType,
+    MaturityType,
     MetricInputMeasure,
     MetricTypeParams,
-    Group,
-    RefArgs,
-)
-from dbt.contracts.graph.semantic_layer_common import WhereFilter, WhereFilterIntersection
-from dbt.contracts.graph.unparsed import (
-    ExposureType,
     Owner,
-    MaturityType,
+    RefArgs,
+    WhereFilter,
+    WhereFilterIntersection,
 )
 import dbt_common.invocation
 from dbt_common.events.functions import reset_metadata_vars

@@ -1,7 +1,8 @@
 git+https://github.com/dbt-labs/dbt-adapters.git@main
+git+https://github.com/dbt-labs/dbt-postgres.git@main
 black==23.3.0
 bumpversion
-ddtrace==2.1.7
+ddtrace==2.3.0
 docutils
 flake8
 flaky
@@ -12,9 +13,9 @@ mypy==1.4.1
 pip-tools
 pre-commit
 protobuf>=4.0.0
-pytest
+pytest~=7.4
 pytest-cov
-pytest-csv
+pytest-csv~=3.0
 pytest-dotenv
 pytest-logbook
 pytest-mock

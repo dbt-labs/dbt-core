@@ -20,6 +20,7 @@ from fixtures import (  # noqa: F401
     event_sql,
     test_my_model_incremental_yml,
     test_my_model_yml_invalid,
+    test_my_model_yml_invalid_ref,
     valid_emails_sql,
     top_level_domains_sql,
     external_package__accounts_seed_csv,
@@ -262,7 +263,16 @@ class TestUnitTestInvalidInputConfiguration:
         results = run_dbt(["run"])
         assert len(results) == 3
 
+        # A data type in a given row is incorrect, and we'll get a runtime error
         run_dbt(["test"], expect_pass=False)
+
+        # Test invalid model ref. Parsing error InvalidUnitTestGivenInput
+        write_file(
+            test_my_model_yml_invalid_ref, project.project_root, "models", "test_my_model.yml"
+        )
+        results = run_dbt(["test"], expect_pass=False)
+        result = results.results[0]
+        assert "not found in the manifest" in result.message
 
 
 unit_test_ext_node_yml = """
