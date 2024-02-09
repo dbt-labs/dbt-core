@@ -360,6 +360,40 @@ snapshot_sql = """
 {% endsnapshot %}
 """
 
+
+semantic_model_schema_yml = """
+models:
+  - name: view_model
+    columns:
+      - name: id
+        data_tests:
+          - unique:
+              severity: error
+          - not_null
+      - name: name
+
+semantic_models:
+  - name: my_sm
+    model: ref('view_model')
+"""
+
+modified_semantic_model_schema_yml = """
+models:
+  - name: view_model
+    columns:
+      - name: id
+        data_tests:
+          - unique:
+              severity: error
+          - not_null
+      - name: name
+
+semantic_models:
+  - name: my_sm
+    model: ref('view_model')
+    description: modified description
+"""
+
 model_1_sql = """
 select * from {{ ref('seed') }}
 """
@@ -421,4 +455,8 @@ models:
   - name: model_2
     config:
       group: finance
+"""
+
+metricflow_time_spine_sql = """
+SELECT to_date('02/20/2023', 'mm/dd/yyyy') as date_day
 """
