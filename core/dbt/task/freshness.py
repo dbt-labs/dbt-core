@@ -157,7 +157,7 @@ class FreshnessRunner(BaseRunner):
     def compile(self, manifest):
         if self.node.resource_type != NodeType.Source:
             # should be unreachable...
-            raise DbtRuntimeError("fresnhess runner: got a non-Source")
+            raise DbtRuntimeError("freshness runner: got a non-Source")
         # we don't do anything interesting when we compile a source node
         return self.node
 
