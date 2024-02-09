@@ -1,7 +1,8 @@
 import dbt.tracking
 from dbt_common.invocation import reset_invocation_id
 from dbt.version import installed as installed_version
-from dbt.adapters.factory import adapter_management, register_adapter
+from dbt.adapters.factory import adapter_management, register_adapter, get_adapter
+from dbt.context.providers import generate_runtime_macro_context
 from dbt.flags import set_flags, get_flag_dict
 from dbt.cli.exceptions import (
     ExceptionExit,
@@ -280,6 +281,9 @@ def manifest(*args0, write=True, write_perf_info=False):
                 )
             else:
                 register_adapter(runtime_config, get_mp_context())
+                adapter = get_adapter(runtime_config)
+                adapter.set_macro_context_generator(generate_runtime_macro_context)
+                adapter.set_macro_resolver(ctx.obj["manifest"])
             return func(*args, **kwargs)
 
         return update_wrapper(wrapper, func)
