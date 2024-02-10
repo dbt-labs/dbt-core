@@ -5,7 +5,8 @@ from dbt_common.context import set_invocation_context
 from dbt_common.invocation import reset_invocation_id
 
 from dbt.version import installed as installed_version
-from dbt.adapters.factory import adapter_management
+from dbt.adapters.factory import adapter_management, register_adapter, get_adapter
+from dbt.context.providers import generate_runtime_macro_context
 from dbt.flags import set_flags, get_flag_dict
 from dbt.cli.exceptions import (
     ExceptionExit,
@@ -35,6 +36,7 @@ from dbt.profiler import profiler
 from dbt.tracking import active_user, initialize_from_flags, track_run
 from dbt_common.utils import cast_dict_to_dict_of_strings
 from dbt.plugins import set_up_plugin_manager
+from dbt.mp_context import get_mp_context
 
 from click import Context
 from functools import update_wrapper
@@ -283,6 +285,11 @@ def manifest(*args0, write=True, write_perf_info=False):
                 ctx.obj["manifest"] = parse_manifest(
                     runtime_config, write_perf_info, write, ctx.obj["flags"].write_json
                 )
+            else:
+                register_adapter(runtime_config, get_mp_context())
+                adapter = get_adapter(runtime_config)
+                adapter.set_macro_context_generator(generate_runtime_macro_context)
+                adapter.set_macro_resolver(ctx.obj["manifest"])
             return func(*args, **kwargs)
 
         return update_wrapper(wrapper, func)

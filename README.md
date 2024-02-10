@@ -21,7 +21,7 @@ These select statements, or "models", form a dbt project. Models frequently buil
 
 ## Getting started
 
-- [Install dbt](https://docs.getdbt.com/docs/get-started/installation)
+- [Install dbt Core](https://docs.getdbt.com/docs/get-started/installation) or explore the [dbt Cloud CLI](https://docs.getdbt.com/docs/cloud/cloud-cli-installation), a command-line interface powered by [dbt Cloud](https://docs.getdbt.com/docs/cloud/about-cloud/dbt-cloud-features) that enhances collaboration.
 - Read the [introduction](https://docs.getdbt.com/docs/introduction/) and [viewpoint](https://docs.getdbt.com/docs/about/viewpoint/)
 
 ## Join the dbt Community
