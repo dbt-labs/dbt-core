@@ -336,7 +336,11 @@ class BaseRunner(metaclass=ABCMeta):
         return str(e)
 
     def _handle_internal_exception(self, e, ctx):
-        fire_event(InternalErrorOnRun(build_path=self.node.build_path, exc=str(e), node_info=get_node_info()))
+        fire_event(
+            InternalErrorOnRun(
+                build_path=self.node.build_path, exc=str(e), node_info=get_node_info()
+            )
+        )
         return str(e)
 
     def _handle_generic_exception(self, e, ctx):
