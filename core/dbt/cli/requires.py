@@ -290,6 +290,7 @@ def manifest(*args0, write=True, write_perf_info=False):
                 adapter = get_adapter(runtime_config)
                 adapter.set_macro_context_generator(generate_runtime_macro_context)
                 adapter.set_macro_resolver(ctx.obj["manifest"])
+                adapter.connections.set_query_header(ctx.obj["manifest"])
             return func(*args, **kwargs)
 
         return update_wrapper(wrapper, func)
