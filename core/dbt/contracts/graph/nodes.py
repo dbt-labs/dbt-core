@@ -1527,9 +1527,6 @@ class SemanticModel(GraphNode[SemanticModelResource], SemanticModelResource):
     def same_model(self, old: "SemanticModel") -> bool:
         return self.model == old.model
 
-    def same_node_relation(self, old: "SemanticModel") -> bool:
-        return self.node_relation == old.node_relation
-
     def same_description(self, old: "SemanticModel") -> bool:
         return self.description == old.description
 
@@ -1562,7 +1559,6 @@ class SemanticModel(GraphNode[SemanticModelResource], SemanticModelResource):
 
         return (
             self.same_model(old)
-            and self.same_node_relation(old)
             and self.same_description(old)
             and self.same_defaults(old)
             and self.same_entities(old)
