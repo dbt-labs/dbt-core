@@ -168,6 +168,9 @@ class BaseNode(BaseResource):
         assert isinstance(resource_instance, cls.resource_class())
         return cls.from_dict(resource_instance.to_dict())
 
+    def to_resource(self):
+        return self.resource_class().from_dict(self.to_dict())
+
 
 @dataclass
 class GraphNode(GraphResource, BaseNode):
