@@ -2,10 +2,8 @@ name: Check Artifact Changes
 
 on:
   pull_request:
-    types:
-      - labeled
-    paths:
-      - 'core/dbt/artifacts/**'
+    types: [ opened, reopened, labeled, unlabeled, synchronize ]
+    paths-ignore: [ '.changes/**', '.github/**', 'tests/**', '**.md', '**.yml' ]
 
 jobs:
   check-artifact-changes:
