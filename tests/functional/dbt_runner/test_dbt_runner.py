@@ -6,7 +6,7 @@ from dbt.cli.exceptions import DbtUsageException
 from dbt.cli.main import dbtRunner
 from dbt.exceptions import DbtProjectError
 from dbt.adapters.factory import reset_adapters, FACTORY
-from dbt.tests.util import read_file, rm_file
+from dbt.tests.util import read_file, write_file
 from dbt.version import __version__ as dbt_version
 
 
@@ -114,7 +114,7 @@ class TestDbtRunnerQueryComments:
         dbt = dbtRunner()
         dbt.invoke(["build", "--select", "models"])
         result = dbt.invoke(["parse"])
-        rm_file(logs_dir, "dbt.log")
+        write_file("", logs_dir, "dbt.log")
         # pass in manifest from parse command
         dbt = dbtRunner(result.result)
         dbt.invoke(["build", "--select", "models"])
