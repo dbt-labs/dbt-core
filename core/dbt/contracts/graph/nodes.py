@@ -4,7 +4,6 @@ import time
 from dataclasses import dataclass, field
 import hashlib
 
-from abc import ABC
 from mashumaro.types import SerializableType
 from typing import (
     Optional,
@@ -14,10 +13,9 @@ from typing import (
     Any,
     Sequence,
     Tuple,
+    Type,
     Iterator,
     Literal,
-    Generic,
-    TypeVar,
 )
 
 from dbt import deprecations
@@ -116,12 +114,18 @@ from dbt.artifacts.resources import (
 # ==================================================
 
 
-ResourceTypeT = TypeVar("ResourceTypeT", bound="BaseResource")
-
-
 @dataclass
-class BaseNode(ABC, Generic[ResourceTypeT], BaseResource):
+class BaseNode(BaseResource):
     """All nodes or node-like objects in this file should have this as a base class"""
+
+    # In an ideal world this would be a class property. However, chaining @classmethod and
+    # @property was deprecated in python 3.11 and removed in 3.13. There are more
+    # complicated ways of making a class property, however a class method suits our
+    # purposes well enough
+    @classmethod
+    def resource_class(cls) -> Type[BaseResource]:
+        """Should be overriden by any class inheriting BaseNode"""
+        raise NotImplementedError
 
     @property
     def search_name(self):
@@ -160,12 +164,13 @@ class BaseNode(ABC, Generic[ResourceTypeT], BaseResource):
         return self.config.materialized
 
     @classmethod
-    def from_resource(cls, resource_instance: ResourceTypeT):
+    def from_resource(cls, resource_instance: BaseResource):
+        assert isinstance(resource_instance, cls.resource_class())
         return cls.from_dict(resource_instance.to_dict())
 
 
 @dataclass
-class GraphNode(GraphResource, BaseNode[ResourceTypeT], Generic[ResourceTypeT]):
+class GraphNode(GraphResource, BaseNode):
     """Nodes in the DAG. Macro and Documentation don't have fqn."""
 
     def same_fqn(self, other) -> bool:
@@ -190,7 +195,7 @@ class DeferRelation(HasRelationMetadata):
 
 
 @dataclass
-class ParsedNodeMandatory(GraphNode[GraphResource], HasRelationMetadata, Replaceable):
+class ParsedNodeMandatory(GraphNode, HasRelationMetadata, Replaceable):
     alias: str
     checksum: FileHash
     config: NodeConfig = field(default_factory=NodeConfig)
@@ -985,7 +990,7 @@ class UnitTestDefinitionMandatory:
 
 
 @dataclass
-class UnitTestDefinition(NodeInfoMixin, GraphNode[GraphResource], UnitTestDefinitionMandatory):
+class UnitTestDefinition(NodeInfoMixin, GraphNode, UnitTestDefinitionMandatory):
     description: str = ""
     overrides: Optional[UnitTestOverrides] = None
     depends_on: DependsOn = field(default_factory=DependsOn)
@@ -1211,12 +1216,16 @@ class UnpatchedSourceDefinition(BaseNode):
 @dataclass
 class SourceDefinition(
     NodeInfoMixin,
-    GraphNode[SourceDefinitionResource],
+    GraphNode,
     SourceDefinitionResource,
     HasRelationMetadata,
 ):
     # Overriding the `freshness` property to use the `FreshnessThreshold` instead of the `FreshnessThresholdResource`
     freshness: Optional[FreshnessThreshold] = None
+
+    @classmethod
+    def resource_class(cls) -> Type[SourceDefinitionResource]:
+        return SourceDefinitionResource
 
     def __post_serialize__(self, dct):
         if "_event_status" in dct:
@@ -1326,7 +1335,7 @@ class SourceDefinition(
 
 
 @dataclass
-class Exposure(GraphNode[ExposureResource], ExposureResource):
+class Exposure(GraphNode, ExposureResource):
     @property
     def depends_on_nodes(self):
         return self.depends_on.nodes
@@ -1334,6 +1343,10 @@ class Exposure(GraphNode[ExposureResource], ExposureResource):
     @property
     def search_name(self):
         return self.name
+
+    @classmethod
+    def resource_class(cls) -> Type[ExposureResource]:
+        return ExposureResource
 
     def same_depends_on(self, old: "Exposure") -> bool:
         return set(self.depends_on.nodes) == set(old.depends_on.nodes)
@@ -1392,7 +1405,7 @@ class Exposure(GraphNode[ExposureResource], ExposureResource):
 
 
 @dataclass
-class Metric(GraphNode[MetricResource], MetricResource):
+class Metric(GraphNode, MetricResource):
     @property
     def depends_on_nodes(self):
         return self.depends_on.nodes
@@ -1400,6 +1413,10 @@ class Metric(GraphNode[MetricResource], MetricResource):
     @property
     def search_name(self):
         return self.name
+
+    @classmethod
+    def resource_class(cls) -> Type[MetricResource]:
+        return MetricResource
 
     def same_description(self, old: "Metric") -> bool:
         return self.description == old.description
@@ -1459,7 +1476,7 @@ class Group(GroupResource, BaseNode):
 
 
 @dataclass
-class SemanticModel(GraphNode[SemanticModelResource], SemanticModelResource):
+class SemanticModel(GraphNode, SemanticModelResource):
     @property
     def depends_on_nodes(self):
         return self.depends_on.nodes
@@ -1467,6 +1484,10 @@ class SemanticModel(GraphNode[SemanticModelResource], SemanticModelResource):
     @property
     def depends_on_macros(self):
         return self.depends_on.macros
+
+    @classmethod
+    def resource_class(cls) -> Type[SemanticModelResource]:
+        return SemanticModelResource
 
     def same_model(self, old: "SemanticModel") -> bool:
         return self.model == old.same_model
@@ -1525,7 +1546,11 @@ class SemanticModel(GraphNode[SemanticModelResource], SemanticModelResource):
 
 
 @dataclass
-class SavedQuery(NodeInfoMixin, GraphNode[SavedQueryResource], SavedQueryResource):
+class SavedQuery(NodeInfoMixin, GraphNode, SavedQueryResource):
+    @classmethod
+    def resource_class(cls) -> Type[SavedQueryResource]:
+        return SavedQueryResource
+
     def same_metrics(self, old: "SavedQuery") -> bool:
         return self.query_params.metrics == old.query_params.metrics
 
