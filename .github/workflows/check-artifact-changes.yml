@@ -5,6 +5,8 @@ on:
     types: [ opened, reopened, labeled, unlabeled, synchronize ]
     paths-ignore: [ '.changes/**', '.github/**', 'tests/**', '**.md', '**.yml' ]
 
+  workflow_dispatch:
+
 jobs:
   check-artifact-changes:
     runs-on: ubuntu-latest
