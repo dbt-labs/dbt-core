@@ -1697,6 +1697,7 @@ message SeedHeaderMsg {
 message SQLRunnerException {
     string exc = 1;
     string exc_info = 2;
+    NodeInfo node_info = 3;
 }
 
 message SQLRunnerExceptionMsg {
@@ -2048,6 +2049,7 @@ message CatchableExceptionOnRunMsg {
 message InternalErrorOnRun {
     string build_path = 1;
     string exc = 2;
+    NodeInfo node_info = 3;
 }
 
 message InternalErrorOnRunMsg {
@@ -2060,6 +2062,7 @@ message GenericExceptionOnRun {
     string build_path = 1;
     string unique_id = 2;
     string exc = 3;
+    NodeInfo node_info = 4;
 }
 
 message GenericExceptionOnRunMsg {
