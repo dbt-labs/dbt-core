@@ -1,6 +1,6 @@
 black==23.3.0
 bumpversion
-ddtrace==2.1.7
+ddtrace==2.3.0
 docutils
 flake8
 flaky

@@ -5,6 +5,8 @@ import pytest
 from dbt.cli.exceptions import DbtUsageException
 from dbt.cli.main import dbtRunner
 from dbt.exceptions import DbtProjectError
+from dbt.tests.util import read_file, write_file
+from dbt.version import __version__ as dbt_version
 
 
 class TestDbtRunner:
@@ -70,3 +72,31 @@ class TestDbtRunner:
     def test_invoke_kwargs_and_flags(self, project, dbt):
         res = dbt.invoke(["--log-format=text", "run"], log_format="json")
         assert res.result.args["log_format"] == "json"
+
+
+class TestDbtRunnerQueryComments:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "models.sql": "select 1 as id",
+        }
+
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "query-comment": {
+                "comment": f"comment: {dbt_version}",
+                "append": True,
+            }
+        }
+
+    def test_query_comment_saved_manifest(self, project, logs_dir):
+        dbt = dbtRunner()
+        dbt.invoke(["build", "--select", "models"])
+        result = dbt.invoke(["parse"])
+        write_file("", logs_dir, "dbt.log")
+        # pass in manifest from parse command
+        dbt = dbtRunner(result.result)
+        dbt.invoke(["build", "--select", "models"])
+        log_file = read_file(logs_dir, "dbt.log")
+        assert f"comment: {dbt_version}" in log_file
