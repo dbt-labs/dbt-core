@@ -1230,11 +1230,6 @@ class SourceDefinition(
     def resource_class(cls) -> Type[SourceDefinitionResource]:
         return SourceDefinitionResource
 
-    def __post_serialize__(self, dct):
-        if "_event_status" in dct:
-            del dct["_event_status"]
-        return dct
-
     def same_database_representation(self, other: "SourceDefinition") -> bool:
         return (
             self.database == other.database

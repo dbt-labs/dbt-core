@@ -50,6 +50,7 @@ from dbt.contracts.graph.nodes import (
     TestMetadata,
     SemanticModel,
 )
+from dbt.artifacts.resources import SourceDefinition as SourceDefinitionResource
 from dbt import flags
 from argparse import Namespace
 
@@ -2036,13 +2037,13 @@ def test_basic_source_definition(
     node_dict = basic_parsed_source_definition_dict
     minimum = minimum_parsed_source_definition_dict
 
-    assert_symmetric(node, node_dict, SourceDefinition)
+    assert_symmetric(node.to_resource(), node_dict, SourceDefinitionResource)
 
     assert node.is_ephemeral is False
     assert node.is_refable is False
     assert node.has_freshness is False
 
-    assert_from_dict(node, minimum, SourceDefinition)
+    assert_from_dict(node.to_resource(), minimum, SourceDefinitionResource)
     pickle.loads(pickle.dumps(node))
 
 
@@ -2063,7 +2064,7 @@ def test_complex_source_definition(
 ):
     node = complex_parsed_source_definition_object
     node_dict = complex_parsed_source_definition_dict
-    assert_symmetric(node, node_dict, SourceDefinition)
+    assert_symmetric(node.to_resource(), node_dict, SourceDefinitionResource)
 
     assert node.is_ephemeral is False
     assert node.is_refable is False
