@@ -41,6 +41,11 @@ class QueryParams(dbtClassMixin):
 
 
 @dataclass
+class SavedQueryCache(dbtClassMixin):
+    enabled: bool = False
+
+
+@dataclass
 class SavedQueryConfig(BaseConfig):
     """Where config options for SavedQueries are stored.
 
@@ -61,6 +66,7 @@ class SavedQueryConfig(BaseConfig):
     )
     export_as: Optional[ExportDestinationType] = None
     schema: Optional[str] = None
+    cache: SavedQueryCache = field(default_factory=SavedQueryCache)
 
 
 @dataclass
