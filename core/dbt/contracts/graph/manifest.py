@@ -1037,7 +1037,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             docs=self.docs,
             exposures=self._map_nodes_to_map_resources(self.exposures),
             metrics=self._map_nodes_to_map_resources(self.metrics),
-            groups=self.groups,
+            groups=self._map_nodes_to_map_resources(self.groups),
             selectors=self.selectors,
             metadata=self.metadata,
             disabled=self.disabled,

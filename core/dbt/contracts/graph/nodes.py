@@ -1462,7 +1462,9 @@ class Metric(GraphNode, MetricResource):
 
 @dataclass
 class Group(GroupResource, BaseNode):
-    pass
+    @classmethod
+    def resource_class(cls) -> Type[GroupResource]:
+        return GroupResource
 
 
 # ====================================
