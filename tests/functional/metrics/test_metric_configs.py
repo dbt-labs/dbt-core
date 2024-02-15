@@ -8,6 +8,7 @@ from dbt.tests.util import run_dbt, update_config_file, get_manifest
 from tests.functional.metrics.fixtures import (
     models_people_sql,
     models_people_metrics_yml,
+    models_people_metrics_meta_top_yml,
     metricflow_time_spine_sql,
     disabled_metric_level_schema_yml,
     enabled_metric_level_schema_yml,
@@ -40,19 +41,6 @@ class TestMetricEnabledConfigProjectLevel(MetricConfigTests):
     def project_config_update(self):
         return {
             "metrics": {
-                "average_tenure_minus_people": {
-                    "enabled": True,
-                },
-            }
-        }
-
-    def test_enabled_metric_config_dbt_project(self, project):
-        run_dbt(["parse"])
-        manifest = get_manifest(project.project_root)
-        assert "metric.test.average_tenure_minus_people" in manifest.metrics
-
-        new_enabled_config = {
-            "metrics": {
                 "test": {
                     "average_tenure_minus_people": {
                         "enabled": False,
@@ -60,10 +48,25 @@ class TestMetricEnabledConfigProjectLevel(MetricConfigTests):
                 }
             }
         }
-        update_config_file(new_enabled_config, project.project_root, "dbt_project.yml")
+
+    def test_enabled_metric_config_dbt_project(self, project):
         run_dbt(["parse"])
         manifest = get_manifest(project.project_root)
         assert "metric.test.average_tenure_minus_people" not in manifest.metrics
+
+        new_enabled_config = {
+            "metrics": {
+                "test": {
+                    "average_tenure_minus_people": {
+                        "enabled": True,
+                    },
+                }
+            }
+        }
+        update_config_file(new_enabled_config, project.project_root, "dbt_project.yml")
+        run_dbt(["parse"])
+        manifest = get_manifest(project.project_root)
+        assert "metric.test.average_tenure_minus_people" in manifest.metrics
         assert "metric.test.collective_tenure" in manifest.metrics
 
 
@@ -204,3 +207,84 @@ class TestDisabledMetric(MetricConfigTests):
                 "The metric `number_of_people` is disabled and thus cannot be referenced."
             )
             assert expected_msg in str(excinfo.value)
+
+
+# Test meta config in dbt_project.yml
+class TestMetricMetaConfigProjectLevel(MetricConfigTests):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "people.sql": models_people_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+            "semantic_model_people.yml": semantic_model_people_yml,
+            "schema.yml": models_people_metrics_yml,
+        }
+
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "metrics": {
+                "test": {
+                    "average_tenure_minus_people": {
+                        "+meta": {"project_field": "project_value"},
+                    },
+                }
+            }
+        }
+
+    def test_meta_metric_config_dbt_project(self, project):
+        run_dbt(["parse"])
+        manifest = get_manifest(project.project_root)
+        assert "metric.test.average_tenure_minus_people" in manifest.metrics
+        # for backwards compatibility the config level meta gets copied to the top level meta
+        assert manifest.metrics.get("metric.test.average_tenure_minus_people").config.meta == {
+            "project_field": "project_value"
+        }
+        assert manifest.metrics.get("metric.test.average_tenure_minus_people").meta == {
+            "project_field": "project_value"
+        }
+
+
+# Test setting config at config level
+class TestMetricMetaConfigLevel(MetricConfigTests):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "people.sql": models_people_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+            "semantic_model_people.yml": semantic_model_people_yml,
+            "schema.yml": models_people_metrics_yml,
+        }
+
+    def test_meta_metric_config_yaml(self, project):
+        run_dbt(["parse"])
+        manifest = get_manifest(project.project_root)
+        assert "metric.test.number_of_people" in manifest.metrics
+        assert manifest.metrics.get("metric.test.number_of_people").config.meta == {
+            "my_meta_config": "config"
+        }
+        assert manifest.metrics.get("metric.test.number_of_people").meta == {
+            "my_meta_config": "config"
+        }
+
+
+# Test setting config at metric level- expect to exist in config after parsing
+class TestMetricMetaTopLevel(MetricConfigTests):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "people.sql": models_people_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+            "semantic_model_people.yml": semantic_model_people_yml,
+            "schema.yml": models_people_metrics_meta_top_yml,
+        }
+
+    def test_meta_metric_config_yaml(self, project):
+        run_dbt(["parse"])
+        manifest = get_manifest(project.project_root)
+        assert "metric.test.number_of_people" in manifest.metrics
+        # for backwards compatibility the config level meta gets copied to the top level meta
+        assert manifest.metrics.get("metric.test.number_of_people").config.meta != {
+            "my_meta_top": "top"
+        }
+        assert manifest.metrics.get("metric.test.number_of_people").meta == {"my_meta_top": "top"}

@@ -8,7 +8,7 @@ from dbt.artifacts.resources.v1.semantic_layer_components import (
     SourceFileMetadata,
     WhereFilterIntersection,
 )
-from dbt_common.contracts.config.base import BaseConfig, CompareBehavior
+from dbt_common.contracts.config.base import BaseConfig, CompareBehavior, MergeBehavior
 from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_semantic_interfaces.references import MeasureReference, MetricReference
 from dbt_semantic_interfaces.type_enums import (
@@ -101,6 +101,8 @@ class MetricConfig(BaseConfig):
         metadata=CompareBehavior.Exclude.meta(),
     )
 
+    meta: Dict[str, Any] = field(default_factory=dict, metadata=MergeBehavior.Update.meta())
+
 
 @dataclass
 class Metric(GraphResource):
@@ -112,7 +114,7 @@ class Metric(GraphResource):
     filter: Optional[WhereFilterIntersection] = None
     metadata: Optional[SourceFileMetadata] = None
     resource_type: Literal[NodeType.Metric]
-    meta: Dict[str, Any] = field(default_factory=dict)
+    meta: Dict[str, Any] = field(default_factory=dict, metadata=MergeBehavior.Update.meta())
     tags: List[str] = field(default_factory=list)
     config: MetricConfig = field(default_factory=MetricConfig)
     unrendered_config: Dict[str, Any] = field(default_factory=dict)
