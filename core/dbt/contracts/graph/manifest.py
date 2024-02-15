@@ -1025,7 +1025,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
 
     @classmethod
     def _map_nodes_to_map_resources(cls, nodes_map: MutableMapping[str, NodeClassT]):
-        return {name: node.to_resource() for name, node in nodes_map.items()}
+        return {node_id: node.to_resource() for node_id, node in nodes_map.items()}
 
     def writable_manifest(self) -> "WritableManifest":
         self.build_parent_and_child_maps()
