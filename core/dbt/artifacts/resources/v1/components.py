@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from datetime import timedelta
 from dbt.artifacts.resources.types import TimePeriod
 from dbt.artifacts.resources.v1.macro import MacroDependsOn
 from dbt_common.contracts.config.properties import AdditionalPropertiesMixin
@@ -68,12 +69,35 @@ class Time(dbtClassMixin, Mergeable):
     count: Optional[int] = None
     period: Optional[TimePeriod] = None
 
+    def exceeded(self, actual_age: float) -> bool:
+        if self.period is None or self.count is None:
+            return False
+        kwargs: Dict[str, int] = {self.period.plural(): self.count}
+        difference = timedelta(**kwargs).total_seconds()
+        return actual_age > difference
+
+    def __bool__(self):
+        return self.count is not None and self.period is not None
+
 
 @dataclass
 class FreshnessThreshold(dbtClassMixin, Mergeable):
     warn_after: Optional[Time] = field(default_factory=Time)
     error_after: Optional[Time] = field(default_factory=Time)
     filter: Optional[str] = None
+
+    def status(self, age: float) -> "dbt.artifacts.schemas.results.FreshnessStatus":  # type: ignore # noqa F821
+        from dbt.artifacts.schemas.results import FreshnessStatus
+
+        if self.error_after and self.error_after.exceeded(age):
+            return FreshnessStatus.Error
+        elif self.warn_after and self.warn_after.exceeded(age):
+            return FreshnessStatus.Warn
+        else:
+            return FreshnessStatus.Pass
+
+    def __bool__(self):
+        return bool(self.warn_after) or bool(self.error_after)
 
 
 @dataclass
@@ -90,3 +114,10 @@ class HasRelationMetadata(dbtClassMixin, Replaceable):
         if "database" not in data:
             data["database"] = None
         return data
+
+    @property
+    def quoting_dict(self) -> Dict[str, bool]:
+        if hasattr(self, "quoting"):
+            return self.quoting.to_dict(omit_none=True)
+        else:
+            return {}

@@ -2,7 +2,6 @@ from datetime import timedelta
 import pickle
 import pytest
 
-from dbt.contracts.graph.components import FreshnessThreshold, Time
 from dbt.contracts.graph.unparsed import (
     UnparsedNode,
     UnparsedRunHook,
@@ -20,7 +19,14 @@ from dbt.contracts.graph.unparsed import (
     UnparsedMetricInputMeasure,
     UnparsedVersion,
 )
-from dbt.artifacts.resources import ExposureType, MaturityType, Owner, Quoting
+from dbt.artifacts.resources import (
+    ExposureType,
+    FreshnessThreshold,
+    MaturityType,
+    Owner,
+    Quoting,
+    Time,
+)
 from dbt.artifacts.resources.types import TimePeriod
 from dbt.artifacts.schemas.results import FreshnessStatus
 from dbt.node_types import NodeType

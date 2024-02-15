@@ -27,7 +27,6 @@ from dbt_common.dataclass_schema import dbtClassMixin
 
 from dbt_common.clients.system import write_file
 from dbt.contracts.files import FileHash
-from dbt.contracts.graph.components import FreshnessThreshold, HasRelationMetadata
 from dbt.contracts.graph.unparsed import (
     HasYamlMetadata,
     TestDef,
@@ -76,6 +75,7 @@ from dbt.artifacts.resources import (
     DependsOn,
     Docs,
     Exposure as ExposureResource,
+    HasRelationMetadata as HasRelationMetadataResource,
     MacroDependsOn,
     MacroArgument,
     Documentation as DocumentationResource,
@@ -188,7 +188,7 @@ class Contract(dbtClassMixin, Replaceable):
 
 
 @dataclass
-class DeferRelation(HasRelationMetadata):
+class DeferRelation(HasRelationMetadataResource):
     alias: str
     relation_name: Optional[str]
 
@@ -198,7 +198,7 @@ class DeferRelation(HasRelationMetadata):
 
 
 @dataclass
-class ParsedNodeMandatory(GraphNode, HasRelationMetadata, Replaceable):
+class ParsedNodeMandatory(GraphNode, HasRelationMetadataResource, Replaceable):
     alias: str
     checksum: FileHash
     config: NodeConfig = field(default_factory=NodeConfig)
@@ -1221,11 +1221,8 @@ class SourceDefinition(
     NodeInfoMixin,
     GraphNode,
     SourceDefinitionResource,
-    HasRelationMetadata,
+    HasRelationMetadataResource,
 ):
-    # Overriding the `freshness` property to use the `FreshnessThreshold` instead of the `FreshnessThresholdResource`
-    freshness: Optional[FreshnessThreshold] = None
-
     @classmethod
     def resource_class(cls) -> Type[SourceDefinitionResource]:
         return SourceDefinitionResource

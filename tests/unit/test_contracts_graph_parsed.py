@@ -10,6 +10,7 @@ from dbt.artifacts.resources import (
     Entity,
     ExposureConfig,
     ExposureType,
+    FreshnessThreshold,
     MaturityType,
     Measure,
     MetricInputMeasure,
@@ -18,11 +19,11 @@ from dbt.artifacts.resources import (
     Quoting,
     RefArgs,
     SourceConfig,
+    Time,
 )
 from dbt.artifacts.resources.types import TimePeriod
 from dbt.node_types import NodeType, AccessType
 from dbt.contracts.files import FileHash
-from dbt.contracts.graph.components import FreshnessThreshold, Time
 from dbt.contracts.graph.model_config import (
     ModelConfig,
     NodeConfig,

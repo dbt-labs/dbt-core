@@ -12,13 +12,13 @@ from dbt_common.dataclass_schema import (
     ExtensibleDbtClassMixin,
     ValidationError,
 )
-from dbt.contracts.graph.components import FreshnessThreshold
 from dbt.node_types import NodeType
 from dbt.artifacts.resources import (
     Defaults,
     DimensionValidityParams,
     ExposureType,
     ExternalTable,
+    FreshnessThreshold,
     MaturityType,
     MeasureAggregationParameters,
 )
