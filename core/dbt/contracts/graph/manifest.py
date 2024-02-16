@@ -20,6 +20,7 @@ from typing import (
     Generic,
     AbstractSet,
     ClassVar,
+    Type,
 )
 from typing_extensions import Protocol
 
@@ -46,7 +47,7 @@ from dbt.contracts.graph.nodes import (
 from dbt.contracts.graph.unparsed import SourcePatch, UnparsedVersion
 
 # to preserve import paths
-from dbt.artifacts.resources import NodeVersion
+from dbt.artifacts.resources import NodeVersion, BaseResource
 from dbt.artifacts.schemas.manifest import WritableManifest, ManifestMetadata, UniqueID
 from dbt.contracts.files import (
     SourceFile,
@@ -1038,37 +1039,16 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
                 unit_test_id: unit_test
                 for unit_test_id, unit_test in writable_manifest.unit_tests.items()
             },
-            sources={
-                source_id: SourceDefinition.from_resource(source)
-                for source_id, source in writable_manifest.sources.items()
-            },
-            macros={
-                macro_id: Macro.from_resource(macro)
-                for macro_id, macro in writable_manifest.macros.items()
-            },
-            docs={
-                doc_id: Documentation.from_resource(doc)
-                for doc_id, doc in writable_manifest.docs.items()
-            },
-            exposures={
-                exposure_id: Exposure.from_resource(exposure)
-                for exposure_id, exposure in writable_manifest.exposures.items()
-            },
-            metrics={
-                metric_id: Metric.from_resource(metric)
-                for metric_id, metric in writable_manifest.metrics.items()
-            },
-            groups={
-                group_id: Group.from_resource(group)
-                for group_id, group in writable_manifest.groups.items()
-            },
+            sources=cls._map_resources_to_map_nodes(writable_manifest.sources, SourceDefinition),
+            macros=cls._map_resources_to_map_nodes(writable_manifest.macros, Macro),
+            docs=cls._map_resources_to_map_nodes(writable_manifest.docs, Documentation),
+            exposures=cls._map_resources_to_map_nodes(writable_manifest.exposures, Exposure),
+            metrics=cls._map_resources_to_map_nodes(writable_manifest.metrics, Metric),
+            groups=cls._map_resources_to_map_nodes(writable_manifest.groups, Group),
+            semantic_models=cls._map_resources_to_map_nodes(writable_manifest.semantic_models, SemanticModel),
             selectors={
                 selector_id: selector
                 for selector_id, selector in writable_manifest.selectors.items()
-            },
-            semantic_models={
-                semantic_model_id: SemanticModel.from_resource(semantic_model)
-                for semantic_model_id, semantic_model in writable_manifest.semantic_models.items()
             },
         )
 
@@ -1076,6 +1056,9 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
 
     def _map_nodes_to_map_resources(cls, nodes_map: MutableMapping[str, NodeClassT]):
         return {node_id: node.to_resource() for node_id, node in nodes_map.items()}
+    
+    def _map_resources_to_map_nodes(cls, resources_map: Mapping[str, BaseResource], node_class: Type[BaseNode]):
+        return {node_id: node_class.from_resource(resource) for node_id, resource in resources_map.items()}
 
     def writable_manifest(self) -> "WritableManifest":
         self.build_parent_and_child_maps()
