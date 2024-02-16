@@ -216,7 +216,7 @@ class TestInheritingExportConfigsFromProject(BaseConfigProject):
         assert saved_query.config.export_as == ExportDestinationType.TABLE
 
 
-# cache can be specified in a SavedQuery config
+# cache can be specified just in a SavedQuery config
 class TestSavedQueryLevelCacheConfigs(BaseConfigProject):
     @pytest.fixture(scope="class")
     def models(self):
@@ -281,7 +281,8 @@ class TestSavedQueryCacheConfigsOverride(BaseConfigProject):
         saved_query = result.result.saved_queries["saved_query.test.test_saved_query"]
         assert saved_query.config.cache.enabled is True
 
-        # set cache to False via project config but since it's set to true at teh saved_query level, it should stay enabled
+        # set cache to enabled=False via project config but since it's set to true at the saved_query
+        # level, it should stay enabled
         config_patch = {
             "saved-queries": {"test": {"test_saved_query": {"+cache": {"enabled": False}}}}
         }
