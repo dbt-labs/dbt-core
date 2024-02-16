@@ -60,7 +60,7 @@ class TestSavedQueryConfigs(BaseConfigProject):
         saved_query = result.result.saved_queries["saved_query.test.test_saved_query"]
         assert saved_query.config.export_as == ExportDestinationType.VIEW
         assert saved_query.config.schema == "my_default_export_schema"
-        assert saved_query.config.cache.enabled == True
+        assert saved_query.config.cache.enabled is True
 
         # disable the saved_query via project config and rerun
         config_patch = {"saved-queries": {"test": {"test_saved_query": {"+enabled": False}}}}
@@ -94,7 +94,7 @@ class TestSavedQueryDefaultCacheConfigs(BaseConfigProject):
         assert isinstance(result.result, Manifest)
         assert len(result.result.saved_queries) == 1
         saved_query = result.result.saved_queries["saved_query.test.test_saved_query"]
-        assert saved_query.config.cache.enabled == False
+        assert saved_query.config.cache.enabled is False
 
 
 class TestExportConfigsWithAdditionalProperties(BaseConfigProject):
@@ -240,7 +240,7 @@ class TestSavedQueryLevelCacheConfigs(BaseConfigProject):
         assert isinstance(result.result, Manifest)
         assert len(result.result.saved_queries) == 1
         saved_query = result.result.saved_queries["saved_query.test.test_saved_query"]
-        assert saved_query.config.cache.enabled == True
+        assert saved_query.config.cache.enabled is True
 
 
 # the cache defined in yaml for the SavedQuery overrides settings from the dbt_project.toml
@@ -279,7 +279,7 @@ class TestSavedQueryCacheConfigsOverride(BaseConfigProject):
         assert isinstance(result.result, Manifest)
         assert len(result.result.saved_queries) == 1
         saved_query = result.result.saved_queries["saved_query.test.test_saved_query"]
-        assert saved_query.config.cache.enabled == True
+        assert saved_query.config.cache.enabled is True
 
         # set cache to False via project config but since it's set to true at teh saved_query level, it should stay enabled
         config_patch = {
@@ -288,4 +288,4 @@ class TestSavedQueryCacheConfigsOverride(BaseConfigProject):
         update_config_file(config_patch, project.project_root, "dbt_project.yml")
         result = runner.invoke(["parse"])
         assert result.success
-        assert saved_query.config.cache.enabled == True
+        assert saved_query.config.cache.enabled is True
