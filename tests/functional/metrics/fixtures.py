@@ -105,8 +105,64 @@ metrics:
     type: simple
     type_params:
       measure: people
+    config:
+      meta:
+        my_meta_config: 'config'
+
+  - name: collective_tenure
+    label: "Collective tenure"
+    description: Total number of years of team experience
+    type: simple
+    type_params:
+      measure:
+        name: years_tenure
+        filter: "{{ Dimension('id__loves_dbt') }} is true"
+        join_to_timespine: true
+        fill_nulls_with: 0
+
+  - name: collective_window
+    label: "Collective window"
+    description: Testing window
+    type: simple
+    type_params:
+      measure:
+        name: years_tenure
+        filter: "{{ Dimension('id__loves_dbt') }} is true"
+      window: 14 days
+
+  - name: average_tenure
+    label: Average Tenure
+    description: The average tenure of our people
+    type: ratio
+    type_params:
+      numerator: collective_tenure
+      denominator: number_of_people
+
+  - name: average_tenure_minus_people
+    label: Average Tenure minus People
+    description: Well this isn't really useful is it?
+    type: derived
+    type_params:
+      expr: average_tenure - number_of_people
+      metrics:
+        - average_tenure
+        - number_of_people
+
+"""
+
+models_people_metrics_meta_top_yml = """
+version: 2
+
+metrics:
+
+  - name: number_of_people
+    label: "Number of people"
+    description: Total count of people
+    type: simple
+    type_params:
+      measure: people
     meta:
-        my_meta: 'testing'
+        my_meta_top: 'top'
 
   - name: collective_tenure
     label: "Collective tenure"
@@ -446,6 +502,34 @@ metrics:
       enabled: False
     meta:
         my_meta: 'testing'
+
+  - name: collective_tenure
+    label: "Collective tenure"
+    description: Total number of years of team experience
+    type: simple
+    type_params:
+      measure:
+        name: years_tenure
+        filter: "{{ Dimension('id__loves_dbt') }} is true"
+
+"""
+
+meta_metric_level_schema_yml = """
+version: 2
+
+metrics:
+
+  - name: number_of_people
+    label: "Number of people"
+    description: Total count of people
+    type: simple
+    type_params:
+      measure: people
+    config:
+      meta:
+         my_meta_config: 'config
+    meta:
+        my_meta_direct: 'direct'
 
   - name: collective_tenure
     label: "Collective tenure"

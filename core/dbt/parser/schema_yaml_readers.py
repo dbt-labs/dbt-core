@@ -366,6 +366,11 @@ class MetricParser(YamlReader):
                 f"Calculated a {type(config)} for a metric, but expected a MetricConfig"
             )
 
+        # If we have meta in the config, copy to node level, for backwards
+        # compatibility with earlier node-only config.
+        if "meta" in config and config["meta"]:
+            unparsed.meta = config["meta"]
+
         parsed = Metric(
             resource_type=NodeType.Metric,
             package_name=package_name,

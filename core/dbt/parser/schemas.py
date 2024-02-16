@@ -845,7 +845,10 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
                 # Includes alias recomputation
                 self.patch_node_config(versioned_model_node, versioned_model_patch)
 
-                # Need to reapply this here, in the case that 'contract: {enforced: true}' was during config-setting
+                # Need to reapply setting constraints and contract checksum here, because
+                # they depend on node.contract.enabled, which wouldn't be set when
+                # patch_node_properties was called if it wasn't set in the model file.
+                self.patch_constraints(versioned_model_node, versioned_model_patch.constraints)
                 versioned_model_node.build_contract_checksum()
                 source_file.append_patch(
                     versioned_model_patch.yaml_key, versioned_model_node.unique_id
@@ -869,6 +872,7 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
                     unique_id=node.unique_id,
                     field_value=patch.access,
                 )
+        # These two will have to be reapplied after config is built for versioned models
         self.patch_constraints(node, patch.constraints)
         node.build_contract_checksum()
 

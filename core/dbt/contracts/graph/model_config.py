@@ -7,6 +7,7 @@ from dbt.artifacts.resources import (
     MetricConfig,
     SavedQueryConfig,
     SemanticModelConfig,
+    SourceConfig,
 )
 from dbt_common.contracts.config.base import BaseConfig, MergeBehavior, CompareBehavior
 from dbt_common.contracts.config.materialization import OnConfigurationChangeOption
@@ -52,11 +53,6 @@ class Hook(dbtClassMixin, Replaceable):
     sql: str
     transaction: bool = True
     index: Optional[int] = None
-
-
-@dataclass
-class SourceConfig(BaseConfig):
-    enabled: bool = True
 
 
 @dataclass

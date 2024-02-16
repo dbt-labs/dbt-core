@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 from typing import Dict, Any, Sequence, List, Union, Optional
 from datetime import datetime
 
+from dbt.artifacts.resources import FreshnessThreshold
 from dbt.artifacts.schemas.results import ExecutionResult, FreshnessStatus, NodeResult, TimingInfo
 from dbt.artifacts.schemas.base import (
     ArtifactMixin,
@@ -12,7 +13,6 @@ from dbt.artifacts.schemas.base import (
 from dbt_common.dataclass_schema import dbtClassMixin, StrEnum
 from dbt_common.exceptions import DbtInternalError
 
-from dbt.contracts.graph.unparsed import FreshnessThreshold
 from dbt.contracts.graph.nodes import SourceDefinition
 
 

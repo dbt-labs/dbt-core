@@ -2,7 +2,7 @@ git+https://github.com/dbt-labs/dbt-adapters.git@main
 git+https://github.com/dbt-labs/dbt-postgres.git@main
 black==23.3.0
 bumpversion
-ddtrace==2.1.7
+ddtrace==2.3.0
 docutils
 flake8
 flaky

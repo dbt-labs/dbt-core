@@ -1,8 +1,7 @@
 import pytest
+
+from dbt.artifacts.resources import SourceConfig
 from dbt_common.dataclass_schema import ValidationError
-
-from dbt.contracts.graph.model_config import SourceConfig
-
 from dbt.tests.util import run_dbt, update_config_file, get_manifest
 from tests.functional.sources.fixtures import (
     basic_source_schema_yml,

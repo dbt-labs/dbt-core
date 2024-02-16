@@ -1,7 +1,16 @@
 from dbt.artifacts.resources.base import BaseResource, GraphResource
 
 # alias to latest resource definitions
-from dbt.artifacts.resources.v1.components import DependsOn, NodeVersion, RefArgs
+from dbt.artifacts.resources.v1.components import (
+    ColumnInfo,
+    DependsOn,
+    FreshnessThreshold,
+    HasRelationMetadata,
+    NodeVersion,
+    Quoting,
+    RefArgs,
+    Time,
+)
 from dbt.artifacts.resources.v1.documentation import Documentation
 from dbt.artifacts.resources.v1.exposure import (
     Exposure,
@@ -49,4 +58,11 @@ from dbt.artifacts.resources.v1.semantic_model import (
     NonAdditiveDimension,
     SemanticModel,
     SemanticModelConfig,
+)
+from dbt.artifacts.resources.v1.source_definition import (
+    ExternalPartition,
+    ExternalTable,
+    SourceDefinition,
+    ParsedSourceMandatory,
+    SourceConfig,
 )

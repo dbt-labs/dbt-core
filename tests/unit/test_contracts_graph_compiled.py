@@ -1,9 +1,9 @@
 import pickle
 import pytest
 
+from dbt.artifacts.resources import ColumnInfo
 from dbt.contracts.files import FileHash
 from dbt.contracts.graph.nodes import (
-    ColumnInfo,
     DependsOn,
     GenericTestNode,
     InjectedCTE,

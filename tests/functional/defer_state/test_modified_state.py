@@ -38,6 +38,9 @@ from tests.functional.defer_state.fixtures import (
     table_model_now_view_sql,
     table_model_now_incremental_sql,
     view_model_now_table_sql,
+    metricflow_time_spine_sql,
+    semantic_model_schema_yml,
+    modified_semantic_model_schema_yml,
 )
 
 
@@ -993,3 +996,22 @@ class TestModifiedLatestVersion(BaseModifiedState):
 
         results = run_dbt(["list", "-s", "state:modified", "--state", "./state"])
         assert results == ["test.table_model.v1", "test.table_model.v2"]
+
+
+class TestChangedSemanticModelContents(BaseModifiedState):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "view_model.sql": view_model_sql,
+            "schema.yml": semantic_model_schema_yml,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+        }
+
+    def test_changed_semantic_model_contents(self, project):
+        self.run_and_save_state()
+        results = run_dbt(["list", "-s", "state:modified", "--state", "./state"])
+        assert len(results) == 0
+
+        write_file(modified_semantic_model_schema_yml, "models", "schema.yml")
+        results = run_dbt(["list", "-s", "state:modified", "--state", "./state"])
+        assert len(results) == 1

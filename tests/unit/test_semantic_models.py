@@ -1,9 +1,10 @@
+from copy import deepcopy
 import pytest
-
 from typing import List
 
 from dbt.artifacts.resources import Dimension, Entity, Measure, Defaults
 from dbt.contracts.graph.nodes import SemanticModel
+from dbt.artifacts.resources.v1.semantic_model import NodeRelation
 from dbt.node_types import NodeType
 from dbt_semantic_interfaces.references import MeasureReference
 from dbt_semantic_interfaces.type_enums import AggregationType, DimensionType, EntityType
@@ -41,7 +42,9 @@ def default_semantic_model(
         dimensions=dimensions,
         entities=entities,
         measures=measures,
-        node_relation=None,
+        node_relation=NodeRelation(
+            alias="test_alias", schema_name="test_schema", database="test_database"
+        ),
     )
 
 
@@ -79,3 +82,25 @@ def test_checked_agg_time_dimension_for_measure_exception(default_semantic_model
         f"Aggregation time dimension for measure {measure.name} on semantic model {default_semantic_model.name}"
         in str(execinfo.value)
     )
+
+
+def test_semantic_model_same_contents(default_semantic_model: SemanticModel):
+    default_semantic_model_copy = deepcopy(default_semantic_model)
+
+    assert default_semantic_model.same_contents(default_semantic_model_copy)
+
+
+def test_semantic_model_same_contents_update_model(default_semantic_model: SemanticModel):
+    default_semantic_model_copy = deepcopy(default_semantic_model)
+    default_semantic_model_copy.model = "ref('test_another_model')"
+
+    assert not default_semantic_model.same_contents(default_semantic_model_copy)
+
+
+def test_semantic_model_same_contents_different_node_relation(
+    default_semantic_model: SemanticModel,
+):
+    default_semantic_model_copy = deepcopy(default_semantic_model)
+    default_semantic_model_copy.node_relation.alias = "test_another_alias"
+    # Relation should not be consided in same_contents
+    assert default_semantic_model.same_contents(default_semantic_model_copy)
