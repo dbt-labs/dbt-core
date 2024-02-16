@@ -4,7 +4,7 @@ from dbt.artifacts.resources.types import TimePeriod
 from dbt.artifacts.resources.v1.macro import MacroDependsOn
 from dbt_common.contracts.config.properties import AdditionalPropertiesMixin
 from dbt_common.contracts.constraints import ColumnLevelConstraint
-from dbt_common.contracts.util import Mergeable, Replaceable
+from dbt_common.contracts.util import Mergeable
 from dbt_common.dataclass_schema import dbtClassMixin, ExtensibleDbtClassMixin
 from typing import Any, Dict, List, Optional, Union
 
@@ -43,7 +43,7 @@ class RefArgs(dbtClassMixin):
 
 
 @dataclass
-class ColumnInfo(AdditionalPropertiesMixin, ExtensibleDbtClassMixin, Replaceable):
+class ColumnInfo(AdditionalPropertiesMixin, ExtensibleDbtClassMixin):
     """Used in all ManifestNodes and SourceDefinition"""
 
     name: str
@@ -101,7 +101,7 @@ class FreshnessThreshold(dbtClassMixin, Mergeable):
 
 
 @dataclass
-class HasRelationMetadata(dbtClassMixin, Replaceable):
+class HasRelationMetadata(dbtClassMixin):
     database: Optional[str]
     schema: str
 

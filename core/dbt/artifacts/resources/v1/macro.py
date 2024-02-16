@@ -2,7 +2,6 @@ from dataclasses import dataclass, field
 import time
 from typing import Literal, List, Dict, Optional, Any
 
-from dbt_common.contracts.util import Replaceable
 from dbt_common.dataclass_schema import dbtClassMixin
 from dbt.artifacts.resources.base import BaseResource
 from dbt.artifacts.resources.types import NodeType, ModelLanguage
@@ -17,7 +16,7 @@ class MacroArgument(dbtClassMixin):
 
 
 @dataclass
-class MacroDependsOn(dbtClassMixin, Replaceable):
+class MacroDependsOn(dbtClassMixin):
     macros: List[str] = field(default_factory=list)
 
     # 'in' on lists is O(n) so this is O(n^2) for # of macros

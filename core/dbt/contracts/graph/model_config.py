@@ -18,7 +18,7 @@ from dbt_common.dataclass_schema import (
 )
 from dbt.contracts.graph.unparsed import Docs
 from dbt.contracts.graph.utils import validate_color
-from dbt.contracts.util import Replaceable, list_str
+from dbt.contracts.util import list_str
 from dbt import hooks
 from dbt.node_types import NodeType, AccessType
 from mashumaro.jsonschema.annotations import Pattern
@@ -43,13 +43,13 @@ class Severity(str):
 
 
 @dataclass
-class ContractConfig(dbtClassMixin, Replaceable):
+class ContractConfig(dbtClassMixin):
     enforced: bool = False
     alias_types: bool = True
 
 
 @dataclass
-class Hook(dbtClassMixin, Replaceable):
+class Hook(dbtClassMixin):
     sql: str
     transaction: bool = True
     index: Optional[int] = None

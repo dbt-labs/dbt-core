@@ -1,6 +1,6 @@
 import enum
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from itertools import chain, islice
 from mashumaro.mixins.msgpack import DataClassMessagePackMixin
 from multiprocessing.synchronize import Lock
@@ -1385,14 +1385,14 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
                 )
             ):
                 merged.add(unique_id)
-                self.nodes[unique_id] = node.replace(deferred=True)
+                self.nodes[unique_id] = replace(node, deferred=True)
 
             # for all other nodes, add 'defer_relation'
             elif current and node.resource_type in refables and not node.is_ephemeral:
                 defer_relation = DeferRelation(
                     node.database, node.schema, node.alias, node.relation_name
                 )
-                self.nodes[unique_id] = current.replace(defer_relation=defer_relation)
+                self.nodes[unique_id] = replace(current, defer_relation=defer_relation)
 
         # Rebuild the flat_graph, which powers the 'graph' context variable,
         # now that we've deferred some nodes

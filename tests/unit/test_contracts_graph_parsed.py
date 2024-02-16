@@ -1,6 +1,7 @@
 import pickle
 import pytest
 
+from dataclasses import replace
 from hypothesis import given
 from hypothesis.strategies import builds, lists
 
@@ -400,8 +401,8 @@ def test_invalid_bad_materialized(base_parsed_model_dict):
 
 
 unchanged_nodes = [
-    lambda u: (u, u.replace(tags=["mytag"])),
-    lambda u: (u, u.replace(meta={"something": 1000})),
+    lambda u: (u, replace(u, tags=["mytag"])),
+    lambda u: (u, replace(u, meta={"something": 1000})),
     # True -> True
     lambda u: (
         replace_config(u, persist_docs={"relation": True}),
@@ -414,30 +415,32 @@ unchanged_nodes = [
     # only columns docs enabled, but description changed
     lambda u: (
         replace_config(u, persist_docs={"columns": True}),
-        replace_config(u, persist_docs={"columns": True}).replace(
-            description="a model description"
+        replace(
+            replace_config(u, persist_docs={"columns": True}), description="a model description"
         ),
     ),
     # only relation docs eanbled, but columns changed
     lambda u: (
         replace_config(u, persist_docs={"relation": True}),
-        replace_config(u, persist_docs={"relation": True}).replace(
-            columns={"a": ColumnInfo(name="a", description="a column description")}
+        replace(
+            replace_config(u, persist_docs={"relation": True}),
+            columns={"a": ColumnInfo(name="a", description="a column description")},
         ),
     ),
     # not tracked, we track config.alias/config.schema/config.database
-    lambda u: (u, u.replace(alias="other")),
-    lambda u: (u, u.replace(schema="other")),
-    lambda u: (u, u.replace(database="other")),
+    lambda u: (u, replace(u, alias="other")),
+    lambda u: (u, replace(u, schema="other")),
+    lambda u: (u, replace(u, database="other")),
     # unchanged ref representations - protected is default
-    lambda u: (u, u.replace(access=AccessType.Protected)),
+    lambda u: (u, replace(u, access=AccessType.Protected)),
 ]
 
 
 changed_nodes = [
     lambda u: (
         u,
-        u.replace(
+        replace(
+            u,
             fqn=["test", "models", "subdir", "foo"],
             original_file_path="models/subdir/foo.sql",
             path="/root/models/subdir/foo.sql",
@@ -449,15 +452,16 @@ changed_nodes = [
     # persist docs was true for the relation and we changed the model description
     lambda u: (
         replace_config(u, persist_docs={"relation": True}),
-        replace_config(u, persist_docs={"relation": True}).replace(
-            description="a model description"
+        replace(
+            replace_config(u, persist_docs={"relation": True}), description="a model description"
         ),
     ),
     # persist docs was true for columns and we changed the model description
     lambda u: (
         replace_config(u, persist_docs={"columns": True}),
-        replace_config(u, persist_docs={"columns": True}).replace(
-            columns={"a": ColumnInfo(name="a", description="a column description")}
+        replace(
+            replace_config(u, persist_docs={"columns": True}),
+            columns={"a": ColumnInfo(name="a", description="a column description")},
         ),
     ),
     # not tracked, we track config.alias/config.schema/config.database
@@ -682,8 +686,8 @@ def test_seed_complex(complex_parsed_seed_dict, complex_parsed_seed_object):
 
 
 unchanged_seeds = [
-    lambda u: (u, u.replace(tags=["mytag"])),
-    lambda u: (u, u.replace(meta={"something": 1000})),
+    lambda u: (u, replace(u, tags=["mytag"])),
+    lambda u: (u, replace(u, meta={"something": 1000})),
     # True -> True
     lambda u: (
         replace_config(u, persist_docs={"relation": True}),
@@ -696,27 +700,29 @@ unchanged_seeds = [
     # only columns docs enabled, but description changed
     lambda u: (
         replace_config(u, persist_docs={"columns": True}),
-        replace_config(u, persist_docs={"columns": True}).replace(
-            description="a model description"
+        replace(
+            replace_config(u, persist_docs={"columns": True}), description="a model description"
         ),
     ),
     # only relation docs eanbled, but columns changed
     lambda u: (
         replace_config(u, persist_docs={"relation": True}),
-        replace_config(u, persist_docs={"relation": True}).replace(
-            columns={"a": ColumnInfo(name="a", description="a column description")}
+        replace(
+            replace_config(u, persist_docs={"relation": True}),
+            columns={"a": ColumnInfo(name="a", description="a column description")},
         ),
     ),
-    lambda u: (u, u.replace(alias="other")),
-    lambda u: (u, u.replace(schema="other")),
-    lambda u: (u, u.replace(database="other")),
+    lambda u: (u, replace(u, alias="other")),
+    lambda u: (u, replace(u, schema="other")),
+    lambda u: (u, replace(u, database="other")),
 ]
 
 
 changed_seeds = [
     lambda u: (
         u,
-        u.replace(
+        replace(
+            u,
             fqn=["test", "models", "subdir", "foo"],
             original_file_path="models/subdir/foo.sql",
             path="/root/models/subdir/foo.sql",
@@ -728,15 +734,16 @@ changed_seeds = [
     # persist docs was true for the relation and we changed the model description
     lambda u: (
         replace_config(u, persist_docs={"relation": True}),
-        replace_config(u, persist_docs={"relation": True}).replace(
-            description="a model description"
+        replace(
+            replace_config(u, persist_docs={"relation": True}), description="a model description"
         ),
     ),
     # persist docs was true for columns and we changed the model description
     lambda u: (
         replace_config(u, persist_docs={"columns": True}),
-        replace_config(u, persist_docs={"columns": True}).replace(
-            columns={"a": ColumnInfo(name="a", description="a column description")}
+        replace(
+            replace_config(u, persist_docs={"columns": True}),
+            columns={"a": ColumnInfo(name="a", description="a column description")},
         ),
     ),
     lambda u: (u, replace_config(u, alias="other")),
@@ -2082,27 +2089,30 @@ def test_source_no_freshness(complex_parsed_source_definition_object):
 
 
 unchanged_source_definitions = [
-    lambda u: (u, u.replace(tags=["mytag"])),
-    lambda u: (u, u.replace(meta={"a": 1000})),
+    lambda u: (u, replace(u, tags=["mytag"])),
+    lambda u: (u, replace(u, meta={"a": 1000})),
 ]
 
 changed_source_definitions = [
     lambda u: (
         u,
-        u.replace(
+        replace(
+            u,
             freshness=FreshnessThreshold(warn_after=Time(period=TimePeriod.hour, count=1)),
             loaded_at_field="loaded_at",
         ),
     ),
-    lambda u: (u, u.replace(loaded_at_field="loaded_at")),
+    lambda u: (u, replace(u, loaded_at_field="loaded_at")),
     lambda u: (
         u,
-        u.replace(freshness=FreshnessThreshold(error_after=Time(period=TimePeriod.hour, count=1))),
+        replace(
+            u, freshness=FreshnessThreshold(error_after=Time(period=TimePeriod.hour, count=1))
+        ),
     ),
-    lambda u: (u, u.replace(quoting=Quoting(identifier=True))),
-    lambda u: (u, u.replace(database="other_database")),
-    lambda u: (u, u.replace(schema="other_schema")),
-    lambda u: (u, u.replace(identifier="identifier")),
+    lambda u: (u, replace(u, quoting=Quoting(identifier=True))),
+    lambda u: (u, replace(u, database="other_database")),
+    lambda u: (u, replace(u, schema="other_schema")),
+    lambda u: (u, replace(u, identifier="identifier")),
 ]
 
 
@@ -2267,13 +2277,13 @@ unchanged_parsed_exposures = [
 
 
 changed_parsed_exposures = [
-    lambda u: (u, u.replace(fqn=u.fqn[:-1] + ["something", u.fqn[-1]])),
-    lambda u: (u, u.replace(type=ExposureType.ML)),
-    lambda u: (u, u.replace(owner=u.owner.replace(name="My Name"))),
-    lambda u: (u, u.replace(maturity=MaturityType.Medium)),
-    lambda u: (u, u.replace(url="https://example.com/dashboard/1")),
-    lambda u: (u, u.replace(description="My description")),
-    lambda u: (u, u.replace(depends_on=DependsOn(nodes=["model.test.blah"]))),
+    lambda u: (u, replace(u, fqn=u.fqn[:-1] + ["something", u.fqn[-1]])),
+    lambda u: (u, replace(u, type=ExposureType.ML)),
+    lambda u: (u, replace(u, owner=replace(u.owner, name="My Name"))),
+    lambda u: (u, replace(u, maturity=MaturityType.Medium)),
+    lambda u: (u, replace(u, url="https://example.com/dashboard/1")),
+    lambda u: (u, replace(u, description="My description")),
+    lambda u: (u, replace(u, depends_on=DependsOn(nodes=["model.test.blah"]))),
 ]
 
 

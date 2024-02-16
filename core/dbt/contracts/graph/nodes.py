@@ -39,7 +39,6 @@ from dbt.contracts.graph.unparsed import (
     UnitTestNodeVersions,
 )
 from dbt.contracts.graph.node_args import ModelNodeArgs
-from dbt.contracts.util import Replaceable
 from dbt_common.events.functions import warn_or_error
 from dbt.exceptions import ParsingError, ContractBreakingChangeError, ValidationError
 from dbt.events.types import (
@@ -181,7 +180,7 @@ class GraphNode(GraphResource, BaseNode):
 
 
 @dataclass
-class Contract(dbtClassMixin, Replaceable):
+class Contract(dbtClassMixin):
     enforced: bool = False
     alias_types: bool = True
     checksum: Optional[str] = None
@@ -198,7 +197,7 @@ class DeferRelation(HasRelationMetadataResource):
 
 
 @dataclass
-class ParsedNodeMandatory(GraphNode, HasRelationMetadataResource, Replaceable):
+class ParsedNodeMandatory(GraphNode, HasRelationMetadataResource):
     alias: str
     checksum: FileHash
     config: NodeConfig = field(default_factory=NodeConfig)
@@ -399,7 +398,7 @@ class ParsedNode(NodeInfoMixin, ParsedNodeMandatory, SerializableType):
 
 
 @dataclass
-class InjectedCTE(dbtClassMixin, Replaceable):
+class InjectedCTE(dbtClassMixin):
     """Used in CompiledNodes as part of ephemeral model processing"""
 
     id: str
@@ -927,7 +926,7 @@ class SingularTestNode(TestShouldStoreFailures, CompiledNode):
 
 
 @dataclass
-class TestMetadata(dbtClassMixin, Replaceable):
+class TestMetadata(dbtClassMixin):
     __test__ = False
 
     name: str
@@ -1606,7 +1605,7 @@ class SavedQuery(NodeInfoMixin, GraphNode, SavedQueryResource):
 
 
 @dataclass
-class ParsedPatch(HasYamlMetadata, Replaceable):
+class ParsedPatch(HasYamlMetadata):
     name: str
     description: str
     meta: Dict[str, Any]

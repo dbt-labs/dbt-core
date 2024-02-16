@@ -22,7 +22,6 @@ from dbt.artifacts.resources import (
     MaturityType,
     MeasureAggregationParameters,
 )
-from dbt.contracts.util import Replaceable
 
 # trigger the PathEncoder
 import dbt_common.helper_types  # noqa:F401
@@ -37,7 +36,7 @@ from typing import Optional, List, Union, Dict, Any, Sequence, Literal
 
 
 @dataclass
-class UnparsedBaseNode(dbtClassMixin, Replaceable):
+class UnparsedBaseNode(dbtClassMixin):
     package_name: str
     path: str
     original_file_path: str
@@ -84,7 +83,7 @@ class UnparsedRunHook(UnparsedNode):
 
 
 @dataclass
-class HasColumnProps(AdditionalPropertiesMixin, ExtensibleDbtClassMixin, Replaceable):
+class HasColumnProps(AdditionalPropertiesMixin, ExtensibleDbtClassMixin):
     name: str
     description: str = ""
     meta: Dict[str, Any] = field(default_factory=dict)
@@ -112,12 +111,12 @@ class UnparsedColumn(HasColumnAndTestProps):
 
 
 @dataclass
-class HasColumnDocs(dbtClassMixin, Replaceable):
+class HasColumnDocs(dbtClassMixin):
     columns: Sequence[HasColumnProps] = field(default_factory=list)
 
 
 @dataclass
-class HasColumnTests(dbtClassMixin, Replaceable):
+class HasColumnTests(dbtClassMixin):
     columns: Sequence[UnparsedColumn] = field(default_factory=list)
 
 
@@ -280,7 +279,7 @@ class UnparsedSourceTableDefinition(HasColumnTests, HasColumnAndTestProps):
 
 
 @dataclass
-class UnparsedSourceDefinition(dbtClassMixin, Replaceable):
+class UnparsedSourceDefinition(dbtClassMixin):
     name: str
     description: str = ""
     meta: Dict[str, Any] = field(default_factory=dict)
@@ -336,7 +335,7 @@ class SourceTablePatch(dbtClassMixin):
 
 
 @dataclass
-class SourcePatch(dbtClassMixin, Replaceable):
+class SourcePatch(dbtClassMixin):
     name: str = field(
         metadata=dict(description="The name of the source to override"),
     )
@@ -379,7 +378,7 @@ class SourcePatch(dbtClassMixin, Replaceable):
 
 
 @dataclass
-class UnparsedDocumentation(dbtClassMixin, Replaceable):
+class UnparsedDocumentation(dbtClassMixin):
     package_name: str
     path: str
     original_file_path: str
@@ -428,7 +427,7 @@ class Maturity(StrEnum):
 
 
 @dataclass
-class UnparsedExposure(dbtClassMixin, Replaceable):
+class UnparsedExposure(dbtClassMixin):
     name: str
     type: ExposureType
     owner: Owner
@@ -454,7 +453,7 @@ class UnparsedExposure(dbtClassMixin, Replaceable):
 
 
 @dataclass
-class MetricFilter(dbtClassMixin, Replaceable):
+class MetricFilter(dbtClassMixin):
     field: str
     operator: str
     # TODO : Can we make this Any?
@@ -558,7 +557,7 @@ class UnparsedMetric(dbtClassMixin):
 
 
 @dataclass
-class UnparsedGroup(dbtClassMixin, Replaceable):
+class UnparsedGroup(dbtClassMixin):
     name: str
     owner: Owner
 
