@@ -1,0 +1,42 @@
+name: Check Artifact Changes
+
+on:
+  pull_request:
+    types: [ opened, reopened, labeled, unlabeled, synchronize ]
+    paths-ignore: [ '.changes/**', '.github/**', 'tests/**', '**.md', '**.yml' ]
+
+  workflow_dispatch:
+
+jobs:
+  check-artifact-changes:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for changes in core/dbt/artifacts
+        id: check_changes
+        run: |
+          # Check for changes in dbt/artifacts
+          CHANGED_FILES=$(git diff --name-only origin/${GITHUB_BASE_REF} origin/${GITHUB_HEAD_REF} | grep 'core/dbt/artifacts/')
+          if [ ! -z "$CHANGED_FILES" ]; then
+            echo "CHANGED=true" >> $GITHUB_ENV
+            echo "Changed files in core/dbt/artifacts:"
+            echo "$CHANGED_FILES"
+          else
+            echo "CHANGED=false" >> $GITHUB_ENV
+          fi
+
+      - name: Fail CI if artifacts have changed
+        if: env.CHANGED == 'true' && !contains(github.event.pull_request.labels.*.name, 'artifact_minor_upgrade')
+        run: |
+          echo "CI failure: Artifact changes checked in core/dbt/artifacts directory."
+          echo "To bypass this check, confirm that the change is not breaking (https://github.com/dbt-labs/dbt-core/blob/main/core/dbt/artifacts/README.md#breaking-changes) and add the 'artifact_minor_upgrade' label to the PR."
+          exit 1
+
+      - name: CI check passed
+        if: env.CHANGED == 'false' || contains(github.event.pull_request.labels.*.name, 'artifact_minor_upgrade')
+        run: |
+          echo "No prohibited artifact changes checked in core/dbt/artifacts, or 'artifact_minor_upgrade' label found. CI check passed."

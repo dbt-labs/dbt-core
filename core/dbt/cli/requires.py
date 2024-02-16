@@ -15,6 +15,7 @@ from dbt.cli.exceptions import (
 from dbt.cli.flags import Flags
 from dbt.config import RuntimeConfig
 from dbt.config.runtime import load_project, load_profile, UnsetProfile
+from dbt.context.manifest import generate_query_header_context
 
 from dbt_common.events.base_types import EventLevel
 from dbt_common.events.functions import (
@@ -290,6 +291,10 @@ def manifest(*args0, write=True, write_perf_info=False):
                 adapter = get_adapter(runtime_config)
                 adapter.set_macro_context_generator(generate_runtime_macro_context)
                 adapter.set_macro_resolver(ctx.obj["manifest"])
+                query_header_context = generate_query_header_context(
+                    adapter.config, ctx.obj["manifest"]
+                )
+                adapter.connections.set_query_header(query_header_context)
             return func(*args, **kwargs)
 
         return update_wrapper(wrapper, func)

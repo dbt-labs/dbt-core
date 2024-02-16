@@ -24,7 +24,11 @@ class GenericSqlRunner(CompileRunner, Generic[SQLResult]):
         CompileRunner.__init__(self, config, adapter, node, node_index, num_nodes)
 
     def handle_exception(self, e, ctx):
-        fire_event(SQLRunnerException(exc=str(e), exc_info=traceback.format_exc()))
+        fire_event(
+            SQLRunnerException(
+                exc=str(e), exc_info=traceback.format_exc(), node_info=self.node.node_info
+            )
+        )
         if isinstance(e, dbt.exceptions.Exception):
             if isinstance(e, dbt_common.exceptions.DbtRuntimeError):
                 e.add_node(ctx.node)

@@ -54,3 +54,12 @@ class RunHookType(StrEnum):
 class ModelLanguage(StrEnum):
     python = "python"
     sql = "sql"
+
+
+class TimePeriod(StrEnum):
+    minute = "minute"
+    hour = "hour"
+    day = "day"
+
+    def plural(self) -> str:
+        return str(self) + "s"

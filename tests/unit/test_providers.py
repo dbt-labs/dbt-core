@@ -2,8 +2,8 @@ import pytest
 from unittest import mock
 
 from dbt.adapters.base import BaseRelation
+from dbt.artifacts.resources import Quoting
 from dbt.context.providers import BaseResolver, RuntimeRefResolver, RuntimeSourceResolver
-from dbt.contracts.graph.unparsed import Quoting
 
 
 class TestBaseResolver:

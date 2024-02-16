@@ -2,13 +2,10 @@ import datetime
 import re
 
 from dbt import deprecations
-from dbt.artifacts.resources import ConstantPropertyInput
-from dbt_common.contracts.config.properties import (
-    AdditionalPropertiesAllowed,
-    AdditionalPropertiesMixin,
-)
+from dbt.artifacts.resources import ConstantPropertyInput, Quoting
+from dbt_common.contracts.config.properties import AdditionalPropertiesMixin
 from dbt_common.contracts.util import Mergeable
-from dbt_common.exceptions import DbtInternalError, CompilationError
+from dbt_common.exceptions import DbtInternalError
 from dbt_common.dataclass_schema import (
     dbtClassMixin,
     StrEnum,
@@ -20,6 +17,8 @@ from dbt.artifacts.resources import (
     Defaults,
     DimensionValidityParams,
     ExposureType,
+    ExternalTable,
+    FreshnessThreshold,
     MaturityType,
     MeasureAggregationParameters,
 )
@@ -33,7 +32,6 @@ from dbt_semantic_interfaces.type_enums import ConversionCalculationType
 from dbt.artifacts.resources import Docs, MacroArgument, NodeVersion, Owner
 
 from dataclasses import dataclass, field
-from datetime import timedelta
 from pathlib import Path
 from typing import Optional, List, Union, Dict, Any, Sequence, Literal
 
@@ -262,83 +260,6 @@ class UnparsedModelUpdate(UnparsedNodeUpdate):
 @dataclass
 class UnparsedMacroUpdate(HasConfig, HasColumnProps, HasYamlMetadata):
     arguments: List[MacroArgument] = field(default_factory=list)
-
-
-class TimePeriod(StrEnum):
-    minute = "minute"
-    hour = "hour"
-    day = "day"
-
-    def plural(self) -> str:
-        return str(self) + "s"
-
-
-@dataclass
-class Time(dbtClassMixin, Mergeable):
-    count: Optional[int] = None
-    period: Optional[TimePeriod] = None
-
-    def exceeded(self, actual_age: float) -> bool:
-        if self.period is None or self.count is None:
-            return False
-        kwargs: Dict[str, int] = {self.period.plural(): self.count}
-        difference = timedelta(**kwargs).total_seconds()
-        return actual_age > difference
-
-    def __bool__(self):
-        return self.count is not None and self.period is not None
-
-
-@dataclass
-class FreshnessThreshold(dbtClassMixin, Mergeable):
-    warn_after: Optional[Time] = field(default_factory=Time)
-    error_after: Optional[Time] = field(default_factory=Time)
-    filter: Optional[str] = None
-
-    def status(self, age: float) -> "dbt.artifacts.schemas.results.FreshnessStatus":  # type: ignore # noqa F821
-        from dbt.artifacts.schemas.results import FreshnessStatus
-
-        if self.error_after and self.error_after.exceeded(age):
-            return FreshnessStatus.Error
-        elif self.warn_after and self.warn_after.exceeded(age):
-            return FreshnessStatus.Warn
-        else:
-            return FreshnessStatus.Pass
-
-    def __bool__(self):
-        return bool(self.warn_after) or bool(self.error_after)
-
-
-@dataclass
-class ExternalPartition(AdditionalPropertiesAllowed, Replaceable):
-    name: str = ""
-    description: str = ""
-    data_type: str = ""
-    meta: Dict[str, Any] = field(default_factory=dict)
-
-    def __post_init__(self):
-        if self.name == "" or self.data_type == "":
-            raise CompilationError("External partition columns must have names and data types")
-
-
-@dataclass
-class ExternalTable(AdditionalPropertiesAllowed, Mergeable):
-    location: Optional[str] = None
-    file_format: Optional[str] = None
-    row_format: Optional[str] = None
-    tbl_properties: Optional[str] = None
-    partitions: Optional[Union[List[str], List[ExternalPartition]]] = None
-
-    def __bool__(self):
-        return self.location is not None
-
-
-@dataclass
-class Quoting(dbtClassMixin, Mergeable):
-    database: Optional[bool] = None
-    schema: Optional[bool] = None
-    identifier: Optional[bool] = None
-    column: Optional[bool] = None
 
 
 @dataclass

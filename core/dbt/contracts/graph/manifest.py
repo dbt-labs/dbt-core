@@ -772,6 +772,9 @@ class ManifestStateCheck(dbtClassMixin):
     project_hashes: MutableMapping[str, FileHash] = field(default_factory=dict)
 
 
+NodeClassT = TypeVar("NodeClassT", bound="BaseNode")
+
+
 @dataclass
 class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     """The manifest for the full graph, after parsing and during compilation."""
@@ -1020,26 +1023,30 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
                     group_map[node.group].append(node.unique_id)
         self.group_map = group_map
 
+    @classmethod
+    def _map_nodes_to_map_resources(cls, nodes_map: MutableMapping[str, NodeClassT]):
+        return {node_id: node.to_resource() for node_id, node in nodes_map.items()}
+
     def writable_manifest(self) -> "WritableManifest":
         self.build_parent_and_child_maps()
         self.build_group_map()
         return WritableManifest(
             nodes=self.nodes,
-            sources=self.sources,
+            sources=self._map_nodes_to_map_resources(self.sources),
             macros=self.macros,
             docs=self.docs,
-            exposures=self.exposures,
-            metrics=self.metrics,
-            groups=self.groups,
+            exposures=self._map_nodes_to_map_resources(self.exposures),
+            metrics=self._map_nodes_to_map_resources(self.metrics),
+            groups=self._map_nodes_to_map_resources(self.groups),
             selectors=self.selectors,
             metadata=self.metadata,
             disabled=self.disabled,
             child_map=self.child_map,
             parent_map=self.parent_map,
             group_map=self.group_map,
-            semantic_models=self.semantic_models,
+            semantic_models=self._map_nodes_to_map_resources(self.semantic_models),
             unit_tests=self.unit_tests,
-            saved_queries=self.saved_queries,
+            saved_queries=self._map_nodes_to_map_resources(self.saved_queries),
         )
 
     def write(self, path):

@@ -5,17 +5,23 @@ from hypothesis import given
 from hypothesis.strategies import builds, lists
 
 from dbt.artifacts.resources import (
+    ColumnInfo,
     Dimension,
     Entity,
     ExposureConfig,
     ExposureType,
+    FreshnessThreshold,
     MaturityType,
     Measure,
     MetricInputMeasure,
     MetricTypeParams,
     Owner,
+    Quoting,
     RefArgs,
+    SourceConfig,
+    Time,
 )
+from dbt.artifacts.resources.types import TimePeriod
 from dbt.node_types import NodeType, AccessType
 from dbt.contracts.files import FileHash
 from dbt.contracts.graph.model_config import (
@@ -24,14 +30,12 @@ from dbt.contracts.graph.model_config import (
     SeedConfig,
     TestConfig,
     SnapshotConfig,
-    SourceConfig,
     EmptySnapshotConfig,
     Hook,
 )
 from dbt.contracts.graph.nodes import (
     ModelNode,
     DependsOn,
-    ColumnInfo,
     GenericTestNode,
     SnapshotNode,
     IntermediateSnapshotNode,
@@ -47,12 +51,7 @@ from dbt.contracts.graph.nodes import (
     TestMetadata,
     SemanticModel,
 )
-from dbt.contracts.graph.unparsed import (
-    FreshnessThreshold,
-    Quoting,
-    Time,
-    TimePeriod,
-)
+from dbt.artifacts.resources import SourceDefinition as SourceDefinitionResource
 from dbt import flags
 from argparse import Namespace
 
@@ -2039,13 +2038,13 @@ def test_basic_source_definition(
     node_dict = basic_parsed_source_definition_dict
     minimum = minimum_parsed_source_definition_dict
 
-    assert_symmetric(node, node_dict, SourceDefinition)
+    assert_symmetric(node.to_resource(), node_dict, SourceDefinitionResource)
 
     assert node.is_ephemeral is False
     assert node.is_refable is False
     assert node.has_freshness is False
 
-    assert_from_dict(node, minimum, SourceDefinition)
+    assert_from_dict(node.to_resource(), minimum, SourceDefinitionResource)
     pickle.loads(pickle.dumps(node))
 
 
@@ -2066,7 +2065,7 @@ def test_complex_source_definition(
 ):
     node = complex_parsed_source_definition_object
     node_dict = complex_parsed_source_definition_dict
-    assert_symmetric(node, node_dict, SourceDefinition)
+    assert_symmetric(node.to_resource(), node_dict, SourceDefinitionResource)
 
     assert node.is_ephemeral is False
     assert node.is_refable is False

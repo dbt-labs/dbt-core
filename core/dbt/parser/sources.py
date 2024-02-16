@@ -4,6 +4,11 @@ from typing import Iterable, Dict, Optional, Set, Any, List
 
 from dbt.adapters.capability import Capability
 from dbt.adapters.factory import get_adapter
+from dbt.artifacts.resources import (
+    FreshnessThreshold,
+    SourceConfig,
+    Time,
+)
 from dbt.config import RuntimeConfig
 from dbt.context.context_config import (
     BaseContextConfigGenerator,
@@ -11,7 +16,6 @@ from dbt.context.context_config import (
     UnrenderedConfigGenerator,
 )
 from dbt.contracts.graph.manifest import Manifest, SourceKey
-from dbt.contracts.graph.model_config import SourceConfig
 from dbt.contracts.graph.nodes import (
     UnpatchedSourceDefinition,
     SourceDefinition,
@@ -22,9 +26,7 @@ from dbt.contracts.graph.unparsed import (
     SourcePatch,
     SourceTablePatch,
     UnparsedSourceTableDefinition,
-    FreshnessThreshold,
     UnparsedColumn,
-    Time,
 )
 from dbt_common.events.functions import warn_or_error, fire_event
 from dbt.events.types import UnusedTables, FreshnessConfigProblem
