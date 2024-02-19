@@ -456,12 +456,6 @@ def deps(ctx, **kwargs):
                 message=f"Version is required in --add-package when a package when source is {flags.SOURCE}",
                 option_name="--add-package",
             )
-    else:
-        if flags.DRY_RUN:
-            raise BadOptionUsage(
-                message="Invalid flag `--dry-run` when not using `--add-package`.",
-                option_name="--dry-run",
-            )
     with DepsTask(flags, ctx.obj["project"]) as task:
         results = task.run()
         success = task.interpret_results(results)
