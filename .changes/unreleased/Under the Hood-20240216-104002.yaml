@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Remove uses of Replaceable class
+time: 2024-02-16T10:40:02.25455-06:00
+custom:
+  Author: emmyoop
+  Issue: "7802"

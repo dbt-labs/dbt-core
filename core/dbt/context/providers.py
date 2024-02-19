@@ -1,4 +1,5 @@
 import abc
+from copy import deepcopy
 import os
 from typing import (
     Callable,
@@ -12,12 +13,16 @@ from typing import (
     Iterable,
     Mapping,
 )
+
 from typing_extensions import Protocol
 
 from dbt.adapters.base.column import Column
+from dbt.artifacts.resources import NodeVersion, RefArgs
+from dbt_common.clients.jinja import MacroProtocol
+from dbt_common.context import get_invocation_context
 from dbt.adapters.factory import get_adapter, get_adapter_package_names, get_adapter_type_names
-from dbt.clients import agate_helper
-from dbt.clients.jinja import get_rendered, MacroGenerator, MacroStack
+from dbt_common.clients import agate_helper
+from dbt.clients.jinja import get_rendered, MacroGenerator, MacroStack, UnitTestMacroGenerator
 from dbt.config import RuntimeConfig, Project
 from dbt.constants import SECRET_ENV_PREFIX, DEFAULT_ENV_PLACEHOLDER
 from dbt.context.base import contextmember, contextproperty, Var
@@ -27,7 +32,7 @@ from dbt.context.exceptions_jinja import wrapped_exports
 from dbt.context.macro_resolver import MacroResolver, TestMacroNamespace
 from dbt.context.macros import MacroNamespaceBuilder, MacroNamespace
 from dbt.context.manifest import ManifestContext
-from dbt.contracts.connection import AdapterResponse
+from dbt.adapters.contracts.connection import AdapterResponse
 from dbt.contracts.graph.manifest import Manifest, Disabled
 from dbt.contracts.graph.nodes import (
     Macro,
@@ -36,19 +41,24 @@ from dbt.contracts.graph.nodes import (
     SourceDefinition,
     Resource,
     ManifestNode,
-    RefArgs,
     AccessType,
     SemanticModel,
+    UnitTestNode,
 )
 from dbt.contracts.graph.metrics import MetricReference, ResolvedMetricReference
-from dbt.contracts.graph.unparsed import NodeVersion
-from dbt.events.functions import get_metadata_vars
+from dbt_common.events.functions import get_metadata_vars
+from dbt_common.exceptions import (
+    DbtInternalError,
+    DbtRuntimeError,
+    DbtValidationError,
+    MacrosSourcesUnWriteableError,
+)
+from dbt.adapters.exceptions import MissingConfigError
 from dbt.exceptions import (
     CompilationError,
     ConflictingConfigKeysError,
     SecretEnvVarLocationError,
     EnvVarMissingError,
-    DbtInternalError,
     InlineModelConfigError,
     NumberSourceArgsError,
     PersistDocsValueTypeError,
@@ -56,24 +66,19 @@ from dbt.exceptions import (
     LoadAgateTableValueError,
     MacroDispatchArgError,
     MacroResultAlreadyLoadedError,
-    MacrosSourcesUnWriteableError,
     MetricArgsError,
-    MissingConfigError,
     OperationsCannotRefEphemeralNodesError,
-    PackageNotInDepsError,
     ParsingError,
     RefBadContextError,
     RefArgsError,
-    DbtRuntimeError,
     TargetNotFoundError,
-    DbtValidationError,
     DbtReferenceError,
 )
 from dbt.config import IsFQNResource
 from dbt.node_types import NodeType, ModelLanguage
 
-from dbt.utils import merge, AttrDict, MultiDict, args_to_dict, cast_to_str
-
+from dbt.utils import MultiDict, args_to_dict
+from dbt_common.utils import merge, AttrDict, cast_to_str
 from dbt import selected_resources
 
 import agate
@@ -90,11 +95,6 @@ class RelationProxy:
 
     def __getattr__(self, key):
         return getattr(self._relation_type, key)
-
-    def create_from_source(self, *args, **kwargs):
-        # bypass our create when creating from source so as not to mess up
-        # the source quoting
-        return self._relation_type.create_from_source(*args, **kwargs)
 
     def create(self, *args, **kwargs):
         kwargs["quote_policy"] = merge(self._quoting_config, kwargs.pop("quote_policy", {}))
@@ -535,9 +535,7 @@ class RuntimeRefResolver(BaseRefResolver):
     def create_relation(self, target_model: ManifestNode) -> RelationProxy:
         if target_model.is_ephemeral_model:
             self.model.set_cte(target_model.unique_id, None)
-            return self.Relation.create_ephemeral_from_node(
-                self.config, target_model, limit=self.resolve_limit
-            )
+            return self.Relation.create_ephemeral_from(target_model, limit=self.resolve_limit)
         else:
             return self.Relation.create_from(self.config, target_model, limit=self.resolve_limit)
 
@@ -572,6 +570,16 @@ class OperationRefResolver(RuntimeRefResolver):
             return super().create_relation(target_model)
 
 
+class RuntimeUnitTestRefResolver(RuntimeRefResolver):
+    def resolve(
+        self,
+        target_name: str,
+        target_package: Optional[str] = None,
+        target_version: Optional[NodeVersion] = None,
+    ) -> RelationProxy:
+        return super().resolve(target_name, target_package, target_version)
+
+
 # `source` implementations
 class ParseSourceResolver(BaseSourceResolver):
     def resolve(self, source_name: str, table_name: str):
@@ -596,7 +604,30 @@ class RuntimeSourceResolver(BaseSourceResolver):
                 target_kind="source",
                 disabled=(isinstance(target_source, Disabled)),
             )
-        return self.Relation.create_from_source(target_source, limit=self.resolve_limit)
+        return self.Relation.create_from(self.config, target_source, limit=self.resolve_limit)
+
+
+class RuntimeUnitTestSourceResolver(BaseSourceResolver):
+    def resolve(self, source_name: str, table_name: str):
+        target_source = self.manifest.resolve_source(
+            source_name,
+            table_name,
+            self.current_project,
+            self.model.package_name,
+        )
+        if target_source is None or isinstance(target_source, Disabled):
+            raise TargetNotFoundError(
+                node=self.model,
+                target_name=f"{source_name}.{table_name}",
+                target_kind="source",
+                disabled=(isinstance(target_source, Disabled)),
+            )
+        # For unit tests, this isn't a "real" source, it's a ModelNode taking
+        # the place of a source. We don't really need to return the relation here,
+        # we just need to set_cte, but skipping it confuses typing. We *do* need
+        # the relation in the "this" property.
+        self.model.set_cte(target_source.unique_id, None)
+        return self.Relation.create_ephemeral_from(target_source)
 
 
 # metric` implementations
@@ -644,10 +675,8 @@ class ModelConfiguredVar(Var):
         package_name = self._node.package_name
 
         if package_name != self._config.project_name:
-            if package_name not in dependencies:
-                # I don't think this is actually reachable
-                raise PackageNotInDepsError(package_name, node=self._node)
-            yield dependencies[package_name]
+            if package_name in dependencies:
+                yield dependencies[package_name]
         yield self._config
 
     def _generate_merged(self) -> Mapping[str, Any]:
@@ -674,6 +703,22 @@ class ParseVar(ModelConfiguredVar):
 
 class RuntimeVar(ModelConfiguredVar):
     pass
+
+
+class UnitTestVar(RuntimeVar):
+    def __init__(
+        self,
+        context: Dict[str, Any],
+        config: RuntimeConfig,
+        node: Resource,
+    ) -> None:
+        config_copy = None
+        assert isinstance(node, UnitTestNode)
+        if node.overrides and node.overrides.vars:
+            config_copy = deepcopy(config)
+            config_copy.cli_vars.update(node.overrides.vars)
+
+        super().__init__(context, config_copy or config, node=node)
 
 
 # Providers
@@ -714,6 +759,16 @@ class RuntimeProvider(Provider):
     Var = RuntimeVar
     ref = RuntimeRefResolver
     source = RuntimeSourceResolver
+    metric = RuntimeMetricResolver
+
+
+class RuntimeUnitTestProvider(Provider):
+    execute = True
+    Config = RuntimeConfigObject
+    DatabaseWrapper = RuntimeDatabaseWrapper
+    Var = UnitTestVar
+    ref = RuntimeUnitTestRefResolver
+    source = RuntimeUnitTestSourceResolver
     metric = RuntimeMetricResolver
 
 
@@ -1300,8 +1355,11 @@ class ProviderContext(ManifestContext):
         return_value = None
         if var.startswith(SECRET_ENV_PREFIX):
             raise SecretEnvVarLocationError(var)
-        if var in os.environ:
-            return_value = os.environ[var]
+
+        env = get_invocation_context().env
+
+        if var in env:
+            return_value = env[var]
         elif default is not None:
             return_value = default
 
@@ -1320,7 +1378,7 @@ class ProviderContext(ManifestContext):
                 # reparsing. If the default changes, the file will have been updated and therefore
                 # will be scheduled for reparsing anyways.
                 self.manifest.env_vars[var] = (
-                    return_value if var in os.environ else DEFAULT_ENV_PLACEHOLDER
+                    return_value if var in env else DEFAULT_ENV_PLACEHOLDER
                 )
 
                 # hooks come from dbt_project.yml which doesn't have a real file_id
@@ -1368,7 +1426,7 @@ class MacroContext(ProviderContext):
 
     def __init__(
         self,
-        model: Macro,
+        model: MacroProtocol,
         config: RuntimeConfig,
         manifest: Manifest,
         provider: Provider,
@@ -1388,7 +1446,7 @@ class ModelContext(ProviderContext):
 
     @contextproperty()
     def pre_hooks(self) -> List[Dict[str, Any]]:
-        if self.model.resource_type in [NodeType.Source, NodeType.Test]:
+        if self.model.resource_type in [NodeType.Source, NodeType.Test, NodeType.Unit]:
             return []
         # TODO CT-211
         return [
@@ -1397,7 +1455,7 @@ class ModelContext(ProviderContext):
 
     @contextproperty()
     def post_hooks(self) -> List[Dict[str, Any]]:
-        if self.model.resource_type in [NodeType.Source, NodeType.Test]:
+        if self.model.resource_type in [NodeType.Source, NodeType.Test, NodeType.Unit]:
             return []
         # TODO CT-211
         return [
@@ -1405,30 +1463,22 @@ class ModelContext(ProviderContext):
         ]
 
     @contextproperty()
-    def sql(self) -> Optional[str]:
-        # only doing this in sql model for backward compatible
-        if self.model.language == ModelLanguage.sql:  # type: ignore[union-attr]
-            # If the model is deferred and the adapter doesn't support zero-copy cloning, then select * from the prod
-            # relation
-            if getattr(self.model, "defer_relation", None):
-                # TODO https://github.com/dbt-labs/dbt-core/issues/7976
-                return f"select * from {self.model.defer_relation.relation_name or str(self.defer_relation)}"  # type: ignore[union-attr]
-            elif getattr(self.model, "extra_ctes_injected", None):
-                # TODO CT-211
-                return self.model.compiled_code  # type: ignore[union-attr]
-            else:
-                return None
-        else:
-            return None
-
-    @contextproperty()
     def compiled_code(self) -> Optional[str]:
-        if getattr(self.model, "defer_relation", None):
+        # TODO: avoid routing on args.which if possible
+        if getattr(self.model, "defer_relation", None) and self.config.args.which == "clone":
             # TODO https://github.com/dbt-labs/dbt-core/issues/7976
             return f"select * from {self.model.defer_relation.relation_name or str(self.defer_relation)}"  # type: ignore[union-attr]
         elif getattr(self.model, "extra_ctes_injected", None):
             # TODO CT-211
             return self.model.compiled_code  # type: ignore[union-attr]
+        else:
+            return None
+
+    @contextproperty()
+    def sql(self) -> Optional[str]:
+        # only set this for sql models, for backward compatibility
+        if self.model.language == ModelLanguage.sql:  # type: ignore[union-attr]
+            return self.compiled_code
         else:
             return None
 
@@ -1483,11 +1533,38 @@ class ModelContext(ProviderContext):
         object for that stateful other
         """
         if getattr(self.model, "defer_relation", None):
-            return self.db_wrapper.Relation.create_from_node(
+            return self.db_wrapper.Relation.create_from(
                 self.config, self.model.defer_relation  # type: ignore
             )
         else:
             return None
+
+
+class UnitTestContext(ModelContext):
+    model: UnitTestNode
+
+    @contextmember()
+    def env_var(self, var: str, default: Optional[str] = None) -> str:
+        """The env_var() function. Return the overriden unit test environment variable named 'var'.
+
+        If there is no unit test override, return the environment variable named 'var'.
+
+        If there is no such environment variable set, return the default.
+
+        If the default is None, raise an exception for an undefined variable.
+        """
+        if self.model.overrides and var in self.model.overrides.env_vars:
+            return self.model.overrides.env_vars[var]
+        else:
+            return super().env_var(var, default)
+
+    @contextproperty()
+    def this(self) -> Optional[str]:
+        if self.model.this_input_node_unique_id:
+            this_node = self.manifest.expect(self.model.this_input_node_unique_id)
+            self.model.set_cte(this_node.unique_id, None)  # type: ignore
+            return self.adapter.Relation.add_ephemeral_prefix(this_node.name)
+        return None
 
 
 # This is called by '_context_for', used in 'render_with_context'
@@ -1525,13 +1602,31 @@ def generate_runtime_model_context(
 
 
 def generate_runtime_macro_context(
-    macro: Macro,
+    macro: MacroProtocol,
     config: RuntimeConfig,
     manifest: Manifest,
     package_name: Optional[str],
 ) -> Dict[str, Any]:
     ctx = MacroContext(macro, config, manifest, OperationProvider(), package_name)
     return ctx.to_dict()
+
+
+def generate_runtime_unit_test_context(
+    unit_test: UnitTestNode,
+    config: RuntimeConfig,
+    manifest: Manifest,
+) -> Dict[str, Any]:
+    ctx = UnitTestContext(unit_test, config, manifest, RuntimeUnitTestProvider(), None)
+    ctx_dict = ctx.to_dict()
+
+    if unit_test.overrides and unit_test.overrides.macros:
+        for macro_name, macro_value in unit_test.overrides.macros.items():
+            context_value = ctx_dict.get(macro_name)
+            if isinstance(context_value, MacroGenerator):
+                ctx_dict[macro_name] = UnitTestMacroGenerator(context_value, macro_value)
+            else:
+                ctx_dict[macro_name] = macro_value
+    return ctx_dict
 
 
 class ExposureRefResolver(BaseResolver):
@@ -1694,8 +1789,10 @@ class TestContext(ProviderContext):
         return_value = None
         if var.startswith(SECRET_ENV_PREFIX):
             raise SecretEnvVarLocationError(var)
-        if var in os.environ:
-            return_value = os.environ[var]
+
+        env = get_invocation_context().env
+        if var in env:
+            return_value = env[var]
         elif default is not None:
             return_value = default
 
@@ -1707,7 +1804,7 @@ class TestContext(ProviderContext):
                 # reparsing. If the default changes, the file will have been updated and therefore
                 # will be scheduled for reparsing anyways.
                 self.manifest.env_vars[var] = (
-                    return_value if var in os.environ else DEFAULT_ENV_PLACEHOLDER
+                    return_value if var in env else DEFAULT_ENV_PLACEHOLDER
                 )
                 # the "model" should only be test nodes, but just in case, check
                 # TODO CT-211

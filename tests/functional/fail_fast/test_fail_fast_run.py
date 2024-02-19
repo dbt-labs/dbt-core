@@ -44,15 +44,15 @@ class TestFastFailingDuringRun(FailFastBase):
 
 class TestFailFastFromConfig(FailFastBase):
     @pytest.fixture(scope="class")
-    def profiles_config_update(self):
+    def project_config_update(self):
         return {
-            "config": {
+            "flags": {
                 "send_anonymous_usage_stats": False,
                 "fail_fast": True,
             }
         }
 
-    def test_fail_fast_run_user_config(
+    def test_fail_fast_run_project_flags(
         self,
         project,
         models,  # noqa: F811

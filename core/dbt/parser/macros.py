@@ -2,7 +2,8 @@ from typing import Iterable, List
 
 import jinja2
 
-from dbt.clients import jinja
+from dbt_common.clients import jinja
+from dbt.clients.jinja import get_supported_languages
 from dbt.contracts.graph.unparsed import UnparsedMacro
 from dbt.contracts.graph.nodes import Macro
 from dbt.contracts.files import FilePath, SourceFile
@@ -10,7 +11,7 @@ from dbt.exceptions import ParsingError
 from dbt.node_types import NodeType
 from dbt.parser.base import BaseParser
 from dbt.parser.search import FileBlock, filesystem_search
-from dbt.utils import MACRO_PREFIX
+from dbt_common.utils import MACRO_PREFIX
 
 
 class MacroParser(BaseParser[Macro]):
@@ -31,10 +32,11 @@ class MacroParser(BaseParser[Macro]):
 
     def parse_macro(self, block: jinja.BlockTag, base_node: UnparsedMacro, name: str) -> Macro:
         unique_id = self.generate_unique_id(name)
+        macro_sql = block.full_block or ""
 
         return Macro(
             path=base_node.path,
-            macro_sql=block.full_block,
+            macro_sql=macro_sql,
             original_file_path=base_node.original_file_path,
             package_name=base_node.package_name,
             resource_type=base_node.resource_type,
@@ -48,7 +50,7 @@ class MacroParser(BaseParser[Macro]):
                 t
                 for t in jinja.extract_toplevel_blocks(
                     base_node.raw_code,
-                    allowed_blocks={"macro", "materialization", "test"},
+                    allowed_blocks={"macro", "materialization", "test", "data_test"},
                     collect_raw_data=False,
                 )
                 if isinstance(t, jinja.BlockTag)
@@ -64,16 +66,28 @@ class MacroParser(BaseParser[Macro]):
                 e.add_node(base_node)
                 raise
 
-            macro_nodes = list(ast.find_all(jinja2.nodes.Macro))
+            if (
+                isinstance(ast, jinja2.nodes.Template)
+                and hasattr(ast, "body")
+                and len(ast.body) == 1
+                and isinstance(ast.body[0], jinja2.nodes.Macro)
+            ):
+                # If the top level node in the Template is a Macro, things look
+                # good and this is much faster than traversing the full ast, as
+                # in the following else clause. It's not clear if that traversal
+                # is ever really needed.
+                macro = ast.body[0]
+            else:
+                macro_nodes = list(ast.find_all(jinja2.nodes.Macro))
 
-            if len(macro_nodes) != 1:
-                # things have gone disastrously wrong, we thought we only
-                # parsed one block!
-                raise ParsingError(
-                    f"Found multiple macros in {block.full_block}, expected 1", node=base_node
-                )
+                if len(macro_nodes) != 1:
+                    # things have gone disastrously wrong, we thought we only
+                    # parsed one block!
+                    raise ParsingError(
+                        f"Found multiple macros in {block.full_block}, expected 1", node=base_node
+                    )
 
-            macro = macro_nodes[0]
+                macro = macro_nodes[0]
 
             if not macro.name.startswith(MACRO_PREFIX):
                 continue
@@ -82,7 +96,7 @@ class MacroParser(BaseParser[Macro]):
             node = self.parse_macro(block, base_node, name)
             # get supported_languages for materialization macro
             if block.block_type_name == "materialization":
-                node.supported_languages = jinja.get_supported_languages(macro)
+                node.supported_languages = get_supported_languages(macro)
             yield node
 
     def parse_file(self, block: FileBlock):

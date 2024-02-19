@@ -61,33 +61,27 @@ setup(
         # with major versions in each new minor version of dbt-core.
         "click>=8.0.2,<9",
         "networkx>=2.3,<4",
+        "requests<3.0.0",  # should match dbt-common
         # ----
         # These packages are major-version-0. Keep upper bounds on upcoming minor versions (which could have breaking changes)
         # and check compatibility / bump in each new minor version of dbt-core.
-        "colorama>=0.3.9,<0.5",
         "pathspec>=0.9,<0.12",
-        "isodate>=0.6,<0.7",
-        # ----
         "sqlparse>=0.2.3,<0.5",
         # ----
         # These are major-version-0 packages also maintained by dbt-labs. Accept patches.
         "dbt-extractor~=0.5.0",
         "minimal-snowplow-tracker~=0.0.2",
-        "dbt-semantic-interfaces~=0.4.0",
+        "dbt-semantic-interfaces~=0.5.0a2",
+        "dbt-common~=0.1.3",
+        "dbt-adapters~=0.1.0a2",
         # ----
         # Expect compatibility with all new versions of these packages, so lower bounds only.
-        "jsonschema>=3.0",
         "packaging>20.9",
         "protobuf>=4.0.0",
         "pytz>=2015.7",
         "pyyaml>=6.0",
+        "daff>=1.3.46",
         "typing-extensions>=4.4",
-        # ----
-        # Match snowflake-connector-python, to ensure compatibility in dbt-snowflake
-        "cffi>=1.9,<2.0.0",
-        "idna>=2.5,<4",
-        "requests<3.0.0",
-        "urllib3~=1.0",
         # ----
     ],
     zip_safe=False,

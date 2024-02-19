@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Start using `Mergeable` from dbt-common
+time: 2024-02-01T12:54:16.462414-08:00
+custom:
+  Author: QMalcolm
+  Issue: "9505"

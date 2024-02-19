@@ -85,7 +85,6 @@ def model(dbt, _):
 """
 
 model_schema_yml = """
-version: 2
 models:
   - name: my_model
     config:
@@ -101,7 +100,7 @@ models:
             - type: primary_key
             - type: check
               expression: (id > 0)
-        tests:
+        data_tests:
           - unique
       - name: color
         data_type: string
@@ -110,7 +109,6 @@ models:
 """
 
 model_schema_alias_types_false_yml = """
-version: 2
 models:
   - name: my_model
     config:
@@ -127,7 +125,7 @@ models:
             - type: primary_key
             - type: check
               expression: (id > 0)
-        tests:
+        data_tests:
           - unique
       - name: color
         data_type: string
@@ -136,7 +134,6 @@ models:
 """
 
 model_schema_ignore_unsupported_yml = """
-version: 2
 models:
   - name: my_model
     config:
@@ -155,7 +152,7 @@ models:
             - type: check
               warn_unsupported: False
               expression: (id > 0)
-        tests:
+        data_tests:
           - unique
       - name: color
         data_type: text
@@ -164,7 +161,6 @@ models:
 """
 
 model_schema_errors_yml = """
-version: 2
 models:
   - name: my_model
     config:
@@ -179,7 +175,7 @@ models:
             - type: primary_key
             - type: check
               expression: (id > 0)
-        tests:
+        data_tests:
           - unique
       - name: color
         data_type: text
@@ -197,7 +193,7 @@ models:
             - type: primary_key
             - type: check
               expression: (id > 0)
-        tests:
+        data_tests:
           - unique
       - name: color
         data_type: text
@@ -206,7 +202,6 @@ models:
 """
 
 model_schema_blank_yml = """
-version: 2
 models:
   - name: my_model
     config:
@@ -215,7 +210,6 @@ models:
 """
 
 model_schema_complete_datatypes_yml = """
-version: 2
 models:
   - name: my_model
     columns:
@@ -228,7 +222,7 @@ models:
           - type: primary_key
           - type: check
             expression: (id > 0)
-        tests:
+        data_tests:
           - unique
       - name: color
         data_type: text
@@ -237,7 +231,6 @@ models:
 """
 
 model_schema_incomplete_datatypes_yml = """
-version: 2
 models:
   - name: my_model
     columns:
@@ -250,7 +243,7 @@ models:
           - type: primary_key
           - type: check
             expression: (id > 0)
-        tests:
+        data_tests:
           - unique
       - name: color
       - name: date_day

@@ -1,119 +1,27 @@
-from dataclasses import field, Field, dataclass
-from enum import Enum
-from itertools import chain
-from typing import Any, List, Optional, Dict, Union, Type, TypeVar, Callable
+from dataclasses import field, dataclass
+from typing import Any, List, Optional, Dict, Union, Type
 from typing_extensions import Annotated
 
-from dbt.dataclass_schema import (
+from dbt.artifacts.resources import (
+    ExposureConfig,
+    MetricConfig,
+    SavedQueryConfig,
+    SemanticModelConfig,
+    SourceConfig,
+)
+from dbt_common.contracts.config.base import BaseConfig, MergeBehavior, CompareBehavior
+from dbt_common.contracts.config.materialization import OnConfigurationChangeOption
+from dbt_common.contracts.config.metadata import Metadata, ShowBehavior
+from dbt_common.dataclass_schema import (
     dbtClassMixin,
     ValidationError,
-    StrEnum,
 )
-from dbt.contracts.graph.unparsed import AdditionalPropertiesAllowed, Docs
+from dbt.contracts.graph.unparsed import Docs
 from dbt.contracts.graph.utils import validate_color
-from dbt.contracts.util import Replaceable, list_str
-from dbt.exceptions import DbtInternalError, CompilationError
+from dbt.contracts.util import list_str
 from dbt import hooks
 from dbt.node_types import NodeType, AccessType
-from dbt_semantic_interfaces.type_enums.export_destination_type import ExportDestinationType
 from mashumaro.jsonschema.annotations import Pattern
-
-
-M = TypeVar("M", bound="Metadata")
-
-
-def _get_meta_value(cls: Type[M], fld: Field, key: str, default: Any) -> M:
-    # a metadata field might exist. If it does, it might have a matching key.
-    # If it has both, make sure the value is valid and return it. If it
-    # doesn't, return the default.
-    if fld.metadata:
-        value = fld.metadata.get(key, default)
-    else:
-        value = default
-
-    try:
-        return cls(value)
-    except ValueError as exc:
-        raise DbtInternalError(f"Invalid {cls} value: {value}") from exc
-
-
-def _set_meta_value(obj: M, key: str, existing: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    if existing is None:
-        result = {}
-    else:
-        result = existing.copy()
-    result.update({key: obj})
-    return result
-
-
-class Metadata(Enum):
-    @classmethod
-    def from_field(cls: Type[M], fld: Field) -> M:
-        default = cls.default_field()
-        key = cls.metadata_key()
-
-        return _get_meta_value(cls, fld, key, default)
-
-    def meta(self, existing: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        key = self.metadata_key()
-        return _set_meta_value(self, key, existing)
-
-    @classmethod
-    def default_field(cls) -> "Metadata":
-        raise NotImplementedError("Not implemented")
-
-    @classmethod
-    def metadata_key(cls) -> str:
-        raise NotImplementedError("Not implemented")
-
-
-class MergeBehavior(Metadata):
-    Append = 1
-    Update = 2
-    Clobber = 3
-    DictKeyAppend = 4
-
-    @classmethod
-    def default_field(cls) -> "MergeBehavior":
-        return cls.Clobber
-
-    @classmethod
-    def metadata_key(cls) -> str:
-        return "merge"
-
-
-class ShowBehavior(Metadata):
-    Show = 1
-    Hide = 2
-
-    @classmethod
-    def default_field(cls) -> "ShowBehavior":
-        return cls.Show
-
-    @classmethod
-    def metadata_key(cls) -> str:
-        return "show_hide"
-
-    @classmethod
-    def should_show(cls, fld: Field) -> bool:
-        return cls.from_field(fld) == cls.Show
-
-
-class CompareBehavior(Metadata):
-    Include = 1
-    Exclude = 2
-
-    @classmethod
-    def default_field(cls) -> "CompareBehavior":
-        return cls.Include
-
-    @classmethod
-    def metadata_key(cls) -> str:
-        return "compare"
-
-    @classmethod
-    def should_include(cls, fld: Field) -> bool:
-        return cls.from_field(fld) == cls.Include
 
 
 def metas(*metas: Metadata) -> Dict[str, Any]:
@@ -121,62 +29,6 @@ def metas(*metas: Metadata) -> Dict[str, Any]:
     for m in metas:
         existing = m.meta(existing)
     return existing
-
-
-def _listify(value: Any) -> List:
-    if isinstance(value, list):
-        return value[:]
-    else:
-        return [value]
-
-
-# There are two versions of this code. The one here is for config
-# objects, the one in _add_config_call in context_config.py is for
-# config_call_dict dictionaries.
-def _merge_field_value(
-    merge_behavior: MergeBehavior,
-    self_value: Any,
-    other_value: Any,
-):
-    if merge_behavior == MergeBehavior.Clobber:
-        return other_value
-    elif merge_behavior == MergeBehavior.Append:
-        return _listify(self_value) + _listify(other_value)
-    elif merge_behavior == MergeBehavior.Update:
-        if not isinstance(self_value, dict):
-            raise DbtInternalError(f"expected dict, got {self_value}")
-        if not isinstance(other_value, dict):
-            raise DbtInternalError(f"expected dict, got {other_value}")
-        value = self_value.copy()
-        value.update(other_value)
-        return value
-    elif merge_behavior == MergeBehavior.DictKeyAppend:
-        if not isinstance(self_value, dict):
-            raise DbtInternalError(f"expected dict, got {self_value}")
-        if not isinstance(other_value, dict):
-            raise DbtInternalError(f"expected dict, got {other_value}")
-        new_dict = {}
-        for key in self_value.keys():
-            new_dict[key] = _listify(self_value[key])
-        for key in other_value.keys():
-            extend = False
-            new_key = key
-            # This might start with a +, to indicate we should extend the list
-            # instead of just clobbering it
-            if new_key.startswith("+"):
-                new_key = key.lstrip("+")
-                extend = True
-            if new_key in new_dict and extend:
-                # extend the list
-                value = other_value[key]
-                new_dict[new_key].extend(_listify(value))
-            else:
-                # clobber the list
-                new_dict[new_key] = _listify(other_value[key])
-        return new_dict
-
-    else:
-        raise DbtInternalError(f"Got an invalid merge_behavior: {merge_behavior}")
 
 
 def insensitive_patterns(*patterns: str):
@@ -190,245 +42,17 @@ class Severity(str):
     pass
 
 
-class OnConfigurationChangeOption(StrEnum):
-    Apply = "apply"
-    Continue = "continue"
-    Fail = "fail"
-
-    @classmethod
-    def default(cls) -> "OnConfigurationChangeOption":
-        return cls.Apply
-
-
 @dataclass
-class ContractConfig(dbtClassMixin, Replaceable):
+class ContractConfig(dbtClassMixin):
     enforced: bool = False
     alias_types: bool = True
 
 
 @dataclass
-class Hook(dbtClassMixin, Replaceable):
+class Hook(dbtClassMixin):
     sql: str
     transaction: bool = True
     index: Optional[int] = None
-
-
-T = TypeVar("T", bound="BaseConfig")
-
-
-@dataclass
-class BaseConfig(AdditionalPropertiesAllowed, Replaceable):
-    # enable syntax like: config['key']
-    def __getitem__(self, key):
-        return self.get(key)
-
-    # like doing 'get' on a dictionary
-    def get(self, key, default=None):
-        if hasattr(self, key):
-            return getattr(self, key)
-        elif key in self._extra:
-            return self._extra[key]
-        else:
-            return default
-
-    # enable syntax like: config['key'] = value
-    def __setitem__(self, key, value):
-        if hasattr(self, key):
-            setattr(self, key, value)
-        else:
-            self._extra[key] = value
-
-    def __delitem__(self, key):
-        if hasattr(self, key):
-            msg = (
-                'Error, tried to delete config key "{}": Cannot delete ' "built-in keys"
-            ).format(key)
-            raise CompilationError(msg)
-        else:
-            del self._extra[key]
-
-    def _content_iterator(self, include_condition: Callable[[Field], bool]):
-        seen = set()
-        for fld, _ in self._get_fields():
-            seen.add(fld.name)
-            if include_condition(fld):
-                yield fld.name
-
-        for key in self._extra:
-            if key not in seen:
-                seen.add(key)
-                yield key
-
-    def __iter__(self):
-        yield from self._content_iterator(include_condition=lambda f: True)
-
-    def __len__(self):
-        return len(self._get_fields()) + len(self._extra)
-
-    @staticmethod
-    def compare_key(
-        unrendered: Dict[str, Any],
-        other: Dict[str, Any],
-        key: str,
-    ) -> bool:
-        if key not in unrendered and key not in other:
-            return True
-        elif key not in unrendered and key in other:
-            return False
-        elif key in unrendered and key not in other:
-            return False
-        else:
-            return unrendered[key] == other[key]
-
-    @classmethod
-    def same_contents(cls, unrendered: Dict[str, Any], other: Dict[str, Any]) -> bool:
-        """This is like __eq__, except it ignores some fields."""
-        seen = set()
-        for fld, target_name in cls._get_fields():
-            key = target_name
-            seen.add(key)
-            if CompareBehavior.should_include(fld):
-                if not cls.compare_key(unrendered, other, key):
-                    return False
-
-        for key in chain(unrendered, other):
-            if key not in seen:
-                seen.add(key)
-                if not cls.compare_key(unrendered, other, key):
-                    return False
-        return True
-
-    # This is used in 'add_config_call' to create the combined config_call_dict.
-    # 'meta' moved here from node
-    mergebehavior = {
-        "append": ["pre-hook", "pre_hook", "post-hook", "post_hook", "tags"],
-        "update": [
-            "quoting",
-            "column_types",
-            "meta",
-            "docs",
-            "contract",
-        ],
-        "dict_key_append": ["grants"],
-    }
-
-    @classmethod
-    def _merge_dicts(cls, src: Dict[str, Any], data: Dict[str, Any]) -> Dict[str, Any]:
-        """Find all the items in data that match a target_field on this class,
-        and merge them with the data found in `src` for target_field, using the
-        field's specified merge behavior. Matching items will be removed from
-        `data` (but _not_ `src`!).
-
-        Returns a dict with the merge results.
-
-        That means this method mutates its input! Any remaining values in data
-        were not merged.
-        """
-        result = {}
-
-        for fld, target_field in cls._get_fields():
-            if target_field not in data:
-                continue
-
-            data_attr = data.pop(target_field)
-            if target_field not in src:
-                result[target_field] = data_attr
-                continue
-
-            merge_behavior = MergeBehavior.from_field(fld)
-            self_attr = src[target_field]
-
-            result[target_field] = _merge_field_value(
-                merge_behavior=merge_behavior,
-                self_value=self_attr,
-                other_value=data_attr,
-            )
-        return result
-
-    def update_from(self: T, data: Dict[str, Any], adapter_type: str, validate: bool = True) -> T:
-        """Given a dict of keys, update the current config from them, validate
-        it, and return a new config with the updated values
-        """
-        # sadly, this is a circular import
-        from dbt.adapters.factory import get_config_class_by_name
-
-        dct = self.to_dict(omit_none=False)
-
-        adapter_config_cls = get_config_class_by_name(adapter_type)
-
-        self_merged = self._merge_dicts(dct, data)
-        dct.update(self_merged)
-
-        adapter_merged = adapter_config_cls._merge_dicts(dct, data)
-        dct.update(adapter_merged)
-
-        # any remaining fields must be "clobber"
-        dct.update(data)
-
-        # any validation failures must have come from the update
-        if validate:
-            self.validate(dct)
-        return self.from_dict(dct)
-
-    def finalize_and_validate(self: T) -> T:
-        dct = self.to_dict(omit_none=False)
-        self.validate(dct)
-        return self.from_dict(dct)
-
-
-@dataclass
-class SemanticModelConfig(BaseConfig):
-    enabled: bool = True
-    group: Optional[str] = field(
-        default=None,
-        metadata=CompareBehavior.Exclude.meta(),
-    )
-    meta: Dict[str, Any] = field(
-        default_factory=dict,
-        metadata=MergeBehavior.Update.meta(),
-    )
-
-
-@dataclass
-class SavedQueryConfig(BaseConfig):
-    """Where config options for SavedQueries are stored.
-
-    This class is much like many other node config classes. It's likely that
-    this class will expand in the direction of what's in the `NodeAndTestConfig`
-    class. It might make sense to clean the various *Config classes into one at
-    some point.
-    """
-
-    enabled: bool = True
-    group: Optional[str] = field(
-        default=None,
-        metadata=CompareBehavior.Exclude.meta(),
-    )
-    meta: Dict[str, Any] = field(
-        default_factory=dict,
-        metadata=MergeBehavior.Update.meta(),
-    )
-    export_as: Optional[ExportDestinationType] = None
-    schema: Optional[str] = None
-
-
-@dataclass
-class MetricConfig(BaseConfig):
-    enabled: bool = True
-    group: Optional[str] = field(
-        default=None,
-        metadata=CompareBehavior.Exclude.meta(),
-    )
-
-
-@dataclass
-class ExposureConfig(BaseConfig):
-    enabled: bool = True
-
-
-@dataclass
-class SourceConfig(BaseConfig):
-    enabled: bool = True
 
 
 @dataclass
@@ -552,6 +176,11 @@ class ModelConfig(NodeConfig):
         default=AccessType.Protected,
         metadata=MergeBehavior.Update.meta(),
     )
+
+
+@dataclass
+class UnitTestNodeConfig(NodeConfig):
+    expected_rows: List[Dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
@@ -726,6 +355,18 @@ class SnapshotConfig(EmptySnapshotConfig):
         return self.from_dict(data)
 
 
+@dataclass
+class UnitTestConfig(BaseConfig):
+    tags: Union[str, List[str]] = field(
+        default_factory=list_str,
+        metadata=metas(ShowBehavior.Hide, MergeBehavior.Append, CompareBehavior.Exclude),
+    )
+    meta: Dict[str, Any] = field(
+        default_factory=dict,
+        metadata=MergeBehavior.Update.meta(),
+    )
+
+
 RESOURCE_TYPES: Dict[NodeType, Type[BaseConfig]] = {
     NodeType.Metric: MetricConfig,
     NodeType.SemanticModel: SemanticModelConfig,
@@ -736,6 +377,7 @@ RESOURCE_TYPES: Dict[NodeType, Type[BaseConfig]] = {
     NodeType.Test: TestConfig,
     NodeType.Model: NodeConfig,
     NodeType.Snapshot: SnapshotConfig,
+    NodeType.Unit: UnitTestConfig,
 }
 
 

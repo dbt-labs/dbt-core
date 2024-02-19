@@ -16,14 +16,15 @@ from dbt.contracts.graph.nodes import Resource
 from dbt.exceptions import (
     SecretEnvVarLocationError,
     EnvVarMissingError,
-    MacroReturn,
     RequiredVarNotFoundError,
     SetStrictWrongTypeError,
     ZipStrictWrongTypeError,
 )
-from dbt.events.functions import fire_event, get_invocation_id
+from dbt_common.context import get_invocation_context
+from dbt_common.exceptions.macros import MacroReturn
+from dbt_common.events.functions import fire_event, get_invocation_id
 from dbt.events.types import JinjaLogInfo, JinjaLogDebug
-from dbt.events.contextvars import get_node_info
+from dbt_common.events.contextvars import get_node_info
 from dbt.version import __version__ as dbt_version
 
 # These modules are added to the context. Consider alternative
@@ -303,8 +304,9 @@ class BaseContext(metaclass=ContextMeta):
         return_value = None
         if var.startswith(SECRET_ENV_PREFIX):
             raise SecretEnvVarLocationError(var)
-        if var in os.environ:
-            return_value = os.environ[var]
+        env = get_invocation_context().env
+        if var in env:
+            return_value = env[var]
         elif default is not None:
             return_value = default
 
@@ -313,7 +315,7 @@ class BaseContext(metaclass=ContextMeta):
             # that so we can skip partial parsing.  Otherwise the file will be scheduled for
             # reparsing. If the default changes, the file will have been updated and therefore
             # will be scheduled for reparsing anyways.
-            self.env_vars[var] = return_value if var in os.environ else DEFAULT_ENV_PLACEHOLDER
+            self.env_vars[var] = return_value if var in env else DEFAULT_ENV_PLACEHOLDER
 
             return return_value
         else:

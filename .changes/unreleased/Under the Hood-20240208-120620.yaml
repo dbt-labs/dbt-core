@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Move data parts of `SourceDefinition` class to dbt/artifacts
+time: 2024-02-08T12:06:20.696709-08:00
+custom:
+  Author: QMalcolm
+  Issue: "9384"

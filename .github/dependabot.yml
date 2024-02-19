@@ -11,11 +11,6 @@ updates:
     schedule:
       interval: "daily"
     rebase-strategy: "disabled"
-  - package-ecosystem: "pip"
-    directory: "/plugins/postgres"
-    schedule:
-      interval: "daily"
-    rebase-strategy: "disabled"
 
   # docker dependencies
   - package-ecosystem: "docker"

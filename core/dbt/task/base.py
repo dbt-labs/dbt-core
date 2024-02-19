@@ -8,41 +8,39 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Type, Union
 
+from dbt.compilation import Compiler
+import dbt_common.exceptions.base
 import dbt.exceptions
 from dbt import tracking
-from dbt.adapters.factory import get_adapter
 from dbt.config import RuntimeConfig, Project
 from dbt.config.profile import read_profile
 from dbt.constants import DBT_PROJECT_FILE_NAME
 from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.results import (
-    NodeStatus,
-    RunResult,
-    collect_timing_info,
-    RunStatus,
-    RunningStatus,
-    TimingInfo,
-)
-from dbt.events.contextvars import get_node_info
-from dbt.events.functions import fire_event
+from dbt.artifacts.schemas.results import TimingInfo, collect_timing_info
+from dbt.artifacts.schemas.results import NodeStatus, RunningStatus, RunStatus
+from dbt.artifacts.schemas.run import RunResult
+from dbt_common.events.contextvars import get_node_info
+from dbt_common.events.functions import fire_event
 from dbt.events.types import (
-    LogDbtProjectError,
-    LogDbtProfileError,
+    SkippingDetails,
+    NodeCompiling,
+    NodeExecuting,
     CatchableExceptionOnRun,
     InternalErrorOnRun,
     GenericExceptionOnRun,
     NodeConnectionReleaseError,
     LogDebugStackTrace,
-    SkippingDetails,
     LogSkipBecauseError,
-    NodeCompiling,
-    NodeExecuting,
 )
-from dbt.exceptions import (
-    NotImplementedError,
-    CompilationError,
+from dbt_common.exceptions import (
     DbtRuntimeError,
     DbtInternalError,
+    CompilationError,
+    NotImplementedError,
+)
+from dbt.events.types import (
+    LogDbtProjectError,
+    LogDbtProfileError,
 )
 from dbt.flags import get_flags
 from dbt.graph import Graph
@@ -103,17 +101,17 @@ class BaseTask(metaclass=ABCMeta):
             fire_event(LogDbtProjectError(exc=str(exc)))
 
             tracking.track_invalid_invocation(args=args, result_type=exc.result_type)
-            raise dbt.exceptions.DbtRuntimeError("Could not run dbt") from exc
+            raise dbt_common.exceptions.DbtRuntimeError("Could not run dbt") from exc
         except dbt.exceptions.DbtProfileError as exc:
             all_profile_names = list(read_profiles(get_flags().PROFILES_DIR).keys())
             fire_event(LogDbtProfileError(exc=str(exc), profiles=all_profile_names))
             tracking.track_invalid_invocation(args=args, result_type=exc.result_type)
-            raise dbt.exceptions.DbtRuntimeError("Could not run dbt") from exc
+            raise dbt_common.exceptions.DbtRuntimeError("Could not run dbt") from exc
         return cls(args, config, *pargs, **kwargs)
 
     @abstractmethod
     def run(self):
-        raise dbt.exceptions.NotImplementedError("Not Implemented")
+        raise dbt_common.exceptions.base.NotImplementedError("Not Implemented")
 
     def interpret_results(self, results):
         return True
@@ -128,7 +126,7 @@ def get_nearest_project_dir(project_dir: Optional[str]) -> Path:
         if project_file.is_file():
             return cur_dir
         else:
-            raise dbt.exceptions.DbtRuntimeError(
+            raise dbt_common.exceptions.DbtRuntimeError(
                 "fatal: Invalid --project-dir flag. Not a dbt project. "
                 "Missing dbt_project.yml file"
             )
@@ -138,7 +136,7 @@ def get_nearest_project_dir(project_dir: Optional[str]) -> Path:
     if project_file.is_file():
         return cur_dir
     else:
-        raise dbt.exceptions.DbtRuntimeError(
+        raise dbt_common.exceptions.DbtRuntimeError(
             "fatal: Not a dbt project (or any of the parent directories). "
             "Missing dbt_project.yml file"
         )
@@ -160,6 +158,7 @@ class ConfiguredTask(BaseTask):
         super().__init__(args, config)
         self.graph: Optional[Graph] = None
         self.manifest = manifest
+        self.compiler = Compiler(self.config)
 
     def compile_manifest(self):
         if self.manifest is None:
@@ -167,10 +166,7 @@ class ConfiguredTask(BaseTask):
 
         start_compile_manifest = time.perf_counter()
 
-        # we cannot get adapter in init since it will break rpc #5579
-        adapter = get_adapter(self.config)
-        compiler = adapter.get_compiler()
-        self.graph = compiler.compile(self.manifest)
+        self.graph = self.compiler.compile(self.manifest)
 
         compile_time = time.perf_counter() - start_compile_manifest
         if dbt.tracking.active_user is not None:
@@ -195,6 +191,7 @@ class ExecutionContext:
 class BaseRunner(metaclass=ABCMeta):
     def __init__(self, config, adapter, node, node_index, num_nodes) -> None:
         self.config = config
+        self.compiler = Compiler(config)
         self.adapter = adapter
         self.node = node
         self.node_index = node_index
@@ -298,7 +295,9 @@ class BaseRunner(metaclass=ABCMeta):
 
     def compile_and_execute(self, manifest, ctx):
         result = None
-        with self.adapter.connection_for(self.node) if get_flags().INTROSPECT else nullcontext():
+        with self.adapter.connection_named(
+            self.node.unique_id, self.node
+        ) if get_flags().INTROSPECT else nullcontext():
             ctx.node.update_event_status(node_status=RunningStatus.Compiling)
             fire_event(
                 NodeCompiling(
@@ -308,7 +307,7 @@ class BaseRunner(metaclass=ABCMeta):
             with collect_timing_info("compile", ctx.timing.append):
                 # if we fail here, we still have a compiled node to return
                 # this has the benefit of showing a build path for the errant
-                # model
+                # model.  This calls the 'compile' method in CompileTask
                 ctx.node = self.compile(manifest)
 
             # for ephemeral nodes, we only want to compile, not run
@@ -337,7 +336,11 @@ class BaseRunner(metaclass=ABCMeta):
         return str(e)
 
     def _handle_internal_exception(self, e, ctx):
-        fire_event(InternalErrorOnRun(build_path=self.node.build_path, exc=str(e)))
+        fire_event(
+            InternalErrorOnRun(
+                build_path=self.node.build_path, exc=str(e), node_info=get_node_info()
+            )
+        )
         return str(e)
 
     def _handle_generic_exception(self, e, ctx):
@@ -346,6 +349,7 @@ class BaseRunner(metaclass=ABCMeta):
                 build_path=self.node.build_path,
                 unique_id=self.node.unique_id,
                 exc=str(e),
+                node_info=get_node_info(),
             )
         )
         fire_event(LogDebugStackTrace(exc_info=traceback.format_exc()))

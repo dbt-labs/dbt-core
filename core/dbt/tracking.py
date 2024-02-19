@@ -14,7 +14,7 @@ from snowplow_tracker import logger as sp_logger
 
 from dbt import version as dbt_version
 from dbt.clients.yaml_helper import safe_load, yaml  # noqa:F401
-from dbt.events.functions import fire_event, get_invocation_id
+from dbt_common.events.functions import fire_event, get_invocation_id
 from dbt.events.types import (
     DisableTracking,
     FlushEvents,
@@ -24,7 +24,8 @@ from dbt.events.types import (
     SendingEvent,
     TrackingInitializeFailure,
 )
-from dbt.exceptions import FailedToConnectError, NotImplementedError
+from dbt.adapters.exceptions import FailedToConnectError
+from dbt_common.exceptions import NotImplementedError
 
 sp_logger.setLevel(100)
 
@@ -471,7 +472,6 @@ class InvocationProcessor(logbook.Processor):
 
 
 def initialize_from_flags(send_anonymous_usage_stats, profiles_dir):
-    # Setting these used to be in UserConfig, but had to be moved here
     global active_user
     if send_anonymous_usage_stats:
         active_user = User(profiles_dir)
