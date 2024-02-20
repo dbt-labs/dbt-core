@@ -11,8 +11,8 @@ from dbt.artifacts.resources import (
     TestConfig,
     SnapshotConfig,
     SourceConfig,
+    ModelConfig,
 )
-from dbt.artifacts.resources import ModelConfig  # noqa
 from dbt_common.contracts.config.base import BaseConfig, MergeBehavior, CompareBehavior
 from dbt_common.contracts.config.metadata import Metadata, ShowBehavior
 from dbt.contracts.util import list_str
@@ -56,8 +56,6 @@ class UnitTestConfig(BaseConfig):
     )
 
 
-# We get weird failures if NodeType.Model below is changed
-# to have ModelConfig, like you'd expect
 RESOURCE_TYPES: Dict[NodeType, Type[BaseConfig]] = {
     NodeType.Metric: MetricConfig,
     NodeType.SemanticModel: SemanticModelConfig,
@@ -66,7 +64,7 @@ RESOURCE_TYPES: Dict[NodeType, Type[BaseConfig]] = {
     NodeType.Source: SourceConfig,
     NodeType.Seed: SeedConfig,
     NodeType.Test: TestConfig,
-    NodeType.Model: NodeConfig,
+    NodeType.Model: ModelConfig,
     NodeType.Snapshot: SnapshotConfig,
     NodeType.Unit: UnitTestConfig,
 }
