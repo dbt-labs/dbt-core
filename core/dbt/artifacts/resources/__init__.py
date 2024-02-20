@@ -17,17 +17,16 @@ from dbt.artifacts.resources.v1.components import (
     Quoting,
     Time,
 )
-from dbt.artifacts.resources.v1.manifest_nodes import (
-    Analysis,
-    HookNode,
-    Model,
-    SqlOperation,
-    Seed,
-    SingularTest,
-    TestMetadata,
-    GenericTest,
-    Snapshot,
-)
+from dbt.artifacts.resources.v1.analysis import Analysis
+from dbt.artifacts.resources.v1.hook import HookNode
+from dbt.artifacts.resources.v1.model import Model, ModelConfig
+from dbt.artifacts.resources.v1.sql_operation import SqlOperation
+from dbt.artifacts.resources.v1.seed import Seed, SeedConfig
+from dbt.artifacts.resources.v1.singular_test import SingularTest
+from dbt.artifacts.resources.v1.generic_test import GenericTest, TestMetadata
+from dbt.artifacts.resources.v1.snapshot import Snapshot, SnapshotConfig
+
+
 from dbt.artifacts.resources.v1.documentation import Documentation
 from dbt.artifacts.resources.v1.exposure import (
     Exposure,
@@ -79,15 +78,12 @@ from dbt.artifacts.resources.v1.semantic_model import (
 from dbt.artifacts.resources.v1.config import (
     NodeAndTestConfig,
     NodeConfig,
-    ModelConfig,
-    SeedConfig,
     TestConfig,
-    SnapshotConfig,
-    SourceConfig,
     Hook,
 )
 
 from dbt.artifacts.resources.v1.source_definition import (
+    SourceConfig,
     ExternalPartition,
     ExternalTable,
     SourceDefinition,

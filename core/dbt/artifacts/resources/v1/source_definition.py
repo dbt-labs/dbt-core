@@ -9,11 +9,16 @@ from dbt.artifacts.resources.v1.components import (
     HasRelationMetadata,
     Quoting,
 )
-from dbt.artifacts.resources.v1.config import SourceConfig
+from dbt.artifacts.resources.v1.config import BaseConfig
 from dbt_common.contracts.config.properties import AdditionalPropertiesAllowed
 from dbt_common.contracts.util import Mergeable
 from dbt_common.exceptions import CompilationError
 from typing import Any, Dict, List, Literal, Optional, Union
+
+
+@dataclass
+class SourceConfig(BaseConfig):
+    enabled: bool = True
 
 
 @dataclass
