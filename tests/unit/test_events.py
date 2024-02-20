@@ -360,6 +360,13 @@ sample_values = [
         total=0,
         execution_time=0,
     ),
+    core_types.LogNodeNoOpResult(
+        description="",
+        status="",
+        index=0,
+        total=0,
+        execution_time=0,
+    ),
     core_types.LogCancelLine(conn_name=""),
     core_types.DefaultSelector(name=""),
     core_types.NodeStart(),
