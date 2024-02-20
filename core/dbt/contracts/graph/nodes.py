@@ -253,7 +253,6 @@ class ParsedNode(NodeInfoMixin, ParsedNodeMandatory, SerializableType):
     docs: Docs = field(default_factory=Docs)
     patch_path: Optional[str] = None
     build_path: Optional[str] = None
-    deferred: bool = False
     unrendered_config: Dict[str, Any] = field(default_factory=dict)
     created_at: float = field(default_factory=lambda: time.time())
     config_call_dict: Dict[str, Any] = field(default_factory=dict)

@@ -450,7 +450,6 @@ class RunTask(CompileTask):
             required_schemas = self.get_model_schemas(adapter, selected_uids)
             self.create_schemas(adapter, required_schemas)
             self.populate_adapter_cache(adapter, required_schemas)
-            self.defer_to_manifest(adapter, selected_uids)
             self.safe_run_hooks(adapter, RunHookType.Start, {})
 
     def after_run(self, adapter, results) -> None:

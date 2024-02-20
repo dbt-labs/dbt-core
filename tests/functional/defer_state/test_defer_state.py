@@ -1,4 +1,3 @@
-import json
 import os
 import shutil
 from copy import deepcopy
@@ -87,17 +86,14 @@ class BaseDeferState:
     def run_and_save_state(self, project_root, with_snapshot=False):
         results = run_dbt(["seed"])
         assert len(results) == 1
-        assert not any(r.node.deferred for r in results)
         results = run_dbt(["run"])
         assert len(results) == 2
-        assert not any(r.node.deferred for r in results)
         results = run_dbt(["test"])
         assert len(results) == 2
 
         if with_snapshot:
             results = run_dbt(["snapshot"])
             assert len(results) == 1
-            assert not any(r.node.deferred for r in results)
 
         # copy files
         self.copy_state(project_root)
@@ -180,10 +176,6 @@ class TestRunDeferState(BaseDeferState):
         )
         assert other_schema not in results[0].node.compiled_code
         assert unique_schema in results[0].node.compiled_code
-
-        with open("target/manifest.json") as fp:
-            data = json.load(fp)
-        assert data["nodes"]["seed.test.seed"]["deferred"]
 
         assert len(results) == 1
 

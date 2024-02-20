@@ -1,10 +1,9 @@
 import threading
-from typing import AbstractSet, Any, List, Iterable, Set, Optional
+from typing import AbstractSet, Any, List, Iterable, Set
 
 from dbt.adapters.base import BaseRelation
 from dbt.clients.jinja import MacroGenerator
 from dbt.context.providers import generate_runtime_model_context
-from dbt.contracts.graph.manifest import WritableManifest
 from dbt.artifacts.schemas.run import RunStatus, RunResult
 from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_common.exceptions import DbtInternalError, CompilationError
@@ -94,11 +93,6 @@ class CloneTask(GraphRunnableTask):
     def raise_on_first_error(self):
         return False
 
-    def _get_deferred_manifest(self) -> Optional[WritableManifest]:
-        # Unlike other commands, 'clone' always requires a state manifest
-        # Load previous state, regardless of whether --defer flag has been set
-        return self._get_previous_state()
-
     def get_model_schemas(self, adapter, selected_uids: Iterable[str]) -> Set[BaseRelation]:
         if self.manifest is None:
             raise DbtInternalError("manifest was None in get_model_schemas")
@@ -122,8 +116,6 @@ class CloneTask(GraphRunnableTask):
 
     def before_run(self, adapter, selected_uids: AbstractSet[str]):
         with adapter.connection_named("master"):
-            # unlike in other tasks, we want to add information from the --state manifest *before* caching!
-            self.defer_to_manifest(adapter, selected_uids)
             # only create *our* schemas, but cache *other* schemas in addition
             schemas_to_create = super().get_model_schemas(adapter, selected_uids)
             self.create_schemas(adapter, schemas_to_create)

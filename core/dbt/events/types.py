@@ -57,12 +57,7 @@ class MainTrackingUserState(DebugLevel):
         return f"Tracking: {self.user_state}"
 
 
-class MergedFromState(DebugLevel):
-    def code(self) -> str:
-        return "A004"
-
-    def message(self) -> str:
-        return f"Merged {self.num_merged} items from state (sample: {self.sample})"
+# Removed A004: MergedFromState
 
 
 class MissingProfileTarget(InfoLevel):

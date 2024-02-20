@@ -63,6 +63,7 @@ class TestRuntimeRefResolver:
         mock_node.quoting_dict = {}
         mock_node.alias = "test"
         mock_node.is_ephemeral_model = is_ephemeral_model
+        mock_node.defer_relation = None
 
         # create limited relation
         with mock.patch("dbt.contracts.graph.nodes.ParsedNode", new=mock.Mock):

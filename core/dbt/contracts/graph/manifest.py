@@ -1,7 +1,7 @@
 import enum
 from collections import defaultdict
 from dataclasses import dataclass, field, replace
-from itertools import chain, islice
+from itertools import chain
 from mashumaro.mixins.msgpack import DataClassMessagePackMixin
 from multiprocessing.synchronize import Lock
 from typing import (
@@ -18,7 +18,6 @@ from typing import (
     TypeVar,
     Callable,
     Generic,
-    AbstractSet,
     ClassVar,
 )
 from typing_extensions import Protocol
@@ -67,7 +66,7 @@ from dbt.adapters.exceptions import DuplicateMacroInPackageError, DuplicateMater
 from dbt_common.helper_types import PathSet
 from dbt_common.events.functions import fire_event
 from dbt_common.events.contextvars import get_node_info
-from dbt.events.types import MergedFromState, UnpinnedRefNewVersionAvailable
+from dbt.events.types import UnpinnedRefNewVersionAvailable
 from dbt.node_types import NodeType, AccessType, REFABLE_NODE_TYPES, VERSIONED_NODE_TYPES
 from dbt.mp_context import get_mp_context
 import dbt_common.utils
@@ -1358,49 +1357,24 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             node.package_name != target_model.package_name and restrict_package_access
         )
 
-    # Called by GraphRunnableTask.defer_to_manifest
-    def merge_from_artifact(
-        self,
-        adapter,
-        other: "WritableManifest",
-        selected: AbstractSet[UniqueID],
-        favor_state: bool = False,
-    ) -> None:
-        """Given the selected unique IDs and a writable manifest, update this
-        manifest by replacing any unselected nodes with their counterpart.
+    # Called by requires.manifest after ManifestLoader.get_full_manifest
+    def merge_from_artifact(self, other: "WritableManifest") -> None:
+        """Update this manifest by adding the 'defer_relation' attribute to all nodes
+        with a counterpart in the stateful manifest used for deferral.
 
         Only non-ephemeral refable nodes are examined.
         """
         refables = set(REFABLE_NODE_TYPES)
-        merged = set()
         for unique_id, node in other.nodes.items():
             current = self.nodes.get(unique_id)
-            if current and (
-                node.resource_type in refables
-                and not node.is_ephemeral
-                and unique_id not in selected
-                and (
-                    not adapter.get_relation(current.database, current.schema, current.identifier)
-                    or favor_state
-                )
-            ):
-                merged.add(unique_id)
-                self.nodes[unique_id] = replace(node, deferred=True)
-
-            # for all other nodes, add 'defer_relation'
-            elif current and node.resource_type in refables and not node.is_ephemeral:
+            if current and node.resource_type in refables and not node.is_ephemeral:
                 defer_relation = DeferRelation(
                     node.database, node.schema, node.alias, node.relation_name
                 )
                 self.nodes[unique_id] = replace(current, defer_relation=defer_relation)
 
-        # Rebuild the flat_graph, which powers the 'graph' context variable,
-        # now that we've deferred some nodes
+        # Rebuild the flat_graph, which powers the 'graph' context variable
         self.build_flat_graph()
-
-        # log up to 5 items
-        sample = list(islice(merged, 5))
-        fire_event(MergedFromState(num_merged=len(merged), sample=sample))
 
     # Methods that were formerly in ParseResult
     def add_macro(self, source_file: SourceFile, macro: Macro):

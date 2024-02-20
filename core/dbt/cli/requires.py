@@ -281,7 +281,7 @@ def manifest(*args0, write=True, write_perf_info=False):
 
             runtime_config = ctx.obj["runtime_config"]
 
-            # a manifest has already been set on the context, so don't overwrite it
+            # if a manifest has already been set on the context, don't overwrite it
             if ctx.obj.get("manifest") is None:
                 ctx.obj["manifest"] = parse_manifest(
                     runtime_config, write_perf_info, write, ctx.obj["flags"].write_json

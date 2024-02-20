@@ -177,6 +177,4 @@ class WritableManifest(ArtifactMixin):
         for unique_id, node in dct["nodes"].items():
             if "config_call_dict" in node:
                 del node["config_call_dict"]
-            if "defer_relation" in node:
-                del node["defer_relation"]
         return dct

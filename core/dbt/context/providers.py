@@ -501,6 +501,7 @@ class RuntimeRefResolver(BaseRefResolver):
             self.model.package_name,
         )
 
+        # Raise an error if the reference target is missing
         if target_model is None or isinstance(target_model, Disabled):
             raise TargetNotFoundError(
                 node=self.model,
@@ -510,6 +511,8 @@ class RuntimeRefResolver(BaseRefResolver):
                 target_version=target_version,
                 disabled=isinstance(target_model, Disabled),
             )
+
+        # Raise error if trying to reference a 'private' resource outside its 'group'
         elif self.manifest.is_invalid_private_ref(
             self.model, target_model, self.config.dependencies
         ):
@@ -519,6 +522,7 @@ class RuntimeRefResolver(BaseRefResolver):
                 access=AccessType.Private,
                 scope=cast_to_str(target_model.group),
             )
+        # Or a 'protected' resource outside its project/package namespace
         elif self.manifest.is_invalid_protected_ref(
             self.model, target_model, self.config.dependencies
         ):
@@ -528,7 +532,6 @@ class RuntimeRefResolver(BaseRefResolver):
                 access=AccessType.Protected,
                 scope=target_model.package_name,
             )
-
         self.validate(target_model, target_name, target_package, target_version)
         return self.create_relation(target_model)
 
@@ -536,6 +539,22 @@ class RuntimeRefResolver(BaseRefResolver):
         if target_model.is_ephemeral_model:
             self.model.set_cte(target_model.unique_id, None)
             return self.Relation.create_ephemeral_from(target_model, limit=self.resolve_limit)
+        elif (
+            hasattr(target_model, "defer_relation")
+            and target_model.defer_relation
+            and self.config.args.defer
+            and (
+                # User has explicitly opted to prefer defer_relation
+                self.config.args.favor_state
+                # Or, this node's relation does not exist in the expected target location (cache lookup)
+                or not get_adapter(self.config).get_relation(
+                    target_model.database, target_model.schema, target_model.identifier
+                )
+            )
+        ):
+            return self.Relation.create_from(
+                self.config, target_model.defer_relation, limit=self.resolve_limit
+            )
         else:
             return self.Relation.create_from(self.config, target_model, limit=self.resolve_limit)
 

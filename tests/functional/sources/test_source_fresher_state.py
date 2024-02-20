@@ -626,7 +626,7 @@ class TestSourceFresherNoPreviousState(SuccessfulSourceFreshnessTest):
         with pytest.raises(DbtInternalError) as excinfo:
             self.run_dbt_with_vars(
                 project,
-                ["run", "-s", "source_status:fresher", "--defer", "--state", "previous_state"],
+                ["run", "-s", "source_status:fresher", "--state", "previous_state"],
             )
         assert "No previous state comparison freshness results in sources.json" in str(
             excinfo.value

@@ -81,7 +81,6 @@ REQUIRED_PARSED_NODE_KEYS = frozenset(
         "compiled_path",
         "patch_path",
         "docs",
-        "deferred",
         "checksum",
         "unrendered_config",
         "created_at",
@@ -1046,8 +1045,7 @@ class MixedManifestTest(unittest.TestCase):
 
         original_manifest = Manifest(nodes=original_nodes)
         other_manifest = Manifest(nodes=other_nodes)
-        adapter = mock.MagicMock()
-        original_manifest.merge_from_artifact(adapter, other_manifest.writable_manifest(), {})
+        original_manifest.merge_from_artifact(other_manifest.writable_manifest())
 
         # new node added should not be in original manifest
         assert "model.root.nested2" not in original_manifest.nodes
