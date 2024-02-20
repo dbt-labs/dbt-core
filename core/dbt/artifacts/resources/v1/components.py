@@ -129,11 +129,25 @@ class FreshnessThreshold(dbtClassMixin, Mergeable):
 
 @dataclass
 class HasRelationMetadata(dbtClassMixin):
+    database: Optional[str]
+    schema: str
+
     # Can't set database to None like it ought to be
     # because it messes up the subclasses and default parameters
     # so hack it here
-    database: Optional[str]
-    schema: str
+    @classmethod
+    def __pre_deserialize__(cls, data):
+        data = super().__pre_deserialize__(data)
+        if "database" not in data:
+            data["database"] = None
+        return data
+
+    @property
+    def quoting_dict(self) -> Dict[str, bool]:
+        if hasattr(self, "quoting"):
+            return self.quoting.to_dict(omit_none=True)
+        else:
+            return {}
 
 
 @dataclass
