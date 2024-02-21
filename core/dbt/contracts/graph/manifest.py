@@ -34,7 +34,6 @@ from dbt.contracts.graph.nodes import (
     ManifestNode,
     Metric,
     ModelNode,
-    DeferRelation,
     ResultNode,
     SavedQuery,
     SemanticModel,
@@ -46,7 +45,7 @@ from dbt.contracts.graph.nodes import (
 from dbt.contracts.graph.unparsed import SourcePatch, UnparsedVersion
 
 # to preserve import paths
-from dbt.artifacts.resources import NodeVersion
+from dbt.artifacts.resources import NodeVersion, DeferRelation
 from dbt.artifacts.schemas.manifest import WritableManifest, ManifestMetadata, UniqueID
 from dbt.contracts.files import (
     SourceFile,

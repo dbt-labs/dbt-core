@@ -12,11 +12,12 @@ from dbt.context.providers import (
     generate_generate_name_macro_context,
 )
 from dbt.adapters.factory import get_adapter  # noqa: F401
+from dbt.artifacts.resources import Contract
 from dbt.clients.jinja import get_rendered
 from dbt.config import Project, RuntimeConfig
 from dbt.context.context_config import ContextConfig
 from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.graph.nodes import Contract, BaseNode, ManifestNode
+from dbt.contracts.graph.nodes import BaseNode, ManifestNode
 from dbt.contracts.graph.unparsed import Docs, UnparsedNode
 from dbt.exceptions import (
     DbtInternalError,

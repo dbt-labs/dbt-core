@@ -14,7 +14,8 @@ from dbt.context.context_config import ContextConfig
 from dbt.context.providers import generate_parse_exposure, get_rendered
 from dbt.contracts.files import FileHash, SchemaSourceFile
 from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.graph.model_config import UnitTestNodeConfig, ModelConfig
+from dbt.contracts.graph.model_config import UnitTestNodeConfig
+from dbt.artifacts.resources import ModelConfig
 from dbt.contracts.graph.nodes import (
     ModelNode,
     UnitTestNode,

@@ -19,20 +19,22 @@ from dbt.artifacts.resources import (
     Owner,
     Quoting,
     RefArgs,
+    MacroDependsOn,
+    TestMetadata,
     SourceConfig,
     Time,
+    Hook,
 )
 from dbt.artifacts.resources.types import TimePeriod
 from dbt.node_types import NodeType, AccessType
 from dbt.contracts.files import FileHash
 from dbt.contracts.graph.model_config import (
-    ModelConfig,
     NodeConfig,
     SeedConfig,
     TestConfig,
     SnapshotConfig,
     EmptySnapshotConfig,
-    Hook,
+    ModelConfig,
 )
 from dbt.contracts.graph.nodes import (
     ModelNode,
@@ -45,11 +47,9 @@ from dbt.contracts.graph.nodes import (
     Metric,
     SeedNode,
     Docs,
-    MacroDependsOn,
     SourceDefinition,
     Documentation,
     HookNode,
-    TestMetadata,
     SemanticModel,
 )
 from dbt.artifacts.resources import SourceDefinition as SourceDefinitionResource

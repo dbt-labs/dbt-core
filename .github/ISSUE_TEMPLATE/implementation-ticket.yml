@@ -60,6 +60,15 @@ body:
       required: true
   - type: textarea
     attributes:
+      label: Are there any security concerns with these changes?
+      description: |
+        When in doubt, run it by the security team.
+      placeholder: |
+        Example: Logging sensitive data
+    validations:
+      required: true
+  - type: textarea
+    attributes:
       label: Context
       description: |
         Provide the "why", motivation, and alternative approaches considered -- linking to previous refinement issues, spikes and documentation as appropriate

@@ -11,10 +11,8 @@ from dbt.contracts.graph.nodes import (
     InjectedCTE,
     ModelNode,
     ModelConfig,
-    TestConfig,
-    TestMetadata,
-    Contract,
 )
+from dbt.artifacts.resources import Contract, TestConfig, TestMetadata
 from dbt.node_types import NodeType
 
 from .utils import (

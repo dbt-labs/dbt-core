@@ -17,10 +17,10 @@ from dbt import utils
 from dbt.adapters.base import BaseRelation
 from dbt.clients.jinja import MacroGenerator
 from dbt.context.providers import generate_runtime_model_context
-from dbt.contracts.graph.model_config import Hook
 from dbt.contracts.graph.nodes import HookNode, ResultNode
 from dbt.artifacts.schemas.results import NodeStatus, RunStatus, RunningStatus, BaseResult
 from dbt.artifacts.schemas.run import RunResult
+from dbt.artifacts.resources import Hook
 from dbt.exceptions import (
     CompilationError,
     DbtInternalError,
