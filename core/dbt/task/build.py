@@ -21,7 +21,7 @@ class SavedQueryRunner(BaseRunner):
     # Stub. No-op Runner for Saved Queries, which require MetricFlow for execution.
     @property
     def description(self):
-        return self.node.unique_id
+        return f"saved query {self.node.name}"
 
     def before_execute(self):
         pass
