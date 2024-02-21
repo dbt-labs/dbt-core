@@ -57,13 +57,6 @@ click_type_mapping = {
 
 
 class InitTask(BaseTask):
-    def __enter__(self):
-        self.orig_dir = os.getcwd()
-        return self
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        os.chdir(self.orig_dir)
-
     def copy_starter_repo(self, project_name):
         fire_event(StarterProjectPath(dir=starter_project_directory))
         shutil.copytree(

@@ -77,6 +77,13 @@ class BaseTask(metaclass=ABCMeta):
         self.config = config
         self.project = config if isinstance(config, Project) else project
 
+    def __enter__(self):
+        self.orig_dir = os.getcwd()
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        os.chdir(self.orig_dir)
+
     @classmethod
     def pre_init_hook(cls, args):
         """A hook called before the task is initialized."""
