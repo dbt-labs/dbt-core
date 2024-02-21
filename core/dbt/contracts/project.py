@@ -1,5 +1,5 @@
 from dbt import deprecations
-from dbt.contracts.util import Replaceable, list_str, Identifier
+from dbt.contracts.util import list_str, Identifier
 from dbt.adapters.contracts.connection import QueryComment
 from dbt_common.helper_types import NoValue
 from dbt_common.contracts.util import Mergeable
@@ -41,7 +41,7 @@ class Quoting(dbtClassMixin, Mergeable):
 
 
 @dataclass
-class Package(dbtClassMixin, Replaceable):
+class Package(dbtClassMixin):
     pass
 
 
@@ -95,7 +95,7 @@ PackageSpec = Union[LocalPackage, TarballPackage, GitPackage, RegistryPackage]
 
 
 @dataclass
-class PackageConfig(dbtClassMixin, Replaceable):
+class PackageConfig(dbtClassMixin):
     packages: List[PackageSpec]
 
     @classmethod
@@ -127,7 +127,7 @@ class ProjectPackageMetadata:
 
 
 @dataclass
-class Downloads(ExtensibleDbtClassMixin, Replaceable):
+class Downloads(ExtensibleDbtClassMixin):
     tarball: str
 
 
@@ -185,7 +185,7 @@ BANNED_PROJECT_NAMES = {
 
 
 @dataclass
-class Project(dbtClassMixin, Replaceable):
+class Project(dbtClassMixin):
     _hyphenated: ClassVar[bool] = True
     # Annotated is used by mashumaro for jsonschema generation
     name: Annotated[Identifier, Pattern(r"^[^\d\W]\w*$")]
@@ -295,7 +295,7 @@ class Project(dbtClassMixin, Replaceable):
 
 
 @dataclass
-class ProjectFlags(ExtensibleDbtClassMixin, Replaceable):
+class ProjectFlags(ExtensibleDbtClassMixin):
     cache_selected_only: Optional[bool] = None
     debug: Optional[bool] = None
     fail_fast: Optional[bool] = None
@@ -324,7 +324,7 @@ class ProjectFlags(ExtensibleDbtClassMixin, Replaceable):
 
 
 @dataclass
-class ProfileConfig(dbtClassMixin, Replaceable):
+class ProfileConfig(dbtClassMixin):
     profile_name: str
     target_name: str
     threads: int
@@ -333,7 +333,7 @@ class ProfileConfig(dbtClassMixin, Replaceable):
 
 
 @dataclass
-class ConfiguredQuoting(Quoting, Replaceable):
+class ConfiguredQuoting(Quoting):
     identifier: bool = True
     schema: bool = True
     database: Optional[bool] = None

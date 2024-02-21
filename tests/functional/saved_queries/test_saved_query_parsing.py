@@ -7,7 +7,11 @@ from dbt_common.events.base_types import BaseEvent
 from dbt.tests.util import write_file
 from dbt_semantic_interfaces.type_enums.export_destination_type import ExportDestinationType
 from tests.functional.assertions.test_runner import dbtTestRunner
-from tests.functional.saved_queries.fixtures import saved_queries_yml, saved_query_description
+from tests.functional.saved_queries.fixtures import (
+    saved_queries_yml,
+    saved_query_description,
+    saved_queries_with_diff_filters_yml,
+)
 from tests.functional.semantic_models.fixtures import (
     fct_revenue_sql,
     metricflow_time_spine_sql,
@@ -63,11 +67,37 @@ class TestSavedQueryPartialParsing:
     def models(self):
         return {
             "saved_queries.yml": saved_queries_yml,
+            "saved_queries_with_diff_filters.yml": saved_queries_with_diff_filters_yml,
             "schema.yml": schema_yml,
             "fct_revenue.sql": fct_revenue_sql,
             "metricflow_time_spine.sql": metricflow_time_spine_sql,
             "docs.md": saved_query_description,
         }
+
+    def test_saved_query_filter_types(self, project):
+        runner = dbtTestRunner()
+        result = runner.invoke(["parse"])
+        assert result.success
+
+        manifest = result.result
+        saved_query1 = manifest.saved_queries["saved_query.test.test_saved_query_where_list"]
+        saved_query2 = manifest.saved_queries["saved_query.test.test_saved_query_where_str"]
+
+        # List filter
+        assert len(saved_query1.query_params.where.where_filters) == 2
+        assert {
+            where_filter.where_sql_template
+            for where_filter in saved_query1.query_params.where.where_filters
+        } == {
+            "{{ Dimension('user__ds', 'DAY') }} <= now()",
+            "{{ Dimension('user__ds', 'DAY') }} >= '2023-01-01'",
+        }
+        # String filter
+        assert len(saved_query2.query_params.where.where_filters) == 1
+        assert (
+            saved_query2.query_params.where.where_filters[0].where_sql_template
+            == "{{ Dimension('user__ds', 'DAY') }} <= now()"
+        )
 
     def test_saved_query_metrics_changed(self, project):
         # First, use the default saved_queries.yml to define our saved_queries, and

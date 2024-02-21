@@ -4,7 +4,6 @@ from datetime import datetime
 
 from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_common.utils.formatting import lowercase
-from dbt_common.contracts.util import Replaceable
 from dbt.artifacts.schemas.base import ArtifactMixin, BaseArtifactMetadata, schema_version
 
 Primitive = Union[bool, str, float, None]
@@ -49,7 +48,7 @@ class TableMetadata(dbtClassMixin):
 
 
 @dataclass
-class CatalogTable(dbtClassMixin, Replaceable):
+class CatalogTable(dbtClassMixin):
     metadata: TableMetadata
     columns: ColumnMap
     stats: StatsDict

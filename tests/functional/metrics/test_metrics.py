@@ -28,6 +28,8 @@ from tests.functional.metrics.fixtures import (
     semantic_model_people_yml,
     semantic_model_purchasing_yml,
     purchasing_model_sql,
+    filtered_metrics_yml,
+    basic_metrics_yml,
 )
 
 
@@ -399,3 +401,53 @@ class TestConversionMetric:
             ].type_params.conversion_type_params.entity
             == "purchase"
         )
+
+
+class TestFilterParsing:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "basic_metrics.yml": basic_metrics_yml,
+            "filtered_metrics.yml": filtered_metrics_yml,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+            "semantic_model_people.yml": semantic_model_people_yml,
+            "people.sql": models_people_sql,
+        }
+
+    # Tests that filters are parsed to their appropriate type
+    def test_string_filter_parsing(
+        self,
+        project,
+    ):
+        runner = dbtRunner()
+        result = runner.invoke(["parse"])
+        assert result.success
+        assert isinstance(result.result, Manifest)
+
+        manifest = get_manifest(project.project_root)
+        assert manifest
+
+        # Test metrics with input measure filters.
+        filters1 = (
+            manifest.metrics["metric.test.collective_tenure_measure_filter_str"]
+            .input_measures[0]
+            .filter.where_filters
+        )
+        assert len(filters1) == 1
+        assert filters1[0].where_sql_template == "{{ Dimension('id__loves_dbt') }} is true"
+
+        # Test metrics with metric-level filters.
+        filters2 = manifest.metrics[
+            "metric.test.collective_tenure_metric_filter_str"
+        ].filter.where_filters
+        assert len(filters2) == 1
+        assert filters2[0].where_sql_template == "{{ Dimension('id__loves_dbt') }} is true"
+
+        # Test derived metrics with input metric filters.
+        filters3 = (
+            manifest.metrics["metric.test.average_tenure_filter_str"]
+            .input_metrics[0]
+            .filter.where_filters
+        )
+        assert len(filters3) == 1
+        assert filters3[0].where_sql_template == "{{ Dimension('id__loves_dbt') }} is true"
