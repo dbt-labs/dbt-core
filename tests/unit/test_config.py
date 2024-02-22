@@ -14,7 +14,7 @@ import yaml
 import dbt.config
 from dbt.constants import DEPENDENCIES_FILE_NAME, PACKAGES_FILE_NAME
 import dbt.exceptions
-import dbt.tracking
+from dbt import tracking
 from dbt import flags
 from dbt.adapters.factory import load_plugin
 from dbt.adapters.postgres import PostgresCredentials
@@ -1134,6 +1134,20 @@ class TestRuntimeConfig(BaseConfigTest):
             )
         finally:
             dbt.flags.WARN_ERROR = False
+
+    @mock.patch.object(tracking, "active_user")
+    def test_get_metadata(self, mock_user):
+        project = self.get_project()
+        profile = self.get_profile()
+        config = dbt.config.RuntimeConfig.from_parts(project, profile, self.args)
+
+        mock_user.id = "cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf"
+        set_from_args(Namespace(SEND_ANONYMOUS_USAGE_STATS=False), None)
+
+        metadata = config.get_metadata()
+        # ensure user_id and send_anonymous_usage_stats are set correctly
+        self.assertEqual(metadata.user_id, mock_user.id)
+        self.assertFalse(metadata.send_anonymous_usage_stats)
 
 
 class TestRuntimeConfigWithConfigs(BaseConfigTest):
