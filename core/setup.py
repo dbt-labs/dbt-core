@@ -49,7 +49,7 @@ setup(
         # ----
         # dbt-core uses these packages deeply, throughout the codebase, and there have been breaking changes in past patch releases (even though these are major-version-one).
         # Pin to the patch or minor version, and bump in each new minor version of dbt-core.
-        "agate~=1.7.0",
+        "agate>=1.7,<1.9",
         "Jinja2~=3.1.2",
         "mashumaro[msgpack]~=3.9",
         # ----
