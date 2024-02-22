@@ -54,6 +54,7 @@ click_type_mapping = {
 
 class InitTask(BaseTask):
     def copy_starter_repo(self, project_name: str) -> None:
+        # Lazy import to avoid ModuleNotFoundError
         from dbt.include.starter_project import PACKAGE_PATH as starter_project_directory
 
         fire_event(StarterProjectPath(dir=starter_project_directory))
@@ -263,6 +264,8 @@ class InitTask(BaseTask):
 
     def get_valid_project_name(self) -> str:
         """Returns a valid project name, either from CLI arg or user prompt."""
+
+        # Lazy import to avoid ModuleNotFoundError
         from dbt.include.global_project import PROJECT_NAME as GLOBAL_PROJECT_NAME
 
         name = self.args.project_name
