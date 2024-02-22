@@ -20,8 +20,6 @@ from dbt.artifacts.resources import (
 )
 
 # TODO: remove usage of dbt modules other than dbt.artifacts
-from dbt import tracking
-from dbt.flags import get_flags
 from dbt.contracts.graph.nodes import (
     GraphMemberNode,
     ManifestNode,
@@ -69,16 +67,6 @@ class ManifestMetadata(BaseArtifactMetadata):
         default=None,
         metadata=dict(description="The type name of the adapter"),
     )
-
-    def __post_init__(self):
-        if tracking.active_user is None:
-            return
-
-        if self.user_id is None:
-            self.user_id = tracking.active_user.id
-
-        if self.send_anonymous_usage_stats is None:
-            self.send_anonymous_usage_stats = get_flags().SEND_ANONYMOUS_USAGE_STATS
 
     @classmethod
     def default(cls):

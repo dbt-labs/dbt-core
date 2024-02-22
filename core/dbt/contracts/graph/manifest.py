@@ -23,6 +23,7 @@ from typing import (
 )
 from typing_extensions import Protocol
 
+from dbt import tracking
 from dbt.contracts.graph.nodes import (
     BaseNode,
     Documentation,
@@ -43,6 +44,7 @@ from dbt.contracts.graph.nodes import (
     UnitTestFileFixture,
 )
 from dbt.contracts.graph.unparsed import SourcePatch, UnparsedVersion
+from dbt.flags import get_flags
 
 # to preserve import paths
 from dbt.artifacts.resources import NodeVersion, DeferRelation
@@ -1578,7 +1580,12 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
 class MacroManifest(MacroMethods):
     def __init__(self, macros) -> None:
         self.macros = macros
-        self.metadata = ManifestMetadata()
+        self.metadata = ManifestMetadata(
+            user_id=tracking.active_user.id if tracking.active_user else None,
+            send_anonymous_usage_stats=get_flags().SEND_ANONYMOUS_USAGE_STATS
+            if tracking.active_user
+            else None,
+        )
         # This is returned by the 'graph' context property
         # in the ProviderContext class.
         self.flat_graph: Dict[str, Any] = {}
