@@ -52,7 +52,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.8'
+          python-version: '3.11'
 
       - name: Install python dependencies
         run: |
@@ -63,7 +63,9 @@ jobs:
           dbt --version
 
       - name: Run pre-commit hooks
-        run: pre-commit run --all-files --show-diff-on-failure
+        run: |
+          pre-commit install
+          pre-commit run --all-files --show-diff-on-failure
 
   unit:
     name: unit test / python ${{ matrix.python-version }}
