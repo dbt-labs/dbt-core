@@ -53,7 +53,7 @@ click_type_mapping = {
 
 
 class InitTask(BaseTask):
-    def copy_starter_repo(self, project_name):
+    def copy_starter_repo(self, project_name: str) -> None:
         from dbt.include.starter_project import PACKAGE_PATH as starter_project_directory
 
         fire_event(StarterProjectPath(dir=starter_project_directory))
