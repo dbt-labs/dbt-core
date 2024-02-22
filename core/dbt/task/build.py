@@ -70,6 +70,7 @@ class BuildTask(RunTask):
         NodeType.Seed: seed_runner,
         NodeType.Test: test_runner,
         NodeType.Unit: test_runner,
+        NodeType.SavedQuery: SavedQueryRunner,
     }
     ALL_RESOURCE_VALUES = frozenset({x for x in RUNNER_MAP.keys()})
 
@@ -79,10 +80,6 @@ class BuildTask(RunTask):
         self.model_to_unit_test_map: Dict[str, List] = {}
 
     def resource_types(self, no_unit_tests=False):
-        if self.args.include_saved_query:
-            self.RUNNER_MAP[NodeType.SavedQuery] = SavedQueryRunner
-            self.ALL_RESOURCE_VALUES = self.ALL_RESOURCE_VALUES.union({NodeType.SavedQuery})
-
         if not self.args.resource_types:
             resource_types = list(self.ALL_RESOURCE_VALUES)
         else:

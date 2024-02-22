@@ -187,8 +187,9 @@ def cli(ctx, **kwargs):
 @click.pass_context
 @global_flags
 @p.exclude
+@p.export_saved_queries
 @p.full_refresh
-@p.include_saved_query
+@p.deprecated_include_saved_query
 @p.profile
 @p.profiles_dir
 @p.project_dir
