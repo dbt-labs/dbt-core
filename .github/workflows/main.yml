@@ -58,7 +58,7 @@ jobs:
         run: |
           pip install --user --upgrade pip
           pip --version
-          pip install -r editable-requirements.txt -r dev-requirements.txt
+          pip install -r dev-requirements.txt -r editable-requirements.txt
           mypy --version
           dbt --version
 
