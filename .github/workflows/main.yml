@@ -56,9 +56,9 @@ jobs:
 
       - name: Install python dependencies
         run: |
-          python -m pip install --user --upgrade pip
-          python -m pip --version
-          python -m pip install -r dev-requirements.txt -r editable-requirements.txt
+          pip install --user --upgrade pip
+          pip --version
+          pip install -r editable-requirements.txt -r dev-requirements.txt
           mypy --version
           dbt --version
 
