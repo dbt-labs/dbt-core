@@ -993,6 +993,10 @@ class Macro(MacroResource, BaseNode):
 
 @dataclass
 class Documentation(DocumentationResource, BaseNode):
+    @classmethod
+    def resource_class(cls) -> Type[DocumentationResource]:
+        return DocumentationResource
+
     @property
     def search_name(self):
         return self.name
