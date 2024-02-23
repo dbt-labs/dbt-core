@@ -101,7 +101,7 @@ class TestPluginManager:
         nodes = pm.get_nodes()
 
         assert len(nodes.models) == 2
-        assert tracking.track_plugin_get_nodes.called_once_with(
+        tracking.track_plugin_get_nodes.assert_called_once_with(
             {
                 "plugin_name": get_nodes_plugins[0].name,
                 "num_model_nodes": 2,
