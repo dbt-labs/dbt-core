@@ -26,7 +26,7 @@ permissions: read-all
 
 env:
   LATEST_SCHEMA_PATH: ${{ github.workspace }}/new_schemas
-  SCHEMA_DIFF_ARTIFACT: ${{ github.workspace }}//schema_schanges.txt
+  SCHEMA_DIFF_ARTIFACT: ${{ github.workspace }}/schema_schanges.txt
   DBT_REPO_DIRECTORY: ${{ github.workspace }}/dbt
   SCHEMA_REPO_DIRECTORY: ${{ github.workspace }}/schemas.getdbt.com
 
