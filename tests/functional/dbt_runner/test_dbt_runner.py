@@ -7,7 +7,7 @@ from dbt.cli.main import dbtRunner
 from dbt.exceptions import DbtProjectError
 from dbt.tests.util import read_file, write_file
 from dbt.version import __version__ as dbt_version
-from dbt_common.events.contextvars import get_node_info
+from dbt.events.contextvars import get_node_info
 
 
 class TestDbtRunner:
