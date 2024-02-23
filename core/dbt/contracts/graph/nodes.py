@@ -1,6 +1,5 @@
 import os
 from datetime import datetime
-import time
 from dataclasses import dataclass, field
 import hashlib
 
@@ -29,13 +28,9 @@ from dbt.contracts.graph.unparsed import (
     UnparsedSourceTableDefinition,
     UnparsedColumn,
     UnitTestOverrides,
-    UnitTestInputFixture,
-    UnitTestOutputFixture,
-    UnitTestNodeVersions,
 )
 from dbt.contracts.graph.model_config import (
     UnitTestNodeConfig,
-    UnitTestConfig,
     EmptySnapshotConfig,
 )
 from dbt.contracts.graph.node_args import ModelNodeArgs
@@ -91,6 +86,7 @@ from dbt.artifacts.resources import (
     Snapshot as SnapshotResource,
     Quoting as QuotingResource,
     SourceDefinition as SourceDefinitionResource,
+    UnitTestDefinition as UnitTestDefinitionResource,
 )
 
 # =====================================================================
@@ -889,23 +885,10 @@ class UnitTestNode(CompiledNode):
 
 
 @dataclass
-class UnitTestDefinitionMandatory:
-    model: str
-    given: Sequence[UnitTestInputFixture]
-    expect: UnitTestOutputFixture
-
-
-@dataclass
-class UnitTestDefinition(NodeInfoMixin, GraphNode, UnitTestDefinitionMandatory):
-    description: str = ""
-    overrides: Optional[UnitTestOverrides] = None
-    depends_on: DependsOn = field(default_factory=DependsOn)
-    config: UnitTestConfig = field(default_factory=UnitTestConfig)
-    checksum: Optional[str] = None
-    schema: Optional[str] = None
-    created_at: float = field(default_factory=lambda: time.time())
-    versions: Optional[UnitTestNodeVersions] = None
-    version: Optional[NodeVersion] = None
+class UnitTestDefinition(NodeInfoMixin, GraphNode, UnitTestDefinitionResource):
+    @classmethod
+    def resource_class(cls) -> Type[UnitTestDefinitionResource]:
+        return UnitTestDefinitionResource
 
     @property
     def build_path(self):
@@ -987,6 +970,10 @@ class SnapshotNode(SnapshotResource, CompiledNode):
 
 @dataclass
 class Macro(MacroResource, BaseNode):
+    @classmethod
+    def resource_class(cls) -> Type[MacroResource]:
+        return MacroResource
+
     def same_contents(self, other: Optional["Macro"]) -> bool:
         if other is None:
             return False

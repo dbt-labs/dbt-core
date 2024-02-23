@@ -1040,8 +1040,8 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         return WritableManifest(
             nodes=self.nodes,
             sources=self._map_nodes_to_map_resources(self.sources),
-            macros=self.macros,
-            docs=self.docs,
+            macros=self._map_nodes_to_map_resources(self.macros),
+            docs=self._map_nodes_to_map_resources(self.docs),
             exposures=self._map_nodes_to_map_resources(self.exposures),
             metrics=self._map_nodes_to_map_resources(self.metrics),
             groups=self._map_nodes_to_map_resources(self.groups),
@@ -1052,7 +1052,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             parent_map=self.parent_map,
             group_map=self.group_map,
             semantic_models=self._map_nodes_to_map_resources(self.semantic_models),
-            unit_tests=self.unit_tests,
+            unit_tests=self._map_nodes_to_map_resources(self.unit_tests),
             saved_queries=self._map_nodes_to_map_resources(self.saved_queries),
         )
 
