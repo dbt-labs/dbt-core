@@ -23,6 +23,7 @@ from typing import (
 )
 from typing_extensions import Protocol
 
+from dbt import tracking
 from dbt.contracts.graph.nodes import (
     BaseNode,
     Documentation,
@@ -43,6 +44,7 @@ from dbt.contracts.graph.nodes import (
     UnitTestFileFixture,
 )
 from dbt.contracts.graph.unparsed import SourcePatch, UnparsedVersion
+from dbt.flags import get_flags
 
 # to preserve import paths
 from dbt.artifacts.resources import NodeVersion, DeferRelation
@@ -1022,6 +1024,10 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
                     group_map[node.group].append(node.unique_id)
         self.group_map = group_map
 
+    def fill_tracking_metadata(self):
+        self.metadata.user_id = tracking.active_user.id if tracking.active_user else None
+        self.metadata.send_anonymous_usage_stats = get_flags().SEND_ANONYMOUS_USAGE_STATS
+
     @classmethod
     def _map_nodes_to_map_resources(cls, nodes_map: MutableMapping[str, NodeClassT]):
         return {node_id: node.to_resource() for node_id, node in nodes_map.items()}
@@ -1029,6 +1035,8 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     def writable_manifest(self) -> "WritableManifest":
         self.build_parent_and_child_maps()
         self.build_group_map()
+        self.fill_tracking_metadata()
+
         return WritableManifest(
             nodes=self.nodes,
             sources=self._map_nodes_to_map_resources(self.sources),
@@ -1578,7 +1586,12 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
 class MacroManifest(MacroMethods):
     def __init__(self, macros) -> None:
         self.macros = macros
-        self.metadata = ManifestMetadata()
+        self.metadata = ManifestMetadata(
+            user_id=tracking.active_user.id if tracking.active_user else None,
+            send_anonymous_usage_stats=get_flags().SEND_ANONYMOUS_USAGE_STATS
+            if tracking.active_user
+            else None,
+        )
         # This is returned by the 'graph' context property
         # in the ProviderContext class.
         self.flat_graph: Dict[str, Any] = {}
