@@ -1,3 +1,4 @@
+from pathlib import Path
 from shutil import copytree, move
 
 import pytest
@@ -327,3 +328,40 @@ class TestRetryFullRefresh:
         # ...and so should this one, since the effect of the full-refresh parameter should persist.
         results = run_dbt(["retry"], expect_pass=False)
         assert len(results) == 1
+
+
+class TestRetryTargetPathEnvVar:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "sample_model.sql": models__sample_model,
+        }
+
+    def test_retry_target_path_env_var(self, project, monkeypatch):
+        monkeypatch.setenv("DBT_TARGET_PATH", "artifacts")
+        run_dbt(["run"], expect_pass=False)
+
+        write_file(models__second_model, "models", "sample_model.sql")
+
+        results = run_dbt(["retry"])
+        assert len(results) == 1
+
+
+class TestRetryTargetPathFlag:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "sample_model.sql": models__sample_model,
+        }
+
+    def test_retry_target_path_flag(self, project):
+        run_dbt(["run", "--target-path", "target"], expect_pass=False)
+
+        project_root = project.project_root
+        move(project_root / "target", project_root / "artifacts")
+
+        write_file(models__second_model, "models", "sample_model.sql")
+
+        results = run_dbt(["retry", "--state", "artifacts", "--target-path", "my_target_path"])
+        assert len(results) == 1
+        assert Path("my_target_path").is_dir()
