@@ -492,6 +492,60 @@ class ModelNode(ModelResource, CompiledNode):
     def materialization_enforces_constraints(self) -> bool:
         return self.config.materialized in ["table", "incremental"]
 
+    def infer_primary_key(self, data_tests: List["GenericTestNode"]) -> List[str]:
+        """
+        Infers the columns that can be used as primary key of a model in the following order:
+        1. Columns with primary key constraints
+        2. Columns with unique and not_null data tests
+        3. Columns with enabled unique or dbt_utils.unique_combination_of_columns data tests
+        4. Columns with disabled unique or dbt_utils.unique_combination_of_columns data tests
+        """
+        for constraint in self.constraints:
+            if constraint.type == ConstraintType.primary_key:
+                return constraint.columns
+
+        for column, column_info in self.columns.items():
+            for column_constraint in column_info.constraints:
+                if column_constraint.type == ConstraintType.primary_key:
+                    return [column]
+
+        columns_with_enabled_unique_tests = set()
+        columns_with_disabled_unique_tests = set()
+        columns_with_not_null_tests = set()
+        for test in data_tests:
+            columns = []
+            if "column_name" in test.test_metadata.kwargs:
+                columns = [test.test_metadata.kwargs["column_name"]]
+            elif "combination_of_columns" in test.test_metadata.kwargs:
+                columns = test.test_metadata.kwargs["combination_of_columns"]
+
+            for column in columns:
+                if test.test_metadata.name in ["unique", "unique_combination_of_columns"]:
+                    if test.config.enabled:
+                        columns_with_enabled_unique_tests.add(column)
+                    else:
+                        columns_with_disabled_unique_tests.add(column)
+                elif test.test_metadata.name == "not_null":
+                    columns_with_not_null_tests.add(column)
+
+        columns_with_unique_and_not_null_tests = []
+        for column in columns_with_not_null_tests:
+            if (
+                column in columns_with_enabled_unique_tests
+                or column in columns_with_disabled_unique_tests
+            ):
+                columns_with_unique_and_not_null_tests.append(column)
+        if columns_with_unique_and_not_null_tests:
+            return columns_with_unique_and_not_null_tests
+
+        if columns_with_enabled_unique_tests:
+            return list(columns_with_enabled_unique_tests)
+
+        if columns_with_disabled_unique_tests:
+            return list(columns_with_disabled_unique_tests)
+
+        return []
+
     def same_contents(self, old, adapter_type) -> bool:
         return super().same_contents(old, adapter_type) and self.same_ref_representation(old)
 
