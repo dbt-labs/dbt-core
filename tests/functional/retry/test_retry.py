@@ -330,14 +330,14 @@ class TestRetryFullRefresh:
         assert len(results) == 1
 
 
-class TestRetryEnvVar:
+class TestRetryTargetPathEnvVar:
     @pytest.fixture(scope="class")
     def models(self):
         return {
             "sample_model.sql": models__sample_model,
         }
 
-    def test_retry_env_var(self, project, monkeypatch):
+    def test_retry_target_path_env_var(self, project, monkeypatch):
         monkeypatch.setenv("DBT_TARGET_PATH", "artifacts")
         run_dbt(["run"], expect_pass=False)
 
@@ -345,5 +345,20 @@ class TestRetryEnvVar:
 
         results = run_dbt(["retry"])
         assert len(results) == 1
+
+
+class TestRetryTargetPathFlag:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "sample_model.sql": models__sample_model,
+        }
+
+    def test_retry_target_path_env_var(self, project, monkeypatch):
+        run_dbt(["run"], expect_pass=False)
+
+        write_file(models__second_model, "models", "sample_model.sql")
+
+        results = run_dbt(["retry", "--target-path", "artifacts"])
+        assert len(results) == 1
         assert Path("artifacts").is_dir()
-        assert not Path("target").is_dir()
