@@ -987,6 +987,10 @@ class SnapshotNode(SnapshotResource, CompiledNode):
 
 @dataclass
 class Macro(MacroResource, BaseNode):
+    @classmethod
+    def resource_class(cls) -> Type[MacroResource]:
+        return MacroResource
+
     def same_contents(self, other: Optional["Macro"]) -> bool:
         if other is None:
             return False
@@ -1006,6 +1010,10 @@ class Macro(MacroResource, BaseNode):
 
 @dataclass
 class Documentation(DocumentationResource, BaseNode):
+    @classmethod
+    def resource_class(cls) -> Type[DocumentationResource]:
+        return DocumentationResource
+
     @property
     def search_name(self):
         return self.name
