@@ -354,11 +354,14 @@ class TestRetryTargetPathFlag:
             "sample_model.sql": models__sample_model,
         }
 
-    def test_retry_target_path_env_var(self, project, monkeypatch):
-        run_dbt(["run"], expect_pass=False)
+    def test_retry_target_path_flag(self, project):
+        run_dbt(["run", "--target-path", "target"], expect_pass=False)
+
+        project_root = project.project_root
+        move(project_root / "target", project_root / "artifacts")
 
         write_file(models__second_model, "models", "sample_model.sql")
 
-        results = run_dbt(["retry", "--target-path", "artifacts"])
+        results = run_dbt(["retry", "--state", "artifacts", "--target-path", "my_target_path"])
         assert len(results) == 1
-        assert Path("artifacts").is_dir()
+        assert Path("my_target_path").is_dir()
