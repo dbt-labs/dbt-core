@@ -71,7 +71,7 @@ setup(
         # These are major-version-0 packages also maintained by dbt-labs. Accept patches.
         "dbt-extractor>=0.5.0,<=0.6",
         "minimal-snowplow-tracker>=0.0.2,<0.1",
-        "dbt-semantic-interfaces<1.0",
+        "dbt-semantic-interfaces<1.0.0a1",
         "dbt-common<1.0",
         "dbt-adapters>=0.1.0a2,<1.0",
         # ----
