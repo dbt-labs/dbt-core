@@ -49,9 +49,9 @@ setup(
         # ----
         # dbt-core uses these packages deeply, throughout the codebase, and there have been breaking changes in past patch releases (even though these are major-version-one).
         # Pin to the patch or minor version, and bump in each new minor version of dbt-core.
-        "agate~=1.7.0",
+        "agate>=1.7.0,<1.8",
         "Jinja2~=3.1.2",
-        "mashumaro[msgpack]~=3.9",
+        "mashumaro[msgpack]>=3.9,<4.0",
         # ----
         # Legacy: This package has not been updated since 2019, and it is unused in dbt's logging system (since v1.0)
         # The dependency here will be removed along with the removal of 'legacy logging', in a future release of dbt-core
@@ -59,8 +59,8 @@ setup(
         # ----
         # dbt-core uses these packages in standard ways. Pin to the major version, and check compatibility
         # with major versions in each new minor version of dbt-core.
-        "click>=8.0.2,<9",
-        "networkx>=2.3,<4",
+        "click>=8.0.2,<9.0",
+        "networkx>=2.3,<4.0",
         "requests<3.0.0",  # should match dbt-common
         # ----
         # These packages are major-version-0. Keep upper bounds on upcoming minor versions (which could have breaking changes)
@@ -69,11 +69,11 @@ setup(
         "sqlparse>=0.2.3,<0.5",
         # ----
         # These are major-version-0 packages also maintained by dbt-labs. Accept patches.
-        "dbt-extractor~=0.5.0",
-        "minimal-snowplow-tracker~=0.0.2",
-        "dbt-semantic-interfaces~=0.5.0a2",
-        "dbt-common~=0.1.6",
-        "dbt-adapters~=0.1.0a2",
+        "dbt-extractor>=0.5.0,<=0.6",
+        "minimal-snowplow-tracker>=0.0.2,<0.1",
+        "dbt-semantic-interfaces<1.0",
+        "dbt-common<1.0",
+        "dbt-adapters<1.0",
         # ----
         # Expect compatibility with all new versions of these packages, so lower bounds only.
         "packaging>20.9",
