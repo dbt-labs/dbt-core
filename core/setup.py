@@ -69,7 +69,7 @@ setup(
         "sqlparse>=0.2.3,<0.5",
         # ----
         # These are major-version-0 packages also maintained by dbt-labs. Accept patches.
-        "dbt-extractor~=0.5.0",
+        "dbt-extractor~=0.5.1",
         "minimal-snowplow-tracker~=0.0.2",
         "dbt-semantic-interfaces~=0.5.0a2",
         "dbt-common~=0.1.6",
