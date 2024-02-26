@@ -635,8 +635,9 @@ def run(ctx, **kwargs):
 @p.profiles_dir
 @p.vars
 @p.profile
-@p.target
 @p.state
+@p.target
+@p.target_path
 @p.threads
 @p.full_refresh
 @requires.postflight
