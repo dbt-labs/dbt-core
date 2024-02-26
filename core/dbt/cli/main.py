@@ -635,6 +635,7 @@ def run(ctx, **kwargs):
 @p.profiles_dir
 @p.vars
 @p.profile
+@p.state
 @p.target
 @p.target_path
 @p.threads
