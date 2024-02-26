@@ -46,7 +46,7 @@ setup(
         "console_scripts": ["dbt = dbt.cli.main:cli"],
     },
     install_requires=[
-        "Jinja2==3.1.2",
+        "Jinja2>=3.1.3,<4",
         "agate>=1.6,<1.7.1",
         # temporarily pinning click for mypy failures: https://github.com/pallets/click/issues/2558
         "click<9",
