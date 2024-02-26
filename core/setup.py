@@ -68,10 +68,12 @@ setup(
         "pathspec>=0.9,<0.12",
         "sqlparse>=0.2.3,<0.5",
         # ----
-        # These are major-version-0 packages also maintained by dbt-labs. Accept patches.
+        # These are major-version-0 packages also maintained by dbt-labs.
+        # Accept patches but avoid automatically updating past a set minor version range.
         "dbt-extractor>=0.5.0,<=0.6",
         "minimal-snowplow-tracker>=0.0.2,<0.1",
-        "dbt-semantic-interfaces<1.0.0a1",
+        "dbt-semantic-interfaces>=0.5.0a2,<0.6",
+        # Minor versions for these are expected to be backwards-compatible
         "dbt-common<1.0",
         "dbt-adapters>=0.1.0a2,<1.0",
         # ----
