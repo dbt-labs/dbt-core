@@ -1,16 +1,32 @@
-from dbt.artifacts.resources.base import BaseResource, GraphResource
+from dbt.artifacts.resources.base import BaseResource, GraphResource, FileHash, Docs
 
 # alias to latest resource definitions
 from dbt.artifacts.resources.v1.components import (
-    ColumnInfo,
     DependsOn,
-    FreshnessThreshold,
-    HasRelationMetadata,
     NodeVersion,
-    Quoting,
     RefArgs,
+    HasRelationMetadata,
+    ParsedResourceMandatory,
+    ParsedResource,
+    ColumnInfo,
+    CompiledResource,
+    InjectedCTE,
+    Contract,
+    DeferRelation,
+    FreshnessThreshold,
+    Quoting,
     Time,
 )
+from dbt.artifacts.resources.v1.analysis import Analysis
+from dbt.artifacts.resources.v1.hook import HookNode
+from dbt.artifacts.resources.v1.model import Model, ModelConfig
+from dbt.artifacts.resources.v1.sql_operation import SqlOperation
+from dbt.artifacts.resources.v1.seed import Seed, SeedConfig
+from dbt.artifacts.resources.v1.singular_test import SingularTest
+from dbt.artifacts.resources.v1.generic_test import GenericTest, TestMetadata
+from dbt.artifacts.resources.v1.snapshot import Snapshot, SnapshotConfig
+
+
 from dbt.artifacts.resources.v1.documentation import Documentation
 from dbt.artifacts.resources.v1.exposure import (
     Exposure,
@@ -19,7 +35,6 @@ from dbt.artifacts.resources.v1.exposure import (
     MaturityType,
 )
 from dbt.artifacts.resources.v1.macro import Macro, MacroDependsOn, MacroArgument
-from dbt.artifacts.resources.v1.docs import Docs
 from dbt.artifacts.resources.v1.group import Group
 from dbt.artifacts.resources.v1.metric import (
     ConstantPropertyInput,
@@ -59,10 +74,18 @@ from dbt.artifacts.resources.v1.semantic_model import (
     SemanticModel,
     SemanticModelConfig,
 )
+
+from dbt.artifacts.resources.v1.config import (
+    NodeAndTestConfig,
+    NodeConfig,
+    TestConfig,
+    Hook,
+)
+
 from dbt.artifacts.resources.v1.source_definition import (
+    SourceConfig,
     ExternalPartition,
     ExternalTable,
     SourceDefinition,
     ParsedSourceMandatory,
-    SourceConfig,
 )

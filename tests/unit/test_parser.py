@@ -12,7 +12,8 @@ from dbt.artifacts.resources import RefArgs
 from dbt.context.context_config import ContextConfig
 from dbt.contracts.files import SourceFile, FileHash, FilePath, SchemaSourceFile
 from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.graph.model_config import NodeConfig, TestConfig, SnapshotConfig, ModelConfig
+from dbt.contracts.graph.model_config import NodeConfig, TestConfig, SnapshotConfig
+from dbt.artifacts.resources import ModelConfig
 from dbt.contracts.graph.nodes import (
     ModelNode,
     Macro,

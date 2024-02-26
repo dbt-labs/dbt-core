@@ -1,0 +1,6 @@
+kind: "Dependencies"
+body: "Bump peter-evans/create-pull-request from 5 to 6"
+time: 2024-02-12T01:13:24.00000Z
+custom:
+  Author: dependabot[bot]
+  PR: 9552

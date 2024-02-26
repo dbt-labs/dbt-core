@@ -15,6 +15,7 @@ from typing import (
     Type,
 )
 
+from dbt import tracking
 from dbt.adapters.factory import get_include_paths, get_relation_class_by_name
 from dbt.adapters.contracts.connection import AdapterRequiredConfig, Credentials, HasCredentials
 from dbt.adapters.contracts.relation import ComponentName
@@ -283,6 +284,10 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
         return ManifestMetadata(
             project_name=self.project_name,
             project_id=self.hashed_name(),
+            user_id=tracking.active_user.id if tracking.active_user else None,
+            send_anonymous_usage_stats=get_flags().SEND_ANONYMOUS_USAGE_STATS
+            if tracking.active_user
+            else None,
             adapter_type=self.credentials.type,
         )
 

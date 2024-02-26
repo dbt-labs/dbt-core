@@ -3,9 +3,9 @@ import time
 from typing import Literal, List, Dict, Optional, Any
 
 from dbt_common.dataclass_schema import dbtClassMixin
-from dbt.artifacts.resources.base import BaseResource
+from dbt.artifacts.resources.base import BaseResource, Docs
 from dbt.artifacts.resources.types import NodeType, ModelLanguage
-from dbt.artifacts.resources.v1.docs import Docs
+from dbt.artifacts.resources.v1.components import MacroDependsOn
 
 
 @dataclass
@@ -13,16 +13,6 @@ class MacroArgument(dbtClassMixin):
     name: str
     type: Optional[str] = None
     description: str = ""
-
-
-@dataclass
-class MacroDependsOn(dbtClassMixin):
-    macros: List[str] = field(default_factory=list)
-
-    # 'in' on lists is O(n) so this is O(n^2) for # of macros
-    def add_macro(self, value: str):
-        if value not in self.macros:
-            self.macros.append(value)
 
 
 @dataclass
