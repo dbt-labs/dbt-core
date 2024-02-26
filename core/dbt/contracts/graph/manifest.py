@@ -1063,6 +1063,14 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     def _map_nodes_to_map_resources(cls, nodes_map: MutableMapping[str, NodeClassT]):
         return {node_id: node.to_resource() for node_id, node in nodes_map.items()}
 
+    def _map_list_nodes_to_map_list_resources(
+        cls, nodes_map: MutableMapping[str, List[NodeClassT]]
+    ):
+        return {
+            node_id: [node.to_resource() for node in node_list]
+            for node_id, node_list in nodes_map.items()
+        }
+
     @classmethod
     def _map_resources_to_map_nodes(
         cls, resources_map: Mapping[str, BaseResource], node_class: Type[BaseNode]
@@ -1078,7 +1086,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         self.fill_tracking_metadata()
 
         return WritableManifest(
-            nodes=self.nodes,
+            nodes=self._map_nodes_to_map_resources(self.nodes),
             sources=self._map_nodes_to_map_resources(self.sources),
             macros=self._map_nodes_to_map_resources(self.macros),
             docs=self._map_nodes_to_map_resources(self.docs),
@@ -1087,7 +1095,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             groups=self._map_nodes_to_map_resources(self.groups),
             selectors=self.selectors,
             metadata=self.metadata,
-            disabled=self.disabled,
+            disabled=self._map_list_nodes_to_map_list_resources(self.disabled),
             child_map=self.child_map,
             parent_map=self.parent_map,
             group_map=self.group_map,
