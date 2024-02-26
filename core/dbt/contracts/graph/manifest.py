@@ -1040,10 +1040,9 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             }
             if writable_manifest.disabled is not None
             else {},
-            unit_tests={
-                unit_test_id: unit_test
-                for unit_test_id, unit_test in writable_manifest.unit_tests.items()
-            },
+            unit_tests=cls._map_resources_to_map_nodes(
+                writable_manifest.unit_tests, UnitTestDefinition
+            ),
             sources=cls._map_resources_to_map_nodes(writable_manifest.sources, SourceDefinition),
             macros=cls._map_resources_to_map_nodes(writable_manifest.macros, Macro),
             docs=cls._map_resources_to_map_nodes(writable_manifest.docs, Documentation),
