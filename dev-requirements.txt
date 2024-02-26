@@ -1,4 +1,6 @@
 git+https://github.com/dbt-labs/dbt-adapters.git@main
+git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-tests-adapter
+git+https://github.com/dbt-labs/dbt-common.git@main
 git+https://github.com/dbt-labs/dbt-postgres.git@main
 black==23.3.0
 bumpversion
@@ -6,16 +8,16 @@ ddtrace==2.3.0
 docutils
 flake8
 flaky
-freezegun==0.3.12
+freezegun>=1.4.0,<1.5
 hypothesis
 ipdb
 mypy==1.4.1
 pip-tools
 pre-commit
-protobuf>=4.0.0
-pytest~=7.4
+protobuf>=4.0.0,<5.0.0
+pytest>=7.4,<8.0
 pytest-cov
-pytest-csv~=3.0
+pytest-csv>=3.0,<4.0
 pytest-dotenv
 pytest-logbook
 pytest-mock

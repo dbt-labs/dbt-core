@@ -32,10 +32,6 @@ from dbt.events.types import (
     ProjectCreated,
 )
 
-from dbt.include.starter_project import PACKAGE_PATH as starter_project_directory
-
-from dbt.include.global_project import PROJECT_NAME as GLOBAL_PROJECT_NAME
-
 from dbt.task.base import BaseTask, move_to_nearest_project_dir
 
 DOCS_URL = "https://docs.getdbt.com/docs/configure-your-profile"
@@ -57,7 +53,10 @@ click_type_mapping = {
 
 
 class InitTask(BaseTask):
-    def copy_starter_repo(self, project_name):
+    def copy_starter_repo(self, project_name: str) -> None:
+        # Lazy import to avoid ModuleNotFoundError
+        from dbt.include.starter_project import PACKAGE_PATH as starter_project_directory
+
         fire_event(StarterProjectPath(dir=starter_project_directory))
         shutil.copytree(
             starter_project_directory, project_name, ignore=shutil.ignore_patterns(*IGNORE_FILES)
@@ -265,6 +264,10 @@ class InitTask(BaseTask):
 
     def get_valid_project_name(self) -> str:
         """Returns a valid project name, either from CLI arg or user prompt."""
+
+        # Lazy import to avoid ModuleNotFoundError
+        from dbt.include.global_project import PROJECT_NAME as GLOBAL_PROJECT_NAME
+
         name = self.args.project_name
         internal_package_names = {GLOBAL_PROJECT_NAME}
         available_adapters = list(_get_adapter_plugin_names())

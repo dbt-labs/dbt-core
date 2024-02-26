@@ -101,13 +101,25 @@ class TestPluginManager:
         nodes = pm.get_nodes()
 
         assert len(nodes.models) == 2
-        assert tracking.track_plugin_get_nodes.called_once_with(
-            {
-                "plugin_name": get_nodes_plugins[0].name,
-                "num_model_nodes": 2,
-                "num_model_packages": 1,
-            }
-        )
+
+        expected_calls = [
+            mock.call(
+                {
+                    "plugin_name": get_nodes_plugins[0].name,
+                    "num_model_nodes": 1,
+                    "num_model_packages": 1,
+                }
+            ),
+            mock.call(
+                {
+                    "plugin_name": get_nodes_plugins[1].name,
+                    "num_model_nodes": 1,
+                    "num_model_packages": 1,
+                }
+            ),
+        ]
+
+        tracking.track_plugin_get_nodes.assert_has_calls(expected_calls)
 
     def test_get_manifest_artifact(self, get_artifacts_plugins):
         pm = PluginManager(plugins=get_artifacts_plugins)

@@ -733,7 +733,7 @@ class StateSelectorMethod(SelectorMethod):
             if unique_id in manifest.nodes:
                 previous_node = manifest.nodes[unique_id]
             elif unique_id in manifest.sources:
-                previous_node = manifest.sources[unique_id]
+                previous_node = SourceDefinition.from_resource(manifest.sources[unique_id])
             elif unique_id in manifest.exposures:
                 previous_node = Exposure.from_resource(manifest.exposures[unique_id])
             elif unique_id in manifest.metrics:
@@ -741,7 +741,7 @@ class StateSelectorMethod(SelectorMethod):
             elif unique_id in manifest.semantic_models:
                 previous_node = SemanticModel.from_resource(manifest.semantic_models[unique_id])
             elif unique_id in manifest.unit_tests:
-                previous_node = manifest.unit_tests[unique_id]
+                previous_node = UnitTestDefinition.from_resource(manifest.unit_tests[unique_id])
 
             keyword_args = {}
             if checker.__name__ in [

@@ -89,3 +89,13 @@ from dbt.artifacts.resources.v1.source_definition import (
     SourceDefinition,
     ParsedSourceMandatory,
 )
+
+from dbt.artifacts.resources.v1.unit_test_definition import (
+    UnitTestConfig,
+    UnitTestDefinition,
+    UnitTestInputFixture,
+    UnitTestOutputFixture,
+    UnitTestOverrides,
+    UnitTestNodeVersions,
+    UnitTestFormat,
+)

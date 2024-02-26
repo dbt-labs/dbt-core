@@ -17,14 +17,14 @@ from dbt.artifacts.resources import (
     Metric,
     SavedQuery,
     SemanticModel,
+    SourceDefinition,
+    UnitTestDefinition,
 )
 
 # TODO: remove usage of dbt modules other than dbt.artifacts
 from dbt.contracts.graph.nodes import (
     GraphMemberNode,
     ManifestNode,
-    SourceDefinition,
-    UnitTestDefinition,
 )
 
 

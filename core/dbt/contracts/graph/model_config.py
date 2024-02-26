@@ -1,5 +1,5 @@
 from dataclasses import field, dataclass
-from typing import Any, List, Optional, Dict, Union, Type
+from typing import Any, List, Optional, Dict, Type
 
 from dbt.artifacts.resources import (
     ExposureConfig,
@@ -12,10 +12,10 @@ from dbt.artifacts.resources import (
     SnapshotConfig,
     SourceConfig,
     ModelConfig,
+    UnitTestConfig,
 )
-from dbt_common.contracts.config.base import BaseConfig, MergeBehavior, CompareBehavior
-from dbt_common.contracts.config.metadata import Metadata, ShowBehavior
-from dbt.contracts.util import list_str
+from dbt_common.contracts.config.base import BaseConfig
+from dbt_common.contracts.config.metadata import Metadata
 from dbt.node_types import NodeType
 
 
@@ -42,18 +42,6 @@ class UnitTestNodeConfig(NodeConfig):
 class EmptySnapshotConfig(NodeConfig):
     materialized: str = "snapshot"
     unique_key: Optional[str] = None  # override NodeConfig unique_key definition
-
-
-@dataclass
-class UnitTestConfig(BaseConfig):
-    tags: Union[str, List[str]] = field(
-        default_factory=list_str,
-        metadata=metas(ShowBehavior.Hide, MergeBehavior.Append, CompareBehavior.Exclude),
-    )
-    meta: Dict[str, Any] = field(
-        default_factory=dict,
-        metadata=MergeBehavior.Update.meta(),
-    )
 
 
 RESOURCE_TYPES: Dict[NodeType, Type[BaseConfig]] = {
