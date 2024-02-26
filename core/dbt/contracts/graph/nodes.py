@@ -15,6 +15,7 @@ from typing import (
     Type,
     Iterator,
     Literal,
+    get_args,
 )
 
 from dbt import deprecations
@@ -396,20 +397,6 @@ class CompiledNode(CompiledResource, ParsedNode):
         else:
             self.extra_ctes.append(InjectedCTE(id=cte_id, sql=sql))
 
-    def __post_serialize__(self, dct):
-        dct = super().__post_serialize__(dct)
-        if "_pre_injected_sql" in dct:
-            del dct["_pre_injected_sql"]
-        # Remove compiled attributes
-        if "compiled" in dct and dct["compiled"] is False:
-            del dct["compiled"]
-            del dct["extra_ctes_injected"]
-            del dct["extra_ctes"]
-            # "omit_none" means these might not be in the dictionary
-            if "compiled_code" in dct:
-                del dct["compiled_code"]
-        return dct
-
     @property
     def depends_on_nodes(self):
         return self.depends_on.nodes
@@ -426,16 +413,24 @@ class CompiledNode(CompiledResource, ParsedNode):
 
 @dataclass
 class AnalysisNode(AnalysisResource, CompiledNode):
-    pass
+    @classmethod
+    def resource_class(cls) -> Type[AnalysisResource]:
+        return AnalysisResource
 
 
 @dataclass
 class HookNode(HookNodeResource, CompiledNode):
-    pass
+    @classmethod
+    def resource_class(cls) -> Type[HookNodeResource]:
+        return HookNodeResource
 
 
 @dataclass
 class ModelNode(ModelResource, CompiledNode):
+    @classmethod
+    def resource_class(cls) -> Type[ModelResource]:
+        return ModelResource
+
     @classmethod
     def from_args(cls, args: ModelNodeArgs) -> "ModelNode":
         unique_id = args.unique_id
@@ -768,7 +763,9 @@ class ModelNode(ModelResource, CompiledNode):
 
 @dataclass
 class SqlNode(SqlOperationResource, CompiledNode):
-    pass
+    @classmethod
+    def resource_class(cls) -> Type[SqlOperationResource]:
+        return SqlOperationResource
 
 
 # ====================================
@@ -778,6 +775,10 @@ class SqlNode(SqlOperationResource, CompiledNode):
 
 @dataclass
 class SeedNode(SeedResource, ParsedNode):  # No SQLDefaults!
+    @classmethod
+    def resource_class(cls) -> Type[SeedResource]:
+        return SeedResource
+
     def same_seeds(self, other: "SeedNode") -> bool:
         # for seeds, we check the hashes. If the hashes are different types,
         # no match. If the hashes are both the same 'path', log a warning and
@@ -896,6 +897,10 @@ class TestShouldStoreFailures:
 
 @dataclass
 class SingularTestNode(SingularTestResource, TestShouldStoreFailures, CompiledNode):
+    @classmethod
+    def resource_class(cls) -> Type[SingularTestResource]:
+        return SingularTestResource
+
     @property
     def test_node_type(self):
         return "singular"
@@ -908,6 +913,10 @@ class SingularTestNode(SingularTestResource, TestShouldStoreFailures, CompiledNo
 
 @dataclass
 class GenericTestNode(GenericTestResource, TestShouldStoreFailures, CompiledNode):
+    @classmethod
+    def resource_class(cls) -> Type[GenericTestResource]:
+        return GenericTestResource
+
     def same_contents(self, other, adapter_type: Optional[str]) -> bool:
         if other is None:
             return False
@@ -1014,7 +1023,9 @@ class IntermediateSnapshotNode(CompiledNode):
 
 @dataclass
 class SnapshotNode(SnapshotResource, CompiledNode):
-    pass
+    @classmethod
+    def resource_class(cls) -> Type[SnapshotResource]:
+        return SnapshotResource
 
 
 # ====================================
@@ -1626,3 +1637,10 @@ Resource = Union[
 ]
 
 TestNode = Union[SingularTestNode, GenericTestNode]
+
+
+RESOURCE_CLASS_TO_NODE_CLASS: Dict[Type[BaseResource], Type[BaseNode]] = {
+    node_class.resource_class(): node_class
+    for node_class in get_args(Resource)
+    if node_class is not UnitTestNode
+}

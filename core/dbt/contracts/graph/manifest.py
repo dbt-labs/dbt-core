@@ -20,7 +20,6 @@ from typing import (
     Generic,
     AbstractSet,
     ClassVar,
-    Type,
 )
 from typing_extensions import Protocol
 
@@ -43,12 +42,17 @@ from dbt.contracts.graph.nodes import (
     UnpatchedSourceDefinition,
     UnitTestDefinition,
     UnitTestFileFixture,
+    RESOURCE_CLASS_TO_NODE_CLASS,
 )
 from dbt.contracts.graph.unparsed import SourcePatch, UnparsedVersion
 from dbt.flags import get_flags
 
 # to preserve import paths
-from dbt.artifacts.resources import NodeVersion, DeferRelation, BaseResource
+from dbt.artifacts.resources import (
+    NodeVersion,
+    DeferRelation,
+    BaseResource,
+)
 from dbt.artifacts.schemas.manifest import WritableManifest, ManifestMetadata, UniqueID
 from dbt.contracts.files import (
     SourceFile,
@@ -775,6 +779,7 @@ class ManifestStateCheck(dbtClassMixin):
 
 
 NodeClassT = TypeVar("NodeClassT", bound="BaseNode")
+ResourceClassT = TypeVar("ResourceClassT", bound="BaseResource")
 
 
 @dataclass
@@ -1032,26 +1037,16 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     @classmethod
     def from_writable_manifest(cls, writable_manifest: WritableManifest) -> "Manifest":
         manifest = Manifest(
-            # TODO: update these as corresponding resources are created
-            nodes={node_id: node for node_id, node in writable_manifest.nodes.items()},
-            disabled={
-                disabled_node_id: disabled_node
-                for disabled_node_id, disabled_node in writable_manifest.disabled.items()
-            }
-            if writable_manifest.disabled is not None
-            else {},
-            unit_tests=cls._map_resources_to_map_nodes(
-                writable_manifest.unit_tests, UnitTestDefinition
-            ),
-            sources=cls._map_resources_to_map_nodes(writable_manifest.sources, SourceDefinition),
-            macros=cls._map_resources_to_map_nodes(writable_manifest.macros, Macro),
-            docs=cls._map_resources_to_map_nodes(writable_manifest.docs, Documentation),
-            exposures=cls._map_resources_to_map_nodes(writable_manifest.exposures, Exposure),
-            metrics=cls._map_resources_to_map_nodes(writable_manifest.metrics, Metric),
-            groups=cls._map_resources_to_map_nodes(writable_manifest.groups, Group),
-            semantic_models=cls._map_resources_to_map_nodes(
-                writable_manifest.semantic_models, SemanticModel
-            ),
+            nodes=cls._map_resources_to_map_nodes(writable_manifest.nodes),
+            disabled=cls._map_list_resources_to_map_list_nodes(writable_manifest.disabled),
+            unit_tests=cls._map_resources_to_map_nodes(writable_manifest.unit_tests),
+            sources=cls._map_resources_to_map_nodes(writable_manifest.sources),
+            macros=cls._map_resources_to_map_nodes(writable_manifest.macros),
+            docs=cls._map_resources_to_map_nodes(writable_manifest.docs),
+            exposures=cls._map_resources_to_map_nodes(writable_manifest.exposures),
+            metrics=cls._map_resources_to_map_nodes(writable_manifest.metrics),
+            groups=cls._map_resources_to_map_nodes(writable_manifest.groups),
+            semantic_models=cls._map_resources_to_map_nodes(writable_manifest.semantic_models),
             selectors={
                 selector_id: selector
                 for selector_id, selector in writable_manifest.selectors.items()
@@ -1072,12 +1067,25 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         }
 
     @classmethod
-    def _map_resources_to_map_nodes(
-        cls, resources_map: Mapping[str, BaseResource], node_class: Type[BaseNode]
-    ):
+    def _map_resources_to_map_nodes(cls, resources_map: Mapping[str, ResourceClassT]):
         return {
-            node_id: node_class.from_resource(resource)
+            node_id: RESOURCE_CLASS_TO_NODE_CLASS[type(resource)].from_resource(resource)
             for node_id, resource in resources_map.items()
+        }
+
+    @classmethod
+    def _map_list_resources_to_map_list_nodes(
+        cls, resources_map: Optional[Mapping[str, List[ResourceClassT]]]
+    ):
+        if resources_map is None:
+            return {}
+
+        return {
+            node_id: [
+                RESOURCE_CLASS_TO_NODE_CLASS[type(resource)].from_resource(resource)
+                for resource in resource_list
+            ]
+            for node_id, resource_list in resources_map.items()
         }
 
     def writable_manifest(self) -> "WritableManifest":
