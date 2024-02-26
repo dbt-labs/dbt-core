@@ -7,6 +7,7 @@ from dbt.cli.main import dbtRunner
 from dbt.exceptions import DbtProjectError
 from dbt.tests.util import read_file, write_file
 from dbt.version import __version__ as dbt_version
+from dbt.events.contextvars import get_node_info
 
 
 class TestDbtRunner:
@@ -100,3 +101,20 @@ class TestDbtRunnerQueryComments:
         dbt.invoke(["build", "--select", "models"])
         log_file = read_file(logs_dir, "dbt.log")
         assert f"comment: {dbt_version}" in log_file
+
+
+class TestDbtRunnerHooks:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "models.sql": "select 1 as id",
+        }
+
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {"on-run-end": ["select 1;"]}
+
+    def test_node_info_non_persistence(self, project):
+        dbt = dbtRunner()
+        dbt.invoke(["run", "--select", "models"])
+        assert get_node_info() == {}

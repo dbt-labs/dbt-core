@@ -81,9 +81,9 @@ def reset_contextvars(prefix: str, **kwargs: contextvars.Token) -> None:
 # remove from contextvars
 def unset_contextvars(prefix: str, *keys: str) -> None:
     for k in keys:
-        if k in _context_vars:
-            log_key = f"{prefix}{k}"
-            _context_vars[log_key].set(Ellipsis)
+        prefix_key = f"{prefix}{k}"
+        if prefix_key in _context_vars:
+            _context_vars[prefix_key].set(Ellipsis)
 
 
 # Context manager or decorator to set and unset the context vars
