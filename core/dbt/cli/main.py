@@ -189,6 +189,7 @@ def cli(ctx, **kwargs):
 @p.exclude
 @p.full_refresh
 @p.include_saved_query
+@p.no_skip_on_failture
 @p.profile
 @p.profiles_dir
 @p.project_dir
@@ -557,6 +558,7 @@ def parse(ctx, **kwargs):
 @global_flags
 @p.exclude
 @p.full_refresh
+@p.no_skip_on_failture
 @p.profile
 @p.profiles_dir
 @p.project_dir
@@ -593,6 +595,7 @@ def run(ctx, **kwargs):
 @p.project_dir
 @p.profiles_dir
 @p.vars
+@p.no_skip_on_failture
 @p.profile
 @p.target
 @p.target_path
@@ -689,6 +692,7 @@ def run_operation(ctx, **kwargs):
 @global_flags
 @p.exclude
 @p.full_refresh
+@p.no_skip_on_failture
 @p.profile
 @p.profiles_dir
 @p.project_dir
