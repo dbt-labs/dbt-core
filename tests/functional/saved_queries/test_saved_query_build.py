@@ -32,4 +32,4 @@ packages:
         run_dbt(["deps"])
         result = run_dbt(["build"])
         assert len(result.results) == 3
-        assert "NO-OP" in [r.node.status for r in result.results]
+        assert "NO-OP" in [r.message for r in result.results]
