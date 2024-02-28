@@ -52,6 +52,10 @@ class SnapshotConfig(NodeConfig):
         if data.get("materialized") and data.get("materialized") != "snapshot":
             raise ValidationError("A snapshot must have a materialized value of 'snapshot'")
 
+        # Validate if there are duplicate column names in check_cols.
+        if len(data.get("check_cols")) != len(set(data.get("check_cols"))):
+            raise ValidationError(f"Duplicate column names in 'check_cols': {data['check_cols']}.")
+
     # Called by "calculate_node_config_dict" in ContextConfigGenerator
     def finalize_and_validate(self):
         data = self.to_dict(omit_none=True)
