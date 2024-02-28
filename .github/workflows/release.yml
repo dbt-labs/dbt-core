@@ -129,7 +129,7 @@ jobs:
     if: ${{ !failure() && !cancelled() }}
     needs: [job-setup, bump-version-generate-changelog]
 
-    uses: dbt-labs/dbt-release/.github/workflows/build.yml@main
+    uses: dbt-labs/dbt-release/.github/workflows/build.yml@pip_install_editable_requirements
 
     with:
       sha: ${{ needs.bump-version-generate-changelog.outputs.final_sha }}
