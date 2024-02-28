@@ -8,7 +8,7 @@ from dbt_common.dataclass_schema import StrEnum
 
 from .graph import UniqueId
 
-from dbt.contracts.graph.manifest import Manifest, WritableManifest
+from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import (
     SingularTestNode,
     Exposure,
@@ -725,7 +725,7 @@ class StateSelectorMethod(SelectorMethod):
                 f'Got an invalid selector "{selector}", expected one of ' f'"{list(state_checks)}"'
             )
 
-        manifest: WritableManifest = self.previous_state.manifest
+        manifest: Manifest = self.previous_state.manifest
 
         for unique_id, node in self.all_nodes(included_nodes):
             previous_node: Optional[SelectorTarget] = None

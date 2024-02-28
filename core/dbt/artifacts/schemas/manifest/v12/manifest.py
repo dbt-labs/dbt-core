@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Mapping, Iterable, Tuple, Optional, Dict, List, Any
+from typing import Mapping, Iterable, Tuple, Optional, Dict, List, Any, Union
 from uuid import UUID
 
 from dbt.artifacts.schemas.base import (
@@ -19,17 +19,38 @@ from dbt.artifacts.resources import (
     SemanticModel,
     SourceDefinition,
     UnitTestDefinition,
-)
-
-# TODO: remove usage of dbt modules other than dbt.artifacts
-from dbt.contracts.graph.nodes import (
-    GraphMemberNode,
-    ManifestNode,
+    Seed,
+    Analysis,
+    SingularTest,
+    HookNode,
+    Model,
+    SqlOperation,
+    GenericTest,
+    Snapshot,
 )
 
 
 NodeEdgeMap = Dict[str, List[str]]
 UniqueID = str
+ManifestResource = Union[
+    Seed,
+    Analysis,
+    SingularTest,
+    HookNode,
+    Model,
+    SqlOperation,
+    GenericTest,
+    Snapshot,
+]
+DisabledManifestResource = Union[
+    ManifestResource,
+    SourceDefinition,
+    Exposure,
+    Metric,
+    SavedQuery,
+    SemanticModel,
+    UnitTestDefinition,
+]
 
 
 @dataclass
@@ -78,7 +99,7 @@ class ManifestMetadata(BaseArtifactMetadata):
 @dataclass
 @schema_version("manifest", 12)
 class WritableManifest(ArtifactMixin):
-    nodes: Mapping[UniqueID, ManifestNode] = field(
+    nodes: Mapping[UniqueID, ManifestResource] = field(
         metadata=dict(description=("The nodes defined in the dbt project and its dependencies"))
     )
     sources: Mapping[UniqueID, SourceDefinition] = field(
@@ -104,7 +125,7 @@ class WritableManifest(ArtifactMixin):
     selectors: Mapping[UniqueID, Any] = field(
         metadata=dict(description=("The selectors defined in selectors.yml"))
     )
-    disabled: Optional[Mapping[UniqueID, List[GraphMemberNode]]] = field(
+    disabled: Optional[Mapping[UniqueID, List[DisabledManifestResource]]] = field(
         metadata=dict(description="A mapping of the disabled nodes in the target")
     )
     parent_map: Optional[NodeEdgeMap] = field(

@@ -15,7 +15,7 @@ import dbt.tracking
 import dbt.utils
 from dbt.adapters.base import BaseRelation
 from dbt.adapters.factory import get_adapter
-from dbt.contracts.graph.manifest import WritableManifest
+from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import ResultNode
 from dbt.artifacts.schemas.results import NodeStatus, RunningStatus, RunStatus, BaseResult
 from dbt.artifacts.schemas.run import RunExecutionResult, RunResult
@@ -643,7 +643,7 @@ class GraphRunnableTask(ConfiguredTask):
     def task_end_messages(self, results):
         print_run_end_messages(results)
 
-    def _get_previous_state(self) -> Optional[WritableManifest]:
+    def _get_previous_state(self) -> Optional[Manifest]:
         state = self.previous_defer_state or self.previous_state
         if not state:
             raise DbtRuntimeError(
@@ -654,5 +654,5 @@ class GraphRunnableTask(ConfiguredTask):
             raise DbtRuntimeError(f'Could not find manifest in --state path: "{state}"')
         return state.manifest
 
-    def _get_deferred_manifest(self) -> Optional[WritableManifest]:
+    def _get_deferred_manifest(self) -> Optional[Manifest]:
         return self._get_previous_state() if self.args.defer else None
