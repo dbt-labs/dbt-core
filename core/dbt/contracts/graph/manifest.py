@@ -42,12 +42,17 @@ from dbt.contracts.graph.nodes import (
     UnpatchedSourceDefinition,
     UnitTestDefinition,
     UnitTestFileFixture,
+    RESOURCE_CLASS_TO_NODE_CLASS,
 )
 from dbt.contracts.graph.unparsed import SourcePatch, UnparsedVersion
 from dbt.flags import get_flags
 
 # to preserve import paths
-from dbt.artifacts.resources import NodeVersion, DeferRelation
+from dbt.artifacts.resources import (
+    NodeVersion,
+    DeferRelation,
+    BaseResource,
+)
 from dbt.artifacts.schemas.manifest import WritableManifest, ManifestMetadata, UniqueID
 from dbt.contracts.files import (
     SourceFile,
@@ -774,6 +779,7 @@ class ManifestStateCheck(dbtClassMixin):
 
 
 NodeClassT = TypeVar("NodeClassT", bound="BaseNode")
+ResourceClassT = TypeVar("ResourceClassT", bound="BaseResource")
 
 
 @dataclass
@@ -1029,8 +1035,58 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         self.metadata.send_anonymous_usage_stats = get_flags().SEND_ANONYMOUS_USAGE_STATS
 
     @classmethod
+    def from_writable_manifest(cls, writable_manifest: WritableManifest) -> "Manifest":
+        manifest = Manifest(
+            nodes=cls._map_resources_to_map_nodes(writable_manifest.nodes),
+            disabled=cls._map_list_resources_to_map_list_nodes(writable_manifest.disabled),
+            unit_tests=cls._map_resources_to_map_nodes(writable_manifest.unit_tests),
+            sources=cls._map_resources_to_map_nodes(writable_manifest.sources),
+            macros=cls._map_resources_to_map_nodes(writable_manifest.macros),
+            docs=cls._map_resources_to_map_nodes(writable_manifest.docs),
+            exposures=cls._map_resources_to_map_nodes(writable_manifest.exposures),
+            metrics=cls._map_resources_to_map_nodes(writable_manifest.metrics),
+            groups=cls._map_resources_to_map_nodes(writable_manifest.groups),
+            semantic_models=cls._map_resources_to_map_nodes(writable_manifest.semantic_models),
+            selectors={
+                selector_id: selector
+                for selector_id, selector in writable_manifest.selectors.items()
+            },
+        )
+
+        return manifest
+
     def _map_nodes_to_map_resources(cls, nodes_map: MutableMapping[str, NodeClassT]):
         return {node_id: node.to_resource() for node_id, node in nodes_map.items()}
+
+    def _map_list_nodes_to_map_list_resources(
+        cls, nodes_map: MutableMapping[str, List[NodeClassT]]
+    ):
+        return {
+            node_id: [node.to_resource() for node in node_list]
+            for node_id, node_list in nodes_map.items()
+        }
+
+    @classmethod
+    def _map_resources_to_map_nodes(cls, resources_map: Mapping[str, ResourceClassT]):
+        return {
+            node_id: RESOURCE_CLASS_TO_NODE_CLASS[type(resource)].from_resource(resource)
+            for node_id, resource in resources_map.items()
+        }
+
+    @classmethod
+    def _map_list_resources_to_map_list_nodes(
+        cls, resources_map: Optional[Mapping[str, List[ResourceClassT]]]
+    ):
+        if resources_map is None:
+            return {}
+
+        return {
+            node_id: [
+                RESOURCE_CLASS_TO_NODE_CLASS[type(resource)].from_resource(resource)
+                for resource in resource_list
+            ]
+            for node_id, resource_list in resources_map.items()
+        }
 
     def writable_manifest(self) -> "WritableManifest":
         self.build_parent_and_child_maps()
@@ -1038,7 +1094,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         self.fill_tracking_metadata()
 
         return WritableManifest(
-            nodes=self.nodes,
+            nodes=self._map_nodes_to_map_resources(self.nodes),
             sources=self._map_nodes_to_map_resources(self.sources),
             macros=self._map_nodes_to_map_resources(self.macros),
             docs=self._map_nodes_to_map_resources(self.docs),
@@ -1047,7 +1103,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             groups=self._map_nodes_to_map_resources(self.groups),
             selectors=self.selectors,
             metadata=self.metadata,
-            disabled=self.disabled,
+            disabled=self._map_list_nodes_to_map_list_resources(self.disabled),
             child_map=self.child_map,
             parent_map=self.parent_map,
             group_map=self.group_map,
@@ -1369,7 +1425,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     def merge_from_artifact(
         self,
         adapter,
-        other: "WritableManifest",
+        other: "Manifest",
         selected: AbstractSet[UniqueID],
         favor_state: bool = False,
     ) -> None:

@@ -4,7 +4,7 @@ from typing import AbstractSet, Any, List, Iterable, Set, Optional
 from dbt.adapters.base import BaseRelation
 from dbt.clients.jinja import MacroGenerator
 from dbt.context.providers import generate_runtime_model_context
-from dbt.contracts.graph.manifest import WritableManifest
+from dbt.contracts.graph.manifest import Manifest
 from dbt.artifacts.schemas.run import RunStatus, RunResult
 from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_common.exceptions import DbtInternalError, CompilationError
@@ -94,7 +94,7 @@ class CloneTask(GraphRunnableTask):
     def raise_on_first_error(self):
         return False
 
-    def _get_deferred_manifest(self) -> Optional[WritableManifest]:
+    def _get_deferred_manifest(self) -> Optional[Manifest]:
         # Unlike other commands, 'clone' always requires a state manifest
         # Load previous state, regardless of whether --defer flag has been set
         return self._get_previous_state()
