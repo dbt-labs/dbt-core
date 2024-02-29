@@ -79,7 +79,7 @@ from dbt.context.docs import generate_runtime_docs_context
 from dbt.context.macro_resolver import MacroResolver, TestMacroNamespace
 from dbt.context.configured import generate_macro_context
 from dbt.context.providers import ParseProvider, generate_runtime_macro_context
-from dbt.contracts.files import ParseFileType, SchemaSourceFile
+from dbt.contracts.files import FileHash, ParseFileType, SchemaSourceFile
 from dbt.parser.read_files import (
     ReadFilesFromFileSystem,
     load_source_file,
@@ -107,7 +107,7 @@ from dbt.contracts.graph.nodes import (
     ResultNode,
     ModelNode,
 )
-from dbt.artifacts.resources import NodeRelation, NodeVersion, FileHash
+from dbt.artifacts.resources import NodeRelation, NodeVersion
 from dbt.artifacts.schemas.base import Writable
 from dbt.exceptions import (
     TargetNotFoundError,
@@ -401,15 +401,13 @@ class ManifestLoader:
                         )
                     )
 
-                    # Get traceback info
                     tb_info = traceback.format_exc()
-                    formatted_lines = tb_info.splitlines()
-                    (_, line, method) = formatted_lines[-3].split(", ")
+                    tb_last_frame = traceback.extract_tb(exc.__traceback__)[-1]
                     exc_info = {
                         "traceback": tb_info,
-                        "exception": formatted_lines[-1],
-                        "code": formatted_lines[-2],
-                        "location": f"{line} {method}",
+                        "exception": tb_info.splitlines()[-1],
+                        "code": tb_last_frame.line,  # if the source is not available, it is None.
+                        "location": f"line {tb_last_frame.lineno} in {tb_last_frame.name}",
                     }
 
                     # get file info for local logs
