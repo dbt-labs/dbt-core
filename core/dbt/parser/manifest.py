@@ -401,12 +401,14 @@ class ManifestLoader:
                         )
                     )
 
+                    # Get traceback info
                     tb_info = traceback.format_exc()
+                    # index last stack frame in traceback (i.e. lastest exception and its context)
                     tb_last_frame = traceback.extract_tb(exc.__traceback__)[-1]
                     exc_info = {
                         "traceback": tb_info,
                         "exception": tb_info.splitlines()[-1],
-                        "code": tb_last_frame.line,  # if the source is not available, it is None.
+                        "code": tb_last_frame.line,  # if the source is not available, it is None
                         "location": f"line {tb_last_frame.lineno} in {tb_last_frame.name}",
                     }
 
