@@ -22,7 +22,7 @@ from dbt.artifacts.schemas.run import RunExecutionResult, RunResult
 from dbt.contracts.state import PreviousState
 from dbt_common.events.contextvars import log_contextvars, task_contextvars
 from dbt_common.events.functions import fire_event, warn_or_error
-from dbt_common.events.types import Formatting
+from dbt_common.events.types import Formatting, Note
 from dbt.events.types import (
     LogCancelLine,
     DefaultSelector,
@@ -32,7 +32,6 @@ from dbt.events.types import (
     ConcurrencyLine,
     EndRunResult,
     NothingToDo,
-    Note,
 )
 from dbt.exceptions import (
     DbtInternalError,
