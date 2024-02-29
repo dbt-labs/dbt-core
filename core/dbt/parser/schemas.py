@@ -562,6 +562,14 @@ class PatchParser(YamlReader, Generic[NonSourceTarget, Parsed]):
                         validate_and_rename(column)
 
     def patch_node_config(self, node, patch):
+        if "access" in patch.config:
+            if AccessType.is_valid(patch.config["access"]):
+                patch.config["access"] = AccessType(patch.config["access"])
+            else:
+                raise InvalidAccessTypeError(
+                    unique_id=node.unique_id,
+                    field_value=patch.config["access"],
+                )
         # Get the ContextConfig that's used in calculating the config
         # This must match the model resource_type that's being patched
         config = ContextConfig(

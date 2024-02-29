@@ -359,8 +359,9 @@ class ManifestTest(unittest.TestCase):
         del os.environ["DBT_ENV_CUSTOM_ENV_key"]
         reset_metadata_vars()
 
+    @mock.patch.object(tracking, "active_user")
     @freezegun.freeze_time("2018-02-14T09:15:13Z")
-    def test_no_nodes(self):
+    def test_no_nodes(self, mock_user):
         manifest = Manifest(
             nodes={},
             sources={},
@@ -377,6 +378,8 @@ class ManifestTest(unittest.TestCase):
         )
 
         invocation_id = dbt_common.invocation._INVOCATION_ID
+        mock_user.id = "cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf"
+        set_from_args(Namespace(SEND_ANONYMOUS_USAGE_STATS=False), None)
         self.assertEqual(
             manifest.writable_manifest().to_dict(omit_none=True),
             {
@@ -396,6 +399,8 @@ class ManifestTest(unittest.TestCase):
                     "dbt_version": dbt.version.__version__,
                     "env": {ENV_KEY_NAME: "value"},
                     "invocation_id": invocation_id,
+                    "send_anonymous_usage_stats": False,
+                    "user_id": "cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf",
                 },
                 "docs": {},
                 "disabled": {},
@@ -406,7 +411,10 @@ class ManifestTest(unittest.TestCase):
         )
 
     @freezegun.freeze_time("2018-02-14T09:15:13Z")
-    def test_nested_nodes(self):
+    @mock.patch.object(tracking, "active_user")
+    def test_nested_nodes(self, mock_user):
+        set_from_args(Namespace(SEND_ANONYMOUS_USAGE_STATS=False), None)
+        mock_user.id = "cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf"
         nodes = deepcopy(self.nested_nodes)
         manifest = Manifest(
             nodes=nodes,
@@ -422,6 +430,8 @@ class ManifestTest(unittest.TestCase):
         )
         serialized = manifest.writable_manifest().to_dict(omit_none=True)
         self.assertEqual(serialized["metadata"]["generated_at"], "2018-02-14T09:15:13Z")
+        self.assertEqual(serialized["metadata"]["user_id"], mock_user.id)
+        self.assertFalse(serialized["metadata"]["send_anonymous_usage_stats"])
         self.assertEqual(serialized["docs"], {})
         self.assertEqual(serialized["disabled"], {})
         parent_map = serialized["parent_map"]
@@ -512,28 +522,6 @@ class ManifestTest(unittest.TestCase):
             self.assertEqual(frozenset(node), REQUIRED_PARSED_NODE_KEYS)
 
     @mock.patch.object(tracking, "active_user")
-    def test_metadata(self, mock_user):
-        mock_user.id = "cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf"
-        dbt_common.invocation._INVOCATION_ID = "01234567-0123-0123-0123-0123456789ab"
-        set_from_args(Namespace(SEND_ANONYMOUS_USAGE_STATS=False), None)
-        now = datetime.utcnow()
-        self.assertEqual(
-            ManifestMetadata(
-                project_id="098f6bcd4621d373cade4e832627b4f6",
-                adapter_type="postgres",
-                generated_at=now,
-            ),
-            ManifestMetadata(
-                project_id="098f6bcd4621d373cade4e832627b4f6",
-                user_id="cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf",
-                send_anonymous_usage_stats=False,
-                adapter_type="postgres",
-                generated_at=now,
-                invocation_id="01234567-0123-0123-0123-0123456789ab",
-            ),
-        )
-
-    @mock.patch.object(tracking, "active_user")
     @freezegun.freeze_time("2018-02-14T09:15:13Z")
     def test_no_nodes_with_metadata(self, mock_user):
         mock_user.id = "cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf"
@@ -543,6 +531,8 @@ class ManifestTest(unittest.TestCase):
             project_id="098f6bcd4621d373cade4e832627b4f6",
             adapter_type="postgres",
             generated_at=datetime.utcnow(),
+            user_id="cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf",
+            send_anonymous_usage_stats=False,
         )
         manifest = Manifest(
             nodes={},
@@ -884,8 +874,11 @@ class MixedManifestTest(unittest.TestCase):
     def tearDown(self):
         del os.environ["DBT_ENV_CUSTOM_ENV_key"]
 
+    @mock.patch.object(tracking, "active_user")
     @freezegun.freeze_time("2018-02-14T09:15:13Z")
-    def test_no_nodes(self):
+    def test_no_nodes(self, mock_user):
+        mock_user.id = "cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf"
+        set_from_args(Namespace(SEND_ANONYMOUS_USAGE_STATS=False), None)
         metadata = ManifestMetadata(
             generated_at=datetime.utcnow(), invocation_id="01234567-0123-0123-0123-0123456789ab"
         )
@@ -921,6 +914,8 @@ class MixedManifestTest(unittest.TestCase):
                     "dbt_version": dbt.version.__version__,
                     "invocation_id": "01234567-0123-0123-0123-0123456789ab",
                     "env": {ENV_KEY_NAME: "value"},
+                    "send_anonymous_usage_stats": False,
+                    "user_id": "cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf",
                 },
                 "docs": {},
                 "disabled": {},

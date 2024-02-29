@@ -8,6 +8,7 @@ from tests.functional.configs.fixtures import BaseConfigProject
 from tests.functional.saved_queries.fixtures import (
     saved_queries_yml,
     saved_query_description,
+    saved_query_with_cache_configs_defined_yml,
     saved_query_with_extra_config_attributes_yml,
     saved_query_with_export_configs_defined_at_saved_query_level_yml,
     saved_query_without_export_configs_defined_yml,
@@ -29,6 +30,7 @@ class TestSavedQueryConfigs(BaseConfigProject):
                         "+enabled": True,
                         "+export_as": ExportDestinationType.VIEW.value,
                         "+schema": "my_default_export_schema",
+                        "+cache": {"enabled": True},
                     }
                 },
             },
@@ -58,6 +60,7 @@ class TestSavedQueryConfigs(BaseConfigProject):
         saved_query = result.result.saved_queries["saved_query.test.test_saved_query"]
         assert saved_query.config.export_as == ExportDestinationType.VIEW
         assert saved_query.config.schema == "my_default_export_schema"
+        assert saved_query.config.cache.enabled is True
 
         # disable the saved_query via project config and rerun
         config_patch = {"saved-queries": {"test": {"test_saved_query": {"+enabled": False}}}}
@@ -65,6 +68,33 @@ class TestSavedQueryConfigs(BaseConfigProject):
         result = runner.invoke(["parse"])
         assert result.success
         assert len(result.result.saved_queries) == 0
+
+
+# Test that the cache will default to enabled = false if not set in the saved_query config
+class TestSavedQueryDefaultCacheConfigs(BaseConfigProject):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "saved_queries.yml": saved_query_with_extra_config_attributes_yml,
+            "schema.yml": schema_yml,
+            "fct_revenue.sql": fct_revenue_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+            "docs.md": saved_query_description,
+        }
+
+    def test_basic_saved_query_config(
+        self,
+        project,
+    ):
+        runner = dbtTestRunner()
+
+        # parse with default fixture project config
+        result = runner.invoke(["parse"])
+        assert result.success
+        assert isinstance(result.result, Manifest)
+        assert len(result.result.saved_queries) == 1
+        saved_query = result.result.saved_queries["saved_query.test.test_saved_query"]
+        assert saved_query.config.cache.enabled is False
 
 
 class TestExportConfigsWithAdditionalProperties(BaseConfigProject):
@@ -184,3 +214,79 @@ class TestInheritingExportConfigsFromProject(BaseConfigProject):
         assert len(result.result.saved_queries) == 1
         saved_query = result.result.saved_queries["saved_query.test.test_saved_query"]
         assert saved_query.config.export_as == ExportDestinationType.TABLE
+
+
+# cache can be specified just in a SavedQuery config
+class TestSavedQueryLevelCacheConfigs(BaseConfigProject):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "saved_queries.yml": saved_query_with_cache_configs_defined_yml,
+            "schema.yml": schema_yml,
+            "fct_revenue.sql": fct_revenue_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+            "docs.md": saved_query_description,
+        }
+
+    def test_basic_saved_query_config(
+        self,
+        project,
+    ):
+        runner = dbtTestRunner()
+
+        # parse with default fixture project config
+        result = runner.invoke(["parse"])
+        assert result.success
+        assert isinstance(result.result, Manifest)
+        assert len(result.result.saved_queries) == 1
+        saved_query = result.result.saved_queries["saved_query.test.test_saved_query"]
+        assert saved_query.config.cache.enabled is True
+
+
+# the cache defined in yaml for the SavedQuery overrides settings from the dbt_project.toml
+class TestSavedQueryCacheConfigsOverride(BaseConfigProject):
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "saved-queries": {
+                "test": {
+                    "test_saved_query": {
+                        "+cache": {"enabled": True},
+                    }
+                },
+            },
+        }
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "saved_queries.yml": saved_query_with_cache_configs_defined_yml,
+            "schema.yml": schema_yml,
+            "fct_revenue.sql": fct_revenue_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+            "docs.md": saved_query_description,
+        }
+
+    def test_override_saved_query_config(
+        self,
+        project,
+    ):
+        runner = dbtTestRunner()
+
+        # parse with default fixture project config
+        result = runner.invoke(["parse"])
+        assert result.success
+        assert isinstance(result.result, Manifest)
+        assert len(result.result.saved_queries) == 1
+        saved_query = result.result.saved_queries["saved_query.test.test_saved_query"]
+        assert saved_query.config.cache.enabled is True
+
+        # set cache to enabled=False via project config but since it's set to true at the saved_query
+        # level, it should stay enabled
+        config_patch = {
+            "saved-queries": {"test": {"test_saved_query": {"+cache": {"enabled": False}}}}
+        }
+        update_config_file(config_patch, project.project_root, "dbt_project.yml")
+        result = runner.invoke(["parse"])
+        assert result.success
+        assert saved_query.config.cache.enabled is True

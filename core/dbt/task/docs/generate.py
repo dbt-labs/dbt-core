@@ -1,5 +1,6 @@
 import os
 import shutil
+from dataclasses import replace
 from datetime import datetime
 from typing import Dict, List, Any, Optional, Tuple, Set, Iterable
 import agate
@@ -131,7 +132,7 @@ class Catalog(Dict[CatalogKey, CatalogTable]):
             if key in node_map:
                 unique_id = node_map[key]
                 if selected_node_ids is None or unique_id in selected_node_ids:
-                    nodes[unique_id] = table.replace(unique_id=unique_id)
+                    nodes[unique_id] = replace(table, unique_id=unique_id)
 
             unique_ids = source_map.get(table.key(), set())
             for unique_id in unique_ids:
@@ -142,7 +143,7 @@ class Catalog(Dict[CatalogKey, CatalogTable]):
                         table.to_dict(omit_none=True),
                     )
                 elif selected_node_ids is None or unique_id in selected_node_ids:
-                    sources[unique_id] = table.replace(unique_id=unique_id)
+                    sources[unique_id] = replace(table, unique_id=unique_id)
         return nodes, sources
 
 

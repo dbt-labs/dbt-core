@@ -1,6 +1,6 @@
 import enum
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from itertools import chain, islice
 from mashumaro.mixins.msgpack import DataClassMessagePackMixin
 from multiprocessing.synchronize import Lock
@@ -23,6 +23,7 @@ from typing import (
 )
 from typing_extensions import Protocol
 
+from dbt import tracking
 from dbt.contracts.graph.nodes import (
     BaseNode,
     Documentation,
@@ -34,7 +35,6 @@ from dbt.contracts.graph.nodes import (
     ManifestNode,
     Metric,
     ModelNode,
-    DeferRelation,
     ResultNode,
     SavedQuery,
     SemanticModel,
@@ -44,9 +44,10 @@ from dbt.contracts.graph.nodes import (
     UnitTestFileFixture,
 )
 from dbt.contracts.graph.unparsed import SourcePatch, UnparsedVersion
+from dbt.flags import get_flags
 
 # to preserve import paths
-from dbt.artifacts.resources import NodeVersion
+from dbt.artifacts.resources import NodeVersion, DeferRelation
 from dbt.artifacts.schemas.manifest import WritableManifest, ManifestMetadata, UniqueID
 from dbt.contracts.files import (
     SourceFile,
@@ -1023,6 +1024,10 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
                     group_map[node.group].append(node.unique_id)
         self.group_map = group_map
 
+    def fill_tracking_metadata(self):
+        self.metadata.user_id = tracking.active_user.id if tracking.active_user else None
+        self.metadata.send_anonymous_usage_stats = get_flags().SEND_ANONYMOUS_USAGE_STATS
+
     @classmethod
     def _map_nodes_to_map_resources(cls, nodes_map: MutableMapping[str, NodeClassT]):
         return {node_id: node.to_resource() for node_id, node in nodes_map.items()}
@@ -1030,6 +1035,8 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     def writable_manifest(self) -> "WritableManifest":
         self.build_parent_and_child_maps()
         self.build_group_map()
+        self.fill_tracking_metadata()
+
         return WritableManifest(
             nodes=self.nodes,
             sources=self._map_nodes_to_map_resources(self.sources),
@@ -1385,14 +1392,14 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
                 )
             ):
                 merged.add(unique_id)
-                self.nodes[unique_id] = node.replace(deferred=True)
+                self.nodes[unique_id] = replace(node, deferred=True)
 
             # for all other nodes, add 'defer_relation'
             elif current and node.resource_type in refables and not node.is_ephemeral:
                 defer_relation = DeferRelation(
                     node.database, node.schema, node.alias, node.relation_name
                 )
-                self.nodes[unique_id] = current.replace(defer_relation=defer_relation)
+                self.nodes[unique_id] = replace(current, defer_relation=defer_relation)
 
         # Rebuild the flat_graph, which powers the 'graph' context variable,
         # now that we've deferred some nodes
@@ -1579,7 +1586,12 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
 class MacroManifest(MacroMethods):
     def __init__(self, macros) -> None:
         self.macros = macros
-        self.metadata = ManifestMetadata()
+        self.metadata = ManifestMetadata(
+            user_id=tracking.active_user.id if tracking.active_user else None,
+            send_anonymous_usage_stats=get_flags().SEND_ANONYMOUS_USAGE_STATS
+            if tracking.active_user
+            else None,
+        )
         # This is returned by the 'graph' context property
         # in the ProviderContext class.
         self.flat_graph: Dict[str, Any] = {}
