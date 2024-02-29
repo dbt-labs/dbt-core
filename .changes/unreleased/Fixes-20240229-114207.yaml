@@ -1,0 +1,6 @@
+kind: Fixes
+body: 'Bug fix: don''t parse Jinja in filters for input metrics or measures.'
+time: 2024-02-29T11:42:07.259143-08:00
+custom:
+  Author: courtneyholcomb
+  Issue: "9582"
