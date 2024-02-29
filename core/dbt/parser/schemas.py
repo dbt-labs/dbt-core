@@ -887,7 +887,7 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
     def patch_constraints(self, node, constraints):
         contract_config = node.config.get("contract")
         if contract_config.enforced is True:
-            self._validate_constraint_prerequisites(node, constraints)
+            self._validate_constraint_prerequisites(node)
 
             if any(
                 c for c in constraints if "type" not in c or not ConstraintType.is_valid(c["type"])
@@ -897,12 +897,43 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
                     f"Type must be one of {[ct.value for ct in ConstraintType]}"
                 )
 
+        self._validate_pk_constraints(node, constraints)
         node.constraints = [ModelLevelConstraint.from_dict(c) for c in constraints]
 
-    def _validate_constraint_prerequisites(
-        self, model_node: ModelNode, constraints: List[Dict[str, Any]]
-    ):
+    def _validate_pk_constraints(self, model_node: ModelNode, constraints: List[Dict[str, Any]]):
+        errors = []
+        # check for primary key constraints defined at the column level
+        pk_col: List[str] = []
+        for col in model_node.columns.values():
+            for constraint in col.constraints:
+                if constraint.type == ConstraintType.primary_key:
+                    pk_col.append(col.name)
 
+        if len(pk_col) > 1:
+            errors.append(
+                f"Found {len(pk_col)} columns ({pk_col}) with primary key constraints defined. "
+                "Primary keys for multiple columns must be defined as a model level constraint."
+            )
+
+        if len(pk_col) > 0 and (
+            any(
+                constraint.type == ConstraintType.primary_key
+                for constraint in model_node.constraints
+            )
+            or any(constraint["type"] == ConstraintType.primary_key for constraint in constraints)
+        ):
+            errors.append(
+                "Primary key constraints defined at the model level and the columns level. "
+                "Primary keys can be defined at the model level or the column level, not both."
+            )
+
+        if errors:
+            raise ParsingError(
+                f"Primary key constraint error: ({model_node.original_file_path})\n"
+                + "\n".join(errors)
+            )
+
+    def _validate_constraint_prerequisites(self, model_node: ModelNode):
         column_warn_unsupported = [
             constraint.warn_unsupported
             for column in model_node.columns.values()
@@ -928,28 +959,6 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
 
         if str(model_node.language) != "sql":
             errors.append(f"Language Error: Expected 'sql' but found '{model_node.language}'")
-
-        # check for primary key constraints defined at the column level
-        pk_col: List[str] = []
-        for col in model_node.columns.values():
-            for constraint in col.constraints:
-                if constraint.type == "primary_key":
-                    pk_col.append(col.name)
-
-        if len(pk_col) > 1:
-            errors.append(
-                f"Found {len(pk_col)} columns ({pk_col}) with primary key constraints defined. "
-                "Primary keys for multiple columns must be defined as a model level constraint."
-            )
-
-        if len(pk_col) > 0 and (
-            any(constraint.type == "primary_key" for constraint in model_node.constraints)
-            or any(constraint["type"] == "primary_key" for constraint in constraints)
-        ):
-            errors.append(
-                "Primary key constraints defined at the model level and the columns level. "
-                "Primary keys can be defined at the model level or the column level, not both."
-            )
 
         if errors:
             raise ParsingError(
