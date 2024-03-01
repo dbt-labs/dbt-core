@@ -211,6 +211,7 @@ class PartialParsing:
         if (
             file_id not in self.project_parser_files[project_name][parser_name]
             and file_id not in self.file_diff["deleted"]
+            and file_id not in self.file_diff["deleted_schema_files"]
         ):
             self.project_parser_files[project_name][parser_name].append(file_id)
 
