@@ -35,7 +35,7 @@ class TestLS(BaseConfigProject):
         ls_result = runner.invoke(cli, ["ls"])
         assert "1 seed" in ls_result.output
         assert "1 model" in ls_result.output
-        assert "5 data_tests" in ls_result.output
+        assert "5 data tests" in ls_result.output
         assert "1 snapshot" in ls_result.output
 
 

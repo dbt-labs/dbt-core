@@ -105,6 +105,14 @@ exclude = click.option(
     help="Specify the nodes to exclude.",
 )
 
+export_saved_queries = click.option(
+    "--export-saved-queries/--no-export-saved-queries",
+    envvar="DBT_EXPORT_SAVED_QUERIES",
+    help="Export saved queries within the 'build' command, otherwise no-op",
+    is_flag=True,
+    hidden=True,
+)
+
 fail_fast = click.option(
     "--fail-fast/--no-fail-fast",
     "-x/ ",
@@ -406,7 +414,8 @@ resource_type = click.option(
     default=(),
 )
 
-include_saved_query = click.option(
+# Renamed to --export-saved-queries
+deprecated_include_saved_query = click.option(
     "--include-saved-query/--no-include-saved-query",
     envvar="DBT_INCLUDE_SAVED_QUERY",
     help="Include saved queries in the list of resources to be selected for build command",

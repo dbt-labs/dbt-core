@@ -25,7 +25,7 @@ with open(os.path.join(this_directory, "README.md")) as f:
 
 
 package_name = "dbt-core"
-package_version = "1.8.0a1"
+package_version = "1.8.0b1"
 description = """With dbt, data analysts and engineers can build analytics \
 the way engineers build applications."""
 
@@ -68,16 +68,18 @@ setup(
         "pathspec>=0.9,<0.12",
         "sqlparse>=0.2.3,<0.5",
         # ----
-        # These are major-version-0 packages also maintained by dbt-labs. Accept patches.
+        # These are major-version-0 packages also maintained by dbt-labs.
+        # Accept patches but avoid automatically updating past a set minor version range.
         "dbt-extractor>=0.5.0,<=0.6",
         "minimal-snowplow-tracker>=0.0.2,<0.1",
-        "dbt-semantic-interfaces<1.0.0a1",
-        "dbt-common<1.0",
-        "dbt-adapters>=0.1.0a2,<1.0",
+        "dbt-semantic-interfaces>=0.5.0a2,<0.6",
+        # Minor versions for these are expected to be backwards-compatible
+        "dbt-common<2.0",
+        "dbt-adapters>=0.1.0a2,<2.0",
         # ----
         # Expect compatibility with all new versions of these packages, so lower bounds only.
         "packaging>20.9",
-        "protobuf>=4.0.0",
+        "protobuf>=4.0.0,<5",
         "pytz>=2015.7",
         "pyyaml>=6.0",
         "daff>=1.3.46",
@@ -95,6 +97,7 @@ setup(
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
     ],
     python_requires=">=3.8",
 )

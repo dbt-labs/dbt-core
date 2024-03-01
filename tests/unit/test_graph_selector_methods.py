@@ -1,3 +1,4 @@
+from argparse import Namespace
 import copy
 from dataclasses import replace
 import pytest
@@ -35,6 +36,7 @@ from dbt.artifacts.resources import (
     MacroDependsOn,
     TestConfig,
     TestMetadata,
+    RefArgs,
 )
 from dbt.contracts.graph.unparsed import (
     UnitTestInputFixture,
@@ -65,6 +67,9 @@ from dbt.graph.selector_methods import (
 import dbt_common.exceptions
 from dbt_semantic_interfaces.type_enums import MetricType
 from .utils import replace_config
+from dbt.flags import set_from_args
+
+set_from_args(Namespace(WARN_ERROR=False), None)
 
 
 def make_model(
@@ -109,7 +114,8 @@ def make_model(
     source_values = []
     ref_values = []
     for ref in refs:
-        ref_values.append([ref.name])
+        ref_version = ref.version if hasattr(ref, "version") else None
+        ref_values.append(RefArgs(name=ref.name, package=ref.package_name, version=ref_version))
         depends_on_nodes.append(ref.unique_id)
     for src in sources:
         source_values.append([src.source_name, src.name])
@@ -261,7 +267,11 @@ def make_generic_test(
         source_values.append([test_model.source_name, test_model.name])
     else:
         kwargs["model"] = "{{ ref('" + test_model.name + "')}}"
-        ref_values.append([test_model.name])
+        ref_values.append(
+            RefArgs(
+                name=test_model.name, package=test_model.package_name, version=test_model.version
+            )
+        )
     if column_name is not None:
         kwargs["column_name"] = column_name
 
@@ -296,7 +306,8 @@ def make_generic_test(
 
     depends_on_nodes = []
     for ref in refs:
-        ref_values.append([ref.name])
+        ref_version = ref.version if hasattr(ref, "version") else None
+        ref_values.append(RefArgs(name=ref.name, package=ref.package_name, version=ref_version))
         depends_on_nodes.append(ref.unique_id)
 
     for source in sources:
@@ -378,7 +389,8 @@ def make_singular_test(
     source_values = []
     ref_values = []
     for ref in refs:
-        ref_values.append([ref.name])
+        ref_version = ref.version if hasattr(ref, "version") else None
+        ref_values.append(RefArgs(name=ref.name, package=ref.package_name, version=ref_version))
         depends_on_nodes.append(ref.unique_id)
     for src in sources:
         source_values.append([src.source_name, src.name])
@@ -903,7 +915,7 @@ def manifest(
         files={},
         exposures={},
         metrics={},
-        disabled=[],
+        disabled={},
         selectors={},
         groups={},
         metadata=ManifestMetadata(adapter_type="postgres"),
@@ -1434,7 +1446,7 @@ def previous_state(manifest):
         target_path=Path("/path/does/not/exist"),
         project_root=Path("/path/does/not/exist"),
     )
-    state.manifest = writable
+    state.manifest = Manifest.from_writable_manifest(writable)
     return state
 
 

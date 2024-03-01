@@ -1,12 +1,10 @@
-from distutils.util import strtobool
-
 import agate
 import daff
 import io
 import json
 import re
 from dataclasses import dataclass
-from dbt.utils import _coerce_decimal
+from dbt.utils import _coerce_decimal, strtobool
 from dbt_common.events.format import pluralize
 from dbt_common.dataclass_schema import dbtClassMixin
 import threading

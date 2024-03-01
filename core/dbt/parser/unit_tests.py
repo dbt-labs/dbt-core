@@ -15,16 +15,15 @@ from dbt.context.providers import generate_parse_exposure, get_rendered
 from dbt.contracts.files import FileHash, SchemaSourceFile
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.model_config import UnitTestNodeConfig
-from dbt.artifacts.resources import ModelConfig
+from dbt.artifacts.resources import ModelConfig, UnitTestConfig, UnitTestFormat
 from dbt.contracts.graph.nodes import (
     ModelNode,
     UnitTestNode,
     UnitTestDefinition,
     DependsOn,
-    UnitTestConfig,
     UnitTestSourceDefinition,
 )
-from dbt.contracts.graph.unparsed import UnparsedUnitTest, UnitTestFormat
+from dbt.contracts.graph.unparsed import UnparsedUnitTest
 from dbt.exceptions import ParsingError, InvalidUnitTestGivenInput
 from dbt.graph import UniqueId
 from dbt.node_types import NodeType
