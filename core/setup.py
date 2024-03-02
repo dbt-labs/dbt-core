@@ -62,7 +62,6 @@ setup(
         "sqlparse>=0.2.3,<0.5",
         "dbt-extractor~=0.4.1",
         "typing-extensions>=3.7.4",
-        "werkzeug>=1,<3",
         "pathspec>=0.9,<0.12",
         "protobuf>=4.0.0,<5",
         "pytz>=2015.7",
