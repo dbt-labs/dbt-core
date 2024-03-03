@@ -62,6 +62,6 @@ body:
     attributes:
       label: Context
       description: |
-        Provide the "why", motivation, and alternative approaches considered -- linking to previous refinement issues, spikes, Notion docs as appropriate
+        Provide the "why", motivation, and alternative approaches considered -- linking to previous refinement issues, spikes and documentation as appropriate
     validations:
       required: false

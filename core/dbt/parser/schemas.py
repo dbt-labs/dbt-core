@@ -530,21 +530,46 @@ class PatchParser(YamlReader, Generic[NonSourceTarget, Parsed]):
         return self.normalize_attribute(data, path, "access")
 
     def validate_data_tests(self, data):
-        if data.get("columns"):
-            for column in data["columns"]:
-                if "tests" in column and "data_tests" in column:
+        # Rename 'tests' -> 'data_tests' at both model-level and column-level
+        # Raise a validation error if the user has defined both names
+        def validate_and_rename(data):
+            if data.get("tests"):
+                if "tests" in data and "data_tests" in data:
                     raise ValidationError(
                         "Invalid test config: cannot have both 'tests' and 'data_tests' defined"
                     )
-                if "tests" in column:
-                    deprecations.warn(
-                        "project-test-config",
-                        deprecated_path="tests",
-                        exp_path="data_tests",
-                    )
-                    column["data_tests"] = column.pop("tests")
+                deprecations.warn(
+                    "project-test-config",
+                    deprecated_path="tests",
+                    exp_path="data_tests",
+                )
+                data["data_tests"] = data.pop("tests")
+
+        # model-level tests
+        validate_and_rename(data)
+
+        # column-level tests
+        if data.get("columns"):
+            for column in data["columns"]:
+                validate_and_rename(column)
+
+        # versioned models
+        if data.get("versions"):
+            for version in data["versions"]:
+                validate_and_rename(version)
+                if version.get("columns"):
+                    for column in version["columns"]:
+                        validate_and_rename(column)
 
     def patch_node_config(self, node, patch):
+        if "access" in patch.config:
+            if AccessType.is_valid(patch.config["access"]):
+                patch.config["access"] = AccessType(patch.config["access"])
+            else:
+                raise InvalidAccessTypeError(
+                    unique_id=node.unique_id,
+                    field_value=patch.config["access"],
+                )
         # Get the ContextConfig that's used in calculating the config
         # This must match the model resource_type that's being patched
         config = ContextConfig(
@@ -828,7 +853,10 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
                 # Includes alias recomputation
                 self.patch_node_config(versioned_model_node, versioned_model_patch)
 
-                # Need to reapply this here, in the case that 'contract: {enforced: true}' was during config-setting
+                # Need to reapply setting constraints and contract checksum here, because
+                # they depend on node.contract.enabled, which wouldn't be set when
+                # patch_node_properties was called if it wasn't set in the model file.
+                self.patch_constraints(versioned_model_node, versioned_model_patch.constraints)
                 versioned_model_node.build_contract_checksum()
                 source_file.append_patch(
                     versioned_model_patch.yaml_key, versioned_model_node.unique_id
@@ -852,6 +880,7 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
                     unique_id=node.unique_id,
                     field_value=patch.access,
                 )
+        # These two will have to be reapplied after config is built for versioned models
         self.patch_constraints(node, patch.constraints)
         node.build_contract_checksum()
 
@@ -868,10 +897,43 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
                     f"Type must be one of {[ct.value for ct in ConstraintType]}"
                 )
 
-            node.constraints = [ModelLevelConstraint.from_dict(c) for c in constraints]
+        self._validate_pk_constraints(node, constraints)
+        node.constraints = [ModelLevelConstraint.from_dict(c) for c in constraints]
+
+    def _validate_pk_constraints(self, model_node: ModelNode, constraints: List[Dict[str, Any]]):
+        errors = []
+        # check for primary key constraints defined at the column level
+        pk_col: List[str] = []
+        for col in model_node.columns.values():
+            for constraint in col.constraints:
+                if constraint.type == ConstraintType.primary_key:
+                    pk_col.append(col.name)
+
+        if len(pk_col) > 1:
+            errors.append(
+                f"Found {len(pk_col)} columns ({pk_col}) with primary key constraints defined. "
+                "Primary keys for multiple columns must be defined as a model level constraint."
+            )
+
+        if len(pk_col) > 0 and (
+            any(
+                constraint.type == ConstraintType.primary_key
+                for constraint in model_node.constraints
+            )
+            or any(constraint["type"] == ConstraintType.primary_key for constraint in constraints)
+        ):
+            errors.append(
+                "Primary key constraints defined at the model level and the columns level. "
+                "Primary keys can be defined at the model level or the column level, not both."
+            )
+
+        if errors:
+            raise ParsingError(
+                f"Primary key constraint error: ({model_node.original_file_path})\n"
+                + "\n".join(errors)
+            )
 
     def _validate_constraint_prerequisites(self, model_node: ModelNode):
-
         column_warn_unsupported = [
             constraint.warn_unsupported
             for column in model_node.columns.values()

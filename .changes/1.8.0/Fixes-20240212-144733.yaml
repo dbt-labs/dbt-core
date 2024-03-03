@@ -1,0 +1,6 @@
+kind: Fixes
+body: Set query headers when manifest is passed in to dbtRunner
+time: 2024-02-12T14:47:33.092877-05:00
+custom:
+  Author: gshank
+  Issue: "9546"

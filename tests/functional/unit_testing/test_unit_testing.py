@@ -1,4 +1,5 @@
 import pytest
+from unittest import mock
 from dbt.tests.util import (
     run_dbt,
     write_file,
@@ -6,7 +7,10 @@ from dbt.tests.util import (
 )
 from dbt.contracts.results import NodeStatus
 from dbt.exceptions import DuplicateResourceNameError, ParsingError
-from fixtures import (
+from dbt.plugins.manifest import PluginNodes, ModelNodeArgs
+from dbt.tests.fixtures.project import write_project_files
+from fixtures import (  # noqa: F401
+    my_model_sql,
     my_model_vars_sql,
     my_model_a_sql,
     my_model_b_sql,
@@ -15,6 +19,12 @@ from fixtures import (
     my_incremental_model_sql,
     event_sql,
     test_my_model_incremental_yml,
+    test_my_model_yml_invalid,
+    test_my_model_yml_invalid_ref,
+    valid_emails_sql,
+    top_level_domains_sql,
+    external_package__accounts_seed_csv,
+    external_package,
 )
 
 
@@ -237,3 +247,126 @@ class TestUnitTestNonexistentSeed:
             ParsingError, match="Unable to find seed 'test.my_second_favorite_seed' for unit tests"
         ):
             run_dbt(["test", "--select", "my_new_model"], expect_pass=False)
+
+
+class TestUnitTestInvalidInputConfiguration:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_model.sql": my_model_sql,
+            "my_model_a.sql": my_model_a_sql,
+            "my_model_b.sql": my_model_b_sql,
+            "test_my_model.yml": test_my_model_yml_invalid,
+        }
+
+    def test_invalid_input_configuration(self, project):
+        results = run_dbt(["run"])
+        assert len(results) == 3
+
+        # A data type in a given row is incorrect, and we'll get a runtime error
+        run_dbt(["test"], expect_pass=False)
+
+        # Test invalid model ref. Parsing error InvalidUnitTestGivenInput
+        write_file(
+            test_my_model_yml_invalid_ref, project.project_root, "models", "test_my_model.yml"
+        )
+        results = run_dbt(["test"], expect_pass=False)
+        result = results.results[0]
+        assert "not found in the manifest" in result.message
+
+
+unit_test_ext_node_yml = """
+unit_tests:
+  - name: unit_test_ext_node
+    model: valid_emails
+    given:
+      - input: ref('external_package', 'external_model')
+        rows:
+          - {user_id: 1, email: cool@example.com,     email_top_level_domain: example.com}
+          - {user_id: 2, email: cool@unknown.com,     email_top_level_domain: unknown.com}
+          - {user_id: 3, email: badgmail.com,         email_top_level_domain: gmail.com}
+          - {user_id: 4, email: missingdot@gmailcom,  email_top_level_domain: gmail.com}
+      - input: ref('top_level_domains')
+        rows:
+          - {tld: example.com}
+          - {tld: gmail.com}
+    expect:
+      rows:
+        - {user_id: 1, is_valid_email_address: true}
+        - {user_id: 2, is_valid_email_address: false}
+        - {user_id: 3, is_valid_email_address: true}
+        - {user_id: 4, is_valid_email_address: true}
+"""
+
+
+class TestUnitTestExternalPackageNode:
+    @pytest.fixture(scope="class", autouse=True)
+    def setUp(self, project_root, external_package):  # noqa: F811
+        write_project_files(project_root, "external_package", external_package)
+
+    @pytest.fixture(scope="class")
+    def packages(self):
+        return {"packages": [{"local": "external_package"}]}
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "top_level_domains.sql": top_level_domains_sql,
+            "valid_emails.sql": valid_emails_sql,
+            "unit_test_ext_node.yml": unit_test_ext_node_yml,
+        }
+
+    def test_unit_test_ext_nodes(
+        self,
+        project,
+    ):
+        # `deps` to install the external package
+        run_dbt(["deps"], expect_pass=True)
+        # `seed` need so a table exists for `external_model` to point to
+        run_dbt(["seed"], expect_pass=True)
+        # `run` needed to ensure `top_level_domains` exists in database for column getting step
+        run_dbt(["run"], expect_pass=True)
+        results = run_dbt(["test", "--select", "valid_emails"], expect_pass=True)
+        assert len(results) == 1
+
+
+class TestUnitTestExternalProjectNode:
+    @pytest.fixture(scope="class")
+    def external_model_node(self, unique_schema):
+        return ModelNodeArgs(
+            name="external_model",
+            package_name="external_package",
+            identifier="external_node_seed",
+            schema=unique_schema,
+        )
+
+    @pytest.fixture(scope="class")
+    def seeds(self):
+        return {"external_node_seed.csv": external_package__accounts_seed_csv}
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "top_level_domains.sql": top_level_domains_sql,
+            "valid_emails.sql": valid_emails_sql,
+            "unit_test_ext_node.yml": unit_test_ext_node_yml,
+        }
+
+    @mock.patch("dbt.plugins.get_plugin_manager")
+    def test_unit_test_ext_nodes(
+        self,
+        get_plugin_manager,
+        project,
+        external_model_node,
+    ):
+        # initial plugin - one external model
+        external_nodes = PluginNodes()
+        external_nodes.add_model(external_model_node)
+        get_plugin_manager.return_value.get_nodes.return_value = external_nodes
+
+        # `seed` need so a table exists for `external_model` to point to
+        run_dbt(["seed"], expect_pass=True)
+        # `run` needed to ensure `top_level_domains` exists in database for column getting step
+        run_dbt(["run"], expect_pass=True)
+        results = run_dbt(["test", "--select", "valid_emails"], expect_pass=True)
+        assert len(results) == 1

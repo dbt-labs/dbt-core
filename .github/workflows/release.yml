@@ -19,10 +19,6 @@ name: Release to GitHub and PyPI
 on:
   workflow_dispatch:
     inputs:
-      sha:
-        description: "The last commit sha in the release"
-        type: string
-        required: true
       target_branch:
         description: "The branch to release from"
         type: string
@@ -30,26 +26,6 @@ on:
       version_number:
         description: "The release version number (i.e. 1.0.0b1)"
         type: string
-        required: true
-      build_script_path:
-        description: "Build script path"
-        type: string
-        default: "scripts/build-dist.sh"
-        required: true
-      env_setup_script_path:
-        description: "Environment setup script path"
-        type: string
-        default: "scripts/env-setup.sh"
-        required: false
-      s3_bucket_name:
-        description: "AWS S3 bucket name"
-        type: string
-        default: "core-team-artifacts"
-        required: true
-      package_test_command:
-        description: "Package test command"
-        type: string
-        default: "dbt --version"
         required: true
       test_run:
         description: "Test run (Publish release as draft)"
@@ -63,10 +39,6 @@ on:
         required: false
   workflow_call:
     inputs:
-      sha:
-        description: "The last commit sha in the release"
-        type: string
-        required: true
       target_branch:
         description: "The branch to release from"
         type: string
@@ -74,26 +46,6 @@ on:
       version_number:
         description: "The release version number (i.e. 1.0.0b1)"
         type: string
-        required: true
-      build_script_path:
-        description: "Build script path"
-        type: string
-        default: "scripts/build-dist.sh"
-        required: true
-      env_setup_script_path:
-        description: "Environment setup script path"
-        type: string
-        default: "scripts/env-setup.sh"
-        required: false
-      s3_bucket_name:
-        description: "AWS S3 bucket name"
-        type: string
-        default: "core-team-artifacts"
-        required: true
-      package_test_command:
-        description: "Package test command"
-        type: string
-        default: "dbt --version"
         required: true
       test_run:
         description: "Test run (Publish release as draft)"
@@ -114,32 +66,45 @@ defaults:
     shell: bash
 
 jobs:
-  log-inputs:
+  job-setup:
     name: Log Inputs
     runs-on: ubuntu-latest
+    outputs:
+      starting_sha: ${{ steps.set_sha.outputs.starting_sha }}
     steps:
       - name: "[DEBUG] Print Variables"
         run: |
-          echo The last commit sha in the release: ${{ inputs.sha }}
+          echo Inputs
           echo The branch to release from:         ${{ inputs.target_branch }}
           echo The release version number:         ${{ inputs.version_number }}
-          echo Build script path:                  ${{ inputs.build_script_path }}
-          echo Environment setup script path:      ${{ inputs.env_setup_script_path }}
-          echo AWS S3 bucket name:                 ${{ inputs.s3_bucket_name }}
-          echo Package test command:               ${{ inputs.package_test_command }}
           echo Test run:                           ${{ inputs.test_run }}
           echo Nightly release:                    ${{ inputs.nightly_release }}
 
+      - name: "Checkout target branch"
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.target_branch }}
+
+      # release-prep.yml really shouldn't take in the sha but since core + all adapters
+      # depend on it now this workaround lets us not input it manually with risk of error.
+      # The changes always get merged into the head so we can't use a specific commit for
+      # releases anyways.
+      - name: "Capture sha"
+        id: set_sha
+        run: |
+          echo "starting_sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+
   bump-version-generate-changelog:
     name: Bump package version, Generate changelog
+    needs: [job-setup]
 
     uses: dbt-labs/dbt-release/.github/workflows/release-prep.yml@main
 
     with:
-      sha: ${{ inputs.sha }}
+      sha: ${{ needs.job-setup.outputs.starting_sha }}
       version_number: ${{ inputs.version_number }}
       target_branch: ${{ inputs.target_branch }}
-      env_setup_script_path: ${{ inputs.env_setup_script_path }}
+      env_setup_script_path: "scripts/env-setup.sh"
       test_run: ${{ inputs.test_run }}
       nightly_release: ${{ inputs.nightly_release }}
 
@@ -162,7 +127,7 @@ jobs:
   build-test-package:
     name: Build, Test, Package
     if: ${{ !failure() && !cancelled() }}
-    needs: [bump-version-generate-changelog]
+    needs: [job-setup, bump-version-generate-changelog]
 
     uses: dbt-labs/dbt-release/.github/workflows/build.yml@main
 
@@ -170,9 +135,9 @@ jobs:
       sha: ${{ needs.bump-version-generate-changelog.outputs.final_sha }}
       version_number: ${{ inputs.version_number }}
       changelog_path: ${{ needs.bump-version-generate-changelog.outputs.changelog_path }}
-      build_script_path: ${{ inputs.build_script_path }}
-      s3_bucket_name: ${{ inputs.s3_bucket_name }}
-      package_test_command: ${{ inputs.package_test_command }}
+      build_script_path: "scripts/build-dist.sh"
+      s3_bucket_name: "core-team-artifacts"
+      package_test_command: "dbt --version"
       test_run: ${{ inputs.test_run }}
       nightly_release: ${{ inputs.nightly_release }}
 

@@ -379,7 +379,10 @@ def dict_replace(dct, **kwargs):
 
 
 def replace_config(n, **kwargs):
-    return n.replace(
+    from dataclasses import replace
+
+    return replace(
+        n,
         config=n.config.replace(**kwargs),
         unrendered_config=dict_replace(n.unrendered_config, **kwargs),
     )

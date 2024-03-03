@@ -1,5 +1,6 @@
+from argparse import Namespace
 import copy
-
+from dataclasses import replace
 import pytest
 from unittest import mock
 
@@ -8,33 +9,36 @@ from pathlib import Path
 from dbt.contracts.files import FileHash
 from dbt.contracts.graph.nodes import (
     DependsOn,
-    MacroDependsOn,
     NodeConfig,
     Macro,
     ModelNode,
     Exposure,
     Metric,
-    MetricTypeParams,
-    MetricInputMeasure,
     Group,
-    NodeRelation,
     SavedQuery,
     SeedNode,
     SemanticModel,
     SingularTestNode,
     GenericTestNode,
     SourceDefinition,
-    TestConfig,
-    TestMetadata,
-    ColumnInfo,
     AccessType,
     UnitTestDefinition,
 )
 from dbt.contracts.graph.manifest import Manifest, ManifestMetadata
-from dbt.contracts.graph.saved_queries import QueryParams
-from dbt.contracts.graph.unparsed import (
+from dbt.artifacts.resources import (
+    ColumnInfo,
     ExposureType,
+    MetricInputMeasure,
+    MetricTypeParams,
+    NodeRelation,
     Owner,
+    QueryParams,
+    MacroDependsOn,
+    TestConfig,
+    TestMetadata,
+    RefArgs,
+)
+from dbt.contracts.graph.unparsed import (
     UnitTestInputFixture,
     UnitTestOutputFixture,
 )
@@ -63,6 +67,9 @@ from dbt.graph.selector_methods import (
 import dbt_common.exceptions
 from dbt_semantic_interfaces.type_enums import MetricType
 from .utils import replace_config
+from dbt.flags import set_from_args
+
+set_from_args(Namespace(WARN_ERROR=False), None)
 
 
 def make_model(
@@ -107,7 +114,8 @@ def make_model(
     source_values = []
     ref_values = []
     for ref in refs:
-        ref_values.append([ref.name])
+        ref_version = ref.version if hasattr(ref, "version") else None
+        ref_values.append(RefArgs(name=ref.name, package=ref.package_name, version=ref_version))
         depends_on_nodes.append(ref.unique_id)
     for src in sources:
         source_values.append([src.source_name, src.name])
@@ -259,7 +267,11 @@ def make_generic_test(
         source_values.append([test_model.source_name, test_model.name])
     else:
         kwargs["model"] = "{{ ref('" + test_model.name + "')}}"
-        ref_values.append([test_model.name])
+        ref_values.append(
+            RefArgs(
+                name=test_model.name, package=test_model.package_name, version=test_model.version
+            )
+        )
     if column_name is not None:
         kwargs["column_name"] = column_name
 
@@ -294,7 +306,8 @@ def make_generic_test(
 
     depends_on_nodes = []
     for ref in refs:
-        ref_values.append([ref.name])
+        ref_version = ref.version if hasattr(ref, "version") else None
+        ref_values.append(RefArgs(name=ref.name, package=ref.package_name, version=ref_version))
         depends_on_nodes.append(ref.unique_id)
 
     for source in sources:
@@ -376,7 +389,8 @@ def make_singular_test(
     source_values = []
     ref_values = []
     for ref in refs:
-        ref_values.append([ref.name])
+        ref_version = ref.version if hasattr(ref, "version") else None
+        ref_values.append(RefArgs(name=ref.name, package=ref.package_name, version=ref_version))
         depends_on_nodes.append(ref.unique_id)
     for src in sources:
         source_values.append([src.source_name, src.name])
@@ -901,7 +915,7 @@ def manifest(
         files={},
         exposures={},
         metrics={},
-        disabled=[],
+        disabled={},
         selectors={},
         groups={},
         metadata=ManifestMetadata(adapter_type="postgres"),
@@ -1034,9 +1048,7 @@ def test_select_group(manifest, view_model):
     manifest.groups[group.unique_id] = group
     change_node(
         manifest,
-        view_model.replace(
-            config={"materialized": "view", "group": group_name},
-        ),
+        replace(view_model, config={"materialized": "view", "group": group_name}),
     )
     methods = MethodManager(manifest, None)
     method = methods.get_method("group", [])
@@ -1050,9 +1062,7 @@ def test_select_group(manifest, view_model):
 def test_select_access(manifest, view_model):
     change_node(
         manifest,
-        view_model.replace(
-            access="public",
-        ),
+        replace(view_model, access="public"),
     )
     methods = MethodManager(manifest, None)
     method = methods.get_method("access", [])
@@ -1436,7 +1446,7 @@ def previous_state(manifest):
         target_path=Path("/path/does/not/exist"),
         project_root=Path("/path/does/not/exist"),
     )
-    state.manifest = writable
+    state.manifest = Manifest.from_writable_manifest(writable)
     return state
 
 
@@ -1505,7 +1515,7 @@ def test_select_state_added_model(manifest, previous_state):
 
 
 def test_select_state_changed_model_sql(manifest, previous_state, view_model):
-    change_node(manifest, view_model.replace(raw_code="select 1 as id"))
+    change_node(manifest, replace(view_model, raw_code="select 1 as id"))
     method = statemethod(manifest, previous_state)
 
     # both of these
@@ -1524,7 +1534,7 @@ def test_select_state_changed_model_sql(manifest, previous_state, view_model):
 
 def test_select_state_changed_model_fqn(manifest, previous_state, view_model):
     change_node(
-        manifest, view_model.replace(fqn=view_model.fqn[:-1] + ["nested"] + view_model.fqn[-1:])
+        manifest, replace(view_model, fqn=view_model.fqn[:-1] + ["nested"] + view_model.fqn[-1:])
     )
     method = statemethod(manifest, previous_state)
     assert search_manifest_using_method(manifest, method, "modified") == {"view_model"}
@@ -1547,7 +1557,7 @@ def test_select_state_added_seed(manifest, previous_state):
 
 
 def test_select_state_changed_seed_checksum_sha_to_sha(manifest, previous_state, seed):
-    change_node(manifest, seed.replace(checksum=FileHash.from_contents("changed")))
+    change_node(manifest, replace(seed, checksum=FileHash.from_contents("changed")))
     method = statemethod(manifest, previous_state)
     assert search_manifest_using_method(manifest, method, "modified") == {"seed"}
     assert not search_manifest_using_method(manifest, method, "new")
@@ -1557,10 +1567,10 @@ def test_select_state_changed_seed_checksum_sha_to_sha(manifest, previous_state,
 def test_select_state_changed_seed_checksum_path_to_path(manifest, previous_state, seed):
     change_node(
         previous_state.manifest,
-        seed.replace(checksum=FileHash(name="path", checksum=seed.original_file_path)),
+        replace(seed, checksum=FileHash(name="path", checksum=seed.original_file_path)),
     )
     change_node(
-        manifest, seed.replace(checksum=FileHash(name="path", checksum=seed.original_file_path))
+        manifest, replace(seed, checksum=FileHash(name="path", checksum=seed.original_file_path))
     )
     method = statemethod(manifest, previous_state)
     with mock.patch("dbt.contracts.graph.nodes.warn_or_error") as warn_or_error_patch:
@@ -1587,7 +1597,7 @@ def test_select_state_changed_seed_checksum_path_to_path(manifest, previous_stat
 
 def test_select_state_changed_seed_checksum_sha_to_path(manifest, previous_state, seed):
     change_node(
-        manifest, seed.replace(checksum=FileHash(name="path", checksum=seed.original_file_path))
+        manifest, replace(seed, checksum=FileHash(name="path", checksum=seed.original_file_path))
     )
     method = statemethod(manifest, previous_state)
     with mock.patch("dbt.contracts.graph.nodes.warn_or_error") as warn_or_error_patch:
@@ -1615,7 +1625,7 @@ def test_select_state_changed_seed_checksum_sha_to_path(manifest, previous_state
 def test_select_state_changed_seed_checksum_path_to_sha(manifest, previous_state, seed):
     change_node(
         previous_state.manifest,
-        seed.replace(checksum=FileHash(name="path", checksum=seed.original_file_path)),
+        replace(seed, checksum=FileHash(name="path", checksum=seed.original_file_path)),
     )
     method = statemethod(manifest, previous_state)
     with mock.patch("dbt.contracts.graph.nodes.warn_or_error") as warn_or_error_patch:
@@ -1633,7 +1643,7 @@ def test_select_state_changed_seed_checksum_path_to_sha(manifest, previous_state
 
 
 def test_select_state_changed_seed_fqn(manifest, previous_state, seed):
-    change_node(manifest, seed.replace(fqn=seed.fqn[:-1] + ["nested"] + seed.fqn[-1:]))
+    change_node(manifest, replace(seed, fqn=seed.fqn[:-1] + ["nested"] + seed.fqn[-1:]))
     method = statemethod(manifest, previous_state)
     assert search_manifest_using_method(manifest, method, "modified") == {"seed"}
     assert not search_manifest_using_method(manifest, method, "new")
@@ -1656,7 +1666,7 @@ def test_select_state_changed_seed_relation_documented(manifest, previous_state,
 
 def test_select_state_changed_seed_relation_documented_nodocs(manifest, previous_state, seed):
     seed_doc_relation = replace_config(seed, persist_docs={"relation": True})
-    seed_doc_relation_documented = seed_doc_relation.replace(description="a description")
+    seed_doc_relation_documented = replace(seed_doc_relation, description="a description")
     change_node(previous_state.manifest, seed_doc_relation)
     change_node(manifest, seed_doc_relation_documented)
     method = statemethod(manifest, previous_state)
@@ -1672,7 +1682,7 @@ def test_select_state_changed_seed_relation_documented_nodocs(manifest, previous
 
 def test_select_state_changed_seed_relation_documented_withdocs(manifest, previous_state, seed):
     seed_doc_relation = replace_config(seed, persist_docs={"relation": True})
-    seed_doc_relation_documented = seed_doc_relation.replace(description="a description")
+    seed_doc_relation_documented = replace(seed_doc_relation, description="a description")
     change_node(previous_state.manifest, seed_doc_relation_documented)
     change_node(manifest, seed_doc_relation)
     method = statemethod(manifest, previous_state)
@@ -1700,7 +1710,8 @@ def test_select_state_changed_seed_columns_documented(manifest, previous_state, 
 
 def test_select_state_changed_seed_columns_documented_nodocs(manifest, previous_state, seed):
     seed_doc_columns = replace_config(seed, persist_docs={"columns": True})
-    seed_doc_columns_documented_columns = seed_doc_columns.replace(
+    seed_doc_columns_documented_columns = replace(
+        seed_doc_columns,
         columns={"a": ColumnInfo(name="a", description="a description")},
     )
 
@@ -1720,7 +1731,8 @@ def test_select_state_changed_seed_columns_documented_nodocs(manifest, previous_
 
 def test_select_state_changed_seed_columns_documented_withdocs(manifest, previous_state, seed):
     seed_doc_columns = replace_config(seed, persist_docs={"columns": True})
-    seed_doc_columns_documented_columns = seed_doc_columns.replace(
+    seed_doc_columns_documented_columns = replace(
+        seed_doc_columns,
         columns={"a": ColumnInfo(name="a", description="a description")},
     )
 
@@ -1741,8 +1753,8 @@ def test_select_state_changed_seed_columns_documented_withdocs(manifest, previou
 def test_select_state_changed_test_macro_sql(
     manifest, previous_state, macro_default_test_not_null
 ):
-    manifest.macros[macro_default_test_not_null.unique_id] = macro_default_test_not_null.replace(
-        macro_sql="lalala"
+    manifest.macros[macro_default_test_not_null.unique_id] = replace(
+        macro_default_test_not_null, macro_sql="lalala"
     )
     method = statemethod(manifest, previous_state)
     assert search_manifest_using_method(manifest, method, "modified") == {
@@ -1761,7 +1773,7 @@ def test_select_state_changed_test_macro_sql(
 def test_select_state_changed_test_macros(manifest, previous_state):
     changed_macro = make_macro("dbt", "changed_macro", "blablabla")
     add_macro(manifest, changed_macro)
-    add_macro(previous_state.manifest, changed_macro.replace(macro_sql="something different"))
+    add_macro(previous_state.manifest, replace(changed_macro, macro_sql="something different"))
 
     unchanged_macro = make_macro("dbt", "unchanged_macro", "blablabla")
     add_macro(manifest, unchanged_macro)
@@ -1802,7 +1814,7 @@ def test_select_state_changed_test_macros(manifest, previous_state):
 def test_select_state_changed_test_macros_with_upstream_change(manifest, previous_state):
     changed_macro = make_macro("dbt", "changed_macro", "blablabla")
     add_macro(manifest, changed_macro)
-    add_macro(previous_state.manifest, changed_macro.replace(macro_sql="something different"))
+    add_macro(previous_state.manifest, replace(changed_macro, macro_sql="something different"))
 
     unchanged_macro1 = make_macro("dbt", "unchanged_macro", "blablabla")
     add_macro(manifest, unchanged_macro1)

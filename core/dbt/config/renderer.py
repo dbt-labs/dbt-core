@@ -1,6 +1,5 @@
 from typing import Dict, Any, Tuple, Optional, Union, Callable
 import re
-import os
 from datetime import date
 
 from dbt.clients.jinja import get_rendered
@@ -11,6 +10,7 @@ from dbt.context.secret import SecretContext, SECRET_PLACEHOLDER
 from dbt.context.base import BaseContext
 from dbt.adapters.contracts.connection import HasCredentials
 from dbt.exceptions import DbtProjectError
+from dbt_common.context import get_invocation_context
 from dbt_common.exceptions import CompilationError, RecursionError
 from dbt_common.utils import deep_map_render
 
@@ -212,7 +212,7 @@ class SecretRenderer(BaseRenderer):
             )
             if m:
                 found = m.group(1)
-                value = os.environ[found]
+                value = get_invocation_context().env[found]
                 replace_this = SECRET_PLACEHOLDER.format(found)
                 return rendered.replace(replace_this, value)
         else:

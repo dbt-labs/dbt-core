@@ -30,26 +30,22 @@ CI_FLAGS =\
 .PHONY: dev_req
 dev_req: ## Installs dbt-* packages in develop mode along with only development dependencies.
 	@\
-	pip install -r dev-requirements.txt
-	pip install -r editable-requirements.txt
+	pip install -r dev-requirements.txt -r editable-requirements.txt
 
 .PHONY: dev
 dev: dev_req ## Installs dbt-* packages in develop mode along with development dependencies and pre-commit.
 	@\
 	pre-commit install
 
-.PHONY: proto_types
-proto_types:  ## generates google protobuf python file from types.proto
-	protoc -I=./core/dbt/common/events --python_out=./core/dbt/common/events ./core/dbt/common/events/types.proto
+.PHONY: dev-uninstall
+dev-uninstall: ## Uninstall all packages in venv except for build tools
+	@\
+    pip freeze | grep -v "^-e" | cut -d "@" -f1 | xargs pip uninstall -y; \
+    pip uninstall -y dbt-core
 
 .PHONY: core_proto_types
 core_proto_types:  ## generates google protobuf python file from core_types.proto
 	protoc -I=./core/dbt/events --python_out=./core/dbt/events ./core/dbt/events/core_types.proto
-
-.PHONY: adapter_proto_types
-adapter_proto_types:  ## generates google protobuf python file from core_types.proto
-	protoc -I=./core/dbt/adapters/events --python_out=./core/dbt/adapters/events ./core/dbt/adapters/events/adapter_types.proto
-
 
 .PHONY: mypy
 mypy: .env ## Runs mypy against staged changes for static type checking.
@@ -86,12 +82,12 @@ test: .env ## Runs unit tests with py and code checks against staged changes.
 	$(DOCKER_CMD) pre-commit run mypy-check --hook-stage manual | grep -v "INFO"
 
 .PHONY: integration
-integration: .env ## Runs postgres integration tests with py-integration
+integration: .env ## Runs core integration tests using postgres with py-integration
 	@\
 	$(CI_FLAGS) $(DOCKER_CMD) tox -e py-integration -- -nauto
 
 .PHONY: integration-fail-fast
-integration-fail-fast: .env ## Runs postgres integration tests with py-integration in "fail fast" mode.
+integration-fail-fast: .env ## Runs core integration tests using postgres with py-integration in "fail fast" mode.
 	@\
 	$(DOCKER_CMD) tox -e py-integration -- -x -nauto
 

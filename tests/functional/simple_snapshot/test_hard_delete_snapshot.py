@@ -3,13 +3,13 @@ from datetime import datetime, timedelta
 import pytz
 import pytest
 from dbt.tests.util import run_dbt, check_relations_equal
-from dbt.tests.adapter.utils.test_current_timestamp import is_aware
 from tests.functional.simple_snapshot.fixtures import (
     models__schema_yml,
     models__ref_snapshot_sql,
     macros__test_no_overlaps_sql,
     snapshots_pg__snapshot_sql,
 )
+from tests.functional.utils import is_aware
 
 
 # These tests uses the same seed data, containing 20 records of which we hard delete the last 10.

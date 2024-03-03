@@ -1,0 +1,6 @@
+kind: Fixes
+body: Store node_info in node associated logging events
+time: 2024-02-12T16:56:19.954358-05:00
+custom:
+  Author: gshank
+  Issue: "9557"

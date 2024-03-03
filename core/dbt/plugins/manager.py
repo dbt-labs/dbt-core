@@ -5,6 +5,7 @@ from types import ModuleType
 from typing import Dict, List, Callable, Mapping
 
 from dbt.contracts.graph.manifest import Manifest
+from dbt_common.tests import test_caching_enabled
 from dbt_common.exceptions import DbtRuntimeError
 from dbt.plugins.contracts import PluginArtifacts
 from dbt.plugins.manifest import PluginNodes
@@ -76,6 +77,9 @@ def _get_dbt_modules() -> Mapping[str, ModuleType]:
     }
 
 
+_MODULES_CACHE = None
+
+
 class PluginManager:
     PLUGIN_MODULE_PREFIX = "dbt_"
     PLUGIN_ATTR_NAME = "plugins"
@@ -104,7 +108,16 @@ class PluginManager:
 
     @classmethod
     def from_modules(cls, project_name: str) -> "PluginManager":
-        discovered_dbt_modules = _get_dbt_modules()
+
+        if test_caching_enabled():
+            global _MODULES_CACHE
+            if _MODULES_CACHE is None:
+                discovered_dbt_modules = cls.get_prefixed_modules()
+                _MODULES_CACHE = discovered_dbt_modules
+            else:
+                discovered_dbt_modules = _MODULES_CACHE
+        else:
+            discovered_dbt_modules = cls.get_prefixed_modules()
 
         plugins = []
         for name, module in discovered_dbt_modules.items():
@@ -117,6 +130,14 @@ class PluginManager:
                     plugin = plugin_cls(project_name=project_name)
                     plugins.append(plugin)
         return cls(plugins=plugins)
+
+    @classmethod
+    def get_prefixed_modules(cls):
+        return {
+            name: importlib.import_module(name)
+            for _, name, _ in pkgutil.iter_modules()
+            if name.startswith(cls.PLUGIN_MODULE_PREFIX)
+        }
 
     def get_manifest_artifacts(self, manifest: Manifest) -> PluginArtifacts:
         all_plugin_artifacts = {}

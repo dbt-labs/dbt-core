@@ -19,33 +19,37 @@ from dbt.contracts.graph.unparsed import (
     UnparsedSemanticModel,
     UnparsedConversionTypeParams,
 )
-from dbt.contracts.graph.model_config import SavedQueryConfig
 from dbt.contracts.graph.nodes import (
     Exposure,
     Group,
     Metric,
+    SemanticModel,
+    SavedQuery,
+)
+from dbt.artifacts.resources import (
+    ConversionTypeParams,
+    Dimension,
+    DimensionTypeParams,
+    Entity,
+    Export,
+    ExportConfig,
+    ExposureConfig,
+    Measure,
+    MetricConfig,
     MetricInput,
     MetricInputMeasure,
     MetricTimeWindow,
     MetricTypeParams,
-    SemanticModel,
-    SavedQuery,
-    ConversionTypeParams,
-)
-from dbt.contracts.graph.saved_queries import Export, ExportConfig, QueryParams
-from dbt.contracts.graph.semantic_layer_common import WhereFilter, WhereFilterIntersection
-from dbt.contracts.graph.semantic_models import (
-    Dimension,
-    DimensionTypeParams,
-    Entity,
-    Measure,
     NonAdditiveDimension,
+    QueryParams,
+    SavedQueryConfig,
+    WhereFilter,
+    WhereFilterIntersection,
 )
 from dbt_common.exceptions import DbtInternalError
 from dbt.exceptions import YamlParseDictError, JSONValidationError
 from dbt.context.providers import generate_parse_exposure, generate_parse_semantic_models
 
-from dbt.contracts.graph.model_config import MetricConfig, ExposureConfig
 from dbt.context.context_config import (
     BaseContextConfigGenerator,
     ContextConfigGenerator,
@@ -361,6 +365,11 @@ class MetricParser(YamlReader):
             raise DbtInternalError(
                 f"Calculated a {type(config)} for a metric, but expected a MetricConfig"
             )
+
+        # If we have meta in the config, copy to node level, for backwards
+        # compatibility with earlier node-only config.
+        if "meta" in config and config["meta"]:
+            unparsed.meta = config["meta"]
 
         parsed = Metric(
             resource_type=NodeType.Metric,

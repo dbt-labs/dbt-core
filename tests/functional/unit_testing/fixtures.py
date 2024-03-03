@@ -1,3 +1,5 @@
+import pytest
+
 my_model_vars_sql = """
 SELECT
 a+b as c,
@@ -598,3 +600,396 @@ unit_tests:
       format: csv
       fixture: test_my_model_basic_fixture
 """
+
+test_model_a_b_yml = """
+unit_tests:
+  - name: my_test_name
+    model: my_model_a
+    given: []
+    expect:
+      rows:
+        - {a: 1, id: 1, not_testing: 2, string_a: "a", date_a: "2020-01-02"}
+
+  - name: my_test_name
+    model: my_model_b
+    given: []
+    expect:
+      rows:
+        - {b: 2, id: 1, c: 2, string_b: "b"}
+"""
+
+test_model_a_with_duplicate_test_name_yml = """
+unit_tests:
+  - name: my_test_name
+    model: my_model_a
+    given: []
+    expect:
+      rows:
+        - {a: 1, id: 1, not_testing: 2, string_a: "a", date_a: "2020-01-02"}
+
+  - name: my_test_name
+    model: my_model_a
+    given: []
+    expect:
+      rows:
+        - {a: 1, id: 1, not_testing: 2, string_a: "a", date_a: "2020-01-02"}
+"""
+
+test_my_model_yml_invalid = """
+unit_tests:
+  - name: test_my_model
+    model: my_model
+    given:
+      - input: ref('my_model_a')
+        rows:
+          - {id: 1, a: "a"}
+      - input: ref('my_model_b')
+        rows:
+          - {id: 1, b: 2}
+          - {id: 2, b: 2}
+    expect:
+      rows:
+        - {c: 3}
+"""
+
+test_my_model_yml_invalid_ref = """
+unit_tests:
+  - name: test_my_model
+    model: my_model
+    given:
+      - input: ref('my_model_x')
+        rows:
+          - {id: 1, a: 1}
+      - input: ref('my_model_b')
+        rows:
+          - {id: 1, b: 2}
+          - {id: 2, b: 2}
+    expect:
+      rows:
+        - {c: 3}
+"""
+
+# -- unit testing versioned models
+my_model_v1_sql = """
+SELECT
+a,
+b,
+a+b as c,
+concat(string_a, string_b) as string_c,
+not_testing, date_a
+FROM {{ ref('my_model_a')}} my_model_a
+JOIN {{ ref('my_model_b' )}} my_model_b
+ON my_model_a.id = my_model_b.id
+"""
+
+my_model_v2_sql = """
+SELECT
+a,
+b,
+a+b as c,
+concat(string_a, string_b) as string_c,
+date_a
+FROM {{ ref('my_model_a')}} my_model_a
+JOIN {{ ref('my_model_b' )}} my_model_b
+ON my_model_a.id = my_model_b.id
+"""
+
+my_model_v3_sql = """
+SELECT
+a,
+b,
+a+b as c,
+concat(string_a, string_b) as string_c
+FROM {{ ref('my_model_a')}} my_model_a
+JOIN {{ ref('my_model_b' )}} my_model_b
+ON my_model_a.id = my_model_b.id
+"""
+
+my_model_versioned_yml = """
+models:
+  - name: my_model
+    latest_version: 1
+    access: public
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: a
+        data_type: integer
+      - name: b
+        data_type: integer
+      - name: c
+        data_type: integer
+      - name: string_c
+        data_type: string
+      - name: not_testing
+        data_type: integer
+      - name: date_a
+        data_type: date
+    versions:
+      - v: 1
+      - v: 2
+        columns:
+          # This means: use the 'columns' list from above, but exclude not_testing
+          - include: "all"
+            exclude:
+            - not_testing
+      - v: 3
+        # now exclude another column
+        columns:
+          - include: all
+            exclude:
+            - not_testing
+            - date_a
+"""
+
+my_model_versioned_no_2_yml = """
+models:
+  - name: my_model
+    latest_version: 1
+    access: public
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: a
+        data_type: integer
+      - name: b
+        data_type: integer
+      - name: c
+        data_type: integer
+      - name: string_c
+        data_type: string
+      - name: not_testing
+        data_type: integer
+      - name: date_a
+        data_type: date
+    versions:
+      - v: 1
+      - v: 3
+        # now exclude another column
+        columns:
+          - include: all
+            exclude:
+            - not_testing
+            - date_a
+"""
+
+test_my_model_all_versions_yml = """
+unit_tests:
+  - name: test_my_model
+    model: my_model
+    given:
+      - input: ref('my_model_a')
+        format: csv
+        rows: |
+          id,a
+          1,1
+          2,3
+      - input: ref('my_model_b')
+        format: csv
+        rows: |
+          id,b
+          1,2
+          2,2
+    expect:
+      format: csv
+      rows: |
+          a,b,c
+          1,2,3
+          3,2,5
+"""
+
+test_my_model_exclude_versions_yml = """
+unit_tests:
+  - name: test_my_model
+    model: my_model
+    versions:
+      exclude:
+        - 2
+    given:
+      - input: ref('my_model_a')
+        format: csv
+        rows: |
+          id,a
+          1,1
+          2,3
+      - input: ref('my_model_b')
+        format: csv
+        rows: |
+          id,b
+          1,2
+          2,2
+    expect:
+      format: csv
+      rows: |
+          a,b,c
+          1,2,3
+          3,2,5
+"""
+
+test_my_model_include_versions_yml = """
+unit_tests:
+  - name: test_my_model
+    model: my_model
+    versions:
+      include:
+        - 2
+    given:
+      - input: ref('my_model_a')
+        format: csv
+        rows: |
+          id,a
+          1,1
+          2,3
+      - input: ref('my_model_b')
+        format: csv
+        rows: |
+          id,b
+          1,2
+          2,2
+    expect:
+      format: csv
+      rows: |
+          a,b,c
+          1,2,3
+          3,2,5
+"""
+
+test_my_model_include_exclude_versions_yml = """
+unit_tests:
+  - name: test_my_model
+    model: my_model
+    versions:
+      include:
+        - 2
+      exclude:
+        - 3
+    given:
+      - input: ref('my_model_a')
+        format: csv
+        rows: |
+          id,a
+          1,1
+          2,3
+      - input: ref('my_model_b')
+        format: csv
+        rows: |
+          id,b
+          1,2
+          2,2
+    expect:
+      format: csv
+      rows: |
+          a,b,c
+          1,2,3
+          3,2,5
+"""
+
+test_my_model_include_unversioned_yml = """
+unit_tests:
+  - name: test_my_model
+    model: my_model
+    versions:
+      include:
+        - 2
+    given:
+      - input: ref('my_model_a')
+        rows:
+          - {id: 1, a: 1}
+      - input: ref('my_model_b')
+        rows:
+          - {id: 1, b: 2}
+          - {id: 2, b: 2}
+    expect:
+      rows:
+        - {c: 2}
+"""
+
+my_model_version_ref_sql = """
+   select * from {{ ref('my_model', version=2) }}
+"""
+
+test_my_model_version_ref_yml = """
+unit_tests:
+  - name: test_my_model_version_ref
+    model: my_model_version_ref
+    given:
+      - input: ref('my_model', version=2)
+        rows:
+          - {c: 2}
+    expect:
+      rows:
+        - {c: 2}
+"""
+
+
+# -- unit testing external models
+top_level_domains_sql = """
+SELECT 'example.com' AS tld
+UNION ALL
+SELECT 'gmail.com' AS tld
+"""
+
+valid_emails_sql = """
+WITH
+accounts AS (
+  SELECT user_id, email, email_top_level_domain
+  FROM {{ ref('external_package', 'external_model')}}
+),
+top_level_domains AS (
+  SELECT tld FROM {{ ref('top_level_domains')}}
+),
+joined AS (
+  SELECT
+    accounts.user_id as user_id,
+    top_level_domains.tld as tld
+  FROM accounts
+  LEFT OUTER JOIN top_level_domains
+    ON   accounts.email_top_level_domain = top_level_domains.tld
+)
+
+SELECT
+  joined.user_id as user_id,
+  CASE WHEN joined.tld IS NULL THEN FALSE ELSE TRUE END AS is_valid_email_address
+from joined
+"""
+
+external_package__accounts_seed_csv = """user_id,email,email_top_level_domain
+1,"example@example.com","example.com"
+"""
+
+external_package__external_model_sql = """
+SELECT user_id, email, email_top_level_domain FROM {{ ref('accounts_seed') }}
+"""
+
+
+external_package_project_yml = """
+name: external_package
+version: '1.0'
+config-version: 2
+
+model-paths: ["models"]    # paths to models
+analysis-paths: ["analyses"] # path with analysis files which are compiled, but not run
+target-path: "target"      # path for compiled code
+clean-targets: ["target"]  # directories removed by the clean task
+test-paths: ["tests"]       # where to store test results
+seed-paths: ["seeds"]       # load CSVs from this directory with `dbt seed`
+macro-paths: ["macros"]    # where to find macros
+
+profile: user
+
+models:
+    external_package:
+"""
+
+
+@pytest.fixture(scope="class")
+def external_package():
+    return {
+        "dbt_project.yml": external_package_project_yml,
+        "seeds": {"accounts_seed.csv": external_package__accounts_seed_csv},
+        "models": {
+            "external_model.sql": external_package__external_model_sql,
+        },
+    }

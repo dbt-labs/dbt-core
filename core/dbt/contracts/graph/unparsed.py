@@ -2,11 +2,10 @@ import datetime
 import re
 
 from dbt import deprecations
-from dbt_common.contracts.config.properties import (
-    AdditionalPropertiesAllowed,
-    AdditionalPropertiesMixin,
-)
-from dbt_common.exceptions import DbtInternalError, CompilationError
+from dbt.artifacts.resources import ConstantPropertyInput, Quoting
+from dbt_common.contracts.config.properties import AdditionalPropertiesMixin
+from dbt_common.contracts.util import Mergeable
+from dbt_common.exceptions import DbtInternalError
 from dbt_common.dataclass_schema import (
     dbtClassMixin,
     StrEnum,
@@ -14,14 +13,18 @@ from dbt_common.dataclass_schema import (
     ValidationError,
 )
 from dbt.node_types import NodeType
-from dbt.contracts.graph.semantic_models import (
+from dbt.artifacts.resources import (
     Defaults,
     DimensionValidityParams,
+    ExposureType,
+    ExternalTable,
+    FreshnessThreshold,
+    MaturityType,
     MeasureAggregationParameters,
-)
-from dbt.contracts.util import (
-    Mergeable,
-    Replaceable,
+    UnitTestInputFixture,
+    UnitTestOutputFixture,
+    UnitTestNodeVersions,
+    UnitTestOverrides,
 )
 
 # trigger the PathEncoder
@@ -29,15 +32,15 @@ import dbt_common.helper_types  # noqa:F401
 from dbt.exceptions import ParsingError
 
 from dbt_semantic_interfaces.type_enums import ConversionCalculationType
+from dbt.artifacts.resources import Docs, MacroArgument, NodeVersion, Owner
 
 from dataclasses import dataclass, field
-from datetime import timedelta
 from pathlib import Path
 from typing import Optional, List, Union, Dict, Any, Sequence, Literal
 
 
 @dataclass
-class UnparsedBaseNode(dbtClassMixin, Replaceable):
+class UnparsedBaseNode(dbtClassMixin):
     package_name: str
     path: str
     original_file_path: str
@@ -84,13 +87,7 @@ class UnparsedRunHook(UnparsedNode):
 
 
 @dataclass
-class Docs(dbtClassMixin, Replaceable):
-    show: bool = True
-    node_color: Optional[str] = None
-
-
-@dataclass
-class HasColumnProps(AdditionalPropertiesMixin, ExtensibleDbtClassMixin, Replaceable):
+class HasColumnProps(AdditionalPropertiesMixin, ExtensibleDbtClassMixin):
     name: str
     description: str = ""
     meta: Dict[str, Any] = field(default_factory=dict)
@@ -106,7 +103,9 @@ TestDef = Union[Dict[str, Any], str]
 @dataclass
 class HasColumnAndTestProps(HasColumnProps):
     data_tests: List[TestDef] = field(default_factory=list)
-    tests: List[TestDef] = field(default_factory=list)
+    tests: List[TestDef] = field(
+        default_factory=list
+    )  # back compat for previous name of 'data_tests'
 
 
 @dataclass
@@ -116,12 +115,12 @@ class UnparsedColumn(HasColumnAndTestProps):
 
 
 @dataclass
-class HasColumnDocs(dbtClassMixin, Replaceable):
+class HasColumnDocs(dbtClassMixin):
     columns: Sequence[HasColumnProps] = field(default_factory=list)
 
 
 @dataclass
-class HasColumnTests(dbtClassMixin, Replaceable):
+class HasColumnTests(dbtClassMixin):
     columns: Sequence[UnparsedColumn] = field(default_factory=list)
 
 
@@ -141,9 +140,6 @@ class HasConfig:
     config: Dict[str, Any] = field(default_factory=dict)
 
 
-NodeVersion = Union[str, float]
-
-
 @dataclass
 class UnparsedVersion(dbtClassMixin):
     v: NodeVersion
@@ -154,6 +150,7 @@ class UnparsedVersion(dbtClassMixin):
     constraints: List[Dict[str, Any]] = field(default_factory=list)
     docs: Docs = field(default_factory=Docs)
     data_tests: Optional[List[TestDef]] = None
+    tests: Optional[List[TestDef]] = None  # back compat for previous name of 'data_tests'
     columns: Sequence[Union[dbt_common.helper_types.IncludeExclude, UnparsedColumn]] = field(
         default_factory=list
     )
@@ -264,92 +261,8 @@ class UnparsedModelUpdate(UnparsedNodeUpdate):
 
 
 @dataclass
-class MacroArgument(dbtClassMixin):
-    name: str
-    type: Optional[str] = None
-    description: str = ""
-
-
-@dataclass
 class UnparsedMacroUpdate(HasConfig, HasColumnProps, HasYamlMetadata):
     arguments: List[MacroArgument] = field(default_factory=list)
-
-
-class TimePeriod(StrEnum):
-    minute = "minute"
-    hour = "hour"
-    day = "day"
-
-    def plural(self) -> str:
-        return str(self) + "s"
-
-
-@dataclass
-class Time(dbtClassMixin, Mergeable):
-    count: Optional[int] = None
-    period: Optional[TimePeriod] = None
-
-    def exceeded(self, actual_age: float) -> bool:
-        if self.period is None or self.count is None:
-            return False
-        kwargs: Dict[str, int] = {self.period.plural(): self.count}
-        difference = timedelta(**kwargs).total_seconds()
-        return actual_age > difference
-
-    def __bool__(self):
-        return self.count is not None and self.period is not None
-
-
-@dataclass
-class FreshnessThreshold(dbtClassMixin, Mergeable):
-    warn_after: Optional[Time] = field(default_factory=Time)
-    error_after: Optional[Time] = field(default_factory=Time)
-    filter: Optional[str] = None
-
-    def status(self, age: float) -> "dbt.artifacts.results.FreshnessStatus":  # type: ignore # noqa F821
-        from dbt.artifacts.results import FreshnessStatus
-
-        if self.error_after and self.error_after.exceeded(age):
-            return FreshnessStatus.Error
-        elif self.warn_after and self.warn_after.exceeded(age):
-            return FreshnessStatus.Warn
-        else:
-            return FreshnessStatus.Pass
-
-    def __bool__(self):
-        return bool(self.warn_after) or bool(self.error_after)
-
-
-@dataclass
-class ExternalPartition(AdditionalPropertiesAllowed, Replaceable):
-    name: str = ""
-    description: str = ""
-    data_type: str = ""
-    meta: Dict[str, Any] = field(default_factory=dict)
-
-    def __post_init__(self):
-        if self.name == "" or self.data_type == "":
-            raise CompilationError("External partition columns must have names and data types")
-
-
-@dataclass
-class ExternalTable(AdditionalPropertiesAllowed, Mergeable):
-    location: Optional[str] = None
-    file_format: Optional[str] = None
-    row_format: Optional[str] = None
-    tbl_properties: Optional[str] = None
-    partitions: Optional[Union[List[str], List[ExternalPartition]]] = None
-
-    def __bool__(self):
-        return self.location is not None
-
-
-@dataclass
-class Quoting(dbtClassMixin, Mergeable):
-    database: Optional[bool] = None
-    schema: Optional[bool] = None
-    identifier: Optional[bool] = None
-    column: Optional[bool] = None
 
 
 @dataclass
@@ -370,7 +283,7 @@ class UnparsedSourceTableDefinition(HasColumnTests, HasColumnAndTestProps):
 
 
 @dataclass
-class UnparsedSourceDefinition(dbtClassMixin, Replaceable):
+class UnparsedSourceDefinition(dbtClassMixin):
     name: str
     description: str = ""
     meta: Dict[str, Any] = field(default_factory=dict)
@@ -409,6 +322,7 @@ class SourceTablePatch(dbtClassMixin):
     external: Optional[ExternalTable] = None
     tags: Optional[List[str]] = None
     data_tests: Optional[List[TestDef]] = None
+    tests: Optional[List[TestDef]] = None  # back compat for previous name of 'data_tests'
     columns: Optional[Sequence[UnparsedColumn]] = None
 
     def to_patch_dict(self) -> Dict[str, Any]:
@@ -425,7 +339,7 @@ class SourceTablePatch(dbtClassMixin):
 
 
 @dataclass
-class SourcePatch(dbtClassMixin, Replaceable):
+class SourcePatch(dbtClassMixin):
     name: str = field(
         metadata=dict(description="The name of the source to override"),
     )
@@ -468,7 +382,7 @@ class SourcePatch(dbtClassMixin, Replaceable):
 
 
 @dataclass
-class UnparsedDocumentation(dbtClassMixin, Replaceable):
+class UnparsedDocumentation(dbtClassMixin):
     package_name: str
     path: str
     original_file_path: str
@@ -516,28 +430,8 @@ class Maturity(StrEnum):
         return self == other or self < other
 
 
-class ExposureType(StrEnum):
-    Dashboard = "dashboard"
-    Notebook = "notebook"
-    Analysis = "analysis"
-    ML = "ml"
-    Application = "application"
-
-
-class MaturityType(StrEnum):
-    Low = "low"
-    Medium = "medium"
-    High = "high"
-
-
 @dataclass
-class Owner(AdditionalPropertiesAllowed, Replaceable):
-    email: Optional[str] = None
-    name: Optional[str] = None
-
-
-@dataclass
-class UnparsedExposure(dbtClassMixin, Replaceable):
+class UnparsedExposure(dbtClassMixin):
     name: str
     type: ExposureType
     owner: Owner
@@ -563,7 +457,7 @@ class UnparsedExposure(dbtClassMixin, Replaceable):
 
 
 @dataclass
-class MetricFilter(dbtClassMixin, Replaceable):
+class MetricFilter(dbtClassMixin):
     field: str
     operator: str
     # TODO : Can we make this Any?
@@ -592,7 +486,8 @@ class MetricTime(dbtClassMixin, Mergeable):
 @dataclass
 class UnparsedMetricInputMeasure(dbtClassMixin):
     name: str
-    filter: Optional[Union[str, List[str]]] = None
+    # Note: `Union` must be the outermost part of the type annotation for serialization to work properly.
+    filter: Union[str, List[str], None] = None
     alias: Optional[str] = None
     join_to_timespine: bool = False
     fill_nulls_with: Optional[int] = None
@@ -601,16 +496,11 @@ class UnparsedMetricInputMeasure(dbtClassMixin):
 @dataclass
 class UnparsedMetricInput(dbtClassMixin):
     name: str
-    filter: Optional[Union[str, List[str]]] = None
+    # Note: `Union` must be the outermost part of the type annotation for serialization to work properly.
+    filter: Union[str, List[str], None] = None
     alias: Optional[str] = None
     offset_window: Optional[str] = None
     offset_to_grain: Optional[str] = None  # str is really a TimeGranularity Enum
-
-
-@dataclass
-class ConstantPropertyInput(dbtClassMixin):
-    base_property: str
-    conversion_property: str
 
 
 @dataclass
@@ -644,7 +534,8 @@ class UnparsedMetric(dbtClassMixin):
     type: str
     type_params: UnparsedMetricTypeParams
     description: str = ""
-    filter: Optional[Union[str, List[str]]] = None
+    # Note: `Union` must be the outermost part of the type annotation for serialization to work properly.
+    filter: Union[str, List[str], None] = None
     # metadata: Optional[Unparsedetadata] = None # TODO
     meta: Dict[str, Any] = field(default_factory=dict)
     tags: List[str] = field(default_factory=list)
@@ -673,7 +564,7 @@ class UnparsedMetric(dbtClassMixin):
 
 
 @dataclass
-class UnparsedGroup(dbtClassMixin, Replaceable):
+class UnparsedGroup(dbtClassMixin):
     name: str
     owner: Owner
 
@@ -754,7 +645,8 @@ class UnparsedSemanticModel(dbtClassMixin):
 class UnparsedQueryParams(dbtClassMixin):
     metrics: List[str] = field(default_factory=list)
     group_by: List[str] = field(default_factory=list)
-    where: Optional[Union[str, List[str]]] = None
+    # Note: `Union` must be the outermost part of the type annotation for serialization to work properly.
+    where: Union[str, List[str], None] = None
 
 
 @dataclass
@@ -790,33 +682,6 @@ def normalize_date(d: Optional[datetime.date]) -> Optional[datetime.datetime]:
     return dt
 
 
-class UnitTestFormat(StrEnum):
-    CSV = "csv"
-    Dict = "dict"
-
-
-@dataclass
-class UnitTestInputFixture(dbtClassMixin):
-    input: str
-    rows: Optional[Union[str, List[Dict[str, Any]]]] = None
-    format: UnitTestFormat = UnitTestFormat.Dict
-    fixture: Optional[str] = None
-
-
-@dataclass
-class UnitTestOutputFixture(dbtClassMixin):
-    rows: Optional[Union[str, List[Dict[str, Any]]]] = None
-    format: UnitTestFormat = UnitTestFormat.Dict
-    fixture: Optional[str] = None
-
-
-@dataclass
-class UnitTestOverrides(dbtClassMixin):
-    macros: Dict[str, Any] = field(default_factory=dict)
-    vars: Dict[str, Any] = field(default_factory=dict)
-    env_vars: Dict[str, Any] = field(default_factory=dict)
-
-
 @dataclass
 class UnparsedUnitTest(dbtClassMixin):
     name: str
@@ -826,3 +691,11 @@ class UnparsedUnitTest(dbtClassMixin):
     description: str = ""
     overrides: Optional[UnitTestOverrides] = None
     config: Dict[str, Any] = field(default_factory=dict)
+    versions: Optional[UnitTestNodeVersions] = None
+
+    @classmethod
+    def validate(cls, data):
+        super(UnparsedUnitTest, cls).validate(data)
+        if data.get("versions", None):
+            if data["versions"].get("include") and data["versions"].get("exclude"):
+                raise ValidationError("Unit tests can not both include and exclude versions.")

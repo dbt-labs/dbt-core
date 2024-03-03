@@ -17,8 +17,8 @@ from dbt.cli.exceptions import (
     DbtUsageException,
 )
 from dbt.contracts.graph.manifest import Manifest
-from dbt.artifacts.catalog import CatalogArtifact
-from dbt.artifacts.run import RunExecutionResult
+from dbt.artifacts.schemas.catalog import CatalogArtifact
+from dbt.artifacts.schemas.run import RunExecutionResult
 from dbt_common.events.base_types import EventMsg
 from dbt.task.build import BuildTask
 from dbt.task.clean import CleanTask
@@ -121,11 +121,19 @@ class dbtRunner:
 def global_flags(func):
     @p.cache_selected_only
     @p.debug
+    @p.defer
+    @p.deprecated_defer
+    @p.defer_state
+    @p.deprecated_favor_state
     @p.deprecated_print
+    @p.deprecated_state
     @p.enable_legacy_logger
     @p.fail_fast
+    @p.favor_state
+    @p.indirect_selection
     @p.log_cache_events
     @p.log_file_max_bytes
+    @p.log_format
     @p.log_format_file
     @p.log_level
     @p.log_level_file
@@ -141,12 +149,15 @@ def global_flags(func):
     @p.record_timing_info
     @p.send_anonymous_usage_stats
     @p.single_threaded
+    @p.state
     @p.static_parser
     @p.use_colors
     @p.use_colors_file
     @p.use_experimental_parser
     @p.version
     @p.version_check
+    @p.warn_error
+    @p.warn_error_options
     @p.write_json
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
@@ -164,9 +175,6 @@ def global_flags(func):
 )
 @click.pass_context
 @global_flags
-@p.warn_error
-@p.warn_error_options
-@p.log_format
 @p.show_resource_report
 def cli(ctx, **kwargs):
     """An ELT tool for managing your SQL transformations and data models.
@@ -178,14 +186,10 @@ def cli(ctx, **kwargs):
 @cli.command("build")
 @click.pass_context
 @global_flags
-@p.defer
-@p.deprecated_defer
 @p.exclude
-@p.favor_state
-@p.deprecated_favor_state
+@p.export_saved_queries
 @p.full_refresh
-@p.include_saved_query
-@p.indirect_selection
+@p.deprecated_include_saved_query
 @p.profile
 @p.profiles_dir
 @p.project_dir
@@ -193,9 +197,6 @@ def cli(ctx, **kwargs):
 @p.select
 @p.selector
 @p.show
-@p.state
-@p.defer_state
-@p.deprecated_state
 @p.store_failures
 @p.target
 @p.target_path
@@ -257,11 +258,7 @@ def docs(ctx, **kwargs):
 @click.pass_context
 @global_flags
 @p.compile_docs
-@p.defer
-@p.deprecated_defer
 @p.exclude
-@p.favor_state
-@p.deprecated_favor_state
 @p.profile
 @p.profiles_dir
 @p.project_dir
@@ -269,9 +266,6 @@ def docs(ctx, **kwargs):
 @p.selector
 @p.empty_catalog
 @p.static
-@p.state
-@p.defer_state
-@p.deprecated_state
 @p.target
 @p.target_path
 @p.threads
@@ -328,14 +322,9 @@ def docs_serve(ctx, **kwargs):
 @cli.command("compile")
 @click.pass_context
 @global_flags
-@p.defer
-@p.deprecated_defer
 @p.exclude
-@p.favor_state
-@p.deprecated_favor_state
 @p.full_refresh
 @p.show_output_format
-@p.indirect_selection
 @p.introspect
 @p.profile
 @p.profiles_dir
@@ -344,9 +333,6 @@ def docs_serve(ctx, **kwargs):
 @p.select
 @p.selector
 @p.inline
-@p.state
-@p.defer_state
-@p.deprecated_state
 @p.compile_inject_ephemeral_ctes
 @p.target
 @p.target_path
@@ -376,15 +362,10 @@ def compile(ctx, **kwargs):
 @cli.command("show")
 @click.pass_context
 @global_flags
-@p.defer
-@p.deprecated_defer
 @p.exclude
-@p.favor_state
-@p.deprecated_favor_state
 @p.full_refresh
 @p.show_output_format
 @p.show_limit
-@p.indirect_selection
 @p.introspect
 @p.profile
 @p.profiles_dir
@@ -392,9 +373,6 @@ def compile(ctx, **kwargs):
 @p.select
 @p.selector
 @p.inline
-@p.state
-@p.defer_state
-@p.deprecated_state
 @p.target
 @p.target_path
 @p.threads
@@ -514,7 +492,6 @@ def init(ctx, **kwargs):
 @click.pass_context
 @global_flags
 @p.exclude
-@p.indirect_selection
 @p.models
 @p.output
 @p.output_keys
@@ -524,9 +501,6 @@ def init(ctx, **kwargs):
 @p.resource_type
 @p.raw_select
 @p.selector
-@p.state
-@p.defer_state
-@p.deprecated_state
 @p.target
 @p.target_path
 @p.vars
@@ -582,10 +556,6 @@ def parse(ctx, **kwargs):
 @cli.command("run")
 @click.pass_context
 @global_flags
-@p.defer
-@p.deprecated_defer
-@p.favor_state
-@p.deprecated_favor_state
 @p.exclude
 @p.full_refresh
 @p.profile
@@ -594,9 +564,6 @@ def parse(ctx, **kwargs):
 @p.empty
 @p.select
 @p.selector
-@p.state
-@p.defer_state
-@p.deprecated_state
 @p.target
 @p.target_path
 @p.threads
@@ -629,7 +596,7 @@ def run(ctx, **kwargs):
 @p.vars
 @p.profile
 @p.target
-@p.state
+@p.target_path
 @p.threads
 @p.full_refresh
 @requires.postflight
@@ -639,10 +606,10 @@ def run(ctx, **kwargs):
 @requires.runtime_config
 def retry(ctx, **kwargs):
     """Retry the nodes that failed in the previous run."""
+    # Retry will parse manifest inside the task after we consolidate the flags
     task = RetryTask(
         ctx.obj["flags"],
         ctx.obj["runtime_config"],
-        ctx.obj["manifest"],
     )
 
     results = task.run()
@@ -654,7 +621,6 @@ def retry(ctx, **kwargs):
 @cli.command("clone")
 @click.pass_context
 @global_flags
-@p.defer_state
 @p.exclude
 @p.full_refresh
 @p.profile
@@ -663,7 +629,6 @@ def retry(ctx, **kwargs):
 @p.resource_type
 @p.select
 @p.selector
-@p.state  # required
 @p.target
 @p.target_path
 @p.threads
@@ -731,9 +696,6 @@ def run_operation(ctx, **kwargs):
 @p.select
 @p.selector
 @p.show
-@p.state
-@p.defer_state
-@p.deprecated_state
 @p.target
 @p.target_path
 @p.threads
@@ -760,19 +722,12 @@ def seed(ctx, **kwargs):
 @cli.command("snapshot")
 @click.pass_context
 @global_flags
-@p.defer
-@p.deprecated_defer
 @p.exclude
-@p.favor_state
-@p.deprecated_favor_state
 @p.profile
 @p.profiles_dir
 @p.project_dir
 @p.select
 @p.selector
-@p.state
-@p.defer_state
-@p.deprecated_state
 @p.target
 @p.target_path
 @p.threads
@@ -815,9 +770,6 @@ def source(ctx, **kwargs):
 @p.project_dir
 @p.select
 @p.selector
-@p.state
-@p.defer_state
-@p.deprecated_state
 @p.target
 @p.target_path
 @p.threads
@@ -851,20 +803,12 @@ cli.commands["source"].add_command(snapshot_freshness, "snapshot-freshness")  # 
 @cli.command("test")
 @click.pass_context
 @global_flags
-@p.defer
-@p.deprecated_defer
 @p.exclude
-@p.favor_state
-@p.deprecated_favor_state
-@p.indirect_selection
 @p.profile
 @p.profiles_dir
 @p.project_dir
 @p.select
 @p.selector
-@p.state
-@p.defer_state
-@p.deprecated_state
 @p.store_failures
 @p.target
 @p.target_path

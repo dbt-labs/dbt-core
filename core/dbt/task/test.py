@@ -1,12 +1,10 @@
-from distutils.util import strtobool
-
 import agate
 import daff
 import io
 import json
 import re
 from dataclasses import dataclass
-from dbt.utils import _coerce_decimal
+from dbt.utils import _coerce_decimal, strtobool
 from dbt_common.events.format import pluralize
 from dbt_common.dataclass_schema import dbtClassMixin
 import threading
@@ -17,9 +15,9 @@ from .run import RunTask
 
 from dbt.contracts.graph.nodes import TestNode, UnitTestDefinition, UnitTestNode
 from dbt.contracts.graph.manifest import Manifest
-from dbt.artifacts.results import TestStatus
-from dbt.artifacts.run import RunResult
-from dbt.artifacts.catalog import PrimitiveDict
+from dbt.artifacts.schemas.results import TestStatus
+from dbt.artifacts.schemas.run import RunResult
+from dbt.artifacts.schemas.catalog import PrimitiveDict
 from dbt.context.providers import generate_runtime_model_context
 from dbt.clients.jinja import MacroGenerator
 from dbt_common.events.functions import fire_event
@@ -27,11 +25,9 @@ from dbt.events.types import (
     LogTestResult,
     LogStartLine,
 )
-from dbt.exceptions import (
-    DbtInternalError,
-    BooleanError,
-)
-from ..adapters.exceptions import MissingMaterializationError
+from dbt.exceptions import DbtInternalError, BooleanError
+from dbt_common.exceptions import DbtBaseException, DbtRuntimeError
+from dbt.adapters.exceptions import MissingMaterializationError
 from dbt.graph import (
     ResourceTypeSelector,
 )
@@ -83,15 +79,22 @@ class UnitTestResultData(dbtClassMixin):
 class TestRunner(CompileRunner):
     _ANSI_ESCAPE = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
 
+    def describe_node_name(self):
+        if self.node.resource_type == NodeType.Unit:
+            name = f"{self.node.model}::{self.node.versioned_name}"
+            return name
+        else:
+            return self.node.name
+
     def describe_node(self):
-        return f"{self.node.resource_type} {self.node.name}"
+        return f"{self.node.resource_type} {self.describe_node_name()}"
 
     def print_result_line(self, result):
         model = result.node
 
         fire_event(
             LogTestResult(
-                name=model.name,
+                name=self.describe_node_name(),
                 status=str(result.status),
                 index=self.node_index,
                 num_models=self.num_nodes,
@@ -207,7 +210,14 @@ class TestRunner(CompileRunner):
         # generate materialization macro
         macro_func = MacroGenerator(materialization_macro, context)
         # execute materialization macro
-        macro_func()
+        try:
+            macro_func()
+        except DbtBaseException as e:
+            raise DbtRuntimeError(
+                f"An error occurred during execution of unit test '{unit_test_def.name}'. "
+                f"There may be an error in the unit test definition: check the data types.\n {e}"
+            )
+
         # load results from context
         # could eventually be returned directly by materialization
         result = context["load_result"]("main")
@@ -222,7 +232,7 @@ class TestRunner(CompileRunner):
         if daff_diff.hasDifference():
             should_error = True
             rendered = self._render_daff_diff(daff_diff)
-            rendered = f"\n\n{red('expected')} differs from {green('actual')}:\n\n{rendered}\n"
+            rendered = f"\n\n{green('actual')} differs from {red('expected')}:\n\n{rendered}\n"
 
             diff = UnitTestDiff(
                 actual=json_rows_from_table(actual),

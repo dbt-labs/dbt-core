@@ -366,6 +366,14 @@ class TestFlags:
 
         assert flags_a.USE_COLORS == flags_b.USE_COLORS
 
+    def test_set_project_only_flags(self, project_flags, run_context):
+        flags = Flags(run_context, project_flags)
+
+        for project_only_flag, project_only_flag_value in project_flags.project_only_flags.items():
+            assert getattr(flags, project_only_flag) == project_only_flag_value
+            # sanity check: ensure project_only_flag is not part of the click context
+            assert project_only_flag not in run_context.params
+
     def _create_flags_from_dict(self, cmd, d):
         write_file("", "profiles.yml")
         result = Flags.from_dict(cmd, d)

@@ -5,7 +5,7 @@ from .printer import (
     print_run_end_messages,
 )
 
-from dbt.artifacts.results import RunStatus, NodeStatus
+from dbt.artifacts.schemas.results import RunStatus, NodeStatus
 from dbt_common.exceptions import DbtInternalError
 from dbt.graph import ResourceTypeSelector
 from dbt.logger import TextOnly
@@ -62,10 +62,6 @@ class SeedRunner(ModelRunner):
 
 
 class SeedTask(RunTask):
-    def defer_to_manifest(self, adapter, selected_uids):
-        # seeds don't defer
-        return
-
     def raise_on_first_error(self):
         return False
 

@@ -1,0 +1,6 @@
+kind: Features
+body: Accelerate integration tests with caching.
+time: 2024-02-01T15:49:56.422651-05:00
+custom:
+  Author: peterallenwebb
+  Issue: "9498"

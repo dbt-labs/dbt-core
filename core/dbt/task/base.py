@@ -16,9 +16,9 @@ from dbt.config import RuntimeConfig, Project
 from dbt.config.profile import read_profile
 from dbt.constants import DBT_PROJECT_FILE_NAME
 from dbt.contracts.graph.manifest import Manifest
-from dbt.artifacts.results import TimingInfo, collect_timing_info
-from dbt.artifacts.results import NodeStatus, RunningStatus, RunStatus
-from dbt.artifacts.run import RunResult
+from dbt.artifacts.schemas.results import TimingInfo, collect_timing_info
+from dbt.artifacts.schemas.results import NodeStatus, RunningStatus, RunStatus
+from dbt.artifacts.schemas.run import RunResult
 from dbt_common.events.contextvars import get_node_info
 from dbt_common.events.functions import fire_event
 from dbt.events.types import (
@@ -336,7 +336,11 @@ class BaseRunner(metaclass=ABCMeta):
         return str(e)
 
     def _handle_internal_exception(self, e, ctx):
-        fire_event(InternalErrorOnRun(build_path=self.node.build_path, exc=str(e)))
+        fire_event(
+            InternalErrorOnRun(
+                build_path=self.node.build_path, exc=str(e), node_info=get_node_info()
+            )
+        )
         return str(e)
 
     def _handle_generic_exception(self, e, ctx):
@@ -345,6 +349,7 @@ class BaseRunner(metaclass=ABCMeta):
                 build_path=self.node.build_path,
                 unique_id=self.node.unique_id,
                 exc=str(e),
+                node_info=get_node_info(),
             )
         )
         fire_event(LogDebugStackTrace(exc_info=traceback.format_exc()))
