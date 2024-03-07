@@ -206,3 +206,38 @@ class TestCLIVarsSelectors:
         # Var in cli_vars works
         results = run_dbt(["run", "--vars", "snapshot_target: dev"])
         assert len(results) == 1
+
+
+models_scrubbing__schema_yml = """
+version: 2
+models:
+- name: simple_model
+  columns:
+  - name: simple
+    data_tests:
+    - accepted_values:
+        values:
+        - abc
+"""
+
+models_scrubbing__simple_model_sql = """
+select
+    '{{ var("DBT_ENV_SECRET_simple") }}'::varchar as simple
+"""
+
+
+class TestCLIVarsScrubbing:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": models_scrubbing__schema_yml,
+            "simple_model.sql": models_scrubbing__simple_model_sql,
+        }
+
+    def test__run_results_scrubbing(self, project):
+        results = run_dbt(["run", "--vars", "{DBT_ENV_SECRET_simple: abc, unused: def}"])
+        assert len(results) == 1
+        results = run_dbt(["test", "--vars", "{DBT_ENV_SECRET_simple: abc, unused: def}"])
+        assert len(results) == 1
+        run_results = get_artifact(project.project_root, "target", "run_results.json")
+        assert run_results["args"]["vars"] == {"DBT_ENV_SECRET_simple": "*****", "unused": "def"}

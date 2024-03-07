@@ -1,0 +1,6 @@
+kind: Features
+body: Support scrubbing secret vars
+time: 2024-03-07T15:36:22.754627+01:00
+custom:
+  Author: nielspardon
+  Issue: "7247"
