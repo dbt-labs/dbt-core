@@ -89,7 +89,7 @@ class ListTask(GraphRunnableTask):
             else:
                 raise DbtRuntimeError(
                     f'Got an unexpected result from node selection: "{node}"'
-                    f"Expected a source or a node!"
+                    f"Listing this node type is not yet supported!"
                 )
 
     def generate_selectors(self):
