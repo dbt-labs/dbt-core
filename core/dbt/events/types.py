@@ -1348,7 +1348,22 @@ class LogFreshnessResult(DynamicLevel):
             return EventLevel.INFO
 
 
-# Skipped Q019, Q020, Q021
+class LogNodeNoOpResult(InfoLevel):
+    def code(self) -> str:
+        return "Q019"
+
+    def message(self) -> str:
+        msg = f"NO-OP {self.description}"
+        return format_fancy_output_line(
+            msg=msg,
+            status=yellow("NO-OP"),
+            index=self.index,
+            total=self.total,
+            execution_time=self.execution_time,
+        )
+
+
+# Skipped Q020, Q021
 
 
 class LogCancelLine(ErrorLevel):

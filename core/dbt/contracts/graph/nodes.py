@@ -1,6 +1,5 @@
 import os
 from datetime import datetime
-import time
 from dataclasses import dataclass, field
 import hashlib
 
@@ -16,6 +15,7 @@ from typing import (
     Type,
     Iterator,
     Literal,
+    get_args,
 )
 
 from dbt import deprecations
@@ -29,13 +29,9 @@ from dbt.contracts.graph.unparsed import (
     UnparsedSourceTableDefinition,
     UnparsedColumn,
     UnitTestOverrides,
-    UnitTestInputFixture,
-    UnitTestOutputFixture,
-    UnitTestNodeVersions,
 )
 from dbt.contracts.graph.model_config import (
     UnitTestNodeConfig,
-    UnitTestConfig,
     EmptySnapshotConfig,
 )
 from dbt.contracts.graph.node_args import ModelNodeArgs
@@ -91,6 +87,7 @@ from dbt.artifacts.resources import (
     Snapshot as SnapshotResource,
     Quoting as QuotingResource,
     SourceDefinition as SourceDefinitionResource,
+    UnitTestDefinition as UnitTestDefinitionResource,
 )
 
 # =====================================================================
@@ -400,20 +397,6 @@ class CompiledNode(CompiledResource, ParsedNode):
         else:
             self.extra_ctes.append(InjectedCTE(id=cte_id, sql=sql))
 
-    def __post_serialize__(self, dct):
-        dct = super().__post_serialize__(dct)
-        if "_pre_injected_sql" in dct:
-            del dct["_pre_injected_sql"]
-        # Remove compiled attributes
-        if "compiled" in dct and dct["compiled"] is False:
-            del dct["compiled"]
-            del dct["extra_ctes_injected"]
-            del dct["extra_ctes"]
-            # "omit_none" means these might not be in the dictionary
-            if "compiled_code" in dct:
-                del dct["compiled_code"]
-        return dct
-
     @property
     def depends_on_nodes(self):
         return self.depends_on.nodes
@@ -430,16 +413,24 @@ class CompiledNode(CompiledResource, ParsedNode):
 
 @dataclass
 class AnalysisNode(AnalysisResource, CompiledNode):
-    pass
+    @classmethod
+    def resource_class(cls) -> Type[AnalysisResource]:
+        return AnalysisResource
 
 
 @dataclass
 class HookNode(HookNodeResource, CompiledNode):
-    pass
+    @classmethod
+    def resource_class(cls) -> Type[HookNodeResource]:
+        return HookNodeResource
 
 
 @dataclass
 class ModelNode(ModelResource, CompiledNode):
+    @classmethod
+    def resource_class(cls) -> Type[ModelResource]:
+        return ModelResource
+
     @classmethod
     def from_args(cls, args: ModelNodeArgs) -> "ModelNode":
         unique_id = args.unique_id
@@ -491,6 +482,60 @@ class ModelNode(ModelResource, CompiledNode):
     @property
     def materialization_enforces_constraints(self) -> bool:
         return self.config.materialized in ["table", "incremental"]
+
+    def infer_primary_key(self, data_tests: List["GenericTestNode"]) -> List[str]:
+        """
+        Infers the columns that can be used as primary key of a model in the following order:
+        1. Columns with primary key constraints
+        2. Columns with unique and not_null data tests
+        3. Columns with enabled unique or dbt_utils.unique_combination_of_columns data tests
+        4. Columns with disabled unique or dbt_utils.unique_combination_of_columns data tests
+        """
+        for constraint in self.constraints:
+            if constraint.type == ConstraintType.primary_key:
+                return constraint.columns
+
+        for column, column_info in self.columns.items():
+            for column_constraint in column_info.constraints:
+                if column_constraint.type == ConstraintType.primary_key:
+                    return [column]
+
+        columns_with_enabled_unique_tests = set()
+        columns_with_disabled_unique_tests = set()
+        columns_with_not_null_tests = set()
+        for test in data_tests:
+            columns = []
+            if "column_name" in test.test_metadata.kwargs:
+                columns = [test.test_metadata.kwargs["column_name"]]
+            elif "combination_of_columns" in test.test_metadata.kwargs:
+                columns = test.test_metadata.kwargs["combination_of_columns"]
+
+            for column in columns:
+                if test.test_metadata.name in ["unique", "unique_combination_of_columns"]:
+                    if test.config.enabled:
+                        columns_with_enabled_unique_tests.add(column)
+                    else:
+                        columns_with_disabled_unique_tests.add(column)
+                elif test.test_metadata.name == "not_null":
+                    columns_with_not_null_tests.add(column)
+
+        columns_with_unique_and_not_null_tests = []
+        for column in columns_with_not_null_tests:
+            if (
+                column in columns_with_enabled_unique_tests
+                or column in columns_with_disabled_unique_tests
+            ):
+                columns_with_unique_and_not_null_tests.append(column)
+        if columns_with_unique_and_not_null_tests:
+            return columns_with_unique_and_not_null_tests
+
+        if columns_with_enabled_unique_tests:
+            return list(columns_with_enabled_unique_tests)
+
+        if columns_with_disabled_unique_tests:
+            return list(columns_with_disabled_unique_tests)
+
+        return []
 
     def same_contents(self, old, adapter_type) -> bool:
         return super().same_contents(old, adapter_type) and self.same_ref_representation(old)
@@ -718,7 +763,9 @@ class ModelNode(ModelResource, CompiledNode):
 
 @dataclass
 class SqlNode(SqlOperationResource, CompiledNode):
-    pass
+    @classmethod
+    def resource_class(cls) -> Type[SqlOperationResource]:
+        return SqlOperationResource
 
 
 # ====================================
@@ -728,6 +775,10 @@ class SqlNode(SqlOperationResource, CompiledNode):
 
 @dataclass
 class SeedNode(SeedResource, ParsedNode):  # No SQLDefaults!
+    @classmethod
+    def resource_class(cls) -> Type[SeedResource]:
+        return SeedResource
+
     def same_seeds(self, other: "SeedNode") -> bool:
         # for seeds, we check the hashes. If the hashes are different types,
         # no match. If the hashes are both the same 'path', log a warning and
@@ -846,6 +897,10 @@ class TestShouldStoreFailures:
 
 @dataclass
 class SingularTestNode(SingularTestResource, TestShouldStoreFailures, CompiledNode):
+    @classmethod
+    def resource_class(cls) -> Type[SingularTestResource]:
+        return SingularTestResource
+
     @property
     def test_node_type(self):
         return "singular"
@@ -858,6 +913,10 @@ class SingularTestNode(SingularTestResource, TestShouldStoreFailures, CompiledNo
 
 @dataclass
 class GenericTestNode(GenericTestResource, TestShouldStoreFailures, CompiledNode):
+    @classmethod
+    def resource_class(cls) -> Type[GenericTestResource]:
+        return GenericTestResource
+
     def same_contents(self, other, adapter_type: Optional[str]) -> bool:
         if other is None:
             return False
@@ -889,23 +948,10 @@ class UnitTestNode(CompiledNode):
 
 
 @dataclass
-class UnitTestDefinitionMandatory:
-    model: str
-    given: Sequence[UnitTestInputFixture]
-    expect: UnitTestOutputFixture
-
-
-@dataclass
-class UnitTestDefinition(NodeInfoMixin, GraphNode, UnitTestDefinitionMandatory):
-    description: str = ""
-    overrides: Optional[UnitTestOverrides] = None
-    depends_on: DependsOn = field(default_factory=DependsOn)
-    config: UnitTestConfig = field(default_factory=UnitTestConfig)
-    checksum: Optional[str] = None
-    schema: Optional[str] = None
-    created_at: float = field(default_factory=lambda: time.time())
-    versions: Optional[UnitTestNodeVersions] = None
-    version: Optional[NodeVersion] = None
+class UnitTestDefinition(NodeInfoMixin, GraphNode, UnitTestDefinitionResource):
+    @classmethod
+    def resource_class(cls) -> Type[UnitTestDefinitionResource]:
+        return UnitTestDefinitionResource
 
     @property
     def build_path(self):
@@ -977,7 +1023,9 @@ class IntermediateSnapshotNode(CompiledNode):
 
 @dataclass
 class SnapshotNode(SnapshotResource, CompiledNode):
-    pass
+    @classmethod
+    def resource_class(cls) -> Type[SnapshotResource]:
+        return SnapshotResource
 
 
 # ====================================
@@ -987,6 +1035,10 @@ class SnapshotNode(SnapshotResource, CompiledNode):
 
 @dataclass
 class Macro(MacroResource, BaseNode):
+    @classmethod
+    def resource_class(cls) -> Type[MacroResource]:
+        return MacroResource
+
     def same_contents(self, other: Optional["Macro"]) -> bool:
         if other is None:
             return False
@@ -1006,6 +1058,10 @@ class Macro(MacroResource, BaseNode):
 
 @dataclass
 class Documentation(DocumentationResource, BaseNode):
+    @classmethod
+    def resource_class(cls) -> Type[DocumentationResource]:
+        return DocumentationResource
+
     @property
     def search_name(self):
         return self.name
@@ -1581,3 +1637,10 @@ Resource = Union[
 ]
 
 TestNode = Union[SingularTestNode, GenericTestNode]
+
+
+RESOURCE_CLASS_TO_NODE_CLASS: Dict[Type[BaseResource], Type[BaseNode]] = {
+    node_class.resource_class(): node_class
+    for node_class in get_args(Resource)
+    if node_class is not UnitTestNode
+}

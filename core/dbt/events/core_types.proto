@@ -1331,8 +1331,23 @@ message LogFreshnessResultMsg {
     LogFreshnessResult data = 2;
 }
 
+// Q018
+message LogNodeNoOpResult {
+    NodeInfo node_info = 1;
+    string description = 2;
+    string status = 3;
+    int32 index = 4;
+    int32 total = 5;
+    float execution_time = 6;
+}
 
-// Skipped Q019, Q020, Q021
+message LogNodeNoOpResultMsg {
+    CoreEventInfo info = 1;
+    LogNodeNoOpResult data = 2;
+}
+
+
+// Skipped Q020, Q021
 
 
 // Q022

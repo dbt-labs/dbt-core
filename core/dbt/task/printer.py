@@ -33,11 +33,11 @@ def get_counts(flat_nodes) -> str:
         if node.resource_type == NodeType.Model:
             t = "{} {}".format(node.get_materialization(), t)
         elif node.resource_type == NodeType.Operation:
-            t = "hook"
+            t = "project hook"
 
         counts[t] = counts.get(t, 0) + 1
 
-    stat_line = ", ".join([pluralize(v, k) for k, v in counts.items()])
+    stat_line = ", ".join([pluralize(v, k).replace("_", " ") for k, v in counts.items()])
 
     return stat_line
 

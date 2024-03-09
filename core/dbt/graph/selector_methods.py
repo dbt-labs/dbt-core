@@ -8,7 +8,7 @@ from dbt_common.dataclass_schema import StrEnum
 
 from .graph import UniqueId
 
-from dbt.contracts.graph.manifest import Manifest, WritableManifest
+from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import (
     SingularTestNode,
     Exposure,
@@ -725,7 +725,7 @@ class StateSelectorMethod(SelectorMethod):
                 f'Got an invalid selector "{selector}", expected one of ' f'"{list(state_checks)}"'
             )
 
-        manifest: WritableManifest = self.previous_state.manifest
+        manifest: Manifest = self.previous_state.manifest
 
         for unique_id, node in self.all_nodes(included_nodes):
             previous_node: Optional[SelectorTarget] = None
@@ -733,7 +733,7 @@ class StateSelectorMethod(SelectorMethod):
             if unique_id in manifest.nodes:
                 previous_node = manifest.nodes[unique_id]
             elif unique_id in manifest.sources:
-                previous_node = manifest.sources[unique_id]
+                previous_node = SourceDefinition.from_resource(manifest.sources[unique_id])
             elif unique_id in manifest.exposures:
                 previous_node = Exposure.from_resource(manifest.exposures[unique_id])
             elif unique_id in manifest.metrics:
@@ -741,7 +741,7 @@ class StateSelectorMethod(SelectorMethod):
             elif unique_id in manifest.semantic_models:
                 previous_node = SemanticModel.from_resource(manifest.semantic_models[unique_id])
             elif unique_id in manifest.unit_tests:
-                previous_node = manifest.unit_tests[unique_id]
+                previous_node = UnitTestDefinition.from_resource(manifest.unit_tests[unique_id])
 
             keyword_args = {}
             if checker.__name__ in [

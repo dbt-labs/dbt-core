@@ -1,4 +1,5 @@
-from dbt.contracts.graph.nodes import UnitTestDefinition, UnitTestConfig, DependsOn, NodeType
+from dbt.contracts.graph.nodes import UnitTestDefinition, NodeType
+from dbt.artifacts.resources import UnitTestConfig, DependsOn
 from dbt.parser import SchemaParser
 from dbt.parser.unit_tests import UnitTestParser
 

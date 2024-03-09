@@ -21,6 +21,10 @@ from dbt.artifacts.resources import (
     FreshnessThreshold,
     MaturityType,
     MeasureAggregationParameters,
+    UnitTestInputFixture,
+    UnitTestOutputFixture,
+    UnitTestNodeVersions,
+    UnitTestOverrides,
 )
 
 # trigger the PathEncoder
@@ -676,39 +680,6 @@ def normalize_date(d: Optional[datetime.date]) -> Optional[datetime.datetime]:
         dt = dt.astimezone()
 
     return dt
-
-
-class UnitTestFormat(StrEnum):
-    CSV = "csv"
-    Dict = "dict"
-
-
-@dataclass
-class UnitTestInputFixture(dbtClassMixin):
-    input: str
-    rows: Optional[Union[str, List[Dict[str, Any]]]] = None
-    format: UnitTestFormat = UnitTestFormat.Dict
-    fixture: Optional[str] = None
-
-
-@dataclass
-class UnitTestOutputFixture(dbtClassMixin):
-    rows: Optional[Union[str, List[Dict[str, Any]]]] = None
-    format: UnitTestFormat = UnitTestFormat.Dict
-    fixture: Optional[str] = None
-
-
-@dataclass
-class UnitTestOverrides(dbtClassMixin):
-    macros: Dict[str, Any] = field(default_factory=dict)
-    vars: Dict[str, Any] = field(default_factory=dict)
-    env_vars: Dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass
-class UnitTestNodeVersions(dbtClassMixin):
-    include: Optional[List[NodeVersion]] = None
-    exclude: Optional[List[NodeVersion]] = None
 
 
 @dataclass

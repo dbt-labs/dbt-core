@@ -13,45 +13,30 @@ from dbt.node_types import NodeType
 from dbt.task.test import TestSelector
 from dbt.task.base import BaseRunner
 from dbt_common.events.functions import fire_event
-from dbt.events.types import LogStartLine, LogModelResult
-from dbt_common.events.base_types import EventLevel
+from dbt.events.types import LogNodeNoOpResult
 from dbt.exceptions import DbtInternalError
 
 
 class SavedQueryRunner(BaseRunner):
-    # A no-op Runner for Saved Queries
+    # Stub. No-op Runner for Saved Queries, which require MetricFlow for execution.
     @property
     def description(self):
-        return "Saved Query {}".format(self.node.unique_id)
+        return f"saved query {self.node.name}"
 
     def before_execute(self):
-        fire_event(
-            LogStartLine(
-                description=self.description,
-                index=self.node_index,
-                total=self.num_nodes,
-                node_info=self.node.node_info,
-            )
-        )
+        pass
 
     def compile(self, manifest):
         return self.node
 
     def after_execute(self, result):
-        if result.status == NodeStatus.Error:
-            level = EventLevel.ERROR
-        else:
-            level = EventLevel.INFO
         fire_event(
-            LogModelResult(
+            LogNodeNoOpResult(
                 description=self.description,
-                status=result.status,
                 index=self.node_index,
                 total=self.num_nodes,
-                execution_time=result.execution_time,
                 node_info=self.node.node_info,
-            ),
-            level=level,
+            )
         )
 
     def execute(self, compiled_node, manifest):
@@ -61,8 +46,8 @@ class SavedQueryRunner(BaseRunner):
             status=RunStatus.Success,
             timing=[],
             thread_id=threading.current_thread().name,
-            execution_time=0.1,
-            message="done",
+            execution_time=0,
+            message="NO-OP",
             adapter_response={},
             failures=0,
             agate_table=None,
@@ -85,6 +70,7 @@ class BuildTask(RunTask):
         NodeType.Seed: seed_runner,
         NodeType.Test: test_runner,
         NodeType.Unit: test_runner,
+        NodeType.SavedQuery: SavedQueryRunner,
     }
     ALL_RESOURCE_VALUES = frozenset({x for x in RUNNER_MAP.keys()})
 
@@ -94,10 +80,6 @@ class BuildTask(RunTask):
         self.model_to_unit_test_map: Dict[str, List] = {}
 
     def resource_types(self, no_unit_tests=False):
-        if self.args.include_saved_query:
-            self.RUNNER_MAP[NodeType.SavedQuery] = SavedQueryRunner
-            self.ALL_RESOURCE_VALUES = self.ALL_RESOURCE_VALUES.union({NodeType.SavedQuery})
-
         if not self.args.resource_types:
             resource_types = list(self.ALL_RESOURCE_VALUES)
         else:

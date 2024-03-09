@@ -206,3 +206,17 @@ class CompiledResource(ParsedResource):
     extra_ctes: List[InjectedCTE] = field(default_factory=list)
     _pre_injected_sql: Optional[str] = None
     contract: Contract = field(default_factory=Contract)
+
+    def __post_serialize__(self, dct):
+        dct = super().__post_serialize__(dct)
+        if "_pre_injected_sql" in dct:
+            del dct["_pre_injected_sql"]
+        # Remove compiled attributes
+        if "compiled" in dct and dct["compiled"] is False:
+            del dct["compiled"]
+            del dct["extra_ctes_injected"]
+            del dct["extra_ctes"]
+            # "omit_none" means these might not be in the dictionary
+            if "compiled_code" in dct:
+                del dct["compiled_code"]
+        return dct
