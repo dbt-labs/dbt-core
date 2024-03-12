@@ -13,11 +13,6 @@
 # the core team as a whole will be assigned
 *       @dbt-labs/core-team
 
-### ADAPTERS
-
-# Functional tests for adapter plugins
-/tests/adapter                  @dbt-labs/adapters
-
 ### ARTIFACTS
 
 /schemas/dbt                    @dbt-labs/cloud-artifacts
