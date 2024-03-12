@@ -1572,7 +1572,7 @@ def _process_metric_node(
         assert (
             metric.type_params.measure is not None
         ), f"{metric} should have a measure defined, but it does not."
-        metric.type_params.input_measures.append(metric.type_params.measure)
+        metric.add_input_measure(metric.type_params.measure)
         _process_metric_depends_on(
             manifest=manifest, current_project=current_project, metric=metric
         )
@@ -1581,8 +1581,8 @@ def _process_metric_node(
         assert (
             conversion_type_params
         ), f"{metric.name} is a conversion metric and must have conversion_type_params defined."
-        metric.type_params.input_measures.append(conversion_type_params.base_measure)
-        metric.type_params.input_measures.append(conversion_type_params.conversion_measure)
+        metric.add_input_measure(conversion_type_params.base_measure)
+        metric.add_input_measure(conversion_type_params.conversion_measure)
         _process_metric_depends_on(
             manifest=manifest, current_project=current_project, metric=metric
         )
@@ -1618,7 +1618,8 @@ def _process_metric_node(
             _process_metric_node(
                 manifest=manifest, current_project=current_project, metric=target_metric
             )
-            metric.type_params.input_measures.extend(target_metric.type_params.input_measures)
+            for input_measure in target_metric.type_params.input_measures:
+                metric.add_input_measure(input_measure)
             metric.depends_on.add_node(target_metric.unique_id)
     else:
         assert_values_exhausted(metric.type)

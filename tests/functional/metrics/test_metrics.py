@@ -28,6 +28,8 @@ from tests.functional.metrics.fixtures import (
     semantic_model_people_yml,
     semantic_model_purchasing_yml,
     purchasing_model_sql,
+    basic_metrics_yml,
+    duplicate_measure_metric_yml,
 )
 
 
@@ -76,7 +78,7 @@ class TestSimpleMetrics:
                     "metric.test.average_tenure_minus_people"
                 ].type_params.input_measures
             )
-            == 3
+            == 2
         )
 
 
@@ -399,3 +401,21 @@ class TestConversionMetric:
             ].type_params.conversion_type_params.entity
             == "purchase"
         )
+
+
+class TestDuplicateInputMeasures:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "basic_metrics.yml": basic_metrics_yml,
+            "filtered_metrics.yml": duplicate_measure_metric_yml,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+            "semantic_model_people.yml": semantic_model_people_yml,
+            "people.sql": models_people_sql,
+        }
+
+    def test_duplicate_input_measures(self, project):
+        runner = dbtRunner()
+        result = runner.invoke(["parse"])
+        assert result.success
+        assert isinstance(result.result, Manifest)

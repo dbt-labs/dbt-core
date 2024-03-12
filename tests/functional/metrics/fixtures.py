@@ -664,3 +664,56 @@ metrics:
           conversion_measure: num_orders
           entity: purchase
 """
+
+filtered_metrics_yml = """
+version: 2
+
+metrics:
+
+  - name: collective_tenure_measure_filter_str
+    label: "Collective tenure1"
+    description: Total number of years of team experience
+    type: simple
+    type_params:
+      measure:
+        name: "years_tenure"
+        filter: "{{ Dimension('id__loves_dbt') }} is true"
+
+  - name: collective_tenure_metric_filter_str
+    label: Collective tenure3
+    description: Total number of years of team experience
+    type: simple
+    type_params:
+      measure:
+        name: "years_tenure"
+    filter: "{{ Dimension('id__loves_dbt') }} is true"
+
+
+  - name: average_tenure_filter_str
+    label: Average tenure of people who love dbt1
+    description: Average tenure of people who love dbt
+    type: derived
+    type_params:
+      expr: "average_tenure"
+      metrics:
+        - name: average_tenure
+          filter: "{{ Dimension('id__loves_dbt') }} is true"
+"""
+
+duplicate_measure_metric_yml = """
+metrics:
+  # Simple metrics
+  - name: people_with_tenure
+    description: "Count of people with tenure"
+    type: simple
+    label: People with tenure
+    type_params:
+      measure: people
+  - name: ratio_tenure_to_people
+    description: People to years of tenure
+    label: New customers to all customers
+    type: ratio
+    type_params:
+      numerator: people_with_tenure
+      denominator: number_of_people
+"""
