@@ -16,6 +16,7 @@ from dbt.config import RuntimeConfig, Project
 from dbt.config.profile import read_profile
 from dbt.constants import DBT_PROJECT_FILE_NAME
 from dbt.contracts.graph.manifest import Manifest
+from dbt.artifacts.resources.types import NodeType
 from dbt.artifacts.schemas.results import TimingInfo, collect_timing_info
 from dbt.artifacts.schemas.results import NodeStatus, RunningStatus, RunStatus
 from dbt.artifacts.schemas.run import RunResult
@@ -483,23 +484,27 @@ class BaseRunner(metaclass=ABCMeta):
 
 
 def resource_types_from_args(
-    args, all_resource_values: Set[str], default_resource_values: Set[str]
+    args, all_resource_values: Set[NodeType], default_resource_values: Set[NodeType]
 ) -> Set:
 
     if not args.resource_types:
         resource_types = default_resource_values
     else:
-        resource_types = set(args.resource_types)
+        # This is a list of strings, not NodeTypes
+        arg_resource_types = args.resource_types.copy()
 
-        if "all" in resource_types:
-            resource_types.remove("all")
-            resource_types.update(all_resource_values)
-        if "default" in resource_types:
-            resource_types.remove("default")
-            resource_types.update(default_resource_values)
+        if "all" in arg_resource_types:
+            arg_resource_types.remove("all")
+            arg_resource_types.update(all_resource_values)
+        if "default" in arg_resource_types:
+            arg_resource_types.remove("default")
+            arg_resource_types.update(default_resource_values)
+        # Convert to a set of NodeTypes now that the non-NodeType strings are gone
+        resource_types = set([NodeType(rt) for rt in arg_resource_types])
 
     if args.exclude_resource_types:
-        exclude_resource_types = set(args.exclude_resource_types)
+        # Convert from a list of strings to a set of NodeTypes
+        exclude_resource_types = set([NodeType(rt) for rt in args.exclude_resource_types])
         resource_types = resource_types - exclude_resource_types
 
     return resource_types
