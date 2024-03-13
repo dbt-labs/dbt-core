@@ -491,7 +491,7 @@ def resource_types_from_args(
         resource_types = default_resource_values
     else:
         # This is a list of strings, not NodeTypes
-        arg_resource_types = args.resource_types
+        arg_resource_types = set(args.resource_types)
 
         if "all" in arg_resource_types:
             arg_resource_types.remove("all")
