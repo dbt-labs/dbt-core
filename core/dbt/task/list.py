@@ -4,11 +4,13 @@ from dbt.contracts.graph.nodes import (
     Exposure,
     SourceDefinition,
     Metric,
+    SavedQuery,
     SemanticModel,
     UnitTestDefinition,
 )
 from dbt.flags import get_flags
 from dbt.graph import ResourceTypeSelector
+from dbt.task.base import resource_types_from_args
 from dbt.task.runnable import GraphRunnableTask
 from dbt.task.test import TestSelector
 from dbt.node_types import NodeType
@@ -31,6 +33,7 @@ class ListTask(GraphRunnableTask):
             NodeType.Source,
             NodeType.Exposure,
             NodeType.Metric,
+            NodeType.SavedQuery,
             NodeType.SemanticModel,
             NodeType.Unit,
         )
@@ -83,10 +86,12 @@ class ListTask(GraphRunnableTask):
                 yield self.manifest.semantic_models[unique_id]
             elif unique_id in self.manifest.unit_tests:
                 yield self.manifest.unit_tests[unique_id]
+            elif unique_id in self.manifest.saved_queries:
+                yield self.manifest.saved_queries[unique_id]
             else:
                 raise DbtRuntimeError(
                     f'Got an unexpected result from node selection: "{unique_id}"'
-                    f"Expected a source or a node!"
+                    f"Listing this node type is not yet supported!"
                 )
 
     def generate_selectors(self):
@@ -106,6 +111,10 @@ class ListTask(GraphRunnableTask):
                 # metrics are searched for by pkg.metric_name
                 metric_selector = ".".join([node.package_name, node.name])
                 yield f"metric:{metric_selector}"
+            elif node.resource_type == NodeType.SavedQuery:
+                assert isinstance(node, SavedQuery)
+                saved_query_selector = ".".join([node.package_name, node.name])
+                yield f"saved_query:{saved_query_selector}"
             elif node.resource_type == NodeType.SemanticModel:
                 assert isinstance(node, SemanticModel)
                 semantic_model_selector = ".".join([node.package_name, node.name])
@@ -175,17 +184,11 @@ class ListTask(GraphRunnableTask):
         if self.args.models:
             return [NodeType.Model]
 
-        if not self.args.resource_types:
-            return list(self.DEFAULT_RESOURCE_VALUES)
+        resource_types = resource_types_from_args(
+            self.args, set(self.ALL_RESOURCE_VALUES), set(self.DEFAULT_RESOURCE_VALUES)
+        )
 
-        values = set(self.args.resource_types)
-        if "default" in values:
-            values.remove("default")
-            values.update(self.DEFAULT_RESOURCE_VALUES)
-        if "all" in values:
-            values.remove("all")
-            values.update(self.ALL_RESOURCE_VALUES)
-        return list(values)
+        return list(resource_types)
 
     @property
     def selection_arg(self):

@@ -32,6 +32,7 @@ from dbt.events.types import (
     ConcurrencyLine,
     EndRunResult,
     NothingToDo,
+    GenericExceptionOnRun,
 )
 from dbt.exceptions import (
     DbtInternalError,
@@ -221,19 +222,44 @@ class GraphRunnableTask(ConfiguredTask):
                     )
                 )
             status: Dict[str, str] = {}
+            result = None
+            thread_exception = None
             try:
                 result = runner.run_with_hooks(self.manifest)
-            except Exception as exc:
-                raise DbtInternalError(f"Unable to execute node: {exc}")
+            except Exception as e:
+                thread_exception = e
             finally:
                 finishctx = TimestampNamed("finished_at")
                 with finishctx, DbtModelState(status):
-                    fire_event(
-                        NodeFinished(
-                            node_info=runner.node.node_info,
-                            run_result=result.to_msg_dict(),
+                    if result is not None:
+                        fire_event(
+                            NodeFinished(
+                                node_info=runner.node.node_info,
+                                run_result=result.to_msg_dict(),
+                            )
                         )
-                    )
+                    else:
+                        msg = f"Exception on worker thread. {thread_exception}"
+
+                        fire_event(
+                            GenericExceptionOnRun(
+                                unique_id=runner.node.unique_id,
+                                exc=str(thread_exception),
+                                node_info=runner.node.node_info,
+                            )
+                        )
+
+                        result = RunResult(
+                            status=RunStatus.Error,  # type: ignore
+                            timing=[],
+                            thread_id="",
+                            execution_time=0.0,
+                            adapter_response={},
+                            message=msg,
+                            failures=None,
+                            node=runner.node,
+                        )
+
             # `_event_status` dict is only used for logging.  Make sure
             # it gets deleted when we're done with it, except for unit tests
             if not runner.node.resource_type == NodeType.Unit:
