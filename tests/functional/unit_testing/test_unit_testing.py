@@ -50,11 +50,21 @@ class TestUnitTests:
         results = run_dbt(["test", "--select", "my_model"], expect_pass=False)
         assert len(results) == 5
 
-        results = run_dbt(["build", "--select", "my_model"], expect_pass=False)
+        results = run_dbt(
+            ["build", "--select", "my_model", "--resource-types", "model unit_test"],
+            expect_pass=False,
+        )
         assert len(results) == 6
         for result in results:
             if result.node.unique_id == "model.test.my_model":
                 result.status == NodeStatus.Skipped
+
+        # Run build command but specify no unit tests
+        results = run_dbt(
+            ["build", "--select", "my_model", "--exclude-resource-types", "unit_test"],
+            expect_pass=True,
+        )
+        assert len(results) == 1
 
         # Test select by test name
         results = run_dbt(["test", "--select", "test_name:test_my_model_string_concat"])

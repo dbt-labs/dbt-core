@@ -283,7 +283,8 @@ class GenerateTask(CompileTask):
                         node
                         for node in self.manifest.nodes.values()
                         if (node.is_relational and not node.is_ephemeral_model)
-                    ]
+                    ],
+                    self.manifest.sources.values(),
                 )
                 used_schemas = self.manifest.get_used_schemas()
                 catalog_table, exceptions = adapter.get_filtered_catalog(

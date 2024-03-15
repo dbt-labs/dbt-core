@@ -12,6 +12,7 @@ from typing import (
     Type,
     Iterable,
     Mapping,
+    Tuple,
 )
 
 from typing_extensions import Protocol
@@ -1620,12 +1621,47 @@ def generate_runtime_unit_test_context(
     ctx_dict = ctx.to_dict()
 
     if unit_test.overrides and unit_test.overrides.macros:
+        global_macro_overrides: Dict[str, Any] = {}
+        package_macro_overrides: Dict[Tuple[str, str], Any] = {}
+
+        # split macro overrides into global and package-namespaced collections
         for macro_name, macro_value in unit_test.overrides.macros.items():
-            context_value = ctx_dict.get(macro_name)
-            if isinstance(context_value, MacroGenerator):
-                ctx_dict[macro_name] = UnitTestMacroGenerator(context_value, macro_value)
-            else:
+            macro_name_split = macro_name.split(".")
+            macro_package = macro_name_split[0] if len(macro_name_split) == 2 else None
+            macro_name = macro_name_split[-1]
+
+            # macro overrides of global macros
+            if macro_package is None and macro_name in ctx_dict:
+                original_context_value = ctx_dict[macro_name]
+                if isinstance(original_context_value, MacroGenerator):
+                    macro_value = UnitTestMacroGenerator(original_context_value, macro_value)
+                global_macro_overrides[macro_name] = macro_value
+
+            # macro overrides of package-namespaced macros
+            elif (
+                macro_package
+                and macro_package in ctx_dict
+                and macro_name in ctx_dict[macro_package]
+            ):
+                original_context_value = ctx_dict[macro_package][macro_name]
+                if isinstance(original_context_value, MacroGenerator):
+                    macro_value = UnitTestMacroGenerator(original_context_value, macro_value)
+                package_macro_overrides[(macro_package, macro_name)] = macro_value
+
+        # macro overrides of package-namespaced macros
+        for (macro_package, macro_name), macro_override_value in package_macro_overrides.items():
+            ctx_dict[macro_package][macro_name] = macro_override_value
+            # propgate override of namespaced dbt macro to global namespace
+            if macro_package == "dbt":
                 ctx_dict[macro_name] = macro_value
+
+        # macro overrides of global macros, which should take precedence over equivalent package-namespaced overrides
+        for macro_name, macro_override_value in global_macro_overrides.items():
+            ctx_dict[macro_name] = macro_override_value
+            # propgate override of global dbt macro to dbt namespace
+            if ctx_dict["dbt"].get(macro_name):
+                ctx_dict["dbt"][macro_name] = macro_override_value
+
     return ctx_dict
 
 

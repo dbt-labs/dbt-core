@@ -194,6 +194,7 @@ def cli(ctx, **kwargs):
 @p.profiles_dir
 @p.project_dir
 @p.resource_type
+@p.exclude_resource_type
 @p.select
 @p.selector
 @p.show
@@ -499,6 +500,7 @@ def init(ctx, **kwargs):
 @p.profiles_dir
 @p.project_dir
 @p.resource_type
+@p.exclude_resource_type
 @p.raw_select
 @p.selector
 @p.target
@@ -627,6 +629,7 @@ def retry(ctx, **kwargs):
 @p.profiles_dir
 @p.project_dir
 @p.resource_type
+@p.exclude_resource_type
 @p.select
 @p.selector
 @p.target
