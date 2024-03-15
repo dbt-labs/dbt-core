@@ -4,13 +4,12 @@ from dbt.tests.util import run_dbt
 
 my_model_with_macros = """
 SELECT
-{{ current_timestamp() }} as global_dbt_macro,
-{{ dbt.current_timestamp() }} as dbt_macro,
-{{ my_macro() }} as global_user_defined_macro,
-{{ dbt_utils.generate_surrogate_key() }} as package_macro
+{{ current_timestamp() }} as global_current_timestamp,
+{{ dbt.current_timestamp() }} as dbt_current_timestamp,
+{{ dbt.type_int() }} as dbt_type_int,
+{{ my_macro() }} as user_defined_my_macro,
+{{ dbt_utils.generate_surrogate_key() }} as package_defined_macro
 """
-
-# TODO: add tests for global override, namespaced usage
 
 test_my_model_with_macros = """
 unit_tests:
@@ -18,17 +17,18 @@ unit_tests:
     model: my_model_with_macros
     overrides:
       macros:
-        current_timestamp: "'global_dbt_macro_override'"
-        dbt.current_timestamp: "'dbt_macro_override'"
+        current_timestamp: "'current_timestamp_override'"
+        dbt.type_int: "'dbt_macro_override'"
         my_macro: "'global_user_defined_macro_override'"
         dbt_utils.generate_surrogate_key: "'package_macro_override'"
     given: []
     expect:
       rows:
-        - global_dbt_macro: "global_dbt_macro_override"
-          dbt_macro: "dbt_macro_override"
-          global_user_defined_macro: "global_user_defined_macro_override"
-          package_macro: "package_macro_override"
+        - global_current_timestamp: "current_timestamp_override"
+          dbt_current_timestamp: "current_timestamp_override"
+          dbt_type_int: "dbt_macro_override"
+          user_defined_my_macro: "global_user_defined_macro_override"
+          package_defined_macro: "package_macro_override"
 """
 
 MY_MACRO_SQL = """
