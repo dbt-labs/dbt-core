@@ -18,6 +18,8 @@ from dbt.node_types import NodeType, AccessType, REFABLE_NODE_TYPES
 
 from dbt_common.dataclass_schema import ValidationError
 
+from dbt.constants import SECRET_ENV_PREFIX
+
 
 class ContractBreakingChangeError(DbtRuntimeError):
     CODE = 10016
@@ -358,7 +360,10 @@ class RequiredVarNotFoundError(CompilationError):
         pretty_vars = json.dumps(dct, sort_keys=True, indent=4)
 
         msg = f"Required var '{self.var_name}' not found in config:\nVars supplied to {node_name} = {pretty_vars}"
-        return msg
+        return scrub_secrets(msg, self.var_secrets())
+
+    def var_secrets(self) -> List[str]:
+        return [v for k, v in self.merged.items() if k.startswith(SECRET_ENV_PREFIX) and v.strip()]
 
 
 class PackageNotFoundForMacroError(CompilationError):
