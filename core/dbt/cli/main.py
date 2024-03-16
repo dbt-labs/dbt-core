@@ -145,12 +145,14 @@ def global_flags(func):
     @p.populate_cache
     @p.print
     @p.printer_width
+    @p.profile
     @p.quiet
     @p.record_timing_info
     @p.send_anonymous_usage_stats
     @p.single_threaded
     @p.state
     @p.static_parser
+    @p.target
     @p.use_colors
     @p.use_colors_file
     @p.use_experimental_parser

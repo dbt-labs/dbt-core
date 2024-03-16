@@ -342,7 +342,7 @@ printer_width = click.option(
 
 profile = click.option(
     "--profile",
-    envvar=None,
+    envvar="DBT_TARGET",
     help="Which existing profile to load. Overrides setting in dbt_project.yml.",
 )
 
@@ -603,7 +603,7 @@ store_failures = click.option(
 target = click.option(
     "--target",
     "-t",
-    envvar=None,
+    envvar="DBT_PROFILE",
     help="Which target to load for the given profile",
 )
 
