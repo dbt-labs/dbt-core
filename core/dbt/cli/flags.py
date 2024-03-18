@@ -28,6 +28,7 @@ if os.name != "nt":
 FLAGS_DEFAULTS = {
     "INDIRECT_SELECTION": "eager",
     "TARGET_PATH": None,
+    "DEFER_STATE": None,  # necessary because of retry construction of flags
     "WARN_ERROR": None,
     # Cli args without project_flags or env var option.
     "FULL_REFRESH": False,
