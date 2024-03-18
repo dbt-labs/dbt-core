@@ -1,7 +1,6 @@
 from hashlib import sha1
 from typing import Any, Dict, Optional, List
 import yaml
-from pathlib import Path
 import dbt.utils
 import dbt.deprecations
 import dbt.exceptions
@@ -98,9 +97,7 @@ class DepsTask(BaseTask):
         # --project-dir with deps.  A larger overhaul of our path handling methods
         # is needed to fix this the "right" way.
         # See GH-7615
-        project.project_root = str(Path(project.project_root).resolve())
 
-        move_to_nearest_project_dir(project.project_root)
         super().__init__(args=args, config=None, project=project)
         self.cli_vars = args.vars
 
@@ -206,6 +203,7 @@ class DepsTask(BaseTask):
         fire_event(DepsLockUpdating(lock_filepath=lock_filepath))
 
     def run(self) -> None:
+        move_to_nearest_project_dir(self.args.project_dir)
         if self.args.add_package:
             self.add()
 

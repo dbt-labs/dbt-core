@@ -239,10 +239,9 @@ def build(ctx, **kwargs):
 @requires.project
 def clean(ctx, **kwargs):
     """Delete all folders in the clean-targets list (usually the dbt_packages and target directories.)"""
-    task = CleanTask(ctx.obj["flags"], ctx.obj["project"])
-
-    results = task.run()
-    success = task.interpret_results(results)
+    with CleanTask(ctx.obj["flags"], ctx.obj["project"]) as task:
+        results = task.run()
+        success = task.interpret_results(results)
     return results, success
 
 
@@ -459,9 +458,9 @@ def deps(ctx, **kwargs):
                 message=f"Version is required in --add-package when a package when source is {flags.SOURCE}",
                 option_name="--add-package",
             )
-    task = DepsTask(flags, ctx.obj["project"])
-    results = task.run()
-    success = task.interpret_results(results)
+    with DepsTask(flags, ctx.obj["project"]) as task:
+        results = task.run()
+        success = task.interpret_results(results)
     return results, success
 
 
@@ -481,10 +480,9 @@ def deps(ctx, **kwargs):
 @requires.preflight
 def init(ctx, **kwargs):
     """Initialize a new dbt project."""
-    task = InitTask(ctx.obj["flags"], None)
-
-    results = task.run()
-    success = task.interpret_results(results)
+    with InitTask(ctx.obj["flags"], None) as task:
+        results = task.run()
+        success = task.interpret_results(results)
     return results, success
 
 
