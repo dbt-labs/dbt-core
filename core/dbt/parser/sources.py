@@ -132,14 +132,15 @@ class SourcePatcher:
         refs = ParserRef.from_target(table)
         unique_id = target.unique_id
         description = table.description or ""
-        meta = table.meta or {}
         source_description = source.description or ""
         loaded_at_field = table.loaded_at_field or source.loaded_at_field
 
         freshness = merge_freshness(source.freshness, table.freshness)
         quoting = source.quoting.merged(table.quoting)
         # path = block.path.original_file_path
+        table_meta = table.meta or {}
         source_meta = source.meta or {}
+        meta = {**source_meta, **table_meta}
 
         # make sure we don't do duplicate tags from source + table
         tags = sorted(set(itertools.chain(source.tags, table.tags)))

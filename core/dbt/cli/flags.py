@@ -399,7 +399,10 @@ def command_params(command: CliCommand, args_dict: Dict[str, Any]) -> CommandPar
 
         # MultiOption flags come back as lists, but we want to pass them as space separated strings
         if isinstance(v, list):
-            v = " ".join(v)
+            if len(v) > 0:
+                v = " ".join(v)
+            else:
+                continue
 
         if k == "macro" and command == CliCommand.RUN_OPERATION:
             add_fn(v)

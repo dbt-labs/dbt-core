@@ -11,7 +11,7 @@ from dbt.artifacts.schemas.run import RunResult
 from dbt.graph import ResourceTypeSelector, GraphQueue, Graph
 from dbt.node_types import NodeType
 from dbt.task.test import TestSelector
-from dbt.task.base import BaseRunner
+from dbt.task.base import BaseRunner, resource_types_from_args
 from dbt_common.events.functions import fire_event
 from dbt.events.types import LogNodeNoOpResult
 from dbt.exceptions import DbtInternalError
@@ -80,14 +80,9 @@ class BuildTask(RunTask):
         self.model_to_unit_test_map: Dict[str, List] = {}
 
     def resource_types(self, no_unit_tests=False):
-        if not self.args.resource_types:
-            resource_types = list(self.ALL_RESOURCE_VALUES)
-        else:
-            resource_types = set(self.args.resource_types)
-
-            if "all" in resource_types:
-                resource_types.remove("all")
-                resource_types.update(self.ALL_RESOURCE_VALUES)
+        resource_types = resource_types_from_args(
+            self.args, set(self.ALL_RESOURCE_VALUES), set(self.ALL_RESOURCE_VALUES)
+        )
 
         # First we get selected_nodes including unit tests, then without,
         # and do a set difference.
