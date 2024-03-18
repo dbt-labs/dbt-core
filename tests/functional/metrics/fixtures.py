@@ -88,6 +88,14 @@ metrics:
       metrics:
         - average_tenure
       expr: "average_tenure + 1"
+
+  - name: tenured_people
+    label: Tenured People
+    description: People who have been here more than 1 year
+    type: simple
+    type_params:
+      measure: people
+    filter: "{{ Metric('collective_tenure', ['id']) }} > 2"
 """
 
 metricflow_time_spine_sql = """
