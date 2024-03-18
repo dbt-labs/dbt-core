@@ -394,10 +394,12 @@ class TestFlags:
         args_dict = {
             "print": True,
             "state": "some/path",
+            "defer_state": None,
         }
         result = self._create_flags_from_dict(Command.BUILD, args_dict)
         assert result.print is True
         assert "some/path" in str(result.state)
+        assert result.defer_state is None
 
     def test_from_dict__seed(self):
         args_dict = {"use_colors": False, "exclude": ["model_three"]}
