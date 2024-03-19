@@ -1,4 +1,3 @@
-import agate
 import daff
 import io
 import json
@@ -8,7 +7,7 @@ from dbt.utils import _coerce_decimal, strtobool
 from dbt_common.events.format import pluralize
 from dbt_common.dataclass_schema import dbtClassMixin
 import threading
-from typing import Dict, Any, Optional, Union, List
+from typing import Dict, Any, Optional, Union, List, TYPE_CHECKING
 
 from .compile import CompileRunner
 from .run import RunTask
@@ -35,6 +34,10 @@ from dbt.node_types import NodeType
 from dbt.parser.unit_tests import UnitTestManifestLoader
 from dbt.flags import get_flags
 from dbt_common.ui import green, red
+
+
+if TYPE_CHECKING:
+    import agate
 
 
 @dataclass
@@ -325,7 +328,7 @@ class TestRunner(CompileRunner):
         return unit_test_table.select(columns)
 
     def _get_daff_diff(
-        self, expected: agate.Table, actual: agate.Table, ordered: bool = False
+        self, expected: "agate.Table", actual: "agate.Table", ordered: bool = False
     ) -> daff.TableDiff:
 
         expected_daff_table = daff.PythonTableView(list_rows_from_table(expected))
@@ -388,7 +391,7 @@ class TestTask(RunTask):
 
 
 # This was originally in agate_helper, but that was moved out into dbt_common
-def json_rows_from_table(table: agate.Table) -> List[Dict[str, Any]]:
+def json_rows_from_table(table: "agate.Table") -> List[Dict[str, Any]]:
     "Convert a table to a list of row dict objects"
     output = io.StringIO()
     table.to_json(path=output)  # type: ignore
@@ -397,7 +400,7 @@ def json_rows_from_table(table: agate.Table) -> List[Dict[str, Any]]:
 
 
 # This was originally in agate_helper, but that was moved out into dbt_common
-def list_rows_from_table(table: agate.Table) -> List[Any]:
+def list_rows_from_table(table: "agate.Table") -> List[Any]:
     "Convert a table to a list of lists, where the first element represents the header"
     rows = [[col.name for col in table.columns]]
     for row in table.rows:

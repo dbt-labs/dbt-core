@@ -201,7 +201,7 @@ class DepsTask(BaseTask):
         )
 
         with open(lock_filepath, "w") as lock_obj:
-            yaml.safe_dump(packages_installed, lock_obj)
+            yaml.dump(packages_installed, lock_obj, Dumper=dbtPackageDumper)
 
         fire_event(DepsLockUpdating(lock_filepath=lock_filepath))
 

@@ -1,8 +1,7 @@
 import json
 import re
 import io
-import agate
-from typing import Any, Dict, List, Mapping, Optional, Union
+from typing import Any, Dict, List, Mapping, Optional, Union, TYPE_CHECKING
 
 from dbt_common.exceptions import (
     DbtRuntimeError,
@@ -17,6 +16,10 @@ from dbt_common.exceptions import (
 from dbt.node_types import NodeType, AccessType, REFABLE_NODE_TYPES
 
 from dbt_common.dataclass_schema import ValidationError
+
+
+if TYPE_CHECKING:
+    import agate
 
 
 class ContractBreakingChangeError(DbtRuntimeError):
@@ -1349,7 +1352,7 @@ class ContractError(CompilationError):
         self.sql_columns = sql_columns
         super().__init__(msg=self.get_message())
 
-    def get_mismatches(self) -> agate.Table:
+    def get_mismatches(self) -> "agate.Table":
         # avoid a circular import
         from dbt_common.clients.agate_helper import table_from_data_flat
 
@@ -1400,7 +1403,7 @@ class ContractError(CompilationError):
                 "This model has an enforced contract, and its 'columns' specification is missing"
             )
 
-        table: agate.Table = self.get_mismatches()
+        table: "agate.Table" = self.get_mismatches()
         # Hack to get Agate table output as string
         output = io.StringIO()
         table.print_table(output=output, max_rows=None, max_column_width=50)  # type: ignore

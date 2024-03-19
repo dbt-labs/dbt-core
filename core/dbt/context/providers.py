@@ -13,6 +13,7 @@ from typing import (
     Iterable,
     Mapping,
     Tuple,
+    TYPE_CHECKING,
 )
 
 from typing_extensions import Protocol
@@ -22,7 +23,6 @@ from dbt.artifacts.resources import NodeVersion, RefArgs
 from dbt_common.clients.jinja import MacroProtocol
 from dbt_common.context import get_invocation_context
 from dbt.adapters.factory import get_adapter, get_adapter_package_names, get_adapter_type_names
-from dbt_common.clients import agate_helper
 from dbt.clients.jinja import get_rendered, MacroGenerator, MacroStack, UnitTestMacroGenerator
 from dbt.config import RuntimeConfig, Project
 from dbt.constants import SECRET_ENV_PREFIX, DEFAULT_ENV_PLACEHOLDER
@@ -82,7 +82,8 @@ from dbt.utils import MultiDict, args_to_dict
 from dbt_common.utils import merge, AttrDict, cast_to_str
 from dbt import selected_resources
 
-import agate
+if TYPE_CHECKING:
+    import agate
 
 
 _MISSING = object()
@@ -851,8 +852,10 @@ class ProviderContext(ManifestContext):
 
     @contextmember()
     def store_result(
-        self, name: str, response: Any, agate_table: Optional[agate.Table] = None
+        self, name: str, response: Any, agate_table: Optional["agate.Table"] = None
     ) -> str:
+        from dbt_common.clients import agate_helper
+
         if agate_table is None:
             agate_table = agate_helper.empty_table()
 
@@ -872,7 +875,7 @@ class ProviderContext(ManifestContext):
         message=Optional[str],
         code=Optional[str],
         rows_affected=Optional[str],
-        agate_table: Optional[agate.Table] = None,
+        agate_table: Optional["agate.Table"] = None,
     ) -> str:
         response = AdapterResponse(_message=message, code=code, rows_affected=rows_affected)
         return self.store_result(name, response, agate_table)
@@ -921,7 +924,9 @@ class ProviderContext(ManifestContext):
             raise CompilationError(message_if_exception, self.model)
 
     @contextmember()
-    def load_agate_table(self) -> agate.Table:
+    def load_agate_table(self) -> "agate.Table":
+        from dbt_common.clients import agate_helper
+
         if not isinstance(self.model, SeedNode):
             raise LoadAgateTableNotSeedError(self.model.resource_type, node=self.model)
 
