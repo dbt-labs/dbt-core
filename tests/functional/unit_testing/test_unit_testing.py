@@ -142,7 +142,7 @@ class TestUnitTestIncrementalModelNoOverride:
     def test_no_override(self, project):
         with pytest.raises(
             ParsingError,
-            match="Boolean override for 'is_incremental' must be provided for unit testing model 'my_incremental_model'",
+            match="Boolean override for 'is_incremental' must be provided for unit test 'incremental_false' in model 'my_incremental_model'",
         ):
             run_dbt(["parse"])
 
@@ -159,7 +159,7 @@ class TestUnitTestIncrementalModelWrongOverride:
     def test_str_override(self, project):
         with pytest.raises(
             ParsingError,
-            match="Boolean override for 'is_incremental' must be provided for unit testing model 'my_incremental_model'",
+            match="Boolean override for 'is_incremental' must be provided for unit test 'incremental_false' in model 'my_incremental_model'",
         ):
             run_dbt(["parse"])
 

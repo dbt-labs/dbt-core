@@ -445,7 +445,7 @@ def process_models_for_unit_test(
 
     if target_model_is_incremental and (not unit_test_def_has_incremental_override):
         raise ParsingError(
-            f"Boolean override for 'is_incremental' must be provided for unit testing model '{target_model.name}'"
+            f"Boolean override for 'is_incremental' must be provided for unit test '{unit_test_def.name}' in model '{target_model.name}'"
         )
 
     unit_test_def_incremental_override_true = (
