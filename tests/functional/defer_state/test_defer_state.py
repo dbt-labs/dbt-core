@@ -305,6 +305,9 @@ class TestDeferStateFlag(BaseDeferState):
             expect_pass=False,
         )
 
+        # Test that retry of a defer command works
+        run_dbt(["retry"], expect_pass=False)
+
         # this will fail because we haven't passed in --state
         with pytest.raises(
             DbtRuntimeError, match="Got a state selector method, but no comparison manifest"
