@@ -1,0 +1,6 @@
+kind: Fixes
+body: Do not add duplicate input_measures
+time: 2024-02-26T17:32:27.837427-05:00
+custom:
+  Author: gshank
+  Issue: "9360"

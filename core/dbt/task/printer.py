@@ -3,9 +3,9 @@ from dbt.logger import (
     DbtStatusMessage,
     TextOnly,
 )
-from dbt.events.functions import fire_event
+from dbt_common.events.functions import fire_event
+from dbt_common.events.types import Formatting
 from dbt.events.types import (
-    Formatting,
     RunResultWarning,
     RunResultWarningMessage,
     RunResultFailure,
@@ -18,9 +18,9 @@ from dbt.events.types import (
 )
 
 from dbt.tracking import InvocationProcessor
-from dbt.events.format import pluralize
+from dbt_common.events.format import pluralize
 
-from dbt.contracts.results import NodeStatus
+from dbt.artifacts.schemas.results import NodeStatus
 from dbt.node_types import NodeType
 
 
@@ -33,11 +33,11 @@ def get_counts(flat_nodes) -> str:
         if node.resource_type == NodeType.Model:
             t = "{} {}".format(node.get_materialization(), t)
         elif node.resource_type == NodeType.Operation:
-            t = "hook"
+            t = "project hook"
 
         counts[t] = counts.get(t, 0) + 1
 
-    stat_line = ", ".join([pluralize(v, k) for k, v in counts.items()])
+    stat_line = ", ".join([pluralize(v, k).replace("_", " ") for k, v in counts.items()])
 
     return stat_line
 

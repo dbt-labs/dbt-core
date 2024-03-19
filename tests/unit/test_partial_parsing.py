@@ -6,11 +6,14 @@ from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import ModelNode
 from dbt.contracts.files import ParseFileType, SourceFile, SchemaSourceFile, FilePath, FileHash
 from dbt.node_types import NodeType
+from dbt.tests.util import safe_set_invocation_context
 from .utils import normalize
 
 
 class TestPartialParsing(unittest.TestCase):
     def setUp(self):
+
+        safe_set_invocation_context()
 
         project_name = "my_test"
         project_root = "/users/root"
@@ -156,7 +159,6 @@ class TestPartialParsing(unittest.TestCase):
         )
 
     def test_simple(self):
-
         # Nothing has changed
         self.assertIsNotNone(self.partial_parsing)
         self.assertTrue(self.partial_parsing.skip_parsing())

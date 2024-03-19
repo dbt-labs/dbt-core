@@ -1,7 +1,9 @@
-from dbt.contracts.util import Replaceable, Mergeable, list_str, Identifier
-from dbt.contracts.connection import QueryComment, UserConfigContract
-from dbt.helper_types import NoValue
-from dbt.dataclass_schema import (
+from dbt import deprecations
+from dbt.contracts.util import list_str, Identifier
+from dbt.adapters.contracts.connection import QueryComment
+from dbt_common.helper_types import NoValue
+from dbt_common.contracts.util import Mergeable
+from dbt_common.dataclass_schema import (
     dbtClassMixin,
     ValidationError,
     ExtensibleDbtClassMixin,
@@ -39,13 +41,14 @@ class Quoting(dbtClassMixin, Mergeable):
 
 
 @dataclass
-class Package(dbtClassMixin, Replaceable):
+class Package(dbtClassMixin):
     pass
 
 
 @dataclass
 class LocalPackage(Package):
     local: str
+    unrendered: Dict[str, Any] = field(default_factory=dict)
 
 
 # `float` also allows `int`, according to PEP484 (and jsonschema!)
@@ -56,6 +59,7 @@ RawVersion = Union[str, float]
 class TarballPackage(Package):
     tarball: str
     name: str
+    unrendered: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -64,6 +68,7 @@ class GitPackage(Package):
     revision: Optional[RawVersion] = None
     warn_unpinned: Optional[bool] = field(default=None, metadata={"alias": "warn-unpinned"})
     subdirectory: Optional[str] = None
+    unrendered: Dict[str, Any] = field(default_factory=dict)
 
     def get_revisions(self) -> List[str]:
         if self.revision is None:
@@ -77,6 +82,7 @@ class RegistryPackage(Package):
     package: str
     version: Union[RawVersion, List[RawVersion]]
     install_prerelease: Optional[bool] = False
+    unrendered: Dict[str, Any] = field(default_factory=dict)
 
     def get_versions(self) -> List[str]:
         if isinstance(self.version, list):
@@ -89,7 +95,7 @@ PackageSpec = Union[LocalPackage, TarballPackage, GitPackage, RegistryPackage]
 
 
 @dataclass
-class PackageConfig(dbtClassMixin, Replaceable):
+class PackageConfig(dbtClassMixin):
     packages: List[PackageSpec]
 
     @classmethod
@@ -121,7 +127,7 @@ class ProjectPackageMetadata:
 
 
 @dataclass
-class Downloads(ExtensibleDbtClassMixin, Replaceable):
+class Downloads(ExtensibleDbtClassMixin):
     tarball: str
 
 
@@ -179,7 +185,7 @@ BANNED_PROJECT_NAMES = {
 
 
 @dataclass
-class Project(dbtClassMixin, Replaceable):
+class Project(dbtClassMixin):
     _hyphenated: ClassVar[bool] = True
     # Annotated is used by mashumaro for jsonschema generation
     name: Annotated[Identifier, Pattern(r"^[^\d\W]\w*$")]
@@ -190,7 +196,7 @@ class Project(dbtClassMixin, Replaceable):
     source_paths: Optional[List[str]] = None
     model_paths: Optional[List[str]] = None
     macro_paths: Optional[List[str]] = None
-    data_paths: Optional[List[str]] = None
+    data_paths: Optional[List[str]] = None  # deprecated
     seed_paths: Optional[List[str]] = None
     test_paths: Optional[List[str]] = None
     analysis_paths: Optional[List[str]] = None
@@ -212,7 +218,9 @@ class Project(dbtClassMixin, Replaceable):
     snapshots: Dict[str, Any] = field(default_factory=dict)
     analyses: Dict[str, Any] = field(default_factory=dict)
     sources: Dict[str, Any] = field(default_factory=dict)
-    tests: Dict[str, Any] = field(default_factory=dict)
+    tests: Dict[str, Any] = field(default_factory=dict)  # deprecated
+    data_tests: Dict[str, Any] = field(default_factory=dict)
+    unit_tests: Dict[str, Any] = field(default_factory=dict)
     metrics: Dict[str, Any] = field(default_factory=dict)
     semantic_models: Dict[str, Any] = field(default_factory=dict)
     saved_queries: Dict[str, Any] = field(default_factory=dict)
@@ -276,10 +284,18 @@ class Project(dbtClassMixin, Replaceable):
             raise ValidationError(
                 f"Invalid dbt_cloud config. Expected a 'dict' but got '{type(data['dbt_cloud'])}'"
             )
+        if data.get("tests", None) and data.get("data_tests", None):
+            raise ValidationError(
+                "Invalid project config: cannot have both 'tests' and 'data_tests' defined"
+            )
+        if "tests" in data:
+            deprecations.warn(
+                "project-test-config", deprecated_path="tests", exp_path="data_tests"
+            )
 
 
 @dataclass
-class UserConfig(ExtensibleDbtClassMixin, Replaceable, UserConfigContract):
+class ProjectFlags(ExtensibleDbtClassMixin):
     cache_selected_only: Optional[bool] = None
     debug: Optional[bool] = None
     fail_fast: Optional[bool] = None
@@ -292,6 +308,7 @@ class UserConfig(ExtensibleDbtClassMixin, Replaceable, UserConfigContract):
     populate_cache: Optional[bool] = None
     printer_width: Optional[int] = None
     send_anonymous_usage_stats: bool = DEFAULT_SEND_ANONYMOUS_USAGE_STATS
+    source_freshness_run_project_hooks: bool = False
     static_parser: Optional[bool] = None
     use_colors: Optional[bool] = None
     use_colors_file: Optional[bool] = None
@@ -301,19 +318,22 @@ class UserConfig(ExtensibleDbtClassMixin, Replaceable, UserConfigContract):
     warn_error_options: Optional[Dict[str, Union[str, List[str]]]] = None
     write_json: Optional[bool] = None
 
+    @property
+    def project_only_flags(self) -> Dict[str, Any]:
+        return {"source_freshness_run_project_hooks": self.source_freshness_run_project_hooks}
+
 
 @dataclass
-class ProfileConfig(dbtClassMixin, Replaceable):
+class ProfileConfig(dbtClassMixin):
     profile_name: str
     target_name: str
-    user_config: UserConfig
     threads: int
     # TODO: make this a dynamic union of some kind?
     credentials: Optional[Dict[str, Any]]
 
 
 @dataclass
-class ConfiguredQuoting(Quoting, Replaceable):
+class ConfiguredQuoting(Quoting):
     identifier: bool = True
     schema: bool = True
     database: Optional[bool] = None

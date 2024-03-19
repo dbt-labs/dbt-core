@@ -7,7 +7,7 @@ import dbt.deprecations
 import dbt.exceptions
 import json
 
-from dbt.config.renderer import DbtProjectYamlRenderer
+from dbt.config.renderer import PackageRenderer
 from dbt.config.project import package_config_from_data, load_yml_dict
 from dbt.constants import PACKAGE_LOCK_FILE_NAME, PACKAGE_LOCK_HASH_KEY
 from dbt.deps.base import downloads_directory
@@ -15,7 +15,11 @@ from dbt.deps.resolver import resolve_lock_packages, resolve_packages
 from dbt.deps.registry import RegistryPinnedPackage
 from dbt.contracts.project import Package
 
-from dbt.events.functions import fire_event
+
+from dbt_common.events.functions import fire_event
+from dbt_common.events.types import (
+    Formatting,
+)
 from dbt.events.types import (
     DepsAddPackage,
     DepsFoundDuplicatePackage,
@@ -27,9 +31,8 @@ from dbt.events.types import (
     DepsStartPackageInstall,
     DepsUpdateAvailable,
     DepsUpToDate,
-    Formatting,
 )
-from dbt.clients import system
+from dbt_common.clients import system
 
 from dbt.task.base import BaseTask, move_to_nearest_project_dir
 
@@ -75,10 +78,10 @@ def _create_packages_yml_entry(package: str, version: Optional[str], source: str
     if source == "hub":
         package_key = "package"
 
+    packages_yml_entry = {package_key: package}
+
     if source == "git":
         version_key = "revision"
-
-    packages_yml_entry = {package_key: package}
 
     if version:
         if "," in version:
@@ -192,16 +195,13 @@ class DepsTask(BaseTask):
         # this loop is to create the package-lock.yml in the same format as original packages.yml
         # package-lock.yml includes both the stated packages in packages.yml along with dependent packages
         for package in resolved_deps:
-            lock_entry = _create_packages_yml_entry(
-                package.name, package.get_version(), package.source_type()
-            )
-            packages_installed["packages"].append(lock_entry)
+            packages_installed["packages"].append(package.to_dict())
         packages_installed[PACKAGE_LOCK_HASH_KEY] = _create_sha1_hash(
             self.project.packages.packages
         )
 
         with open(lock_filepath, "w") as lock_obj:
-            yaml.safe_dump(packages_installed, lock_obj)
+            yaml.dump(packages_installed, lock_obj, Dumper=dbtPackageDumper)
 
         fire_event(DepsLockUpdating(lock_filepath=lock_filepath))
 
@@ -223,8 +223,9 @@ class DepsTask(BaseTask):
             if previous_hash != current_hash:
                 self.lock()
 
-        # Early return when dry run or lock only.
-        if self.args.dry_run or self.args.lock:
+        # Early return when 'dbt deps --lock'
+        # Just resolve packages and write lock file, don't actually install packages
+        if self.args.lock:
             return
 
         if system.path_exists(self.project.packages_install_path):
@@ -234,7 +235,10 @@ class DepsTask(BaseTask):
 
         packages_lock_dict = load_yml_dict(f"{self.project.project_root}/{PACKAGE_LOCK_FILE_NAME}")
 
-        packages_lock_config = package_config_from_data(packages_lock_dict).packages
+        renderer = PackageRenderer(self.cli_vars)
+        packages_lock_config = package_config_from_data(
+            renderer.render_data(packages_lock_dict), packages_lock_dict
+        ).packages
 
         if not packages_lock_config:
             fire_event(DepsNoPackagesFound())
@@ -242,7 +246,7 @@ class DepsTask(BaseTask):
 
         with downloads_directory():
             lock_defined_deps = resolve_lock_packages(packages_lock_config)
-            renderer = DbtProjectYamlRenderer(None, self.cli_vars)
+            renderer = PackageRenderer(self.cli_vars)
 
             packages_to_upgrade = []
 

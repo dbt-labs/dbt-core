@@ -1,0 +1,6 @@
+kind: Breaking Changes
+body: Remove dbt-tests-adapter and dbt-postgres packages from dbt-core
+time: 2024-01-30T14:05:50.291291-08:00
+custom:
+  Author: colin-rogers-dbt
+  Issue: "9455"

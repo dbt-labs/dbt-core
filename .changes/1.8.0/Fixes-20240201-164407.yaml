@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix bug where Semantic Layer filter strings are parsed into lists.
+time: 2024-02-01T16:44:07.697777-08:00
+custom:
+  Author: courtneyholcomb
+  Issue: "9507"

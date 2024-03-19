@@ -83,13 +83,12 @@ deprecated_defer = click.option(
     hidden=True,
 )
 
-dry_run = click.option(
-    "--dry-run",
-    envvar=None,
-    help="Option to run `dbt deps --add-package` without updating package-lock.yml file.",
+empty = click.option(
+    "--empty/--no-empty",
+    envvar="DBT_EMPTY",
+    help="If specified, limit input refs and sources to zero rows.",
     is_flag=True,
 )
-
 
 enable_legacy_logger = click.option(
     "--enable-legacy-logger/--no-enable-legacy-logger",
@@ -104,6 +103,14 @@ exclude = click.option(
     cls=MultiOption,
     multiple=True,
     help="Specify the nodes to exclude.",
+)
+
+export_saved_queries = click.option(
+    "--export-saved-queries/--no-export-saved-queries",
+    envvar="DBT_EXPORT_SAVED_QUERIES",
+    help="Export saved queries within the 'build' command, otherwise no-op",
+    is_flag=True,
+    hidden=True,
 )
 
 fail_fast = click.option(
@@ -384,16 +391,18 @@ record_timing_info = click.option(
 resource_type = click.option(
     "--resource-types",
     "--resource-type",
-    envvar=None,
+    envvar="DBT_RESOURCE_TYPES",
     help="Restricts the types of resources that dbt will include",
     type=ChoiceTuple(
         [
             "metric",
             "semantic_model",
+            "saved_query",
             "source",
             "analysis",
             "model",
             "test",
+            "unit_test",
             "exposure",
             "snapshot",
             "seed",
@@ -407,7 +416,35 @@ resource_type = click.option(
     default=(),
 )
 
-include_saved_query = click.option(
+exclude_resource_type = click.option(
+    "--exclude-resource-types",
+    "--exclude-resource-type",
+    envvar="DBT_EXCLUDE_RESOURCE_TYPES",
+    help="Specify the types of resources that dbt will exclude",
+    type=ChoiceTuple(
+        [
+            "metric",
+            "semantic_model",
+            "saved_query",
+            "source",
+            "analysis",
+            "model",
+            "test",
+            "unit_test",
+            "exposure",
+            "snapshot",
+            "seed",
+            "default",
+        ],
+        case_sensitive=False,
+    ),
+    cls=MultiOption,
+    multiple=True,
+    default=(),
+)
+
+# Renamed to --export-saved-queries
+deprecated_include_saved_query = click.option(
     "--include-saved-query/--no-include-saved-query",
     envvar="DBT_INCLUDE_SAVED_QUERY",
     help="Include saved queries in the list of resources to be selected for build command",

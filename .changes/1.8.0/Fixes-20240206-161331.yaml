@@ -1,0 +1,6 @@
+kind: Fixes
+body: Initialize invocation context before test fixtures are built.
+time: 2024-02-06T16:13:31.04575-05:00
+custom:
+  Author: peterallenwebb
+  Issue: '#9489'

@@ -4,7 +4,7 @@ import os
 from dbt.constants import SECRET_ENV_PREFIX
 from dbt.exceptions import ParsingError, DbtInternalError
 from tests.functional.context_methods.first_dependency import FirstDependencyProject
-from dbt.tests.util import run_dbt, run_dbt_and_capture
+from dbt.tests.util import run_dbt, run_dbt_and_capture, read_file
 
 
 secret_bad__context_sql = """
@@ -76,10 +76,12 @@ class TestAllowSecretProfilePackage(FirstDependencyProject):
         os.environ[SECRET_ENV_PREFIX + "USER"] = "root"
         os.environ[SECRET_ENV_PREFIX + "PASS"] = "password"
         os.environ[SECRET_ENV_PREFIX + "PACKAGE"] = "first_dependency"
+        os.environ[SECRET_ENV_PREFIX + "GIT_TOKEN"] = "abc123"
         yield
         del os.environ[SECRET_ENV_PREFIX + "USER"]
         del os.environ[SECRET_ENV_PREFIX + "PASS"]
         del os.environ[SECRET_ENV_PREFIX + "PACKAGE"]
+        del os.environ[SECRET_ENV_PREFIX + "GIT_TOKEN"]
 
     @pytest.fixture(scope="class")
     def models(self):
@@ -89,7 +91,19 @@ class TestAllowSecretProfilePackage(FirstDependencyProject):
     def packages(self):
         return {
             "packages": [
-                {"local": "{{ env_var('DBT_ENV_SECRET_PACKAGE') }}"},
+                {
+                    # the raw value of this secret *will* be written to lock file
+                    "local": "{{ env_var('DBT_ENV_SECRET_PACKAGE') }}"
+                },
+                {
+                    # this secret env var will *not* be written to lock file
+                    "git": "https://{{ env_var('DBT_ENV_SECRET_GIT_TOKEN') }}@github.com/dbt-labs/dbt-external-tables.git"
+                },
+                {
+                    # this secret env var will *not* be written to lock file
+                    "tarball": "https://{{ env_var('DBT_ENV_SECRET_GIT_TOKEN') }}@github.com/dbt-labs/dbt-utils/archive/refs/tags/1.1.1.tar.gz",
+                    "name": "dbt_utils",
+                },
             ]
         }
 
@@ -108,7 +122,16 @@ class TestAllowSecretProfilePackage(FirstDependencyProject):
 
     def test_allow_secrets(self, project, first_dependency):
         _, log_output = run_dbt_and_capture(["deps"])
+        lock_file_contents = read_file("package-lock.yml")
+
+        # this will not be written to logs or lock file
+        assert not ("abc123" in log_output)
+        assert not ("abc123" in lock_file_contents)
+        assert "{{ env_var('DBT_ENV_SECRET_GIT_TOKEN') }}" in lock_file_contents
+
+        # this will be scrubbed from logs, but not from the lock file
         assert not ("first_dependency" in log_output)
+        assert "first_dependency" in lock_file_contents
 
 
 class TestCloneFailSecretScrubbed:

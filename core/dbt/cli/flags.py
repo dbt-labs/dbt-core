@@ -2,7 +2,7 @@ import os
 import sys
 from dataclasses import dataclass
 from importlib import import_module
-from multiprocessing import get_context
+from pathlib import Path
 from pprint import pformat as pf
 from typing import Any, Callable, Dict, List, Optional, Set, Union
 
@@ -11,11 +11,15 @@ from click.core import Command as ClickCommand, Group, ParameterSource
 from dbt.cli.exceptions import DbtUsageException
 from dbt.cli.resolvers import default_log_path, default_project_dir
 from dbt.cli.types import Command as CliCommand
-from dbt.config.profile import read_user_config
-from dbt.contracts.project import UserConfig
-from dbt.exceptions import DbtInternalError
+from dbt.config.project import read_project_flags
+from dbt.contracts.project import ProjectFlags
+from dbt_common import ui
+from dbt_common.events import functions
+from dbt_common.exceptions import DbtInternalError
+from dbt_common.clients import jinja
 from dbt.deprecations import renamed_env_var
-from dbt.helper_types import WarnErrorOptions
+from dbt_common.helper_types import WarnErrorOptions
+from dbt.events import ALL_EVENT_NAMES
 
 if os.name != "nt":
     # https://bugs.python.org/issue41567
@@ -24,7 +28,8 @@ if os.name != "nt":
 FLAGS_DEFAULTS = {
     "INDIRECT_SELECTION": "eager",
     "TARGET_PATH": None,
-    # Cli args without user_config or env var option.
+    "WARN_ERROR": None,
+    # Cli args without project_flags or env var option.
     "FULL_REFRESH": False,
     "STRICT_MODE": False,
     "STORE_FAILURES": False,
@@ -47,7 +52,9 @@ def convert_config(config_name, config_value):
     ret = config_value
     if config_name.lower() == "warn_error_options" and type(config_value) == dict:
         ret = WarnErrorOptions(
-            include=config_value.get("include", []), exclude=config_value.get("exclude", [])
+            include=config_value.get("include", []),
+            exclude=config_value.get("exclude", []),
+            valid_error_names=ALL_EVENT_NAMES,
         )
     return ret
 
@@ -76,9 +83,8 @@ class Flags:
     """Primary configuration artifact for running dbt"""
 
     def __init__(
-        self, ctx: Optional[Context] = None, user_config: Optional[UserConfig] = None
+        self, ctx: Optional[Context] = None, project_flags: Optional[ProjectFlags] = None
     ) -> None:
-
         # Set the default flags.
         for key, value in FLAGS_DEFAULTS.items():
             object.__setattr__(self, key, value)
@@ -107,6 +113,7 @@ class Flags:
         def _assign_params(
             ctx: Context,
             params_assigned_from_default: set,
+            params_assigned_from_user: set,
             deprecated_env_vars: Dict[str, Callable],
         ):
             """Recursively adds all click params to flag object"""
@@ -120,7 +127,6 @@ class Flags:
                 # respected over DBT_PRINT or --print.
                 new_name: Union[str, None] = None
                 if param_name in DEPRECATED_PARAMS:
-
                     # Deprecated env vars can only be set via env var.
                     # We use the deprecated option in click to serialize the value
                     # from the env var string.
@@ -173,15 +179,30 @@ class Flags:
                     object.__setattr__(self, flag_name, param_value)
 
                 # Track default assigned params.
-                if is_default:
+                # For flags that are accepted at both 'parent' and 'child' levels,
+                # we need to track user-provided and default values across both,
+                # to support detection of mutually exclusive flags later on.
+                if not is_default:
+                    params_assigned_from_user.add(param_name)
+                    if param_name in params_assigned_from_default:
+                        params_assigned_from_default.remove(param_name)
+                if is_default and param_name not in params_assigned_from_user:
                     params_assigned_from_default.add(param_name)
 
             if ctx.parent:
-                _assign_params(ctx.parent, params_assigned_from_default, deprecated_env_vars)
+                _assign_params(
+                    ctx.parent,
+                    params_assigned_from_default,
+                    params_assigned_from_user,
+                    deprecated_env_vars,
+                )
 
+        params_assigned_from_user = set()  # type: Set[str]
         params_assigned_from_default = set()  # type: Set[str]
         deprecated_env_vars: Dict[str, Callable] = {}
-        _assign_params(ctx, params_assigned_from_default, deprecated_env_vars)
+        _assign_params(
+            ctx, params_assigned_from_default, params_assigned_from_user, deprecated_env_vars
+        )
 
         # Set deprecated_env_var_warnings to be fired later after events have been init.
         object.__setattr__(
@@ -198,33 +219,48 @@ class Flags:
             invoked_subcommand.ignore_unknown_options = True
             invoked_subcommand_ctx = invoked_subcommand.make_context(None, sys.argv)
             _assign_params(
-                invoked_subcommand_ctx, params_assigned_from_default, deprecated_env_vars
+                invoked_subcommand_ctx,
+                params_assigned_from_default,
+                params_assigned_from_user,
+                deprecated_env_vars,
             )
 
-        if not user_config:
+        if not project_flags:
+            project_dir = getattr(self, "PROJECT_DIR", str(default_project_dir()))
             profiles_dir = getattr(self, "PROFILES_DIR", None)
-            user_config = read_user_config(profiles_dir) if profiles_dir else None
+            if profiles_dir and project_dir:
+                project_flags = read_project_flags(project_dir, profiles_dir)
+            else:
+                project_flags = None
 
         # Add entire invocation command to flags
         object.__setattr__(self, "INVOCATION_COMMAND", "dbt " + " ".join(sys.argv[1:]))
 
-        # Overwrite default assignments with user config if available.
-        if user_config:
+        if project_flags:
+            # Overwrite default assignments with project flags if available.
             param_assigned_from_default_copy = params_assigned_from_default.copy()
             for param_assigned_from_default in params_assigned_from_default:
-                user_config_param_value = getattr(user_config, param_assigned_from_default, None)
-                if user_config_param_value is not None:
+                project_flags_param_value = getattr(
+                    project_flags, param_assigned_from_default, None
+                )
+                if project_flags_param_value is not None:
                     object.__setattr__(
                         self,
                         param_assigned_from_default.upper(),
-                        convert_config(param_assigned_from_default, user_config_param_value),
+                        convert_config(param_assigned_from_default, project_flags_param_value),
                     )
                     param_assigned_from_default_copy.remove(param_assigned_from_default)
             params_assigned_from_default = param_assigned_from_default_copy
 
+            # Add project-level flags that are not available as CLI options / env vars
+            for (
+                project_level_flag_name,
+                project_level_flag_value,
+            ) in project_flags.project_only_flags.items():
+                object.__setattr__(self, project_level_flag_name.upper(), project_level_flag_value)
+
         # Set hard coded flags.
         object.__setattr__(self, "WHICH", invoked_subcommand_name or ctx.info_name)
-        object.__setattr__(self, "MP_CONTEXT", get_context("spawn"))
 
         # Apply the lead/follow relationship between some parameters.
         self._override_if_set("USE_COLORS", "USE_COLORS_FILE", params_assigned_from_default)
@@ -235,9 +271,11 @@ class Flags:
         # Starting in v1.5, if `log-path` is set in `dbt_project.yml`, it will raise a deprecation warning,
         # with the possibility of removing it in a future release.
         if getattr(self, "LOG_PATH", None) is None:
-            project_dir = getattr(self, "PROJECT_DIR", default_project_dir())
+            project_dir = getattr(self, "PROJECT_DIR", str(default_project_dir()))
             version_check = getattr(self, "VERSION_CHECK", True)
-            object.__setattr__(self, "LOG_PATH", default_log_path(project_dir, version_check))
+            object.__setattr__(
+                self, "LOG_PATH", default_log_path(Path(project_dir), version_check)
+            )
 
         # Support console DO NOT TRACK initiative.
         if os.getenv("DO_NOT_TRACK", "").lower() in ("1", "t", "true", "y", "yes"):
@@ -254,6 +292,8 @@ class Flags:
         )
         for param in params:
             object.__setattr__(self, param.lower(), getattr(self, param))
+
+        self.set_common_global_flags()
 
     def __str__(self) -> str:
         return str(pf(self.__dict__))
@@ -295,6 +335,22 @@ class Flags:
         flags.fire_deprecations()
         return flags
 
+    def set_common_global_flags(self):
+        # Set globals for common.ui
+        if getattr(self, "PRINTER_WIDTH", None) is not None:
+            ui.PRINTER_WIDTH = getattr(self, "PRINTER_WIDTH")
+        if getattr(self, "USE_COLORS", None) is not None:
+            ui.USE_COLOR = getattr(self, "USE_COLORS")
+
+        # Set globals for common.events.functions
+        functions.WARN_ERROR = getattr(self, "WARN_ERROR", False)
+        if getattr(self, "WARN_ERROR_OPTIONS", None) is not None:
+            functions.WARN_ERROR_OPTIONS = getattr(self, "WARN_ERROR_OPTIONS")
+
+        # Set globals for common.jinja
+        if getattr(self, "MACRO_DEBUGGING", None) is not None:
+            jinja.MACRO_DEBUGGING = getattr(self, "MACRO_DEBUGGING")
+
 
 CommandParams = List[str]
 
@@ -315,7 +371,6 @@ def command_params(command: CliCommand, args_dict: Dict[str, Any]) -> CommandPar
     default_args = set([x.lower() for x in FLAGS_DEFAULTS.keys()])
 
     res = command.to_list()
-
     for k, v in args_dict.items():
         k = k.lower()
         # if a "which" value exists in the args dict, it should match the command provided
@@ -327,7 +382,9 @@ def command_params(command: CliCommand, args_dict: Dict[str, Any]) -> CommandPar
             continue
 
         # param was assigned from defaults and should not be included
-        if k not in (cmd_args | prnt_args) - default_args:
+        if k not in (cmd_args | prnt_args) or (
+            k in default_args and v == FLAGS_DEFAULTS[k.upper()]
+        ):
             continue
 
         # if the param is in parent args, it should come before the arg name
@@ -342,12 +399,19 @@ def command_params(command: CliCommand, args_dict: Dict[str, Any]) -> CommandPar
 
         # MultiOption flags come back as lists, but we want to pass them as space separated strings
         if isinstance(v, list):
-            v = " ".join(v)
+            if len(v) > 0:
+                v = " ".join(v)
+            else:
+                continue
 
         if k == "macro" and command == CliCommand.RUN_OPERATION:
             add_fn(v)
         # None is a Singleton, False is a Flyweight, only one instance of each.
-        elif v is None or v is False:
+        elif (v is None or v is False) and k not in (
+            # These are None by default but they do not support --no-{flag}
+            "defer_state",
+            "log_format",
+        ):
             add_fn(f"--no-{spinal_cased}")
         elif v is True:
             add_fn(f"--{spinal_cased}")

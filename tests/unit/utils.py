@@ -10,7 +10,7 @@ from unittest import TestCase
 
 import agate
 import pytest
-from dbt.dataclass_schema import ValidationError
+from dbt_common.dataclass_schema import ValidationError
 from dbt.config.project import PartialProject
 
 
@@ -253,7 +253,7 @@ def generate_name_macros(package):
 
 class TestAdapterConversions(TestCase):
     def _get_tester_for(self, column_type):
-        from dbt.clients import agate_helper
+        from dbt_common.clients import agate_helper
 
         if column_type is agate.TimeDelta:  # dbt never makes this!
             return agate.TimeDelta()
@@ -336,7 +336,7 @@ def MockNode(package, name, resource_type=None, **kwargs):
 
     version = kwargs.get("version")
     search_name = name if version is None else f"{name}.v{version}"
-    unique_id = f"{str(resource_type)}.{package}.{name}"
+    unique_id = f"{str(resource_type)}.{package}.{search_name}"
     node = mock.MagicMock(
         __class__=cls,
         resource_type=resource_type,
@@ -379,7 +379,10 @@ def dict_replace(dct, **kwargs):
 
 
 def replace_config(n, **kwargs):
-    return n.replace(
+    from dataclasses import replace
+
+    return replace(
+        n,
         config=n.config.replace(**kwargs),
         unrendered_config=dict_replace(n.unrendered_config, **kwargs),
     )

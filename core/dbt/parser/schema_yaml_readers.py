@@ -6,7 +6,6 @@ from dbt.contracts.graph.unparsed import (
     UnparsedDimensionTypeParams,
     UnparsedEntity,
     UnparsedExport,
-    UnparsedExportConfig,
     UnparsedExposure,
     UnparsedGroup,
     UnparsedMeasure,
@@ -18,46 +17,55 @@ from dbt.contracts.graph.unparsed import (
     UnparsedQueryParams,
     UnparsedSavedQuery,
     UnparsedSemanticModel,
+    UnparsedConversionTypeParams,
 )
 from dbt.contracts.graph.nodes import (
     Exposure,
     Group,
     Metric,
+    SemanticModel,
+    SavedQuery,
+)
+from dbt.artifacts.resources import (
+    ConversionTypeParams,
+    Dimension,
+    DimensionTypeParams,
+    Entity,
+    Export,
+    ExportConfig,
+    ExposureConfig,
+    Measure,
+    MetricConfig,
     MetricInput,
     MetricInputMeasure,
     MetricTimeWindow,
     MetricTypeParams,
-    SemanticModel,
-    SavedQuery,
-)
-from dbt.contracts.graph.saved_queries import Export, ExportConfig, QueryParams
-from dbt.contracts.graph.semantic_layer_common import WhereFilter, WhereFilterIntersection
-from dbt.contracts.graph.semantic_models import (
-    Dimension,
-    DimensionTypeParams,
-    Entity,
-    Measure,
     NonAdditiveDimension,
+    QueryParams,
+    SavedQueryConfig,
+    WhereFilter,
+    WhereFilterIntersection,
 )
-from dbt.exceptions import DbtInternalError, YamlParseDictError, JSONValidationError
+from dbt_common.exceptions import DbtInternalError
+from dbt.exceptions import YamlParseDictError, JSONValidationError
 from dbt.context.providers import generate_parse_exposure, generate_parse_semantic_models
 
-from dbt.contracts.graph.model_config import MetricConfig, ExposureConfig
 from dbt.context.context_config import (
     BaseContextConfigGenerator,
     ContextConfigGenerator,
     UnrenderedConfigGenerator,
 )
 from dbt.clients.jinja import get_rendered
-from dbt.dataclass_schema import ValidationError
+from dbt_common.dataclass_schema import ValidationError
 from dbt_semantic_interfaces.type_enums import (
     AggregationType,
+    ConversionCalculationType,
     DimensionType,
     EntityType,
     MetricType,
     TimeGranularity,
 )
-from typing import List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 
 def parse_where_filter(
@@ -226,7 +234,7 @@ class MetricParser(YamlReader):
                     self.yaml.path,
                     "window",
                     {"window": unparsed_window},
-                    f"Invalid window ({unparsed_window}) in cumulative metric. Should be of the form `<count> <granularity>`, "
+                    f"Invalid window ({unparsed_window}) in cumulative/conversion metric. Should be of the form `<count> <granularity>`, "
                     "e.g., `28 days`",
                 )
 
@@ -240,7 +248,7 @@ class MetricParser(YamlReader):
                     self.yaml.path,
                     "window",
                     {"window": unparsed_window},
-                    f"Invalid time granularity {granularity} in cumulative metric window string: ({unparsed_window})",
+                    f"Invalid time granularity {granularity} in cumulative/conversion metric window string: ({unparsed_window})",
                 )
 
             count = parts[0]
@@ -249,7 +257,7 @@ class MetricParser(YamlReader):
                     self.yaml.path,
                     "window",
                     {"window": unparsed_window},
-                    f"Invalid count ({count}) in cumulative metric window string: ({unparsed_window})",
+                    f"Invalid count ({count}) in cumulative/conversion metric window string: ({unparsed_window})",
                 )
 
             return MetricTimeWindow(
@@ -295,6 +303,20 @@ class MetricParser(YamlReader):
 
         return metric_inputs
 
+    def _get_optional_conversion_type_params(
+        self, unparsed: Optional[UnparsedConversionTypeParams]
+    ) -> Optional[ConversionTypeParams]:
+        if unparsed is None:
+            return None
+        return ConversionTypeParams(
+            base_measure=self._get_input_measure(unparsed.base_measure),
+            conversion_measure=self._get_input_measure(unparsed.conversion_measure),
+            entity=unparsed.entity,
+            calculation=ConversionCalculationType(unparsed.calculation),
+            window=self._get_time_window(unparsed.window),
+            constant_properties=unparsed.constant_properties,
+        )
+
     def _get_metric_type_params(self, type_params: UnparsedMetricTypeParams) -> MetricTypeParams:
         grain_to_date: Optional[TimeGranularity] = None
         if type_params.grain_to_date is not None:
@@ -308,9 +330,10 @@ class MetricParser(YamlReader):
             window=self._get_time_window(type_params.window),
             grain_to_date=grain_to_date,
             metrics=self._get_metric_inputs(type_params.metrics),
-            # TODO This is a compiled list of measure/numerator/denominator as
-            # well as the `input_measures` of included metrics. We're planning
-            # on doing this as part of CT-2707
+            conversion_type_params=self._get_optional_conversion_type_params(
+                type_params.conversion_type_params
+            )
+            # input measures are calculated via metric processing post parsing
             # input_measures=?,
         )
 
@@ -342,6 +365,11 @@ class MetricParser(YamlReader):
             raise DbtInternalError(
                 f"Calculated a {type(config)} for a metric, but expected a MetricConfig"
             )
+
+        # If we have meta in the config, copy to node level, for backwards
+        # compatibility with earlier node-only config.
+        if "meta" in config and config["meta"]:
+            unparsed.meta = config["meta"]
 
         parsed = Metric(
             resource_type=NodeType.Metric,
@@ -669,15 +697,24 @@ class SavedQueryParser(YamlReader):
 
         return config
 
-    def _get_export_config(self, unparsed: UnparsedExportConfig) -> ExportConfig:
-        return ExportConfig(
-            export_as=unparsed.export_as,
-            schema_name=unparsed.schema,
-            alias=unparsed.alias,
-        )
+    def _get_export_config(
+        self, unparsed_export_config: Dict[str, Any], saved_query_config: SavedQueryConfig
+    ) -> ExportConfig:
+        # Combine the two dictionaries using dictionary unpacking
+        # the second dictionary is the one whose keys take priority
+        combined = {**saved_query_config.__dict__, **unparsed_export_config}
+        # `schema` is the user facing attribute, but for DSI protocol purposes we track it as `schema_name`
+        if combined.get("schema") is not None and combined.get("schema_name") is None:
+            combined["schema_name"] = combined["schema"]
 
-    def _get_export(self, unparsed: UnparsedExport) -> Export:
-        return Export(name=unparsed.name, config=self._get_export_config(unparsed.config))
+        return ExportConfig.from_dict(combined)
+
+    def _get_export(
+        self, unparsed: UnparsedExport, saved_query_config: SavedQueryConfig
+    ) -> Export:
+        return Export(
+            name=unparsed.name, config=self._get_export_config(unparsed.config, saved_query_config)
+        )
 
     def _get_query_params(self, unparsed: UnparsedQueryParams) -> QueryParams:
         return QueryParams(
@@ -721,7 +758,7 @@ class SavedQueryParser(YamlReader):
             resource_type=NodeType.SavedQuery,
             unique_id=unique_id,
             query_params=self._get_query_params(unparsed.query_params),
-            exports=[self._get_export(export) for export in unparsed.exports],
+            exports=[self._get_export(export, config) for export in unparsed.exports],
             config=config,
             unrendered_config=unrendered_config,
             group=config.group,
