@@ -703,6 +703,34 @@ class TestList:
             "test.outer",
         }
 
+    def expect_resource_type_env_var(self):
+        """Expect selected resources when --resource-type given multiple times"""
+        os.environ["DBT_RESOURCE_TYPES"] = "test model"
+        results = self.run_dbt_ls()
+        assert set(results) == {
+            "test.ephemeral",
+            "test.incremental",
+            "test.not_null_outer_id",
+            "test.outer",
+            "test.sub.inner",
+            "test.metricflow_time_spine",
+            "test.t",
+            "test.unique_outer_id",
+        }
+        del os.environ["DBT_RESOURCE_TYPES"]
+        os.environ[
+            "DBT_EXCLUDE_RESOURCE_TYPES"
+        ] = "test saved_query metric source semantic_model snapshot seed"
+        results = self.run_dbt_ls()
+        assert set(results) == {
+            "test.ephemeral",
+            "test.incremental",
+            "test.outer",
+            "test.sub.inner",
+            "test.metricflow_time_spine",
+        }
+        del os.environ["DBT_EXCLUDE_RESOURCE_TYPES"]
+
     def expect_selected_keys(self, project):
         """Expect selected fields of the the selected model"""
         expectations = [
@@ -798,6 +826,7 @@ class TestList:
         self.expect_test_output()
         self.expect_select()
         self.expect_resource_type_multiple()
+        self.expect_resource_type_env_var()
         self.expect_all_output()
         self.expect_selected_keys(project)
 
