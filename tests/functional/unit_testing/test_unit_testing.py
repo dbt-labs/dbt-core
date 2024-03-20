@@ -1,4 +1,5 @@
 import pytest
+import os
 from unittest import mock
 from dbt.tests.util import (
     run_dbt,
@@ -65,6 +66,13 @@ class TestUnitTests:
             expect_pass=True,
         )
         assert len(results) == 1
+
+        # Exclude unit tests with environment variable
+        os.environ["DBT_EXCLUDE_RESOURCE_TYPES"] = "unit_test"
+        results = run_dbt(["build", "--select", "my_model"], expect_pass=True)
+        assert len(results) == 1
+
+        del os.environ["DBT_EXCLUDE_RESOURCE_TYPES"]
 
         # Test select by test name
         results = run_dbt(["test", "--select", "test_name:test_my_model_string_concat"])

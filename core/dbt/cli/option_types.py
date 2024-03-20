@@ -81,8 +81,8 @@ class ChoiceTuple(Choice):
 
     def convert(self, value, param, ctx):
         if not isinstance(value, str):
-          for value_item in value:
-              super().convert(value_item, param, ctx)
+            for value_item in value:
+                super().convert(value_item, param, ctx)
         else:
             super().convert(value, param, ctx)
 
