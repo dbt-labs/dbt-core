@@ -108,7 +108,6 @@ class TestFlags:
     def test_resource_types(self, monkeypatch):
         monkeypatch.setenv("DBT_RESOURCE_TYPES", "model")
         build_context = self.make_dbt_context("build", ["build"])
-        # Is there any point to this?
         build_context.params["resource_types"] = ("unit_test",)
         flags = Flags(build_context)
         assert flags.resource_types == ("unit_test",)
