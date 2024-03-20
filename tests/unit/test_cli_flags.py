@@ -105,6 +105,14 @@ class TestFlags:
         flags = Flags(run_context)
         assert flags.SEND_ANONYMOUS_USAGE_STATS == expected_anonymous_usage_stats
 
+    def test_resource_types(self, monkeypatch):
+        monkeypatch.setenv("DBT_RESOURCE_TYPES", "model")
+        build_context = self.make_dbt_context("build", ["build"])
+        # Is there any point to this?
+        build_context.params["resource_types"] = ("unit_test",)
+        flags = Flags(build_context)
+        assert flags.resource_types == ("unit_test",)
+
     def test_empty_project_flags_uses_default(self, run_context, project_flags):
         flags = Flags(run_context, project_flags)
         assert flags.USE_COLORS == run_context.params["use_colors"]

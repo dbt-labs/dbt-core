@@ -500,7 +500,7 @@ def resource_types_from_args(
             arg_resource_types.remove("default")
             arg_resource_types.update(default_resource_values)
         # Convert to a set of NodeTypes now that the non-NodeType strings are gone
-        resource_types = set([NodeType(rt) for rt in arg_resource_types])
+        resource_types = set([NodeType(rt) for rt in list(arg_resource_types)])
 
     if args.exclude_resource_types:
         # Convert from a list of strings to a set of NodeTypes
