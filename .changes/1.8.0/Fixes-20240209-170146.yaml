@@ -1,0 +1,6 @@
+kind: Fixes
+body: only include unmodified semantic mdodels in state:modified selection
+time: 2024-02-09T17:01:46.676097-05:00
+custom:
+  Author: michelleark
+  Issue: "9548"

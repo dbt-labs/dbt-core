@@ -14,6 +14,7 @@ from tests.functional.list.fixtures import (  # noqa: F401
     analyses,
     semantic_models,
     metrics,
+    saved_queries,
     project_files,
 )
 
@@ -98,7 +99,7 @@ class TestList:
                     "packages": [],
                     "incremental_strategy": None,
                     "docs": {"node_color": None, "show": True},
-                    "contract": {"enforced": False},
+                    "contract": {"enforced": False, "alias_types": True},
                 },
                 "unique_id": "snapshot.test.my_snapshot",
                 "original_file_path": normalize("snapshots/snapshot.sql"),
@@ -140,7 +141,7 @@ class TestList:
                     "packages": [],
                     "incremental_strategy": None,
                     "docs": {"node_color": None, "show": True},
-                    "contract": {"enforced": False},
+                    "contract": {"enforced": False, "alias_types": True},
                 },
                 "unique_id": "analysis.test.a",
                 "original_file_path": normalize("analyses/a.sql"),
@@ -192,7 +193,7 @@ class TestList:
                         "packages": [],
                         "incremental_strategy": None,
                         "docs": {"node_color": None, "show": True},
-                        "contract": {"enforced": False},
+                        "contract": {"enforced": False, "alias_types": True},
                         "access": "protected",
                     },
                     "original_file_path": normalize("models/ephemeral.sql"),
@@ -230,7 +231,7 @@ class TestList:
                         "packages": [],
                         "incremental_strategy": "delete+insert",
                         "docs": {"node_color": None, "show": True},
-                        "contract": {"enforced": False},
+                        "contract": {"enforced": False, "alias_types": True},
                         "access": "protected",
                     },
                     "original_file_path": normalize("models/incremental.sql"),
@@ -268,7 +269,7 @@ class TestList:
                         "packages": [],
                         "incremental_strategy": None,
                         "docs": {"node_color": None, "show": True},
-                        "contract": {"enforced": False},
+                        "contract": {"enforced": False, "alias_types": True},
                         "access": "protected",
                     },
                     "original_file_path": normalize("models/sub/inner.sql"),
@@ -306,7 +307,7 @@ class TestList:
                         "packages": [],
                         "incremental_strategy": None,
                         "docs": {"node_color": None, "show": True},
-                        "contract": {"enforced": False},
+                        "contract": {"enforced": False, "alias_types": True},
                         "access": "protected",
                     },
                     "original_file_path": normalize("models/metricflow_time_spine.sql"),
@@ -344,7 +345,7 @@ class TestList:
                         "packages": [],
                         "incremental_strategy": None,
                         "docs": {"node_color": None, "show": True},
-                        "contract": {"enforced": False},
+                        "contract": {"enforced": False, "alias_types": True},
                         "access": "protected",
                     },
                     "original_file_path": normalize("models/outer.sql"),
@@ -462,7 +463,7 @@ class TestList:
                     "packages": [],
                     "incremental_strategy": None,
                     "docs": {"node_color": None, "show": True},
-                    "contract": {"enforced": False},
+                    "contract": {"enforced": False, "alias_types": True},
                 },
                 "depends_on": {"macros": []},
                 "unique_id": "seed.test.seed",
@@ -493,6 +494,7 @@ class TestList:
                         "materialized": "test",
                         "severity": "ERROR",
                         "store_failures": None,
+                        "store_failures_as": None,
                         "warn_if": "!= 0",
                         "error_if": "!= 0",
                         "fail_calc": "count(*)",
@@ -520,6 +522,7 @@ class TestList:
                         "materialized": "test",
                         "severity": "ERROR",
                         "store_failures": None,
+                        "store_failures_as": None,
                         "warn_if": "!= 0",
                         "error_if": "!= 0",
                         "fail_calc": "count(*)",
@@ -550,6 +553,7 @@ class TestList:
                         "materialized": "test",
                         "severity": "ERROR",
                         "store_failures": None,
+                        "store_failures_as": None,
                         "warn_if": "!= 0",
                         "error_if": "!= 0",
                         "fail_calc": "count(*)",
@@ -593,6 +597,7 @@ class TestList:
             "test.t",
             "semantic_model:test.my_sm",
             "metric:test.total_outer",
+            "saved_query:test.my_saved_query",
         }
         # analyses have their type inserted into their fqn like tests
         expected_all = expected_default | {"test.analysis.a"}
@@ -622,6 +627,9 @@ class TestList:
 
         results = self.run_dbt_ls(["--resource-type", "metric"])
         assert set(results) == {"metric:test.total_outer"}
+
+        results = self.run_dbt_ls(["--resource-type", "saved_query"])
+        assert set(results) == {"saved_query:test.my_saved_query"}
 
         results = self.run_dbt_ls(["--resource-type", "model", "--select", "outer+"])
         assert set(results) == {"test.outer", "test.sub.inner"}
@@ -656,7 +664,14 @@ class TestList:
         }
 
         results = self.run_dbt_ls(
-            ["--resource-type", "test", "--resource-type", "model", "--exclude", "unique_outer_id"]
+            [
+                "--resource-type",
+                "test",
+                "--resource-type",
+                "model",
+                "--exclude",
+                "unique_outer_id",
+            ]
         )
         assert set(results) == {
             "test.ephemeral",

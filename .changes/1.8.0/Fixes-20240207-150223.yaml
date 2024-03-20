@@ -1,0 +1,6 @@
+kind: Fixes
+body: When patching versioned models, set constraints after config
+time: 2024-02-07T15:02:23.697345-05:00
+custom:
+  Author: gshank
+  Issue: "9364"

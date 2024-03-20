@@ -1,4 +1,3 @@
-import itertools
 import unittest
 import os
 from typing import Set, Dict, Any
@@ -14,13 +13,15 @@ from dbt.contracts.graph.nodes import (
     NodeConfig,
     DependsOn,
     Macro,
+    UnitTestNode,
+    UnitTestOverrides,
 )
 from dbt.config.project import VarProvider
 from dbt.context import base, providers, docs, manifest, macros
 from dbt.contracts.files import FileHash
-from dbt.events.functions import reset_metadata_vars
+from dbt_common.events.functions import reset_metadata_vars
 from dbt.node_types import NodeType
-import dbt.exceptions
+import dbt_common.exceptions
 from .utils import (
     config_from_parts_or_dicts,
     inject_adapter,
@@ -91,7 +92,7 @@ class TestVar(unittest.TestCase):
         var = providers.RuntimeVar(self.context, self.config, self.model)
 
         self.assertEqual(var("foo", "bar"), "bar")
-        with self.assertRaises(dbt.exceptions.CompilationError):
+        with self.assertRaises(dbt_common.exceptions.CompilationError):
             var("foo")
 
     def test_parser_var_default_something(self):
@@ -118,8 +119,9 @@ class TestVar(unittest.TestCase):
 class TestParseWrapper(unittest.TestCase):
     def setUp(self):
         self.mock_config = mock.MagicMock()
+        self.mock_mp_context = mock.MagicMock()
         adapter_class = adapter_factory()
-        self.mock_adapter = adapter_class(self.mock_config)
+        self.mock_adapter = adapter_class(self.mock_config, self.mock_mp_context)
         self.namespace = mock.MagicMock()
         self.wrapper = providers.ParseDatabaseWrapper(self.mock_adapter, self.namespace)
         self.responder = self.mock_adapter.responder
@@ -137,13 +139,14 @@ class TestParseWrapper(unittest.TestCase):
 class TestRuntimeWrapper(unittest.TestCase):
     def setUp(self):
         self.mock_config = mock.MagicMock()
+        self.mock_mp_context = mock.MagicMock()
         self.mock_config.quoting = {
             "database": True,
             "schema": True,
             "identifier": True,
         }
         adapter_class = adapter_factory()
-        self.mock_adapter = adapter_class(self.mock_config)
+        self.mock_adapter = adapter_class(self.mock_config, self.mock_mp_context)
         self.namespace = mock.MagicMock()
         self.wrapper = providers.RuntimeDatabaseWrapper(self.mock_adapter, self.namespace)
         self.responder = self.mock_adapter.responder
@@ -313,12 +316,27 @@ def mock_macro(name, package_name):
     return macro
 
 
-def mock_manifest(config):
+def mock_manifest(config, additional_macros=None):
+    default_macro_names = ["macro_a", "macro_b"]
+    default_macros = [mock_macro(name, config.project_name) for name in default_macro_names]
+    additional_macros = additional_macros or []
+    all_macros = default_macros + additional_macros
+
     manifest_macros = {}
-    for name in ["macro_a", "macro_b"]:
-        macro = mock_macro(name, config.project_name)
+    macros_by_package = {}
+    for macro in all_macros:
         manifest_macros[macro.unique_id] = macro
-    return mock.MagicMock(macros=manifest_macros)
+        if macro.package_name not in macros_by_package:
+            macros_by_package[macro.package_name] = {}
+        macro_package = macros_by_package[macro.package_name]
+        macro_package[macro.name] = macro
+
+    def gmbp():
+        return macros_by_package
+
+    m = mock.MagicMock(macros=manifest_macros)
+    m.get_macros_by_package = gmbp
+    return m
 
 
 def mock_model():
@@ -355,6 +373,14 @@ def mock_model():
         raw_code="",
         description="",
         columns={},
+    )
+
+
+def mock_unit_test_node():
+    return mock.MagicMock(
+        __class__=UnitTestNode,
+        resource_type=NodeType.Unit,
+        tested_node_unique_id="model.root.model_one",
     )
 
 
@@ -457,7 +483,7 @@ def test_macro_namespace_duplicates(config_postgres, manifest_fx):
     mn.add_macros(manifest_fx.macros.values(), {})
 
     # same pkg, same name: error
-    with pytest.raises(dbt.exceptions.CompilationError):
+    with pytest.raises(dbt_common.exceptions.CompilationError):
         mn.add_macro(mock_macro("macro_a", "root"), {})
 
     # different pkg, same name: no error
@@ -467,15 +493,19 @@ def test_macro_namespace_duplicates(config_postgres, manifest_fx):
 def test_macro_namespace(config_postgres, manifest_fx):
     mn = macros.MacroNamespaceBuilder("root", "search", MacroStack(), ["dbt_postgres", "dbt"])
 
+    mbp = manifest_fx.get_macros_by_package()
     dbt_macro = mock_macro("some_macro", "dbt")
+    mbp["dbt"] = {"some_macro": dbt_macro}
+
     # same namespace, same name, different pkg!
     pg_macro = mock_macro("some_macro", "dbt_postgres")
+    mbp["dbt_postgres"] = {"some_macro": pg_macro}
+
     # same name, different package
     package_macro = mock_macro("some_macro", "root")
+    mbp["root"]["some_macro"] = package_macro
 
-    all_macros = itertools.chain(manifest_fx.macros.values(), [dbt_macro, pg_macro, package_macro])
-
-    namespace = mn.build_namespace(all_macros, {})
+    namespace = mn.build_namespace(mbp, {})
     dct = dict(namespace)
     for result in [dct, namespace]:
         assert "dbt" in result
@@ -518,3 +548,84 @@ def test_dbt_metadata_envs(
 
     # cleanup
     reset_metadata_vars()
+
+
+def test_unit_test_runtime_context(config_postgres, manifest_fx, get_adapter, get_include_paths):
+    ctx = providers.generate_runtime_unit_test_context(
+        unit_test=mock_unit_test_node(),
+        config=config_postgres,
+        manifest=manifest_fx,
+    )
+    assert_has_keys(REQUIRED_MODEL_KEYS, MAYBE_KEYS, ctx)
+
+
+def test_unit_test_runtime_context_macro_overrides_global(
+    config_postgres, manifest_fx, get_adapter, get_include_paths
+):
+    unit_test = mock_unit_test_node()
+    unit_test.overrides = UnitTestOverrides(macros={"macro_a": "override"})
+    ctx = providers.generate_runtime_unit_test_context(
+        unit_test=unit_test,
+        config=config_postgres,
+        manifest=manifest_fx,
+    )
+    assert ctx["macro_a"]() == "override"
+
+
+def test_unit_test_runtime_context_macro_overrides_package(
+    config_postgres, manifest_fx, get_adapter, get_include_paths
+):
+    unit_test = mock_unit_test_node()
+    unit_test.overrides = UnitTestOverrides(macros={"some_package.some_macro": "override"})
+
+    dbt_macro = mock_macro("some_macro", "some_package")
+    manifest_with_dbt_macro = mock_manifest(config_postgres, additional_macros=[dbt_macro])
+
+    ctx = providers.generate_runtime_unit_test_context(
+        unit_test=unit_test,
+        config=config_postgres,
+        manifest=manifest_with_dbt_macro,
+    )
+    assert ctx["some_package"]["some_macro"]() == "override"
+
+
+@pytest.mark.parametrize(
+    "overrides,expected_override_value",
+    [
+        # override dbt macro at global level
+        ({"some_macro": "override"}, "override"),
+        # # override dbt macro at dbt-namespaced level level
+        ({"dbt.some_macro": "override"}, "override"),
+        # override dbt macro at both levels - global override should win
+        (
+            {"some_macro": "dbt_global_override", "dbt.some_macro": "dbt_namespaced_override"},
+            "dbt_global_override",
+        ),
+        # override dbt macro at both levels - global override should win, regardless of order
+        (
+            {"dbt.some_macro": "dbt_namespaced_override", "some_macro": "dbt_global_override"},
+            "dbt_global_override",
+        ),
+    ],
+)
+def test_unit_test_runtime_context_macro_overrides_dbt_macro(
+    overrides,
+    expected_override_value,
+    config_postgres,
+    manifest_fx,
+    get_adapter,
+    get_include_paths,
+):
+    unit_test = mock_unit_test_node()
+    unit_test.overrides = UnitTestOverrides(macros=overrides)
+
+    dbt_macro = mock_macro("some_macro", "dbt")
+    manifest_with_dbt_macro = mock_manifest(config_postgres, additional_macros=[dbt_macro])
+
+    ctx = providers.generate_runtime_unit_test_context(
+        unit_test=unit_test,
+        config=config_postgres,
+        manifest=manifest_with_dbt_macro,
+    )
+    assert ctx["some_macro"]() == expected_override_value
+    assert ctx["dbt"]["some_macro"]() == expected_override_value

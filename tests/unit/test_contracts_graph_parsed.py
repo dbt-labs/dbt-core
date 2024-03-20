@@ -1,52 +1,62 @@
 import pickle
 import pytest
 
+from dataclasses import replace
+from hypothesis import given
+from hypothesis.strategies import builds, lists
+
+from dbt.artifacts.resources import (
+    ColumnInfo,
+    Dimension,
+    Entity,
+    ExposureConfig,
+    ExposureType,
+    FreshnessThreshold,
+    MaturityType,
+    Measure,
+    MetricInputMeasure,
+    MetricTypeParams,
+    Owner,
+    Quoting,
+    RefArgs,
+    MacroDependsOn,
+    TestMetadata,
+    SourceConfig,
+    Time,
+    Hook,
+)
+from dbt.artifacts.resources.types import TimePeriod
 from dbt.node_types import NodeType, AccessType
 from dbt.contracts.files import FileHash
 from dbt.contracts.graph.model_config import (
-    ModelConfig,
     NodeConfig,
     SeedConfig,
     TestConfig,
     SnapshotConfig,
-    SourceConfig,
-    ExposureConfig,
     EmptySnapshotConfig,
-    Hook,
+    ModelConfig,
 )
 from dbt.contracts.graph.nodes import (
     ModelNode,
     DependsOn,
-    ColumnInfo,
     GenericTestNode,
     SnapshotNode,
     IntermediateSnapshotNode,
     Macro,
     Exposure,
     Metric,
-    MetricTypeParams,
-    MetricInputMeasure,
     SeedNode,
     Docs,
-    MacroDependsOn,
     SourceDefinition,
     Documentation,
     HookNode,
-    Owner,
-    TestMetadata,
+    SemanticModel,
 )
-from dbt.contracts.graph.unparsed import (
-    ExposureType,
-    FreshnessThreshold,
-    MaturityType,
-    Quoting,
-    Time,
-    TimePeriod,
-)
+from dbt.artifacts.resources import SourceDefinition as SourceDefinitionResource
 from dbt import flags
 from argparse import Namespace
 
-from dbt.dataclass_schema import ValidationError
+from dbt_common.dataclass_schema import ValidationError
 from dbt_semantic_interfaces.type_enums import MetricType
 from .utils import (
     ContractTestCase,
@@ -90,7 +100,7 @@ def populated_node_config_dict():
         "grants": {},
         "packages": [],
         "docs": {"show": True},
-        "contract": {"enforced": False},
+        "contract": {"enforced": False, "alias_types": True},
         "access": "protected",
     }
 
@@ -175,13 +185,13 @@ def base_parsed_model_dict():
             "meta": {},
             "grants": {},
             "docs": {"show": True},
-            "contract": {"enforced": False},
+            "contract": {"enforced": False, "alias_types": True},
             "packages": [],
             "access": "protected",
         },
         "deferred": False,
         "docs": {"show": True},
-        "contract": {"enforced": False},
+        "contract": {"enforced": False, "alias_types": True},
         "columns": {},
         "meta": {},
         "checksum": {
@@ -285,12 +295,12 @@ def complex_parsed_model_dict():
             "meta": {},
             "grants": {},
             "docs": {"show": True},
-            "contract": {"enforced": False},
+            "contract": {"enforced": False, "alias_types": True},
             "packages": [],
             "access": "protected",
         },
         "docs": {"show": True},
-        "contract": {"enforced": False},
+        "contract": {"enforced": False, "alias_types": True},
         "columns": {
             "a": {
                 "name": "a",
@@ -391,8 +401,8 @@ def test_invalid_bad_materialized(base_parsed_model_dict):
 
 
 unchanged_nodes = [
-    lambda u: (u, u.replace(tags=["mytag"])),
-    lambda u: (u, u.replace(meta={"something": 1000})),
+    lambda u: (u, replace(u, tags=["mytag"])),
+    lambda u: (u, replace(u, meta={"something": 1000})),
     # True -> True
     lambda u: (
         replace_config(u, persist_docs={"relation": True}),
@@ -405,30 +415,32 @@ unchanged_nodes = [
     # only columns docs enabled, but description changed
     lambda u: (
         replace_config(u, persist_docs={"columns": True}),
-        replace_config(u, persist_docs={"columns": True}).replace(
-            description="a model description"
+        replace(
+            replace_config(u, persist_docs={"columns": True}), description="a model description"
         ),
     ),
     # only relation docs eanbled, but columns changed
     lambda u: (
         replace_config(u, persist_docs={"relation": True}),
-        replace_config(u, persist_docs={"relation": True}).replace(
-            columns={"a": ColumnInfo(name="a", description="a column description")}
+        replace(
+            replace_config(u, persist_docs={"relation": True}),
+            columns={"a": ColumnInfo(name="a", description="a column description")},
         ),
     ),
     # not tracked, we track config.alias/config.schema/config.database
-    lambda u: (u, u.replace(alias="other")),
-    lambda u: (u, u.replace(schema="other")),
-    lambda u: (u, u.replace(database="other")),
+    lambda u: (u, replace(u, alias="other")),
+    lambda u: (u, replace(u, schema="other")),
+    lambda u: (u, replace(u, database="other")),
     # unchanged ref representations - protected is default
-    lambda u: (u, u.replace(access=AccessType.Protected)),
+    lambda u: (u, replace(u, access=AccessType.Protected)),
 ]
 
 
 changed_nodes = [
     lambda u: (
         u,
-        u.replace(
+        replace(
+            u,
             fqn=["test", "models", "subdir", "foo"],
             original_file_path="models/subdir/foo.sql",
             path="/root/models/subdir/foo.sql",
@@ -440,15 +452,16 @@ changed_nodes = [
     # persist docs was true for the relation and we changed the model description
     lambda u: (
         replace_config(u, persist_docs={"relation": True}),
-        replace_config(u, persist_docs={"relation": True}).replace(
-            description="a model description"
+        replace(
+            replace_config(u, persist_docs={"relation": True}), description="a model description"
         ),
     ),
     # persist docs was true for columns and we changed the model description
     lambda u: (
         replace_config(u, persist_docs={"columns": True}),
-        replace_config(u, persist_docs={"columns": True}).replace(
-            columns={"a": ColumnInfo(name="a", description="a column description")}
+        replace(
+            replace_config(u, persist_docs={"columns": True}),
+            columns={"a": ColumnInfo(name="a", description="a column description")},
         ),
     ),
     # not tracked, we track config.alias/config.schema/config.database
@@ -507,7 +520,7 @@ def basic_parsed_seed_dict():
             "meta": {},
             "grants": {},
             "docs": {"show": True},
-            "contract": {"enforced": False},
+            "contract": {"enforced": False, "alias_types": True},
             "packages": [],
         },
         "deferred": False,
@@ -600,7 +613,7 @@ def complex_parsed_seed_dict():
             "meta": {},
             "grants": {},
             "docs": {"show": True},
-            "contract": {"enforced": False},
+            "contract": {"enforced": False, "alias_types": True},
             "packages": [],
         },
         "deferred": False,
@@ -673,8 +686,8 @@ def test_seed_complex(complex_parsed_seed_dict, complex_parsed_seed_object):
 
 
 unchanged_seeds = [
-    lambda u: (u, u.replace(tags=["mytag"])),
-    lambda u: (u, u.replace(meta={"something": 1000})),
+    lambda u: (u, replace(u, tags=["mytag"])),
+    lambda u: (u, replace(u, meta={"something": 1000})),
     # True -> True
     lambda u: (
         replace_config(u, persist_docs={"relation": True}),
@@ -687,27 +700,29 @@ unchanged_seeds = [
     # only columns docs enabled, but description changed
     lambda u: (
         replace_config(u, persist_docs={"columns": True}),
-        replace_config(u, persist_docs={"columns": True}).replace(
-            description="a model description"
+        replace(
+            replace_config(u, persist_docs={"columns": True}), description="a model description"
         ),
     ),
     # only relation docs eanbled, but columns changed
     lambda u: (
         replace_config(u, persist_docs={"relation": True}),
-        replace_config(u, persist_docs={"relation": True}).replace(
-            columns={"a": ColumnInfo(name="a", description="a column description")}
+        replace(
+            replace_config(u, persist_docs={"relation": True}),
+            columns={"a": ColumnInfo(name="a", description="a column description")},
         ),
     ),
-    lambda u: (u, u.replace(alias="other")),
-    lambda u: (u, u.replace(schema="other")),
-    lambda u: (u, u.replace(database="other")),
+    lambda u: (u, replace(u, alias="other")),
+    lambda u: (u, replace(u, schema="other")),
+    lambda u: (u, replace(u, database="other")),
 ]
 
 
 changed_seeds = [
     lambda u: (
         u,
-        u.replace(
+        replace(
+            u,
             fqn=["test", "models", "subdir", "foo"],
             original_file_path="models/subdir/foo.sql",
             path="/root/models/subdir/foo.sql",
@@ -719,15 +734,16 @@ changed_seeds = [
     # persist docs was true for the relation and we changed the model description
     lambda u: (
         replace_config(u, persist_docs={"relation": True}),
-        replace_config(u, persist_docs={"relation": True}).replace(
-            description="a model description"
+        replace(
+            replace_config(u, persist_docs={"relation": True}), description="a model description"
         ),
     ),
     # persist docs was true for columns and we changed the model description
     lambda u: (
         replace_config(u, persist_docs={"columns": True}),
-        replace_config(u, persist_docs={"columns": True}).replace(
-            columns={"a": ColumnInfo(name="a", description="a column description")}
+        replace(
+            replace_config(u, persist_docs={"columns": True}),
+            columns={"a": ColumnInfo(name="a", description="a column description")},
         ),
     ),
     lambda u: (u, replace_config(u, alias="other")),
@@ -807,11 +823,11 @@ def base_parsed_hook_dict():
             "meta": {},
             "grants": {},
             "docs": {"show": True},
-            "contract": {"enforced": False},
+            "contract": {"enforced": False, "alias_types": True},
             "packages": [],
         },
         "docs": {"show": True},
-        "contract": {"enforced": False},
+        "contract": {"enforced": False, "alias_types": True},
         "columns": {},
         "meta": {},
         "checksum": {
@@ -890,11 +906,11 @@ def complex_parsed_hook_dict():
             "meta": {},
             "grants": {},
             "docs": {"show": True},
-            "contract": {"enforced": False},
+            "contract": {"enforced": False, "alias_types": True},
             "packages": [],
         },
         "docs": {"show": True},
-        "contract": {"enforced": False},
+        "contract": {"enforced": False, "alias_types": True},
         "columns": {
             "a": {
                 "name": "a",
@@ -1047,7 +1063,7 @@ def basic_parsed_schema_test_dict():
             "schema": "dbt_test__audit",
         },
         "docs": {"show": True},
-        "contract": {"enforced": False},
+        "contract": {"enforced": False, "alias_types": True},
         "columns": {},
         "test_metadata": {
             "name": "foo",
@@ -1127,7 +1143,7 @@ def complex_parsed_schema_test_dict():
             "schema": "dbt_test__audit",
         },
         "docs": {"show": False},
-        "contract": {"enforced": False},
+        "contract": {"enforced": False, "alias_types": True},
         "columns": {
             "a": {
                 "name": "a",
@@ -1248,7 +1264,7 @@ def basic_timestamp_snapshot_config_dict():
         "grants": {},
         "packages": [],
         "docs": {"show": True},
-        "contract": {"enforced": False},
+        "contract": {"enforced": False, "alias_types": True},
     }
 
 
@@ -1286,7 +1302,7 @@ def complex_timestamp_snapshot_config_dict():
         "grants": {},
         "packages": [],
         "docs": {"show": True},
-        "contract": {"enforced": False},
+        "contract": {"enforced": False, "alias_types": True},
     }
 
 
@@ -1352,7 +1368,7 @@ def basic_check_snapshot_config_dict():
         "grants": {},
         "packages": [],
         "docs": {"show": True},
-        "contract": {"enforced": False},
+        "contract": {"enforced": False, "alias_types": True},
     }
 
 
@@ -1390,7 +1406,7 @@ def complex_set_snapshot_config_dict():
         "grants": {},
         "packages": [],
         "docs": {"show": True},
-        "contract": {"enforced": False},
+        "contract": {"enforced": False, "alias_types": True},
     }
 
 
@@ -1506,11 +1522,11 @@ def basic_timestamp_snapshot_dict():
             "meta": {},
             "grants": {},
             "docs": {"show": True},
-            "contract": {"enforced": False},
+            "contract": {"enforced": False, "alias_types": True},
             "packages": [],
         },
         "docs": {"show": True},
-        "contract": {"enforced": False},
+        "contract": {"enforced": False, "alias_types": True},
         "columns": {},
         "meta": {},
         "checksum": {
@@ -1654,11 +1670,11 @@ def basic_check_snapshot_dict():
             "meta": {},
             "grants": {},
             "docs": {"show": True},
-            "contract": {"enforced": False},
+            "contract": {"enforced": False, "alias_types": True},
             "packages": [],
         },
         "docs": {"show": True},
-        "contract": {"enforced": False},
+        "contract": {"enforced": False, "alias_types": True},
         "columns": {},
         "meta": {},
         "checksum": {
@@ -2029,13 +2045,13 @@ def test_basic_source_definition(
     node_dict = basic_parsed_source_definition_dict
     minimum = minimum_parsed_source_definition_dict
 
-    assert_symmetric(node, node_dict, SourceDefinition)
+    assert_symmetric(node.to_resource(), node_dict, SourceDefinitionResource)
 
     assert node.is_ephemeral is False
     assert node.is_refable is False
     assert node.has_freshness is False
 
-    assert_from_dict(node, minimum, SourceDefinition)
+    assert_from_dict(node.to_resource(), minimum, SourceDefinitionResource)
     pickle.loads(pickle.dumps(node))
 
 
@@ -2056,21 +2072,13 @@ def test_complex_source_definition(
 ):
     node = complex_parsed_source_definition_object
     node_dict = complex_parsed_source_definition_dict
-    assert_symmetric(node, node_dict, SourceDefinition)
+    assert_symmetric(node.to_resource(), node_dict, SourceDefinitionResource)
 
     assert node.is_ephemeral is False
     assert node.is_refable is False
     assert node.has_freshness is True
 
     pickle.loads(pickle.dumps(node))
-
-
-def test_source_no_loaded_at(complex_parsed_source_definition_object):
-    node = complex_parsed_source_definition_object
-    assert node.has_freshness is True
-    # no loaded_at_field -> does not have freshness
-    node.loaded_at_field = None
-    assert node.has_freshness is False
 
 
 def test_source_no_freshness(complex_parsed_source_definition_object):
@@ -2081,27 +2089,30 @@ def test_source_no_freshness(complex_parsed_source_definition_object):
 
 
 unchanged_source_definitions = [
-    lambda u: (u, u.replace(tags=["mytag"])),
-    lambda u: (u, u.replace(meta={"a": 1000})),
+    lambda u: (u, replace(u, tags=["mytag"])),
+    lambda u: (u, replace(u, meta={"a": 1000})),
 ]
 
 changed_source_definitions = [
     lambda u: (
         u,
-        u.replace(
+        replace(
+            u,
             freshness=FreshnessThreshold(warn_after=Time(period=TimePeriod.hour, count=1)),
             loaded_at_field="loaded_at",
         ),
     ),
-    lambda u: (u, u.replace(loaded_at_field="loaded_at")),
+    lambda u: (u, replace(u, loaded_at_field="loaded_at")),
     lambda u: (
         u,
-        u.replace(freshness=FreshnessThreshold(error_after=Time(period=TimePeriod.hour, count=1))),
+        replace(
+            u, freshness=FreshnessThreshold(error_after=Time(period=TimePeriod.hour, count=1))
+        ),
     ),
-    lambda u: (u, u.replace(quoting=Quoting(identifier=True))),
-    lambda u: (u, u.replace(database="other_database")),
-    lambda u: (u, u.replace(schema="other_schema")),
-    lambda u: (u, u.replace(identifier="identifier")),
+    lambda u: (u, replace(u, quoting=Quoting(identifier=True))),
+    lambda u: (u, replace(u, database="other_database")),
+    lambda u: (u, replace(u, schema="other_schema")),
+    lambda u: (u, replace(u, identifier="identifier")),
 ]
 
 
@@ -2266,13 +2277,13 @@ unchanged_parsed_exposures = [
 
 
 changed_parsed_exposures = [
-    lambda u: (u, u.replace(fqn=u.fqn[:-1] + ["something", u.fqn[-1]])),
-    lambda u: (u, u.replace(type=ExposureType.ML)),
-    lambda u: (u, u.replace(owner=u.owner.replace(name="My Name"))),
-    lambda u: (u, u.replace(maturity=MaturityType.Medium)),
-    lambda u: (u, u.replace(url="https://example.com/dashboard/1")),
-    lambda u: (u, u.replace(description="My description")),
-    lambda u: (u, u.replace(depends_on=DependsOn(nodes=["model.test.blah"]))),
+    lambda u: (u, replace(u, fqn=u.fqn[:-1] + ["something", u.fqn[-1]])),
+    lambda u: (u, replace(u, type=ExposureType.ML)),
+    lambda u: (u, replace(u, owner=replace(u.owner, name="My Name"))),
+    lambda u: (u, replace(u, maturity=MaturityType.Medium)),
+    lambda u: (u, replace(u, url="https://example.com/dashboard/1")),
+    lambda u: (u, replace(u, description="My description")),
+    lambda u: (u, replace(u, depends_on=DependsOn(nodes=["model.test.blah"]))),
 ]
 
 
@@ -2354,3 +2365,18 @@ def basic_parsed_metric_object():
         meta={},
         tags=[],
     )
+
+
+@given(
+    builds(
+        SemanticModel,
+        depends_on=builds(DependsOn),
+        dimensions=lists(builds(Dimension)),
+        entities=lists(builds(Entity)),
+        measures=lists(builds(Measure)),
+        refs=lists(builds(RefArgs)),
+    )
+)
+def test_semantic_model_symmetry(semantic_model: SemanticModel):
+    assert semantic_model == SemanticModel.from_dict(semantic_model.to_dict())
+    assert semantic_model == pickle.loads(pickle.dumps(semantic_model))

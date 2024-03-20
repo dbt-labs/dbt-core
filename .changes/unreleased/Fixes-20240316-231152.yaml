@@ -1,0 +1,6 @@
+kind: Fixes
+body: Handle exceptions for failing on-run-* hooks in source freshness
+time: 2024-03-16T23:11:52.819014-07:00
+custom:
+  Author: aranke
+  Issue: "9511"

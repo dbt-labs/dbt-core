@@ -64,12 +64,12 @@ models:
   - name: descendant_model
     columns:
       - name: favorite_color
-        tests:
+        data_tests:
           - relationships:
              to: source('test_source', 'test_table')
              field: favorite_color
       - name: id
-        tests:
+        data_tests:
           - unique
           - not_null
 
@@ -97,21 +97,21 @@ sources:
             description: The favorite color
           - name: id
             description: The user ID
-            tests:
+            data_tests:
               - unique
               - not_null
             tags:
               - id_column
           - name: first_name
             description: The first name of the user
-            tests: []
+            data_tests: []
           - name: email
             description: The email address of the user
           - name: ip_address
             description: The last IP address the user logged in from
           - name: updated_at
             description: The last update time for this user
-        tests:
+        data_tests:
           - relationships:
               # do this as a table-level test, just to test out that aspect
               column_name: favorite_color
@@ -119,9 +119,10 @@ sources:
               field: favorite_color
       - name: other_test_table
         identifier: other_table
+        freshness: null
         columns:
           - name: id
-            tests:
+            data_tests:
               - not_null
               - unique
             tags:
@@ -174,7 +175,7 @@ sources:
     tables:
       - name: test_table
         identifier: source
-        tests:
+        data_tests:
           - relationships:
             # this is invalid (list of 3 1-key dicts instead of a single 3-key dict)
               - column_name: favorite_color
@@ -351,7 +352,7 @@ sources:
         identifier: source
         columns:
           - name: favorite_color
-            tests:
+            data_tests:
               - relationships:
                   to: ref('model')
                   # this will get rendered as its literal
@@ -454,4 +455,20 @@ collect_freshness_macro_override_previous_return_signature = """
   {% endcall %}
   {{ return(load_result('collect_freshness').table) }}
 {% endmacro %}
+"""
+
+
+freshness_via_metadata_schema_yml = """version: 2
+sources:
+  - name: test_source
+    loader: custom
+    freshness:
+      warn_after: {count: 10, period: hour}
+      error_after: {count: 1, period: day}
+    schema: my_schema
+    quoting:
+      identifier: True
+    tables:
+      - name: test_table
+        identifier: source
 """

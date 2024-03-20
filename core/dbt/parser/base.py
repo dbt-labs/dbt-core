@@ -3,7 +3,7 @@ import itertools
 import os
 from typing import List, Dict, Any, Generic, Optional, TypeVar
 
-from dbt.dataclass_schema import ValidationError
+from dbt_common.dataclass_schema import ValidationError
 
 from dbt import utils
 from dbt.clients.jinja import MacroGenerator
@@ -12,11 +12,12 @@ from dbt.context.providers import (
     generate_generate_name_macro_context,
 )
 from dbt.adapters.factory import get_adapter  # noqa: F401
+from dbt.artifacts.resources import Contract
 from dbt.clients.jinja import get_rendered
 from dbt.config import Project, RuntimeConfig
 from dbt.context.context_config import ContextConfig
 from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.graph.nodes import Contract, BaseNode, ManifestNode
+from dbt.contracts.graph.nodes import BaseNode, ManifestNode
 from dbt.contracts.graph.unparsed import Docs, UnparsedNode
 from dbt.exceptions import (
     DbtInternalError,
@@ -360,7 +361,9 @@ class ConfiguredParser(
 
         # If we have contract in the config, copy to node level
         if "contract" in config_dict and config_dict["contract"]:
-            parsed_node.contract = Contract(enforced=config_dict["contract"]["enforced"])
+            contract_dct = config_dict["contract"]
+            Contract.validate(contract_dct)
+            parsed_node.contract = Contract.from_dict(contract_dct)
 
         # unrendered_config is used to compare the original database/schema/alias
         # values and to handle 'same_config' and 'same_contents' calls

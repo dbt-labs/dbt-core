@@ -1,9 +1,10 @@
 import abc
 from typing import Optional, Set, List, Dict, ClassVar
 
-import dbt.exceptions
-
 import dbt.tracking
+
+from dbt.events import types as core_types
+from dbt_common.events.functions import warn_or_error, fire_event
 
 
 class DBTDeprecation:
@@ -23,7 +24,7 @@ class DBTDeprecation:
     @property
     def event(self) -> abc.ABCMeta:
         if self._event is not None:
-            module_path = dbt.events.types
+            module_path = core_types
             class_name = self._event
 
             try:
@@ -36,7 +37,7 @@ class DBTDeprecation:
     def show(self, *args, **kwargs) -> None:
         if self.name not in active_deprecations:
             event = self.event(**kwargs)
-            dbt.events.functions.warn_or_error(event)
+            warn_or_error(event)
             self.track_deprecation_warn()
             active_deprecations.add(self.name)
 
@@ -51,6 +52,8 @@ class PackageInstallPathDeprecation(DBTDeprecation):
     _event = "PackageInstallPathDeprecation"
 
 
+# deprecations with a pattern of `project-config-*` for the name are not hardcoded
+# they are called programatically via the pattern below
 class ConfigSourcePathDeprecation(DBTDeprecation):
     _name = "project-config-source-paths"
     _event = "ConfigSourcePathDeprecation"
@@ -59,6 +62,16 @@ class ConfigSourcePathDeprecation(DBTDeprecation):
 class ConfigDataPathDeprecation(DBTDeprecation):
     _name = "project-config-data-paths"
     _event = "ConfigDataPathDeprecation"
+
+
+class ConfigLogPathDeprecation(DBTDeprecation):
+    _name = "project-config-log-path"
+    _event = "ConfigLogPathDeprecation"
+
+
+class ConfigTargetPathDeprecation(DBTDeprecation):
+    _name = "project-config-target-path"
+    _event = "ConfigTargetPathDeprecation"
 
 
 def renamed_method(old_name: str, new_name: str):
@@ -81,19 +94,28 @@ class ExposureNameDeprecation(DBTDeprecation):
     _event = "ExposureNameDeprecation"
 
 
-class ConfigLogPathDeprecation(DBTDeprecation):
-    _name = "project-config-log-path"
-    _event = "ConfigLogPathDeprecation"
-
-
-class ConfigTargetPathDeprecation(DBTDeprecation):
-    _name = "project-config-target-path"
-    _event = "ConfigTargetPathDeprecation"
-
-
 class CollectFreshnessReturnSignature(DBTDeprecation):
     _name = "collect-freshness-return-signature"
     _event = "CollectFreshnessReturnSignature"
+
+
+class TestsConfigDeprecation(DBTDeprecation):
+    _name = "project-test-config"
+    _event = "TestsConfigDeprecation"
+
+
+class ProjectFlagsMovedDeprecation(DBTDeprecation):
+    _name = "project-flags-moved"
+    _event = "ProjectFlagsMovedDeprecation"
+
+    def show(self, *args, **kwargs) -> None:
+        if self.name not in active_deprecations:
+            event = self.event(**kwargs)
+            # We can't do warn_or_error because the ProjectFlags
+            # is where that is set up and we're just reading it.
+            fire_event(event)
+            self.track_deprecation_warn()
+            active_deprecations.add(self.name)
 
 
 def renamed_env_var(old_name: str, new_name: str):
@@ -129,11 +151,12 @@ deprecations_list: List[DBTDeprecation] = [
     PackageInstallPathDeprecation(),
     ConfigSourcePathDeprecation(),
     ConfigDataPathDeprecation(),
-    MetricAttributesRenamed(),
     ExposureNameDeprecation(),
     ConfigLogPathDeprecation(),
     ConfigTargetPathDeprecation(),
     CollectFreshnessReturnSignature(),
+    TestsConfigDeprecation(),
+    ProjectFlagsMovedDeprecation(),
 ]
 
 deprecations: Dict[str, DBTDeprecation] = {d.name: d for d in deprecations_list}

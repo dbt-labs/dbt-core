@@ -3,25 +3,28 @@ import copy
 
 from dbt.contracts.graph.nodes import (
     Metric,
+    SavedQuery,
+    SemanticModel,
+)
+from dbt.artifacts.resources import (
+    ConstantPropertyInput,
+    ConversionTypeParams,
+    Defaults,
+    Dimension,
+    DimensionTypeParams,
+    DimensionValidityParams,
+    Entity,
+    FileSlice,
+    Measure,
+    MeasureAggregationParameters,
     MetricInput,
     MetricInputMeasure,
     MetricTimeWindow,
     MetricTypeParams,
     NodeRelation,
-    SemanticModel,
-    WhereFilter,
-)
-from dbt.contracts.graph.semantic_models import (
-    Dimension,
-    DimensionTypeParams,
-    DimensionValidityParams,
-    Defaults,
-    Entity,
-    FileSlice,
-    Measure,
-    MeasureAggregationParameters,
     NonAdditiveDimension,
     SourceFileMetadata,
+    WhereFilter,
 )
 from dbt.node_types import NodeType
 from dbt_semantic_interfaces.protocols import (
@@ -30,6 +33,7 @@ from dbt_semantic_interfaces.protocols import (
     measure as MeasureProtocols,
     metadata as MetadataProtocols,
     metric as MetricProtocols,
+    saved_query as SavedQueryProtocols,
     semantic_model as SemanticModelProtocols,
     WhereFilter as WhereFilterProtocol,
 )
@@ -40,6 +44,8 @@ from dbt_semantic_interfaces.type_enums import (
     MetricType,
     TimeGranularity,
 )
+from hypothesis import given
+from hypothesis.strategies import builds, none, text
 from typing import Protocol, runtime_checkable
 
 
@@ -136,6 +142,11 @@ class RuntimeCheckableMetricTimeWindow(MetricProtocols.MetricTimeWindow, Protoco
     pass
 
 
+@runtime_checkable
+class RuntimeCheckableSavedQuery(SavedQueryProtocols.SavedQuery, Protocol):
+    pass
+
+
 @pytest.fixture(scope="session")
 def file_slice() -> FileSlice:
     return FileSlice(
@@ -225,6 +236,21 @@ def complex_metric_input_measure(where_filter) -> MetricInputMeasure:
 
 
 @pytest.fixture(scope="session")
+def conversion_type_params(
+    simple_metric_input_measure, metric_time_window
+) -> ConversionTypeParams:
+    return ConversionTypeParams(
+        base_measure=simple_metric_input_measure,
+        conversion_measure=simple_metric_input_measure,
+        entity="entity",
+        window=metric_time_window,
+        constant_properties=[
+            ConstantPropertyInput(base_property="base", conversion_property="conversion")
+        ],
+    )
+
+
+@pytest.fixture(scope="session")
 def complex_metric_type_params(
     metric_time_window, simple_metric_input, simple_metric_input_measure
 ) -> MetricTypeParams:
@@ -236,6 +262,7 @@ def complex_metric_type_params(
         window=metric_time_window,
         grain_to_date=TimeGranularity.DAY,
         metrics=[simple_metric_input],
+        conversion_type_params=conversion_type_params,
     )
 
 
@@ -460,3 +487,15 @@ def test_metric_type_params_satisfies_protocol(complex_metric_type_params):
 
 def test_non_additive_dimension_satisfies_protocol(non_additive_dimension):
     assert isinstance(non_additive_dimension, RuntimeCheckableNonAdditiveDimension)
+
+
+@given(
+    builds(
+        SavedQuery,
+        description=text() | none(),
+        label=text() | none(),
+        metadata=builds(SourceFileMetadata) | none(),
+    )
+)
+def test_saved_query_satisfies_protocol(saved_query: SavedQuery):
+    assert isinstance(saved_query, SavedQuery)
