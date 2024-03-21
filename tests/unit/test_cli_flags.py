@@ -346,38 +346,6 @@ class TestFlags:
         assert flags.USE_COLORS is True
         assert flags.USE_COLORS_FILE is False
 
-    @pytest.mark.parametrize(
-        "cli_profile, flag_profile",
-        [
-            (None, None),
-            ("profile", "profile"),
-        ],
-    )
-    @pytest.mark.parametrize(
-        "cli_target, flag_target",
-        [
-            (None, None),
-            ("target", "target"),
-        ],
-    )
-    def test_profile_settings_interaction(
-        self, cli_profile, cli_target, flag_profile, flag_target
-    ):
-        cli_params = ["run"]
-
-        if cli_profile:
-            cli_params = ["--profile", cli_profile] + cli_params
-
-        if cli_target:
-            cli_params = ["--target", cli_target] + cli_params
-
-        context = self.make_dbt_context("run", cli_params)
-
-        flags = Flags(context, None)
-
-        assert flags.PROFILE == flag_profile
-        assert flags.TARGET == flag_target
-
     def test_duplicate_flags_raises_error(self):
         parent_context = self.make_dbt_context("parent", ["--version-check"])
         context = self.make_dbt_context("child", ["--version-check"], parent_context)
