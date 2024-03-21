@@ -1,6 +1,12 @@
 import json
 
-from dbt.contracts.graph.nodes import Exposure, SourceDefinition, Metric, SemanticModel
+from dbt.contracts.graph.nodes import (
+    Exposure,
+    SourceDefinition,
+    Metric,
+    SavedQuery,
+    SemanticModel,
+)
 from dbt.flags import get_flags
 from dbt.graph import ResourceTypeSelector
 from dbt.task.runnable import GraphRunnableTask
@@ -28,6 +34,7 @@ class ListTask(GraphRunnableTask):
             NodeType.Source,
             NodeType.Exposure,
             NodeType.Metric,
+            NodeType.SavedQuery,
             NodeType.SemanticModel,
         )
     )
@@ -77,10 +84,12 @@ class ListTask(GraphRunnableTask):
                 yield self.manifest.metrics[node]
             elif node in self.manifest.semantic_models:
                 yield self.manifest.semantic_models[node]
+            elif node in self.manifest.saved_queries:
+                yield self.manifest.saved_queries[node]
             else:
                 raise DbtRuntimeError(
                     f'Got an unexpected result from node selection: "{node}"'
-                    f"Expected a source or a node!"
+                    f"Listing this node type is not yet supported!"
                 )
 
     def generate_selectors(self):
@@ -100,6 +109,10 @@ class ListTask(GraphRunnableTask):
                 # metrics are searched for by pkg.metric_name
                 metric_selector = ".".join([node.package_name, node.name])
                 yield f"metric:{metric_selector}"
+            elif node.resource_type == NodeType.SavedQuery:
+                assert isinstance(node, SavedQuery)
+                saved_query_selector = ".".join([node.package_name, node.name])
+                yield f"saved_query:{saved_query_selector}"
             elif node.resource_type == NodeType.SemanticModel:
                 assert isinstance(node, SemanticModel)
                 semantic_model_selector = ".".join([node.package_name, node.name])

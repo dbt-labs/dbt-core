@@ -14,6 +14,7 @@ from tests.functional.list.fixtures import (  # noqa: F401
     analyses,
     semantic_models,
     metrics,
+    saved_queries,
     project_files,
 )
 
@@ -596,6 +597,7 @@ class TestList:
             "test.t",
             "semantic_model:test.my_sm",
             "metric:test.total_outer",
+            "saved_query:test.my_saved_query",
         }
         # analyses have their type inserted into their fqn like tests
         expected_all = expected_default | {"test.analysis.a"}
@@ -625,6 +627,9 @@ class TestList:
 
         results = self.run_dbt_ls(["--resource-type", "metric"])
         assert set(results) == {"metric:test.total_outer"}
+
+        results = self.run_dbt_ls(["--resource-type", "saved_query"])
+        assert set(results) == {"saved_query:test.my_saved_query"}
 
         results = self.run_dbt_ls(["--resource-type", "model", "--select", "outer+"])
         assert set(results) == {"test.outer", "test.sub.inner"}

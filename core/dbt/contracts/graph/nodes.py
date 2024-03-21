@@ -1551,6 +1551,12 @@ class Metric(GraphNode):
             and True
         )
 
+    def add_input_measure(self, input_measure: MetricInputMeasure) -> None:
+        for existing_input_measure in self.type_params.input_measures:
+            if input_measure == existing_input_measure:
+                return
+        self.type_params.input_measures.append(input_measure)
+
 
 # ====================================
 # Group node
