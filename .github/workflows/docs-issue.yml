@@ -32,7 +32,7 @@ jobs:
     if: |
       (github.event.issue.state == 'closed' &&
        github.event.issue.state_reason == 'completed' &&
-       contains( github.event.pull_request.labels.*.name, 'user docs'))
+       contains( github.event.issue.labels.*.name, 'user docs'))
     uses: dbt-labs/actions/.github/workflows/open-issue-in-repo.yml@main
     with:
         issue_repository: "dbt-labs/docs.getdbt.com"
