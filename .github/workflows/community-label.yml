@@ -11,7 +11,8 @@
 name: Label community PRs
 
 on:
-  pull_request:
+  # have to use pull_request_target since community PRs come from forks
+  pull_request_target:
     types: [opened, ready_for_review]
 
 defaults:
