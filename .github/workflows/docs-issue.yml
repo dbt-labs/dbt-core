@@ -24,8 +24,8 @@ permissions:
 
 jobs:
   open_issues:
-    # we only want to run this when the is closed as completed and the label `user docs` has been assigned.
-    # If this logic does nto exist in this workflow, it runs the
+    # we only want to run this when the issue is closed as completed and the label `user docs` has been assigned.
+    # If this logic does not exist in this workflow, it runs the
     # risk of duplicaton of issues being created due to merge and label both triggering this workflow to run and neither having
     # generating the comment before the other runs.  This lives here instead of the shared workflow because this is where we
     # decide if it should run or not.
