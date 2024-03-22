@@ -32,6 +32,6 @@ jobs:
        github.event.action == 'ready_for_review' )
     uses: dbt-labs/actions/.github/workflows/label-community.yml@main
     with:
-        github_team: "core"
+        github_team: 'core'
         label: 'community'
     secrets: inherit
