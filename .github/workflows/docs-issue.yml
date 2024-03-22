@@ -1,5 +1,5 @@
 # **what?**
-# Open an issue in docs.getdbt.com when a PR is labeled `user docs`
+# Open an issue in docs.getdbt.com when an issue is labeled `user docs` and closed as completed
 
 # **why?**
 # To reduce barriers for keeping docs up to date
@@ -8,8 +8,8 @@
 # When an issue is labeled `user docs` and is closed as completed.  Can be labeled before or after the issue is closed.
 
 
-name: Open issues in docs.getdbt.com repo when a PR is labeled
-run-name: "Open an issue in docs.getdbt.com for PR #${{ github.event.pull_request.number }}"
+name: Open issues in docs.getdbt.com repo when an issue is labeled
+run-name: "Open an issue in docs.getdbt.com for issue #${{ github.event.issue.number }}"
 
 on:
   issues:
@@ -36,6 +36,6 @@ jobs:
     uses: dbt-labs/actions/.github/workflows/open-issue-in-repo.yml@main
     with:
         issue_repository: "dbt-labs/docs.getdbt.com"
-        issue_title: "Docs Changes Needed from ${{ github.event.repository.name }} PR #${{ github.event.pull_request.number }}"
+        issue_title: "Docs Changes Needed from ${{ github.event.repository.name }} Issue #${{ github.event.issue.number }}"
         issue_body: "At a minimum, update body to include a link to the page on docs.getdbt.com requiring updates and what part(s) of the page you would like to see updated."
     secrets: inherit
