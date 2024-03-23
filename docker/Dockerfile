@@ -9,9 +9,7 @@ ARG build_for=linux/amd64
 ##
 # base image (abstract)
 ##
-# Please do not upgrade beyond python3.10.7 currently as dbt-spark does not support
-# 3.11py and images do not get made properly
-FROM --platform=$build_for python:3.10.7-slim-bullseye as base
+FROM --platform=$build_for python:3.11.2-slim-bullseye as base
 
 # N.B. The refs updated automagically every release via bumpversion
 ARG dbt_core_ref=dbt-core@v1.8.0b1
