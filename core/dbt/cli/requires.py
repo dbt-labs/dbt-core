@@ -1,7 +1,10 @@
 import os
 
 import dbt.tracking
-from dbt_common.context import set_invocation_context
+
+from dbt_common.context import set_invocation_context, get_invocation_context
+from dbt_common.record import Recorder, RecorderMode, get_record_mode_from_env
+from dbt_common.clients.system import get_env
 from dbt_common.invocation import reset_invocation_id
 
 from dbt.version import installed as installed_version
@@ -44,6 +47,7 @@ from functools import update_wrapper
 import importlib.util
 import time
 import traceback
+from typing import Optional
 
 
 def preflight(func):
@@ -52,7 +56,18 @@ def preflight(func):
         assert isinstance(ctx, Context)
         ctx.obj = ctx.obj or {}
 
-        set_invocation_context(os.environ)
+        rec_mode = get_record_mode_from_env()
+
+        recorder: Optional[Recorder] = None
+        if rec_mode == RecorderMode.REPLAY:
+            recording_path = os.environ["DBT_REPLAY"]
+            recorder = Recorder(RecorderMode.REPLAY, recording_path)
+        elif rec_mode == RecorderMode.RECORD:
+            recorder = Recorder(RecorderMode.RECORD)
+
+        set_invocation_context({})
+        get_invocation_context().recorder = recorder
+        get_invocation_context()._env = get_env()
 
         # Flags
         flags = Flags(ctx)
@@ -145,6 +160,13 @@ def postflight(func):
                     elapsed=time.perf_counter() - start_func,
                 )
             )
+
+            recorder = get_invocation_context().recorder
+            if recorder is not None:
+                if recorder.mode == RecorderMode.RECORD:
+                    recorder.write("recording.json")
+                elif recorder.mode == RecorderMode.REPLAY:
+                    recorder.write_diffs("replay_diffs.json")
 
         if not success:
             raise ResultExit(result)
