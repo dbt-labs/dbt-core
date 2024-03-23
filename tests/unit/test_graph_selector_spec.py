@@ -23,6 +23,7 @@ def test_raw_parse_simple():
     assert not result.parents
     assert result.parents_depth is None
     assert result.children_depth is None
+    assert result.childrens_parents_depth is None
 
 
 def test_raw_parse_simple_infer_path():
@@ -37,6 +38,7 @@ def test_raw_parse_simple_infer_path():
     assert not result.parents
     assert result.parents_depth is None
     assert result.children_depth is None
+    assert result.childrens_parents_depth is None
 
 
 def test_raw_parse_simple_infer_path_modified():
@@ -51,6 +53,22 @@ def test_raw_parse_simple_infer_path_modified():
     assert not result.parents
     assert result.parents_depth is None
     assert result.children_depth is None
+    assert result.childrens_parents_depth is None
+
+
+def test_raw_parse_simple_infer_fqn_childrens_parents():
+    raw = "1@asdf"
+    result = SelectionCriteria.from_single_spec(raw)
+    assert result.raw == raw
+    assert result.method == MethodName.FQN
+    assert result.method_arguments == []
+    assert result.value == "asdf"
+    assert result.childrens_parents
+    assert not result.children
+    assert not result.parents
+    assert result.parents_depth is None
+    assert result.children_depth is None
+    assert result.childrens_parents_depth == 1
 
 
 def test_raw_parse_simple_infer_fqn_parents():
@@ -65,6 +83,7 @@ def test_raw_parse_simple_infer_fqn_parents():
     assert result.parents
     assert result.parents_depth is None
     assert result.children_depth is None
+    assert result.childrens_parents_depth is None
 
 
 def test_raw_parse_simple_infer_fqn_children():
@@ -79,6 +98,7 @@ def test_raw_parse_simple_infer_fqn_children():
     assert not result.parents
     assert result.parents_depth is None
     assert result.children_depth is None
+    assert result.childrens_parents_depth is None
 
 
 def test_raw_parse_complex():
@@ -93,6 +113,7 @@ def test_raw_parse_complex():
     assert result.parents
     assert result.parents_depth == 2
     assert result.children_depth == 4
+    assert result.childrens_parents_depth is None
 
 
 def test_raw_parse_weird():
@@ -108,6 +129,7 @@ def test_raw_parse_weird():
     assert not result.parents
     assert result.parents_depth is None
     assert result.children_depth is None
+    assert result.childrens_parents_depth is None
 
 
 def test_raw_parse_invalid():
