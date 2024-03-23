@@ -29,6 +29,13 @@ class TestFlags:
     def project_flags(self) -> ProjectFlags:
         return ProjectFlags()
 
+    def test_cli_args_unmodified(self):
+        args = ["--target", "my_target"]
+        args_before = args.copy()
+        self.make_dbt_context("context", args)
+
+        assert args == args_before
+
     def test_which(self, run_context):
         flags = Flags(run_context)
         assert flags.WHICH == "run"
