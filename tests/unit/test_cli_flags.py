@@ -18,7 +18,7 @@ class TestFlags:
     def make_dbt_context(
         self, context_name: str, args: List[str], parent: Optional[click.Context] = None
     ) -> click.Context:
-        ctx = cli.make_context(context_name, args, parent)
+        ctx = cli.make_context(context_name, args.copy(), parent)
         return ctx
 
     @pytest.fixture(scope="class")
