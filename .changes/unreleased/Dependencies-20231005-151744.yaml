@@ -1,0 +1,6 @@
+kind: "Dependencies"
+body: "Bump docker/setup-buildx-action from 2 to 3"
+time: 2023-10-05T15:17:44.00000Z
+custom:
+  Author: dependabot[bot]
+  PR: 8780
