@@ -64,7 +64,7 @@ def args_to_context(args: List[str]) -> Context:
     """Convert a list of args to a click context with proper hierarchy for dbt commands"""
     from dbt.cli.main import cli
 
-    cli_ctx = cli.make_context(cli.name, args.copy())
+    cli_ctx = cli.make_context(cli.name, args)
     # Split args if they're a comma separated string.
     if len(args) == 1 and "," in args[0]:
         args = args[0].split(",")
@@ -74,7 +74,7 @@ def args_to_context(args: List[str]) -> Context:
         sub_command_name, sub_command, args = sub_command.resolve_command(cli_ctx, args)
 
     assert isinstance(sub_command, ClickCommand)
-    sub_command_ctx = sub_command.make_context(sub_command_name, args.copy())
+    sub_command_ctx = sub_command.make_context(sub_command_name, args)
     sub_command_ctx.parent = cli_ctx
     return sub_command_ctx
 
@@ -218,7 +218,7 @@ class Flags:
             invoked_subcommand = getattr(import_module("dbt.cli.main"), invoked_subcommand_name)
             invoked_subcommand.allow_extra_args = True
             invoked_subcommand.ignore_unknown_options = True
-            invoked_subcommand_ctx = invoked_subcommand.make_context(None, sys.argv.copy())
+            invoked_subcommand_ctx = invoked_subcommand.make_context(None, sys.argv)
             _assign_params(
                 invoked_subcommand_ctx,
                 params_assigned_from_default,

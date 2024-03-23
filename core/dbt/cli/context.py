@@ -6,7 +6,7 @@ from dbt.cli.main import cli as dbt
 
 def make_context(args, command=dbt) -> Optional[click.Context]:
     try:
-        ctx = command.make_context(command.name, args.copy())
+        ctx = command.make_context(command.name, args)
     except click.exceptions.Exit:
         return None
 
