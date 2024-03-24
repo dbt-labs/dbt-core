@@ -277,7 +277,8 @@ class GroupSelectorMethod(SelectorMethod):
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
         """yields nodes from included in the specified group"""
         for node, real_node in self.groupable_nodes(included_nodes):
-            if fnmatch(selector, real_node.config.get("group")):
+            node_group = real_node.config.get("group")
+            if node_group and fnmatch(selector, node_group):
                 yield node
 
 
