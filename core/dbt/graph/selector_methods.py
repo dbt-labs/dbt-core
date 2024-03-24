@@ -278,7 +278,7 @@ class GroupSelectorMethod(SelectorMethod):
         """yields nodes from included in the specified group"""
         for node, real_node in self.groupable_nodes(included_nodes):
             node_group = real_node.config.get("group")
-            if node_group and fnmatch(selector, node_group):
+            if node_group and fnmatch(node_group, selector):
                 yield node
 
 
