@@ -21,6 +21,7 @@ defaults:
 
 permissions:
     pull-requests: write # labels PRs
+    contents: read # reads team membership
 
 jobs:
   open_issues:
