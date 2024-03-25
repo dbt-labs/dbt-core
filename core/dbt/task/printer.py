@@ -79,10 +79,11 @@ def print_run_result_error(result, newline: bool = True, is_warning: bool = Fals
         with TextOnly():
             fire_event(Formatting(""))
 
+    # set node_info for logging events
+    node_info = None
+    if hasattr(result, "node_info"):
+        node_info = result.node_info
     if result.status == NodeStatus.Fail or (is_warning and result.status == NodeStatus.Warn):
-        node_info = None
-        if hasattr(result, "node_info"):
-            node_info = result.node_info
         if is_warning:
             fire_event(
                 RunResultWarning(
@@ -118,7 +119,9 @@ def print_run_result_error(result, newline: bool = True, is_warning: bool = Fals
         if result.node.should_store_failures:
             with TextOnly():
                 fire_event(Formatting(""))
-            fire_event(CheckNodeTestFailure(relation_name=result.node.relation_name, node_info=node_info))
+            fire_event(
+                CheckNodeTestFailure(relation_name=result.node.relation_name, node_info=node_info)
+            )
 
     elif result.message is not None:
         fire_event(RunResultError(msg=result.message, node_info=node_info))
