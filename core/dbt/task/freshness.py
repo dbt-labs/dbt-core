@@ -120,9 +120,9 @@ class FreshnessRunner(BaseRunner):
                 if compiled_node.freshness.filter is not None:
                     fire_event(
                         Note(
-                            f"A filter cannot be applied to a metadata freshness check on source '{compiled_node.name}'.",
-                            EventLevel.WARN,
-                        )
+                            msg=f"A filter cannot be applied to a metadata freshness check on source '{compiled_node.name}'."
+                        ),
+                        EventLevel.WARN,
                     )
 
                 adapter_response, freshness = self.adapter.calculate_freshness_from_metadata(
@@ -133,9 +133,7 @@ class FreshnessRunner(BaseRunner):
                 status = compiled_node.freshness.status(freshness["age"])
             else:
                 status = FreshnessStatus.Warn
-                fire_event(
-                    Note(f"Skipping freshness for source {compiled_node.name}."),
-                )
+                fire_event(Note(msg=f"Skipping freshness for source {compiled_node.name}."))
 
         # adapter_response was not returned in previous versions, so this will be None
         # we cannot call to_dict() on NoneType
