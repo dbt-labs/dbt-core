@@ -265,6 +265,11 @@ class GraphRunnableTask(ConfiguredTask):
             if not runner.node.resource_type == NodeType.Unit:
                 runner.node.clear_event_status()
 
+        # In order to pass node_info into various logging events, set node_info
+        # as an attribute on the result, since it will be cleared out of the node.
+        # We don't want node_info to be serialized in the result.
+        setattr(result, "node_info", runner.node.node_info)
+
         fail_fast = get_flags().FAIL_FAST
 
         if result.status in (NodeStatus.Error, NodeStatus.Fail) and fail_fast:

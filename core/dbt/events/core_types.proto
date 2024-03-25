@@ -1772,6 +1772,7 @@ message RunResultWarning {
     string resource_type = 1;
     string node_name = 2;
     string path = 3;
+    NodeInfo node_info = 4;
 }
 
 message RunResultWarningMsg {
@@ -1784,6 +1785,7 @@ message RunResultFailure {
     string resource_type = 1;
     string node_name = 2;
     string path = 3;
+    NodeInfo node_info = 4;
 }
 
 message RunResultFailureMsg {
@@ -1804,6 +1806,7 @@ message StatsLineMsg {
 // Z024
 message RunResultError {
     string msg = 1;
+    NodeInfo node_info = 2;
 }
 
 message RunResultErrorMsg {
@@ -1814,6 +1817,7 @@ message RunResultErrorMsg {
 // Z025
 message RunResultErrorNoMessage {
     string status = 1;
+    NodeInfo node_info = 2;
 }
 
 message RunResultErrorNoMessageMsg {
@@ -1824,6 +1828,7 @@ message RunResultErrorNoMessageMsg {
 // Z026
 message SQLCompiledPath {
     string path = 1;
+    NodeInfo node_info = 2;
 }
 
 message SQLCompiledPathMsg {
@@ -1834,6 +1839,7 @@ message SQLCompiledPathMsg {
 // Z027
 message CheckNodeTestFailure {
     string relation_name = 1;
+    NodeInfo node_info = 2;
 }
 
 message CheckNodeTestFailureMsg {
@@ -1958,6 +1964,7 @@ message TrackingInitializeFailureMsg {
 // Z046
 message RunResultWarningMessage {
     string msg = 1;
+    NodeInfo node_info = 2;
 }
 
 message RunResultWarningMessageMsg {
