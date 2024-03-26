@@ -395,7 +395,7 @@ class TestsConfigDeprecation(WarnLevel):
     def message(self) -> str:
         description = (
             f"The `{self.deprecated_path}` config has been renamed to `{self.exp_path}`. "
-            "Please update your `dbt_project.yml` configuration to reflect this change."
+            "Please see https://docs.getdbt.com/docs/build/data-tests#new-data_tests-syntax for more information."
         )
         return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
 
