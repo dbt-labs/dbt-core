@@ -1,0 +1,6 @@
+kind: Features
+body: Populate failures in run_results.json even tests passed
+time: 2024-03-23T17:21:05.10213675+07:00
+custom:
+  Author: tbog357
+  Issue: "9808"
