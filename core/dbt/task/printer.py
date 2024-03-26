@@ -5,6 +5,7 @@ from dbt.logger import (
 )
 from dbt_common.events.functions import fire_event
 from dbt_common.events.types import Formatting
+from dbt.events.base_types import EventLevel
 from dbt.events.types import (
     RunResultWarning,
     RunResultWarningMessage,
@@ -75,11 +76,10 @@ def print_run_status_line(results) -> None:
 
 
 def print_run_result_error(result, newline: bool = True, is_warning: bool = False) -> None:
-    if newline:
-        with TextOnly():
-            fire_event(Formatting(""))
-
     if result.status == NodeStatus.Fail or (is_warning and result.status == NodeStatus.Warn):
+        if newline:
+            with TextOnly():
+                fire_event(Formatting(""))
         if is_warning:
             fire_event(
                 RunResultWarning(
@@ -115,7 +115,16 @@ def print_run_result_error(result, newline: bool = True, is_warning: bool = Fals
                 fire_event(Formatting(""))
             fire_event(CheckNodeTestFailure(relation_name=result.node.relation_name))
 
+    elif result.status == NodeStatus.Skipped and result.message is not None:
+        if newline:
+            with TextOnly():
+                fire_event(Formatting(""), level=EventLevel.DEBUG)
+        fire_event(RunResultError(msg=result.message), level=EventLevel.DEBUG)
+
     elif result.message is not None:
+        if newline:
+            with TextOnly():
+                fire_event(Formatting(""))
         fire_event(RunResultError(msg=result.message))
 
 
