@@ -132,8 +132,9 @@ class FreshnessRunner(BaseRunner):
 
                 status = compiled_node.freshness.status(freshness["age"])
             else:
-                status = FreshnessStatus.Warn
-                fire_event(Note(msg=f"Skipping freshness for source {compiled_node.name}."))
+                raise DbtRuntimeError(
+                    f"Could not compute freshness for source {compiled_node.name}: no 'loaded_at_field' provided and {self.adapter.type()} adapter does not support metadata-based freshness checks."
+                )
 
         # adapter_response was not returned in previous versions, so this will be None
         # we cannot call to_dict() on NoneType
