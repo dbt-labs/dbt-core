@@ -7,7 +7,7 @@ from dbt.utils import _coerce_decimal, strtobool
 from dbt_common.events.format import pluralize
 from dbt_common.dataclass_schema import dbtClassMixin
 import threading
-from typing import Dict, Any, Optional, Union, List, TYPE_CHECKING
+from typing import Dict, Any, Optional, Union, List, TYPE_CHECKING, Tuple
 
 from .compile import CompileRunner
 from .run import RunTask
@@ -186,7 +186,7 @@ class TestRunner(CompileRunner):
 
     def execute_unit_test(
         self, unit_test_def: UnitTestDefinition, manifest: Manifest
-    ) -> tuple[UnitTestNode, UnitTestResultData]:
+    ) -> Tuple[UnitTestNode, UnitTestResultData]:
 
         unit_test_manifest = self.build_unit_test_manifest_from_test(unit_test_def, manifest)
 
