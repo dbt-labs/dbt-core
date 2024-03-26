@@ -54,7 +54,7 @@ class dbtRunner:
 
     def invoke(self, args: List[str], **kwargs) -> dbtRunnerResult:
         try:
-            dbt_ctx = cli.make_context(cli.name, args)
+            dbt_ctx = cli.make_context(cli.name, args.copy())
             dbt_ctx.obj = {
                 "manifest": self.manifest,
                 "callbacks": self.callbacks,

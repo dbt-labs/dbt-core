@@ -94,6 +94,12 @@ class TestDbtRunner:
         assert result.success
         assert len(FACTORY.adapters) == 1
 
+    def test_pass_in_args_variable(self, dbt):
+        args = ["--log-format", "text"]
+        args_before = args.copy()
+        dbt.invoke(args)
+        assert args == args_before
+
 
 class TestDbtRunnerQueryComments:
     @pytest.fixture(scope="class")
