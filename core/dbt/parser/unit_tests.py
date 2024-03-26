@@ -123,7 +123,8 @@ class UnitTestManifestLoader:
 
             common_fields = {
                 "resource_type": NodeType.Model,
-                "original_file_path": original_input_node.original_file_path,
+                # root directory for input and output fixtures
+                "original_file_path": unit_test_node.original_file_path,
                 "config": ModelConfig(materialized="ephemeral"),
                 "database": original_input_node.database,
                 "alias": original_input_node.identifier,
@@ -144,7 +145,7 @@ class UnitTestManifestLoader:
                     package_name=original_input_node.package_name,
                     unique_id=f"model.{original_input_node.package_name}.{input_name}",
                     name=input_name,
-                    path=original_input_node.path or f"{input_name}.sql",
+                    path=f"{input_name}.sql",
                 )
                 if (
                     original_input_node.resource_type == NodeType.Model
@@ -162,7 +163,7 @@ class UnitTestManifestLoader:
                     package_name=original_input_node.package_name,
                     unique_id=f"model.{original_input_node.package_name}.{input_name}",
                     name=original_input_node.name,  # must be the same name for source lookup to work
-                    path=input_name + ".sql",  # for writing out compiled_code
+                    path=f"{input_name}.sql",  # for writing out compiled_code
                     source_name=original_input_node.source_name,  # needed for source lookup
                 )
                 # Sources need to go in the sources dictionary in order to create the right lookup

@@ -955,16 +955,6 @@ class UnitTestDefinition(NodeInfoMixin, GraphNode, UnitTestDefinitionResource):
         return UnitTestDefinitionResource
 
     @property
-    def build_path(self):
-        # TODO: is this actually necessary?
-        return self.original_file_path
-
-    @property
-    def compiled_path(self):
-        # TODO: is this actually necessary?
-        return self.original_file_path
-
-    @property
     def depends_on_nodes(self):
         return self.depends_on.nodes
 
