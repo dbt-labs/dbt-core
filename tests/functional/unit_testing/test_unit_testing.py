@@ -447,10 +447,7 @@ class TestUnitTestExternalProjectNode:
         assert len(results) == 1
 
 
-subfolder_model_a_sql = """
-select
-  1 as id, 'blue' as color
-"""
+subfolder_model_a_sql = """select 1 as id, 'blue' as color"""
 
 subfolder_model_b_sql = """
 select
