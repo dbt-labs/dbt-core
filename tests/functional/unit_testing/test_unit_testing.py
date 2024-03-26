@@ -33,6 +33,7 @@ from fixtures import (  # noqa: F401
     test_my_model_incremental_yml_wrong_override,
     test_my_model_incremental_yml_no_this_input,
 )
+from tests.unit.utils import normalize
 
 
 class TestUnitTests:
@@ -492,9 +493,13 @@ class TestUnitTestSubfolderPath:
 
         # Test that correct path is written in logs
         assert (
-            "target/compiled/test/models/subfolder/my_model.yml/models/subfolder/my_unit_test.sql"
+            normalize(
+                "target/compiled/test/models/subfolder/my_model.yml/models/subfolder/my_unit_test.sql"
+            )
             in output
         )
         assert file_exists(
-            "target/compiled/test/models/subfolder/my_model.yml/models/subfolder/my_unit_test.sql"
+            normalize(
+                "target/compiled/test/models/subfolder/my_model.yml/models/subfolder/my_unit_test.sql"
+            )
         )
