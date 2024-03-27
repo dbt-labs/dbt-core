@@ -81,7 +81,7 @@ def print_run_result_error(result, newline: bool = True, is_warning: bool = Fals
 
     # set node_info for logging events
     node_info = None
-    if result.node:
+    if hasattr(result, "node") and result.node:
         node_info = result.node.node_info
     if result.status == NodeStatus.Fail or (is_warning and result.status == NodeStatus.Warn):
         if is_warning:
