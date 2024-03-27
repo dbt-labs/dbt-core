@@ -64,7 +64,7 @@ setup(
         "typing-extensions>=3.7.4",
         "werkzeug>=1,<3",
         "pathspec>=0.9,<0.12",
-        "protobuf>=4.0.0",
+        "protobuf>=4.0.0,<5",
         "pytz>=2015.7",
         # the following are all to match snowflake-connector-python
         "requests<3.0.0",
