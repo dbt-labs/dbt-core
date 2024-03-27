@@ -752,6 +752,7 @@ class SavedQueryParser(YamlReader):
             label=unparsed.label,
             fqn=fqn,
             name=unparsed.name,
+            node_relation=None,  # Resolved from the value of "model" after parsing
             original_file_path=self.yaml.path.original_file_path,
             package_name=package_name,
             path=path,

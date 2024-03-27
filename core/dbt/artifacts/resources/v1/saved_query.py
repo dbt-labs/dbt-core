@@ -2,6 +2,7 @@ from __future__ import annotations
 import time
 
 from dataclasses import dataclass, field
+
 from dbt.artifacts.resources.base import GraphResource
 from dbt.artifacts.resources.v1.components import DependsOn, RefArgs
 from dbt.artifacts.resources.v1.semantic_layer_components import (
@@ -70,9 +71,18 @@ class SavedQueryConfig(BaseConfig):
 
 
 @dataclass
+class NodeRelation(dbtClassMixin):
+    alias: str
+    schema_name: str  # TODO: Could this be called simply "schema" so we could reuse StateRelation?
+    database: Optional[str] = None
+    relation_name: Optional[str] = None
+
+
+@dataclass
 class SavedQueryMandatory(GraphResource):
     query_params: QueryParams
     exports: List[Export]
+    node_relation: Optional[NodeRelation]
 
 
 @dataclass

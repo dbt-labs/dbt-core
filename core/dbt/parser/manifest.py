@@ -482,7 +482,6 @@ class ManifestLoader:
             self.process_unit_tests(self.root_project.project_name)
             self.process_docs(self.root_project)
             self.process_metrics(self.root_project)
-            self.process_saved_queries(self.root_project)
             self.check_valid_group_config()
             self.check_valid_access_property()
 
@@ -1104,6 +1103,11 @@ class ManifestLoader:
                 continue
             _process_refs(self.manifest, current_project, semantic_model, dependencies)
             self.update_semantic_model(semantic_model)
+        for saved_query in self.manifest.saved_queries.values():
+            if saved_query.created_at < self.started_at:
+                continue
+            _process_refs(self.manifest, current_project, saved_query, dependencies)
+            self.update_saved_query(saved_query, current_project)
 
     # Takes references in 'metrics' array of nodes and exposures, finds the target
     # node, and updates 'depends_on.nodes' with the unique id
@@ -1123,14 +1127,20 @@ class ManifestLoader:
                 continue
             _process_metrics_for_node(self.manifest, current_project, exposure)
 
-    def process_saved_queries(self, config: RuntimeConfig):
+    def update_saved_query(self, saved_query: SavedQuery, current_project: str) -> None:
         """Processes SavedQuery nodes to populate their `depends_on`."""
-        current_project = config.project_name
-        for saved_query in self.manifest.saved_queries.values():
-            # TODO:
-            # 1. process `where` of SavedQuery for `depends_on`s
-            # 2. process `group_by` of SavedQuery for `depends_on``
-            _process_metrics_for_node(self.manifest, current_project, saved_query)
+        # TODO:
+        # 1. process `where` of SavedQuery for `depends_on`s
+        # 2. process `group_by` of SavedQuery for `depends_on``
+        _process_metrics_for_node(self.manifest, current_project, saved_query)
+        if saved_query.depends_on_nodes[0]:
+            refd_node = self.manifest.nodes[saved_query.depends_on_nodes[0]]
+            saved_query.node_relation = dbt.artifacts.resources.v1.saved_query.NodeRelation(
+                relation_name=refd_node.relation_name,
+                alias=refd_node.alias,
+                schema_name=refd_node.schema,
+                database=refd_node.database,
+            )
 
     def update_semantic_model(self, semantic_model) -> None:
         # This has to be done at the end of parsing because the referenced model
