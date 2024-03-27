@@ -1,8 +1,9 @@
 import pytest
 
-from dbt.artifacts.resources import Quoting, SourceConfig
-from dbt.artifacts.resources.types import NodeType
+from dbt.contracts.graph.model_config import SourceConfig
 from dbt.contracts.graph.nodes import SourceDefinition
+from dbt.contracts.graph.unparsed import Quoting
+from dbt.node_types import NodeType
 
 
 @pytest.fixture

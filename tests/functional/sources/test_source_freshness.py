@@ -4,9 +4,8 @@ import pytest
 from datetime import datetime, timedelta
 
 import dbt.version
-from dbt.artifacts.schemas.freshness import FreshnessResult
-from dbt.artifacts.schemas.results import FreshnessStatus
 from dbt.cli.main import dbtRunner
+from dbt.contracts.results import FreshnessResult, FreshnessStatus
 from tests.functional.sources.common_source_setup import BaseSourcesTest
 from tests.functional.sources.fixtures import (
     error_models_schema_yml,
