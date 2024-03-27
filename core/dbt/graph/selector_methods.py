@@ -456,6 +456,10 @@ class FileSelectorMethod(SelectorMethod):
 class PackageSelectorMethod(SelectorMethod):
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
         """Yields nodes from included that have the specified package"""
+        # `.` is an alias for the current dbt project name
+        if selector == "." and self.manifest.metadata.project_name is not None:
+            selector = self.manifest.metadata.project_name
+
         for node, real_node in self.all_nodes(included_nodes):
             if fnmatch(real_node.package_name, selector):
                 yield node
