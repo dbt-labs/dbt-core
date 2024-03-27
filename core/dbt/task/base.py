@@ -209,6 +209,9 @@ class BaseRunner(metaclass=ABCMeta):
     def compile(self, manifest: Manifest) -> Any:
         pass
 
+    def _node_build_path(self) -> Optional[str]:
+        return self.node.build_path if hasattr(self.node, "build_path") else None
+
     def get_result_status(self, result) -> Dict[str, str]:
         if result.status == NodeStatus.Error:
             return {"node_status": "error", "node_error": str(result.message)}
@@ -339,7 +342,7 @@ class BaseRunner(metaclass=ABCMeta):
     def _handle_internal_exception(self, e, ctx):
         fire_event(
             InternalErrorOnRun(
-                build_path=self.node.build_path, exc=str(e), node_info=get_node_info()
+                build_path=self._node_build_path(), exc=str(e), node_info=get_node_info()
             )
         )
         return str(e)
@@ -347,7 +350,7 @@ class BaseRunner(metaclass=ABCMeta):
     def _handle_generic_exception(self, e, ctx):
         fire_event(
             GenericExceptionOnRun(
-                build_path=self.node.build_path,
+                build_path=self._node_build_path(),
                 unique_id=self.node.unique_id,
                 exc=str(e),
                 node_info=get_node_info(),
