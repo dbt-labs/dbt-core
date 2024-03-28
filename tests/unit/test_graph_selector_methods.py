@@ -1056,6 +1056,7 @@ def test_select_group(manifest, view_model):
     assert method.arguments == []
 
     assert search_manifest_using_method(manifest, method, group_name) == {"view_model"}
+    assert search_manifest_using_method(manifest, method, "my?group") == {"view_model"}
     assert not search_manifest_using_method(manifest, method, "not_my_group")
 
 
