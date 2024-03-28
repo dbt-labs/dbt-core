@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix unexpected error message when git is not installed
+time: 2024-02-15T10:38:38.01821-07:00
+custom:
+  Author: jon-fearer
+  Issue: "9537"

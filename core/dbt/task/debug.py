@@ -406,6 +406,17 @@ class DebugTask(BaseTask):
                 details="git error",
                 summary_message="Error from git --help: {!s}".format(exc),
             )
+        except dbt_common.exceptions.CommandResultError as exc:
+            return SubtaskStatus(
+                log_msg=red("ERROR"),
+                run_status=RunStatus.Error,
+                details="git error",
+                summary_message=(
+                    "Error from git --help: {!s}\n"
+                    "Make sure that `git` is installed in your shell "
+                    "and that `git --help` can execute successfully."
+                ).format(exc),
+            )
         else:
             return SubtaskStatus(
                 log_msg=green("OK found"),
