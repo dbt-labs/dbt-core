@@ -274,7 +274,6 @@ class Compiler:
 
     def initialize(self):
         make_directory(self.config.project_target_path)
-        make_directory(self.config.packages_install_path)
 
     # creates a ModelContext which is converted to
     # a dict for jinja rendering of SQL
