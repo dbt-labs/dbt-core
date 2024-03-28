@@ -69,17 +69,9 @@ jobs:
         id: build_arg
         run: |
           repo_arg=$(echo ${{ inputs.package }} | sed 's/\-/_/g')
-          if [[ ${{ inputs.version_number }} < 1.8.0 ]];
-          then
-            repo_value=$(echo ${{ inputs.package }} | sed 's/postgres/core/g')
-            dbt_postgres_subdirectory="&subdirectory=plugins/postgres"
-          else
-            repo_value=${{ inputs.package }}
-            dbt_postgres_subdirectory=""
-          fi
+          repo_value=$(echo ${{ inputs.package }} | sed 's/postgres/core/g')
           echo "repo_arg=$repo_arg" >> $GITHUB_OUTPUT
-          echo "repo_value=$repo_value" >> $GITHUB_OUTPUT
-          echo "dbt_postgres_subdirectory=$dbt_postgres_subdirectory" >> $GITHUB_OUTPUT
+          echo "repo-value=$repo_value" >> $GITHUB_OUTPUT
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -104,7 +96,5 @@ jobs:
           file: docker/Dockerfile
           push: True
           target: ${{ inputs.package }}
-          build-args: |
-            ${{ steps.build_arg.outputs.repo_arg }}_ref=${{ steps.build_arg.outputs.repo_value }}@v${{ inputs.version_number }}
-            dbt_postgres_subdirectory=${{ steps.build_arg.outputs.dbt_postgres_subdirectory }}
+          build-args: ${{ steps.build_arg.outputs.repo-arg }}_ref=${{ steps.build_arg.outputs.repo-value }}@v${{ inputs.version_number }}
           tags: ${{ needs.version_metadata.outputs.fully_qualified_tags }}

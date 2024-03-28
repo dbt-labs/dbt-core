@@ -21,7 +21,6 @@ ARG dbt_bigquery_ref=dbt-bigquery@v1.8.0b1
 ARG dbt_snowflake_ref=dbt-snowflake@v1.8.0b1
 ARG dbt_spark_ref=dbt-spark@v1.8.0b1
 # special case args
-ARG dbt_postgres_subdirectory=""
 ARG dbt_spark_version=all
 ARG dbt_third_party
 
@@ -63,7 +62,7 @@ RUN python -m pip install --no-cache-dir "git+https://github.com/dbt-labs/${dbt_
 # dbt-postgres
 ##
 FROM base as dbt-postgres
-RUN python -m pip install --no-cache-dir "git+https://github.com/dbt-labs/${dbt_postgres_ref}#egg=dbt-postgres${dbt_postgres_subdirectory}"
+RUN python -m pip install --no-cache-dir "git+https://github.com/dbt-labs/${dbt_postgres_ref}#egg=dbt-postgres&subdirectory=plugins/postgres"
 
 
 ##
