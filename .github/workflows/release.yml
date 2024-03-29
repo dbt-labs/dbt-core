@@ -10,7 +10,7 @@
 # - release it to Docker
 #
 # **why?**
-# Ensure an automated and tested release process
+# Ensure an automated and tested release processs
 #
 # **when?**
 # This workflow can be run manually on demand or can be called by other workflows
@@ -176,7 +176,7 @@ jobs:
       TEST_PYPI_API_TOKEN: ${{ secrets.TEST_PYPI_API_TOKEN }}
 
   determine-docker-package:
-    # postgres exists within dbt-core for versions 1.7 and earlier but is a separate package for 1.8 and later.
+    # dbt-postgres exists within dbt-core for versions 1.7 and earlier but is a separate package for 1.8 and later.
     # determine if we need to release dbt-core or both dbt-core and dbt-postgres
     name: Determine Docker Package
     runs-on: ubuntu-latest
