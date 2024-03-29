@@ -5,6 +5,8 @@ from datetime import datetime, timedelta
 import yaml
 
 import dbt.version
+from dbt.artifacts.schemas.freshness import FreshnessResult
+from dbt.artifacts.schemas.results import FreshnessStatus
 from dbt.cli.main import dbtRunner
 from tests.functional.sources.common_source_setup import BaseSourcesTest
 from tests.functional.sources.fixtures import (
@@ -385,7 +387,7 @@ class TestMetadataFreshnessFails:
     def models(self):
         return {"schema.yml": freshness_via_metadata_schema_yml}
 
-    def test_metadata_freshness_fails(self, project):
+    def test_metadata_freshness_unsupported_parse_warning(self, project):
         """Since the default test adapter (postgres) does not support metadata
         based source freshness checks, trying to use that mechanism should
         result in a parse-time warning."""
@@ -400,6 +402,16 @@ class TestMetadataFreshnessFails:
         runner.invoke(["parse"])
 
         assert got_warning
+
+    def test_metadata_freshness_unsupported_error_when_run(self, project):
+
+        runner = dbtRunner()
+        result = runner.invoke(["source", "freshness"])
+        assert isinstance(result.result, FreshnessResult)
+        assert len(result.result.results) == 1
+        freshness_result = result.result.results[0]
+        assert freshness_result.status == FreshnessStatus.RuntimeErr
+        assert "Could not compute freshness for source test_table" in freshness_result.message
 
 
 class TestHooksInSourceFreshness(SuccessfulSourceFreshnessTest):

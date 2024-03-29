@@ -79,6 +79,10 @@ def print_run_result_error(result, newline: bool = True, is_warning: bool = Fals
         with TextOnly():
             fire_event(Formatting(""))
 
+    # set node_info for logging events
+    node_info = None
+    if hasattr(result, "node") and result.node:
+        node_info = result.node.node_info
     if result.status == NodeStatus.Fail or (is_warning and result.status == NodeStatus.Warn):
         if is_warning:
             fire_event(
@@ -86,6 +90,7 @@ def print_run_result_error(result, newline: bool = True, is_warning: bool = Fals
                     resource_type=result.node.resource_type,
                     node_name=result.node.name,
                     path=result.node.original_file_path,
+                    node_info=node_info,
                 )
             )
         else:
@@ -94,29 +99,32 @@ def print_run_result_error(result, newline: bool = True, is_warning: bool = Fals
                     resource_type=result.node.resource_type,
                     node_name=result.node.name,
                     path=result.node.original_file_path,
+                    node_info=node_info,
                 )
             )
 
         if result.message:
             if is_warning:
-                fire_event(RunResultWarningMessage(msg=result.message))
+                fire_event(RunResultWarningMessage(msg=result.message, node_info=node_info))
             else:
-                fire_event(RunResultError(msg=result.message))
+                fire_event(RunResultError(msg=result.message, node_info=node_info))
         else:
-            fire_event(RunResultErrorNoMessage(status=result.status))
+            fire_event(RunResultErrorNoMessage(status=result.status, node_info=node_info))
 
-        if result.node.build_path is not None:
+        if result.node.compiled_path is not None:
             with TextOnly():
                 fire_event(Formatting(""))
-            fire_event(SQLCompiledPath(path=result.node.compiled_path))
+            fire_event(SQLCompiledPath(path=result.node.compiled_path, node_info=node_info))
 
         if result.node.should_store_failures:
             with TextOnly():
                 fire_event(Formatting(""))
-            fire_event(CheckNodeTestFailure(relation_name=result.node.relation_name))
+            fire_event(
+                CheckNodeTestFailure(relation_name=result.node.relation_name, node_info=node_info)
+            )
 
     elif result.message is not None:
-        fire_event(RunResultError(msg=result.message))
+        fire_event(RunResultError(msg=result.message, node_info=node_info))
 
 
 def print_run_end_messages(results, keyboard_interrupt: bool = False) -> None:

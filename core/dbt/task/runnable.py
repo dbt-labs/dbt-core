@@ -51,7 +51,6 @@ from dbt.logger import (
     ModelMetadata,
     NodeCount,
 )
-from dbt.node_types import NodeType
 from dbt.parser.manifest import write_manifest
 from dbt.task.base import ConfiguredTask, BaseRunner
 from .printer import (
@@ -261,9 +260,8 @@ class GraphRunnableTask(ConfiguredTask):
                         )
 
             # `_event_status` dict is only used for logging.  Make sure
-            # it gets deleted when we're done with it, except for unit tests
-            if not runner.node.resource_type == NodeType.Unit:
-                runner.node.clear_event_status()
+            # it gets deleted when we're done with it
+            runner.node.clear_event_status()
 
         fail_fast = get_flags().FAIL_FAST
 

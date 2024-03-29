@@ -120,10 +120,12 @@ class UnitTestManifestLoader:
             original_input_node = self._get_original_input_node(
                 given.input, tested_node, test_case.name
             )
+            input_name = original_input_node.name
 
             common_fields = {
                 "resource_type": NodeType.Model,
-                "original_file_path": original_input_node.original_file_path,
+                # root directory for input and output fixtures
+                "original_file_path": unit_test_node.original_file_path,
                 "config": ModelConfig(materialized="ephemeral"),
                 "database": original_input_node.database,
                 "alias": original_input_node.identifier,
@@ -131,6 +133,10 @@ class UnitTestManifestLoader:
                 "fqn": original_input_node.fqn,
                 "checksum": FileHash.empty(),
                 "raw_code": self._build_fixture_raw_code(given.rows, None),
+                "package_name": original_input_node.package_name,
+                "unique_id": f"model.{original_input_node.package_name}.{input_name}",
+                "name": input_name,
+                "path": f"{input_name}.sql",
             }
 
             if original_input_node.resource_type in (
@@ -138,14 +144,7 @@ class UnitTestManifestLoader:
                 NodeType.Seed,
                 NodeType.Snapshot,
             ):
-                input_name = original_input_node.name
-                input_node = ModelNode(
-                    **common_fields,
-                    package_name=original_input_node.package_name,
-                    unique_id=f"model.{original_input_node.package_name}.{input_name}",
-                    name=input_name,
-                    path=original_input_node.path or f"{input_name}.sql",
-                )
+                input_node = ModelNode(**common_fields)
                 if (
                     original_input_node.resource_type == NodeType.Model
                     and original_input_node.version
@@ -156,13 +155,8 @@ class UnitTestManifestLoader:
                 # We are reusing the database/schema/identifier from the original source,
                 # but that shouldn't matter since this acts as an ephemeral model which just
                 # wraps a CTE around the unit test node.
-                input_name = original_input_node.name
                 input_node = UnitTestSourceDefinition(
                     **common_fields,
-                    package_name=original_input_node.package_name,
-                    unique_id=f"model.{original_input_node.package_name}.{input_name}",
-                    name=original_input_node.name,  # must be the same name for source lookup to work
-                    path=input_name + ".sql",  # for writing out compiled_code
                     source_name=original_input_node.source_name,  # needed for source lookup
                 )
                 # Sources need to go in the sources dictionary in order to create the right lookup

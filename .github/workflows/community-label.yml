@@ -11,7 +11,8 @@
 name: Label community PRs
 
 on:
-  pull_request:
+  # have to use pull_request_target since community PRs come from forks
+  pull_request_target:
     types: [opened, ready_for_review]
 
 defaults:
@@ -20,6 +21,7 @@ defaults:
 
 permissions:
     pull-requests: write # labels PRs
+    contents: read # reads team membership
 
 jobs:
   open_issues:
@@ -32,6 +34,6 @@ jobs:
        github.event.action == 'ready_for_review' )
     uses: dbt-labs/actions/.github/workflows/label-community.yml@main
     with:
-        github_team: 'core'
+        github_team: 'core-group'
         label: 'community'
     secrets: inherit

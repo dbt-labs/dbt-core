@@ -7,12 +7,18 @@ from dbt.utils import _coerce_decimal, strtobool
 from dbt_common.events.format import pluralize
 from dbt_common.dataclass_schema import dbtClassMixin
 import threading
-from typing import Dict, Any, Optional, Union, List, TYPE_CHECKING
+from typing import Dict, Any, Optional, Union, List, TYPE_CHECKING, Tuple
 
 from .compile import CompileRunner
 from .run import RunTask
 
-from dbt.contracts.graph.nodes import TestNode, UnitTestDefinition, UnitTestNode
+from dbt.contracts.graph.nodes import (
+    TestNode,
+    UnitTestDefinition,
+    UnitTestNode,
+    GenericTestNode,
+    SingularTestNode,
+)
 from dbt.contracts.graph.manifest import Manifest
 from dbt.artifacts.schemas.results import TestStatus
 from dbt.artifacts.schemas.run import RunResult
@@ -180,7 +186,7 @@ class TestRunner(CompileRunner):
 
     def execute_unit_test(
         self, unit_test_def: UnitTestDefinition, manifest: Manifest
-    ) -> UnitTestResultData:
+    ) -> Tuple[UnitTestNode, UnitTestResultData]:
 
         unit_test_manifest = self.build_unit_test_manifest_from_test(unit_test_def, manifest)
 
@@ -190,6 +196,7 @@ class TestRunner(CompileRunner):
 
         # Compile the node
         unit_test_node = self.compiler.compile_node(unit_test_node, unit_test_manifest, {})
+        assert isinstance(unit_test_node, UnitTestNode)
 
         # generate_runtime_unit_test_context not strictly needed - this is to run the 'unit'
         # materialization, not compile the node.compiled_code
@@ -243,18 +250,21 @@ class TestRunner(CompileRunner):
                 rendered=rendered,
             )
 
-        return UnitTestResultData(
+        unit_test_result_data = UnitTestResultData(
             diff=diff,
             should_error=should_error,
             adapter_response=adapter_response,
         )
 
-    def execute(self, test: Union[TestNode, UnitTestDefinition], manifest: Manifest):
+        return unit_test_node, unit_test_result_data
+
+    def execute(self, test: Union[TestNode, UnitTestNode], manifest: Manifest):
         if isinstance(test, UnitTestDefinition):
-            unit_test_result = self.execute_unit_test(test, manifest)
-            return self.build_unit_test_run_result(test, unit_test_result)
+            unit_test_node, unit_test_result = self.execute_unit_test(test, manifest)
+            return self.build_unit_test_run_result(unit_test_node, unit_test_result)
         else:
             # Note: manifest here is a normal manifest
+            assert isinstance(test, (SingularTestNode, GenericTestNode))
             test_result = self.execute_data_test(test, manifest)
             return self.build_test_run_result(test, test_result)
 
@@ -293,7 +303,7 @@ class TestRunner(CompileRunner):
         return run_result
 
     def build_unit_test_run_result(
-        self, test: UnitTestDefinition, result: UnitTestResultData
+        self, test: UnitTestNode, result: UnitTestResultData
     ) -> RunResult:
         thread_id = threading.current_thread().name
 
@@ -306,7 +316,7 @@ class TestRunner(CompileRunner):
             failures = 1
 
         return RunResult(
-            node=test,  # type: ignore
+            node=test,
             status=status,
             timing=[],
             thread_id=thread_id,
