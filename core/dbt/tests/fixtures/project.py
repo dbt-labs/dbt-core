@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest  # type: ignore
 import random
 from argparse import Namespace
-from datetime import datetime
+from datetime import timezone, datetime
 import warnings
 import yaml
 
@@ -70,7 +70,9 @@ from dbt.tests.util import (
 def prefix():
     # create a directory name that will be unique per test session
     _randint = random.randint(0, 9999)
-    _runtime_timedelta = datetime.utcnow() - datetime(1970, 1, 1, 0, 0, 0)
+    _runtime_timedelta = datetime.now(timezone.utc).replace(tzinfo=None) - datetime(
+        1970, 1, 1, 0, 0, 0
+    )
     _runtime = (int(_runtime_timedelta.total_seconds() * 1e6)) + _runtime_timedelta.microseconds
     prefix = f"test{_runtime}{_randint:04}"
     return prefix

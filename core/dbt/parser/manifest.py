@@ -1,7 +1,7 @@
 from copy import deepcopy
 from dataclasses import dataclass
 from dataclasses import field
-import datetime
+from datetime import timezone, datetime, date
 import os
 import traceback
 from typing import (
@@ -146,10 +146,10 @@ def extended_mashumaro_encoder(data):
 
 
 def extended_msgpack_encoder(obj):
-    if type(obj) is datetime.date:
+    if type(obj) is date:
         date_bytes = msgpack.ExtType(1, obj.isoformat().encode())
         return date_bytes
-    elif type(obj) is datetime.datetime:
+    elif type(obj) is datetime:
         datetime_bytes = msgpack.ExtType(2, obj.isoformat().encode())
         return datetime_bytes
 
@@ -162,10 +162,10 @@ def extended_mashumuro_decoder(data):
 
 def extended_msgpack_decoder(code, data):
     if code == 1:
-        d = datetime.date.fromisoformat(data.decode())
+        d = date.fromisoformat(data.decode())
         return d
     elif code == 2:
-        dt = datetime.datetime.fromisoformat(data.decode())
+        dt = datetime.fromisoformat(data.decode())
         return dt
     else:
         return msgpack.ExtType(code, data)
@@ -588,10 +588,7 @@ class ManifestLoader:
     def check_for_model_deprecations(self):
         for node in self.manifest.nodes.values():
             if isinstance(node, ModelNode):
-                if (
-                    node.deprecation_date
-                    and node.deprecation_date < datetime.datetime.now().astimezone()
-                ):
+                if node.deprecation_date and node.deprecation_date < datetime.now().astimezone():
                     warn_or_error(
                         DeprecatedModel(
                             model_name=node.name,
@@ -605,7 +602,7 @@ class ManifestLoader:
                 node.depends_on
                 for resolved_ref in resolved_model_refs:
                     if resolved_ref.deprecation_date:
-                        if resolved_ref.deprecation_date < datetime.datetime.now().astimezone():
+                        if resolved_ref.deprecation_date < datetime.now().astimezone():
                             event_cls = DeprecatedReference
                         else:
                             event_cls = UpcomingReferenceDeprecation
@@ -901,7 +898,9 @@ class ManifestLoader:
                 is_partial_parsable, reparse_reason = self.is_partial_parsable(manifest)
                 if is_partial_parsable:
                     # We don't want to have stale generated_at dates
-                    manifest.metadata.generated_at = datetime.datetime.utcnow()
+                    manifest.metadata.generated_at = datetime.now(timezone.utc).replace(
+                        tzinfo=None
+                    )
                     # or invocation_ids
                     manifest.metadata.invocation_id = get_invocation_id()
                     return manifest
