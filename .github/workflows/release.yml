@@ -174,13 +174,41 @@ jobs:
       PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
       TEST_PYPI_API_TOKEN: ${{ secrets.TEST_PYPI_API_TOKEN }}
 
+  determine-docker-package:
+    # postgres exists within dbt-core for versions 1.7 and earlier but is a separate package for 1.8 and later.
+    # determine if we need to release dbt-core or both dbt-core and dbt-postgres
+    name: Determine Docker Package
+    runs-on: ubuntu-latest
+    needs: [pypi-release]
+    outputs:
+      packages: ${{ steps.determine-docker-package.outputs.packages }}
+    steps:
+      - name: "Audit Version And Parse Into Parts"
+        id: semver
+        uses: dbt-labs/actions/parse-semver@v1.1.0
+        with:
+          version: ${{ inputs.version_number }}
+
+      - name: "Determine Packages to Release"
+        id: determine-docker-package
+        run: |
+          if [ "${{ steps.semver.outputs.minor }}" -ge 8 ]; then
+            package-list="dbt-core"
+          else
+            package-list="dbt-core, dbt-postgres"
+          fi
+          echo "packages=$package-list" >> $GITHUB_OUTPUT
+
   docker-release:
     name: Docker Release
-    needs: [pypi-release]
+    needs: [determine-docker-package]
+    strategy:
+      matrix:
+        package: ${{fromJson(needs.determine-docker-package.outputs.packages)}}
 
     uses: dbt-labs/dbt-release/.github/workflows/docker-release.yml@main
     with:
-      package: ${{ github.event.repository.name }}
+      package: ${{ matrix.package }}
       version_number: ${{ inputs.version_number }}
       test_run: ${{ inputs.test_run }}
 
@@ -194,6 +222,7 @@ jobs:
         build-test-package,
         github-release,
         pypi-release,
+        docker-release,
       ]
 
     uses: dbt-labs/dbt-release/.github/workflows/slack-post-notification.yml@main
