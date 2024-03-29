@@ -15,7 +15,8 @@
 # **when?**
 # This workflow can be run manually on demand or can be called by other workflows
 
-name: Release to GitHub, PyPI & Docker
+name: "Release to GitHub, PyPI & Docker"
+run-name: "Release ${{ inputs.version_number }} to GitHub, PyPI & Docker"
 
 on:
   workflow_dispatch:
@@ -24,10 +25,12 @@ on:
         description: "The branch to release from"
         type: string
         required: true
+        default: "er/playground"
       version_number:
         description: "The release version number (i.e. 1.0.0b1)"
         type: string
         required: true
+        default: "1.7.12"
       test_run:
         description: "Test run (Publish release as draft)"
         type: boolean
@@ -182,7 +185,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [pypi-release]
     outputs:
-      packages: ${{ steps.determine-docker-package.outputs.packages }}
+      matrix: ${{ steps.determine-docker-package.outputs.matrix }}
     steps:
       - name: "Audit Version And Parse Into Parts"
         id: semver
@@ -193,19 +196,19 @@ jobs:
       - name: "Determine Packages to Release"
         id: determine-docker-package
         run: |
-          if [ "${{ steps.semver.outputs.minor }}" -ge 8 ]; then
-            package-list="dbt-core"
+          if [ ${{ steps.semver.outputs.minor }} -ge 8 ]; then
+            json_output={\"package\":[\"dbt-core\"]}
           else
-            package-list="dbt-core, dbt-postgres"
+            json_output={\"package\":[\"dbt-core\",\"dbt-postgres\"]}
           fi
-          echo "packages=$package-list" >> $GITHUB_OUTPUT
+          echo "matrix=$json_output" >> $GITHUB_OUTPUT
 
   docker-release:
     name: "Docker Release for ${{ matrix.package }}"
     needs: [determine-docker-package]
     strategy:
-      matrix:
-        package: ${{fromJson(needs.determine-docker-package.outputs.packages)}}
+      matrix: ${{fromJson(needs.determine-docker-package.outputs.matrix)}}
+
     permissions:
       packages: write
 
