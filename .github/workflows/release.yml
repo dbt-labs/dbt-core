@@ -201,11 +201,13 @@ jobs:
           echo "packages=$package-list" >> $GITHUB_OUTPUT
 
   docker-release:
-    name: Docker Release
+    name: "Docker Release for ${{ matrix.package }}"
     needs: [determine-docker-package]
     strategy:
       matrix:
         package: ${{fromJson(needs.determine-docker-package.outputs.packages)}}
+    permissions:
+      packages: write
 
     uses: dbt-labs/dbt-release/.github/workflows/release-docker.yml@main
     with:
