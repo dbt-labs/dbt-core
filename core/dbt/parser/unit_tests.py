@@ -352,13 +352,23 @@ class UnitTestParser(YamlReader):
                 )
 
             if ut_fixture.fixture:
-                # find fixture file object and store unit_test_definition unique_id
-                fixture = self._get_fixture(ut_fixture.fixture, self.project.project_name)
-                fixture_source_file = self.manifest.files[fixture.file_id]
-                fixture_source_file.unit_tests.append(unit_test_definition.unique_id)
-                ut_fixture.rows = fixture.rows
+                ut_fixture.rows = self.get_fixture_file_rows(
+                    ut_fixture.fixture, self.project.project_name, unit_test_definition.unique_id
+                )
             else:
                 ut_fixture.rows = self._convert_csv_to_list_of_dicts(ut_fixture.rows)
+        elif ut_fixture.format == UnitTestFormat.SQL:
+            if ut_fixture.fixture:
+                ut_fixture.rows = self.get_fixture_file_rows(
+                    ut_fixture.fixture, self.project.project_name, unit_test_definition.unique_id
+                )
+
+    def get_fixture_file_rows(self, fixture_name, project_name, utdef_unique_id):
+        # find fixture file object and store unit_test_definition unique_id
+        fixture = self._get_fixture(fixture_name, project_name)
+        fixture_source_file = self.manifest.files[fixture.file_id]
+        fixture_source_file.unit_tests.append(utdef_unique_id)
+        return fixture.rows
 
     def _convert_csv_to_list_of_dicts(self, csv_string: str) -> List[Dict[str, Any]]:
         dummy_file = StringIO(csv_string)
