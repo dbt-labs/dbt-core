@@ -73,9 +73,8 @@ check_valid_emails as (
         wizards.phone_number,
         wizards.world_id,
 
-        coalesce (regexp_like(
-            wizards.email, '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$'
-        )
+        coalesce (
+            wizards.email ~ '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$'
         = true
         and accepted_email_domains.tld is not null,
         false) as is_valid_email_address
@@ -131,24 +130,24 @@ unit_tests:
       - input: ref('stg_wizards')
         format: sql
         rows: |
-          select 1 as wizard_id, cool@example.com as email, example.com as email_top_level_domain union all
-          select 2 as wizard_id, cool@unknown.com as email, unknown.com as email_top_level_domain union all
-          select 3 as wizard_id, badgmail.com as email, gmail.com as email_top_level_domain union all
-          select 4 as wizard_id, missingdot@gmailcom as email, gmail.com as email_top_level_domain
+          select 'cool@example.com' as email, 'example.com' as email_top_level_domain union all
+          select 'cool@unknown.com' as email, 'unknown.com' as email_top_level_domain union all
+          select 'badgmail.com' as email, 'gmail.com' as email_top_level_domain union all
+          select 'missingdot@gmailcom' as email, 'gmail.com' as email_top_level_domain
       - input: ref('top_level_email_domains')
         format: sql
         rows: |
-          select example.com as tld union all,
-          select gmail.com as tld
+          select 'example.com' as tld union all
+          select 'gmail.com' as tld
       - input: ref('stg_worlds')
         rows: []
     expect:
       format: sql
       rows: |
-        select 1 as wizard_id, true as is_valid_email_address union all
-        select 2 as wizard_id, false as is_valid_email_address union all
-        select 3 as wizard_id, false as is_valid_email_address union all
-        select 4 as wizard_id, false as is_valid_email_address
+        select 'cool@example.com' as email, true as is_valid_email_address union all
+        select 'cool@unknown.com' as email, false as is_valid_email_address union all
+        select 'badgmail.com' as email, false as is_valid_email_address union all
+        select 'missingdot@gmailcom' as email, false as is_valid_email_address
 """
 
 
@@ -171,4 +170,5 @@ class TestSQLFormat:
         }
 
     def test_sql_format(self, project):
-        run_dbt(["seed"])
+        results = run_dbt(["build"])
+        assert len(results) == 7

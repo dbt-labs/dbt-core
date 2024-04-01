@@ -68,6 +68,16 @@ class UnitTestManifestLoader:
         name = test_case.name
         if tested_node.is_versioned:
             name = name + f"_v{tested_node.version}"
+        expected_sql: Optional[str] = None
+        if test_case.expect.format == UnitTestFormat.SQL:
+            expected_rows: List[Dict[str, Any]] = []
+            assert isinstance(test_case.expect.rows, str)
+            expected_sql = test_case.expect.rows
+        else:
+            assert isinstance(test_case.expect.rows, List)
+            expected_rows = deepcopy(test_case.expect.rows)
+
+        assert isinstance(expected_rows, List)
         unit_test_node = UnitTestNode(
             name=name,
             resource_type=NodeType.Unit,
@@ -76,8 +86,7 @@ class UnitTestManifestLoader:
             original_file_path=test_case.original_file_path,
             unique_id=test_case.unique_id,
             config=UnitTestNodeConfig(
-                materialized="unit",
-                expected_rows=deepcopy(test_case.expect.rows),  # type:ignore
+                materialized="unit", expected_rows=expected_rows, expected_sql=expected_sql
             ),
             raw_code=tested_node.raw_code,
             database=tested_node.database,
@@ -132,7 +141,7 @@ class UnitTestManifestLoader:
                 "schema": original_input_node.schema,
                 "fqn": original_input_node.fqn,
                 "checksum": FileHash.empty(),
-                "raw_code": self._build_fixture_raw_code(given.rows, None),
+                "raw_code": self._build_fixture_raw_code(given.rows, None, given.format),
                 "package_name": original_input_node.package_name,
                 "unique_id": f"model.{original_input_node.package_name}.{input_name}",
                 "name": input_name,
@@ -172,12 +181,15 @@ class UnitTestManifestLoader:
             # Add unique ids of input_nodes to depends_on
             unit_test_node.depends_on.nodes.append(input_node.unique_id)
 
-    def _build_fixture_raw_code(self, rows, column_name_to_data_types) -> str:
+    def _build_fixture_raw_code(self, rows, column_name_to_data_types, fixture_format) -> str:
         # We're not currently using column_name_to_data_types, but leaving here for
         # possible future use.
-        return ("{{{{ get_fixture_sql({rows}, {column_name_to_data_types}) }}}}").format(
-            rows=rows, column_name_to_data_types=column_name_to_data_types
-        )
+        if fixture_format == UnitTestFormat.SQL:
+            return rows
+        else:
+            return ("{{{{ get_fixture_sql({rows}, {column_name_to_data_types}) }}}}").format(
+                rows=rows, column_name_to_data_types=column_name_to_data_types
+            )
 
     def _get_original_input_node(self, input: str, tested_node: ModelNode, test_case_name: str):
         """
