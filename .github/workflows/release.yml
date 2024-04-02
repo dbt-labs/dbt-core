@@ -10,7 +10,7 @@
 # - release it to Docker
 #
 # **why?**
-# Ensure an automated and tested release processs
+# Ensure an automated and tested release process
 #
 # **when?**
 # This workflow can be run manually on demand or can be called by other workflows
@@ -25,12 +25,10 @@ on:
         description: "The branch to release from"
         type: string
         required: true
-        default: "er/playground"
       version_number:
         description: "The release version number (i.e. 1.0.0b1)"
         type: string
         required: true
-        default: "1.7.12"
       test_run:
         description: "Test run (Publish release as draft)"
         type: boolean
