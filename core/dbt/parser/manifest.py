@@ -835,13 +835,6 @@ class ManifestLoader:
             )
             valid = False
             reparse_reason = ReparseReason.proj_env_vars_changed
-        if (
-            self.manifest.state_check.profile_env_vars_hash
-            != manifest.state_check.profile_env_vars_hash
-        ):
-            fire_event(UnableToPartialParse(reason="env vars used in profiles.yml have changed"))
-            valid = False
-            reparse_reason = ReparseReason.prof_env_vars_changed
 
         missing_keys = {
             k
@@ -980,14 +973,6 @@ class ManifestLoader:
             env_var_str += f"{key}:{config.project_env_vars[key]}|"
         project_env_vars_hash = FileHash.from_contents(env_var_str)
 
-        # Create a FileHash of the env_vars in the project
-        key_list = list(config.profile_env_vars.keys())
-        key_list.sort()
-        env_var_str = ""
-        for key in key_list:
-            env_var_str += f"{key}:{config.profile_env_vars[key]}|"
-        profile_env_vars_hash = FileHash.from_contents(env_var_str)
-
         # Create a hash of the connection_info, which user has access to in
         # jinja context. Thus attributes here may affect the parsing result.
         # Ideally we should not expose all of the connection info to the jinja.
@@ -997,6 +982,8 @@ class ManifestLoader:
         # This is an example of naming should be chosen based on the functionality
         # rather than the implementation details.
         connection_keys = list(config.credentials.connection_info())
+        # avoid reparsing because of ordering issues
+        connection_keys.sort()
         profile_hash = FileHash.from_contents(pprint.pformat(connection_keys))
 
         # Create a FileHashes for dbt_project for all dependencies
@@ -1009,7 +996,6 @@ class ManifestLoader:
         # Create the ManifestStateCheck object
         state_check = ManifestStateCheck(
             project_env_vars_hash=project_env_vars_hash,
-            profile_env_vars_hash=profile_env_vars_hash,
             vars_hash=vars_hash,
             profile_hash=profile_hash,
             project_hashes=project_hashes,
