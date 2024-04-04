@@ -262,7 +262,16 @@ class FreshnessTask(RunTask):
             ),
             EventLevel.INFO,
         )
-        _, metadata_freshness_results = adapter.calculate_freshness_from_metadata_batch(
-            batch_metadata_sources
-        )
-        self._metadata_freshness_cache.update(metadata_freshness_results)
+
+        try:
+            _, metadata_freshness_results = adapter.calculate_freshness_from_metadata_batch(
+                batch_metadata_sources
+            )
+            self._metadata_freshness_cache.update(metadata_freshness_results)
+        except Exception:
+            # This error handling is intentionally very coarse.
+            # If anything goes wrong during batch metadata calculation, we can safely
+            # leave _metadata_freshness_cache unpopulated.
+            # Downstream, this will be gracefully handled as a cache miss and non-batch
+            # metadata-based freshness will still be performed on a source-by-source basis.
+            pass
