@@ -71,8 +71,7 @@ class UnitTestManifestLoader:
         expected_sql: Optional[str] = None
         if test_case.expect.format == UnitTestFormat.SQL:
             expected_rows: List[Dict[str, Any]] = []
-            assert isinstance(test_case.expect.rows, str)
-            expected_sql = test_case.expect.rows
+            expected_sql = test_case.expect.rows  # type: ignore
         else:
             assert isinstance(test_case.expect.rows, List)
             expected_rows = deepcopy(test_case.expect.rows)
@@ -356,7 +355,7 @@ class UnitTestParser(YamlReader):
                     f"Unit test {unit_test_definition.name} has {fixture_type} rows "
                     f"which do not match format {ut_fixture.format}"
                 )
-        elif ut_fixture.format == UnitTestFormat.CSV:
+        elif ut_fixture.format == UnitTestFormat.CSV or ut_fixture.format == UnitTestFormat.SQL:
             if not (isinstance(ut_fixture.rows, str) or isinstance(ut_fixture.fixture, str)):
                 raise ParsingError(
                     f"Unit test {unit_test_definition.name} has {fixture_type} rows or fixtures "
@@ -370,6 +369,12 @@ class UnitTestParser(YamlReader):
             else:
                 ut_fixture.rows = self._convert_csv_to_list_of_dicts(ut_fixture.rows)
         elif ut_fixture.format == UnitTestFormat.SQL:
+            if not (isinstance(ut_fixture.rows, str) or isinstance(ut_fixture.fixture, str)):
+                raise ParsingError(
+                    f"Unit test {unit_test_definition.name} has {fixture_type} rows or fixtures "
+                    f"which do not match format {ut_fixture.format}.  Expected string."
+                )
+
             if ut_fixture.fixture:
                 ut_fixture.rows = self.get_fixture_file_rows(
                     ut_fixture.fixture, self.project.project_name, unit_test_definition.unique_id

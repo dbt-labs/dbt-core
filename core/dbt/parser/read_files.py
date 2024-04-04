@@ -145,11 +145,11 @@ def get_source_files(project, paths, extension, parse_file_type, saved_files, ig
         if parse_file_type == ParseFileType.Seed:
             fb_list.append(load_seed_source_file(fp, project.project_name))
         # singular tests live in /tests but only generic tests live
-        # in /tests/generic so we want to skip those
+        # in /tests/generic and fixtures in /tests/fixture so we want to skip those
         else:
             if parse_file_type == ParseFileType.SingularTest:
                 path = pathlib.Path(fp.relative_path)
-                if path.parts[0] == "generic":
+                if path.parts[0] in ["generic", "fixtures"]:
                     continue
             file = load_source_file(fp, parse_file_type, project.project_name, saved_files)
             # only append the list if it has contents. added to fix #3568
@@ -431,7 +431,7 @@ def get_file_types_for_project(project):
         },
         ParseFileType.Fixture: {
             "paths": project.fixture_paths,
-            "extensions": [".csv"],
+            "extensions": [".csv", ".sql"],
             "parser": "FixtureParser",
         },
     }
