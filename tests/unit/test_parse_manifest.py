@@ -106,6 +106,18 @@ class TestLoader(unittest.TestCase):
 
 
 class TestPartialParse(unittest.TestCase):
+    def setUp(self) -> None:
+        mock_project = MagicMock(RuntimeConfig)
+        mock_project.cli_vars = ""
+        mock_project.args = MagicMock()
+        mock_project.args.profile = "test"
+        mock_project.args.target = "test"
+        mock_project.project_env_vars = {}
+        mock_project.profile_env_vars = {}
+        mock_project.project_target_path = "mock_target_path"
+        mock_project.credentials = MagicMock()
+        self.mock_project = mock_project
+
     @patch("dbt.parser.manifest.ManifestLoader.build_manifest_state_check")
     @patch("dbt.parser.manifest.os.path.exists")
     @patch("dbt.parser.manifest.open")
@@ -121,3 +133,14 @@ class TestPartialParse(unittest.TestCase):
         ManifestLoader(mock_project, {})
         # if specified in flags, we use the specified path
         patched_open.assert_called_with("specified_partial_parse_path", "rb")
+
+    def test_profile_hash_change(self):
+        # This test validate that the profile_hash is updated when the connection keys change
+        profile_hash = "750bc99c1d64ca518536ead26b28465a224be5ffc918bf2a490102faa5a1bcf5"
+        self.mock_project.credentials.connection_info.return_value = "test"
+        set_from_args(Namespace(), {})
+        manifest = ManifestLoader(self.mock_project, {})
+        assert manifest.manifest.state_check.profile_hash.checksum == profile_hash
+        self.mock_project.credentials.connection_info.return_value = "test1"
+        manifest = ManifestLoader(self.mock_project, {})
+        assert manifest.manifest.state_check.profile_hash.checksum != profile_hash
