@@ -352,6 +352,9 @@ class Flags:
         if getattr(self, "MACRO_DEBUGGING", None) is not None:
             jinja.MACRO_DEBUGGING = getattr(self, "MACRO_DEBUGGING")
 
+    def __getattr__(self, name: str) -> Any:
+        return super().__get_attribute__(name)  # type: ignore
+
 
 CommandParams = List[str]
 

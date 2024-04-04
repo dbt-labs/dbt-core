@@ -12,6 +12,7 @@ from dbt.compilation import Compiler
 import dbt_common.exceptions.base
 import dbt.exceptions
 from dbt import tracking
+from dbt.cli.flags import Flags
 from dbt.config import RuntimeConfig, Project
 from dbt.config.profile import read_profile
 from dbt.constants import DBT_PROJECT_FILE_NAME
@@ -51,7 +52,7 @@ from dbt.task.printer import print_run_result_error
 
 class NoneConfig:
     @classmethod
-    def from_args(cls, args):
+    def from_args(cls, args: Flags):
         return None
 
 
@@ -73,13 +74,13 @@ def read_profiles(profiles_dir=None):
 class BaseTask(metaclass=ABCMeta):
     ConfigType: Union[Type[NoneConfig], Type[Project]] = NoneConfig
 
-    def __init__(self, args, config, project=None) -> None:
+    def __init__(self, args: Flags, config, project=None) -> None:
         self.args = args
         self.config = config
         self.project = config if isinstance(config, Project) else project
 
     @classmethod
-    def pre_init_hook(cls, args):
+    def pre_init_hook(cls, args: Flags):
         """A hook called before the task is initialized."""
         if args.log_format == "json":
             log_manager.format_json()
@@ -155,7 +156,7 @@ def move_to_nearest_project_dir(project_dir: Optional[str]) -> Path:
 class ConfiguredTask(BaseTask):
     ConfigType = RuntimeConfig
 
-    def __init__(self, args, config, manifest: Optional[Manifest] = None) -> None:
+    def __init__(self, args: Flags, config, manifest: Optional[Manifest] = None) -> None:
         super().__init__(args, config)
         self.graph: Optional[Graph] = None
         self.manifest = manifest
@@ -174,7 +175,7 @@ class ConfiguredTask(BaseTask):
             dbt.tracking.track_runnable_timing({"graph_compilation_elapsed": compile_time})
 
     @classmethod
-    def from_args(cls, args, *pargs, **kwargs):
+    def from_args(cls, args: Flags, *pargs, **kwargs):
         move_to_nearest_project_dir(args.project_dir)
         return super().from_args(args, *pargs, **kwargs)
 
@@ -487,7 +488,7 @@ class BaseRunner(metaclass=ABCMeta):
 
 
 def resource_types_from_args(
-    args, all_resource_values: Set[NodeType], default_resource_values: Set[NodeType]
+    args: Flags, all_resource_values: Set[NodeType], default_resource_values: Set[NodeType]
 ) -> Set[NodeType]:
 
     if not args.resource_types:
