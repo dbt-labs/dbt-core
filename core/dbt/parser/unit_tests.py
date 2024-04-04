@@ -355,7 +355,7 @@ class UnitTestParser(YamlReader):
                     f"Unit test {unit_test_definition.name} has {fixture_type} rows "
                     f"which do not match format {ut_fixture.format}"
                 )
-        elif ut_fixture.format == UnitTestFormat.CSV or ut_fixture.format == UnitTestFormat.SQL:
+        elif ut_fixture.format == UnitTestFormat.CSV:
             if not (isinstance(ut_fixture.rows, str) or isinstance(ut_fixture.fixture, str)):
                 raise ParsingError(
                     f"Unit test {unit_test_definition.name} has {fixture_type} rows or fixtures "
