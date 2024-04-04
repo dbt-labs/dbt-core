@@ -136,7 +136,7 @@ class TestPartialParse(unittest.TestCase):
 
     def test_profile_hash_change(self):
         # This test validate that the profile_hash is updated when the connection keys change
-        profile_hash = "7644083797ea2d42b4e7bb1ed4751afc1d8c9566980083c96af826c3486d3531"
+        profile_hash = "750bc99c1d64ca518536ead26b28465a224be5ffc918bf2a490102faa5a1bcf5"
         self.mock_project.credentials.connection_info.return_value = "test"
         set_from_args(Namespace(), {})
         manifest = ManifestLoader(self.mock_project, {})
