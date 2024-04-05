@@ -212,7 +212,7 @@ class FreshnessTask(RunTask):
     def before_run(self, adapter, selected_uids: AbstractSet[str]) -> None:
         super().before_run(adapter, selected_uids)
         if adapter.supports(Capability.TableLastModifiedMetadataBatch):
-            self._populate_metadata_freshness_cache(adapter, selected_uids)
+            self.populate_metadata_freshness_cache(adapter, selected_uids)
 
     def get_runner(self, node) -> BaseRunner:
         freshness_runner = super().get_runner(node)
@@ -245,8 +245,8 @@ class FreshnessTask(RunTask):
         else:
             return []
 
-    def _populate_metadata_freshness_cache(self, adapter, selected_uids: AbstractSet[str]) -> None:
-        if self.manifest is None or self.graph is None:
+    def populate_metadata_freshness_cache(self, adapter, selected_uids: AbstractSet[str]) -> None:
+        if self.manifest is None:
             raise DbtInternalError("manifest must be set to get populate metadata freshness cache")
 
         batch_metadata_sources: List[BaseRelation] = []
@@ -275,3 +275,6 @@ class FreshnessTask(RunTask):
             # Downstream, this will be gracefully handled as a cache miss and non-batch
             # metadata-based freshness will still be performed on a source-by-source basis.
             pass
+
+    def get_freshness_metadata_cache(self) -> Dict[BaseRelation, FreshnessResult]:
+        return self._metadata_freshness_cache
