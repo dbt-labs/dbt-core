@@ -1,6 +1,6 @@
 kind: Dependencies
-body: Remove unwanted dependency of protobuf in dev-requirements
+body: Remove duplicate dependency of protobuf in dev-requirements
 time: 2024-03-31T10:39:17.432017-07:00
 custom:
   Author: niteshy
-  PR: "9838"
+  Issue: "9830"
