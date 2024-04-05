@@ -17,7 +17,7 @@ from dbt.deps.git import GitUnpinnedPackage
 from dbt.deps.registry import RegistryUnpinnedPackage
 
 from dbt.contracts.project import (
-    Package,
+    PackageSpec,
     LocalPackage,
     TarballPackage,
     GitPackage,
@@ -67,7 +67,7 @@ class PackageListing:
         else:
             self.packages[key] = package
 
-    def update_from(self, src: List[Package]) -> None:
+    def update_from(self, src: List[PackageSpec]) -> None:
         pkg: UnpinnedPackage
         for contract in src:
             if isinstance(contract, LocalPackage):
@@ -83,7 +83,7 @@ class PackageListing:
             self.incorporate(pkg)
 
     @classmethod
-    def from_contracts(cls: Type["PackageListing"], src: List[Package]) -> "PackageListing":
+    def from_contracts(cls: Type["PackageListing"], src: List[PackageSpec]) -> "PackageListing":
         self = cls({})
         self.update_from(src)
         return self
@@ -111,7 +111,7 @@ def _check_for_duplicate_project_names(
 
 
 def resolve_packages(
-    packages: List[Package],
+    packages: List[PackageSpec],
     project: Project,
     cli_vars: Dict[str, Any],
 ) -> List[PinnedPackage]:
@@ -134,7 +134,7 @@ def resolve_packages(
     return resolved
 
 
-def resolve_lock_packages(packages: List[Package]) -> List[PinnedPackage]:
+def resolve_lock_packages(packages: List[PackageSpec]) -> List[PinnedPackage]:
     lock_packages = PackageListing.from_contracts(packages)
     final = PackageListing()
 
