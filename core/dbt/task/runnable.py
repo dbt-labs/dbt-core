@@ -126,7 +126,9 @@ class GraphRunnableTask(ConfiguredTask):
             # This is what's used with no default selector and no selection
             # use --select and --exclude args
             spec = parse_difference(self.selection_arg, self.exclusion_arg, indirect_selection)
-        return spec
+        # mypy complains because the return values of get_selector and parse_difference
+        # are different
+        return spec  # type: ignore
 
     @abstractmethod
     def get_node_selector(self) -> NodeSelector:
