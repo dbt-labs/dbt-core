@@ -79,7 +79,8 @@ class DebugRunStatus(Flag):
 
 class DebugTask(BaseTask):
     def __init__(self, args: Flags, config: Project) -> None:
-        super().__init__(args, config)
+        super().__init__(args)
+        self.config = config
         self.profiles_dir = args.PROFILES_DIR
         self.profile_path = os.path.join(self.profiles_dir, "profiles.yml")
         try:
@@ -98,7 +99,7 @@ class DebugTask(BaseTask):
         self.profile: Optional[Profile] = None
         self.raw_profile_data: Optional[Dict[str, Any]] = None
         self.profile_name: Optional[str] = None
-        self.project: Optional[Project] = None
+        self.project: Project = self.config
 
     @property
     def project_profile(self):

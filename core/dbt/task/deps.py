@@ -94,14 +94,15 @@ def _create_packages_yml_entry(package: str, version: Optional[str], source: str
 
 class DepsTask(BaseTask):
     def __init__(self, args: Any, project: Project) -> None:
+        super().__init__(args=args)
         # N.B. This is a temporary fix for a bug when using relative paths via
         # --project-dir with deps.  A larger overhaul of our path handling methods
         # is needed to fix this the "right" way.
         # See GH-7615
         project.project_root = str(Path(project.project_root).resolve())
+        self.project = project
 
         move_to_nearest_project_dir(project.project_root)
-        super().__init__(args=args, config=None, project=project)
         self.cli_vars = args.vars
 
     def track_package_install(

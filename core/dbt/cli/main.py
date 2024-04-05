@@ -396,11 +396,9 @@ def show(ctx, **kwargs):
 def debug(ctx, **kwargs):
     """Show information on the current dbt environment and check dependencies, then test the database connection. Not to be confused with the --debug option which increases verbosity."""
     from dbt.task.debug import DebugTask
-    from dbt.task.base import NoneConfig
 
     task = DebugTask(
         ctx.obj["flags"],
-        NoneConfig(),
     )
 
     results = task.run()
@@ -465,7 +463,7 @@ def init(ctx, **kwargs):
     """Initialize a new dbt project."""
     from dbt.task.init import InitTask
 
-    task = InitTask(ctx.obj["flags"], None)
+    task = InitTask(ctx.obj["flags"])
 
     results = task.run()
     success = task.interpret_results(results)

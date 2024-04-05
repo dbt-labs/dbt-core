@@ -96,7 +96,7 @@ PackageSpec = Union[LocalPackage, TarballPackage, GitPackage, RegistryPackage]
 
 @dataclass
 class PackageConfig(dbtClassMixin):
-    packages: List[PackageSpec]
+    packages: List[Package]
 
     @classmethod
     def validate(cls, data):
@@ -119,7 +119,7 @@ class PackageConfig(dbtClassMixin):
 @dataclass
 class ProjectPackageMetadata:
     name: str
-    packages: List[PackageSpec]
+    packages: List[Package]
 
     @classmethod
     def from_project(cls, project):
@@ -231,7 +231,7 @@ class Project(dbtClassMixin):
             description="map project names to their vars override dicts",
         ),
     )
-    packages: List[PackageSpec] = field(default_factory=list)
+    packages: List[Package] = field(default_factory=list)
     query_comment: Optional[Union[QueryComment, NoValue, str]] = field(default_factory=NoValue)
     restrict_access: bool = False
     dbt_cloud: Optional[Dict[str, Any]] = None
