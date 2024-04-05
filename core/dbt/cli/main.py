@@ -396,10 +396,11 @@ def show(ctx, **kwargs):
 def debug(ctx, **kwargs):
     """Show information on the current dbt environment and check dependencies, then test the database connection. Not to be confused with the --debug option which increases verbosity."""
     from dbt.task.debug import DebugTask
+    from dbt.task.base import NoneConfig
 
     task = DebugTask(
         ctx.obj["flags"],
-        None,
+        NoneConfig(),
     )
 
     results = task.run()

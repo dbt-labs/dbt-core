@@ -78,7 +78,7 @@ class DebugRunStatus(Flag):
 
 
 class DebugTask(BaseTask):
-    def __init__(self, args: Flags, config) -> None:
+    def __init__(self, args: Flags, config: Project) -> None:
         super().__init__(args, config)
         self.profiles_dir = args.PROFILES_DIR
         self.profile_path = os.path.join(self.profiles_dir, "profiles.yml")

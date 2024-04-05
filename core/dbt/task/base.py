@@ -72,9 +72,11 @@ def read_profiles(profiles_dir=None):
 
 
 class BaseTask(metaclass=ABCMeta):
-    ConfigType: Union[Type[NoneConfig], Type[Project]] = NoneConfig
+    ConfigType: Union[Type[NoneConfig], Type[RuntimeConfig], Type[Project]] = NoneConfig
 
-    def __init__(self, args: Flags, config, project=None) -> None:
+    def __init__(
+        self, args: Flags, config: Union[NoneConfig, RuntimeConfig, Project], project=None
+    ) -> None:
         self.args = args
         self.config = config
         self.project = config if isinstance(config, Project) else project
@@ -95,7 +97,7 @@ class BaseTask(metaclass=ABCMeta):
             log_manager.format_text()
 
     @classmethod
-    def from_args(cls, args, *pargs, **kwargs):
+    def from_args(cls, args: Flags, *pargs, **kwargs):
         try:
             # This is usually RuntimeConfig
             config = cls.ConfigType.from_args(args)
@@ -156,7 +158,9 @@ def move_to_nearest_project_dir(project_dir: Optional[str]) -> Path:
 class ConfiguredTask(BaseTask):
     ConfigType = RuntimeConfig
 
-    def __init__(self, args: Flags, config, manifest: Optional[Manifest] = None) -> None:
+    def __init__(
+        self, args: Flags, config: RuntimeConfig, manifest: Optional[Manifest] = None
+    ) -> None:
         super().__init__(args, config)
         self.graph: Optional[Graph] = None
         self.manifest = manifest

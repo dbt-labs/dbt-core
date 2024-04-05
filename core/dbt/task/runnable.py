@@ -16,6 +16,7 @@ import dbt.utils
 from dbt.adapters.base import BaseRelation
 from dbt.adapters.factory import get_adapter
 from dbt.cli.flags import Flags
+from dbt.config.runtime import RuntimeConfig
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import ResultNode
 from dbt.artifacts.schemas.results import NodeStatus, RunningStatus, RunStatus, BaseResult
@@ -66,8 +67,9 @@ RUNNING_STATE = DbtProcessState("running")
 class GraphRunnableTask(ConfiguredTask):
     MARK_DEPENDENT_ERRORS_STATUSES = [NodeStatus.Error]
 
-    def __init__(self, args: Flags, config, manifest) -> None:
+    def __init__(self, args: Flags, config: RuntimeConfig, manifest) -> None:
         super().__init__(args, config, manifest)
+        self.config = config
         self._flattened_nodes: Optional[List[ResultNode]] = None
         self._raise_next_tick: Optional[DbtRuntimeError] = None
         self._skipped_children: Dict[str, Optional[RunResult]] = {}

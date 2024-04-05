@@ -9,6 +9,8 @@ from .test import TestRunner as test_runner
 from dbt.artifacts.schemas.results import NodeStatus, RunStatus
 from dbt.artifacts.schemas.run import RunResult
 from dbt.cli.flags import Flags
+from dbt.config.runtime import RuntimeConfig
+from dbt.contracts.graph.manifest import Manifest
 from dbt.graph import ResourceTypeSelector, GraphQueue, Graph
 from dbt.node_types import NodeType
 from dbt.task.test import TestSelector
@@ -75,7 +77,7 @@ class BuildTask(RunTask):
     }
     ALL_RESOURCE_VALUES = frozenset({x for x in RUNNER_MAP.keys()})
 
-    def __init__(self, args: Flags, config, manifest) -> None:
+    def __init__(self, args: Flags, config: RuntimeConfig, manifest: Manifest) -> None:
         super().__init__(args, config, manifest)
         self.selected_unit_tests: Set = set()
         self.model_to_unit_test_map: Dict[str, List] = {}
