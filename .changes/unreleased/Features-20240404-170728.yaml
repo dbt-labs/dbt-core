@@ -1,0 +1,6 @@
+kind: Features
+body: 'source freshness precomputes metadata-based freshness in batch, if possible '
+time: 2024-04-04T17:07:28.717868-07:00
+custom:
+  Author: michelleark
+  Issue: "8705"
