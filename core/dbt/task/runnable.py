@@ -626,7 +626,9 @@ class GraphRunnableTask(ConfiguredTask):
         list_futures = []
         create_futures = []
 
-        with dbt_common.utils.executor(self.config) as tpe:
+        # TODO: following has a mypy issue because profile and project config
+        # defines threads as int and HasThreadingConfig defines it as Optional[int]
+        with dbt_common.utils.executor(self.config) as tpe:  # type: ignore
             for req in required_databases:
                 if req.database is None:
                     name = "list_schemas"
