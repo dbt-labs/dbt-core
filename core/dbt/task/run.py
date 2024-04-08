@@ -15,6 +15,7 @@ from datetime import datetime
 from dbt import tracking
 from dbt import utils
 from dbt.adapters.base import BaseRelation
+from dbt.cli.flags import Flags
 from dbt.clients.jinja import MacroGenerator
 from dbt.context.providers import generate_runtime_model_context
 from dbt.contracts.graph.nodes import HookNode, ResultNode
@@ -305,7 +306,7 @@ class ModelRunner(CompileRunner):
 
 
 class RunTask(CompileTask):
-    def __init__(self, args, config, manifest) -> None:
+    def __init__(self, args: Flags, config, manifest) -> None:
         super().__init__(args, config, manifest)
         self.ran_hooks: List[HookNode] = []
         self._total_executed = 0

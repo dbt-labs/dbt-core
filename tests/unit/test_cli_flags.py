@@ -18,7 +18,7 @@ class TestFlags:
     def make_dbt_context(
         self, context_name: str, args: List[str], parent: Optional[click.Context] = None
     ) -> click.Context:
-        ctx = cli.make_context(context_name, args, parent)
+        ctx = cli.make_context(context_name, args.copy(), parent)
         return ctx
 
     @pytest.fixture(scope="class")
@@ -28,6 +28,13 @@ class TestFlags:
     @pytest.fixture
     def project_flags(self) -> ProjectFlags:
         return ProjectFlags()
+
+    def test_cli_args_unmodified(self):
+        args = ["--target", "my_target"]
+        args_before = args.copy()
+        self.make_dbt_context("context", args)
+
+        assert args == args_before
 
     def test_which(self, run_context):
         flags = Flags(run_context)

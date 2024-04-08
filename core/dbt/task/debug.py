@@ -19,6 +19,7 @@ import dbt_common.clients.system
 import dbt.exceptions
 import dbt_common.exceptions
 from dbt.adapters.factory import get_adapter, register_adapter
+from dbt.cli.flags import Flags
 from dbt.config import PartialProject, Project, Profile
 from dbt.config.renderer import DbtProjectYamlRenderer, ProfileRenderer
 from dbt.artifacts.schemas.results import RunStatus
@@ -77,7 +78,7 @@ class DebugRunStatus(Flag):
 
 
 class DebugTask(BaseTask):
-    def __init__(self, args, config) -> None:
+    def __init__(self, args: Flags, config) -> None:
         super().__init__(args, config)
         self.profiles_dir = args.PROFILES_DIR
         self.profile_path = os.path.join(self.profiles_dir, "profiles.yml")
