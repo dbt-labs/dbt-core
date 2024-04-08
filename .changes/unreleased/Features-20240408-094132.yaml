@@ -1,0 +1,6 @@
+kind: Features
+body: Support SQL in unit testing fixtures
+time: 2024-04-08T09:41:32.15936-04:00
+custom:
+  Author: gshank
+  Issue: "9405"
