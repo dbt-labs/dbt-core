@@ -75,7 +75,7 @@ def get_flag_dict():
         "log_format",
         "version_check",
         "fail_fast",
-        "no_skip_on_failture",
+        "no_skip_on_failure",
         "send_anonymous_usage_stats",
         "printer_width",
         "indirect_selection",

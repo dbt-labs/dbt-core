@@ -1,5 +1,5 @@
 kind: Features
-body: add flag --no-skip-on-failture
+body: add flag --no-skip-on-failure
 time: 2023-11-07T13:28:42.420727773+01:00
 custom:
   Author: leo-schick
