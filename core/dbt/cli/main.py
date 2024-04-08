@@ -609,6 +609,7 @@ def retry(ctx, **kwargs):
 @global_flags
 @p.exclude
 @p.full_refresh
+@p.no_skip_on_failure
 @p.profiles_dir
 @p.project_dir
 @p.resource_type
