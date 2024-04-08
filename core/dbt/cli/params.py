@@ -123,7 +123,7 @@ fail_fast = click.option(
 no_skip_on_failture = click.option(
     "--no-skip-on-failture",
     envvar="DBT_NO_SKIP_ON_FAILTURE",
-    help="If specified, dbt will proceed with downstream models even the dependent model failed.",
+    help="Proceed with downstream nodes even if an upstream node fails.",
     is_flag=True,
 )
 
