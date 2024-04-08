@@ -69,9 +69,6 @@ class BaseTask(metaclass=ABCMeta):
     def __init__(self, args: Flags) -> None:
         self.args = args
 
-    #       self.config = config
-    #       self.project = config if isinstance(config, Project) else project
-
     @classmethod
     def pre_init_hook(cls, args: Flags):
         """A hook called before the task is initialized."""
