@@ -313,40 +313,33 @@ class TestProfileEnvVars:
         # calls 'load_config' before the tests are run.
         # Note: only the specified profile is rendered, so there's no
         # point it setting env_vars in non-used profiles.
-        os.environ["ENV_VAR_USER"] = "root"
-        os.environ["ENV_VAR_PASS"] = "password"
+        os.environ["ENV_VAR_HOST"] = "localhost"
         return {
             "type": "postgres",
             "threads": 4,
-            "host": "localhost",
+            "host": "{{ env_var('ENV_VAR_HOST') }}",
             "port": 5432,
-            "user": "{{ env_var('ENV_VAR_USER') }}",
-            "pass": "{{ env_var('ENV_VAR_PASS') }}",
+            "user": "root",
+            "pass": "password",
             "dbname": "dbt",
         }
 
     def test_profile_env_vars(self, project, logs_dir):
 
         # Initial run
-        os.environ["ENV_VAR_USER"] = "root"
-        os.environ["ENV_VAR_PASS"] = "password"
+        os.environ["ENV_VAR_HOST"] = "localhost"
 
         run_dbt(["run"])
-        manifest = get_manifest(project.project_root)
-        env_vars_checksum = manifest.state_check.profile_env_vars_hash.checksum
 
         # Change env_vars, the user doesn't exist, this should fail
-        os.environ["ENV_VAR_USER"] = "fake_user"
+        os.environ["ENV_VAR_HOST"] = "wrong_host"
 
         # N.B. run_dbt_and_capture won't work here because FailedToConnectError ends the test entirely
         with pytest.raises(FailedToConnectError):
             run_dbt(["run"], expect_pass=False)
 
         log_output = Path(logs_dir, "dbt.log").read_text()
-        assert "env vars used in profiles.yml have changed" in log_output
-
-        manifest = get_manifest(project.project_root)
-        assert env_vars_checksum != manifest.state_check.profile_env_vars_hash.checksum
+        assert "Unable to do partial parsing because profile has changed" in log_output
 
 
 class TestProfileSecretEnvVars:

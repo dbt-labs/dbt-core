@@ -11,6 +11,7 @@ from dbt.tests.util import (
     run_dbt_and_capture,
     rename_dir,
 )
+import yaml
 from tests.functional.utils import up_one
 from dbt.tests.fixtures.project import write_project_files
 from tests.functional.partial_parsing.fixtures import (
@@ -824,3 +825,31 @@ class TestPortablePartialParsing:
         run_dbt(["deps"])
         len(run_dbt(["--partial-parse", "seed"])) == 1
         len(run_dbt(["--partial-parse", "run"])) == 3
+
+
+class TestProfileChanges:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "model.sql": "select 1 as id",
+        }
+
+    def test_profile_change(self, project, dbt_profile_data):
+        # Fist run not partial parsing
+        _, stdout = run_dbt_and_capture(["parse"])
+        assert "Unable to do partial parsing because saved manifest not found" in stdout
+
+        _, stdout = run_dbt_and_capture(["parse"])
+        assert "Unable to do partial parsing" not in stdout
+
+        # change dbname which is included in the connection_info
+        dbt_profile_data["test"]["outputs"]["default"]["dbname"] = "dbt2"
+        write_file(yaml.safe_dump(dbt_profile_data), project.profiles_dir, "profiles.yml")
+        _, stdout = run_dbt_and_capture(["parse"])
+        assert "Unable to do partial parsing because profile has changed" in stdout
+
+        # Change the password which is not included in the connection_info
+        dbt_profile_data["test"]["outputs"]["default"]["pass"] = "another_password"
+        write_file(yaml.safe_dump(dbt_profile_data), project.profiles_dir, "profiles.yml")
+        _, stdout = run_dbt_and_capture(["parse"])
+        assert "Unable to do partial parsing" not in stdout
