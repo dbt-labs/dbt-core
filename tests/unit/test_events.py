@@ -154,6 +154,7 @@ sample_values = [
     adapter_types.CollectFreshnessReturnSignature(),
     core_types.TestsConfigDeprecation(deprecated_path="", exp_path=""),
     core_types.ProjectFlagsMovedDeprecation(),
+    core_types.SpacesInModelNameDeprecation(model_name="", model_version=""),
     # E - DB Adapter ======================
     adapter_types.AdapterEventDebug(),
     adapter_types.AdapterEventInfo(),

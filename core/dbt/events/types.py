@@ -413,6 +413,19 @@ class ProjectFlagsMovedDeprecation(WarnLevel):
         return warning_tag(f"Deprecated functionality\n\n{description}")
 
 
+class SpacesInModelNameDeprecation(WarnLevel):
+    def code(self) -> str:
+        return "D014"
+
+    def message(self) -> str:
+        version = ".v" + self.model_version if self.model_version else ""
+        description = (
+            f"Model `{self.model_name}{version}` has spaces in its name. This is deprecated and "
+            "may cause errors when using dbt."
+        )
+        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+
+
 # =======================================================
 # I - Project parsing
 # =======================================================
