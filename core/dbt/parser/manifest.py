@@ -62,6 +62,7 @@ from dbt.events.types import (
     StateCheckVarsHash,
     DeprecatedModel,
     DeprecatedReference,
+    SpacesInModelNameDeprecation,
     UpcomingReferenceDeprecation,
 )
 from dbt.logger import DbtProcessState
@@ -520,6 +521,7 @@ class ManifestLoader:
             self.write_manifest_for_partial_parse()
 
         self.check_for_model_deprecations()
+        self.check_for_spaces_in_model_names()
 
         return self.manifest
 
@@ -620,6 +622,16 @@ class ManifestLoader:
                                 ref_model_deprecation_date=resolved_ref.deprecation_date.isoformat(),
                             )
                         )
+
+    def check_for_spaces_in_model_names(self):
+        for node in self.manifest.nodes.values():
+            if isinstance(node, ModelNode) and " " in node.name:
+                fire_event(
+                    SpacesInModelNameDeprecation(
+                        model_name=node.name,
+                        model_version=version_to_str(node.version),
+                    )
+                )
 
     def load_and_parse_macros(self, project_parser_files):
         for project in self.all_projects.values():
