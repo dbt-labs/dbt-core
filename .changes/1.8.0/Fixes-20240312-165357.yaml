@@ -1,0 +1,7 @@
+kind: Fixes
+body: include sources in catalog.json when over 100 relations selected for catalog
+  generation
+time: 2024-03-12T16:53:57.714118-04:00
+custom:
+  Author: michelleark
+  Issue: "9755"

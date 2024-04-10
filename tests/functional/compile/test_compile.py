@@ -3,8 +3,7 @@ import pathlib
 import pytest
 import re
 
-from dbt.cli.main import dbtRunner
-from dbt.exceptions import DbtRuntimeError, Exception as DbtException
+from dbt_common.exceptions import DbtRuntimeError, DbtBaseException as DbtException
 from dbt.tests.util import run_dbt, run_dbt_and_capture, read_file
 from tests.functional.compile.fixtures import (
     first_model_sql,
@@ -16,6 +15,7 @@ from tests.functional.compile.fixtures import (
     schema_yml,
     model_multiline_jinja,
 )
+from tests.functional.assertions.test_runner import dbtTestRunner
 
 
 def norm_whitespace(string):
@@ -49,9 +49,8 @@ class TestIntrospectFlag:
         assert get_lines("first_model") == ["select 1 as fun"]
         assert any("_test_compile as schema" in line for line in get_lines("second_model"))
 
-    @pytest.mark.skip("Investigate flaky test #7179")
     def test_no_introspect(self, project):
-        with pytest.raises(DbtRuntimeError):
+        with pytest.raises(DbtRuntimeError, match="connection never acquired for thread"):
             run_dbt(["compile", "--no-introspect"])
 
 
@@ -164,6 +163,10 @@ class TestCompile:
         with pytest.raises(DbtException, match="Error parsing inline query"):
             run_dbt(["compile", "--inline", "select * from {{ ref('third_model') }}"])
 
+    def test_inline_fail_database_error(self, project):
+        with pytest.raises(DbtRuntimeError, match="Database Error"):
+            run_dbt(["show", "--inline", "slect asdlkjfsld;j"])
+
     def test_multiline_jinja(self, project):
         (results, log_output) = run_dbt_and_capture(["compile", "--inline", model_multiline_jinja])
         assert len(results) == 1
@@ -186,11 +189,11 @@ class TestCompile:
         assert '"compiled"' in log_output
 
     def test_compile_inline_not_add_node(self, project):
-        dbt = dbtRunner()
+        dbt = dbtTestRunner()
         parse_result = dbt.invoke(["parse"])
         manifest = parse_result.result
         assert len(manifest.nodes) == 4
-        dbt = dbtRunner(manifest=manifest)
+        dbt = dbtTestRunner(manifest=manifest)
         dbt.invoke(
             ["compile", "--inline", "select * from {{ ref('second_model') }}"],
             populate_cache=False,
@@ -215,7 +218,7 @@ class TestCompile:
         """Ensure that the compile command generates a file named graph_summary.json
         in the target directory, that the file contains valid json, and that the
         json has the high level structure it should."""
-        dbtRunner().invoke(["compile"])
+        dbtTestRunner().invoke(["compile"])
         summary_path = pathlib.Path(project.project_root, "target/graph_summary.json")
         with open(summary_path, "r") as summary_file:
             summary = json.load(summary_file)

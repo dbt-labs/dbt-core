@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Remove unused key `wildcard` from MethodName enum
+time: 2024-02-23T09:23:30.029245-05:00
+custom:
+  Author: asweet
+  Issue: "9641"

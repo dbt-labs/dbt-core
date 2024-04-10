@@ -1,19 +1,21 @@
-import argparse
 import json
 
 import networkx as nx  # type: ignore
 import os
 import pickle
-import sqlparse
 
 from collections import defaultdict
 from typing import List, Dict, Any, Tuple, Optional
 
+from dbt_common.invocation import get_invocation_id
 from dbt.flags import get_flags
 from dbt.adapters.factory import get_adapter
 from dbt.clients import jinja
-from dbt.clients.system import make_directory
-from dbt.context.providers import generate_runtime_model_context
+from dbt.context.providers import (
+    generate_runtime_model_context,
+    generate_runtime_unit_test_context,
+)
+from dbt_common.clients.system import make_directory
 from dbt.contracts.graph.manifest import Manifest, UniqueID
 from dbt.contracts.graph.nodes import (
     ManifestNode,
@@ -22,6 +24,8 @@ from dbt.contracts.graph.nodes import (
     GraphMemberNode,
     InjectedCTE,
     SeedNode,
+    UnitTestNode,
+    UnitTestDefinition,
 )
 from dbt.exceptions import (
     GraphDependencyNotFoundError,
@@ -29,42 +33,28 @@ from dbt.exceptions import (
     DbtRuntimeError,
 )
 from dbt.graph import Graph
-from dbt.events.functions import fire_event, get_invocation_id
-from dbt.events.types import FoundStats, Note, WritingInjectedSQLForNode
-from dbt.events.contextvars import get_node_info
+from dbt_common.events.functions import fire_event
+from dbt_common.events.types import Note
+from dbt_common.events.contextvars import get_node_info
+from dbt.events.types import WritingInjectedSQLForNode, FoundStats
 from dbt.node_types import NodeType, ModelLanguage
-from dbt.events.format import pluralize
+from dbt_common.events.format import pluralize
 import dbt.tracking
-import dbt.task.list as list_task
+import sqlparse
 
 graph_file_name = "graph.gpickle"
 
 
-def print_compile_stats(stats):
-    names = {
-        NodeType.Model: "model",
-        NodeType.Test: "test",
-        NodeType.Snapshot: "snapshot",
-        NodeType.Analysis: "analysis",
-        NodeType.Macro: "macro",
-        NodeType.Operation: "operation",
-        NodeType.Seed: "seed file",
-        NodeType.Source: "source",
-        NodeType.Exposure: "exposure",
-        NodeType.Metric: "metric",
-        NodeType.Group: "group",
-    }
-
-    results = {k: 0 for k in names.keys()}
-    results.update(stats)
-
+def print_compile_stats(stats: Dict[NodeType, int]):
     # create tracking event for resource_counts
     if dbt.tracking.active_user is not None:
-        resource_counts = {k.pluralize(): v for k, v in results.items()}
+        resource_counts = {k.pluralize(): v for k, v in stats.items()}
         dbt.tracking.track_resource_counts(resource_counts)
 
-    stat_line = ", ".join([pluralize(ct, names.get(t)) for t, ct in results.items() if t in names])
-
+    # do not include resource types that are not actually defined in the project
+    stat_line = ", ".join(
+        [pluralize(ct, t).replace("_", " ") for t, ct in stats.items() if ct != 0]
+    )
     fire_event(FoundStats(stat_line=stat_line))
 
 
@@ -76,22 +66,24 @@ def _node_enabled(node: ManifestNode):
         return True
 
 
-def _generate_stats(manifest: Manifest):
+def _generate_stats(manifest: Manifest) -> Dict[NodeType, int]:
     stats: Dict[NodeType, int] = defaultdict(int)
     for node in manifest.nodes.values():
         if _node_enabled(node):
             stats[node.resource_type] += 1
 
-    for source in manifest.sources.values():
-        stats[source.resource_type] += 1
-    for exposure in manifest.exposures.values():
-        stats[exposure.resource_type] += 1
-    for metric in manifest.metrics.values():
-        stats[metric.resource_type] += 1
-    for macro in manifest.macros.values():
-        stats[macro.resource_type] += 1
-    for group in manifest.groups.values():
-        stats[group.resource_type] += 1
+    # Disabled nodes don't appear in the following collections, so we don't check.
+    stats[NodeType.Source] += len(manifest.sources)
+    stats[NodeType.Exposure] += len(manifest.exposures)
+    stats[NodeType.Metric] += len(manifest.metrics)
+    stats[NodeType.Macro] += len(manifest.macros)
+    stats[NodeType.Group] += len(manifest.groups)
+    stats[NodeType.SemanticModel] += len(manifest.semantic_models)
+    stats[NodeType.SavedQuery] += len(manifest.saved_queries)
+    stats[NodeType.Unit] += len(manifest.unit_tests)
+
+    # TODO: should we be counting dimensions + entities?
+
     return stats
 
 
@@ -123,10 +115,10 @@ def _get_tests_for_node(manifest: Manifest, unique_id: UniqueID) -> List[UniqueI
 
 
 class Linker:
-    def __init__(self, data=None):
+    def __init__(self, data=None) -> None:
         if data is None:
             data = {}
-        self.graph = nx.DiGraph(**data)
+        self.graph: nx.DiGraph = nx.DiGraph(**data)
 
     def edges(self):
         return self.graph.edges()
@@ -173,20 +165,26 @@ class Linker:
                 self.dependency(node.unique_id, (manifest.sources[dependency].unique_id))
             elif dependency in manifest.metrics:
                 self.dependency(node.unique_id, (manifest.metrics[dependency].unique_id))
+            elif dependency in manifest.semantic_models:
+                self.dependency(node.unique_id, (manifest.semantic_models[dependency].unique_id))
             else:
                 raise GraphDependencyNotFoundError(node, dependency)
 
     def link_graph(self, manifest: Manifest):
         for source in manifest.sources.values():
             self.add_node(source.unique_id)
-        for semantic_model in manifest.semantic_models.values():
-            self.add_node(semantic_model.unique_id)
         for node in manifest.nodes.values():
             self.link_node(node, manifest)
+        for semantic_model in manifest.semantic_models.values():
+            self.link_node(semantic_model, manifest)
         for exposure in manifest.exposures.values():
             self.link_node(exposure, manifest)
         for metric in manifest.metrics.values():
             self.link_node(metric, manifest)
+        for unit_test in manifest.unit_tests.values():
+            self.link_node(unit_test, manifest)
+        for saved_query in manifest.saved_queries.values():
+            self.link_node(saved_query, manifest)
 
         cycle = self.find_cycles()
 
@@ -228,6 +226,7 @@ class Linker:
                 # Get all tests that depend on any upstream nodes.
                 upstream_tests = []
                 for upstream_node in upstream_nodes:
+                    # This gets tests with unique_ids starting with "test."
                     upstream_tests += _get_tests_for_node(manifest, upstream_node)
 
                 for upstream_test in upstream_tests:
@@ -270,12 +269,11 @@ class Linker:
 
 
 class Compiler:
-    def __init__(self, config):
+    def __init__(self, config) -> None:
         self.config = config
 
     def initialize(self):
         make_directory(self.config.project_target_path)
-        make_directory(self.config.packages_install_path)
 
     # creates a ModelContext which is converted to
     # a dict for jinja rendering of SQL
@@ -285,8 +283,10 @@ class Compiler:
         manifest: Manifest,
         extra_context: Dict[str, Any],
     ) -> Dict[str, Any]:
-
-        context = generate_runtime_model_context(node, self.config, manifest)
+        if isinstance(node, UnitTestNode):
+            context = generate_runtime_unit_test_context(node, self.config, manifest)
+        else:
+            context = generate_runtime_model_context(node, self.config, manifest)
         context.update(extra_context)
 
         if isinstance(node, GenericTestNode):
@@ -315,6 +315,10 @@ class Compiler:
         """
         if model.compiled_code is None:
             raise DbtRuntimeError("Cannot inject ctes into an uncompiled node", model)
+
+        # tech debt: safe flag/arg access (#6259)
+        if not getattr(self.config.args, "inject_ephemeral_ctes", True):
+            return (model, [])
 
         # extra_ctes_injected flag says that we've already recursively injected the ctes
         if model.extra_ctes_injected:
@@ -374,16 +378,16 @@ class Compiler:
 
             _add_prepended_cte(prepended_ctes, InjectedCTE(id=cte.id, sql=sql))
 
-        injected_sql = inject_ctes_into_sql(
-            model.compiled_code,
-            prepended_ctes,
-        )
         # Check again before updating for multi-threading
         if not model.extra_ctes_injected:
+            injected_sql = inject_ctes_into_sql(
+                model.compiled_code,
+                prepended_ctes,
+            )
+            model.extra_ctes_injected = True
             model._pre_injected_sql = model.compiled_code
             model.compiled_code = injected_sql
             model.extra_ctes = prepended_ctes
-            model.extra_ctes_injected = True
 
         # if model.extra_ctes is not set to prepended ctes, something went wrong
         return model, model.extra_ctes
@@ -450,6 +454,7 @@ class Compiler:
         summaries["_invocation_id"] = get_invocation_id()
         summaries["linked"] = linker.get_graph_summary(manifest)
 
+        # This is only called for the "build" command
         if add_test_edges:
             manifest.build_parent_and_child_maps()
             linker.add_test_edges(manifest)
@@ -475,11 +480,8 @@ class Compiler:
         if write:
             self.write_graph_file(linker, manifest)
 
-        # Do not print these for ListTask's
-        if not (
-            self.config.args.__class__ == argparse.Namespace
-            and self.config.args.cls == list_task.ListTask
-        ):
+        # Do not print these for list command
+        if self.config.args.which != "list":
             stats = _generate_stats(manifest)
             print_compile_stats(stats)
 
@@ -519,6 +521,15 @@ class Compiler:
         the node's raw_code into compiled_code, and then calls the
         recursive method to "prepend" the ctes.
         """
+        if isinstance(node, UnitTestDefinition):
+            return node
+
+        # Make sure Lexer for sqlparse 0.4.4 is initialized
+        from sqlparse.lexer import Lexer  # type: ignore
+
+        if hasattr(Lexer, "get_default_instance"):
+            Lexer.get_default_instance()
+
         node = self._compile_code(node, manifest, extra_context)
 
         node, _ = self._recursively_prepend_ctes(node, manifest, extra_context)

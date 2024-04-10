@@ -1,0 +1,6 @@
+kind: Docs
+body: Add analytics for dbt.com
+time: 2023-06-15T10:51:57.838991+02:00
+custom:
+  Author: b-per
+  Issue: "430"

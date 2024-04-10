@@ -1,8 +1,9 @@
 from typing import Set, Iterable, Iterator, Optional, NewType
 from itertools import product
 import networkx as nx  # type: ignore
+from functools import partial
 
-from dbt.exceptions import DbtInternalError
+from dbt_common.exceptions import DbtInternalError
 
 UniqueId = NewType("UniqueId", str)
 
@@ -12,8 +13,8 @@ class Graph:
     and how they interact with the graph.
     """
 
-    def __init__(self, graph):
-        self.graph = graph
+    def __init__(self, graph) -> None:
+        self.graph: nx.DiGraph = graph
 
     def nodes(self) -> Set[UniqueId]:
         return set(self.graph.nodes())
@@ -42,15 +43,13 @@ class Graph:
         return {child for _, child in nx.bfs_edges(filtered_graph, node, depth_limit=max_depth)}
 
     def exclude_edge_type(self, edge_type_to_exclude):
-        return nx.restricted_view(
+        return nx.subgraph_view(
             self.graph,
-            nodes=[],
-            edges=(
-                (a, b)
-                for a, b in self.graph.edges
-                if self.graph[a][b].get("edge_type") == edge_type_to_exclude
-            ),
+            filter_edge=partial(self.filter_edges_by_type, edge_type=edge_type_to_exclude),
         )
+
+    def filter_edges_by_type(self, first_node, second_node, edge_type):
+        return self.graph.get_edge_data(first_node, second_node).get("edge_type") != edge_type
 
     def select_childrens_parents(self, selected: Set[UniqueId]) -> Set[UniqueId]:
         ancestors_for = self.select_children(selected) | selected
@@ -84,10 +83,10 @@ class Graph:
         removed nodes are preserved as explicit new edges.
         """
 
-        new_graph = self.graph.copy()
-        include_nodes = set(selected)
+        new_graph: nx.DiGraph = self.graph.copy()
+        include_nodes: Set[UniqueId] = set(selected)
 
-        still_removing = True
+        still_removing: bool = True
         while still_removing:
             nodes_to_remove = list(
                 node
@@ -130,6 +129,8 @@ class Graph:
         return Graph(new_graph)
 
     def subgraph(self, nodes: Iterable[UniqueId]) -> "Graph":
+        # Take the original networkx graph and return a subgraph containing only
+        # the selected unique_id nodes.
         return Graph(self.graph.subgraph(nodes))
 
     def get_dependent_nodes(self, node: UniqueId):

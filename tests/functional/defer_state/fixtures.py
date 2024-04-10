@@ -67,24 +67,32 @@ models:
   - name: view_model
     columns:
       - name: id
-        tests:
+        data_tests:
           - unique:
               severity: error
           - not_null
       - name: name
 """
 
-contract_schema_yml = """
+no_contract_schema_yml = """
 version: 2
 models:
-  - name: view_model
+  - name: table_model
+    config: {}
     columns:
       - name: id
-        tests:
+        data_type: integer
+        data_tests:
           - unique:
               severity: error
           - not_null
       - name: name
+        data_type: text
+"""
+
+contract_schema_yml = """
+version: 2
+models:
   - name: table_model
     config:
       contract:
@@ -92,7 +100,7 @@ models:
     columns:
       - name: id
         data_type: integer
-        tests:
+        data_tests:
           - unique:
               severity: error
           - not_null
@@ -103,14 +111,6 @@ models:
 modified_contract_schema_yml = """
 version: 2
 models:
-  - name: view_model
-    columns:
-      - name: id
-        tests:
-          - unique:
-              severity: error
-          - not_null
-      - name: name
   - name: table_model
     config:
       contract:
@@ -118,7 +118,7 @@ models:
     columns:
       - name: id
         data_type: integer
-        tests:
+        data_tests:
           - unique:
               severity: error
           - not_null
@@ -129,19 +129,92 @@ models:
 disabled_contract_schema_yml = """
 version: 2
 models:
-  - name: view_model
+  - name: table_model
+    config:
+      contract:
+        enforced: False
     columns:
       - name: id
-        tests:
+        data_type: integer
+        data_tests:
           - unique:
               severity: error
           - not_null
       - name: name
+        data_type: text
+"""
+
+versioned_no_contract_schema_yml = """
+version: 2
+models:
   - name: table_model
+    config: {}
+    versions:
+      - v: 1
     columns:
       - name: id
         data_type: integer
-        tests:
+        data_tests:
+          - unique:
+              severity: error
+          - not_null
+      - name: name
+        data_type: text
+"""
+
+versioned_contract_schema_yml = """
+version: 2
+models:
+  - name: table_model
+    config:
+      contract:
+        enforced: True
+    versions:
+      - v: 1
+    columns:
+      - name: id
+        data_type: integer
+        data_tests:
+          - unique:
+              severity: error
+          - not_null
+      - name: name
+        data_type: text
+"""
+
+versioned_modified_contract_schema_yml = """
+version: 2
+models:
+  - name: table_model
+    config:
+      contract:
+        enforced: True
+    versions:
+      - v: 1
+    columns:
+      - name: id
+        data_type: integer
+        data_tests:
+          - unique:
+              severity: error
+          - not_null
+      - name: user_name
+        data_type: text
+"""
+
+versioned_disabled_contract_schema_yml = """
+version: 2
+models:
+  - name: table_model
+    config:
+      contract:
+        enforced: False
+    versions:
+      - v: 1
+    columns:
+      - name: id
+        data_type: integer
+        data_tests:
           - unique:
               severity: error
           - not_null
@@ -155,7 +228,7 @@ models:
   - name: view_model
     columns:
       - name: id
-        tests:
+        data_tests:
           - unique:
               severity: error
           - not_null
@@ -172,7 +245,7 @@ models:
         constraints:
           - type: not_null
         data_type: integer
-        tests:
+        data_tests:
           - unique:
               severity: error
           - not_null
@@ -186,7 +259,7 @@ models:
   - name: view_model
     columns:
       - name: id
-        tests:
+        data_tests:
           - unique:
               severity: error
           - not_null
@@ -201,7 +274,7 @@ models:
     columns:
       - name: id
         data_type: integer
-        tests:
+        data_tests:
           - unique:
               severity: error
           - not_null
@@ -215,7 +288,7 @@ models:
   - name: view_model
     columns:
       - name: id
-        tests:
+        data_tests:
           - unique:
               severity: error
           - not_null
@@ -229,7 +302,7 @@ models:
         constraints:
           - type: not_null
         data_type: integer
-        tests:
+        data_tests:
           - unique:
               severity: error
           - not_null
@@ -285,4 +358,105 @@ snapshot_sql = """
     select * from {{ ref('view_model') }}
 
 {% endsnapshot %}
+"""
+
+
+semantic_model_schema_yml = """
+models:
+  - name: view_model
+    columns:
+      - name: id
+        data_tests:
+          - unique:
+              severity: error
+          - not_null
+      - name: name
+
+semantic_models:
+  - name: my_sm
+    model: ref('view_model')
+"""
+
+modified_semantic_model_schema_yml = """
+models:
+  - name: view_model
+    columns:
+      - name: id
+        data_tests:
+          - unique:
+              severity: error
+          - not_null
+      - name: name
+
+semantic_models:
+  - name: my_sm
+    model: ref('view_model')
+    description: modified description
+"""
+
+model_1_sql = """
+select * from {{ ref('seed') }}
+"""
+
+modified_model_1_sql = """
+select * from  {{ ref('seed') }}
+order by 1
+"""
+
+model_2_sql = """
+select id from  {{ ref('model_1') }}
+"""
+
+modified_model_2_sql = """
+select * from  {{ ref('model_1') }}
+order by 1
+"""
+
+
+group_schema_yml = """
+groups:
+  - name: finance
+    owner:
+      email: finance@jaffleshop.com
+
+models:
+  - name: model_1
+    config:
+      group: finance
+  - name: model_2
+    config:
+      group: finance
+"""
+
+
+group_modified_schema_yml = """
+groups:
+  - name: accounting
+    owner:
+      email: finance@jaffleshop.com
+models:
+  - name: model_1
+    config:
+      group: accounting
+  - name: model_2
+    config:
+      group: accounting
+"""
+
+group_modified_fail_schema_yml = """
+groups:
+  - name: finance
+    owner:
+      email: finance@jaffleshop.com
+models:
+  - name: model_1
+    config:
+      group: accounting
+  - name: model_2
+    config:
+      group: finance
+"""
+
+metricflow_time_spine_sql = """
+SELECT to_date('02/20/2023', 'mm/dd/yyyy') as date_day
 """

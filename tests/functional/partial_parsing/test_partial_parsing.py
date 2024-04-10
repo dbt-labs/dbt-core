@@ -1,6 +1,18 @@
+from argparse import Namespace
 import pytest
+from unittest import mock
 
-from dbt.tests.util import run_dbt, get_manifest, write_file, rm_file, run_dbt_and_capture
+import dbt.flags as flags
+from dbt.tests.util import (
+    run_dbt,
+    get_manifest,
+    write_file,
+    rm_file,
+    run_dbt_and_capture,
+    rename_dir,
+)
+import yaml
+from tests.functional.utils import up_one
 from dbt.tests.fixtures.project import write_project_files
 from tests.functional.partial_parsing.fixtures import (
     model_one_sql,
@@ -8,9 +20,6 @@ from tests.functional.partial_parsing.fixtures import (
     models_schema1_yml,
     models_schema2_yml,
     models_schema2b_yml,
-    models_versions_schema_yml,
-    models_versions_defined_in_schema_yml,
-    models_versions_updated_schema_yml,
     model_three_sql,
     model_three_modified_sql,
     model_four1_sql,
@@ -56,24 +65,18 @@ from tests.functional.partial_parsing.fixtures import (
     gsm_override_sql,
     gsm_override2_sql,
     orders_sql,
-    orders_downstream_sql,
     snapshot_sql,
     snapshot2_sql,
     generic_schema_yml,
     generic_test_sql,
     generic_test_schema_yml,
     generic_test_edited_sql,
-    groups_schema_yml_one_group,
-    groups_schema_yml_two_groups,
-    groups_schema_yml_two_groups_edited,
-    groups_schema_yml_one_group_model_in_group2,
-    groups_schema_yml_two_groups_private_orders_valid_access,
-    groups_schema_yml_two_groups_private_orders_invalid_access,
 )
 
-from dbt.exceptions import CompilationError, ParsingError, DuplicateVersionedUnversionedError
+from dbt.exceptions import CompilationError
 from dbt.contracts.files import ParseFileType
 from dbt.contracts.results import TestStatus
+from dbt.plugins.manifest import PluginNodes, ModelNodeArgs
 
 import re
 import os
@@ -132,7 +135,7 @@ class TestModels:
         assert model_three_node.description == "The third model"
         schema_file = manifest.files[schema_file_id]
         assert type(schema_file).__name__ == "SchemaSourceFile"
-        assert len(schema_file.tests) == 1
+        assert len(schema_file.data_tests) == 1
         tests = schema_file.get_all_test_ids()
         assert tests == ["test.test.unique_model_three_id.6776ac8160"]
         unique_test_id = tests[0]
@@ -301,72 +304,6 @@ class TestModels:
         model_id = "model.test.model_three"
         assert model_id in manifest.nodes
         assert model_id not in manifest.disabled
-
-
-class TestVersionedModels:
-    @pytest.fixture(scope="class")
-    def models(self):
-        return {
-            "model_one_v1.sql": model_one_sql,
-            "model_one.sql": model_one_sql,
-            "model_one_downstream.sql": model_four2_sql,
-            "schema.yml": models_versions_schema_yml,
-        }
-
-    def test_pp_versioned_models(self, project):
-        results = run_dbt(["run"])
-        assert len(results) == 3
-
-        manifest = get_manifest(project.project_root)
-        model_one_node = manifest.nodes["model.test.model_one.v1"]
-        assert not model_one_node.is_latest_version
-        model_two_node = manifest.nodes["model.test.model_one.v2"]
-        assert model_two_node.is_latest_version
-        # assert unpinned ref points to latest version
-        model_one_downstream_node = manifest.nodes["model.test.model_one_downstream"]
-        assert model_one_downstream_node.depends_on.nodes == ["model.test.model_one.v2"]
-
-        # update schema.yml block - model_one is now 'defined_in: model_one_different'
-        rm_file(project.project_root, "models", "model_one.sql")
-        write_file(model_one_sql, project.project_root, "models", "model_one_different.sql")
-        write_file(
-            models_versions_defined_in_schema_yml, project.project_root, "models", "schema.yml"
-        )
-        results = run_dbt(["--partial-parse", "run"])
-        assert len(results) == 3
-
-        # update versions schema.yml block - latest_version from 2 to 1
-        write_file(
-            models_versions_updated_schema_yml, project.project_root, "models", "schema.yml"
-        )
-        results, log_output = run_dbt_and_capture(
-            ["--partial-parse", "--log-format", "json", "run"]
-        )
-        assert len(results) == 3
-
-        manifest = get_manifest(project.project_root)
-        model_one_node = manifest.nodes["model.test.model_one.v1"]
-        assert model_one_node.is_latest_version
-        model_two_node = manifest.nodes["model.test.model_one.v2"]
-        assert not model_two_node.is_latest_version
-        # assert unpinned ref points to latest version
-        model_one_downstream_node = manifest.nodes["model.test.model_one_downstream"]
-        assert model_one_downstream_node.depends_on.nodes == ["model.test.model_one.v1"]
-        # assert unpinned ref to latest-not-max version yields an "FYI" info-level log
-        assert "UnpinnedRefNewVersionAvailable" in log_output
-
-        # update versioned model
-        write_file(model_two_sql, project.project_root, "models", "model_one_different.sql")
-        results = run_dbt(["--partial-parse", "run"])
-        assert len(results) == 3
-        manifest = get_manifest(project.project_root)
-        assert len(manifest.nodes) == 3
-        print(f"--- nodes: {manifest.nodes.keys()}")
-
-        # create a new model_one in model_one.sql and re-parse
-        write_file(model_one_sql, project.project_root, "models", "model_one.sql")
-        with pytest.raises(DuplicateVersionedUnversionedError):
-            run_dbt(["parse"])
 
 
 class TestSources:
@@ -720,88 +657,199 @@ class TestTests:
         assert expected_nodes == list(manifest.nodes.keys())
 
 
-class TestGroups:
+class TestExternalModels:
+    @pytest.fixture(scope="class")
+    def external_model_node(self):
+        return ModelNodeArgs(
+            name="external_model",
+            package_name="external",
+            identifier="test_identifier",
+            schema="test_schema",
+        )
+
+    @pytest.fixture(scope="class")
+    def external_model_node_versioned(self):
+        return ModelNodeArgs(
+            name="external_model_versioned",
+            package_name="external",
+            identifier="test_identifier_v1",
+            schema="test_schema",
+            version=1,
+        )
+
+    @pytest.fixture(scope="class")
+    def external_model_node_depends_on(self):
+        return ModelNodeArgs(
+            name="external_model_depends_on",
+            package_name="external",
+            identifier="test_identifier_depends_on",
+            schema="test_schema",
+            depends_on_nodes=["model.external.external_model_depends_on_parent"],
+        )
+
+    @pytest.fixture(scope="class")
+    def external_model_node_depends_on_parent(self):
+        return ModelNodeArgs(
+            name="external_model_depends_on_parent",
+            package_name="external",
+            identifier="test_identifier_depends_on_parent",
+            schema="test_schema",
+        )
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"model_one.sql": model_one_sql}
+
+    @mock.patch("dbt.plugins.get_plugin_manager")
+    def test_pp_external_models(
+        self,
+        get_plugin_manager,
+        project,
+        external_model_node,
+        external_model_node_versioned,
+        external_model_node_depends_on,
+        external_model_node_depends_on_parent,
+    ):
+        # initial plugin - one external model
+        external_nodes = PluginNodes()
+        external_nodes.add_model(external_model_node)
+        get_plugin_manager.return_value.get_nodes.return_value = external_nodes
+
+        # initial parse
+        manifest = run_dbt(["parse"])
+        assert len(manifest.nodes) == 2
+        assert set(manifest.nodes.keys()) == {
+            "model.external.external_model",
+            "model.test.model_one",
+        }
+        assert len(manifest.external_node_unique_ids) == 1
+        assert manifest.external_node_unique_ids == ["model.external.external_model"]
+
+        # add a model file
+        write_file(model_two_sql, project.project_root, "models", "model_two.sql")
+        manifest = run_dbt(["--partial-parse", "parse"])
+        assert len(manifest.nodes) == 3
+
+        # add an external model
+        external_nodes.add_model(external_model_node_versioned)
+        manifest = run_dbt(["--partial-parse", "parse"])
+        assert len(manifest.nodes) == 4
+        assert len(manifest.external_node_unique_ids) == 2
+
+        # add a model file that depends on external model
+        write_file(
+            "SELECT * FROM {{ref('external', 'external_model')}}",
+            project.project_root,
+            "models",
+            "model_depends_on_external.sql",
+        )
+        manifest = run_dbt(["--partial-parse", "parse"])
+        assert len(manifest.nodes) == 5
+        assert len(manifest.external_node_unique_ids) == 2
+
+        # remove a model file that depends on external model
+        rm_file(project.project_root, "models", "model_depends_on_external.sql")
+        manifest = run_dbt(["--partial-parse", "parse"])
+        assert len(manifest.nodes) == 4
+
+        # add an external node with depends on
+        external_nodes.add_model(external_model_node_depends_on)
+        external_nodes.add_model(external_model_node_depends_on_parent)
+        manifest = run_dbt(["--partial-parse", "parse"])
+        assert len(manifest.nodes) == 6
+        assert len(manifest.external_node_unique_ids) == 4
+
+        # skip files parsing - ensure no issues
+        run_dbt(["--partial-parse", "parse"])
+        assert len(manifest.nodes) == 6
+        assert len(manifest.external_node_unique_ids) == 4
+
+
+class TestPortablePartialParsing:
     @pytest.fixture(scope="class")
     def models(self):
         return {
-            "orders.sql": orders_sql,
-            "orders_downstream.sql": orders_downstream_sql,
-            "schema.yml": groups_schema_yml_one_group,
+            "model_one.sql": model_one_sql,
         }
 
-    def test_pp_groups(self, project):
+    @pytest.fixture(scope="class")
+    def packages(self):
+        return {"packages": [{"local": "local_dependency"}]}
+
+    @pytest.fixture(scope="class")
+    def local_dependency_files(self):
+        return {
+            "dbt_project.yml": local_dependency__dbt_project_yml,
+            "models": {
+                "schema.yml": local_dependency__models__schema_yml,
+                "model_to_import.sql": local_dependency__models__model_to_import_sql,
+            },
+            "macros": {"dep_macro.sql": local_dependency__macros__dep_macro_sql},
+            "seeds": {"seed.csv": local_dependency__seeds__seed_csv},
+        }
+
+    def rename_project_root(self, project, new_project_root):
+        with up_one(new_project_root):
+            rename_dir(project.project_root, new_project_root)
+            project.project_root = new_project_root
+            # flags.project_dir is set during the project test fixture, and is persisted across run_dbt calls,
+            # so it needs to be reset between invocations
+            flags.set_from_args(Namespace(PROJECT_DIR=new_project_root), None)
+
+    @pytest.fixture(scope="class", autouse=True)
+    def initial_run_and_rename_project_dir(self, project, local_dependency_files):
+        initial_project_root = project.project_root
+        renamed_project_root = os.path.join(project.project_root.dirname, "renamed_project_dir")
+
+        write_project_files(project.project_root, "local_dependency", local_dependency_files)
 
         # initial run
-        results = run_dbt()
-        assert len(results) == 2
-        manifest = get_manifest(project.project_root)
-        expected_nodes = ["model.test.orders", "model.test.orders_downstream"]
-        expected_groups = ["group.test.test_group"]
-        assert expected_nodes == sorted(list(manifest.nodes.keys()))
-        assert expected_groups == sorted(list(manifest.groups.keys()))
+        run_dbt(["deps"])
+        assert len(run_dbt(["seed"])) == 1
+        assert len(run_dbt(["run"])) == 2
 
-        # add group to schema
-        write_file(groups_schema_yml_two_groups, project.project_root, "models", "schema.yml")
-        results = run_dbt(["--partial-parse", "run"])
-        assert len(results) == 2
-        manifest = get_manifest(project.project_root)
-        expected_nodes = ["model.test.orders", "model.test.orders_downstream"]
-        expected_groups = ["group.test.test_group", "group.test.test_group2"]
-        assert expected_nodes == sorted(list(manifest.nodes.keys()))
-        assert expected_groups == sorted(list(manifest.groups.keys()))
+        self.rename_project_root(project, renamed_project_root)
+        yield
+        self.rename_project_root(project, initial_project_root)
 
-        # edit group in schema
-        write_file(
-            groups_schema_yml_two_groups_edited, project.project_root, "models", "schema.yml"
-        )
-        results = run_dbt(["--partial-parse", "run"])
-        assert len(results) == 2
-        manifest = get_manifest(project.project_root)
-        expected_nodes = ["model.test.orders", "model.test.orders_downstream"]
-        expected_groups = ["group.test.test_group", "group.test.test_group2_edited"]
-        assert expected_nodes == sorted(list(manifest.nodes.keys()))
-        assert expected_groups == sorted(list(manifest.groups.keys()))
+    def test_pp_renamed_project_dir_unchanged_project_contents(self, project):
+        # partial parse same project in new absolute dir location, using partial_parse.msgpack created in previous dir
+        run_dbt(["deps"])
+        assert len(run_dbt(["--partial-parse", "seed"])) == 1
+        assert len(run_dbt(["--partial-parse", "run"])) == 2
 
-        # delete group in schema
-        write_file(groups_schema_yml_one_group, project.project_root, "models", "schema.yml")
-        results = run_dbt(["--partial-parse", "run"])
-        assert len(results) == 2
-        manifest = get_manifest(project.project_root)
-        expected_nodes = ["model.test.orders", "model.test.orders_downstream"]
-        expected_groups = ["group.test.test_group"]
-        assert expected_nodes == sorted(list(manifest.nodes.keys()))
-        assert expected_groups == sorted(list(manifest.groups.keys()))
+    def test_pp_renamed_project_dir_changed_project_contents(self, project):
+        write_file(model_two_sql, project.project_root, "models", "model_two.sql")
 
-        # add back second group
-        write_file(groups_schema_yml_two_groups, project.project_root, "models", "schema.yml")
-        results = run_dbt(["--partial-parse", "run"])
-        assert len(results) == 2
+        # partial parse changed project in new absolute dir location, using partial_parse.msgpack created in previous dir
+        run_dbt(["deps"])
+        len(run_dbt(["--partial-parse", "seed"])) == 1
+        len(run_dbt(["--partial-parse", "run"])) == 3
 
-        # remove second group with model still configured to second group
-        write_file(
-            groups_schema_yml_one_group_model_in_group2,
-            project.project_root,
-            "models",
-            "schema.yml",
-        )
-        with pytest.raises(ParsingError):
-            results = run_dbt(["--partial-parse", "run"])
 
-        # add back second group, make orders private with valid ref
-        write_file(
-            groups_schema_yml_two_groups_private_orders_valid_access,
-            project.project_root,
-            "models",
-            "schema.yml",
-        )
-        results = run_dbt(["--partial-parse", "run"])
-        assert len(results) == 2
+class TestProfileChanges:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "model.sql": "select 1 as id",
+        }
 
-        write_file(
-            groups_schema_yml_two_groups_private_orders_invalid_access,
-            project.project_root,
-            "models",
-            "schema.yml",
-        )
-        with pytest.raises(ParsingError):
-            results = run_dbt(["--partial-parse", "run"])
+    def test_profile_change(self, project, dbt_profile_data):
+        # Fist run not partial parsing
+        _, stdout = run_dbt_and_capture(["parse"])
+        assert "Unable to do partial parsing because saved manifest not found" in stdout
+
+        _, stdout = run_dbt_and_capture(["parse"])
+        assert "Unable to do partial parsing" not in stdout
+
+        # change dbname which is included in the connection_info
+        dbt_profile_data["test"]["outputs"]["default"]["dbname"] = "dbt2"
+        write_file(yaml.safe_dump(dbt_profile_data), project.profiles_dir, "profiles.yml")
+        _, stdout = run_dbt_and_capture(["parse"])
+        assert "Unable to do partial parsing because profile has changed" in stdout
+
+        # Change the password which is not included in the connection_info
+        dbt_profile_data["test"]["outputs"]["default"]["pass"] = "another_password"
+        write_file(yaml.safe_dump(dbt_profile_data), project.profiles_dir, "profiles.yml")
+        _, stdout = run_dbt_and_capture(["parse"])
+        assert "Unable to do partial parsing" not in stdout

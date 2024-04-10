@@ -3,7 +3,8 @@ from pathlib import Path
 
 import pytest
 from dbt.constants import SECRET_ENV_PREFIX
-from dbt.exceptions import FailedToConnectError, ParsingError
+from dbt.exceptions import ParsingError
+from dbt.adapters.exceptions import FailedToConnectError
 from dbt.tests.util import get_manifest, run_dbt, run_dbt_and_capture, write_file
 
 from tests.functional.partial_parsing.fixtures import (
@@ -17,8 +18,10 @@ from tests.functional.partial_parsing.fixtures import (
     env_var_schema3_yml,
     env_var_schema_yml,
     env_var_sources_yml,
+    metricflow_time_spine_sql,
     model_color_sql,
     model_one_sql,
+    people_semantic_models_yml,
     people_sql,
     raw_customers_csv,
     test_color_sql,
@@ -228,6 +231,12 @@ class TestEnvVars:
         # Add a metrics file with env_vars
         os.environ["ENV_VAR_METRICS"] = "TeStInG"
         write_file(people_sql, project.project_root, "models", "people.sql")
+        write_file(
+            metricflow_time_spine_sql, project.project_root, "models", "metricflow_time_spine.sql"
+        )
+        write_file(
+            people_semantic_models_yml, project.project_root, "models", "semantic_models.yml"
+        )
         write_file(env_var_metrics_yml, project.project_root, "models", "metrics.yml")
         results = run_dbt(["run"])
         manifest = get_manifest(project.project_root)
@@ -305,40 +314,33 @@ class TestProfileEnvVars:
         # calls 'load_config' before the tests are run.
         # Note: only the specified profile is rendered, so there's no
         # point it setting env_vars in non-used profiles.
-        os.environ["ENV_VAR_USER"] = "root"
-        os.environ["ENV_VAR_PASS"] = "password"
+        os.environ["ENV_VAR_HOST"] = "localhost"
         return {
             "type": "postgres",
             "threads": 4,
-            "host": "localhost",
+            "host": "{{ env_var('ENV_VAR_HOST') }}",
             "port": 5432,
-            "user": "{{ env_var('ENV_VAR_USER') }}",
-            "pass": "{{ env_var('ENV_VAR_PASS') }}",
+            "user": "root",
+            "pass": "password",
             "dbname": "dbt",
         }
 
     def test_profile_env_vars(self, project, logs_dir):
 
         # Initial run
-        os.environ["ENV_VAR_USER"] = "root"
-        os.environ["ENV_VAR_PASS"] = "password"
+        os.environ["ENV_VAR_HOST"] = "localhost"
 
         run_dbt(["run"])
-        manifest = get_manifest(project.project_root)
-        env_vars_checksum = manifest.state_check.profile_env_vars_hash.checksum
 
         # Change env_vars, the user doesn't exist, this should fail
-        os.environ["ENV_VAR_USER"] = "fake_user"
+        os.environ["ENV_VAR_HOST"] = "wrong_host"
 
         # N.B. run_dbt_and_capture won't work here because FailedToConnectError ends the test entirely
         with pytest.raises(FailedToConnectError):
             run_dbt(["run"], expect_pass=False)
 
         log_output = Path(logs_dir, "dbt.log").read_text()
-        assert "env vars used in profiles.yml have changed" in log_output
-
-        manifest = get_manifest(project.project_root)
-        assert env_vars_checksum != manifest.state_check.profile_env_vars_hash.checksum
+        assert "Unable to do partial parsing because profile has changed" in log_output
 
 
 class TestProfileSecretEnvVars:

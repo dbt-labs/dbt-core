@@ -2,7 +2,7 @@ import os
 import pathspec  # type: ignore
 import pathlib
 from dataclasses import dataclass, field
-from dbt.clients.system import load_file_contents
+from dbt_common.clients.system import load_file_contents
 from dbt.contracts.files import (
     FilePath,
     ParseFileType,
@@ -10,15 +10,17 @@ from dbt.contracts.files import (
     FileHash,
     AnySourceFile,
     SchemaSourceFile,
+    FixtureSourceFile,
 )
 from dbt.config import Project
-from dbt.dataclass_schema import dbtClassMixin
+from dbt_common.dataclass_schema import dbtClassMixin
 from dbt.parser.schemas import yaml_from_file, schema_file_keys
 from dbt.exceptions import ParsingError
 from dbt.parser.search import filesystem_search
-from typing import Optional, Dict, List, Mapping
+from typing import Optional, Dict, List, Mapping, MutableMapping
 from dbt.events.types import InputFileDiffError
-from dbt.events.functions import fire_event
+from dbt_common.events.functions import fire_event
+from typing import Protocol
 
 
 @dataclass
@@ -45,7 +47,13 @@ def load_source_file(
     saved_files,
 ) -> Optional[AnySourceFile]:
 
-    sf_cls = SchemaSourceFile if parse_file_type == ParseFileType.Schema else SourceFile
+    if parse_file_type == ParseFileType.Schema:
+        sf_cls = SchemaSourceFile
+    elif parse_file_type == ParseFileType.Fixture:
+        sf_cls = FixtureSourceFile  # type:ignore[assignment]
+    else:
+        sf_cls = SourceFile  # type:ignore[assignment]
+
     source_file = sf_cls(
         path=path,
         checksum=FileHash.empty(),
@@ -73,7 +81,7 @@ def load_source_file(
         # the checksum to match the stored file contents
         file_contents = load_file_contents(path.absolute_path, strip=True)
         source_file.contents = file_contents
-        source_file.checksum = FileHash.from_contents(source_file.contents)
+        source_file.checksum = FileHash.from_contents(file_contents)
 
     if parse_file_type == ParseFileType.Schema and source_file.contents:
         dfy = yaml_from_file(source_file)
@@ -173,12 +181,21 @@ def generate_dbt_ignore_spec(project_root):
     return ignore_spec
 
 
+# Protocol for the ReadFiles... classes
+class ReadFiles(Protocol):
+    files: MutableMapping[str, AnySourceFile]
+    project_parser_files: Dict
+
+    def read_files(self):
+        pass
+
+
 @dataclass
 class ReadFilesFromFileSystem:
     all_projects: Mapping[str, Project]
-    files: Dict[str, AnySourceFile] = field(default_factory=dict)
+    files: MutableMapping[str, AnySourceFile] = field(default_factory=dict)
     # saved_files is only used to compare schema files
-    saved_files: Dict[str, AnySourceFile] = field(default_factory=dict)
+    saved_files: MutableMapping[str, AnySourceFile] = field(default_factory=dict)
     # project_parser_files = {
     #   "my_project": {
     #     "ModelParser": ["my_project://models/my_model.sql"]
@@ -212,10 +229,10 @@ class ReadFilesFromDiff:
     root_project_name: str
     all_projects: Mapping[str, Project]
     file_diff: FileDiff
-    files: Dict[str, AnySourceFile] = field(default_factory=dict)
+    files: MutableMapping[str, AnySourceFile] = field(default_factory=dict)
     # saved_files is used to construct a fresh copy of files, without
     # additional information from parsing
-    saved_files: Dict[str, AnySourceFile] = field(default_factory=dict)
+    saved_files: MutableMapping[str, AnySourceFile] = field(default_factory=dict)
     project_parser_files: Dict = field(default_factory=dict)
     project_file_types: Dict = field(default_factory=dict)
     local_package_dirs: Optional[List[str]] = None
@@ -411,6 +428,11 @@ def get_file_types_for_project(project):
             "paths": project.all_source_paths,
             "extensions": [".yml", ".yaml"],
             "parser": "SchemaParser",
+        },
+        ParseFileType.Fixture: {
+            "paths": project.fixture_paths,
+            "extensions": [".csv"],
+            "parser": "FixtureParser",
         },
     }
     return file_types

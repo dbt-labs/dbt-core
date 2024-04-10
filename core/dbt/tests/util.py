@@ -1,3 +1,4 @@
+from contextvars import ContextVar, copy_context
 from io import StringIO
 import os
 import shutil
@@ -5,22 +6,23 @@ import yaml
 import json
 import warnings
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from contextlib import contextmanager
 from dbt.adapters.factory import Adapter
 
 from dbt.cli.main import dbtRunner
 from dbt.logger import log_manager
 from dbt.contracts.graph.manifest import Manifest
-from dbt.events.functions import (
+from dbt_common.context import _INVOCATION_CONTEXT_VAR, InvocationContext
+from dbt_common.events.functions import (
     fire_event,
     capture_stdout_logs,
     stop_capture_stdout_logs,
     reset_metadata_vars,
 )
-from dbt.events.base_types import EventLevel
-from dbt.events.types import Note
-
+from dbt_common.events.base_types import EventLevel
+from dbt_common.events.types import Note
+from dbt.adapters.base.relation import BaseRelation
 
 # =============================================================================
 # Test utilities
@@ -68,7 +70,7 @@ from dbt.events.types import Note
 # The first parameter is a list of dbt command line arguments, such as
 #   run_dbt(["run", "--vars", "seed_name: base"])
 # If the command is expected to fail, pass in "expect_pass=False"):
-#   run_dbt("test"], expect_pass=False)
+#   run_dbt(["test"], expect_pass=False)
 def run_dbt(
     args: Optional[List[str]] = None,
     expect_pass: bool = True,
@@ -149,13 +151,23 @@ def get_logging_events(log_output, event_name):
 # Used in test cases to get the manifest from the partial parsing file
 # Note: this uses an internal version of the manifest, and in the future
 # parts of it will not be supported for external use.
-def get_manifest(project_root):
+def get_manifest(project_root) -> Optional[Manifest]:
     path = os.path.join(project_root, "target", "partial_parse.msgpack")
     if os.path.exists(path):
         with open(path, "rb") as fp:
             manifest_mp = fp.read()
         manifest: Manifest = Manifest.from_msgpack(manifest_mp)
         return manifest
+    else:
+        return None
+
+
+# Used in test cases to get the run_results.json file.
+def get_run_results(project_root) -> Any:
+    path = os.path.join(project_root, "target", "run_results.json")
+    if os.path.exists(path):
+        with open(path) as run_result_text:
+            return json.load(run_result_text)
     else:
         return None
 
@@ -212,6 +224,10 @@ def rm_dir(directory_path):
         shutil.rmtree(directory_path)
     except FileNotFoundError:
         raise FileNotFoundError(f"{directory_path} does not exist.")
+
+
+def rename_dir(src_directory_path, dest_directory_path):
+    os.rename(src_directory_path, dest_directory_path)
 
 
 # Get an artifact (usually from the target directory) such as
@@ -588,3 +604,45 @@ class AnyStringWith:
 
     def __repr__(self):
         return "AnyStringWith<{!r}>".format(self.contains)
+
+
+def assert_message_in_logs(message: str, logs: str, expected_pass: bool = True):
+    # if the logs are json strings, then 'jsonify' the message because of things like escape quotes
+    if os.environ.get("DBT_LOG_FORMAT", "") == "json":
+        message = message.replace(r'"', r"\"")
+
+    if expected_pass:
+        assert message in logs
+    else:
+        assert message not in logs
+
+
+def get_project_config(project):
+    file_yaml = read_file(project.project_root, "dbt_project.yml")
+    return yaml.safe_load(file_yaml)
+
+
+def set_project_config(project, config):
+    config_yaml = yaml.safe_dump(config)
+    write_file(config_yaml, project.project_root, "dbt_project.yml")
+
+
+def get_model_file(project, relation: BaseRelation) -> str:
+    return read_file(project.project_root, "models", f"{relation.name}.sql")
+
+
+def set_model_file(project, relation: BaseRelation, model_sql: str):
+    write_file(model_sql, project.project_root, "models", f"{relation.name}.sql")
+
+
+def safe_set_invocation_context():
+    """In order to deal with a problem with the way the pytest runner interacts
+    with ContextVars, this function provides a mechanism for setting the
+    invocation context reliably, using its name rather than the reference
+    variable, which may have been loaded in a separate context."""
+    invocation_var: Optional[ContextVar] = next(
+        iter([cv for cv in copy_context() if cv.name == _INVOCATION_CONTEXT_VAR.name]), None
+    )
+    if invocation_var is None:
+        invocation_var = _INVOCATION_CONTEXT_VAR
+    invocation_var.set(InvocationContext(os.environ))

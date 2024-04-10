@@ -1,14 +1,14 @@
 from typing import List
 
 from dbt.clients.jinja import MacroStack
-from dbt.contracts.connection import AdapterRequiredConfig
+from dbt.adapters.contracts.connection import AdapterRequiredConfig
 from dbt.contracts.graph.manifest import Manifest
 from dbt.context.macro_resolver import TestMacroNamespace
 from .base import contextproperty
 
 
 from .configured import ConfiguredContext
-from .macros import MacroNamespaceBuilder
+from .macros import MacroNamespace, MacroNamespaceBuilder
 
 
 class ManifestContext(ConfiguredContext):
@@ -36,11 +36,11 @@ class ManifestContext(ConfiguredContext):
         # to be able to do: namespace.get_from_package(..)
         self.namespace = self._build_namespace()
 
-    def _build_namespace(self):
+    def _build_namespace(self) -> MacroNamespace:
         # this takes all the macros in the manifest and adds them
         # to the MacroNamespaceBuilder stored in self.namespace
         builder = self._get_namespace_builder()
-        return builder.build_namespace(self.manifest.macros.values(), self._ctx)
+        return builder.build_namespace(self.manifest.get_macros_by_package(), self._ctx)
 
     def _get_namespace_builder(self) -> MacroNamespaceBuilder:
         # avoid an import loop
@@ -65,9 +65,10 @@ class ManifestContext(ConfiguredContext):
             dct.update(self.namespace.project_namespace)
         else:
             dct.update(self.namespace)
+
         return dct
 
-    @contextproperty
+    @contextproperty()
     def context_macro_stack(self):
         return self.macro_stack
 

@@ -1,28 +1,398 @@
 {
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
-  "required": [
-    "metadata",
-    "nodes",
-    "sources"
-  ],
+  "title": "CatalogArtifact",
   "properties": {
     "metadata": {
-      "$ref": "#/definitions/CatalogMetadata"
+      "type": "object",
+      "title": "CatalogMetadata",
+      "properties": {
+        "dbt_schema_version": {
+          "type": "string"
+        },
+        "dbt_version": {
+          "type": "string",
+          "default": "1.8.0a1"
+        },
+        "generated_at": {
+          "type": "string"
+        },
+        "invocation_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "env": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "propertyNames": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
     },
     "nodes": {
       "type": "object",
       "additionalProperties": {
-        "$ref": "#/definitions/CatalogTable"
+        "type": "object",
+        "title": "CatalogTable",
+        "properties": {
+          "metadata": {
+            "type": "object",
+            "title": "TableMetadata",
+            "properties": {
+              "type": {
+                "type": "string"
+              },
+              "schema": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "database": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "comment": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "owner": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "type",
+              "schema",
+              "name"
+            ]
+          },
+          "columns": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "title": "ColumnMetadata",
+              "properties": {
+                "type": {
+                  "type": "string"
+                },
+                "index": {
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "comment": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "type",
+                "index",
+                "name"
+              ]
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "stats": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "title": "StatsItem",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "value": {
+                  "anyOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "include": {
+                  "type": "boolean"
+                },
+                "description": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "label",
+                "value",
+                "include"
+              ]
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "unique_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "metadata",
+          "columns",
+          "stats"
+        ]
+      },
+      "propertyNames": {
+        "type": "string"
       }
     },
     "sources": {
       "type": "object",
       "additionalProperties": {
-        "$ref": "#/definitions/CatalogTable"
+        "type": "object",
+        "title": "CatalogTable",
+        "properties": {
+          "metadata": {
+            "type": "object",
+            "title": "TableMetadata",
+            "properties": {
+              "type": {
+                "type": "string"
+              },
+              "schema": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "database": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "comment": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "owner": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "type",
+              "schema",
+              "name"
+            ]
+          },
+          "columns": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "title": "ColumnMetadata",
+              "properties": {
+                "type": {
+                  "type": "string"
+                },
+                "index": {
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "comment": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "type",
+                "index",
+                "name"
+              ]
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "stats": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "title": "StatsItem",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "value": {
+                  "anyOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "include": {
+                  "type": "boolean"
+                },
+                "description": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "label",
+                "value",
+                "include"
+              ]
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "unique_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "metadata",
+          "columns",
+          "stats"
+        ]
+      },
+      "propertyNames": {
+        "type": "string"
       }
     },
     "errors": {
-      "oneOf": [
+      "anyOf": [
         {
           "type": "array",
           "items": {
@@ -32,218 +402,24 @@
         {
           "type": "null"
         }
-      ]
+      ],
+      "default": null
+    },
+    "_compile_results": {
+      "anyOf": [
+        {},
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     }
   },
   "additionalProperties": false,
-  "description": "CatalogArtifact(metadata: dbt.contracts.results.CatalogMetadata, nodes: Dict[str, dbt.contracts.results.CatalogTable], sources: Dict[str, dbt.contracts.results.CatalogTable], errors: Optional[List[str]] = None, _compile_results: Optional[Any] = None)",
-  "definitions": {
-    "CatalogMetadata": {
-      "type": "object",
-      "required": [],
-      "properties": {
-        "dbt_schema_version": {
-          "type": "string",
-          "default": "https://schemas.getdbt.com/dbt/catalog/v1.json"
-        },
-        "dbt_version": {
-          "type": "string",
-          "default": "1.5.0a1"
-        },
-        "generated_at": {
-          "type": "string",
-          "format": "date-time",
-          "default": "2023-02-09T23:46:55.265093Z"
-        },
-        "invocation_id": {
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": "e6a9b266-203d-4fec-93af-fb8f55423a6b"
-        },
-        "env": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "string"
-          },
-          "default": {}
-        }
-      },
-      "additionalProperties": false,
-      "description": "CatalogMetadata(dbt_schema_version: str = <factory>, dbt_version: str = '1.5.0a1', generated_at: datetime.datetime = <factory>, invocation_id: Optional[str] = <factory>, env: Dict[str, str] = <factory>)"
-    },
-    "CatalogTable": {
-      "type": "object",
-      "required": [
-        "metadata",
-        "columns",
-        "stats"
-      ],
-      "properties": {
-        "metadata": {
-          "$ref": "#/definitions/TableMetadata"
-        },
-        "columns": {
-          "type": "object",
-          "additionalProperties": {
-            "$ref": "#/definitions/ColumnMetadata"
-          }
-        },
-        "stats": {
-          "type": "object",
-          "additionalProperties": {
-            "$ref": "#/definitions/StatsItem"
-          }
-        },
-        "unique_id": {
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "additionalProperties": false,
-      "description": "CatalogTable(metadata: dbt.contracts.results.TableMetadata, columns: Dict[str, dbt.contracts.results.ColumnMetadata], stats: Dict[str, dbt.contracts.results.StatsItem], unique_id: Optional[str] = None)"
-    },
-    "TableMetadata": {
-      "type": "object",
-      "required": [
-        "type",
-        "schema",
-        "name"
-      ],
-      "properties": {
-        "type": {
-          "type": "string"
-        },
-        "schema": {
-          "type": "string"
-        },
-        "name": {
-          "type": "string"
-        },
-        "database": {
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "comment": {
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "owner": {
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "additionalProperties": false,
-      "description": "TableMetadata(type: str, schema: str, name: str, database: Optional[str] = None, comment: Optional[str] = None, owner: Optional[str] = None)"
-    },
-    "ColumnMetadata": {
-      "type": "object",
-      "required": [
-        "type",
-        "index",
-        "name"
-      ],
-      "properties": {
-        "type": {
-          "type": "string"
-        },
-        "index": {
-          "type": "integer"
-        },
-        "name": {
-          "type": "string"
-        },
-        "comment": {
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "additionalProperties": false,
-      "description": "ColumnMetadata(type: str, index: int, name: str, comment: Optional[str] = None)"
-    },
-    "StatsItem": {
-      "type": "object",
-      "required": [
-        "id",
-        "label",
-        "include"
-      ],
-      "properties": {
-        "id": {
-          "type": "string"
-        },
-        "label": {
-          "type": "string"
-        },
-        "value": {
-          "oneOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "string"
-            },
-            {
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "include": {
-          "type": "boolean"
-        },
-        "description": {
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "additionalProperties": false,
-      "description": "StatsItem(id: str, label: str, value: Union[bool, str, float, NoneType], include: bool, description: Optional[str] = None)"
-    }
-  },
-  "$schema": "http://json-schema.org/draft-07/schema#",
+  "required": [
+    "metadata",
+    "nodes",
+    "sources"
+  ],
   "$id": "https://schemas.getdbt.com/dbt/catalog/v1.json"
 }

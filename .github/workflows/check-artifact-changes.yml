@@ -1,0 +1,41 @@
+name: Check Artifact Changes
+
+on:
+  pull_request:
+    types: [ opened, reopened, labeled, unlabeled, synchronize ]
+    paths-ignore: [ '.changes/**', '.github/**', 'tests/**', '**.md', '**.yml' ]
+
+  workflow_dispatch:
+
+jobs:
+  check-artifact-changes:
+    runs-on: ubuntu-latest
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'artifact_minor_upgrade') }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for changes in core/dbt/artifacts
+        # https://github.com/marketplace/actions/paths-changes-filter
+        uses: dorny/paths-filter@v3
+        id: check_artifact_changes
+        with:
+          filters: |
+            artifacts_changed:
+              - 'core/dbt/artifacts/**'
+          list-files: shell
+
+      - name: Fail CI if artifacts have changed
+        if: steps.check_artifact_changes.outputs.artifacts_changed == 'true'
+        run: |
+          echo "CI failure: Artifact changes checked in core/dbt/artifacts directory."
+          echo "Files changed: ${{ steps.check_artifact_changes.outputs.artifacts_changed_files }}"
+          echo "To bypass this check, confirm that the change is not breaking (https://github.com/dbt-labs/dbt-core/blob/main/core/dbt/artifacts/README.md#breaking-changes) and add the 'artifact_minor_upgrade' label to the PR."
+          exit 1
+
+      - name: CI check passed
+        if: steps.check_artifact_changes.outputs.artifacts_changed == 'false'
+        run: |
+          echo "No prohibited artifact changes found in core/dbt/artifacts. CI check passed."

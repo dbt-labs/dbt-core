@@ -106,14 +106,31 @@ models:
     description: "yet another model"
   - name: ref_my_model
     description: "a model that refs my_model"
-    group: marts
-  - name: ref_my_model
-    description: "a model that refs my_model"
     group: analytics
   - name: people_model
     description: "some people"
-    access: private
+    access: public
     group: analytics
+"""
+
+v6_schema_yml = """
+models:
+  - name: my_model
+    description: "my model"
+    config:
+      access: private
+      group: analytics
+  - name: another_model
+    description: "yet another model"
+  - name: ref_my_model
+    description: "a model that refs my_model"
+    config:
+      group: analytics
+  - name: people_model
+    description: "some people"
+    config:
+      access: public
+      group: analytics
 """
 
 people_model_sql = """
@@ -122,6 +139,31 @@ union all
 select 1 as id, 'Jeremy' as first_name, 'Cohen' as last_name, 'indigo' as favorite_color, true as loves_dbt, 4 as tenure, current_timestamp as created_at
 union all
 select 1 as id, 'Callum' as first_name, 'McCann' as last_name, 'emerald' as favorite_color, true as loves_dbt, 0 as tenure, current_timestamp as created_at
+"""
+
+people_semantic_model_yml = """
+semantic_models:
+  - name: semantic_people
+    model: ref('people_model')
+    dimensions:
+      - name: favorite_color
+        type: categorical
+      - name: created_at
+        type: TIME
+        type_params:
+          time_granularity: day
+    measures:
+      - name: years_tenure
+        agg: SUM
+        expr: tenure
+      - name: people
+        agg: count
+        expr: id
+    entities:
+      - name: id
+        type: primary
+    defaults:
+      agg_time_dimension: created_at
 """
 
 people_metric_yml = """
@@ -203,6 +245,10 @@ models:
   group: package
 """
 
+metricflow_time_spine_sql = """
+SELECT to_date('02/20/2023', 'mm/dd/yyyy') as date_day
+"""
+
 
 class TestAccess:
     @pytest.fixture(scope="class")
@@ -278,13 +324,27 @@ class TestAccess:
         write_file(v5_schema_yml, project.project_root, "models", "schema.yml")
         rm_file(project.project_root, "models", "simple_exposure.yml")
         write_file(people_model_sql, "models", "people_model.sql")
+        write_file(people_semantic_model_yml, "models", "people_semantic_model.yml")
         write_file(people_metric_yml, "models", "people_metric.yml")
+        write_file(metricflow_time_spine_sql, "models", "metricflow_time_spine.sql")
         # Should succeed
         manifest = run_dbt(["parse"])
-        assert len(manifest.nodes) == 4
-        manifest = get_manifest(project.project_root)
+        assert len(manifest.nodes) == 5
         metric_id = "metric.test.number_of_people"
         assert manifest.metrics[metric_id].group == "analytics"
+
+        # Use access and group in config
+        write_file(v5_schema_yml, project.project_root, "models", "schema.yml")
+        manifest = run_dbt(["parse"])
+        assert len(manifest.nodes) == 5
+        assert manifest.nodes["model.test.my_model"].access == AccessType.Private
+        assert manifest.nodes["model.test.my_model"].group == "analytics"
+        assert manifest.nodes["model.test.ref_my_model"].access == AccessType.Protected
+        assert manifest.nodes["model.test.ref_my_model"].group == "analytics"
+        assert manifest.nodes["model.test.people_model"].access == AccessType.Public
+        assert manifest.nodes["model.test.people_model"].group == "analytics"
+        assert manifest.nodes["model.test.another_model"].access == AccessType.Protected
+        assert manifest.nodes["model.test.another_model"].group is None
 
 
 class TestUnrestrictedPackageAccess:
@@ -367,3 +427,46 @@ class TestRestrictedPackageAccess:
 
         with pytest.raises(DbtReferenceError):
             run_dbt(["parse"])
+
+
+dbt_project_yml = """
+models:
+  test:
+    subdir_one:
+      +group: analytics
+      +access: private
+    subdir_two:
+      +group: marts
+      +access: public
+"""
+
+
+class TestAccessDbtProjectConfig:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "model_one.sql": my_model_sql,
+            "subdir_one": {
+                "model_two.sql": my_model_sql,
+            },
+            "subdir_two": {
+                "model_three.sql": my_model_sql,
+            },
+        }
+
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return dbt_project_yml
+
+    def test_dbt_project_access_config(self, project):
+        write_file(groups_yml, project.project_root, "models", "groups.yml")
+        manifest = run_dbt(["parse"])
+        model_one = manifest.nodes["model.test.model_one"]
+        model_two = manifest.nodes["model.test.model_two"]
+        model_three = manifest.nodes["model.test.model_three"]
+        assert model_one.group is None
+        assert model_one.access == AccessType.Protected
+        assert model_two.group == "analytics"
+        assert model_two.access == AccessType.Private
+        assert model_three.group == "marts"
+        assert model_three.access == AccessType.Public

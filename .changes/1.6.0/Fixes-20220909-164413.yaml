@@ -1,7 +1,0 @@
-kind: Fixes
-body: Raise better error message when dispatching a package that is not installed
-time: 2022-09-09T16:44:13.382685-06:00
-custom:
-  Author: "dbeatty10"
-  Issue: "5801"
-  PR: "5804"

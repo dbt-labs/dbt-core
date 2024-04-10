@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Include node_info in various Result events
+time: 2024-03-25T17:20:59.445718-04:00
+custom:
+  Author: gshank
+  Issue: "9619"

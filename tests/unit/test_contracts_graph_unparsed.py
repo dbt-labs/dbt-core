@@ -1,14 +1,11 @@
-import pickle
 from datetime import timedelta
+import pickle
+import pytest
 
 from dbt.contracts.graph.unparsed import (
     UnparsedNode,
     UnparsedRunHook,
     UnparsedMacro,
-    Time,
-    TimePeriod,
-    FreshnessThreshold,
-    Quoting,
     UnparsedSourceDefinition,
     UnparsedSourceTableDefinition,
     UnparsedDocumentationFile,
@@ -17,15 +14,21 @@ from dbt.contracts.graph.unparsed import (
     UnparsedModelUpdate,
     Docs,
     UnparsedExposure,
-    MaturityType,
-    Owner,
-    ExposureType,
     UnparsedMetric,
     UnparsedMetricTypeParams,
     UnparsedMetricInputMeasure,
     UnparsedVersion,
 )
-from dbt.contracts.results import FreshnessStatus
+from dbt.artifacts.resources import (
+    ExposureType,
+    FreshnessThreshold,
+    MaturityType,
+    Owner,
+    Quoting,
+    Time,
+)
+from dbt.artifacts.resources.types import TimePeriod
+from dbt.artifacts.schemas.results import FreshnessStatus
 from dbt.node_types import NodeType
 from .utils import ContractTestCase
 
@@ -130,18 +133,6 @@ class TestUnparsedNode(ContractTestCase):
 
         self.assert_fails_validation(node_dict, cls=UnparsedRunHook)
         self.assert_fails_validation(node_dict, cls=UnparsedMacro)
-
-    def test_bad_type(self):
-        node_dict = {
-            "name": "foo",
-            "resource_type": NodeType.Source,  # not valid!
-            "path": "/root/x/path.sql",
-            "original_file_path": "/root/path.sql",
-            "package_name": "test",
-            "language": "sql",
-            "raw_code": 'select * from {{ ref("thing") }}',
-        }
-        self.assert_fails_validation(node_dict)
 
 
 class TestUnparsedRunHook(ContractTestCase):
@@ -329,6 +320,7 @@ class TestUnparsedSourceDefinition(ContractTestCase):
                     "description": "",
                     "config": {},
                     "docs": {"show": True},
+                    "data_tests": [],
                     "tests": [],
                     "columns": [],
                     "constraints": [],
@@ -342,6 +334,7 @@ class TestUnparsedSourceDefinition(ContractTestCase):
                     "description": "table 2",
                     "config": {},
                     "docs": {"show": True},
+                    "data_tests": [],
                     "tests": [],
                     "columns": [],
                     "constraints": [],
@@ -415,6 +408,7 @@ class TestUnparsedNodeUpdate(ContractTestCase):
             "columns": [],
             "description": "",
             "docs": {"show": True},
+            "data_tests": [],
             "tests": [],
             "meta": {},
             "config": {},
@@ -430,7 +424,7 @@ class TestUnparsedNodeUpdate(ContractTestCase):
             original_file_path="/some/fake/path",
             package_name="test",
             description="a description",
-            tests=["table_test"],
+            data_tests=["table_test"],
             meta={"key": ["value1", "value2"]},
             columns=[
                 UnparsedColumn(
@@ -441,7 +435,7 @@ class TestUnparsedNodeUpdate(ContractTestCase):
                 UnparsedColumn(
                     name="y",
                     description="y description",
-                    tests=["unique", {"accepted_values": {"values": ["blue", "green"]}}],
+                    data_tests=["unique", {"accepted_values": {"values": ["blue", "green"]}}],
                     meta={},
                     tags=["a", "b"],
                 ),
@@ -454,7 +448,8 @@ class TestUnparsedNodeUpdate(ContractTestCase):
             "original_file_path": "/some/fake/path",
             "package_name": "test",
             "description": "a description",
-            "tests": ["table_test"],
+            "data_tests": ["table_test"],
+            "tests": [],
             "meta": {"key": ["value1", "value2"]},
             "constraints": [],
             "columns": [
@@ -462,6 +457,7 @@ class TestUnparsedNodeUpdate(ContractTestCase):
                     "name": "x",
                     "description": "x description",
                     "docs": {"show": True},
+                    "data_tests": [],
                     "tests": [],
                     "meta": {"key2": "value3"},
                     "tags": [],
@@ -471,7 +467,8 @@ class TestUnparsedNodeUpdate(ContractTestCase):
                     "name": "y",
                     "description": "y description",
                     "docs": {"show": True},
-                    "tests": ["unique", {"accepted_values": {"values": ["blue", "green"]}}],
+                    "data_tests": ["unique", {"accepted_values": {"values": ["blue", "green"]}}],
+                    "tests": [],
                     "meta": {},
                     "tags": ["a", "b"],
                     "constraints": [],
@@ -490,13 +487,15 @@ class TestUnparsedNodeUpdate(ContractTestCase):
             "original_file_path": "/some/fake/path",
             "package_name": "test",
             "description": "a description",
-            "tests": ["table_test"],
+            "data_tests": ["table_test"],
+            "tests": [],
             "meta": {"key": ["value1", "value2"]},
             "columns": [
                 {
                     "name": "x",
                     "description": "x description",
                     "docs": {"show": True},
+                    "data_tests": [],
                     "tests": [],
                     "meta": {"key2": "value3"},
                 },
@@ -504,7 +503,8 @@ class TestUnparsedNodeUpdate(ContractTestCase):
                     "name": "y",
                     "description": "y description",
                     "docs": {"show": True},
-                    "tests": [100, {"accepted_values": {"values": ["blue", "green"]}}],
+                    "data_tests": [100, {"accepted_values": {"values": ["blue", "green"]}}],
+                    "tests": [],
                     "meta": {},
                     "yaml_key": "models",
                     "original_file_path": "/some/fake/path",
@@ -520,13 +520,15 @@ class TestUnparsedNodeUpdate(ContractTestCase):
             "original_file_path": "/some/fake/path",
             "package_name": "test",
             "description": "a description",
-            "tests": ["table_test"],
+            "data_tests": ["table_test"],
+            "tests": [],
             "meta": {"key": ["value1", "value2"]},
             "columns": [
                 # column missing a name
                 {
                     "description": "x description",
                     "docs": {"show": True},
+                    "data_tests": [],
                     "tests": [],
                     "meta": {"key2": "value3"},
                 },
@@ -534,7 +536,8 @@ class TestUnparsedNodeUpdate(ContractTestCase):
                     "name": "y",
                     "description": "y description",
                     "docs": {"show": True},
-                    "tests": ["unique", {"accepted_values": {"values": ["blue", "green"]}}],
+                    "data_tests": ["unique", {"accepted_values": {"values": ["blue", "green"]}}],
+                    "tests": [],
                     "meta": {},
                     "yaml_key": "models",
                     "original_file_path": "/some/fake/path",
@@ -550,13 +553,15 @@ class TestUnparsedNodeUpdate(ContractTestCase):
             "original_file_path": "/some/fake/path",
             "package_name": "test",
             "description": "a description",
-            "tests": ["table_test"],
+            "data_tests": ["table_test"],
+            "tests": [],
             "meta": {"key": ["value1", "value2"]},
             "columns": [
                 {
                     "name": "x",
                     "description": "x description",
                     "docs": {"show": True},
+                    "data_tests": [],
                     "tests": [],
                     "meta": {"key2": "value3"},
                 },
@@ -564,7 +569,8 @@ class TestUnparsedNodeUpdate(ContractTestCase):
                     "name": "y",
                     "description": "y description",
                     "docs": {"show": True},
-                    "tests": ["unique", {"accepted_values": {"values": ["blue", "green"]}}],
+                    "data_tests": ["unique", {"accepted_values": {"values": ["blue", "green"]}}],
+                    "tests": [],
                     "meta": {},
                     "yaml_key": "models",
                     "original_file_path": "/some/fake/path",
@@ -599,6 +605,7 @@ class TestUnparsedModelUpdate(ContractTestCase):
             "columns": [],
             "description": "",
             "docs": {"show": True},
+            "data_tests": [],
             "tests": [],
             "meta": {},
             "config": {},
@@ -615,7 +622,7 @@ class TestUnparsedModelUpdate(ContractTestCase):
             original_file_path="/some/fake/path",
             package_name="test",
             description="a description",
-            tests=["table_test"],
+            data_tests=["table_test"],
             meta={"key": ["value1", "value2"]},
             columns=[
                 UnparsedColumn(
@@ -626,7 +633,7 @@ class TestUnparsedModelUpdate(ContractTestCase):
                 UnparsedColumn(
                     name="y",
                     description="y description",
-                    tests=["unique", {"accepted_values": {"values": ["blue", "green"]}}],
+                    data_tests=["unique", {"accepted_values": {"values": ["blue", "green"]}}],
                     meta={},
                     tags=["a", "b"],
                 ),
@@ -640,7 +647,8 @@ class TestUnparsedModelUpdate(ContractTestCase):
             "original_file_path": "/some/fake/path",
             "package_name": "test",
             "description": "a description",
-            "tests": ["table_test"],
+            "data_tests": ["table_test"],
+            "tests": [],
             "meta": {"key": ["value1", "value2"]},
             "constraints": [],
             "versions": [
@@ -658,6 +666,7 @@ class TestUnparsedModelUpdate(ContractTestCase):
                     "name": "x",
                     "description": "x description",
                     "docs": {"show": True},
+                    "data_tests": [],
                     "tests": [],
                     "meta": {"key2": "value3"},
                     "tags": [],
@@ -667,7 +676,8 @@ class TestUnparsedModelUpdate(ContractTestCase):
                     "name": "y",
                     "description": "y description",
                     "docs": {"show": True},
-                    "tests": ["unique", {"accepted_values": {"values": ["blue", "green"]}}],
+                    "data_tests": ["unique", {"accepted_values": {"values": ["blue", "green"]}}],
+                    "tests": [],
                     "meta": {},
                     "tags": ["a", "b"],
                     "constraints": [],
@@ -686,13 +696,15 @@ class TestUnparsedModelUpdate(ContractTestCase):
             "original_file_path": "/some/fake/path",
             "package_name": "test",
             "description": "a description",
-            "tests": ["table_test"],
+            "data_tests": ["table_test"],
+            "tests": [],
             "meta": {"key": ["value1", "value2"]},
             "columns": [
                 {
                     "name": "x",
                     "description": "x description",
                     "docs": {"show": True},
+                    "data_tests": [],
                     "tests": [],
                     "meta": {"key2": "value3"},
                 },
@@ -700,7 +712,8 @@ class TestUnparsedModelUpdate(ContractTestCase):
                     "name": "y",
                     "description": "y description",
                     "docs": {"show": True},
-                    "tests": [100, {"accepted_values": {"values": ["blue", "green"]}}],
+                    "data_tests": [100, {"accepted_values": {"values": ["blue", "green"]}}],
+                    "tests": [],
                     "meta": {},
                     "yaml_key": "models",
                     "original_file_path": "/some/fake/path",
@@ -716,13 +729,15 @@ class TestUnparsedModelUpdate(ContractTestCase):
             "original_file_path": "/some/fake/path",
             "package_name": "test",
             "description": "a description",
-            "tests": ["table_test"],
+            "data_tests": ["table_test"],
+            "tests": [],
             "meta": {"key": ["value1", "value2"]},
             "columns": [
                 # column missing a name
                 {
                     "description": "x description",
                     "docs": {"show": True},
+                    "data_tests": [],
                     "tests": [],
                     "meta": {"key2": "value3"},
                 },
@@ -730,7 +745,8 @@ class TestUnparsedModelUpdate(ContractTestCase):
                     "name": "y",
                     "description": "y description",
                     "docs": {"show": True},
-                    "tests": ["unique", {"accepted_values": {"values": ["blue", "green"]}}],
+                    "data_tests": ["unique", {"accepted_values": {"values": ["blue", "green"]}}],
+                    "tests": [],
                     "meta": {},
                     "yaml_key": "models",
                     "original_file_path": "/some/fake/path",
@@ -746,13 +762,15 @@ class TestUnparsedModelUpdate(ContractTestCase):
             "original_file_path": "/some/fake/path",
             "package_name": "test",
             "description": "a description",
-            "tests": ["table_test"],
+            "data_tests": ["table_test"],
+            "tests": [],
             "meta": {"key": ["value1", "value2"]},
             "columns": [
                 {
                     "name": "x",
                     "description": "x description",
                     "docs": {"show": True},
+                    "data_tests": [],
                     "tests": [],
                     "meta": {"key2": "value3"},
                 },
@@ -760,7 +778,8 @@ class TestUnparsedModelUpdate(ContractTestCase):
                     "name": "y",
                     "description": "y description",
                     "docs": {"show": True},
-                    "tests": ["unique", {"accepted_values": {"values": ["blue", "green"]}}],
+                    "data_tests": ["unique", {"accepted_values": {"values": ["blue", "green"]}}],
+                    "tests": [],
                     "meta": {},
                     "yaml_key": "models",
                     "original_file_path": "/some/fake/path",
@@ -869,6 +888,7 @@ class TestUnparsedMetric(ContractTestCase):
                 "measure": {
                     "name": "customers",
                     "filter": "is_new = true",
+                    "join_to_timespine": False,
                 },
             },
             "config": {},
@@ -917,7 +937,7 @@ class TestUnparsedVersion(ContractTestCase):
             "config": {},
             "constraints": [],
             "docs": {"show": False},
-            "tests": [],
+            "data_tests": [],
             "columns": [],
         }
 
@@ -929,7 +949,7 @@ class TestUnparsedVersion(ContractTestCase):
             config={},
             constraints=[],
             docs=Docs(show=False),
-            tests=[],
+            data_tests=[],
             columns=[],
         )
         dct = self.get_ok_dict()
@@ -940,3 +960,25 @@ class TestUnparsedVersion(ContractTestCase):
         version = self.get_ok_dict()
         del version["v"]
         self.assert_fails_validation(version)
+
+
+@pytest.mark.parametrize(
+    "left,right,expected_lt",
+    [
+        # same types
+        (2, 12, True),
+        (12, 2, False),
+        ("a", "b", True),
+        ("b", "a", False),
+        # mismatched types - numeric
+        (2, 12.0, True),
+        (12.0, 2, False),
+        (2, "12", True),
+        ("12", 2, False),
+        # mismatched types
+        (1, "test", True),
+        ("test", 1, False),
+    ],
+)
+def test_unparsed_version_lt(left, right, expected_lt):
+    assert (UnparsedVersion(left) < UnparsedVersion(right)) == expected_lt

@@ -1,8 +1,8 @@
 import re
 import os.path
 
-from dbt.clients.system import run_cmd, rmdir
-from dbt.events.functions import fire_event
+from dbt_common.clients.system import run_cmd, rmdir
+from dbt_common.events.functions import fire_event
 from dbt.events.types import (
     GitSparseCheckoutSubdirectory,
     GitProgressCheckoutRevision,
@@ -111,7 +111,7 @@ def checkout(cwd, repo, revision=None):
 def get_current_sha(cwd):
     out, err = run_cmd(cwd, ["git", "rev-parse", "HEAD"], env={"LC_ALL": "C"})
 
-    return out.decode("utf-8")
+    return out.decode("utf-8").strip()
 
 
 def remove_remote(cwd):

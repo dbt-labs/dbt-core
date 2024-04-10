@@ -33,7 +33,7 @@ sources:
       - name: "seed"
         columns:
           - name: id
-            tests:
+            data_tests:
               - unique
 
 """
@@ -67,7 +67,7 @@ sources:
       - name: raw_customers
         columns:
           - name: id
-            tests:
+            data_tests:
               - not_null:
                   severity: "{{ 'error' if target.name == 'prod' else 'warn' }}"
               - unique
@@ -80,7 +80,7 @@ seeds:
     description: "Raw customer data"
     columns:
       - name: id
-        tests:
+        data_tests:
           - unique
           - not_null
       - name: first_name
@@ -140,7 +140,7 @@ sources:
       - name: raw_customers
         columns:
           - name: id
-            tests:
+            data_tests:
               - not_null:
                   severity: "{{ 'error' if target.name == 'prod' else 'warn' }}"
               - unique
@@ -154,7 +154,7 @@ seeds:
     description: "Raw customer data"
     columns:
       - name: id
-        tests:
+        data_tests:
           - unique
           - not_null
       - name: first_name
@@ -194,7 +194,7 @@ sources:
       - name: "seed"
         columns:
           - name: id
-            tests:
+            data_tests:
               - unique
               - not_null
 
@@ -209,7 +209,7 @@ sources:
       - name: raw_customers
         columns:
           - name: id
-            tests:
+            data_tests:
               - not_null:
                   severity: "{{ env_var('ENV_VAR_SEVERITY') }}"
               - unique
@@ -258,7 +258,7 @@ sources:
       - name: raw_customers
         columns:
           - name: id
-            tests:
+            data_tests:
               - not_null:
                   severity: "{{ 'error' if target.name == 'prod' else 'warn' }}"
               - unique
@@ -279,7 +279,7 @@ sources:
       - name: raw_customers
         columns:
           - name: id
-            tests:
+            data_tests:
               - not_null:
                   severity: "{{ 'error' if target.name == 'prod' else 'warn' }}"
               - unique
@@ -315,7 +315,7 @@ sources:
       - name: raw_customers
         columns:
           - name: id
-            tests:
+            data_tests:
               - not_null:
                   severity: "{{ 'error' if target.name == 'prod' else 'warn' }}"
               - unique
@@ -353,7 +353,7 @@ metrics:
     type_params:
       measure:
         name: customers
-        filter: "{{dimension('loves_dbt')}} is true"
+        filter: "{{ Dimension('id__loves_dbt') }} is true"
     +meta:
         is_okr: True
     tags:
@@ -369,7 +369,7 @@ models:
     - name: model_one
       config:
         materialized: "{{ env_var('TEST_SCHEMA_VAR') }}"
-      tests:
+      data_tests:
         - check_color:
             column_name: fun
             color: "env_var('ENV_VAR_COLOR')"
@@ -397,13 +397,17 @@ select 1 as fun
 
 """
 
+metricflow_time_spine_sql = """
+SELECT to_date('02/20/2023', 'mm/dd/yyyy') as date_day
+"""
+
 env_var_schema3_yml = """
 
 models:
     - name: model_one
       config:
         materialized: "{{ env_var('TEST_SCHEMA_VAR') }}"
-      tests:
+      data_tests:
         - check_color:
             column_name: fun
             color: "env_var('ENV_VAR_COLOR')"
@@ -419,6 +423,87 @@ exposures:
       - ref("model_color")
       - source("seed_sources", "raw_customers")
 
+"""
+
+people_semantic_models_yml = """
+version: 2
+
+semantic_models:
+  - name: semantic_people
+    model: ref('people')
+    dimensions:
+      - name: favorite_color
+        type: categorical
+      - name: created_at
+        type: TIME
+        type_params:
+          time_granularity: day
+    measures:
+      - name: years_tenure
+        agg: SUM
+        expr: tenure
+      - name: people
+        agg: count
+        expr: id
+    entities:
+      - name: id
+        type: primary
+    defaults:
+      agg_time_dimension: created_at
+"""
+
+people_sl_yml = """
+version: 2
+
+semantic_models:
+  - name: semantic_people
+    model: ref('people')
+    dimensions:
+      - name: favorite_color
+        type: categorical
+      - name: created_at
+        type: TIME
+        type_params:
+          time_granularity: day
+    measures:
+      - name: years_tenure
+        agg: SUM
+        expr: tenure
+      - name: people
+        agg: count
+        expr: id
+    entities:
+      - name: id
+        type: primary
+    defaults:
+      agg_time_dimension: created_at
+
+metrics:
+
+  - name: number_of_people
+    description: Total count of people
+    label: "Number of people"
+    type: simple
+    type_params:
+      measure: people
+    meta:
+        my_meta: 'testing'
+
+  - name: collective_tenure
+    description: Total number of years of team experience
+    label: "Collective tenure"
+    type: simple
+    type_params:
+      measure:
+        name: years_tenure
+        filter: "{{ Dimension('id__loves_dbt') }} is true"
+
+  - name: average_tenure
+    label: Average Tenure
+    type: ratio
+    type_params:
+      numerator: collective_tenure
+      denominator: number_of_people
 """
 
 env_var_metrics_yml = """
@@ -441,7 +526,7 @@ metrics:
     type_params:
       measure:
         name: years_tenure
-        filter: "{{dimension('loves_dbt')}} is true"
+        filter: "{{ Dimension('id__loves_dbt') }} is true"
 
 """
 
@@ -588,7 +673,7 @@ metrics:
     type_params:
       measure:
         name: years_tenure
-        filter: "{{dimension('loves_dbt')}} is true"
+        filter: "{{ Dimension('id__loves_dbt') }} is true"
 
 """
 
@@ -639,7 +724,7 @@ models:
       description: "The third model"
       columns:
         - name: id
-          tests:
+          data_tests:
             - not_null
 
 """
@@ -665,7 +750,7 @@ models:
         enabled: false
       columns:
         - name: id
-          tests:
+          data_tests:
             - unique
 
 """
@@ -682,7 +767,7 @@ models:
     description: "Some order data"
     columns:
       - name: id
-        tests:
+        data_tests:
           - unique
           - is_odd
 
@@ -742,7 +827,7 @@ models:
       description: "The third model"
       columns:
         - name: id
-          tests:
+          data_tests:
             - unique
 
 """
@@ -764,7 +849,7 @@ models:
       description: "The first model"
     - name: model_three
       description: "The third model"
-      tests:
+      data_tests:
           - unique
 macros:
     - name: do_something
@@ -806,7 +891,7 @@ models:
   - name: model_color
     columns:
       - name: fun
-        tests:
+        data_tests:
           - unique:
               enabled: "{{ env_var('ENV_VAR_ENABLED', True) }}"
 
@@ -849,7 +934,7 @@ macros_schema_yml = """
 
 models:
     - name: model_a
-      tests:
+      data_tests:
         - type_one
         - type_two
 
@@ -943,7 +1028,7 @@ models:
         enabled: true
       columns:
         - name: id
-          tests:
+          data_tests:
             - unique
 
 """
@@ -977,7 +1062,7 @@ metrics:
     type_params:
       measure:
         name: years_tenure
-        filter: "{{dimension('loves_dbt')}} is true"
+        filter: "{{ Dimension('id__loves_dbt') }} is true"
 
 """
 
@@ -988,7 +1073,7 @@ models:
     description: "Some order data"
     columns:
       - name: id
-        tests:
+        data_tests:
           - unique
 
 """

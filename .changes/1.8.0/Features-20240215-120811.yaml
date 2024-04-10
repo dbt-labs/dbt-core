@@ -1,0 +1,6 @@
+kind: Features
+body: Support meta at the config level for Metric nodes
+time: 2024-02-15T12:08:11.927789-06:00
+custom:
+  Author: emmyoop
+  Issue: "9441"

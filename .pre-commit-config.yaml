@@ -1,7 +1,7 @@
 # Configuration for pre-commit hooks (see https://pre-commit.com/).
 # Eventually the hooks described here will be run as tests before merging each PR.
 
-exclude: ^(core/dbt/docs/build/|core/dbt/events/types_pb2.py)
+exclude: ^(core/dbt/docs/build/|core/dbt/common/events/types_pb2.py|core/dbt/events/core_types_pb2.py|core/dbt/adapters/events/adapter_types_pb2.py)
 
 # Force all unspecified python hooks to run python 3.8
 default_language_version:
@@ -37,7 +37,7 @@ repos:
     alias: flake8-check
     stages: [manual]
 - repo: https://github.com/pre-commit/mirrors-mypy
-  rev: v1.3.0
+  rev: v1.4.1
   hooks:
   - id: mypy
     # N.B.: Mypy is... a bit fragile.

@@ -2,10 +2,16 @@ from pathlib import Path
 
 import click
 from dbt.cli.options import MultiOption
-from dbt.cli.option_types import YAML, ChoiceTuple, WarnErrorOptionsType
+from dbt.cli.option_types import YAML, ChoiceTuple, WarnErrorOptionsType, Package
 from dbt.cli.resolvers import default_project_dir, default_profiles_dir
 from dbt.version import get_version_information
 
+add_package = click.option(
+    "--add-package",
+    help="Add a package to current package spec, specify it as package-name@version. Change the source with --source flag.",
+    envvar=None,
+    type=Package(),
+)
 args = click.option(
     "--args",
     envvar=None,
@@ -40,6 +46,14 @@ compile_docs = click.option(
     default=True,
 )
 
+compile_inject_ephemeral_ctes = click.option(
+    "--inject-ephemeral-ctes/--no-inject-ephemeral-ctes",
+    envvar=None,
+    help="Internal flag controlling injection of referenced ephemeral models' CTEs during `compile`.",
+    hidden=True,
+    default=True,
+)
+
 config_dir = click.option(
     "--config-dir",
     envvar=None,
@@ -69,6 +83,13 @@ deprecated_defer = click.option(
     hidden=True,
 )
 
+empty = click.option(
+    "--empty/--no-empty",
+    envvar="DBT_EMPTY",
+    help="If specified, limit input refs and sources to zero rows.",
+    is_flag=True,
+)
+
 enable_legacy_logger = click.option(
     "--enable-legacy-logger/--no-enable-legacy-logger",
     envvar="DBT_ENABLE_LEGACY_LOGGER",
@@ -82,6 +103,14 @@ exclude = click.option(
     cls=MultiOption,
     multiple=True,
     help="Specify the nodes to exclude.",
+)
+
+export_saved_queries = click.option(
+    "--export-saved-queries/--no-export-saved-queries",
+    envvar="DBT_EXPORT_SAVED_QUERIES",
+    help="Export saved queries within the 'build' command, otherwise no-op",
+    is_flag=True,
+    hidden=True,
 )
 
 fail_fast = click.option(
@@ -117,6 +146,13 @@ indirect_selection = click.option(
     help="Choose which tests to select that are adjacent to selected resources. Eager is most inclusive, cautious is most exclusive, and buildable is in between. Empty includes no tests at all.",
     type=click.Choice(["eager", "cautious", "buildable", "empty"], case_sensitive=False),
     default="eager",
+)
+
+lock = click.option(
+    "--lock",
+    envvar=None,
+    help="Generate the package-lock.yml file without install the packages.",
+    is_flag=True,
 )
 
 log_cache_events = click.option(
@@ -169,6 +205,15 @@ use_colors_file = click.option(
     envvar="DBT_USE_COLORS_FILE",
     help="Specify whether log file output is colorized by overriding the default value and the general --use-colors/--no-use-colors setting.",
     default=True,
+)
+
+log_file_max_bytes = click.option(
+    "--log-file-max-bytes",
+    envvar="DBT_LOG_FILE_MAX_BYTES",
+    help="Configure the max file size in bytes for a single dbt.log file, before rolling over. 0 means no limit.",
+    default=10 * 1024 * 1024,  # 10mb
+    type=click.INT,
+    hidden=True,
 )
 
 log_path = click.option(
@@ -248,6 +293,14 @@ partial_parse_file_path = click.option(
     type=click.Path(exists=True, dir_okay=False, resolve_path=True),
 )
 
+partial_parse_file_diff = click.option(
+    "--partial-parse-file-diff/--no-partial-parse-file-diff",
+    envvar="DBT_PARTIAL_PARSE_FILE_DIFF",
+    help="Internal flag for whether to compute a file diff during partial parsing.",
+    hidden=True,
+    default=True,
+)
+
 populate_cache = click.option(
     "--populate-cache/--no-populate-cache",
     envvar="DBT_POPULATE_CACHE",
@@ -289,8 +342,8 @@ printer_width = click.option(
 
 profile = click.option(
     "--profile",
-    envvar=None,
-    help="Which profile to load. Overrides setting in dbt_project.yml.",
+    envvar="DBT_PROFILE",
+    help="Which existing profile to load. Overrides setting in dbt_project.yml.",
 )
 
 profiles_dir = click.option(
@@ -338,15 +391,18 @@ record_timing_info = click.option(
 resource_type = click.option(
     "--resource-types",
     "--resource-type",
-    envvar=None,
+    envvar="DBT_RESOURCE_TYPES",
     help="Restricts the types of resources that dbt will include",
     type=ChoiceTuple(
         [
             "metric",
+            "semantic_model",
+            "saved_query",
             "source",
             "analysis",
             "model",
             "test",
+            "unit_test",
             "exposure",
             "snapshot",
             "seed",
@@ -358,6 +414,42 @@ resource_type = click.option(
     cls=MultiOption,
     multiple=True,
     default=(),
+)
+
+exclude_resource_type = click.option(
+    "--exclude-resource-types",
+    "--exclude-resource-type",
+    envvar="DBT_EXCLUDE_RESOURCE_TYPES",
+    help="Specify the types of resources that dbt will exclude",
+    type=ChoiceTuple(
+        [
+            "metric",
+            "semantic_model",
+            "saved_query",
+            "source",
+            "analysis",
+            "model",
+            "test",
+            "unit_test",
+            "exposure",
+            "snapshot",
+            "seed",
+            "default",
+        ],
+        case_sensitive=False,
+    ),
+    cls=MultiOption,
+    multiple=True,
+    default=(),
+)
+
+# Renamed to --export-saved-queries
+deprecated_include_saved_query = click.option(
+    "--include-saved-query/--no-include-saved-query",
+    envvar="DBT_INCLUDE_SAVED_QUERY",
+    help="Include saved queries in the list of resources to be selected for build command",
+    is_flag=True,
+    hidden=True,
 )
 
 model_decls = ("-m", "--models", "--model")
@@ -380,9 +472,9 @@ inline = click.option(
 # Most CLI arguments should use the combined `select` option that aliases `--models` to `--select`.
 # However, if you need to split out these separators (like `dbt ls`), use the `models` and `raw_select` options instead.
 # See https://github.com/dbt-labs/dbt-core/pull/6774#issuecomment-1408476095 for more info.
-models = click.option(*model_decls, **select_attrs)
-raw_select = click.option(*select_decls, **select_attrs)
-select = click.option(*select_decls, *model_decls, **select_attrs)
+models = click.option(*model_decls, **select_attrs)  # type: ignore[arg-type]
+raw_select = click.option(*select_decls, **select_attrs)  # type: ignore[arg-type]
+select = click.option(*select_decls, *model_decls, **select_attrs)  # type: ignore[arg-type]
 
 selector = click.option(
     "--selector",
@@ -394,6 +486,13 @@ send_anonymous_usage_stats = click.option(
     "--send-anonymous-usage-stats/--no-send-anonymous-usage-stats",
     envvar="DBT_SEND_ANONYMOUS_USAGE_STATS",
     help="Send anonymous usage stats to dbt Labs.",
+    default=True,
+)
+
+clean_project_files_only = click.option(
+    "--clean-project-files-only / --no-clean-project-files-only",
+    envvar="DBT_CLEAN_PROJECT_FILES_ONLY",
+    help="If disabled, dbt clean will delete all paths specified in clean-paths, even if they're outside the dbt project.",
     default=True,
 )
 
@@ -428,6 +527,21 @@ skip_profile_setup = click.option(
 empty_catalog = click.option(
     "--empty-catalog",
     help="If specified, generate empty catalog.json file during the `dbt docs generate` command.",
+    default=False,
+    is_flag=True,
+)
+
+source = click.option(
+    "--source",
+    envvar=None,
+    help="Source to download page from, must be one of hub, git, or local. Defaults to hub.",
+    type=click.Choice(["hub", "git", "local"], case_sensitive=True),
+    default="hub",
+)
+
+static = click.option(
+    "--static",
+    help="Generate an additional static_index.html with manifest and catalog built-in.",
     default=False,
     is_flag=True,
 )
@@ -489,7 +603,7 @@ store_failures = click.option(
 target = click.option(
     "--target",
     "-t",
-    envvar=None,
+    envvar="DBT_TARGET",
     help="Which target to load for the given profile",
 )
 
@@ -498,6 +612,13 @@ target_path = click.option(
     envvar="DBT_TARGET_PATH",
     help="Configure the 'target-path'. Only applies this setting for the current run. Overrides the 'DBT_TARGET_PATH' if it is set.",
     type=click.Path(),
+)
+
+upgrade = click.option(
+    "--upgrade",
+    envvar=None,
+    help="Upgrade packages to the latest version.",
+    is_flag=True,
 )
 
 debug_connection = click.option(
@@ -580,4 +701,11 @@ write_json = click.option(
     envvar="DBT_WRITE_JSON",
     help="Whether or not to write the manifest.json and run_results.json files to the target directory",
     default=True,
+)
+
+show_resource_report = click.option(
+    "--show-resource-report/--no-show-resource-report",
+    default=False,
+    envvar="DBT_SHOW_RESOURCE_REPORT",
+    hidden=True,
 )

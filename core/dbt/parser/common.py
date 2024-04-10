@@ -1,3 +1,5 @@
+from dbt.artifacts.resources import ColumnInfo, NodeVersion
+from dbt_common.contracts.constraints import ColumnLevelConstraint, ConstraintType
 from dbt.contracts.graph.unparsed import (
     HasColumnProps,
     UnparsedColumn,
@@ -7,17 +9,13 @@ from dbt.contracts.graph.unparsed import (
     UnparsedExposure,
     UnparsedModelUpdate,
 )
-from dbt.contracts.graph.unparsed import NodeVersion, HasColumnTests, HasColumnDocs
-from dbt.contracts.graph.nodes import (
-    UnpatchedSourceDefinition,
-    ColumnInfo,
-    ColumnLevelConstraint,
-    ConstraintType,
-)
+from dbt.contracts.graph.unparsed import HasColumnTests, HasColumnDocs
+from dbt.contracts.graph.nodes import UnpatchedSourceDefinition
 from dbt.parser.search import FileBlock
 from typing import List, Dict, Any, TypeVar, Generic, Union, Optional
 from dataclasses import dataclass
-from dbt.exceptions import DbtInternalError, ParsingError
+from dbt_common.exceptions import DbtInternalError
+from dbt.exceptions import ParsingError
 
 
 def trimmed(inp: str) -> str:
@@ -78,6 +76,10 @@ class TargetBlock(YamlBlock, Generic[Target]):
         return []
 
     @property
+    def data_tests(self) -> List[TestDef]:
+        return []
+
+    @property
     def tests(self) -> List[TestDef]:
         return []
 
@@ -103,11 +105,11 @@ class TargetColumnsBlock(TargetBlock[ColumnTarget], Generic[ColumnTarget]):
 @dataclass
 class TestBlock(TargetColumnsBlock[Testable], Generic[Testable]):
     @property
-    def tests(self) -> List[TestDef]:
-        if self.target.tests is None:
+    def data_tests(self) -> List[TestDef]:
+        if self.target.data_tests is None:
             return []
         else:
-            return self.target.tests
+            return self.target.data_tests
 
     @property
     def quote_columns(self) -> Optional[bool]:
@@ -132,11 +134,11 @@ class VersionedTestBlock(TestBlock, Generic[Versioned]):
             raise DbtInternalError(".columns for VersionedTestBlock with versions")
 
     @property
-    def tests(self) -> List[TestDef]:
+    def data_tests(self) -> List[TestDef]:
         if not self.target.versions:
-            return super().tests
+            return super().data_tests
         else:
-            raise DbtInternalError(".tests for VersionedTestBlock with versions")
+            raise DbtInternalError(".data_tests for VersionedTestBlock with versions")
 
     @classmethod
     def from_yaml_block(cls, src: YamlBlock, target: Versioned) -> "VersionedTestBlock[Versioned]":
@@ -149,7 +151,7 @@ class VersionedTestBlock(TestBlock, Generic[Versioned]):
 
 @dataclass
 class GenericTestBlock(TestBlock[Testable], Generic[Testable]):
-    test: Dict[str, Any]
+    data_test: Dict[str, Any]
     column_name: Optional[str]
     tags: List[str]
     version: Optional[NodeVersion]
@@ -158,7 +160,7 @@ class GenericTestBlock(TestBlock[Testable], Generic[Testable]):
     def from_test_block(
         cls,
         src: TestBlock,
-        test: Dict[str, Any],
+        data_test: Dict[str, Any],
         column_name: Optional[str],
         tags: List[str],
         version: Optional[NodeVersion],
@@ -167,7 +169,7 @@ class GenericTestBlock(TestBlock[Testable], Generic[Testable]):
             file=src.file,
             data=src.data,
             target=src.target,
-            test=test,
+            data_test=data_test,
             column_name=column_name,
             tags=tags,
             version=version,
@@ -177,10 +179,10 @@ class GenericTestBlock(TestBlock[Testable], Generic[Testable]):
 class ParserRef:
     """A helper object to hold parse-time references."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.column_info: Dict[str, ColumnInfo] = {}
 
-    def _add(self, column: HasColumnProps):
+    def _add(self, column: HasColumnProps) -> None:
         tags: List[str] = []
         tags.extend(getattr(column, "tags", ()))
         quote: Optional[bool]

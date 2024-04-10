@@ -1,6 +1,0 @@
-kind: Fixes
-body: Fix null-safe equals comparison via `equals`
-time: 2023-06-04T08:00:52.537967-06:00
-custom:
-  Author: dbeatty10
-  Issue: "7778"

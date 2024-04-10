@@ -6,10 +6,11 @@ from unittest import mock
 import dbt.deps
 import dbt.exceptions
 from dbt.deps.git import GitUnpinnedPackage
-from dbt.deps.local import LocalUnpinnedPackage
+from dbt.deps.local import LocalUnpinnedPackage, LocalPinnedPackage
 from dbt.deps.tarball import TarballUnpinnedPackage
 from dbt.deps.registry import RegistryUnpinnedPackage
 from dbt.clients.registry import is_compatible_version
+from dbt.config.renderer import DbtProjectYamlRenderer
 from dbt.deps.resolver import resolve_packages
 from dbt.contracts.project import (
     LocalPackage,
@@ -17,11 +18,15 @@ from dbt.contracts.project import (
     GitPackage,
     RegistryPackage,
 )
+from dbt.config.project import PartialProject
 from dbt.contracts.project import PackageConfig
-from dbt.semver import VersionSpecifier
+from dbt_common.semver import VersionSpecifier
 from dbt.version import get_installed_version
+from dbt_common.dataclass_schema import ValidationError
+from dbt.flags import set_from_args
+from argparse import Namespace
 
-from dbt.dataclass_schema import ValidationError
+set_from_args(Namespace(WARN_ERROR=False), None)
 
 
 class TestLocalPackage(unittest.TestCase):
@@ -36,40 +41,140 @@ class TestLocalPackage(unittest.TestCase):
 
 
 class TestTarballPackage(unittest.TestCase):
-    def test_TarballPackage(self):
-        from dbt.contracts.project import RegistryPackageMetadata
-        from mashumaro.exceptions import MissingField
+    class MockMetadata:
+        name = "mock_metadata_name"
 
-        dict_well_formed_contract = {"tarball": "http://example.com", "name": "my_cool_package"}
+    @mock.patch("dbt.config.project.PartialProject.from_project_root")
+    @mock.patch("os.listdir")
+    @mock.patch("dbt.deps.tarball.get_downloads_path")
+    @mock.patch("dbt_common.clients.system.untar_package")
+    @mock.patch("dbt_common.clients.system.download")
+    def test_fetch_metadata(
+        self,
+        mock_download,
+        mock_untar_package,
+        mock_get_downloads_path,
+        mock_listdir,
+        mock_from_project_root,
+    ):
+        mock_listdir.return_value = ["one_directory/"]
+        mock_get_downloads_path.return_value = "downloads_path"
+        mock_from_project_root.return_value = object()
+        mock_from_project_root.return_value
+        dict_well_formed_contract = {
+            "tarball": "http://example.com/invalid_url@/package.tar.gz",
+            "name": "my_package",
+        }
 
+        a_contract = TarballPackage.from_dict(dict_well_formed_contract)
+        a = TarballUnpinnedPackage.from_contract(a_contract)
+
+        a_pinned = a.resolved()
+        with mock.patch.object(PartialProject, "from_project_root", return_value=PartialProject):
+            with mock.patch.object(
+                PartialProject, "render_package_metadata", return_value=self.MockMetadata
+            ):
+                metadata = a_pinned.fetch_metadata("", DbtProjectYamlRenderer())
+
+        assert metadata == self.MockMetadata
+        mock_download.assert_called_once_with(
+            "http://example.com/invalid_url@/package.tar.gz", "downloads_path/my_package"
+        )
+        mock_untar_package.assert_called_once_with(
+            "downloads_path/my_package", "downloads_path/my_package_untarred", "my_package"
+        )
+
+    @mock.patch("dbt.config.project.PartialProject.from_project_root")
+    @mock.patch("os.listdir")
+    @mock.patch("dbt.deps.tarball.get_downloads_path")
+    @mock.patch("dbt_common.clients.system.untar_package")
+    @mock.patch("dbt_common.clients.system.download")
+    def test_fetch_metadata_fails_on_incorrect_tar_folder_structure(
+        self,
+        mock_download,
+        mock_untar_package,
+        mock_get_downloads_path,
+        mock_listdir,
+        mock_from_project_root,
+    ):
+        mock_listdir.return_value = ["one_directory/", "another_directory/"]
+
+        mock_get_downloads_path.return_value = "downloads_path"
+        mock_from_project_root.return_value = object()
+        mock_from_project_root.return_value
+        dict_well_formed_contract = {
+            "tarball": "http://example.com/invalid_url@/package.tar.gz",
+            "name": "my_package",
+        }
+
+        a_contract = TarballPackage.from_dict(dict_well_formed_contract)
+        a = TarballUnpinnedPackage.from_contract(a_contract)
+
+        a_pinned = a.resolved()
+        with mock.patch.object(PartialProject, "from_project_root", return_value=PartialProject):
+            with mock.patch.object(
+                PartialProject, "render_package_metadata", return_value=self.MockMetadata
+            ):
+                with self.assertRaises(dbt.exceptions.DependencyError):
+                    a_pinned.fetch_metadata("", DbtProjectYamlRenderer())
+
+    @mock.patch("dbt.deps.tarball.get_downloads_path")
+    def test_tarball_package_contract(self, mock_get_downloads_path):
+        dict_well_formed_contract = {
+            "tarball": "http://example.com/invalid_url@/package.tar.gz",
+            "name": "my_cool_package",
+        }
         a_contract = TarballPackage.from_dict(dict_well_formed_contract)
 
         # check contract and resolver
-        self.assertEqual(a_contract.tarball, "http://example.com")
+        self.assertEqual(a_contract.tarball, "http://example.com/invalid_url@/package.tar.gz")
         self.assertEqual(a_contract.name, "my_cool_package")
 
         a = TarballUnpinnedPackage.from_contract(a_contract)
-        self.assertEqual(a.tarball, "http://example.com")
+        self.assertEqual(a.tarball, "http://example.com/invalid_url@/package.tar.gz")
         self.assertEqual(a.package, "my_cool_package")
 
         a_pinned = a.resolved()
         self.assertEqual(a_pinned.source_type(), "tarball")
 
+        a_pinned_dict = a_pinned.to_dict()
+        self.assertEqual(
+            a_pinned_dict,
+            {
+                "tarball": "http://example.com/invalid_url@/package.tar.gz",
+                "name": "my_cool_package",
+            },
+        )
+
+    @mock.patch("dbt.deps.tarball.get_downloads_path")
+    def test_tarball_pinned_package_contract_with_unrendered(self, mock_get_downloads_path):
+        contract = TarballPackage(
+            tarball="http://example.com/invalid_url@/package.tar.gz",
+            name="my_cool_package",
+            unrendered={"tarball": "tarball_unrendered"},
+        )
+        tarball_unpinned_package = TarballUnpinnedPackage.from_contract(contract)
+
+        self.assertEqual(
+            tarball_unpinned_package.tarball, "http://example.com/invalid_url@/package.tar.gz"
+        )
+        self.assertEqual(tarball_unpinned_package.package, "my_cool_package")
+        self.assertEqual(tarball_unpinned_package.tarball_unrendered, "tarball_unrendered")
+
+        tarball_pinned_package = tarball_unpinned_package.resolved()
+        tarball_unpinned_package_dict = tarball_pinned_package.to_dict()
+        self.assertEqual(
+            tarball_unpinned_package_dict,
+            {"tarball": "tarball_unrendered", "name": "my_cool_package"},
+        )
+
+    def test_tarball_package_contract_fails_on_no_name(self):
+        from mashumaro.exceptions import MissingField
+
         # check bad contract (no name) fails
-        dict_missing_name_should_fail_on_contract = {"tarball": "http://example.com"}
-
+        a_contract = {"tarball": "http://example.com"}
         with self.assertRaises(MissingField):
-            TarballPackage.from_dict(dict_missing_name_should_fail_on_contract)
-
-        # check RegistryPackageMetadata - it is used in TarballUnpinnedPackage
-        dct = {
-            "name": a.package,
-            "packages": [],  # note: required by RegistryPackageMetadata
-            "downloads": {"tarball": a_pinned.tarball},
-        }
-
-        metastore = RegistryPackageMetadata.from_dict(dct)
-        self.assertEqual(metastore.downloads.tarball, "http://example.com")
+            TarballPackage.from_dict(a_contract)
 
 
 class TestGitPackage(unittest.TestCase):
@@ -92,6 +197,38 @@ class TestGitPackage(unittest.TestCase):
         self.assertEqual(a_pinned.source_type(), "git")
         self.assertIs(a_pinned.warn_unpinned, True)
 
+        a_pinned_dict = a_pinned.to_dict()
+        self.assertEqual(a_pinned_dict, {"git": "http://example.com", "revision": "0.0.1"})
+
+    def test_init_with_unrendered(self):
+        contract = GitPackage(
+            git="http://example.com", revision="0.0.1", unrendered={"git": "git_unrendered"}
+        )
+
+        git_unpinned_package = GitUnpinnedPackage.from_contract(contract)
+        self.assertEqual(git_unpinned_package.git, "http://example.com")
+        self.assertEqual(git_unpinned_package.revisions, ["0.0.1"])
+        self.assertIs(git_unpinned_package.git_unrendered, "git_unrendered")
+
+        git_pinned_package = git_unpinned_package.resolved()
+        git_pinned_package_dict = git_pinned_package.to_dict()
+        self.assertEqual(git_pinned_package_dict, {"git": "git_unrendered", "revision": "0.0.1"})
+
+    @mock.patch("shutil.copytree")
+    @mock.patch("dbt.deps.local.system.make_symlink")
+    @mock.patch("dbt.deps.local.LocalPinnedPackage.get_installation_path")
+    @mock.patch("dbt.deps.local.LocalPinnedPackage.resolve_path")
+    def test_deps_install(
+        self, mock_resolve_path, mock_get_installation_path, mock_symlink, mock_shutil
+    ):
+        mock_resolve_path.return_value = "/tmp/source"
+        mock_get_installation_path.return_value = "/tmp/dest"
+        mock_symlink.side_effect = OSError("Install deps symlink error")
+
+        LocalPinnedPackage("local").install("dummy", "dummy")
+        self.assertEqual(mock_shutil.call_count, 1)
+        mock_shutil.assert_called_once_with("/tmp/source", "/tmp/dest")
+
     def test_invalid(self):
         with self.assertRaises(ValidationError):
             GitPackage.validate(
@@ -105,17 +242,29 @@ class TestGitPackage(unittest.TestCase):
         b_contract = GitPackage.from_dict(
             {"git": "http://example.com", "revision": "0.0.1", "warn-unpinned": False},
         )
+        d_contract = GitPackage.from_dict(
+            {"git": "http://example.com", "revision": "0.0.1", "subdirectory": "foo-bar"},
+        )
         a = GitUnpinnedPackage.from_contract(a_contract)
         b = GitUnpinnedPackage.from_contract(b_contract)
+        c = a.incorporate(b)
+        d = GitUnpinnedPackage.from_contract(d_contract)
+
         self.assertTrue(a.warn_unpinned)
         self.assertFalse(b.warn_unpinned)
-        c = a.incorporate(b)
+        self.assertTrue(d.warn_unpinned)
 
         c_pinned = c.resolved()
         self.assertEqual(c_pinned.name, "http://example.com")
         self.assertEqual(c_pinned.get_version(), "0.0.1")
         self.assertEqual(c_pinned.source_type(), "git")
         self.assertFalse(c_pinned.warn_unpinned)
+
+        d_pinned = d.resolved()
+        self.assertEqual(d_pinned.name, "http://example.com/foo-bar")
+        self.assertEqual(d_pinned.get_version(), "0.0.1")
+        self.assertEqual(d_pinned.source_type(), "git")
+        self.assertEqual(d_pinned.subdirectory, "foo-bar")
 
     def test_resolve_fail(self):
         a_contract = GitPackage.from_dict(
@@ -663,7 +812,6 @@ class TestPackageSpec(unittest.TestCase):
         self.assertEqual(resolved[0].version, "0.1.4a1")
 
     def test_validation_error_when_version_is_missing_from_package_config(self):
-
         packages_data = {"packages": [{"package": "dbt-labs-test/b", "version": None}]}
 
         with self.assertRaises(ValidationError) as exc:
@@ -673,7 +821,6 @@ class TestPackageSpec(unittest.TestCase):
         assert msg in str(exc.exception)
 
     def test_validation_error_when_namespace_is_missing_from_package_config(self):
-
         packages_data = {"packages": [{"package": "dbt-labs", "version": "1.0.0"}]}
 
         with self.assertRaises(ValidationError) as exc:

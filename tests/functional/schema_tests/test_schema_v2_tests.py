@@ -906,7 +906,7 @@ class TestGenericTestsCollide:
         """These tests collide, since only the configs differ"""
         with pytest.raises(DuplicateResourceNameError) as exc:
             run_dbt()
-        assert "dbt found two tests with the name" in str(exc.value)
+        assert "dbt found two data_tests with the name" in str(exc.value)
 
 
 class TestGenericTestsConfigCustomMacros:

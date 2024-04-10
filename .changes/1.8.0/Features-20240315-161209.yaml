@@ -1,0 +1,7 @@
+kind: Features
+body: SourceDefinition.meta represents source-level and table-level meta properties,
+  instead of only table-level
+time: 2024-03-15T16:12:09.789935-04:00
+custom:
+  Author: michelleark
+  Issue: "9766"

@@ -1,31 +1,36 @@
 import os
 import threading
 import time
+from typing import Optional, List
 
 from .base import BaseRunner
 from .printer import (
     print_run_result_error,
 )
-from .runnable import GraphRunnableTask
+from .run import RunTask
 
-from dbt.contracts.results import (
+from dbt.artifacts.schemas.freshness import (
     FreshnessResult,
     PartialSourceFreshnessResult,
     SourceFreshnessResult,
     FreshnessStatus,
 )
-from dbt.exceptions import DbtRuntimeError, DbtInternalError
-from dbt.events.functions import fire_event
+from dbt_common.exceptions import DbtRuntimeError, DbtInternalError
+from dbt_common.events.functions import fire_event
+from dbt_common.events.types import Note
 from dbt.events.types import (
     FreshnessCheckComplete,
     LogStartLine,
     LogFreshnessResult,
 )
-from dbt.node_types import NodeType
+from dbt.contracts.results import RunStatus
+from dbt.node_types import NodeType, RunHookType
 
+from dbt.adapters.capability import Capability
+from dbt.adapters.contracts.connection import AdapterResponse
+from dbt.contracts.graph.nodes import SourceDefinition, HookNode
+from dbt_common.events.base_types import EventLevel
 from dbt.graph import ResourceTypeSelector
-from dbt.contracts.graph.nodes import SourceDefinition
-
 
 RESULT_FILE_NAME = "sources.json"
 
@@ -95,26 +100,41 @@ class FreshnessRunner(BaseRunner):
         return result
 
     def execute(self, compiled_node, manifest):
-        # we should only be here if we compiled_node.has_freshness, and
-        # therefore loaded_at_field should be a str. If this invariant is
-        # broken, raise!
-        if compiled_node.loaded_at_field is None:
-            raise DbtInternalError(
-                "Got to execute for source freshness of a source that has no loaded_at_field!"
-            )
-
-        relation = self.adapter.Relation.create_from_source(compiled_node)
+        relation = self.adapter.Relation.create_from(self.config, compiled_node)
         # given a Source, calculate its freshness.
-        with self.adapter.connection_for(compiled_node):
+        with self.adapter.connection_named(compiled_node.unique_id, compiled_node):
             self.adapter.clear_transaction()
-            adapter_response, freshness = self.adapter.calculate_freshness(
-                relation,
-                compiled_node.loaded_at_field,
-                compiled_node.freshness.filter,
-                manifest=manifest,
-            )
+            adapter_response: Optional[AdapterResponse] = None
+            freshness = None
 
-        status = compiled_node.freshness.status(freshness["age"])
+            if compiled_node.loaded_at_field is not None:
+                adapter_response, freshness = self.adapter.calculate_freshness(
+                    relation,
+                    compiled_node.loaded_at_field,
+                    compiled_node.freshness.filter,
+                    macro_resolver=manifest,
+                )
+
+                status = compiled_node.freshness.status(freshness["age"])
+            elif self.adapter.supports(Capability.TableLastModifiedMetadata):
+                if compiled_node.freshness.filter is not None:
+                    fire_event(
+                        Note(
+                            msg=f"A filter cannot be applied to a metadata freshness check on source '{compiled_node.name}'."
+                        ),
+                        EventLevel.WARN,
+                    )
+
+                adapter_response, freshness = self.adapter.calculate_freshness_from_metadata(
+                    relation,
+                    macro_resolver=manifest,
+                )
+
+                status = compiled_node.freshness.status(freshness["age"])
+            else:
+                raise DbtRuntimeError(
+                    f"Could not compute freshness for source {compiled_node.name}: no 'loaded_at_field' provided and {self.adapter.type()} adapter does not support metadata-based freshness checks."
+                )
 
         # adapter_response was not returned in previous versions, so this will be None
         # we cannot call to_dict() on NoneType
@@ -136,7 +156,7 @@ class FreshnessRunner(BaseRunner):
     def compile(self, manifest):
         if self.node.resource_type != NodeType.Source:
             # should be unreachable...
-            raise DbtRuntimeError("fresnhess runner: got a non-Source")
+            raise DbtRuntimeError("freshness runner: got a non-Source")
         # we don't do anything interesting when we compile a source node
         return self.node
 
@@ -150,11 +170,7 @@ class FreshnessSelector(ResourceTypeSelector):
         return node.has_freshness
 
 
-class FreshnessTask(GraphRunnableTask):
-    def defer_to_manifest(self, adapter, selected_uids):
-        # freshness don't defer
-        return
-
+class FreshnessTask(RunTask):
     def result_path(self):
         if self.args.output:
             return os.path.realpath(self.args.output)
@@ -184,7 +200,17 @@ class FreshnessTask(GraphRunnableTask):
 
     def task_end_messages(self, results):
         for result in results:
-            if result.status in (FreshnessStatus.Error, FreshnessStatus.RuntimeErr):
+            if result.status in (
+                FreshnessStatus.Error,
+                FreshnessStatus.RuntimeErr,
+                RunStatus.Error,
+            ):
                 print_run_result_error(result)
 
         fire_event(FreshnessCheckComplete())
+
+    def get_hooks_by_type(self, hook_type: RunHookType) -> List[HookNode]:
+        if self.args.source_freshness_run_project_hooks:
+            return super().get_hooks_by_type(hook_type)
+        else:
+            return []

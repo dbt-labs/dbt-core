@@ -1,0 +1,6 @@
+kind: Features
+body: Enable list command for unit tests
+time: 2024-01-29T11:47:53.696961-05:00
+custom:
+  Author: gshank
+  Issue: "8508"

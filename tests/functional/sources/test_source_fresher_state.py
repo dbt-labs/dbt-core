@@ -4,7 +4,7 @@ import shutil
 import pytest
 from datetime import datetime, timedelta
 
-from dbt.exceptions import DbtInternalError
+from dbt_common.exceptions import DbtInternalError
 
 
 from dbt.tests.util import AnyStringWith, AnyFloat
@@ -16,6 +16,7 @@ from tests.functional.sources.fixtures import (
     models_newly_added_model_sql,
     models_newly_added_error_model_sql,
 )
+from dbt.contracts.results import FreshnessExecutionResultArtifact
 
 
 # TODO: We may create utility classes to handle reusable fixtures.
@@ -81,6 +82,10 @@ class SuccessfulSourceFreshnessTest(BaseSourcesTest):
         with open(path) as fp:
             data = json.load(fp)
 
+        try:
+            FreshnessExecutionResultArtifact.validate(data)
+        except Exception:
+            raise pytest.fail("FreshnessExecutionResultArtifact did not validate")
         assert set(data) == {"metadata", "results", "elapsed_time"}
         assert "generated_at" in data["metadata"]
         assert isinstance(data["elapsed_time"], float)

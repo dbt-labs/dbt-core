@@ -2,6 +2,7 @@ from dbt_semantic_interfaces.implementations.metric import PydanticMetric
 from dbt_semantic_interfaces.implementations.project_configuration import (
     PydanticProjectConfiguration,
 )
+from dbt_semantic_interfaces.implementations.saved_query import PydanticSavedQuery
 from dbt_semantic_interfaces.implementations.semantic_manifest import PydanticSemanticManifest
 from dbt_semantic_interfaces.implementations.semantic_model import PydanticSemanticModel
 from dbt_semantic_interfaces.implementations.time_spine_table_configuration import (
@@ -12,15 +13,15 @@ from dbt_semantic_interfaces.validations.semantic_manifest_validator import (
     SemanticManifestValidator,
 )
 
-from dbt.clients.system import write_file
-from dbt.events.base_types import EventLevel
-from dbt.events.functions import fire_event
+from dbt_common.clients.system import write_file
+from dbt_common.events.base_types import EventLevel
+from dbt_common.events.functions import fire_event
 from dbt.events.types import SemanticValidationFailure
 from dbt.exceptions import ParsingError
 
 
 class SemanticManifest:
-    def __init__(self, manifest):
+    def __init__(self, manifest) -> None:
         self.manifest = manifest
 
     def validate(self) -> bool:
@@ -70,6 +71,11 @@ class SemanticManifest:
 
         for metric in self.manifest.metrics.values():
             pydantic_semantic_manifest.metrics.append(PydanticMetric.parse_obj(metric.to_dict()))
+
+        for saved_query in self.manifest.saved_queries.values():
+            pydantic_semantic_manifest.saved_queries.append(
+                PydanticSavedQuery.parse_obj(saved_query.to_dict())
+            )
 
         # Look for time-spine table model and create time spine table configuration
         if self.manifest.semantic_models:

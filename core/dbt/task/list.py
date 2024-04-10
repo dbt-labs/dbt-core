@@ -1,20 +1,29 @@
 import json
 
-from dbt.contracts.graph.nodes import Exposure, SourceDefinition, Metric
+from dbt.contracts.graph.nodes import (
+    Exposure,
+    SourceDefinition,
+    Metric,
+    SavedQuery,
+    SemanticModel,
+    UnitTestDefinition,
+)
+from dbt.cli.flags import Flags
+from dbt.config.runtime import RuntimeConfig
+from dbt.contracts.graph.manifest import Manifest
 from dbt.flags import get_flags
 from dbt.graph import ResourceTypeSelector
+from dbt.task.base import resource_types_from_args
 from dbt.task.runnable import GraphRunnableTask
 from dbt.task.test import TestSelector
 from dbt.node_types import NodeType
-from dbt.events.functions import (
+from dbt_common.events.functions import (
     fire_event,
     warn_or_error,
 )
-from dbt.events.types import (
-    NoNodesSelected,
-    ListCmdOut,
-)
-from dbt.exceptions import DbtRuntimeError, DbtInternalError
+from dbt.events.types import NoNodesSelected, ListCmdOut
+from dbt_common.exceptions import DbtRuntimeError, DbtInternalError
+from dbt_common.events.contextvars import task_contextvars
 
 
 class ListTask(GraphRunnableTask):
@@ -27,6 +36,9 @@ class ListTask(GraphRunnableTask):
             NodeType.Source,
             NodeType.Exposure,
             NodeType.Metric,
+            NodeType.SavedQuery,
+            NodeType.SemanticModel,
+            NodeType.Unit,
         )
     )
     ALL_RESOURCE_VALUES = DEFAULT_RESOURCE_VALUES | frozenset((NodeType.Analysis,))
@@ -45,7 +57,7 @@ class ListTask(GraphRunnableTask):
         )
     )
 
-    def __init__(self, args, config, manifest):
+    def __init__(self, args: Flags, config: RuntimeConfig, manifest: Manifest) -> None:
         super().__init__(args, config, manifest)
         if self.args.models:
             if self.args.select:
@@ -58,25 +70,31 @@ class ListTask(GraphRunnableTask):
     def _iterate_selected_nodes(self):
         selector = self.get_node_selector()
         spec = self.get_selection_spec()
-        nodes = sorted(selector.get_selected(spec))
-        if not nodes:
+        unique_ids = sorted(selector.get_selected(spec))
+        if not unique_ids:
             warn_or_error(NoNodesSelected())
             return
         if self.manifest is None:
             raise DbtInternalError("manifest is None in _iterate_selected_nodes")
-        for node in nodes:
-            if node in self.manifest.nodes:
-                yield self.manifest.nodes[node]
-            elif node in self.manifest.sources:
-                yield self.manifest.sources[node]
-            elif node in self.manifest.exposures:
-                yield self.manifest.exposures[node]
-            elif node in self.manifest.metrics:
-                yield self.manifest.metrics[node]
+        for unique_id in unique_ids:
+            if unique_id in self.manifest.nodes:
+                yield self.manifest.nodes[unique_id]
+            elif unique_id in self.manifest.sources:
+                yield self.manifest.sources[unique_id]
+            elif unique_id in self.manifest.exposures:
+                yield self.manifest.exposures[unique_id]
+            elif unique_id in self.manifest.metrics:
+                yield self.manifest.metrics[unique_id]
+            elif unique_id in self.manifest.semantic_models:
+                yield self.manifest.semantic_models[unique_id]
+            elif unique_id in self.manifest.unit_tests:
+                yield self.manifest.unit_tests[unique_id]
+            elif unique_id in self.manifest.saved_queries:
+                yield self.manifest.saved_queries[unique_id]
             else:
                 raise DbtRuntimeError(
-                    f'Got an unexpected result from node selection: "{node}"'
-                    f"Expected a source or a node!"
+                    f'Got an unexpected result from node selection: "{unique_id}"'
+                    f"Listing this node type is not yet supported!"
                 )
 
     def generate_selectors(self):
@@ -96,6 +114,18 @@ class ListTask(GraphRunnableTask):
                 # metrics are searched for by pkg.metric_name
                 metric_selector = ".".join([node.package_name, node.name])
                 yield f"metric:{metric_selector}"
+            elif node.resource_type == NodeType.SavedQuery:
+                assert isinstance(node, SavedQuery)
+                saved_query_selector = ".".join([node.package_name, node.name])
+                yield f"saved_query:{saved_query_selector}"
+            elif node.resource_type == NodeType.SemanticModel:
+                assert isinstance(node, SemanticModel)
+                semantic_model_selector = ".".join([node.package_name, node.name])
+                yield f"semantic_model:{semantic_model_selector}"
+            elif node.resource_type == NodeType.Unit:
+                assert isinstance(node, UnitTestDefinition)
+                unit_test_selector = ".".join([node.package_name, node.versioned_name])
+                yield f"unit_test:{unit_test_selector}"
             else:
                 # everything else is from `fqn`
                 yield ".".join(node.fqn)
@@ -123,20 +153,23 @@ class ListTask(GraphRunnableTask):
             yield node.original_file_path
 
     def run(self):
-        self.compile_manifest()
-        output = self.args.output
-        if output == "selector":
-            generator = self.generate_selectors
-        elif output == "name":
-            generator = self.generate_names
-        elif output == "json":
-            generator = self.generate_json
-        elif output == "path":
-            generator = self.generate_paths
-        else:
-            raise DbtInternalError("Invalid output {}".format(output))
+        # We set up a context manager here with "task_contextvars" because we
+        # we need the project_root in compile_manifest.
+        with task_contextvars(project_root=self.config.project_root):
+            self.compile_manifest()
+            output = self.args.output
+            if output == "selector":
+                generator = self.generate_selectors
+            elif output == "name":
+                generator = self.generate_names
+            elif output == "json":
+                generator = self.generate_json
+            elif output == "path":
+                generator = self.generate_paths
+            else:
+                raise DbtInternalError("Invalid output {}".format(output))
 
-        return self.output_results(generator())
+            return self.output_results(generator())
 
     def output_results(self, results):
         """Log, or output a plain, newline-delimited, and ready-to-pipe list of nodes found."""
@@ -154,17 +187,11 @@ class ListTask(GraphRunnableTask):
         if self.args.models:
             return [NodeType.Model]
 
-        if not self.args.resource_types:
-            return list(self.DEFAULT_RESOURCE_VALUES)
+        resource_types = resource_types_from_args(
+            self.args, set(self.ALL_RESOURCE_VALUES), set(self.DEFAULT_RESOURCE_VALUES)
+        )
 
-        values = set(self.args.resource_types)
-        if "default" in values:
-            values.remove("default")
-            values.update(self.DEFAULT_RESOURCE_VALUES)
-        if "all" in values:
-            values.remove("all")
-            values.update(self.ALL_RESOURCE_VALUES)
-        return list(values)
+        return list(resource_types)
 
     @property
     def selection_arg(self):
@@ -174,10 +201,6 @@ class ListTask(GraphRunnableTask):
             return self.args.models
         else:
             return self.args.select
-
-    def defer_to_manifest(self, adapter, selected_uids):
-        # list don't defer
-        return
 
     def get_node_selector(self):
         if self.manifest is None or self.graph is None:

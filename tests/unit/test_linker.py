@@ -4,14 +4,9 @@ import unittest
 from unittest import mock
 
 from dbt import compilation
-
-try:
-    from queue import Empty
-except ImportError:
-    from Queue import Empty
-
 from dbt.graph.selector import NodeSelector
 from dbt.graph.cli import parse_difference
+from queue import Empty
 
 
 def _mock_manifest(nodes):

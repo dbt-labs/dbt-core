@@ -6,7 +6,6 @@ from unittest.mock import MagicMock, patch
 
 from dbt.adapters.postgres import Plugin as PostgresPlugin
 from dbt.adapters.factory import reset_adapters, register_adapter
-import dbt.clients.system
 import dbt.compilation
 import dbt.exceptions
 import dbt.flags
@@ -17,13 +16,11 @@ import dbt.parser.manifest
 from dbt import tracking
 from dbt.contracts.files import SourceFile, FileHash, FilePath
 from dbt.contracts.graph.manifest import MacroManifest, ManifestStateCheck
+from dbt.contracts.project import ProjectFlags
 from dbt.graph import NodeSelector, parse_difference
-
-try:
-    from queue import Empty
-except ImportError:
-    from Queue import Empty
-
+from dbt.events.logging import setup_event_logger
+from dbt.mp_context import get_mp_context
+from queue import Empty
 from .utils import config_from_parts_or_dicts, generate_name_macros, inject_plugin
 
 
@@ -115,16 +112,6 @@ class GraphTest(unittest.TestCase):
 
         self.mock_source_file.side_effect = mock_load_source_file
 
-        @patch("dbt.parser.hooks.HookParser.get_path")
-        def _mock_hook_path(self):
-            path = FilePath(
-                searched_path=".",
-                project_root=os.path.normcase(os.getcwd()),
-                relative_path="dbt_project.yml",
-                modification_time=0.0,
-            )
-            return path
-
     def get_config(self, extra_cfg=None):
         if extra_cfg is None:
             extra_cfg = {}
@@ -139,7 +126,8 @@ class GraphTest(unittest.TestCase):
         cfg.update(extra_cfg)
 
         config = config_from_parts_or_dicts(project=cfg, profile=self.profile)
-        dbt.flags.set_from_args(Namespace(), config)
+        dbt.flags.set_from_args(Namespace(), ProjectFlags())
+        setup_event_logger(dbt.flags.get_flags())
         object.__setattr__(dbt.flags.get_flags(), "PARTIAL_PARSE", False)
         return config
 
@@ -161,7 +149,7 @@ class GraphTest(unittest.TestCase):
 
     def load_manifest(self, config):
         inject_plugin(PostgresPlugin)
-        register_adapter(config)
+        register_adapter(config, get_mp_context())
         loader = dbt.parser.manifest.ManifestLoader(config, {config.project_name: config})
         loader.manifest.macros = self.macro_manifest.macros
         loader.load()

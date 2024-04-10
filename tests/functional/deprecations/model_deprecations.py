@@ -1,6 +1,9 @@
 import pytest
 
+from dbt.exceptions import EventCompilationError
 from dbt.cli.main import dbtRunner
+from dbt.tests.util import run_dbt
+
 
 deprecated_model__yml = """
 version: 2
@@ -41,8 +44,16 @@ class TestModelDeprecationWarning:
         assert len(matches) == 1
         assert matches[0].data.model_name == "my_model"
 
+    def test_deprecation_warning_error(self, project):
+        with pytest.raises(EventCompilationError):
+            run_dbt(["--warn-error", "parse"])
 
-class TestReferenceDeprecatingWarning:
+    def test_deprecation_warning_error_options(self, project):
+        with pytest.raises(EventCompilationError):
+            run_dbt(["--warn-error-options", '{"include": ["DeprecatedModel"]}', "parse"])
+
+
+class TestUpcomingReferenceDeprecatingWarning:
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -59,8 +70,18 @@ class TestReferenceDeprecatingWarning:
         assert matches[0].data.model_name == "my_dependant_model"
         assert matches[0].data.ref_model_name == "my_model"
 
+    def test_deprecation_warning_error(self, project):
+        with pytest.raises(EventCompilationError):
+            run_dbt(["--warn-error", "parse"])
 
-class TestReferenceDeprecatedWarning:
+    def test_deprecation_warning_error_options(self, project):
+        with pytest.raises(EventCompilationError):
+            run_dbt(
+                ["--warn-error-options", '{"include": ["UpcomingReferenceDeprecation"]}', "parse"]
+            )
+
+
+class TestDeprecatedReferenceWarning:
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -76,3 +97,11 @@ class TestReferenceDeprecatedWarning:
         assert len(matches) == 1
         assert matches[0].data.model_name == "my_dependant_model"
         assert matches[0].data.ref_model_name == "my_model"
+
+    def test_deprecation_warning_error(self, project):
+        with pytest.raises(EventCompilationError):
+            run_dbt(["--warn-error", "parse"])
+
+    def test_deprecation_warning_error_options(self, project):
+        with pytest.raises(EventCompilationError):
+            run_dbt(["--warn-error-options", '{"include": ["DeprecatedReference"]}', "parse"])

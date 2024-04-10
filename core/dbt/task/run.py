@@ -3,7 +3,7 @@ import threading
 import time
 from typing import List, Dict, Any, Iterable, Set, Tuple, Optional, AbstractSet
 
-from dbt.dataclass_schema import dbtClassMixin
+from dbt_common.dataclass_schema import dbtClassMixin
 
 from .compile import CompileRunner, CompileTask
 
@@ -15,30 +15,37 @@ from datetime import datetime
 from dbt import tracking
 from dbt import utils
 from dbt.adapters.base import BaseRelation
+from dbt.cli.flags import Flags
 from dbt.clients.jinja import MacroGenerator
+from dbt.config.runtime import RuntimeConfig
 from dbt.context.providers import generate_runtime_model_context
-from dbt.contracts.graph.model_config import Hook
 from dbt.contracts.graph.nodes import HookNode, ResultNode
-from dbt.contracts.results import NodeStatus, RunResult, RunStatus, RunningStatus, BaseResult
+from dbt.contracts.graph.manifest import Manifest
+from dbt.artifacts.schemas.results import NodeStatus, RunStatus, RunningStatus, BaseResult
+from dbt.artifacts.schemas.run import RunResult
+from dbt.artifacts.resources import Hook
 from dbt.exceptions import (
     CompilationError,
     DbtInternalError,
-    MissingMaterializationError,
     DbtRuntimeError,
-    DbtValidationError,
 )
-from dbt.events.functions import fire_event, get_invocation_id
-from dbt.events.types import (
+from dbt_common.exceptions import DbtValidationError
+from dbt.adapters.exceptions import MissingMaterializationError
+from dbt.adapters.events.types import (
     DatabaseErrorRunningHook,
-    Formatting,
     HooksRunning,
     FinishedRunningStats,
+)
+from dbt_common.events.contextvars import log_contextvars
+from dbt_common.events.functions import fire_event, get_invocation_id
+from dbt_common.events.types import Formatting
+from dbt_common.events.base_types import EventLevel
+from dbt.events.types import (
     LogModelResult,
     LogStartLine,
     LogHookEndLine,
     LogHookStartLine,
 )
-from dbt.events.base_types import EventLevel
 from dbt.logger import (
     TextOnly,
     HookMetadata,
@@ -52,7 +59,7 @@ from dbt.node_types import NodeType, RunHookType
 
 
 class Timer:
-    def __init__(self):
+    def __init__(self) -> None:
         self.start = None
         self.end = None
 
@@ -301,20 +308,22 @@ class ModelRunner(CompileRunner):
 
 
 class RunTask(CompileTask):
-    def __init__(self, args, config, manifest):
+    def __init__(self, args: Flags, config: RuntimeConfig, manifest: Manifest) -> None:
         super().__init__(args, config, manifest)
-        self.ran_hooks = []
+        self.ran_hooks: List[HookNode] = []
         self._total_executed = 0
 
     def index_offset(self, value: int) -> int:
         return self._total_executed + value
 
-    def raise_on_first_error(self):
+    def raise_on_first_error(self) -> bool:
         return False
 
-    def get_hook_sql(self, adapter, hook, idx, num_hooks, extra_context):
-        compiler = adapter.get_compiler()
-        compiled = compiler.compile_node(hook, self.manifest, extra_context)
+    def get_hook_sql(self, adapter, hook, idx, num_hooks, extra_context) -> str:
+        if self.manifest is None:
+            raise DbtInternalError("compile_node called before manifest was loaded")
+
+        compiled = self.compiler.compile_node(hook, self.manifest, extra_context)
         statement = compiled.compiled_code
         hook_index = hook.index or num_hooks
         hook_obj = get_hook(statement, index=hook_index)
@@ -337,7 +346,7 @@ class RunTask(CompileTask):
         hooks.sort(key=self._hook_keyfunc)
         return hooks
 
-    def run_hooks(self, adapter, hook_type: RunHookType, extra_context):
+    def run_hooks(self, adapter, hook_type: RunHookType, extra_context) -> None:
         ordered_hooks = self.get_hooks_by_type(hook_type)
 
         # on-run-* hooks should run outside of a transaction. This happens
@@ -356,48 +365,51 @@ class RunTask(CompileTask):
         finishctx = TimestampNamed("node_finished_at")
 
         for idx, hook in enumerate(ordered_hooks, start=1):
-            hook.update_event_status(
-                started_at=datetime.utcnow().isoformat(), node_status=RunningStatus.Started
-            )
-            sql = self.get_hook_sql(adapter, hook, idx, num_hooks, extra_context)
+            # We want to include node_info in the appropriate log files, so use
+            # log_contextvars
+            with log_contextvars(node_info=hook.node_info):
+                hook.update_event_status(
+                    started_at=datetime.utcnow().isoformat(), node_status=RunningStatus.Started
+                )
+                sql = self.get_hook_sql(adapter, hook, idx, num_hooks, extra_context)
 
-            hook_text = "{}.{}.{}".format(hook.package_name, hook_type, hook.index)
-            hook_meta_ctx = HookMetadata(hook, self.index_offset(idx))
-            with UniqueID(hook.unique_id):
-                with hook_meta_ctx, startctx:
-                    fire_event(
-                        LogHookStartLine(
-                            statement=hook_text,
-                            index=idx,
-                            total=num_hooks,
-                            node_info=hook.node_info,
+                hook_text = "{}.{}.{}".format(hook.package_name, hook_type, hook.index)
+                hook_meta_ctx = HookMetadata(hook, self.index_offset(idx))
+                with UniqueID(hook.unique_id):
+                    with hook_meta_ctx, startctx:
+                        fire_event(
+                            LogHookStartLine(
+                                statement=hook_text,
+                                index=idx,
+                                total=num_hooks,
+                                node_info=hook.node_info,
+                            )
                         )
-                    )
 
-                with Timer() as timer:
-                    if len(sql.strip()) > 0:
-                        response, _ = adapter.execute(sql, auto_begin=False, fetch=False)
-                        status = response._message
-                    else:
-                        status = "OK"
+                    with Timer() as timer:
+                        if len(sql.strip()) > 0:
+                            response, _ = adapter.execute(sql, auto_begin=False, fetch=False)
+                            status = response._message
+                        else:
+                            status = "OK"
 
-                self.ran_hooks.append(hook)
-                hook.update_event_status(finished_at=datetime.utcnow().isoformat())
-                with finishctx, DbtModelState({"node_status": "passed"}):
-                    hook.update_event_status(node_status=RunStatus.Success)
-                    fire_event(
-                        LogHookEndLine(
-                            statement=hook_text,
-                            status=status,
-                            index=idx,
-                            total=num_hooks,
-                            execution_time=timer.elapsed,
-                            node_info=hook.node_info,
+                    self.ran_hooks.append(hook)
+                    hook.update_event_status(finished_at=datetime.utcnow().isoformat())
+                    with finishctx, DbtModelState({"node_status": "passed"}):
+                        hook.update_event_status(node_status=RunStatus.Success)
+                        fire_event(
+                            LogHookEndLine(
+                                statement=hook_text,
+                                status=status,
+                                index=idx,
+                                total=num_hooks,
+                                execution_time=timer.elapsed,
+                                node_info=hook.node_info,
+                            )
                         )
-                    )
-            # `_event_status` dict is only used for logging.  Make sure
-            # it gets deleted when we're done with it
-            hook.clear_event_status()
+                # `_event_status` dict is only used for logging.  Make sure
+                # it gets deleted when we're done with it
+                hook.clear_event_status()
 
         self._total_executed += len(ordered_hooks)
 
@@ -423,7 +435,7 @@ class RunTask(CompileTask):
                 )
             )
 
-    def print_results_line(self, results, execution_time):
+    def print_results_line(self, results, execution_time) -> None:
         nodes = [r.node for r in results if hasattr(r, "node")] + self.ran_hooks
         stat_line = get_counts(nodes)
 
@@ -440,7 +452,7 @@ class RunTask(CompileTask):
             )
         )
 
-    def before_run(self, adapter, selected_uids: AbstractSet[str]):
+    def before_run(self, adapter, selected_uids: AbstractSet[str]) -> None:
         with adapter.connection_named("master"):
             required_schemas = self.get_model_schemas(adapter, selected_uids)
             self.create_schemas(adapter, required_schemas)
@@ -448,7 +460,7 @@ class RunTask(CompileTask):
             self.defer_to_manifest(adapter, selected_uids)
             self.safe_run_hooks(adapter, RunHookType.Start, {})
 
-    def after_run(self, adapter, results):
+    def after_run(self, adapter, results) -> None:
         # in on-run-end hooks, provide the value 'database_schemas', which is a
         # list of unique (database, schema) pairs that successfully executed
         # models were in. For backwards compatibility, include the old
@@ -484,6 +496,6 @@ class RunTask(CompileTask):
     def get_runner_type(self, _):
         return ModelRunner
 
-    def task_end_messages(self, results):
+    def task_end_messages(self, results) -> None:
         if results:
             print_run_end_messages(results)

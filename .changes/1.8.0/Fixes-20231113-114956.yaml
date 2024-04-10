@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix formatting of tarball information in packages-lock.yml
+time: 2023-11-13T11:49:56.437007-08:00
+custom:
+  Author: ChenyuLInx QMalcolm
+  Issue: "9062"

@@ -1,7 +1,7 @@
 import pytest
 import shutil
 
-import dbt.exceptions
+import dbt_common.exceptions
 
 from pathlib import Path
 
@@ -20,12 +20,14 @@ from tests.functional.macros.fixtures import (
     models__override_get_columns_macros,
     models__deprecated_adapter_macro_model,
     models__incorrect_dispatch,
+    models__materialization_macro,
     macros__my_macros,
     macros__no_default_macros,
     macros__override_get_columns_macros,
     macros__package_override_get_columns_macros,
     macros__deprecated_adapter_macro,
     macros__incorrect_dispatch,
+    macros__named_materialization,
 )
 
 
@@ -78,6 +80,21 @@ class TestMacros:
         check_relations_equal(project.adapter, ["expected_local_macro", "local_macro"])
 
 
+class TestMacrosNamedMaterialization:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "models_materialization_macro.sql": models__materialization_macro,
+        }
+
+    @pytest.fixture(scope="class")
+    def macros(self):
+        return {"macros_named_materialization.sql": macros__named_materialization}
+
+    def test_macro_with_materialization_in_name_works(self, project):
+        run_dbt(expect_pass=True)
+
+
 class TestInvalidMacros:
     @pytest.fixture(scope="class")
     def models(self):
@@ -101,7 +118,7 @@ class TestAdapterMacroNoDestination:
         return {"my_macros.sql": macros__no_default_macros}
 
     def test_invalid_macro(self, project):
-        with pytest.raises(dbt.exceptions.CompilationError) as exc:
+        with pytest.raises(dbt_common.exceptions.CompilationError) as exc:
             run_dbt()
 
         assert "In dispatch: No macro named 'dispatch_to_nowhere' found" in str(exc.value)
@@ -238,7 +255,7 @@ class TestMisnamedMacroNamespace:
     ):
         run_dbt(["deps"])
 
-        with pytest.raises(dbt.exceptions.CompilationError) as exc:
+        with pytest.raises(dbt_common.exceptions.CompilationError) as exc:
             run_dbt()
 
         assert "In dispatch: No macro named 'cowsay' found" in str(exc.value)
@@ -254,7 +271,7 @@ class TestAdapterMacroDeprecated:
         return {"macro.sql": macros__deprecated_adapter_macro}
 
     def test_invalid_macro(self, project):
-        with pytest.raises(dbt.exceptions.CompilationError) as exc:
+        with pytest.raises(dbt_common.exceptions.CompilationError) as exc:
             run_dbt()
 
         assert 'The "adapter_macro" macro has been deprecated' in str(exc.value)

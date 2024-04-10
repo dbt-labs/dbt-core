@@ -2,12 +2,13 @@ import os
 import re
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
-from dbt.dataclass_schema import StrEnum, dbtClassMixin
+from dbt_common.dataclass_schema import StrEnum, dbtClassMixin
 
 from typing import Set, Iterator, List, Optional, Dict, Union, Any, Iterable, Tuple
 from .graph import UniqueId
 from .selector_methods import MethodName
-from dbt.exceptions import DbtRuntimeError, InvalidSelectorError
+from dbt_common.exceptions import DbtRuntimeError
+from dbt.exceptions import InvalidSelectorError
 
 
 RAW_SELECTOR_PATTERN = re.compile(
@@ -99,6 +100,7 @@ class SelectionCriteria:
         except ValueError as exc:
             raise InvalidSelectorError(f"'{method_parts[0]}' is not a valid method name") from exc
 
+        # Following is for cases like config.severity and config.materialized
         method_arguments: List[str] = method_parts[1:]
 
         return method_name, method_arguments
@@ -176,7 +178,7 @@ class BaseSelectionGroup(dbtClassMixin, Iterable[SelectionSpec], metaclass=ABCMe
         indirect_selection: IndirectSelection = IndirectSelection.Eager,
         expect_exists: bool = False,
         raw: Any = None,
-    ):
+    ) -> None:
         self.components: List[SelectionSpec] = list(components)
         self.expect_exists = expect_exists
         self.raw = raw

@@ -3,7 +3,7 @@ import itertools
 import os
 from typing import List, Dict, Any, Generic, Optional, TypeVar
 
-from dbt.dataclass_schema import ValidationError
+from dbt_common.dataclass_schema import ValidationError
 
 from dbt import utils
 from dbt.clients.jinja import MacroGenerator
@@ -12,15 +12,21 @@ from dbt.context.providers import (
     generate_generate_name_macro_context,
 )
 from dbt.adapters.factory import get_adapter  # noqa: F401
+from dbt.artifacts.resources import Contract
 from dbt.clients.jinja import get_rendered
 from dbt.config import Project, RuntimeConfig
 from dbt.context.context_config import ContextConfig
 from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.graph.nodes import Contract, BaseNode, ManifestNode
+from dbt.contracts.graph.nodes import BaseNode, ManifestNode
 from dbt.contracts.graph.unparsed import Docs, UnparsedNode
-from dbt.exceptions import DbtInternalError, ConfigUpdateError, DictParseError
+from dbt.exceptions import (
+    DbtInternalError,
+    ConfigUpdateError,
+    DictParseError,
+    InvalidAccessTypeError,
+)
 from dbt import hooks
-from dbt.node_types import NodeType, ModelLanguage
+from dbt.node_types import NodeType, ModelLanguage, AccessType
 from dbt.parser.search import FileBlock
 
 # internally, the parser may store a less-restrictive type that will be
@@ -102,8 +108,7 @@ class RelationUpdate:
         self.package_updaters = package_updaters
         self.component = component
 
-    def __call__(self, parsed_node: Any, config_dict: Dict[str, Any]) -> None:
-        override = config_dict.get(self.component)
+    def __call__(self, parsed_node: Any, override: Optional[str]) -> None:
         if parsed_node.package_name in self.package_updaters:
             new_value = self.package_updaters[parsed_node.package_name](override, parsed_node)
         else:
@@ -237,6 +242,7 @@ class ConfiguredParser(
             "checksum": block.file.checksum.to_dict(omit_none=True),
         }
         dct.update(kwargs)
+
         try:
             return self.parse_from_dict(dct, validate=True)
         except ValidationError as exc:
@@ -280,9 +286,19 @@ class ConfiguredParser(
     def update_parsed_node_relation_names(
         self, parsed_node: IntermediateNode, config_dict: Dict[str, Any]
     ) -> None:
-        self._update_node_database(parsed_node, config_dict)
-        self._update_node_schema(parsed_node, config_dict)
-        self._update_node_alias(parsed_node, config_dict)
+
+        # These call the RelationUpdate callable to go through generate_name macros
+        self._update_node_database(parsed_node, config_dict.get("database"))
+        self._update_node_schema(parsed_node, config_dict.get("schema"))
+        self._update_node_alias(parsed_node, config_dict.get("alias"))
+
+        # Snapshot nodes use special "target_database" and "target_schema" fields for some reason
+        if parsed_node.resource_type == NodeType.Snapshot:
+            if "target_database" in config_dict and config_dict["target_database"]:
+                parsed_node.database = config_dict["target_database"]
+            if "target_schema" in config_dict and config_dict["target_schema"]:
+                parsed_node.schema = config_dict["target_schema"]
+
         self._update_node_relation_name(parsed_node)
 
     def update_parsed_node_config(
@@ -318,6 +334,15 @@ class ConfiguredParser(
         if "group" in config_dict and config_dict["group"]:
             parsed_node.group = config_dict["group"]
 
+        # If we have access in the config, copy to node level
+        if parsed_node.resource_type == NodeType.Model and config_dict.get("access", None):
+            if AccessType.is_valid(config_dict["access"]):
+                parsed_node.access = AccessType(config_dict["access"])
+            else:
+                raise InvalidAccessTypeError(
+                    unique_id=parsed_node.unique_id, field_value=config_dict["access"]
+                )
+
         # If we have docs in the config, merge with the node level, for backwards
         # compatibility with earlier node-only config.
         if "docs" in config_dict and config_dict["docs"]:
@@ -336,7 +361,9 @@ class ConfiguredParser(
 
         # If we have contract in the config, copy to node level
         if "contract" in config_dict and config_dict["contract"]:
-            parsed_node.contract = Contract(enforced=config_dict["contract"]["enforced"])
+            contract_dct = config_dict["contract"]
+            Contract.validate(contract_dct)
+            parsed_node.contract = Contract.from_dict(contract_dct)
 
         # unrendered_config is used to compare the original database/schema/alias
         # values and to handle 'same_config' and 'same_contents' calls
@@ -349,7 +376,7 @@ class ConfiguredParser(
         # do this once before we parse the node database/schema/alias, so
         # parsed_node.config is what it would be if they did nothing
         self.update_parsed_node_config_dict(parsed_node, config_dict)
-        # This updates the node database/schema/alias
+        # This updates the node database/schema/alias/relation_name
         self.update_parsed_node_relation_names(parsed_node, config_dict)
 
         # tests don't have hooks

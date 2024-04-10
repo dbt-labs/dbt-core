@@ -2,7 +2,7 @@ import os
 import pytest
 import yaml
 
-from dbt.tests.util import run_dbt
+from dbt.tests.util import run_dbt, run_dbt_and_capture
 from tests.functional.sources.fixtures import (
     models_schema_yml,
     models_view_model_sql,
@@ -57,10 +57,17 @@ class BaseSourcesTest:
             },
         }
 
-    def run_dbt_with_vars(self, project, cmd, *args, **kwargs):
+    def _extend_cmd_with_vars(self, project, cmd):
         vars_dict = {
             "test_run_schema": project.test_schema,
             "test_loaded_at": project.adapter.quote("updated_at"),
         }
         cmd.extend(["--vars", yaml.safe_dump(vars_dict)])
+
+    def run_dbt_with_vars(self, project, cmd, *args, **kwargs):
+        self._extend_cmd_with_vars(project, cmd)
         return run_dbt(cmd, *args, **kwargs)
+
+    def run_dbt_and_capture_with_vars(self, project, cmd, *args, **kwargs):
+        self._extend_cmd_with_vars(project, cmd)
+        return run_dbt_and_capture(cmd, *args, **kwargs)

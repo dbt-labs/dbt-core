@@ -1,17 +1,16 @@
-import pytest
-
-import click
-from multiprocessing import get_context
 from pathlib import Path
 from typing import List, Optional
+
+import click
+import pytest
 
 from dbt.cli.exceptions import DbtUsageException
 from dbt.cli.flags import Flags
 from dbt.cli.main import cli
 from dbt.cli.types import Command
-from dbt.contracts.project import UserConfig
-from dbt.exceptions import DbtInternalError
-from dbt.helper_types import WarnErrorOptions
+from dbt.contracts.project import ProjectFlags
+from dbt_common.exceptions import DbtInternalError
+from dbt_common.helper_types import WarnErrorOptions
 from dbt.tests.util import rm_file, write_file
 
 
@@ -19,7 +18,7 @@ class TestFlags:
     def make_dbt_context(
         self, context_name: str, args: List[str], parent: Optional[click.Context] = None
     ) -> click.Context:
-        ctx = cli.make_context(context_name, args, parent)
+        ctx = cli.make_context(context_name, args.copy(), parent)
         return ctx
 
     @pytest.fixture(scope="class")
@@ -27,16 +26,19 @@ class TestFlags:
         return self.make_dbt_context("run", ["run"])
 
     @pytest.fixture
-    def user_config(self) -> UserConfig:
-        return UserConfig()
+    def project_flags(self) -> ProjectFlags:
+        return ProjectFlags()
+
+    def test_cli_args_unmodified(self):
+        args = ["--target", "my_target"]
+        args_before = args.copy()
+        self.make_dbt_context("context", args)
+
+        assert args == args_before
 
     def test_which(self, run_context):
         flags = Flags(run_context)
         assert flags.WHICH == "run"
-
-    def test_mp_context(self, run_context):
-        flags = Flags(run_context)
-        assert flags.MP_CONTEXT == get_context("spawn")
 
     @pytest.mark.parametrize("param", cli.params)
     def test_cli_group_flags_from_params(self, run_context, param):
@@ -56,6 +58,11 @@ class TestFlags:
         flags = Flags(run_context)
         assert hasattr(flags, "LOG_PATH")
         assert getattr(flags, "LOG_PATH") == Path("logs")
+
+    def test_log_file_max_size_default(self, run_context):
+        flags = Flags(run_context)
+        assert hasattr(flags, "LOG_FILE_MAX_BYTES")
+        assert getattr(flags, "LOG_FILE_MAX_BYTES") == 10 * 1024 * 1024
 
     @pytest.mark.parametrize(
         "set_stats_param,do_not_track,expected_anonymous_usage_stats",
@@ -105,35 +112,42 @@ class TestFlags:
         flags = Flags(run_context)
         assert flags.SEND_ANONYMOUS_USAGE_STATS == expected_anonymous_usage_stats
 
-    def test_empty_user_config_uses_default(self, run_context, user_config):
-        flags = Flags(run_context, user_config)
+    def test_resource_types(self, monkeypatch):
+        monkeypatch.setenv("DBT_RESOURCE_TYPES", "model")
+        build_context = self.make_dbt_context("build", ["build"])
+        build_context.params["resource_types"] = ("unit_test",)
+        flags = Flags(build_context)
+        assert flags.resource_types == ("unit_test",)
+
+    def test_empty_project_flags_uses_default(self, run_context, project_flags):
+        flags = Flags(run_context, project_flags)
         assert flags.USE_COLORS == run_context.params["use_colors"]
 
-    def test_none_user_config_uses_default(self, run_context):
+    def test_none_project_flags_uses_default(self, run_context):
         flags = Flags(run_context, None)
         assert flags.USE_COLORS == run_context.params["use_colors"]
 
-    def test_prefer_user_config_to_default(self, run_context, user_config):
-        user_config.use_colors = False
+    def test_prefer_project_flags_to_default(self, run_context, project_flags):
+        project_flags.use_colors = False
         # ensure default value is not the same as user config
-        assert run_context.params["use_colors"] is not user_config.use_colors
+        assert run_context.params["use_colors"] is not project_flags.use_colors
 
-        flags = Flags(run_context, user_config)
-        assert flags.USE_COLORS == user_config.use_colors
+        flags = Flags(run_context, project_flags)
+        assert flags.USE_COLORS == project_flags.use_colors
 
-    def test_prefer_param_value_to_user_config(self):
-        user_config = UserConfig(use_colors=False)
+    def test_prefer_param_value_to_project_flags(self):
+        project_flags = ProjectFlags(use_colors=False)
         context = self.make_dbt_context("run", ["--use-colors", "True", "run"])
 
-        flags = Flags(context, user_config)
+        flags = Flags(context, project_flags)
         assert flags.USE_COLORS
 
-    def test_prefer_env_to_user_config(self, monkeypatch, user_config):
-        user_config.use_colors = False
+    def test_prefer_env_to_project_flags(self, monkeypatch, project_flags):
+        project_flags.use_colors = False
         monkeypatch.setenv("DBT_USE_COLORS", "True")
         context = self.make_dbt_context("run", ["run"])
 
-        flags = Flags(context, user_config)
+        flags = Flags(context, project_flags)
         assert flags.USE_COLORS
 
     def test_mutually_exclusive_options_passed_separately(self):
@@ -158,14 +172,14 @@ class TestFlags:
             Flags(context)
 
     @pytest.mark.parametrize("warn_error", [True, False])
-    def test_mutually_exclusive_options_from_user_config(self, warn_error, user_config):
-        user_config.warn_error = warn_error
+    def test_mutually_exclusive_options_from_project_flags(self, warn_error, project_flags):
+        project_flags.warn_error = warn_error
         context = self.make_dbt_context(
             "run", ["--warn-error-options", '{"include": "all"}', "run"]
         )
 
         with pytest.raises(DbtUsageException):
-            Flags(context, user_config)
+            Flags(context, project_flags)
 
     @pytest.mark.parametrize("warn_error", ["True", "False"])
     def test_mutually_exclusive_options_from_envvar(self, warn_error, monkeypatch):
@@ -177,14 +191,16 @@ class TestFlags:
             Flags(context)
 
     @pytest.mark.parametrize("warn_error", [True, False])
-    def test_mutually_exclusive_options_from_cli_and_user_config(self, warn_error, user_config):
-        user_config.warn_error = warn_error
+    def test_mutually_exclusive_options_from_cli_and_project_flags(
+        self, warn_error, project_flags
+    ):
+        project_flags.warn_error = warn_error
         context = self.make_dbt_context(
             "run", ["--warn-error-options", '{"include": "all"}', "run"]
         )
 
         with pytest.raises(DbtUsageException):
-            Flags(context, user_config)
+            Flags(context, project_flags)
 
     @pytest.mark.parametrize("warn_error", ["True", "False"])
     def test_mutually_exclusive_options_from_cli_and_envvar(self, warn_error, monkeypatch):
@@ -197,15 +213,15 @@ class TestFlags:
             Flags(context)
 
     @pytest.mark.parametrize("warn_error", ["True", "False"])
-    def test_mutually_exclusive_options_from_user_config_and_envvar(
-        self, user_config, warn_error, monkeypatch
+    def test_mutually_exclusive_options_from_project_flags_and_envvar(
+        self, project_flags, warn_error, monkeypatch
     ):
-        user_config.warn_error = warn_error
+        project_flags.warn_error = warn_error
         monkeypatch.setenv("DBT_WARN_ERROR_OPTIONS", '{"include": "all"}')
         context = self.make_dbt_context("run", ["run"])
 
         with pytest.raises(DbtUsageException):
-            Flags(context, user_config)
+            Flags(context, project_flags)
 
     @pytest.mark.parametrize(
         "cli_colors,cli_colors_file,flag_colors,flag_colors_file",
@@ -314,10 +330,10 @@ class TestFlags:
         assert flags.LOG_FORMAT_FILE == flag_log_format_file
 
     def test_log_settings_from_config(self):
-        """Test that values set in UserConfig for log settings will set flags as expected"""
+        """Test that values set in ProjectFlags for log settings will set flags as expected"""
         context = self.make_dbt_context("run", ["run"])
 
-        config = UserConfig(log_format="json", log_level="warn", use_colors=False)
+        config = ProjectFlags(log_format="json", log_level="warn", use_colors=False)
 
         flags = Flags(context, config)
 
@@ -329,11 +345,11 @@ class TestFlags:
         assert flags.USE_COLORS_FILE is False
 
     def test_log_file_settings_from_config(self):
-        """Test that values set in UserConfig for log *file* settings will set flags as expected, leaving the console
+        """Test that values set in ProjectFlags for log *file* settings will set flags as expected, leaving the console
         logging flags with their default values"""
         context = self.make_dbt_context("run", ["run"])
 
-        config = UserConfig(log_format_file="json", log_level_file="warn", use_colors_file=False)
+        config = ProjectFlags(log_format_file="json", log_level_file="warn", use_colors_file=False)
 
         flags = Flags(context, config)
 
@@ -351,6 +367,27 @@ class TestFlags:
         with pytest.raises(DbtUsageException):
             Flags(context)
 
+    def test_global_flag_at_child_context(self):
+        parent_context_a = self.make_dbt_context("parent_context_a", ["--no-use-colors"])
+        child_context_a = self.make_dbt_context("child_context_a", ["run"], parent_context_a)
+        flags_a = Flags(child_context_a)
+
+        parent_context_b = self.make_dbt_context("parent_context_b", ["run"])
+        child_context_b = self.make_dbt_context(
+            "child_context_b", ["--no-use-colors"], parent_context_b
+        )
+        flags_b = Flags(child_context_b)
+
+        assert flags_a.USE_COLORS == flags_b.USE_COLORS
+
+    def test_set_project_only_flags(self, project_flags, run_context):
+        flags = Flags(run_context, project_flags)
+
+        for project_only_flag, project_only_flag_value in project_flags.project_only_flags.items():
+            assert getattr(flags, project_only_flag) == project_only_flag_value
+            # sanity check: ensure project_only_flag is not part of the click context
+            assert project_only_flag not in run_context.params
+
     def _create_flags_from_dict(self, cmd, d):
         write_file("", "profiles.yml")
         result = Flags.from_dict(cmd, d)
@@ -365,16 +402,18 @@ class TestFlags:
         }
         result = self._create_flags_from_dict(Command.RUN, args_dict)
         assert "model_one" in result.select[0]
-        assert "model_two" in result.select[0]
+        assert "model_two" in result.select[1]
 
     def test_from_dict__build(self):
         args_dict = {
             "print": True,
             "state": "some/path",
+            "defer_state": None,
         }
         result = self._create_flags_from_dict(Command.BUILD, args_dict)
         assert result.print is True
         assert "some/path" in str(result.state)
+        assert result.defer_state is None
 
     def test_from_dict__seed(self):
         args_dict = {"use_colors": False, "exclude": ["model_three"]}
@@ -386,3 +425,43 @@ class TestFlags:
         args_dict = {"which": "some bad command"}
         with pytest.raises(DbtInternalError, match=r"does not match value of which"):
             self._create_flags_from_dict(Command.RUN, args_dict)
+
+    def test_from_dict_0_value(self):
+        args_dict = {"log_file_max_bytes": 0}
+        flags = Flags.from_dict(Command.RUN, args_dict)
+        assert flags.LOG_FILE_MAX_BYTES == 0
+
+
+def test_project_flag_defaults():
+    flags = ProjectFlags()
+    # From # 9183: Let's add a unit test that ensures that:
+    # every attribute of ProjectFlags that has a corresponding click option
+    # in params.py should be set to None by default (except for anon user
+    # tracking). Going forward, flags can have non-None defaults if they
+    # do not have a corresponding CLI option/env var. These will be used
+    # to control backwards incompatible interface or behaviour changes.
+
+    # List of all flags except send_anonymous_usage_stats
+    project_flags = [
+        "cache_selected_only",
+        "debug",
+        "fail_fast",
+        "indirect_selection",
+        "log_format",
+        "log_format_file",
+        "log_level",
+        "log_level_file",
+        "partial_parse",
+        "populate_cache",
+        "printer_width",
+        "static_parser",
+        "use_colors",
+        "use_colors_file",
+        "use_experimental_parser",
+        "version_check",
+        "warn_error",
+        "warn_error_options",
+        "write_json",
+    ]
+    for flag in project_flags:
+        assert getattr(flags, flag) is None

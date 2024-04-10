@@ -1,7 +1,0 @@
-kind: Fixes
-body: Update `use_discrete_percentile` and `use_approximate_percentile` to be non
-  optional and default to `False`
-time: 2023-06-14T14:59:54.042341-07:00
-custom:
-  Author: QMalcolm
-  Issue: "7866"

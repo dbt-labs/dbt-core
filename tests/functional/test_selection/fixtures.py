@@ -32,7 +32,7 @@ sources:
         identifier: model_b
         columns:
           - name: fun
-            tests:
+            data_tests:
               - unique
 
 models:
@@ -40,7 +40,7 @@ models:
     columns:
       - name: fun
         tags: [column_level_tag]
-        tests:
+        data_tests:
           - unique
           - relationships:
               to: ref('model_b')

@@ -1,9 +1,8 @@
 import dbt.flags
-import dbt.ui
+import dbt_common.ui
 
 import json
 import logging
-import os
 import sys
 import time
 import warnings
@@ -11,28 +10,17 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional, List, ContextManager, Callable, Dict, Any, Set
 
-import colorama
 import logbook
-from dbt.constants import SECRET_ENV_PREFIX
-from dbt.dataclass_schema import dbtClassMixin
 
-# Colorama is needed for colored logs on Windows because we're using logger.info
-# intead of print(). If the Windows env doesn't have a TERM var set or it is set to None
-# (i.e. in the case of Git Bash on Windows- this emulates Unix), then it's safe to initialize
-# Colorama with wrapping turned on which allows us to strip ANSI sequences from stdout.
-# You can safely initialize Colorama for any OS and the coloring stays the same except
-# when piped to anoter process for Linux and MacOS, then it loses the coloring. To combat
-# that, we will just initialize Colorama when needed on Windows using a non-Unix terminal.
-
-if sys.platform == "win32" and (not os.getenv("TERM") or os.getenv("TERM") == "None"):
-    colorama.init(wrap=True)
+from dbt_common.context import get_invocation_context
+from dbt_common.dataclass_schema import dbtClassMixin
 
 STDOUT_LOG_FORMAT = "{record.message}"
 DEBUG_LOG_FORMAT = "{record.time:%Y-%m-%d %H:%M:%S.%f%z} ({record.thread_name}): {record.message}"
 
 
 def get_secret_env() -> List[str]:
-    return [v for k, v in os.environ.items() if k.startswith(SECRET_ENV_PREFIX)]
+    return get_invocation_context().env_secrets
 
 
 ExceptionInformation = str
@@ -92,7 +80,7 @@ class JsonFormatter(LogMessageFormatter):
 
 
 class FormatterMixin:
-    def __init__(self, format_string):
+    def __init__(self, format_string) -> None:
         self._text_format_string = format_string
         self.formatter_class = logbook.StringFormatter
         # triggers a formatter update via logbook.StreamHandler
@@ -197,7 +185,7 @@ class TextOnly(logbook.Processor):
 
 
 class TimingProcessor(logbook.Processor):
-    def __init__(self, timing_info: Optional[dbtClassMixin] = None):
+    def __init__(self, timing_info: Optional[dbtClassMixin] = None) -> None:
         self.timing_info = timing_info
         super().__init__()
 
@@ -207,7 +195,7 @@ class TimingProcessor(logbook.Processor):
 
 
 class DbtProcessState(logbook.Processor):
-    def __init__(self, value: str):
+    def __init__(self, value: str) -> None:
         self.value = value
         super().__init__()
 
@@ -218,7 +206,7 @@ class DbtProcessState(logbook.Processor):
 
 
 class DbtModelState(logbook.Processor):
-    def __init__(self, state: Dict[str, str]):
+    def __init__(self, state: Dict[str, str]) -> None:
         self.state = state
         super().__init__()
 
@@ -232,7 +220,7 @@ class DbtStatusMessage(logbook.Processor):
 
 
 class UniqueID(logbook.Processor):
-    def __init__(self, unique_id: str):
+    def __init__(self, unique_id: str) -> None:
         self.unique_id = unique_id
         super().__init__()
 
@@ -241,7 +229,7 @@ class UniqueID(logbook.Processor):
 
 
 class NodeCount(logbook.Processor):
-    def __init__(self, node_count: int):
+    def __init__(self, node_count: int) -> None:
         self.node_count = node_count
         super().__init__()
 
@@ -250,7 +238,7 @@ class NodeCount(logbook.Processor):
 
 
 class NodeMetadata(logbook.Processor):
-    def __init__(self, node, index):
+    def __init__(self, node, index) -> None:
         self.node = node
         self.index = index
         super().__init__()
@@ -301,7 +289,7 @@ class HookMetadata(NodeMetadata):
 
 
 class TimestampNamed(logbook.Processor):
-    def __init__(self, name: str):
+    def __init__(self, name: str) -> None:
         self.name = name
         super().__init__()
 
@@ -327,9 +315,9 @@ initialized = False
 
 
 def make_log_dir_if_missing(log_dir):
-    import dbt.clients.system
+    import dbt_common.clients.system
 
-    dbt.clients.system.make_directory(log_dir)
+    dbt_common.clients.system.make_directory(log_dir)
 
 
 class DebugWarnings(logbook.compat.redirected_warnings):
@@ -348,7 +336,7 @@ DebugWarnings().__enter__()
 
 
 class LogManager(logbook.NestedSetup):
-    def __init__(self, stdout=sys.stdout, stderr=sys.stderr):
+    def __init__(self, stdout=sys.stdout, stderr=sys.stderr) -> None:
         self.stdout = stdout
         self.stderr = stderr
         self._null_handler = logbook.NullHandler()
@@ -531,6 +519,6 @@ def timestamped_line(msg: str) -> str:
 
 def print_timestamped_line(msg: str, use_color: Optional[str] = None):
     if use_color is not None:
-        msg = dbt.ui.color(msg, use_color)
+        msg = dbt_common.ui.color(msg, use_color)
 
     GLOBAL_LOGGER.info(timestamped_line(msg))
