@@ -624,14 +624,27 @@ class ManifestLoader:
                         )
 
     def check_for_spaces_in_model_names(self):
+        improper_model_names = 0
+
         for node in self.manifest.nodes.values():
             if isinstance(node, ModelNode) and " " in node.name:
-                fire_event(
-                    SpacesInModelNameDeprecation(
-                        model_name=node.name,
-                        model_version=version_to_str(node.version),
+                if improper_model_names == 0 or self.root_project.args.DEBUG:
+                    fire_event(
+                        SpacesInModelNameDeprecation(
+                            model_name=node.name,
+                            model_version=version_to_str(node.version),
+                        )
                     )
-                )
+                improper_model_names += 1
+
+        if improper_model_names >= 2 and not self.root_project.args.DEBUG:
+            fire_event(
+                Note(
+                    msg=f"Found {improper_model_names} models with spaces in their names, which is deprecated."
+                    "run again with `--debug` to see them all."
+                ),
+                level=EventLevel.WARN,
+            )
 
     def load_and_parse_macros(self, project_parser_files):
         for project in self.all_projects.values():

@@ -41,3 +41,23 @@ class TestSpacesInModelNamesSadPath:
         event = event_catcher.caught_events[0]
         assert "Model `my model` has spaces in its name. This is deprecated" in event.info.msg
         assert event.info.level == EventLevel.WARN
+
+
+class TestSpaceInModelNamesWithDebug:
+    @pytest.fixture(scope="class")
+    def models(self) -> Dict[str, str]:
+        return {
+            "my model.sql": "select 1 as id",
+            "my model2.sql": "select 1 as id",
+        }
+
+    def tests_debug_when_spaces_in_name(self, project) -> None:
+        event_catcher = EventCatcher()
+        runner = dbtRunner(callbacks=[event_catcher.catch])
+        runner.invoke(["parse"])
+        assert len(event_catcher.caught_events) == 1
+
+        event_catcher = EventCatcher()
+        runner = dbtRunner(callbacks=[event_catcher.catch])
+        runner.invoke(["parse", "--debug"])
+        assert len(event_catcher.caught_events) == 2
