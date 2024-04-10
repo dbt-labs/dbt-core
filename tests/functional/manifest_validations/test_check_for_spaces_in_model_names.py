@@ -3,6 +3,7 @@ import pytest
 from dataclasses import dataclass, field
 from dbt.cli.main import dbtRunner
 from dbt_common.events.base_types import BaseEvent, EventLevel, EventMsg
+from dbt_common.events.types import Note
 from dbt.events.types import SpacesInModelNameDeprecation
 from typing import Dict, List
 
@@ -52,12 +53,16 @@ class TestSpaceInModelNamesWithDebug:
         }
 
     def tests_debug_when_spaces_in_name(self, project) -> None:
-        event_catcher = EventCatcher(SpacesInModelNameDeprecation)
-        runner = dbtRunner(callbacks=[event_catcher.catch])
+        spaces_check_catcher = EventCatcher(SpacesInModelNameDeprecation)
+        note_catcher = EventCatcher(Note)
+        runner = dbtRunner(callbacks=[spaces_check_catcher.catch, note_catcher.catch])
         runner.invoke(["parse"])
-        assert len(event_catcher.caught_events) == 1
+        assert len(spaces_check_catcher.caught_events) == 1
+        assert len(note_catcher.caught_events) == 1
 
-        event_catcher = EventCatcher(SpacesInModelNameDeprecation)
-        runner = dbtRunner(callbacks=[event_catcher.catch])
+        spaces_check_catcher = EventCatcher(SpacesInModelNameDeprecation)
+        note_catcher = EventCatcher(Note)
+        runner = dbtRunner(callbacks=[spaces_check_catcher.catch, note_catcher.catch])
         runner.invoke(["parse", "--debug"])
-        assert len(event_catcher.caught_events) == 2
+        assert len(spaces_check_catcher.caught_events) == 2
+        assert len(note_catcher.caught_events) == 0
