@@ -651,6 +651,7 @@ class ManifestLoader:
                     )
                 improper_model_names += 1
 
+        # don't note the total of problematic names unless more than 1
         if improper_model_names >= 2 and not self.root_project.args.DEBUG:
             fire_event(
                 Note(
