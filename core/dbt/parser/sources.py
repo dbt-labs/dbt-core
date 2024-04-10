@@ -202,7 +202,7 @@ class SourcePatcher:
             # runtime.
             fire_event(
                 FreshnessConfigProblem(
-                    msg=f"The configured adapter does not support metadata-based freshness. A loaded_at_field must be specified for source '{source.name}'."
+                    msg=f"The configured adapter does not support metadata-based freshness. A loaded_at_field must be specified for source '{source.name}.{table.name}'."
                 )
             )
 
