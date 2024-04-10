@@ -654,8 +654,8 @@ class ManifestLoader:
         if improper_model_names >= 2 and not self.root_project.args.DEBUG:
             fire_event(
                 Note(
-                    msg=f"Found {improper_model_names} models with spaces in their names, which is deprecated."
-                    "run again with `--debug` to see them all."
+                    msg=f"Found {improper_model_names} models with spaces in their names, which is deprecated. "
+                    "Run again with `--debug` to see them all."
                 ),
                 level=level,
             )
