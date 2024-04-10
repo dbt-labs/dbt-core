@@ -22,6 +22,7 @@ import time
 from dbt.context.manifest import generate_query_header_context
 from dbt.contracts.graph.semantic_manifest import SemanticManifest
 from dbt_common.events.base_types import EventLevel
+from dbt_common.exceptions.base import DbtValidationError
 import dbt_common.utils
 import json
 import pprint
@@ -624,7 +625,19 @@ class ManifestLoader:
                         )
 
     def check_for_spaces_in_model_names(self):
+        """Validates that model names do not contain spaces
+
+        If `DEBUG` flag is `False`, logs only first bad model name and a count of total bad model names.
+        If `DEBUG` flag is `True`, logs every bad model name
+        If `ALLOW_SPACES_IN_MODEL_NAMES` is `False`, logs are `ERROR` level and an exception is raised if any names are bad
+        If `ALLOW_SPACES_IN_MODEL_NAMES` is `True`, logs are `WARN` level
+        """
         improper_model_names = 0
+        level = (
+            EventLevel.WARN
+            if self.root_project.args.ALLOW_SPACES_IN_MODEL_NAMES
+            else EventLevel.ERROR
+        )
 
         for node in self.manifest.nodes.values():
             if isinstance(node, ModelNode) and " " in node.name:
@@ -633,7 +646,8 @@ class ManifestLoader:
                         SpacesInModelNameDeprecation(
                             model_name=node.name,
                             model_version=version_to_str(node.version),
-                        )
+                        ),
+                        level=level,
                     )
                 improper_model_names += 1
 
@@ -643,8 +657,11 @@ class ManifestLoader:
                     msg=f"Found {improper_model_names} models with spaces in their names, which is deprecated."
                     "run again with `--debug` to see them all."
                 ),
-                level=EventLevel.WARN,
+                level=level,
             )
+
+        if level == EventLevel.ERROR and improper_model_names != 0:
+            raise DbtValidationError("Model names cannot contain spaces")
 
     def load_and_parse_macros(self, project_parser_files):
         for project in self.all_projects.values():

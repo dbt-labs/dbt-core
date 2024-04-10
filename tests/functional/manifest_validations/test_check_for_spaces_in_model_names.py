@@ -5,6 +5,7 @@ from dbt.cli.main import dbtRunner
 from dbt_common.events.base_types import BaseEvent, EventLevel, EventMsg
 from dbt_common.events.types import Note
 from dbt.events.types import SpacesInModelNameDeprecation
+from dbt.tests.util import update_config_file
 from typing import Dict, List
 
 
@@ -66,3 +67,29 @@ class TestSpaceInModelNamesWithDebug:
         runner.invoke(["parse", "--debug"])
         assert len(spaces_check_catcher.caught_events) == 2
         assert len(note_catcher.caught_events) == 0
+
+
+class TestAllowSpacesInModelNamesFalse:
+    @pytest.fixture(scope="class")
+    def models(self) -> Dict[str, str]:
+        return {
+            "my model.sql": "select 1 as id",
+        }
+
+    def test_dont_allow_spaces_in_model_names(self, project):
+        spaces_check_catcher = EventCatcher(SpacesInModelNameDeprecation)
+        runner = dbtRunner(callbacks=[spaces_check_catcher.catch])
+        runner.invoke(["parse"])
+        assert len(spaces_check_catcher.caught_events) == 1
+        assert spaces_check_catcher.caught_events[0].info.level == EventLevel.WARN
+
+        config_patch = {"flags": {"allow_spaces_in_model_names": False}}
+        update_config_file(config_patch, project.project_root, "dbt_project.yml")
+
+        spaces_check_catcher = EventCatcher(SpacesInModelNameDeprecation)
+        runner = dbtRunner(callbacks=[spaces_check_catcher.catch])
+        result = runner.invoke(["parse"])
+        assert not result.success
+        assert "Model names cannot contain spaces" in result.exception.__str__()
+        assert len(spaces_check_catcher.caught_events) == 1
+        assert spaces_check_catcher.caught_events[0].info.level == EventLevel.ERROR
