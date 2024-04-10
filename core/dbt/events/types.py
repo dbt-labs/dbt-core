@@ -413,7 +413,7 @@ class ProjectFlagsMovedDeprecation(WarnLevel):
         return warning_tag(f"Deprecated functionality\n\n{description}")
 
 
-class SpacesInModelNameDeprecation(WarnLevel):
+class SpacesInModelNameDeprecation(DynamicLevel):
     def code(self) -> str:
         return "D014"
 
