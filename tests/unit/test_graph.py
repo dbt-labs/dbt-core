@@ -20,12 +20,7 @@ from dbt.contracts.project import ProjectFlags
 from dbt.graph import NodeSelector, parse_difference
 from dbt.events.logging import setup_event_logger
 from dbt.mp_context import get_mp_context
-
-try:
-    from queue import Empty
-except ImportError:
-    from Queue import Empty
-
+from queue import Empty
 from .utils import config_from_parts_or_dicts, generate_name_macros, inject_plugin
 
 

@@ -6,13 +6,14 @@ from abc import ABCMeta, abstractmethod
 from contextlib import nullcontext
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Type, Union, Set
+from typing import Any, Dict, List, Optional, Set
 
 from dbt.compilation import Compiler
 import dbt_common.exceptions.base
 import dbt.exceptions
 from dbt import tracking
-from dbt.config import RuntimeConfig, Project
+from dbt.cli.flags import Flags
+from dbt.config import RuntimeConfig
 from dbt.config.profile import read_profile
 from dbt.constants import DBT_PROJECT_FILE_NAME
 from dbt.contracts.graph.manifest import Manifest
@@ -49,12 +50,6 @@ from dbt.logger import log_manager
 from dbt.task.printer import print_run_result_error
 
 
-class NoneConfig:
-    @classmethod
-    def from_args(cls, args):
-        return None
-
-
 def read_profiles(profiles_dir=None):
     """This is only used for some error handling"""
     if profiles_dir is None:
@@ -71,15 +66,11 @@ def read_profiles(profiles_dir=None):
 
 
 class BaseTask(metaclass=ABCMeta):
-    ConfigType: Union[Type[NoneConfig], Type[Project]] = NoneConfig
-
-    def __init__(self, args, config, project=None) -> None:
+    def __init__(self, args: Flags) -> None:
         self.args = args
-        self.config = config
-        self.project = config if isinstance(config, Project) else project
 
     @classmethod
-    def pre_init_hook(cls, args):
+    def pre_init_hook(cls, args: Flags):
         """A hook called before the task is initialized."""
         if args.log_format == "json":
             log_manager.format_json()
@@ -92,23 +83,6 @@ class BaseTask(metaclass=ABCMeta):
             log_manager.format_json()
         else:
             log_manager.format_text()
-
-    @classmethod
-    def from_args(cls, args, *pargs, **kwargs):
-        try:
-            # This is usually RuntimeConfig
-            config = cls.ConfigType.from_args(args)
-        except dbt.exceptions.DbtProjectError as exc:
-            fire_event(LogDbtProjectError(exc=str(exc)))
-
-            tracking.track_invalid_invocation(args=args, result_type=exc.result_type)
-            raise dbt_common.exceptions.DbtRuntimeError("Could not run dbt") from exc
-        except dbt.exceptions.DbtProfileError as exc:
-            all_profile_names = list(read_profiles(get_flags().PROFILES_DIR).keys())
-            fire_event(LogDbtProfileError(exc=str(exc), profiles=all_profile_names))
-            tracking.track_invalid_invocation(args=args, result_type=exc.result_type)
-            raise dbt_common.exceptions.DbtRuntimeError("Could not run dbt") from exc
-        return cls(args, config, *pargs, **kwargs)
 
     @abstractmethod
     def run(self):
@@ -153,10 +127,11 @@ def move_to_nearest_project_dir(project_dir: Optional[str]) -> Path:
 # produce the same behavior. currently this class only contains manifest compilation,
 # holding a manifest, and moving direcories.
 class ConfiguredTask(BaseTask):
-    ConfigType = RuntimeConfig
-
-    def __init__(self, args, config, manifest: Optional[Manifest] = None) -> None:
-        super().__init__(args, config)
+    def __init__(
+        self, args: Flags, config: RuntimeConfig, manifest: Optional[Manifest] = None
+    ) -> None:
+        super().__init__(args)
+        self.config = config
         self.graph: Optional[Graph] = None
         self.manifest = manifest
         self.compiler = Compiler(self.config)
@@ -174,9 +149,22 @@ class ConfiguredTask(BaseTask):
             dbt.tracking.track_runnable_timing({"graph_compilation_elapsed": compile_time})
 
     @classmethod
-    def from_args(cls, args, *pargs, **kwargs):
+    def from_args(cls, args: Flags, *pargs, **kwargs):
         move_to_nearest_project_dir(args.project_dir)
-        return super().from_args(args, *pargs, **kwargs)
+        try:
+            # This is usually RuntimeConfig
+            config = RuntimeConfig.from_args(args)
+        except dbt.exceptions.DbtProjectError as exc:
+            fire_event(LogDbtProjectError(exc=str(exc)))
+
+            tracking.track_invalid_invocation(args=args, result_type=exc.result_type)
+            raise dbt_common.exceptions.DbtRuntimeError("Could not run dbt") from exc
+        except dbt.exceptions.DbtProfileError as exc:
+            all_profile_names = list(read_profiles(get_flags().PROFILES_DIR).keys())
+            fire_event(LogDbtProfileError(exc=str(exc), profiles=all_profile_names))
+            tracking.track_invalid_invocation(args=args, result_type=exc.result_type)
+            raise dbt_common.exceptions.DbtRuntimeError("Could not run dbt") from exc
+        return cls(args, config, *pargs, **kwargs)
 
 
 class ExecutionContext:
@@ -487,7 +475,7 @@ class BaseRunner(metaclass=ABCMeta):
 
 
 def resource_types_from_args(
-    args, all_resource_values: Set[NodeType], default_resource_values: Set[NodeType]
+    args: Flags, all_resource_values: Set[NodeType], default_resource_values: Set[NodeType]
 ) -> Set[NodeType]:
 
     if not args.resource_types:

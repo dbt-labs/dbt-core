@@ -8,6 +8,9 @@ from dbt.contracts.graph.nodes import (
     SemanticModel,
     UnitTestDefinition,
 )
+from dbt.cli.flags import Flags
+from dbt.config.runtime import RuntimeConfig
+from dbt.contracts.graph.manifest import Manifest
 from dbt.flags import get_flags
 from dbt.graph import ResourceTypeSelector
 from dbt.task.base import resource_types_from_args
@@ -54,7 +57,7 @@ class ListTask(GraphRunnableTask):
         )
     )
 
-    def __init__(self, args, config, manifest) -> None:
+    def __init__(self, args: Flags, config: RuntimeConfig, manifest: Manifest) -> None:
         super().__init__(args, config, manifest)
         if self.args.models:
             if self.args.select:

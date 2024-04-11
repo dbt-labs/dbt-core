@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Dict, List, NoReturn, Union, Type, Iterator, Set, Any
+from typing import Dict, List, NoReturn, Type, Iterator, Set, Any
 
 from dbt.exceptions import (
     DuplicateDependencyToRootError,
@@ -17,13 +17,12 @@ from dbt.deps.git import GitUnpinnedPackage
 from dbt.deps.registry import RegistryUnpinnedPackage
 
 from dbt.contracts.project import (
+    PackageSpec,
     LocalPackage,
     TarballPackage,
     GitPackage,
     RegistryPackage,
 )
-
-PackageContract = Union[LocalPackage, TarballPackage, GitPackage, RegistryPackage]
 
 
 @dataclass
@@ -68,7 +67,7 @@ class PackageListing:
         else:
             self.packages[key] = package
 
-    def update_from(self, src: List[PackageContract]) -> None:
+    def update_from(self, src: List[PackageSpec]) -> None:
         pkg: UnpinnedPackage
         for contract in src:
             if isinstance(contract, LocalPackage):
@@ -84,9 +83,7 @@ class PackageListing:
             self.incorporate(pkg)
 
     @classmethod
-    def from_contracts(
-        cls: Type["PackageListing"], src: List[PackageContract]
-    ) -> "PackageListing":
+    def from_contracts(cls: Type["PackageListing"], src: List[PackageSpec]) -> "PackageListing":
         self = cls({})
         self.update_from(src)
         return self
@@ -114,7 +111,7 @@ def _check_for_duplicate_project_names(
 
 
 def resolve_packages(
-    packages: List[PackageContract],
+    packages: List[PackageSpec],
     project: Project,
     cli_vars: Dict[str, Any],
 ) -> List[PinnedPackage]:
@@ -137,7 +134,7 @@ def resolve_packages(
     return resolved
 
 
-def resolve_lock_packages(packages: List[PackageContract]) -> List[PinnedPackage]:
+def resolve_lock_packages(packages: List[PackageSpec]) -> List[PinnedPackage]:
     lock_packages = PackageListing.from_contracts(packages)
     final = PackageListing()
 

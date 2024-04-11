@@ -1099,7 +1099,7 @@ class NoNodesForSelectionCriteria(WarnLevel):
         return "M030"
 
     def message(self) -> str:
-        return f"The selection criterion '{self.spec_raw}' does not match any nodes"
+        return f"The selection criterion '{self.spec_raw}' does not match any enabled nodes"
 
 
 class DepsLockUpdating(InfoLevel):

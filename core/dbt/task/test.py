@@ -87,6 +87,7 @@ class UnitTestResultData(dbtClassMixin):
 
 class TestRunner(CompileRunner):
     _ANSI_ESCAPE = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+    _LOG_TEST_RESULT_EVENTS = LogTestResult
 
     def describe_node_name(self):
         if self.node.resource_type == NodeType.Unit:
@@ -102,7 +103,7 @@ class TestRunner(CompileRunner):
         model = result.node
 
         fire_event(
-            LogTestResult(
+            self._LOG_TEST_RESULT_EVENTS(
                 name=self.describe_node_name(),
                 status=str(result.status),
                 index=self.node_index,
@@ -280,7 +281,9 @@ class TestRunner(CompileRunner):
             message = f"Got {num_errors}, configured to fail if {test.config.error_if}"
             failures = result.failures
         elif result.should_warn:
-            if get_flags().WARN_ERROR:
+            if get_flags().WARN_ERROR or get_flags().WARN_ERROR_OPTIONS.includes(
+                self._LOG_TEST_RESULT_EVENTS.__name__
+            ):
                 status = TestStatus.Fail
                 message = f"Got {num_errors}, configured to fail if {test.config.warn_if}"
             else:

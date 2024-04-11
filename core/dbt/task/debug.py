@@ -19,6 +19,7 @@ import dbt_common.clients.system
 import dbt.exceptions
 import dbt_common.exceptions
 from dbt.adapters.factory import get_adapter, register_adapter
+from dbt.cli.flags import Flags
 from dbt.config import PartialProject, Project, Profile
 from dbt.config.renderer import DbtProjectYamlRenderer, ProfileRenderer
 from dbt.artifacts.schemas.results import RunStatus
@@ -77,8 +78,8 @@ class DebugRunStatus(Flag):
 
 
 class DebugTask(BaseTask):
-    def __init__(self, args, config) -> None:
-        super().__init__(args, config)
+    def __init__(self, args: Flags) -> None:
+        super().__init__(args)
         self.profiles_dir = args.PROFILES_DIR
         self.profile_path = os.path.join(self.profiles_dir, "profiles.yml")
         try:
@@ -97,13 +98,6 @@ class DebugTask(BaseTask):
         self.profile: Optional[Profile] = None
         self.raw_profile_data: Optional[Dict[str, Any]] = None
         self.profile_name: Optional[str] = None
-        self.project: Optional[Project] = None
-
-    @property
-    def project_profile(self):
-        if self.project is None:
-            return None
-        return self.project.profile_name
 
     def run(self) -> bool:
         # WARN: this is a legacy workflow that is not compatible with other runtime flags
