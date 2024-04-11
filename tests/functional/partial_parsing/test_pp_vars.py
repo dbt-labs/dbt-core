@@ -309,13 +309,18 @@ class TestProfileEnvVars:
         }
 
     @pytest.fixture(scope="class")
+    def environment(self):
+        custom_env = os.environ.copy()
+        custom_env["ENV_VAR_USER"] = "root"
+        custom_env["ENV_VAR_PASS"] = "password"
+        return custom_env
+
+    @pytest.fixture(scope="class")
     def dbt_profile_target(self):
         # Need to set these here because the base integration test class
         # calls 'load_config' before the tests are run.
         # Note: only the specified profile is rendered, so there's no
         # point it setting env_vars in non-used profiles.
-        os.environ["ENV_VAR_USER"] = "root"
-        os.environ["ENV_VAR_PASS"] = "password"
         return {
             "type": "postgres",
             "threads": 4,
