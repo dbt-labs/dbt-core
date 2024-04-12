@@ -39,7 +39,7 @@ jobs:
 
     steps:
       - name: "Checkout ${{ github.repository }} Branch ${{ env.RELEASE_BRANCH }}"
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: ${{ env.RELEASE_BRANCH }}
 
