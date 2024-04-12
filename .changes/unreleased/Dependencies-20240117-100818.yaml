@@ -3,4 +3,4 @@ body: Relax pathspec upper bound version restriction
 time: 2024-01-17T10:08:18.009949641+01:00
 custom:
   Author: rzjfr
-  PR: "9373"
+  Issue: "9373"

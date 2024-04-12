@@ -3,4 +3,4 @@ body: Update Jinja2 to >= 3.1.3 to address CVE-2024-22195
 time: 2024-02-22T15:24:45.158305-08:00
 custom:
   Author: QMalcolm
-  PR: CVE-2024-22195
+  Issue: 9638
