@@ -146,8 +146,7 @@ class TestExportConfigsWithDefaultProperties(BaseConfigProject):
         export = saved_query.exports[0]
         assert export.config.alias == "my_export_alias"
         assert export.config.schema_name == project.test_schema
-        assert export.config.database_name == project.database
-        assert export.config.relation_name is None
+        assert export.config.database == project.database
 
 
 class TestInheritingExportConfigFromSavedQueryConfig(BaseConfigProject):
