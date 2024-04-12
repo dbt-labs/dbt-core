@@ -58,4 +58,4 @@ jobs:
         commit_message: "Add automated changelog yaml from template for bot PR"
         changie_kind: ${{ matrix.changie_kind }}
         label: ${{ matrix.label }}
-        custom_changelog_string: "custom:\n  Author: ${{ github.event.pull_request.user.login }}\n  PR: ${{ github.event.pull_request.number }}"
+        custom_changelog_string: "custom:\n  Author: ${{ github.event.pull_request.user.login }}\n  Issue: ${{ github.event.pull_request.number }}"
