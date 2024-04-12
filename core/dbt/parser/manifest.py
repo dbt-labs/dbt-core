@@ -628,7 +628,7 @@ class ManifestLoader:
     def check_for_spaces_in_model_names(self):
         """Validates that model names do not contain spaces
 
-        If `DEBUG` flag is `False`, logs only first bad model name and a count of total bad model names.
+        If `DEBUG` flag is `False`, logs only first bad model name
         If `DEBUG` flag is `True`, logs every bad model name
         If `ALLOW_SPACES_IN_MODEL_NAMES` is `False`, logs are `ERROR` level and an exception is raised if any names are bad
         If `ALLOW_SPACES_IN_MODEL_NAMES` is `True`, logs are `WARN` level
@@ -652,10 +652,12 @@ class ManifestLoader:
                     )
                 improper_model_names += 1
 
-        # don't note the total of problematic names unless more than 1
-        if improper_model_names >= 2 and not self.root_project.args.DEBUG:
+        if improper_model_names > 0:
             fire_event(
-                TotalModelNamesWithSpacesDeprecation(count_invalid_names=improper_model_names),
+                TotalModelNamesWithSpacesDeprecation(
+                    count_invalid_names=improper_model_names,
+                    show_debug_hint=(not self.root_project.args.DEBUG),
+                ),
                 level=level,
             )
 

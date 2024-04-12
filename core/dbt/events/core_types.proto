@@ -417,6 +417,7 @@ message SpacesInModelNameDeprecationMsg {
 // D015
 message TotalModelNamesWithSpacesDeprecation {
     int32 count_invalid_names = 1;
+    bool show_debug_hint = 2;
 }
 
 message TotalModelNamesWithSpacesDeprecationMsg {
