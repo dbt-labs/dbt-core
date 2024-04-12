@@ -65,7 +65,7 @@ class TestSpaceInModelNamesWithDebug:
             "Found 2 models with spaces in their names" in total_catcher.caught_events[0].info.msg
         )
         assert (
-            "Run again with\n`--debug` to see them all." in total_catcher.caught_events[0].info.msg
+            "Run again with `--debug` to see them all." in total_catcher.caught_events[0].info.msg
         )
 
         spaces_check_catcher = EventCatcher(SpacesInModelNameDeprecation)
@@ -75,7 +75,7 @@ class TestSpaceInModelNamesWithDebug:
         assert len(spaces_check_catcher.caught_events) == 2
         assert len(total_catcher.caught_events) == 1
         assert (
-            "Run again with\n`--debug` to see them all."
+            "Run again with `--debug` to see them all."
             not in total_catcher.caught_events[0].info.msg
         )
 

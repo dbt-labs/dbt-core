@@ -647,6 +647,7 @@ class ManifestLoader:
                         SpacesInModelNameDeprecation(
                             model_name=node.name,
                             model_version=version_to_str(node.version),
+                            level=level.value,
                         ),
                         level=level,
                     )
@@ -657,6 +658,7 @@ class ManifestLoader:
                 TotalModelNamesWithSpacesDeprecation(
                     count_invalid_names=improper_model_names,
                     show_debug_hint=(not self.root_project.args.DEBUG),
+                    level=level.value,
                 ),
                 level=level,
             )
