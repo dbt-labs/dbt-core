@@ -1,6 +1,5 @@
 import os
 
-from argparse import Namespace
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -23,11 +22,15 @@ from dbt.mp_context import get_mp_context
 from queue import Empty
 from .utils import config_from_parts_or_dicts, generate_name_macros, inject_plugin
 
+from dbt.flags import set_from_args
+from argparse import Namespace
+
+set_from_args(Namespace(WARN_ERROR=False), None)
+
 
 class GraphTest(unittest.TestCase):
     def tearDown(self):
         self.mock_filesystem_search.stop()
-        self.mock_hook_constructor.stop()
         self.load_state_check.stop()
         self.load_source_file_patcher.stop()
         reset_adapters()
@@ -69,17 +72,6 @@ class GraphTest(unittest.TestCase):
         self.mock_filesystem_search = self.filesystem_search.start()
         self.mock_filesystem_search.side_effect = mock_filesystem_search
 
-        # Create HookParser patcher
-        self.hook_patcher = patch.object(dbt.parser.hooks.HookParser, "__new__")
-
-        def create_hook_patcher(cls, project, manifest, root_project):
-            result = MagicMock(project=project, manifest=manifest, root_project=root_project)
-            result.__iter__.side_effect = lambda: iter([])
-            return result
-
-        self.mock_hook_constructor = self.hook_patcher.start()
-        self.mock_hook_constructor.side_effect = create_hook_patcher
-
         # Create the Manifest.state_check patcher
         @patch("dbt.parser.manifest.ManifestLoader.build_manifest_state_check")
         def _mock_state_check(self):
@@ -111,6 +103,15 @@ class GraphTest(unittest.TestCase):
             return source_file
 
         self.mock_source_file.side_effect = mock_load_source_file
+
+        # Create hookparser source file patcher
+        self.load_source_file_manifest_patcher = patch("dbt.parser.manifest.load_source_file")
+        self.mock_source_file_manifest = self.load_source_file_manifest_patcher.start()
+
+        def mock_load_source_file_manifest(path, parse_file_type, project_name, saved_files):
+            return []
+
+        self.mock_source_file_manifest.side_effect = mock_load_source_file_manifest
 
     def get_config(self, extra_cfg=None):
         if extra_cfg is None:

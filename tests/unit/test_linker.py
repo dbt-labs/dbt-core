@@ -8,6 +8,11 @@ from dbt.graph.selector import NodeSelector
 from dbt.graph.cli import parse_difference
 from queue import Empty
 
+from dbt.flags import set_from_args
+from argparse import Namespace
+
+set_from_args(Namespace(WARN_ERROR=False), None)
+
 
 def _mock_manifest(nodes):
     config = mock.MagicMock(enabled=True)
