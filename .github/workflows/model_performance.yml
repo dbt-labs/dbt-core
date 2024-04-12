@@ -48,7 +48,7 @@ jobs:
       # explicitly checkout the performance runner from main regardless of which
       # version we are modeling.
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: main
 
@@ -87,12 +87,12 @@ jobs:
       # explicitly checkout the performance runner from main regardless of which
       # version we are modeling.
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: main
 
       # attempts to access a previously cached runner
-      - uses: actions/cache@v3
+      - uses: actions/cache@v4
         id: cache
         with:
           path: ${{ env.RUNNER_CACHE_PATH }}
@@ -148,7 +148,7 @@ jobs:
           echo "release_branch: ${{ needs.set-variables.outputs.release_branch }}"
 
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: "3.8"
 
@@ -160,13 +160,13 @@ jobs:
 
       # explicitly checkout main to get the latest project definitions
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: main
 
       # this was built in the previous job so it will be there.
       - name: Fetch Runner
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         id: cache
         with:
           path: ${{ env.RUNNER_CACHE_PATH }}
@@ -195,7 +195,7 @@ jobs:
       - name: '[DEBUG] ls baseline directory after run'
         run: ls -R performance/baselines/
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: baseline
           path: performance/baselines/${{ needs.set-variables.outputs.release_id }}/
@@ -225,7 +225,7 @@ jobs:
           echo "release_branch: ${{ needs.set-variables.outputs.release_branch }}"
 
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: ${{ matrix.base-branch }}
 
@@ -235,7 +235,7 @@ jobs:
           git push origin ${{ matrix.target-branch }}
           git branch --set-upstream-to=origin/${{ matrix.target-branch }} ${{ matrix.target-branch }}
 
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: baseline
           path: performance/baselines/${{ needs.set-variables.outputs.release_id }}
