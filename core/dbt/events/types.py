@@ -442,7 +442,7 @@ class TotalModelNamesWithSpacesDeprecation(DynamicLevel):
         return "D015"
 
     def message(self) -> str:
-        description = f"Found {self.count_invalid_names} models with spaces in their names, which is deprecated."
+        description = f"Spaces in model names found in {self.count_invalid_names} model(s), which is deprecated."
 
         if self.show_debug_hint:
             description += " Run again with `--debug` to see them all."
