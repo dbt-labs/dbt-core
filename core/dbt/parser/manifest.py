@@ -661,8 +661,8 @@ class ManifestLoader:
                 level=level,
             )
 
-        if level == EventLevel.ERROR and improper_model_names != 0:
-            raise DbtValidationError("Model names cannot contain spaces")
+            if level == EventLevel.ERROR:
+                raise DbtValidationError("Model names cannot contain spaces")
 
     def load_and_parse_macros(self, project_parser_files):
         for project in self.all_projects.values():
