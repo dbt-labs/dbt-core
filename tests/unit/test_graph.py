@@ -23,7 +23,6 @@ from dbt.mp_context import get_mp_context
 from queue import Empty
 from .utils import config_from_parts_or_dicts, generate_name_macros, inject_plugin
 
-from dbt.flags import set_from_args
 from argparse import Namespace
 
 set_from_args(Namespace(WARN_ERROR=False), None)
