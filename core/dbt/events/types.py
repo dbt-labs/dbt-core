@@ -426,6 +426,18 @@ class SpacesInModelNameDeprecation(DynamicLevel):
         return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
 
 
+class TotalModelNamesWithSpacesDeprecation(DynamicLevel):
+    def code(self) -> str:
+        return "D015"
+
+    def message(self) -> str:
+        description = (
+            f"Found {self.count_invalid_names} models with spaces in their names, which is deprecated. "
+            "Run again with `--debug` to see them all."
+        )
+        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+
+
 # =======================================================
 # I - Project parsing
 # =======================================================

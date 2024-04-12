@@ -3,8 +3,7 @@ import pytest
 from dataclasses import dataclass, field
 from dbt.cli.main import dbtRunner
 from dbt_common.events.base_types import BaseEvent, EventLevel, EventMsg
-from dbt_common.events.types import Note
-from dbt.events.types import SpacesInModelNameDeprecation
+from dbt.events.types import SpacesInModelNameDeprecation, TotalModelNamesWithSpacesDeprecation
 from dbt.tests.util import update_config_file
 from typing import Dict, List
 
@@ -36,11 +35,11 @@ class TestSpacesInModelNamesSadPath:
 
     def tests_warning_when_spaces_in_name(self, project) -> None:
         event_catcher = EventCatcher(SpacesInModelNameDeprecation)
-        note_catcher = EventCatcher(Note)
-        runner = dbtRunner(callbacks=[event_catcher.catch, note_catcher.catch])
+        total_catcher = EventCatcher(TotalModelNamesWithSpacesDeprecation)
+        runner = dbtRunner(callbacks=[event_catcher.catch, total_catcher.catch])
         runner.invoke(["parse"])
 
-        assert len(note_catcher.caught_events) == 0
+        assert len(total_catcher.caught_events) == 0
         assert len(event_catcher.caught_events) == 1
         event = event_catcher.caught_events[0]
         assert "Model `my model` has spaces in its name. This is deprecated" in event.info.msg
@@ -57,21 +56,21 @@ class TestSpaceInModelNamesWithDebug:
 
     def tests_debug_when_spaces_in_name(self, project) -> None:
         spaces_check_catcher = EventCatcher(SpacesInModelNameDeprecation)
-        note_catcher = EventCatcher(Note)
-        runner = dbtRunner(callbacks=[spaces_check_catcher.catch, note_catcher.catch])
+        total_catcher = EventCatcher(TotalModelNamesWithSpacesDeprecation)
+        runner = dbtRunner(callbacks=[spaces_check_catcher.catch, total_catcher.catch])
         runner.invoke(["parse"])
         assert len(spaces_check_catcher.caught_events) == 1
-        assert len(note_catcher.caught_events) == 1
+        assert len(total_catcher.caught_events) == 1
         assert (
-            "Found 2 models with spaces in their names" in note_catcher.caught_events[0].info.msg
+            "Found 2 models with spaces in their names" in total_catcher.caught_events[0].info.msg
         )
 
         spaces_check_catcher = EventCatcher(SpacesInModelNameDeprecation)
-        note_catcher = EventCatcher(Note)
-        runner = dbtRunner(callbacks=[spaces_check_catcher.catch, note_catcher.catch])
+        total_catcher = EventCatcher(TotalModelNamesWithSpacesDeprecation)
+        runner = dbtRunner(callbacks=[spaces_check_catcher.catch, total_catcher.catch])
         runner.invoke(["parse", "--debug"])
         assert len(spaces_check_catcher.caught_events) == 2
-        assert len(note_catcher.caught_events) == 0
+        assert len(total_catcher.caught_events) == 0
 
 
 class TestAllowSpacesInModelNamesFalse:

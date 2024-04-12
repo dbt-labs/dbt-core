@@ -155,6 +155,7 @@ sample_values = [
     core_types.TestsConfigDeprecation(deprecated_path="", exp_path=""),
     core_types.ProjectFlagsMovedDeprecation(),
     core_types.SpacesInModelNameDeprecation(model_name="", model_version=""),
+    core_types.TotalModelNamesWithSpacesDeprecation(count_invalid_names=1),
     # E - DB Adapter ======================
     adapter_types.AdapterEventDebug(),
     adapter_types.AdapterEventInfo(),

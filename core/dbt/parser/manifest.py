@@ -64,6 +64,7 @@ from dbt.events.types import (
     DeprecatedModel,
     DeprecatedReference,
     SpacesInModelNameDeprecation,
+    TotalModelNamesWithSpacesDeprecation,
     UpcomingReferenceDeprecation,
 )
 from dbt.logger import DbtProcessState
@@ -654,10 +655,7 @@ class ManifestLoader:
         # don't note the total of problematic names unless more than 1
         if improper_model_names >= 2 and not self.root_project.args.DEBUG:
             fire_event(
-                Note(
-                    msg=f"Found {improper_model_names} models with spaces in their names, which is deprecated. "
-                    "Run again with `--debug` to see them all."
-                ),
+                TotalModelNamesWithSpacesDeprecation(count_invalid_names=improper_model_names),
                 level=level,
             )
 

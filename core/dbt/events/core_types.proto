@@ -414,6 +414,16 @@ message SpacesInModelNameDeprecationMsg {
     SpacesInModelNameDeprecation data = 2;
 }
 
+// D015
+message TotalModelNamesWithSpacesDeprecation {
+    int32 count_invalid_names = 1;
+}
+
+message TotalModelNamesWithSpacesDeprecationMsg {
+    CoreEventInfo info = 1;
+    TotalModelNamesWithSpacesDeprecation data = 2;
+}
+
 // I065
 message DeprecatedModel {
     string model_name = 1;
