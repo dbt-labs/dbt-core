@@ -1,5 +1,7 @@
 import os
 from pathlib import Path
+from typing import Mapping
+
 import pytest  # type: ignore
 import random
 from argparse import Namespace
@@ -493,11 +495,18 @@ class TestProjInfo:
         return {model_name: materialization for (model_name, materialization) in result}
 
 
+@pytest.fixture(scope="class")
+def environment() -> Mapping[str, str]:
+    # By default, fixture initialization is done with the following environment
+    # from the os, but this fixture provides a way to customize the environment.
+    return os.environ
+
+
 # Housekeeping that needs to be done before we start setting up any test fixtures.
 @pytest.fixture(scope="class")
-def initialization() -> None:
+def initialization(environment) -> None:
     # Create an "invocation context," which dbt application code relies on.
-    set_invocation_context(os.environ)
+    set_invocation_context(environment)
 
     # Enable caches used between test runs, for better testing performance.
     enable_test_caching()
