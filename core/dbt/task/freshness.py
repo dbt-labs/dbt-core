@@ -247,7 +247,7 @@ class FreshnessTask(RunTask):
 
     def populate_metadata_freshness_cache(self, adapter, selected_uids: AbstractSet[str]) -> None:
         if self.manifest is None:
-            raise DbtInternalError("manifest must be set to get populate metadata freshness cache")
+            raise DbtInternalError("Manifest must be set to populate metadata freshness cache")
 
         batch_metadata_sources: List[BaseRelation] = []
         for selected_source_uid in list(selected_uids):
@@ -268,13 +268,16 @@ class FreshnessTask(RunTask):
                 batch_metadata_sources
             )
             self._metadata_freshness_cache.update(metadata_freshness_results)
-        except Exception:
+        except Exception as e:
             # This error handling is intentionally very coarse.
             # If anything goes wrong during batch metadata calculation, we can safely
             # leave _metadata_freshness_cache unpopulated.
             # Downstream, this will be gracefully handled as a cache miss and non-batch
             # metadata-based freshness will still be performed on a source-by-source basis.
-            pass
+            fire_event(
+                Note(msg=f"Metadata freshness could not be computed in batch: {e}"),
+                EventLevel.WARN,
+            )
 
     def get_freshness_metadata_cache(self) -> Dict[BaseRelation, FreshnessResult]:
         return self._metadata_freshness_cache
