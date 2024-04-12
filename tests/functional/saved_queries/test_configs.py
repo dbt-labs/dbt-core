@@ -181,7 +181,7 @@ class TestInheritingExportConfigFromSavedQueryConfig(BaseConfigProject):
         assert export1.config.export_as != saved_query.config.export_as
         assert export1.config.schema_name == "my_custom_export_schema"
         assert export1.config.schema_name != saved_query.config.schema
-        assert export1.config.database_name == project.database
+        assert export1.config.database == project.database
 
         # assert Export `my_export` has its configs defined from the saved_query because they should take priority
         export2 = next(
@@ -192,7 +192,7 @@ class TestInheritingExportConfigFromSavedQueryConfig(BaseConfigProject):
         assert export2.config.export_as == saved_query.config.export_as
         assert export2.config.schema_name == "my_default_export_schema"
         assert export2.config.schema_name == saved_query.config.schema
-        assert export2.config.database_name == project.database
+        assert export2.config.database == project.database
 
 
 class TestInheritingExportConfigsFromProject(BaseConfigProject):

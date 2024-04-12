@@ -778,6 +778,8 @@ class SavedQueryParser(YamlReader):
                 export.config.alias = getattr(export, "alias", None)
             delattr(export, "alias")
 
+            delattr(export, "relation_name")
+
         # Only add thes saved query if it's enabled, otherwise we track it with other diabled nodes
         if parsed.config.enabled:
             self.manifest.add_saved_query(self.yaml.file, parsed)
