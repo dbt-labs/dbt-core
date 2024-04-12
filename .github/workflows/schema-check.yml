@@ -34,17 +34,17 @@ jobs:
 
     steps:
       - name: Set up Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v5
         with:
           python-version: 3.8
 
       - name: Checkout dbt repo
-        uses: actions/checkout@v2.3.4
+        uses: actions/checkout@v4
         with:
             path: ${{ env.DBT_REPO_DIRECTORY }}
 
       - name: Checkout schemas.getdbt.com repo
-        uses: actions/checkout@v2.3.4
+        uses: actions/checkout@v4
         with:
           repository: dbt-labs/schemas.getdbt.com
           ref: 'main'
@@ -80,7 +80,7 @@ jobs:
           fi
 
       - name: Upload schema diff
-        uses: actions/upload-artifact@v2.2.4
+        uses: actions/upload-artifact@v4
         if: ${{ failure() }}
         with:
           name: 'schema_schanges.txt'
