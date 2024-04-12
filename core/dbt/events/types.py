@@ -1,7 +1,7 @@
 import json
 
 from dbt.constants import MAXIMUM_SEED_SIZE_NAME, PIN_PACKAGE_URL
-from dbt_common.ui import warning_tag, line_wrap_message, green, yellow, red
+from dbt_common.ui import error_tag, warning_tag, line_wrap_message, green, yellow, red
 from dbt_common.events.base_types import EventLevel
 from dbt_common.events.format import (
     format_fancy_output_line,
@@ -9,11 +9,6 @@ from dbt_common.events.format import (
     pluralize,
 )
 from dbt.events.base_types import WarnLevel, InfoLevel, DebugLevel, ErrorLevel, DynamicLevel
-
-
-# TODO Move this to dbt_common.ui
-def _error_tag(msg: str) -> str:
-    return f'[{red("ERROR")}]: {msg}'
 
 
 # Event codes have prefixes which follow this table
@@ -430,7 +425,7 @@ class SpacesInModelNameDeprecation(DynamicLevel):
         )
 
         if self.level == EventLevel.ERROR.value:
-            description = _error_tag(description)
+            description = error_tag(description)
         elif self.level == EventLevel.WARN.value:
             description = warning_tag(description)
 
@@ -448,7 +443,7 @@ class TotalModelNamesWithSpacesDeprecation(DynamicLevel):
             description += " Run again with `--debug` to see them all."
 
         if self.level == EventLevel.ERROR.value:
-            description = _error_tag(description)
+            description = error_tag(description)
         elif self.level == EventLevel.WARN.value:
             description = warning_tag(description)
 
