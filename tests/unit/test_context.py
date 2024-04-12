@@ -13,6 +13,8 @@ from dbt.contracts.graph.nodes import (
     NodeConfig,
     DependsOn,
     Macro,
+    UnitTestNode,
+    UnitTestOverrides,
 )
 from dbt.config.project import VarProvider
 from dbt.context import base, providers, docs, manifest, macros
@@ -314,11 +316,15 @@ def mock_macro(name, package_name):
     return macro
 
 
-def mock_manifest(config):
+def mock_manifest(config, additional_macros=None):
+    default_macro_names = ["macro_a", "macro_b"]
+    default_macros = [mock_macro(name, config.project_name) for name in default_macro_names]
+    additional_macros = additional_macros or []
+    all_macros = default_macros + additional_macros
+
     manifest_macros = {}
     macros_by_package = {}
-    for name in ["macro_a", "macro_b"]:
-        macro = mock_macro(name, config.project_name)
+    for macro in all_macros:
         manifest_macros[macro.unique_id] = macro
         if macro.package_name not in macros_by_package:
             macros_by_package[macro.package_name] = {}
@@ -367,6 +373,14 @@ def mock_model():
         raw_code="",
         description="",
         columns={},
+    )
+
+
+def mock_unit_test_node():
+    return mock.MagicMock(
+        __class__=UnitTestNode,
+        resource_type=NodeType.Unit,
+        tested_node_unique_id="model.root.model_one",
     )
 
 
@@ -534,3 +548,84 @@ def test_dbt_metadata_envs(
 
     # cleanup
     reset_metadata_vars()
+
+
+def test_unit_test_runtime_context(config_postgres, manifest_fx, get_adapter, get_include_paths):
+    ctx = providers.generate_runtime_unit_test_context(
+        unit_test=mock_unit_test_node(),
+        config=config_postgres,
+        manifest=manifest_fx,
+    )
+    assert_has_keys(REQUIRED_MODEL_KEYS, MAYBE_KEYS, ctx)
+
+
+def test_unit_test_runtime_context_macro_overrides_global(
+    config_postgres, manifest_fx, get_adapter, get_include_paths
+):
+    unit_test = mock_unit_test_node()
+    unit_test.overrides = UnitTestOverrides(macros={"macro_a": "override"})
+    ctx = providers.generate_runtime_unit_test_context(
+        unit_test=unit_test,
+        config=config_postgres,
+        manifest=manifest_fx,
+    )
+    assert ctx["macro_a"]() == "override"
+
+
+def test_unit_test_runtime_context_macro_overrides_package(
+    config_postgres, manifest_fx, get_adapter, get_include_paths
+):
+    unit_test = mock_unit_test_node()
+    unit_test.overrides = UnitTestOverrides(macros={"some_package.some_macro": "override"})
+
+    dbt_macro = mock_macro("some_macro", "some_package")
+    manifest_with_dbt_macro = mock_manifest(config_postgres, additional_macros=[dbt_macro])
+
+    ctx = providers.generate_runtime_unit_test_context(
+        unit_test=unit_test,
+        config=config_postgres,
+        manifest=manifest_with_dbt_macro,
+    )
+    assert ctx["some_package"]["some_macro"]() == "override"
+
+
+@pytest.mark.parametrize(
+    "overrides,expected_override_value",
+    [
+        # override dbt macro at global level
+        ({"some_macro": "override"}, "override"),
+        # # override dbt macro at dbt-namespaced level level
+        ({"dbt.some_macro": "override"}, "override"),
+        # override dbt macro at both levels - global override should win
+        (
+            {"some_macro": "dbt_global_override", "dbt.some_macro": "dbt_namespaced_override"},
+            "dbt_global_override",
+        ),
+        # override dbt macro at both levels - global override should win, regardless of order
+        (
+            {"dbt.some_macro": "dbt_namespaced_override", "some_macro": "dbt_global_override"},
+            "dbt_global_override",
+        ),
+    ],
+)
+def test_unit_test_runtime_context_macro_overrides_dbt_macro(
+    overrides,
+    expected_override_value,
+    config_postgres,
+    manifest_fx,
+    get_adapter,
+    get_include_paths,
+):
+    unit_test = mock_unit_test_node()
+    unit_test.overrides = UnitTestOverrides(macros=overrides)
+
+    dbt_macro = mock_macro("some_macro", "dbt")
+    manifest_with_dbt_macro = mock_manifest(config_postgres, additional_macros=[dbt_macro])
+
+    ctx = providers.generate_runtime_unit_test_context(
+        unit_test=unit_test,
+        config=config_postgres,
+        manifest=manifest_with_dbt_macro,
+    )
+    assert ctx["some_macro"]() == expected_override_value
+    assert ctx["dbt"]["some_macro"]() == expected_override_value

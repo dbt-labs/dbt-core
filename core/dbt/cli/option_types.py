@@ -80,7 +80,10 @@ class ChoiceTuple(Choice):
     name = "CHOICE_TUPLE"
 
     def convert(self, value, param, ctx):
-        for value_item in value:
-            super().convert(value_item, param, ctx)
+        if not isinstance(value, str):
+            for value_item in value:
+                super().convert(value_item, param, ctx)
+        else:
+            super().convert(value, param, ctx)
 
         return value

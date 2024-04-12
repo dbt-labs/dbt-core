@@ -1,6 +1,5 @@
 import threading
-from typing import Any, Optional, Iterable, Tuple, Sequence, Dict
-import agate
+from typing import Any, Optional, Iterable, Tuple, Sequence, Dict, TYPE_CHECKING
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -22,9 +21,13 @@ from dbt.artifacts.schemas.results import (
 from dbt_common.clients.system import write_json
 
 
+if TYPE_CHECKING:
+    import agate
+
+
 @dataclass
 class RunResult(NodeResult):
-    agate_table: Optional[agate.Table] = field(
+    agate_table: Optional["agate.Table"] = field(
         default=None, metadata={"serialize": lambda x: None, "deserialize": lambda x: None}
     )
 

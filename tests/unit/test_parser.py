@@ -225,6 +225,23 @@ sources:
         - name: my_table
 """
 
+
+MULTIPLE_TABLE_SOURCE_META = """
+sources:
+    - name: my_source
+      meta:
+        source_field: source_value
+        shared_field: shared_field_default
+      tables:
+        - name: my_table_shared_field_default
+          meta:
+            table_field: table_value
+        - name: my_table_shared_field_override
+          meta:
+            shared_field: shared_field_table_override
+            table_field: table_value
+"""
+
 SINGLE_TABLE_SOURCE_TESTS = """
 sources:
     - name: my_source
@@ -415,6 +432,41 @@ class SchemaParserSourceTest(SchemaParserTest):
         assert src.table.name == "my_table"
         assert src.resource_type == NodeType.Source
         assert src.fqn == ["snowplow", "my_source", "my_table"]
+
+    @mock.patch("dbt.parser.sources.get_adapter")
+    def test__parse_basic_source_meta(self, mock_get_adapter):
+        block = self.file_block_for(MULTIPLE_TABLE_SOURCE_META, "test_one.yml")
+        dct = yaml_from_file(block.file)
+        self.parser.parse_file(block, dct)
+        self.assert_has_manifest_lengths(self.parser.manifest, sources=2)
+
+        unpatched_src_default = self.parser.manifest.sources[
+            "source.snowplow.my_source.my_table_shared_field_default"
+        ]
+        src_default = self.source_patcher.parse_source(unpatched_src_default)
+        assert src_default.meta == {
+            "source_field": "source_value",
+            "shared_field": "shared_field_default",
+            "table_field": "table_value",
+        }
+        assert src_default.source_meta == {
+            "source_field": "source_value",
+            "shared_field": "shared_field_default",
+        }
+
+        unpatched_src_override = self.parser.manifest.sources[
+            "source.snowplow.my_source.my_table_shared_field_override"
+        ]
+        src_override = self.source_patcher.parse_source(unpatched_src_override)
+        assert src_override.meta == {
+            "source_field": "source_value",
+            "shared_field": "shared_field_table_override",
+            "table_field": "table_value",
+        }
+        assert src_override.source_meta == {
+            "source_field": "source_value",
+            "shared_field": "shared_field_default",
+        }
 
     def test__read_basic_source_tests(self):
         block = self.yaml_block_for(SINGLE_TABLE_SOURCE_TESTS, "test_one.yml")

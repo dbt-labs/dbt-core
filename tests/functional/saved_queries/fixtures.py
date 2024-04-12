@@ -17,6 +17,7 @@ saved_queries:
         where:
             - "{{ Dimension('user__ds', 'DAY') }} <= now()"
             - "{{ Dimension('user__ds', 'DAY') }} >= '2023-01-01'"
+            - "{{ Metric('txn_revenue', ['id']) }} > 1"
     exports:
         - name: my_export
           config:

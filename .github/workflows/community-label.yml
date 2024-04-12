@@ -1,0 +1,39 @@
+# **what?**
+# Label a PR with a `community` label when a PR is opened by a user outside core/adapters
+
+# **why?**
+# To streamline triage and ensure that community contributions are recognized and prioritized
+
+# **when?**
+# When a PR is opened, not in draft or moved from draft to ready for review
+
+
+name: Label community PRs
+
+on:
+  # have to use pull_request_target since community PRs come from forks
+  pull_request_target:
+    types: [opened, ready_for_review]
+
+defaults:
+  run:
+    shell: bash
+
+permissions:
+    pull-requests: write # labels PRs
+    contents: read # reads team membership
+
+jobs:
+  open_issues:
+    # If this PR already has the community label, no need to relabel it
+    # If this PR is opened and not draft, determine if it needs to be labeled
+    # if the PR is converted out of draft, determine if it needs to be labeled
+    if: |
+      (!contains(github.event.pull_request.labels.*.name, 'community') &&
+      (github.event.action == 'opened' && github.event.pull_request.draft == false ) ||
+       github.event.action == 'ready_for_review' )
+    uses: dbt-labs/actions/.github/workflows/label-community.yml@main
+    with:
+        github_team: 'core-group'
+        label: 'community'
+    secrets: inherit

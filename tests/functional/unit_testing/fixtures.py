@@ -266,7 +266,7 @@ where event_time > (select max(event_time) from {{ this }})
 {% endif %}
 """
 
-test_my_model_incremental_yml = """
+test_my_model_incremental_yml_basic = """
 unit_tests:
   - name: incremental_false
     model: my_incremental_model
@@ -294,6 +294,54 @@ unit_tests:
       - input: this
         rows:
           - {event_time: "2020-01-01", event: 1}
+    expect:
+      rows:
+        - {event_time: "2020-01-02", event: 2}
+        - {event_time: "2020-01-03", event: 3}
+"""
+
+test_my_model_incremental_yml_no_override = """
+unit_tests:
+  - name: incremental_false
+    model: my_incremental_model
+    given:
+      - input: ref('events')
+        rows:
+          - {event_time: "2020-01-01", event: 1}
+    expect:
+      rows:
+        - {event_time: "2020-01-01", event: 1}
+"""
+
+test_my_model_incremental_yml_wrong_override = """
+unit_tests:
+  - name: incremental_false
+    model: my_incremental_model
+    overrides:
+      macros:
+        is_incremental: foobar
+    given:
+      - input: ref('events')
+        rows:
+          - {event_time: "2020-01-01", event: 1}
+    expect:
+      rows:
+        - {event_time: "2020-01-01", event: 1}
+"""
+
+test_my_model_incremental_yml_no_this_input = """
+unit_tests:
+  - name: incremental_true
+    model: my_incremental_model
+    overrides:
+      macros:
+        is_incremental: true
+    given:
+      - input: ref('events')
+        rows:
+          - {event_time: "2020-01-01", event: 1}
+          - {event_time: "2020-01-02", event: 2}
+          - {event_time: "2020-01-03", event: 3}
     expect:
       rows:
         - {event_time: "2020-01-02", event: 2}

@@ -1,0 +1,7 @@
+kind: Fixes
+body: '"Fix Docker release process to account for both historical and current versions
+  of `dbt-postgres`'
+time: 2024-03-27T15:00:13.388268-04:00
+custom:
+  Author: mikealfare
+  Issue: "9827"

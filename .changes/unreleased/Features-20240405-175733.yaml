@@ -1,0 +1,6 @@
+kind: Features
+body: Better error message when trying to select a disabled model
+time: 2024-04-05T17:57:33.047963+02:00
+custom:
+  Author: SamuelBFavarin
+  Issue: "9747"

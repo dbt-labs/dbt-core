@@ -14,6 +14,7 @@ from tests.functional.list.fixtures import (  # noqa: F401
     analyses,
     semantic_models,
     metrics,
+    saved_queries,
     project_files,
 )
 
@@ -35,6 +36,13 @@ class TestList:
                 "quote_columns": False,
             },
         }
+
+    def test_packages_install_path_does_not_exist(self, project):
+        run_dbt(["list"])
+        packages_install_path = "dbt_packages"
+
+        # the packages-install-path should not be created by `dbt list`
+        assert not os.path.exists(packages_install_path)
 
     def run_dbt_ls(self, args=None, expect_pass=True):
         log_manager.stdout_console()
@@ -596,6 +604,7 @@ class TestList:
             "test.t",
             "semantic_model:test.my_sm",
             "metric:test.total_outer",
+            "saved_query:test.my_saved_query",
         }
         # analyses have their type inserted into their fqn like tests
         expected_all = expected_default | {"test.analysis.a"}
@@ -625,6 +634,9 @@ class TestList:
 
         results = self.run_dbt_ls(["--resource-type", "metric"])
         assert set(results) == {"metric:test.total_outer"}
+
+        results = self.run_dbt_ls(["--resource-type", "saved_query"])
+        assert set(results) == {"saved_query:test.my_saved_query"}
 
         results = self.run_dbt_ls(["--resource-type", "model", "--select", "outer+"])
         assert set(results) == {"test.outer", "test.sub.inner"}
@@ -697,6 +709,34 @@ class TestList:
             "test.unique_outer_id",
             "test.outer",
         }
+
+    def expect_resource_type_env_var(self):
+        """Expect selected resources when --resource-type given multiple times"""
+        os.environ["DBT_RESOURCE_TYPES"] = "test model"
+        results = self.run_dbt_ls()
+        assert set(results) == {
+            "test.ephemeral",
+            "test.incremental",
+            "test.not_null_outer_id",
+            "test.outer",
+            "test.sub.inner",
+            "test.metricflow_time_spine",
+            "test.t",
+            "test.unique_outer_id",
+        }
+        del os.environ["DBT_RESOURCE_TYPES"]
+        os.environ[
+            "DBT_EXCLUDE_RESOURCE_TYPES"
+        ] = "test saved_query metric source semantic_model snapshot seed"
+        results = self.run_dbt_ls()
+        assert set(results) == {
+            "test.ephemeral",
+            "test.incremental",
+            "test.outer",
+            "test.sub.inner",
+            "test.metricflow_time_spine",
+        }
+        del os.environ["DBT_EXCLUDE_RESOURCE_TYPES"]
 
     def expect_selected_keys(self, project):
         """Expect selected fields of the the selected model"""
@@ -793,6 +833,7 @@ class TestList:
         self.expect_test_output()
         self.expect_select()
         self.expect_resource_type_multiple()
+        self.expect_resource_type_env_var()
         self.expect_all_output()
         self.expect_selected_keys(project)
 

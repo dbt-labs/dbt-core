@@ -2,8 +2,7 @@ import os
 import threading
 import traceback
 from datetime import datetime
-
-import agate
+from typing import TYPE_CHECKING
 
 import dbt_common.exceptions
 from dbt.adapters.factory import get_adapter
@@ -24,6 +23,10 @@ from dbt.task.base import ConfiguredTask
 RESULT_FILE_NAME = "run_results.json"
 
 
+if TYPE_CHECKING:
+    import agate
+
+
 class RunOperationTask(ConfiguredTask):
     def _get_macro_parts(self):
         macro_name = self.args.macro
@@ -34,7 +37,7 @@ class RunOperationTask(ConfiguredTask):
 
         return package_name, macro_name
 
-    def _run_unsafe(self, package_name, macro_name) -> agate.Table:
+    def _run_unsafe(self, package_name, macro_name) -> "agate.Table":
         adapter = get_adapter(self.config)
 
         macro_kwargs = self.args.args

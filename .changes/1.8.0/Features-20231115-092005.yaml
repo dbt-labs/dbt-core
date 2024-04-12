@@ -1,0 +1,6 @@
+kind: Features
+body: Global config for --target and --profile CLI flags and DBT_TARGET and DBT_PROFILE environment variables.
+time: 2023-11-15T09:20:05.12461Z
+custom:
+  Author: barton996
+  Issue: "7798"
