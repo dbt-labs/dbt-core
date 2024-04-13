@@ -614,6 +614,13 @@ target_path = click.option(
     type=click.Path(),
 )
 
+packages_install_path = click.option(
+    "--packages-install-path",
+    envvar="DBT_PACKAGES_INSTALL_PATH",
+    help="Configure the 'packages-install-path'. Only applies this setting for the current run. Overrides the 'DBT_PACKAGES_INSTALL_PATH' if it is set.",
+    type=click.Path(),
+)
+
 upgrade = click.option(
     "--upgrade",
     envvar=None,
