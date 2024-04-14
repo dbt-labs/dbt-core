@@ -84,6 +84,7 @@ def get_flag_dict():
         "cache_selected_only",
         "introspect",
         "target_path",
+        "packages_install_path",
         "log_path",
         "invocation_command",
     }

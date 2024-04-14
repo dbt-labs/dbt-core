@@ -183,6 +183,7 @@ def cli(ctx, **kwargs):
 @p.show
 @p.store_failures
 @p.target_path
+@p.packages_install_path
 @p.threads
 @p.vars
 @requires.postflight
@@ -214,6 +215,7 @@ def build(ctx, **kwargs):
 @p.profiles_dir
 @p.project_dir
 @p.target_path
+@p.packages_install_path
 @p.vars
 @requires.postflight
 @requires.preflight
@@ -251,6 +253,7 @@ def docs(ctx, **kwargs):
 @p.empty_catalog
 @p.static
 @p.target_path
+@p.packages_install_path
 @p.threads
 @p.vars
 @requires.postflight
@@ -283,6 +286,7 @@ def docs_generate(ctx, **kwargs):
 @p.profiles_dir
 @p.project_dir
 @p.target_path
+@p.packages_install_path
 @p.vars
 @requires.postflight
 @requires.preflight
@@ -319,6 +323,7 @@ def docs_serve(ctx, **kwargs):
 @p.inline
 @p.compile_inject_ephemeral_ctes
 @p.target_path
+@p.packages_install_path
 @p.threads
 @p.vars
 @requires.postflight
@@ -358,6 +363,7 @@ def compile(ctx, **kwargs):
 @p.selector
 @p.inline
 @p.target_path
+@p.packages_install_path
 @p.threads
 @p.vars
 @requires.postflight
@@ -417,6 +423,7 @@ def debug(ctx, **kwargs):
 @p.lock
 @p.upgrade
 @p.add_package
+@p.packages_install_path
 @requires.postflight
 @requires.preflight
 @requires.unset_profile
@@ -485,6 +492,7 @@ def init(ctx, **kwargs):
 @p.raw_select
 @p.selector
 @p.target_path
+@p.packages_install_path
 @p.vars
 @requires.postflight
 @requires.preflight
@@ -520,6 +528,7 @@ cli.add_command(ls, "ls")
 @p.profiles_dir
 @p.project_dir
 @p.target_path
+@p.packages_install_path
 @p.threads
 @p.vars
 @requires.postflight
@@ -546,6 +555,7 @@ def parse(ctx, **kwargs):
 @p.select
 @p.selector
 @p.target_path
+@p.packages_install_path
 @p.threads
 @p.vars
 @requires.postflight
@@ -577,6 +587,7 @@ def run(ctx, **kwargs):
 @p.profiles_dir
 @p.vars
 @p.target_path
+@p.packages_install_path
 @p.threads
 @p.full_refresh
 @requires.postflight
@@ -612,6 +623,7 @@ def retry(ctx, **kwargs):
 @p.select
 @p.selector
 @p.target_path
+@p.packages_install_path
 @p.threads
 @p.vars
 @requires.preflight
@@ -644,6 +656,7 @@ def clone(ctx, **kwargs):
 @p.profiles_dir
 @p.project_dir
 @p.target_path
+@p.packages_install_path
 @p.threads
 @p.vars
 @requires.postflight
@@ -679,6 +692,7 @@ def run_operation(ctx, **kwargs):
 @p.selector
 @p.show
 @p.target_path
+@p.packages_install_path
 @p.threads
 @p.vars
 @requires.postflight
@@ -711,6 +725,7 @@ def seed(ctx, **kwargs):
 @p.select
 @p.selector
 @p.target_path
+@p.packages_install_path
 @p.threads
 @p.vars
 @requires.postflight
@@ -753,6 +768,7 @@ def source(ctx, **kwargs):
 @p.select
 @p.selector
 @p.target_path
+@p.packages_install_path
 @p.threads
 @p.vars
 @requires.postflight
@@ -793,6 +809,7 @@ cli.commands["source"].add_command(snapshot_freshness, "snapshot-freshness")  # 
 @p.selector
 @p.store_failures
 @p.target_path
+@p.packages_install_path
 @p.threads
 @p.vars
 @requires.postflight

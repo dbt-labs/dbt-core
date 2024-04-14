@@ -430,7 +430,13 @@ class PartialProject(RenderComponents):
         log_path: str = str(global_flags.LOG_PATH)
 
         clean_targets: List[str] = value_or(cfg.clean_targets, [target_path])
-        packages_install_path: str = value_or(cfg.packages_install_path, "dbt_packages")
+
+        flag_packages_install_path = (
+            str(global_flags.PACKAGES_INSTALL_PATH) if global_flags.PACKAGES_INSTALL_PATH else None
+        )
+        packages_install_path: str = flag_or(
+            flag_packages_install_path, cfg.packages_install_path, "dbt_packages"
+        )
         # in the default case we'll populate this once we know the adapter type
         # It would be nice to just pass along a Quoting here, but that would
         # break many things
