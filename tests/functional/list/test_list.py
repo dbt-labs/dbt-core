@@ -37,6 +37,13 @@ class TestList:
             },
         }
 
+    def test_packages_install_path_does_not_exist(self, project):
+        run_dbt(["list"])
+        packages_install_path = "dbt_packages"
+
+        # the packages-install-path should not be created by `dbt list`
+        assert not os.path.exists(packages_install_path)
+
     def run_dbt_ls(self, args=None, expect_pass=True):
         log_manager.stdout_console()
         full_args = ["ls"]

@@ -16,6 +16,7 @@ import dbt.utils
 from dbt.adapters.base import BaseRelation
 from dbt.adapters.factory import get_adapter
 from dbt.cli.flags import Flags
+from dbt.config.runtime import RuntimeConfig
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import ResultNode
 from dbt.artifacts.schemas.results import NodeStatus, RunningStatus, RunStatus, BaseResult
@@ -66,8 +67,9 @@ RUNNING_STATE = DbtProcessState("running")
 class GraphRunnableTask(ConfiguredTask):
     MARK_DEPENDENT_ERRORS_STATUSES = [NodeStatus.Error]
 
-    def __init__(self, args: Flags, config, manifest) -> None:
+    def __init__(self, args: Flags, config: RuntimeConfig, manifest: Manifest) -> None:
         super().__init__(args, config, manifest)
+        self.config = config
         self._flattened_nodes: Optional[List[ResultNode]] = None
         self._raise_next_tick: Optional[DbtRuntimeError] = None
         self._skipped_children: Dict[str, Optional[RunResult]] = {}
@@ -124,7 +126,9 @@ class GraphRunnableTask(ConfiguredTask):
             # This is what's used with no default selector and no selection
             # use --select and --exclude args
             spec = parse_difference(self.selection_arg, self.exclusion_arg, indirect_selection)
-        return spec
+        # mypy complains because the return values of get_selector and parse_difference
+        # are different
+        return spec  # type: ignore
 
     @abstractmethod
     def get_node_selector(self) -> NodeSelector:
@@ -624,7 +628,9 @@ class GraphRunnableTask(ConfiguredTask):
         list_futures = []
         create_futures = []
 
-        with dbt_common.utils.executor(self.config) as tpe:
+        # TODO: following has a mypy issue because profile and project config
+        # defines threads as int and HasThreadingConfig defines it as Optional[int]
+        with dbt_common.utils.executor(self.config) as tpe:  # type: ignore
             for req in required_databases:
                 if req.database is None:
                     name = "list_schemas"

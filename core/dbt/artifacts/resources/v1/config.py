@@ -11,7 +11,7 @@ from dbt_common.contracts.config.metadata import Metadata, ShowBehavior
 from dbt_common.contracts.config.materialization import OnConfigurationChangeOption
 from dbt.artifacts.resources.base import Docs
 from dbt.artifacts.resources.types import ModelHookType
-from dbt.contracts.graph.utils import validate_color
+from dbt.artifacts.utils.validation import validate_color
 from dbt import hooks
 from mashumaro.jsonschema.annotations import Pattern
 

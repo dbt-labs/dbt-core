@@ -265,10 +265,15 @@ class TestEnvVars:
 
 class TestProjectEnvVars:
     @pytest.fixture(scope="class")
+    def environment(self):
+        custom_env = os.environ.copy()
+        custom_env["ENV_VAR_NAME"] = "Jane Smith"
+        return custom_env
+
+    @pytest.fixture(scope="class")
     def project_config_update(self):
         # Need to set the environment variable here initially because
         # the project fixture loads the config.
-        os.environ["ENV_VAR_NAME"] = "Jane Smith"
         return {"models": {"+meta": {"meta_name": "{{ env_var('ENV_VAR_NAME') }}"}}}
 
     @pytest.fixture(scope="class")
@@ -279,6 +284,7 @@ class TestProjectEnvVars:
 
     def test_project_env_vars(self, project):
         # Initial run
+        os.environ["ENV_VAR_NAME"] = "Jane Smith"
         results = run_dbt(["run"])
         assert len(results) == 1
         manifest = get_manifest(project.project_root)
@@ -309,12 +315,13 @@ class TestProfileEnvVars:
         }
 
     @pytest.fixture(scope="class")
+    def environment(self):
+        custom_env = os.environ.copy()
+        custom_env["ENV_VAR_HOST"] = "localhost"
+        return custom_env
+
+    @pytest.fixture(scope="class")
     def dbt_profile_target(self):
-        # Need to set these here because the base integration test class
-        # calls 'load_config' before the tests are run.
-        # Note: only the specified profile is rendered, so there's no
-        # point it setting env_vars in non-used profiles.
-        os.environ["ENV_VAR_HOST"] = "localhost"
         return {
             "type": "postgres",
             "threads": 4,

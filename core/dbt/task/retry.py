@@ -63,7 +63,7 @@ CMD_DICT = {
 
 
 class RetryTask(ConfiguredTask):
-    def __init__(self, args: Flags, config) -> None:
+    def __init__(self, args: Flags, config: RuntimeConfig) -> None:
         # load previous run results
         state_path = args.state or config.target_path
         self.previous_results = load_result_state(

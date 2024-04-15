@@ -13,7 +13,7 @@ from dbt.constants import PACKAGE_LOCK_FILE_NAME, PACKAGE_LOCK_HASH_KEY
 from dbt.deps.base import downloads_directory
 from dbt.deps.resolver import resolve_lock_packages, resolve_packages
 from dbt.deps.registry import RegistryPinnedPackage
-from dbt.contracts.project import Package
+from dbt.contracts.project import PackageSpec
 
 
 from dbt_common.events.functions import fire_event
@@ -44,7 +44,7 @@ class dbtPackageDumper(yaml.Dumper):
         return super(dbtPackageDumper, self).increase_indent(flow, False)
 
 
-def _create_sha1_hash(packages: List[Package]) -> str:
+def _create_sha1_hash(packages: List[PackageSpec]) -> str:
     """Create a SHA1 hash of the packages list,
     this is used to determine if the packages for current execution matches
     the previous lock.
@@ -94,14 +94,15 @@ def _create_packages_yml_entry(package: str, version: Optional[str], source: str
 
 class DepsTask(BaseTask):
     def __init__(self, args: Any, project: Project) -> None:
+        super().__init__(args=args)
         # N.B. This is a temporary fix for a bug when using relative paths via
         # --project-dir with deps.  A larger overhaul of our path handling methods
         # is needed to fix this the "right" way.
         # See GH-7615
         project.project_root = str(Path(project.project_root).resolve())
+        self.project = project
 
         move_to_nearest_project_dir(project.project_root)
-        super().__init__(args=args, config=None, project=project)
         self.cli_vars = args.vars
 
     def track_package_install(

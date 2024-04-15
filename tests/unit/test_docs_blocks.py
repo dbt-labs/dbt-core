@@ -10,6 +10,10 @@ from dbt.parser.search import FileBlock
 
 from .utils import config_from_parts_or_dicts
 
+from dbt.flags import set_from_args
+from argparse import Namespace
+
+set_from_args(Namespace(WARN_ERROR=False), None)
 
 SNOWPLOW_SESSIONS_DOCS = r"""
 This table contains one record for every session recorded by Snowplow.

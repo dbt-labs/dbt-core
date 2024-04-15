@@ -66,7 +66,7 @@ setup(
         # ----
         # These packages are major-version-0. Keep upper bounds on upcoming minor versions (which could have breaking changes)
         # and check compatibility / bump in each new minor version of dbt-core.
-        "pathspec>=0.9,<0.12",
+        "pathspec>=0.9,<0.13",
         "sqlparse>=0.2.3,<0.5",
         # ----
         # These are major-version-0 packages also maintained by dbt-labs.
@@ -75,7 +75,7 @@ setup(
         "minimal-snowplow-tracker>=0.0.2,<0.1",
         "dbt-semantic-interfaces>=0.5.1,<0.6",
         # Minor versions for these are expected to be backwards-compatible
-        "dbt-common<2.0",
+        "dbt-common>=1.0.1,<2.0",
         "dbt-adapters>=0.1.0a2,<2.0",
         # ----
         # Expect compatibility with all new versions of these packages, so lower bounds only.

@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 
-from dbt.contracts.graph.nodes import CompiledNode
+from dbt.artifacts.resources import CompiledResource
 from dbt.artifacts.schemas.base import (
     BaseArtifactMetadata,
     ArtifactMixin,
@@ -67,7 +67,7 @@ class RunResultOutput(BaseResult):
 
 def process_run_result(result: RunResult) -> RunResultOutput:
 
-    compiled = isinstance(result.node, CompiledNode)
+    compiled = isinstance(result.node, CompiledResource)
 
     return RunResultOutput(
         unique_id=result.node.unique_id,

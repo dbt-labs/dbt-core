@@ -296,6 +296,7 @@ class Project(dbtClassMixin):
 
 @dataclass
 class ProjectFlags(ExtensibleDbtClassMixin):
+    allow_spaces_in_model_names: Optional[bool] = True
     cache_selected_only: Optional[bool] = None
     debug: Optional[bool] = None
     fail_fast: Optional[bool] = None
@@ -320,7 +321,10 @@ class ProjectFlags(ExtensibleDbtClassMixin):
 
     @property
     def project_only_flags(self) -> Dict[str, Any]:
-        return {"source_freshness_run_project_hooks": self.source_freshness_run_project_hooks}
+        return {
+            "source_freshness_run_project_hooks": self.source_freshness_run_project_hooks,
+            "allow_spaces_in_model_names": self.allow_spaces_in_model_names,
+        }
 
 
 @dataclass

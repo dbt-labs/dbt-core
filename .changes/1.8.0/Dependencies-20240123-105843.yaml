@@ -3,4 +3,4 @@ body: remove dbt/adapters and add dependency on dbt-adapters
 time: 2024-01-23T10:58:43.286952-08:00
 custom:
   Author: colin-rogers-dbt
-  PR: "9430"
+  Issue: "9430"

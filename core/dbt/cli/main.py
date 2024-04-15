@@ -399,7 +399,6 @@ def debug(ctx, **kwargs):
 
     task = DebugTask(
         ctx.obj["flags"],
-        None,
     )
 
     results = task.run()
@@ -464,7 +463,7 @@ def init(ctx, **kwargs):
     """Initialize a new dbt project."""
     from dbt.task.init import InitTask
 
-    task = InitTask(ctx.obj["flags"], None)
+    task = InitTask(ctx.obj["flags"])
 
     results = task.run()
     success = task.interpret_results(results)

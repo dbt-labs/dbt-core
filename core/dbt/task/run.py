@@ -17,8 +17,10 @@ from dbt import utils
 from dbt.adapters.base import BaseRelation
 from dbt.cli.flags import Flags
 from dbt.clients.jinja import MacroGenerator
+from dbt.config.runtime import RuntimeConfig
 from dbt.context.providers import generate_runtime_model_context
 from dbt.contracts.graph.nodes import HookNode, ResultNode
+from dbt.contracts.graph.manifest import Manifest
 from dbt.artifacts.schemas.results import NodeStatus, RunStatus, RunningStatus, BaseResult
 from dbt.artifacts.schemas.run import RunResult
 from dbt.artifacts.resources import Hook
@@ -306,7 +308,7 @@ class ModelRunner(CompileRunner):
 
 
 class RunTask(CompileTask):
-    def __init__(self, args: Flags, config, manifest) -> None:
+    def __init__(self, args: Flags, config: RuntimeConfig, manifest: Manifest) -> None:
         super().__init__(args, config, manifest)
         self.ran_hooks: List[HookNode] = []
         self._total_executed = 0

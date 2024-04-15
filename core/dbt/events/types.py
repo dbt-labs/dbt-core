@@ -1,7 +1,7 @@
 import json
 
 from dbt.constants import MAXIMUM_SEED_SIZE_NAME, PIN_PACKAGE_URL
-from dbt_common.ui import warning_tag, line_wrap_message, green, yellow, red
+from dbt_common.ui import error_tag, warning_tag, line_wrap_message, green, yellow, red
 from dbt_common.events.base_types import EventLevel
 from dbt_common.events.format import (
     format_fancy_output_line,
@@ -411,6 +411,43 @@ class ProjectFlagsMovedDeprecation(WarnLevel):
         )
         # Can't use line_wrap_message here because flags.printer_width isn't available yet
         return warning_tag(f"Deprecated functionality\n\n{description}")
+
+
+class SpacesInModelNameDeprecation(DynamicLevel):
+    def code(self) -> str:
+        return "D014"
+
+    def message(self) -> str:
+        version = ".v" + self.model_version if self.model_version else ""
+        description = (
+            f"Model `{self.model_name}{version}` has spaces in its name. This is deprecated and "
+            "may cause errors when using dbt."
+        )
+
+        if self.level == EventLevel.ERROR.value:
+            description = error_tag(description)
+        elif self.level == EventLevel.WARN.value:
+            description = warning_tag(description)
+
+        return line_wrap_message(description)
+
+
+class TotalModelNamesWithSpacesDeprecation(DynamicLevel):
+    def code(self) -> str:
+        return "D015"
+
+    def message(self) -> str:
+        description = f"Spaces in model names found in {self.count_invalid_names} model(s), which is deprecated."
+
+        if self.show_debug_hint:
+            description += " Run again with `--debug` to see them all."
+
+        if self.level == EventLevel.ERROR.value:
+            description = error_tag(description)
+        elif self.level == EventLevel.WARN.value:
+            description = warning_tag(description)
+
+        return line_wrap_message(description)
 
 
 # =======================================================
@@ -1099,7 +1136,7 @@ class NoNodesForSelectionCriteria(WarnLevel):
         return "M030"
 
     def message(self) -> str:
-        return f"The selection criterion '{self.spec_raw}' does not match any nodes"
+        return f"The selection criterion '{self.spec_raw}' does not match any enabled nodes"
 
 
 class DepsLockUpdating(InfoLevel):
