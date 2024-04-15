@@ -53,4 +53,8 @@ FROM dbt-core as dbt-third-party
 
 ARG dbt_third_party
 
-RUN python -m pip install --no-cache-dir "${dbt_third_party}"
+RUN if [ "$dbt_third_party" ]; then \
+        python -m pip install --no-cache-dir "${dbt_third_party}"; \
+    else \
+        echo "No third party adapter provided"; \
+    fi \
