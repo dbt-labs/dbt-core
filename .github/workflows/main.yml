@@ -288,7 +288,7 @@ jobs:
       - name: Install source distributions
         # ignore dbt-1.0.0, which intentionally raises an error when installed from source
         run: |
-          find ./dist/dbt_[a-z]*.gz -maxdepth 1 -type f | xargs python -m pip install --force-reinstall --find-links=dist/
+          find ./dist/*.gz -maxdepth 1 -type f | xargs python -m pip install --force-reinstall --find-links=dist/
 
       - name: Check source distributions
         run: |
