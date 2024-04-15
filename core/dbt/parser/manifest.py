@@ -22,6 +22,7 @@ import time
 from dbt.context.manifest import generate_query_header_context
 from dbt.contracts.graph.semantic_manifest import SemanticManifest
 from dbt_common.events.base_types import EventLevel
+from dbt_common.exceptions.base import DbtValidationError
 import dbt_common.utils
 import json
 import pprint
@@ -62,6 +63,8 @@ from dbt.events.types import (
     StateCheckVarsHash,
     DeprecatedModel,
     DeprecatedReference,
+    SpacesInModelNameDeprecation,
+    TotalModelNamesWithSpacesDeprecation,
     UpcomingReferenceDeprecation,
 )
 from dbt.logger import DbtProcessState
@@ -520,6 +523,7 @@ class ManifestLoader:
             self.write_manifest_for_partial_parse()
 
         self.check_for_model_deprecations()
+        self.check_for_spaces_in_model_names()
 
         return self.manifest
 
@@ -620,6 +624,47 @@ class ManifestLoader:
                                 ref_model_deprecation_date=resolved_ref.deprecation_date.isoformat(),
                             )
                         )
+
+    def check_for_spaces_in_model_names(self):
+        """Validates that model names do not contain spaces
+
+        If `DEBUG` flag is `False`, logs only first bad model name
+        If `DEBUG` flag is `True`, logs every bad model name
+        If `ALLOW_SPACES_IN_MODEL_NAMES` is `False`, logs are `ERROR` level and an exception is raised if any names are bad
+        If `ALLOW_SPACES_IN_MODEL_NAMES` is `True`, logs are `WARN` level
+        """
+        improper_model_names = 0
+        level = (
+            EventLevel.WARN
+            if self.root_project.args.ALLOW_SPACES_IN_MODEL_NAMES
+            else EventLevel.ERROR
+        )
+
+        for node in self.manifest.nodes.values():
+            if isinstance(node, ModelNode) and " " in node.name:
+                if improper_model_names == 0 or self.root_project.args.DEBUG:
+                    fire_event(
+                        SpacesInModelNameDeprecation(
+                            model_name=node.name,
+                            model_version=version_to_str(node.version),
+                            level=level.value,
+                        ),
+                        level=level,
+                    )
+                improper_model_names += 1
+
+        if improper_model_names > 0:
+            fire_event(
+                TotalModelNamesWithSpacesDeprecation(
+                    count_invalid_names=improper_model_names,
+                    show_debug_hint=(not self.root_project.args.DEBUG),
+                    level=level.value,
+                ),
+                level=level,
+            )
+
+            if level == EventLevel.ERROR:
+                raise DbtValidationError("Model names cannot contain spaces")
 
     def load_and_parse_macros(self, project_parser_files):
         for project in self.all_projects.values():

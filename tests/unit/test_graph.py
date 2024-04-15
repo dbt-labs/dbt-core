@@ -7,22 +7,22 @@ from dbt.adapters.postgres import Plugin as PostgresPlugin
 from dbt.adapters.factory import reset_adapters, register_adapter
 import dbt.compilation
 import dbt.exceptions
-import dbt.flags
 import dbt.parser
 import dbt.config
 import dbt.utils
 import dbt.parser.manifest
 from dbt import tracking
+from dbt.cli.flags import convert_config
 from dbt.contracts.files import SourceFile, FileHash, FilePath
 from dbt.contracts.graph.manifest import MacroManifest, ManifestStateCheck
 from dbt.contracts.project import ProjectFlags
+from dbt.flags import get_flags, set_from_args
 from dbt.graph import NodeSelector, parse_difference
 from dbt.events.logging import setup_event_logger
 from dbt.mp_context import get_mp_context
 from queue import Empty
 from .utils import config_from_parts_or_dicts, generate_name_macros, inject_plugin
 
-from dbt.flags import set_from_args
 from argparse import Namespace
 
 set_from_args(Namespace(WARN_ERROR=False), None)
@@ -127,9 +127,15 @@ class GraphTest(unittest.TestCase):
         cfg.update(extra_cfg)
 
         config = config_from_parts_or_dicts(project=cfg, profile=self.profile)
-        dbt.flags.set_from_args(Namespace(), ProjectFlags())
-        setup_event_logger(dbt.flags.get_flags())
-        object.__setattr__(dbt.flags.get_flags(), "PARTIAL_PARSE", False)
+        set_from_args(Namespace(), ProjectFlags())
+        flags = get_flags()
+        setup_event_logger(flags)
+        object.__setattr__(flags, "PARTIAL_PARSE", False)
+        for arg_name, args_param_value in vars(flags).items():
+            args_param_value = convert_config(arg_name, args_param_value)
+            object.__setattr__(config.args, arg_name.upper(), args_param_value)
+            object.__setattr__(config.args, arg_name.lower(), args_param_value)
+
         return config
 
     def get_compiler(self, project):

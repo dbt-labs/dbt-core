@@ -403,6 +403,30 @@ message ProjectFlagsMovedDeprecationMsg {
     ProjectFlagsMovedDeprecation data = 2;
 }
 
+// D014
+message SpacesInModelNameDeprecation {
+    string model_name = 1;
+    string model_version = 2;
+    string level = 3;
+}
+
+message SpacesInModelNameDeprecationMsg {
+    CoreEventInfo info = 1;
+    SpacesInModelNameDeprecation data = 2;
+}
+
+// D015
+message TotalModelNamesWithSpacesDeprecation {
+    int32 count_invalid_names = 1;
+    bool show_debug_hint = 2;
+    string level = 3;
+}
+
+message TotalModelNamesWithSpacesDeprecationMsg {
+    CoreEventInfo info = 1;
+    TotalModelNamesWithSpacesDeprecation data = 2;
+}
+
 // I065
 message DeprecatedModel {
     string model_name = 1;
