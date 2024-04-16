@@ -105,7 +105,7 @@ jobs:
   bump-version-generate-changelog:
     name: Bump package version, Generate changelog
     needs: [job-setup]
-    if: ${{ !inputs.only_docker}}
+    if: ${{ !inputs.only_docker }}
 
     uses: dbt-labs/dbt-release/.github/workflows/release-prep.yml@main
 
@@ -121,7 +121,7 @@ jobs:
 
   log-outputs-bump-version-generate-changelog:
     name: "[Log output] Bump package version, Generate changelog"
-    if: ${{ !failure() && !cancelled() && !inputs.only_docker}}
+    if: ${{ !failure() && !cancelled() && !inputs.only_docker }}
 
     needs: [bump-version-generate-changelog]
 
@@ -135,7 +135,7 @@ jobs:
 
   build-test-package:
     name: Build, Test, Package
-    if: ${{ !failure() && !cancelled() && !inputs.only_docker}}
+    if: ${{ !failure() && !cancelled() && !inputs.only_docker }}
     needs: [job-setup, bump-version-generate-changelog]
 
     uses: dbt-labs/dbt-release/.github/workflows/build.yml@main
@@ -156,7 +156,7 @@ jobs:
 
   github-release:
     name: GitHub Release
-    if: ${{ !failure() && !cancelled() && !inputs.only_docker}}
+    if: ${{ !failure() && !cancelled() && !inputs.only_docker }}
 
     needs: [bump-version-generate-changelog, build-test-package]
 
