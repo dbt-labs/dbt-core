@@ -492,11 +492,11 @@ def test_select_metric(manifest):
     assert search_manifest_using_method(manifest, method, "*_metric") == {"my_metric"}
 
 
-def test_select_semantic_model(manifest):
+def test_select_semantic_model(manifest, table_model):
     semantic_model = make_semantic_model(
         "pkg",
         "customer",
-        model="customers",
+        model=table_model,
         path="_semantic_models.yml",
     )
     manifest.semantic_models[semantic_model.unique_id] = semantic_model
@@ -508,11 +508,11 @@ def test_select_semantic_model(manifest):
     assert search_manifest_using_method(manifest, method, "*omer") == {"customer"}
 
 
-def test_select_semantic_model_by_tag(manifest):
+def test_select_semantic_model_by_tag(manifest, table_model):
     semantic_model = make_semantic_model(
         "pkg",
         "customer",
-        model="customers",
+        model=table_model,
         path="_semantic_models.yml",
     )
     manifest.semantic_models[semantic_model.unique_id] = semantic_model
