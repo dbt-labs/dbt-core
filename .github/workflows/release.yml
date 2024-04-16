@@ -215,7 +215,7 @@ jobs:
     # We cannot release to docker on a test run because it uses the tag in GitHub as
     # what we need to release but draft releases don't actually tag the commit so it
     # finds nothing to release
-    if: ${{ !inputs.test_run || inputs.only_docker }}
+    if: ${{ !failure() && !cancelled() && (!inputs.test_run || inputs.only_docker) }}
     strategy:
       matrix: ${{fromJson(needs.determine-docker-package.outputs.matrix)}}
 
