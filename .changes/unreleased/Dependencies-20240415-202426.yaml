@@ -1,0 +1,6 @@
+kind: Dependencies
+body: Bump sqlparse to >=0.5.0, <0.6.0
+time: 2024-04-15T20:24:26.768707-05:00
+custom:
+  Author: emmyoop
+  Issue: "9951"
