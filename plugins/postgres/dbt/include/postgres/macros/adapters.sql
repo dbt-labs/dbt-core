@@ -39,7 +39,7 @@
   on {{ relation }} {% if index_config.type -%}
     using {{ index_config.type }}
   {%- endif %}
-  ({{ comma_separated_columns }});
+  ({{ comma_separated_columns }})
 {%- endmacro %}
 
 {% macro postgres__create_schema(relation) -%}

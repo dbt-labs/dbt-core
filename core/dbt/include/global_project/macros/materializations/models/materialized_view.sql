@@ -109,6 +109,8 @@
         {{ build_sql }}
     {% endcall %}
 
+    {{ adapter.rename_relation(existing_relation, target_relation) }}
+
     {% set should_revoke = should_revoke(existing_relation, full_refresh_mode=True) %}
     {% do apply_grants(target_relation, grant_config, should_revoke=should_revoke) %}
 
