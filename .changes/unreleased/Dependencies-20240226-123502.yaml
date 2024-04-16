@@ -1,6 +1,0 @@
-kind: Dependencies
-body: Cap dbt-semantic-interfaces version range to <0.6
-time: 2024-02-26T12:35:02.643779-08:00
-custom:
-  Author: tlento
-  PR: "9671"

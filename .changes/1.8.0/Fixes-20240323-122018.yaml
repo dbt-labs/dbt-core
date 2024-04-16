@@ -1,0 +1,6 @@
+kind: Fixes
+body: Make `args` variable to be un-modified by `dbt.invoke(args)`
+time: 2024-03-23T12:20:18.170948-06:00
+custom:
+  Author: dbeatty10
+  Issue: 8938 9787

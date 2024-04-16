@@ -88,6 +88,14 @@ metrics:
       metrics:
         - average_tenure
       expr: "average_tenure + 1"
+
+  - name: tenured_people
+    label: Tenured People
+    description: People who have been here more than 1 year
+    type: simple
+    type_params:
+      measure: people
+    filter: "{{ Metric('collective_tenure', ['id']) }} > 2"
 """
 
 metricflow_time_spine_sql = """
@@ -763,6 +771,16 @@ metrics:
         name: "years_tenure"
         filter: "{{ Dimension('id__loves_dbt') }} is true"
 
+  - name: collective_tenure_measure_filter_list
+    label: "Collective tenure2"
+    description: Total number of years of team experience
+    type: simple
+    type_params:
+      measure:
+        name: "years_tenure"
+        filter:
+          - "{{ Dimension('id__loves_dbt') }} is true"
+
   - name: collective_tenure_metric_filter_str
     label: Collective tenure3
     description: Total number of years of team experience
@@ -772,6 +790,15 @@ metrics:
         name: "years_tenure"
     filter: "{{ Dimension('id__loves_dbt') }} is true"
 
+  - name: collective_tenure_metric_filter_list
+    label: Collective tenure4
+    description: Total number of years of team experience
+    type: simple
+    type_params:
+      measure:
+        name: "years_tenure"
+    filter:
+      - "{{ Dimension('id__loves_dbt') }} is true"
 
   - name: average_tenure_filter_str
     label: Average tenure of people who love dbt1
@@ -782,4 +809,33 @@ metrics:
       metrics:
         - name: average_tenure
           filter: "{{ Dimension('id__loves_dbt') }} is true"
+
+  - name: average_tenure_filter_list
+    label: Average tenure of people who love dbt2
+    description: Average tenure of people who love dbt
+    type: derived
+    type_params:
+      expr: "average_tenure"
+      metrics:
+        - name: average_tenure
+          filter:
+            - "{{ Dimension('id__loves_dbt') }} is true"
+"""
+
+duplicate_measure_metric_yml = """
+metrics:
+  # Simple metrics
+  - name: people_with_tenure
+    description: "Count of people with tenure"
+    type: simple
+    label: People with tenure
+    type_params:
+      measure: people
+  - name: ratio_tenure_to_people
+    description: People to years of tenure
+    label: New customers to all customers
+    type: ratio
+    type_params:
+      numerator: people_with_tenure
+      denominator: number_of_people
 """

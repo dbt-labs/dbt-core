@@ -170,9 +170,9 @@ Finally, you can also run a specific test or group of tests using [`pytest`](htt
 
 ```sh
 # run all unit tests in a file
-python3 -m pytest tests/unit/test_graph.py
+python3 -m pytest tests/unit/test_base_column.py
 # run a specific unit test
-python3 -m pytest tests/unit/test_graph.py::GraphTest::test__dependency_list
+python3 -m pytest tests/unit/test_base_column.py::TestNumericType::test__numeric_type
 # run specific Postgres functional tests
 python3 -m pytest tests/functional/sources
 ```

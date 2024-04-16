@@ -108,6 +108,59 @@ models:
         data_type: date
 """
 
+model_pk_model_column_schema_yml = """
+models:
+  - name: my_model
+    config:
+      contract:
+        enforced: true
+    constraints:
+      - type: primary_key
+        columns: [id]
+    columns:
+      - name: id
+        data_type: integer
+        description: hello
+        constraints:
+            - type: not_null
+            - type: primary_key
+            - type: check
+              expression: (id > 0)
+        data_tests:
+          - unique
+      - name: color
+        data_type: string
+      - name: date_day
+        data_type: date
+"""
+
+model_pk_mult_column_schema_yml = """
+models:
+  - name: my_model
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: id
+        quote: true
+        data_type: integer
+        description: hello
+        constraints:
+            - type: not_null
+            - type: primary_key
+            - type: check
+              expression: (id > 0)
+        data_tests:
+          - unique
+      - name: color
+        data_type: string
+        constraints:
+            - type: not_null
+            - type: primary_key
+      - name: date_day
+        data_type: date
+"""
+
 model_schema_alias_types_false_yml = """
 models:
   - name: my_model
@@ -514,3 +567,35 @@ class TestModelContractMissingYAMLColumns:
             "This model has an enforced contract, and its 'columns' specification is missing"
         )
         assert expected_error in results[0].message
+
+
+# test primary key defined across model and column level constraints, expect error
+class TestPrimaryKeysModelAndColumnLevelConstraints:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "constraints_schema.yml": model_pk_model_column_schema_yml,
+            "my_model.sql": my_model_sql,
+        }
+
+    def test_model_column_pk_error(self, project):
+        expected_error = "Primary key constraints defined at the model level and the columns level"
+        with pytest.raises(ParsingError) as exc_info:
+            run_dbt(["run"])
+        assert expected_error in str(exc_info.value)
+
+
+# test primary key defined across multiple columns, expect error
+class TestPrimaryKeysMultipleColumns:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "constraints_schema.yml": model_pk_mult_column_schema_yml,
+            "my_model.sql": my_model_sql,
+        }
+
+    def test_pk_multiple_columns(self, project):
+        expected_error = "Found 2 columns (['id', 'color']) with primary key constraints defined"
+        with pytest.raises(ParsingError) as exc_info:
+            run_dbt(["run"])
+        assert expected_error in str(exc_info.value)

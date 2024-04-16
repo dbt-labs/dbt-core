@@ -1,0 +1,6 @@
+kind: Fixes
+body: fix configuration of turning test warnings into failures with WARN_ERROR_OPTIONS
+time: 2024-01-08T23:20:35.339102+09:00
+custom:
+  Author: jx2lee
+  Issue: "7761"

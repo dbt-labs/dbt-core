@@ -81,7 +81,7 @@ def load_source_file(
         # the checksum to match the stored file contents
         file_contents = load_file_contents(path.absolute_path, strip=True)
         source_file.contents = file_contents
-        source_file.checksum = FileHash.from_contents(source_file.contents)
+        source_file.checksum = FileHash.from_contents(file_contents)
 
     if parse_file_type == ParseFileType.Schema and source_file.contents:
         dfy = yaml_from_file(source_file)

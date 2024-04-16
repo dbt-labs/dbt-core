@@ -1,6 +1,0 @@
-kind: "Dependencies"
-body: "Bump actions/setup-python from 4 to 5"
-time: 2023-12-11T00:56:51.00000Z
-custom:
-  Author: dependabot[bot]
-  PR: 9267

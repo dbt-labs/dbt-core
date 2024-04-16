@@ -1,0 +1,6 @@
+kind: Features
+body: Add wildcard support to the group selector method
+time: 2024-03-23T20:12:30.715975-04:00
+custom:
+  Author: heysweet
+  Issue: "9811"
