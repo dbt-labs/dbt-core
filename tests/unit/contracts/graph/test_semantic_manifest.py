@@ -2,7 +2,7 @@ import pytest
 from dbt.contracts.graph.semantic_manifest import SemanticManifest
 
 # Request fixtures for manifest, this is simialr to import * in the file.
-pytest_plugins = ("tests.unit.utils.manifest",)
+# pytest_plugins = ("tests.unit.utils.manifest",)
 
 # Overwrite the default nods to construct the manifest
 
