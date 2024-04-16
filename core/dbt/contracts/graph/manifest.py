@@ -906,6 +906,21 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         adapter_type: str,
         specificity: int,
     ) -> CandidateList:
+
+        # Do not include imported macros in materialization macro candidates
+        def filter(candidate: MacroCandidate) -> bool:
+            flags = get_flags()
+            # legacy behaviour - allow materialization overrides from packages
+            if flags.allow_materialization_overrides is None:
+                # TODO: fire deprecation event
+                return True
+            else:
+                return (
+                    candidate.macro.package_name in flags.allow_materialization_overrides
+                    if candidate.locality == Locality.Imported
+                    else True
+                )
+
         full_name = dbt_common.utils.get_materialization_macro_name(
             materialization_name=materialization_name,
             adapter_type=adapter_type,
@@ -913,7 +928,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         )
         return CandidateList(
             MaterializationCandidate.from_macro(m, specificity)
-            for m in self._find_macros_by_name(full_name, project_name)
+            for m in self._find_macros_by_name(full_name, project_name, filter=filter)
         )
 
     def find_materialization_macro_by_name(

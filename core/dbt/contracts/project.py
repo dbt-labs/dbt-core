@@ -297,6 +297,10 @@ class Project(dbtClassMixin):
 @dataclass
 class ProjectFlags(ExtensibleDbtClassMixin):
     allow_spaces_in_model_names: Optional[bool] = True
+    # None => default, allow from all (default behaviour)
+    # ["dbt_utils"] => only allow from these packages
+    # [] => allow from none, will be new default behaviour
+    allow_materialization_overrides: Optional[List[str]] = None
     cache_selected_only: Optional[bool] = None
     debug: Optional[bool] = None
     fail_fast: Optional[bool] = None
@@ -324,6 +328,7 @@ class ProjectFlags(ExtensibleDbtClassMixin):
         return {
             "source_freshness_run_project_hooks": self.source_freshness_run_project_hooks,
             "allow_spaces_in_model_names": self.allow_spaces_in_model_names,
+            "allow_materialization_overrides": self.allow_materialization_overrides,
         }
 
 
