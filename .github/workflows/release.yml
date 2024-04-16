@@ -86,6 +86,7 @@ jobs:
           echo The release version number:         ${{ inputs.version_number }}
           echo Test run:                           ${{ inputs.test_run }}
           echo Nightly release:                    ${{ inputs.nightly_release }}
+          echo Only Docker:                        ${{ inputs.only_docker }}
 
       - name: "Checkout target branch"
         uses: actions/checkout@v4
