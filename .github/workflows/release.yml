@@ -39,6 +39,11 @@ on:
         type: boolean
         default: false
         required: false
+      only_docker:
+        description: "Only release Docker image, skip GitHub & PyPI"
+        type: boolean
+        default: false
+        required: false
   workflow_call:
     inputs:
       target_branch:
@@ -56,11 +61,6 @@ on:
         required: false
       nightly_release:
         description: "Nightly release to dev environment"
-        type: boolean
-        default: false
-        required: false
-      only_docker:
-        description: "Only release Docker image, skip GitHub & PyPI"
         type: boolean
         default: false
         required: false
