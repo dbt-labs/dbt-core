@@ -41,9 +41,6 @@ from tests.unit.utils.manifest import (
     make_macro,
 )
 
-# Request fixtures for manifest, this is simialr to import * in the file.
-pytest_plugins = ("tests.unit.utils.manifest",)
-
 
 def search_manifest_using_method(manifest, method, selection):
     selected = method.search(

@@ -1,12 +1,8 @@
 import pytest
 from dbt.contracts.graph.semantic_manifest import SemanticManifest
 
-# Request fixtures for manifest, this is simialr to import * in the file.
-# pytest_plugins = ("tests.unit.utils.manifest",)
 
 # Overwrite the default nods to construct the manifest
-
-
 @pytest.fixture
 def nodes(metricflow_time_spine_model):
     return [metricflow_time_spine_model]
