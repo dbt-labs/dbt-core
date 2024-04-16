@@ -450,23 +450,24 @@ def make_group(pkg, name, path=None):
     )
 
 
-def make_semantic_model(pkg: str, name: str, path=None, model=None):
+def make_semantic_model(
+    pkg: str,
+    name: str,
+    model,
+    path=None,
+):
     if path is None:
         path = "schema.yml"
-
-    if model is None:
-        model = name
-
-    node_relation = NodeRelation(
-        alias=model,
-        schema_name="dbt",
-    )
 
     return SemanticModel(
         name=name,
         resource_type=NodeType.SemanticModel,
         model=model,
-        node_relation=node_relation,
+        node_relation=NodeRelation(
+            alias=model.alias,
+            schema_name="dbt",
+            relation_name=model.name,
+        ),
         package_name=pkg,
         path=path,
         description="Customer entity",
@@ -856,22 +857,7 @@ def saved_query() -> SavedQuery:
 
 @pytest.fixture
 def semantic_model(table_model) -> SemanticModel:
-    return SemanticModel(
-        name="test_semantic_model",
-        resource_type=NodeType.SemanticModel,
-        model=table_model.name,
-        node_relation=NodeRelation(
-            alias=table_model.alias,
-            schema_name="dbt",
-        ),
-        package_name="test",
-        path="schema.yml",
-        description="Customer entity",
-        primary_entity="customer",
-        unique_id="semantic_model.test.test_semantic_model",
-        original_file_path="schema.yml",
-        fqn=["test", "semantic_models", "test_semantic_model"],
-    )
+    return make_semantic_model("test", "test_semantic_model", model=table_model)
 
 
 @pytest.fixture
