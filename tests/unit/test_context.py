@@ -17,7 +17,7 @@ from dbt.contracts.graph.nodes import (
     UnitTestOverrides,
 )
 from dbt.config.project import VarProvider
-from dbt.context import base, providers, docs, manifest, macros
+from dbt.context import base, providers, docs, macros, query_header
 from dbt.contracts.files import FileHash
 from dbt_common.events.functions import reset_metadata_vars
 from dbt.node_types import NodeType
@@ -417,7 +417,7 @@ def postgres_adapter(config_postgres, get_adapter):
 
 
 def test_query_header_context(config_postgres, manifest_fx):
-    ctx = manifest.generate_query_header_context(
+    ctx = query_header.generate_query_header_context(
         config=config_postgres,
         manifest=manifest_fx,
     )

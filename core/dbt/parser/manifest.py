@@ -19,7 +19,7 @@ from typing import (
 from itertools import chain
 import time
 
-from dbt.context.manifest import generate_query_header_context
+from dbt.context.query_header import generate_query_header_context
 from dbt.contracts.graph.semantic_manifest import SemanticManifest
 from dbt_common.events.base_types import EventLevel
 from dbt_common.exceptions.base import DbtValidationError
