@@ -5,8 +5,10 @@ actually executes the drop, and `get_drop_sql`, which returns the template.
 */ #}
 
 {% macro drop_materialized_view(relation) -%}
+    {% if relation is not none %}
+        {{ adapter.cache_dropped(relation) }}
+    {% endif %}
     {{ return(adapter.dispatch('drop_materialized_view', 'dbt')(relation)) }}
-    {{ adapter.cache_dropped(relation) }}
 {%- endmacro %}
 
 
