@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Add a test for semantic manifest and move test fixtures needed for it
+time: 2024-04-16T15:00:30.614286-07:00
+custom:
+  Author: ChenyuLInx
+  Issue: "9665"

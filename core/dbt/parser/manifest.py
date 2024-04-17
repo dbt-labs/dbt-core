@@ -44,6 +44,7 @@ from dbt.constants import (
     MANIFEST_FILE_NAME,
     PARTIAL_PARSE_FILE_NAME,
     SEMANTIC_MANIFEST_FILE_NAME,
+    SECRET_ENV_PREFIX,
 )
 from dbt_common.helper_types import PathSet
 from dbt_common.events.functions import fire_event, get_invocation_id, warn_or_error
@@ -116,6 +117,7 @@ from dbt.exceptions import (
     TargetNotFoundError,
     AmbiguousAliasError,
     InvalidAccessTypeError,
+    scrub_secrets,
 )
 from dbt.parser.base import Parser
 from dbt.parser.analysis import AnalysisParser
@@ -989,6 +991,9 @@ class ManifestLoader:
         # of env_vars, that would need to change.
         # We are using the parsed cli_vars instead of config.args.vars, in order
         # to sort them and avoid reparsing because of ordering issues.
+        secret_vars = [
+            v for k, v in config.cli_vars.items() if k.startswith(SECRET_ENV_PREFIX) and v.strip()
+        ]
         stringified_cli_vars = pprint.pformat(config.cli_vars)
         vars_hash = FileHash.from_contents(
             "\x00".join(
@@ -1003,7 +1008,7 @@ class ManifestLoader:
         fire_event(
             StateCheckVarsHash(
                 checksum=vars_hash.checksum,
-                vars=stringified_cli_vars,
+                vars=scrub_secrets(stringified_cli_vars, secret_vars),
                 profile=config.args.profile,
                 target=config.args.target,
                 version=__version__,

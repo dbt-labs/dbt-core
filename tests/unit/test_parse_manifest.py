@@ -108,7 +108,7 @@ class TestLoader(unittest.TestCase):
 class TestPartialParse(unittest.TestCase):
     def setUp(self) -> None:
         mock_project = MagicMock(RuntimeConfig)
-        mock_project.cli_vars = ""
+        mock_project.cli_vars = {}
         mock_project.args = MagicMock()
         mock_project.args.profile = "test"
         mock_project.args.target = "test"
