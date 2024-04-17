@@ -3,8 +3,8 @@ from dbt.artifacts.resources import UnitTestConfig, DependsOn
 from dbt.parser import SchemaParser
 from dbt.parser.unit_tests import UnitTestParser
 
-from .utils import MockNode
-from .test_parser import SchemaParserTest, assertEqualNodes
+from tests.unit.utils import MockNode
+from tests.unit.test_parser import SchemaParserTest, assertEqualNodes
 
 from unittest import mock
 from dbt.contracts.graph.unparsed import UnitTestOutputFixture
