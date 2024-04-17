@@ -450,6 +450,16 @@ class TotalModelNamesWithSpacesDeprecation(DynamicLevel):
         return line_wrap_message(description)
 
 
+class PackageMaterializationOverrideDeprecation(WarnLevel):
+    def code(self) -> str:
+        return "D016"
+
+    def message(self) -> str:
+        description = f"Package '{self.package_name}' is overriding the built-in materialization '{self.materialization_name}' from an installed package, which will be deprecated in future versions of dbt."
+
+        return line_wrap_message(description)
+
+
 # =======================================================
 # I - Project parsing
 # =======================================================

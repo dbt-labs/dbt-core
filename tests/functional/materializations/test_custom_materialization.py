@@ -36,6 +36,7 @@ class TestOverrideDefaultDependency:
     def test_default_dependency(self, project, override_view_default_dep):
         run_dbt(["deps"])
         # this should error because the override is buggy
+        # TODO: assert deprecation fired
         run_dbt(["run"], expect_pass=False)
 
 
