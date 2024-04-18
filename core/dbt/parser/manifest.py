@@ -160,7 +160,7 @@ def extended_msgpack_encoder(obj):
         datetime_bytes = msgpack.ExtType(2, obj.isoformat().encode())
         return datetime_bytes
     elif type(obj) is agate:
-        agate_bytes = msgpack.ExtType(3, obj.__str__().encode())
+        agate_bytes = msgpack.ExtType(3, "".encode())
         return agate_bytes
 
     return obj
@@ -179,6 +179,8 @@ def extended_msgpack_decoder(code, data):
     elif code == 2:
         dt = datetime.datetime.fromisoformat(data.decode())
         return dt
+    elif code == 3:
+        return ""
     else:
         return msgpack.ExtType(code, data)
 
