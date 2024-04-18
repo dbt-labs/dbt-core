@@ -455,9 +455,9 @@ class PackageMaterializationOverrideDeprecation(WarnLevel):
         return "D016"
 
     def message(self) -> str:
-        description = f"Package '{self.package_name}' is overriding the built-in materialization '{self.materialization_name}' from an installed package, which will be deprecated in future versions of dbt."
+        description = f"Installed package '{self.package_name}' is overriding the built-in materialization '{self.materialization_name}'. Overrides of built-in materializations from installed packages will be deprecated in future versions of dbt."
 
-        return line_wrap_message(description)
+        return line_wrap_message(warning_tag(description))
 
 
 # =======================================================

@@ -1,7 +1,7 @@
 import pytest
 
 from dbt.tests.util import run_dbt
-
+from dbt import deprecations
 
 models__model_sql = """
 {{ config(materialized='view') }}
@@ -35,9 +35,12 @@ class TestOverrideDefaultDependency:
 
     def test_default_dependency(self, project, override_view_default_dep):
         run_dbt(["deps"])
+        deprecations.reset_deprecations()
+        assert deprecations.active_deprecations == set()
         # this should error because the override is buggy
-        # TODO: assert deprecation fired
         run_dbt(["run"], expect_pass=False)
+        expected = {"package-materialization-override"}
+        assert expected == deprecations.active_deprecations
 
 
 class TestOverrideAdapterDependencyPassing:
