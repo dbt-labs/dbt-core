@@ -19,6 +19,8 @@ from typing import (
 from itertools import chain
 import time
 
+import agate
+
 from dbt.context.manifest import generate_query_header_context
 from dbt.contracts.graph.semantic_manifest import SemanticManifest
 from dbt_common.events.base_types import EventLevel
@@ -157,12 +159,17 @@ def extended_msgpack_encoder(obj):
     elif type(obj) is datetime.datetime:
         datetime_bytes = msgpack.ExtType(2, obj.isoformat().encode())
         return datetime_bytes
+    elif type(obj) is agate:
+        agate_bytes = msgpack.ExtType(3, obj.__str__().encode())
+        return agate_bytes
 
     return obj
 
 
 def extended_mashumuro_decoder(data):
-    return msgpack.unpackb(data, ext_hook=extended_msgpack_decoder, raw=False, strict_map_key=False)
+    return msgpack.unpackb(
+        data, ext_hook=extended_msgpack_decoder, raw=False, strict_map_key=False
+    )
 
 
 def extended_msgpack_decoder(code, data):
