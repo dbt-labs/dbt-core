@@ -159,7 +159,7 @@ def extended_msgpack_encoder(obj):
     elif type(obj) is datetime.datetime:
         datetime_bytes = msgpack.ExtType(2, obj.isoformat().encode())
         return datetime_bytes
-    elif type(obj) is agate:
+    elif isinstance(obj, agate.Table):
         agate_bytes = msgpack.ExtType(3, "".encode())
         return agate_bytes
 
