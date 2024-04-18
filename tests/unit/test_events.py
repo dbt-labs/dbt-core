@@ -158,6 +158,9 @@ sample_values = [
     core_types.TotalModelNamesWithSpacesDeprecation(
         count_invalid_names=1, show_debug_hint=True, level=""
     ),
+    core_types.PackageMaterializationOverrideDeprecation(
+        package_name="my_package", materialization_name="view"
+    ),
     # E - DB Adapter ======================
     adapter_types.AdapterEventDebug(),
     adapter_types.AdapterEventInfo(),
