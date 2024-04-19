@@ -561,6 +561,20 @@ class BaseContext(metaclass=ContextMeta):
               {{ log("Running some_macro: " ~ arg1 ~ ", " ~ arg2) }}
             {% endmacro %}"
         """
+        # Now, detect instances of the placeholder value ($$$DBT_SECRET_START...DBT_SECRET_END$$$)
+        # and replace them with the standard mask '*****'
+        if "DBT_SECRET_START" in str(msg):
+            search_group = f"({SECRET_ENV_PREFIX}(.*))"
+            from dbt.context.secret import SECRET_PLACEHOLDER
+
+            pattern = SECRET_PLACEHOLDER.format(search_group).replace("$", r"\$")
+            m = re.search(
+                pattern,
+                msg,
+            )
+            if m:
+                msg = re.sub(pattern, "*****", msg)
+
         if info:
             fire_event(JinjaLogInfo(msg=msg, node_info=get_node_info()))
         else:
