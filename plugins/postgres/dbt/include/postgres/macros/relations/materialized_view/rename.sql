@@ -3,6 +3,7 @@
     {% set database = relation.database %}
     {% set schema = relation.schema %}
     {% set to_relation = adapter.get_relation(database=database, schema=schema, identifier=new_name) %}
+    {{ debug() }}
     {% if to_relation is not none %}
         {{ adapter.rename_relation(from_relation=relation, to_relation=to_relation) }}
     {% endif %}
