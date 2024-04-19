@@ -101,13 +101,26 @@ class PackageConfig(dbtClassMixin):
     @classmethod
     def validate(cls, data):
         for package in data.get("packages", data):
+            # This can happen when the target is a variable that is not filled and results in hangs
+            if isinstance(package, dict):
+                if package.get("package") == "":
+                    raise ValidationError(
+                        "A package package is missing the value. It is a required property"
+                    )
+                if package.get("local") == "":
+                    raise ValidationError(
+                        "A local package is missing the value. It is a required property"
+                    )
+                if package.get("git") == "":
+                    raise ValidationError(
+                        "A git package is missing the value. It is a required property"
+                    )
             if isinstance(package, dict) and package.get("package"):
                 if not package["version"]:
                     raise ValidationError(
                         f"{package['package']} is missing the version. When installing from the Hub "
                         "package index, version is a required property"
                     )
-
                 if "/" not in package["package"]:
                     raise ValidationError(
                         f"{package['package']} was not found in the package index. Packages on the index "
