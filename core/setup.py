@@ -25,7 +25,7 @@ with open(os.path.join(this_directory, "README.md")) as f:
 
 
 package_name = "dbt-core"
-package_version = "1.8.0b2"
+package_version = "1.8.0b3"
 description = """With dbt, data analysts and engineers can build analytics \
 the way engineers build applications."""
 
@@ -67,7 +67,7 @@ setup(
         # These packages are major-version-0. Keep upper bounds on upcoming minor versions (which could have breaking changes)
         # and check compatibility / bump in each new minor version of dbt-core.
         "pathspec>=0.9,<0.13",
-        "sqlparse>=0.2.3,<0.5",
+        "sqlparse>=0.5.0,<0.6.0",
         # ----
         # These are major-version-0 packages also maintained by dbt-labs.
         # Accept patches but avoid automatically updating past a set minor version range.

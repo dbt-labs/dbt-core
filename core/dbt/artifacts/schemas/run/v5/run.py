@@ -1,9 +1,11 @@
 import threading
 from typing import Any, Optional, Iterable, Tuple, Sequence, Dict, TYPE_CHECKING
+import copy
 from dataclasses import dataclass, field
 from datetime import datetime
 
 
+from dbt.constants import SECRET_ENV_PREFIX
 from dbt.artifacts.resources import CompiledResource
 from dbt.artifacts.schemas.base import (
     BaseArtifactMetadata,
@@ -19,6 +21,7 @@ from dbt.artifacts.schemas.results import (
     ExecutionResult,
 )
 from dbt_common.clients.system import write_json
+from dbt.exceptions import scrub_secrets
 
 
 if TYPE_CHECKING:
@@ -123,7 +126,26 @@ class RunResultsArtifact(ExecutionResult, ArtifactMixin):
             dbt_schema_version=str(cls.dbt_schema_version),
             generated_at=generated_at,
         )
-        return cls(metadata=meta, results=processed_results, elapsed_time=elapsed_time, args=args)
+
+        secret_vars = [
+            v for k, v in args["vars"].items() if k.startswith(SECRET_ENV_PREFIX) and v.strip()
+        ]
+
+        scrubbed_args = copy.deepcopy(args)
+
+        # scrub secrets in invocation command
+        scrubbed_args["invocation_command"] = scrub_secrets(
+            scrubbed_args["invocation_command"], secret_vars
+        )
+
+        # scrub secrets in vars dict
+        scrubbed_args["vars"] = {
+            k: scrub_secrets(v, secret_vars) for k, v in scrubbed_args["vars"].items()
+        }
+
+        return cls(
+            metadata=meta, results=processed_results, elapsed_time=elapsed_time, args=scrubbed_args
+        )
 
     @classmethod
     def compatible_previous_versions(cls) -> Iterable[Tuple[str, int]]:

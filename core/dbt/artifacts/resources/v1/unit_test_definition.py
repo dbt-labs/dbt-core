@@ -30,6 +30,7 @@ class UnitTestConfig(BaseConfig):
 class UnitTestFormat(StrEnum):
     CSV = "csv"
     Dict = "dict"
+    SQL = "sql"
 
 
 @dataclass

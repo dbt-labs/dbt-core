@@ -10,7 +10,6 @@ MACROS__MACRO_SQL = """
   {%- set comment_dict = dict(
     app='dbt++',
     macro_version='0.1.0',
-    dbt_version=dbt_version,
     message='blah: '~ message) -%}
   {{ return(comment_dict) }}
 {%- endmacro -%}

@@ -191,3 +191,4 @@ class TestEnvVars:
 
         assert not ("secret_variable" in log_output)
         assert "regular_variable" in log_output
+        del os.environ["DBT_DEBUG"]

@@ -26,6 +26,11 @@ class FixtureParser(Parser[UnitTestFileFixture]):
         assert isinstance(file_block.file, FixtureSourceFile)
         unique_id = self.generate_unique_id(file_block.name)
 
+        if file_block.file.path.relative_path.endswith(".sql"):
+            rows = file_block.file.contents  # type: ignore
+        else:  # endswith('.csv')
+            rows = self.get_rows(file_block.file.contents)  # type: ignore
+
         fixture = UnitTestFileFixture(
             name=file_block.name,
             path=file_block.file.path.relative_path,
@@ -33,7 +38,7 @@ class FixtureParser(Parser[UnitTestFileFixture]):
             package_name=self.project.project_name,
             unique_id=unique_id,
             resource_type=NodeType.Fixture,
-            rows=self.get_rows(file_block.file.contents),
+            rows=rows,
         )
         self.manifest.add_fixture(file_block.file, fixture)
 

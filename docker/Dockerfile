@@ -1,5 +1,4 @@
-# this image gets published to GHCR for production use
-ARG py_version=3.10.7
+ARG py_version=3.11.2
 
 FROM python:$py_version-slim-bullseye as base
 

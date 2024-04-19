@@ -36,6 +36,7 @@ def insensitive_patterns(*patterns: str):
 @dataclass
 class UnitTestNodeConfig(NodeConfig):
     expected_rows: List[Dict[str, Any]] = field(default_factory=list)
+    expected_sql: Optional[str] = None
 
 
 @dataclass
