@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: Move ManifestLoader test and change it to pytest
-time: 2024-04-16T15:44:05.659973-07:00
-custom:
-  Author: ChenyuLInx
-  Issue: "9960"
