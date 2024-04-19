@@ -12,7 +12,7 @@ from dbt.flags import set_from_args
 @pytest.fixture
 def mock_project():
     mock_project = MagicMock(RuntimeConfig)
-    mock_project.cli_vars = ""
+    mock_project.cli_vars = {}
     mock_project.args = MagicMock()
     mock_project.args.profile = "test"
     mock_project.args.target = "test"
