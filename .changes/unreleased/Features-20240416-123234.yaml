@@ -1,0 +1,6 @@
+kind: Features
+body: Allow `dbt show` and `dbt compile` to output JSON without extra logs
+time: 2024-04-16T12:32:34.764394-06:00
+custom:
+  Author: dbeatty10
+  Issue: "9840"

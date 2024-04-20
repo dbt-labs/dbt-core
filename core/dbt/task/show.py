@@ -2,6 +2,7 @@ import io
 import threading
 import time
 
+from dbt.flags import get_flags
 from dbt.context.providers import generate_runtime_model_context
 from dbt.contracts.graph.nodes import SeedNode
 from dbt.artifacts.schemas.run import RunResult, RunStatus
@@ -98,15 +99,20 @@ class ShowTask(CompileTask):
             if hasattr(result.node, "version") and result.node.version:
                 node_name += f".v{result.node.version}"
 
-            fire_event(
-                ShowNode(
-                    node_name=node_name,
-                    preview=output.getvalue(),
-                    is_inline=is_inline,
-                    output_format=self.args.output,
-                    unique_id=result.node.unique_id,
-                )
+            show_node_event = ShowNode(
+                node_name=node_name,
+                preview=output.getvalue(),
+                is_inline=is_inline,
+                output_format=self.args.output,
+                unique_id=result.node.unique_id,
+                quiet=get_flags().QUIET,
             )
+
+            if get_flags().LOG_FORMAT == "json":
+                fire_event(show_node_event)
+            else:
+                # Cleaner to leave as print than to mutate the logger not to print timestamps.
+                print(show_node_event.message())
 
     def _handle_result(self, result):
         super()._handle_result(result)

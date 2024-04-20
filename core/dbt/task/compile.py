@@ -1,5 +1,6 @@
 import threading
 
+from dbt.flags import get_flags
 from dbt.artifacts.schemas.run import RunStatus, RunResult
 from dbt_common.events.base_types import EventLevel
 from dbt_common.events.functions import fire_event
@@ -89,15 +90,21 @@ class CompileTask(GraphRunnableTask):
             matched_results = []
 
         for result in matched_results:
-            fire_event(
-                CompiledNode(
-                    node_name=result.node.name,
-                    compiled=result.node.compiled_code,
-                    is_inline=is_inline,
-                    output_format=output_format,
-                    unique_id=result.node.unique_id,
-                )
+
+            compiled_node_event = CompiledNode(
+                node_name=result.node.name,
+                compiled=result.node.compiled_code,
+                is_inline=is_inline,
+                output_format=output_format,
+                unique_id=result.node.unique_id,
+                quiet=get_flags().QUIET,
             )
+
+            if get_flags().LOG_FORMAT == "json":
+                fire_event(compiled_node_event)
+            else:
+                # Cleaner to leave as print than to mutate the logger not to print timestamps.
+                print(compiled_node_event.message())
 
     def _runtime_initialize(self):
         if getattr(self.args, "inline", None):
