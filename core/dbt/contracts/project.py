@@ -105,15 +105,15 @@ class PackageConfig(dbtClassMixin):
             if isinstance(package, dict):
                 if package.get("package") == "":
                     raise ValidationError(
-                        "A package package is missing the value. It is a required property"
+                        "A package is missing the value. It is a required property."
                     )
                 if package.get("local") == "":
                     raise ValidationError(
-                        "A local package is missing the value. It is a required property"
+                        "A local package is missing the value. It is a required property."
                     )
                 if package.get("git") == "":
                     raise ValidationError(
-                        "A git package is missing the value. It is a required property"
+                        "A git package is missing the value. It is a required property."
                     )
             if isinstance(package, dict) and package.get("package"):
                 if not package["version"]:
