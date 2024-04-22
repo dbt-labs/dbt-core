@@ -394,6 +394,17 @@ message CollectFreshnessReturnSignatureMsg {
     CollectFreshnessReturnSignature data = 2;
 }
 
+// D016
+message PackageMaterializationOverrideDeprecation {
+    string package_name = 1;
+    string materialization_name = 2;
+}
+
+message PackageMaterializationOverrideDeprecationMsg {
+    EventInfo info = 1;
+    PackageMaterializationOverrideDeprecation data = 2;
+}
+
 // E - DB Adapter
 
 // E001
