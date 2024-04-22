@@ -571,11 +571,25 @@ M = TypeVar("M", bound=MacroCandidate)
 
 
 class CandidateList(List[M]):
-    def last_candidate(self) -> Optional[MacroCandidate]:
+    def last_candidate(
+        self, valid_localities: Optional[List[Locality]] = None
+    ) -> Optional[MacroCandidate]:
+        """
+        Obtain the last (highest precedence) MacroCandidate from the CandidateList of any locality in valid_localities.
+        If valid_localities is not specified, return the last MacroCandidate of any locality.
+        """
         if not self:
             return None
         self.sort()
-        return self[-1]
+
+        if valid_localities is None:
+            return self[-1]
+
+        for candidate in reversed(self):
+            if candidate.locality in valid_localities:
+                return candidate
+
+        return None
 
     def last(self) -> Optional[Macro]:
         last_candidate = self.last_candidate()
@@ -911,21 +925,6 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         adapter_type: str,
         specificity: int,
     ) -> CandidateList:
-
-        # Do not include imported macros in materialization macro candidates
-        def filter(candidate: MacroCandidate) -> bool:
-            flags = get_flags()
-            # legacy behaviour - allow materialization overrides from packages
-            if flags.allow_materialization_overrides is None:
-                # TODO: fire deprecation event
-                return True
-            else:
-                return (
-                    candidate.macro.package_name in flags.allow_materialization_overrides
-                    if candidate.locality == Locality.Imported
-                    else True
-                )
-
         full_name = dbt_common.utils.get_materialization_macro_name(
             materialization_name=materialization_name,
             adapter_type=adapter_type,
@@ -933,7 +932,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         )
         return CandidateList(
             MaterializationCandidate.from_macro(m, specificity)
-            for m in self._find_macros_by_name(full_name, project_name, filter=filter)
+            for m in self._find_macros_by_name(full_name, project_name)
         )
 
     def find_materialization_macro_by_name(
@@ -961,11 +960,17 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             and materialization_candidate.locality == Locality.Imported
             and core_candidates
         ):
-            deprecations.warn(
-                "package-materialization-override",
-                package_name=materialization_candidate.macro.package_name,
-                materialization_name=materialization_name,
-            )
+            # preserve legacy behaviour - allow materialization override
+            if get_flags().deprecate_package_materialization_builtin_override is False:
+                deprecations.warn(
+                    "package-materialization-override",
+                    package_name=materialization_candidate.macro.package_name,
+                    materialization_name=materialization_name,
+                )
+            else:
+                materialization_candidate = candidates.last_candidate(
+                    valid_localities=[Locality.Core, Locality.Root]
+                )
 
         return materialization_candidate.macro if materialization_candidate else None
 

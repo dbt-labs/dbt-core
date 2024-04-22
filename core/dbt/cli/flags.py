@@ -355,7 +355,7 @@ class Flags:
     # This is here to prevent mypy from complaining about all of the
     # attributes which we added dynamically.
     def __getattr__(self, name: str) -> Any:
-        return super().__get_attribute__(name)  # type: ignore
+        return super().__getattribute__(name)  # type: ignore
 
 
 CommandParams = List[str]
