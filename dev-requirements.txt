@@ -27,7 +27,7 @@ types-PyYAML
 types-freezegun
 types-Jinja2
 types-mock
-types-protobuf
+types-protobuf>=4.0.0,<5.0.0
 types-python-dateutil
 types-pytz
 types-requests < 2.31.0  # types-requests 2.31.0.8 requires urllib3>=2, but we pin urllib3 ~= 1.0 because of openssl requirement for requests
