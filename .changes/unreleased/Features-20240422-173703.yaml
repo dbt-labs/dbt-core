@@ -1,0 +1,6 @@
+kind: Features
+body: Add flags.deprecate_package_materialization_builtin_override
+time: 2024-04-22T17:37:03.892268-04:00
+custom:
+  Author: michelleark
+  Issue: "10007"
