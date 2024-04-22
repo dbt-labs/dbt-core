@@ -1,12 +1,13 @@
 from argparse import Namespace
 import pytest
 
-# from unittest.mock import patch
+from unittest.mock import patch
 
 import dbt.flags as flags
 from dbt_common.events.functions import msg_to_dict, warn_or_error
+from dbt_common.events.event_manager_client import cleanup_event_logger
 
-# from dbt.events.logging import setup_event_logger
+from dbt.events.logging import setup_event_logger
 from dbt_common.events.types import InfoLevel
 from dbt_common.exceptions import EventCompilationError
 from dbt.events.types import NoNodesForSelectionCriteria
@@ -87,11 +88,13 @@ def test_msg_to_dict_handles_exceptions_gracefully():
         ), f"We expect `msg_to_dict` to gracefully handle exceptions, but it raised {exc}"
 
 
-# @patch("dbt_common.events.logger.RotatingFileHandler")
-# def test_setup_event_logger_specify_max_bytes(patched_file_handler):
-#     args = Namespace(log_file_max_bytes=1234567)
-#     flags.set_from_args(args, {})
-#     setup_event_logger(flags.get_flags())
-#     patched_file_handler.assert_called_once_with(
-#         filename="logs/dbt.log", encoding="utf8", maxBytes=1234567, backupCount=5
-#     )
+@patch("dbt_common.events.logger.RotatingFileHandler")
+def test_setup_event_logger_specify_max_bytes(patched_file_handler):
+    args = Namespace(log_file_max_bytes=1234567)
+    flags.set_from_args(args, {})
+    setup_event_logger(flags.get_flags())
+    patched_file_handler.assert_called_once_with(
+        filename="logs/dbt.log", encoding="utf8", maxBytes=1234567, backupCount=5
+    )
+    # XXX if we do not clean up event logger here we are going to affect other tests.
+    cleanup_event_logger()
