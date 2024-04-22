@@ -4,6 +4,9 @@ from dbt.artifacts.resources import Quoting, SourceConfig
 from dbt.artifacts.resources.types import NodeType
 from dbt.contracts.graph.nodes import SourceDefinition
 
+# All manifest related fixtures.
+from tests.unit.utils.manifest import *  # noqa
+
 
 @pytest.fixture
 def basic_parsed_source_definition_object():

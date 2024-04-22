@@ -764,6 +764,22 @@ class SavedQueryParser(YamlReader):
             group=config.group,
         )
 
+        for export in parsed.exports:
+            self.schema_parser.update_parsed_node_relation_names(export, export.config.to_dict())  # type: ignore
+
+            if not export.config.schema_name:
+                export.config.schema_name = getattr(export, "schema", None)
+            delattr(export, "schema")
+
+            export.config.database = getattr(export, "database", None) or export.config.database
+            delattr(export, "database")
+
+            if not export.config.alias:
+                export.config.alias = getattr(export, "alias", None)
+            delattr(export, "alias")
+
+            delattr(export, "relation_name")
+
         # Only add thes saved query if it's enabled, otherwise we track it with other diabled nodes
         if parsed.config.enabled:
             self.manifest.add_saved_query(self.yaml.file, parsed)

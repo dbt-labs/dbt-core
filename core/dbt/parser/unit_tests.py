@@ -68,6 +68,15 @@ class UnitTestManifestLoader:
         name = test_case.name
         if tested_node.is_versioned:
             name = name + f"_v{tested_node.version}"
+        expected_sql: Optional[str] = None
+        if test_case.expect.format == UnitTestFormat.SQL:
+            expected_rows: List[Dict[str, Any]] = []
+            expected_sql = test_case.expect.rows  # type: ignore
+        else:
+            assert isinstance(test_case.expect.rows, List)
+            expected_rows = deepcopy(test_case.expect.rows)
+
+        assert isinstance(expected_rows, List)
         unit_test_node = UnitTestNode(
             name=name,
             resource_type=NodeType.Unit,
@@ -76,8 +85,7 @@ class UnitTestManifestLoader:
             original_file_path=test_case.original_file_path,
             unique_id=test_case.unique_id,
             config=UnitTestNodeConfig(
-                materialized="unit",
-                expected_rows=deepcopy(test_case.expect.rows),  # type:ignore
+                materialized="unit", expected_rows=expected_rows, expected_sql=expected_sql
             ),
             raw_code=tested_node.raw_code,
             database=tested_node.database,
@@ -132,7 +140,7 @@ class UnitTestManifestLoader:
                 "schema": original_input_node.schema,
                 "fqn": original_input_node.fqn,
                 "checksum": FileHash.empty(),
-                "raw_code": self._build_fixture_raw_code(given.rows, None),
+                "raw_code": self._build_fixture_raw_code(given.rows, None, given.format),
                 "package_name": original_input_node.package_name,
                 "unique_id": f"model.{original_input_node.package_name}.{input_name}",
                 "name": input_name,
@@ -172,12 +180,15 @@ class UnitTestManifestLoader:
             # Add unique ids of input_nodes to depends_on
             unit_test_node.depends_on.nodes.append(input_node.unique_id)
 
-    def _build_fixture_raw_code(self, rows, column_name_to_data_types) -> str:
+    def _build_fixture_raw_code(self, rows, column_name_to_data_types, fixture_format) -> str:
         # We're not currently using column_name_to_data_types, but leaving here for
         # possible future use.
-        return ("{{{{ get_fixture_sql({rows}, {column_name_to_data_types}) }}}}").format(
-            rows=rows, column_name_to_data_types=column_name_to_data_types
-        )
+        if fixture_format == UnitTestFormat.SQL:
+            return rows
+        else:
+            return ("{{{{ get_fixture_sql({rows}, {column_name_to_data_types}) }}}}").format(
+                rows=rows, column_name_to_data_types=column_name_to_data_types
+            )
 
     def _get_original_input_node(self, input: str, tested_node: ModelNode, test_case_name: str):
         """
@@ -352,13 +363,29 @@ class UnitTestParser(YamlReader):
                 )
 
             if ut_fixture.fixture:
-                # find fixture file object and store unit_test_definition unique_id
-                fixture = self._get_fixture(ut_fixture.fixture, self.project.project_name)
-                fixture_source_file = self.manifest.files[fixture.file_id]
-                fixture_source_file.unit_tests.append(unit_test_definition.unique_id)
-                ut_fixture.rows = fixture.rows
+                ut_fixture.rows = self.get_fixture_file_rows(
+                    ut_fixture.fixture, self.project.project_name, unit_test_definition.unique_id
+                )
             else:
                 ut_fixture.rows = self._convert_csv_to_list_of_dicts(ut_fixture.rows)
+        elif ut_fixture.format == UnitTestFormat.SQL:
+            if not (isinstance(ut_fixture.rows, str) or isinstance(ut_fixture.fixture, str)):
+                raise ParsingError(
+                    f"Unit test {unit_test_definition.name} has {fixture_type} rows or fixtures "
+                    f"which do not match format {ut_fixture.format}.  Expected string."
+                )
+
+            if ut_fixture.fixture:
+                ut_fixture.rows = self.get_fixture_file_rows(
+                    ut_fixture.fixture, self.project.project_name, unit_test_definition.unique_id
+                )
+
+    def get_fixture_file_rows(self, fixture_name, project_name, utdef_unique_id):
+        # find fixture file object and store unit_test_definition unique_id
+        fixture = self._get_fixture(fixture_name, project_name)
+        fixture_source_file = self.manifest.files[fixture.file_id]
+        fixture_source_file.unit_tests.append(utdef_unique_id)
+        return fixture.rows
 
     def _convert_csv_to_list_of_dicts(self, csv_string: str) -> List[Dict[str, Any]]:
         dummy_file = StringIO(csv_string)

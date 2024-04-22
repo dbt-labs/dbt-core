@@ -991,7 +991,7 @@ class UnitTestDefinition(NodeInfoMixin, GraphNode, UnitTestDefinitionResource):
 @dataclass
 class UnitTestFileFixture(BaseNode):
     resource_type: Literal[NodeType.Fixture]
-    rows: Optional[List[Dict[str, Any]]] = None
+    rows: Optional[Union[List[Dict[str, Any]], str]] = None
 
 
 # ====================================

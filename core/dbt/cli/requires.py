@@ -15,7 +15,7 @@ from dbt.cli.exceptions import (
 from dbt.cli.flags import Flags
 from dbt.config import RuntimeConfig
 from dbt.config.runtime import load_project, load_profile, UnsetProfile
-from dbt.context.manifest import generate_query_header_context
+from dbt.context.query_header import generate_query_header_context
 
 from dbt_common.events.base_types import EventLevel
 from dbt_common.events.functions import (

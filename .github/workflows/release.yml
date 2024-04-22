@@ -39,6 +39,11 @@ on:
         type: boolean
         default: false
         required: false
+      only_docker:
+        description: "Only release Docker image, skip GitHub & PyPI"
+        type: boolean
+        default: false
+        required: false
   workflow_call:
     inputs:
       target_branch:
@@ -81,6 +86,7 @@ jobs:
           echo The release version number:         ${{ inputs.version_number }}
           echo Test run:                           ${{ inputs.test_run }}
           echo Nightly release:                    ${{ inputs.nightly_release }}
+          echo Only Docker:                        ${{ inputs.only_docker }}
 
       - name: "Checkout target branch"
         uses: actions/checkout@v4
@@ -99,6 +105,7 @@ jobs:
   bump-version-generate-changelog:
     name: Bump package version, Generate changelog
     needs: [job-setup]
+    if: ${{ !inputs.only_docker }}
 
     uses: dbt-labs/dbt-release/.github/workflows/release-prep.yml@main
 
@@ -114,7 +121,7 @@ jobs:
 
   log-outputs-bump-version-generate-changelog:
     name: "[Log output] Bump package version, Generate changelog"
-    if: ${{ !failure() && !cancelled() }}
+    if: ${{ !failure() && !cancelled() && !inputs.only_docker }}
 
     needs: [bump-version-generate-changelog]
 
@@ -128,7 +135,7 @@ jobs:
 
   build-test-package:
     name: Build, Test, Package
-    if: ${{ !failure() && !cancelled() }}
+    if: ${{ !failure() && !cancelled() && !inputs.only_docker }}
     needs: [job-setup, bump-version-generate-changelog]
 
     uses: dbt-labs/dbt-release/.github/workflows/build.yml@main
@@ -149,7 +156,7 @@ jobs:
 
   github-release:
     name: GitHub Release
-    if: ${{ !failure() && !cancelled() }}
+    if: ${{ !failure() && !cancelled() && !inputs.only_docker }}
 
     needs: [bump-version-generate-changelog, build-test-package]
 
@@ -180,6 +187,7 @@ jobs:
     # dbt-postgres exists within dbt-core for versions 1.7 and earlier but is a separate package for 1.8 and later.
     # determine if we need to release dbt-core or both dbt-core and dbt-postgres
     name: Determine Docker Package
+    if: ${{ !failure() && !cancelled() }}
     runs-on: ubuntu-latest
     needs: [pypi-release]
     outputs:
@@ -204,6 +212,10 @@ jobs:
   docker-release:
     name: "Docker Release for ${{ matrix.package }}"
     needs: [determine-docker-package]
+    # We cannot release to docker on a test run because it uses the tag in GitHub as
+    # what we need to release but draft releases don't actually tag the commit so it
+    # finds nothing to release
+    if: ${{ !failure() && !cancelled() && (!inputs.test_run || inputs.only_docker) }}
     strategy:
       matrix: ${{fromJson(needs.determine-docker-package.outputs.matrix)}}
 

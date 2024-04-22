@@ -120,7 +120,7 @@ class TestExposureNameDeprecation:
         assert expected_msg in exc_str
 
 
-class TestPrjectFlagsMovedDeprecation:
+class TestProjectFlagsMovedDeprecation:
     @pytest.fixture(scope="class")
     def profiles_config_update(self):
         return {

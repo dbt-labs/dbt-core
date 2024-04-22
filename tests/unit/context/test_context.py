@@ -1,4 +1,3 @@
-import unittest
 import os
 from typing import Set, Dict, Any
 from unittest import mock
@@ -17,26 +16,28 @@ from dbt.contracts.graph.nodes import (
     UnitTestOverrides,
 )
 from dbt.config.project import VarProvider
-from dbt.context import base, providers, docs, manifest, macros
+from dbt.context import base, providers, docs, macros, query_header
 from dbt.contracts.files import FileHash
 from dbt_common.events.functions import reset_metadata_vars
+from dbt.flags import set_from_args
 from dbt.node_types import NodeType
 import dbt_common.exceptions
-from .utils import (
+
+from tests.unit.utils import (
     config_from_parts_or_dicts,
     inject_adapter,
     clear_plugin,
 )
-from .mock_adapter import adapter_factory
-from dbt.flags import set_from_args
+from tests.unit.mock_adapter import adapter_factory
 from argparse import Namespace
 
 set_from_args(Namespace(WARN_ERROR=False), None)
 
 
-class TestVar(unittest.TestCase):
-    def setUp(self):
-        self.model = ModelNode(
+class TestVar:
+    @pytest.fixture
+    def model(self):
+        return ModelNode(
             alias="model_one",
             name="model_one",
             database="dbt",
@@ -70,91 +71,114 @@ class TestVar(unittest.TestCase):
             columns={},
             checksum=FileHash.from_contents(""),
         )
-        self.context = mock.MagicMock()
-        self.provider = VarProvider({})
-        self.config = mock.MagicMock(
-            config_version=2, vars=self.provider, cli_vars={}, project_name="root"
-        )
 
-    def test_var_default_something(self):
-        self.config.cli_vars = {"foo": "baz"}
-        var = providers.RuntimeVar(self.context, self.config, self.model)
-        self.assertEqual(var("foo"), "baz")
-        self.assertEqual(var("foo", "bar"), "baz")
+    @pytest.fixture
+    def context(self):
+        return mock.MagicMock()
 
-    def test_var_default_none(self):
-        self.config.cli_vars = {"foo": None}
-        var = providers.RuntimeVar(self.context, self.config, self.model)
-        self.assertEqual(var("foo"), None)
-        self.assertEqual(var("foo", "bar"), None)
+    @pytest.fixture
+    def provider(self):
+        return VarProvider({})
 
-    def test_var_not_defined(self):
-        var = providers.RuntimeVar(self.context, self.config, self.model)
+    @pytest.fixture
+    def config(self, provider):
+        return mock.MagicMock(config_version=2, vars=provider, cli_vars={}, project_name="root")
 
-        self.assertEqual(var("foo", "bar"), "bar")
-        with self.assertRaises(dbt_common.exceptions.CompilationError):
+    def test_var_default_something(self, model, config, context):
+        config.cli_vars = {"foo": "baz"}
+        var = providers.RuntimeVar(context, config, model)
+
+        assert var("foo") == "baz"
+        assert var("foo", "bar") == "baz"
+
+    def test_var_default_none(self, model, config, context):
+        config.cli_vars = {"foo": None}
+        var = providers.RuntimeVar(context, config, model)
+
+        assert var("foo") is None
+        assert var("foo", "bar") is None
+
+    def test_var_not_defined(self, model, config, context):
+        var = providers.RuntimeVar(self.context, config, model)
+
+        assert var("foo", "bar") == "bar"
+        with pytest.raises(dbt_common.exceptions.CompilationError):
             var("foo")
 
-    def test_parser_var_default_something(self):
-        self.config.cli_vars = {"foo": "baz"}
-        var = providers.ParseVar(self.context, self.config, self.model)
-        self.assertEqual(var("foo"), "baz")
-        self.assertEqual(var("foo", "bar"), "baz")
+    def test_parser_var_default_something(self, model, config, context):
+        config.cli_vars = {"foo": "baz"}
+        var = providers.ParseVar(context, config, model)
+        assert var("foo") == "baz"
+        assert var("foo", "bar") == "baz"
 
-    def test_parser_var_default_none(self):
-        self.config.cli_vars = {"foo": None}
-        var = providers.ParseVar(self.context, self.config, self.model)
-        self.assertEqual(var("foo"), None)
-        self.assertEqual(var("foo", "bar"), None)
+    def test_parser_var_default_none(self, model, config, context):
+        config.cli_vars = {"foo": None}
+        var = providers.ParseVar(context, config, model)
+        assert var("foo") is None
+        assert var("foo", "bar") is None
 
-    def test_parser_var_not_defined(self):
+    def test_parser_var_not_defined(self, model, config, context):
         # at parse-time, we should not raise if we encounter a missing var
         # that way disabled models don't get parse errors
-        var = providers.ParseVar(self.context, self.config, self.model)
+        var = providers.ParseVar(context, config, model)
 
-        self.assertEqual(var("foo", "bar"), "bar")
-        self.assertEqual(var("foo"), None)
+        assert var("foo", "bar") == "bar"
+        assert var("foo") is None
 
 
-class TestParseWrapper(unittest.TestCase):
-    def setUp(self):
-        self.mock_config = mock.MagicMock()
-        self.mock_mp_context = mock.MagicMock()
+class TestParseWrapper:
+    @pytest.fixture
+    def mock_adapter(self):
+        mock_config = mock.MagicMock()
+        mock_mp_context = mock.MagicMock()
         adapter_class = adapter_factory()
-        self.mock_adapter = adapter_class(self.mock_config, self.mock_mp_context)
-        self.namespace = mock.MagicMock()
-        self.wrapper = providers.ParseDatabaseWrapper(self.mock_adapter, self.namespace)
-        self.responder = self.mock_adapter.responder
+        return adapter_class(mock_config, mock_mp_context)
 
-    def test_unwrapped_method(self):
-        self.assertEqual(self.wrapper.quote("test_value"), '"test_value"')
-        self.responder.quote.assert_called_once_with("test_value")
+    @pytest.fixture
+    def wrapper(self, mock_adapter):
+        namespace = mock.MagicMock()
+        return providers.ParseDatabaseWrapper(mock_adapter, namespace)
 
-    def test_wrapped_method(self):
-        found = self.wrapper.get_relation("database", "schema", "identifier")
-        self.assertEqual(found, None)
-        self.responder.get_relation.assert_not_called()
+    @pytest.fixture
+    def responder(self, mock_adapter):
+        return mock_adapter.responder
+
+    def test_unwrapped_method(self, wrapper, responder):
+        assert wrapper.quote("test_value") == '"test_value"'
+        responder.quote.assert_called_once_with("test_value")
+
+    def test_wrapped_method(self, wrapper, responder):
+        found = wrapper.get_relation("database", "schema", "identifier")
+        assert found is None
+        responder.get_relation.assert_not_called()
 
 
-class TestRuntimeWrapper(unittest.TestCase):
-    def setUp(self):
-        self.mock_config = mock.MagicMock()
-        self.mock_mp_context = mock.MagicMock()
-        self.mock_config.quoting = {
+class TestRuntimeWrapper:
+    @pytest.fixture
+    def mock_adapter(self):
+        mock_config = mock.MagicMock()
+        mock_config.quoting = {
             "database": True,
             "schema": True,
             "identifier": True,
         }
+        mock_mp_context = mock.MagicMock()
         adapter_class = adapter_factory()
-        self.mock_adapter = adapter_class(self.mock_config, self.mock_mp_context)
-        self.namespace = mock.MagicMock()
-        self.wrapper = providers.RuntimeDatabaseWrapper(self.mock_adapter, self.namespace)
-        self.responder = self.mock_adapter.responder
+        return adapter_class(mock_config, mock_mp_context)
 
-    def test_unwrapped_method(self):
+    @pytest.fixture
+    def wrapper(self, mock_adapter):
+        namespace = mock.MagicMock()
+        return providers.RuntimeDatabaseWrapper(mock_adapter, namespace)
+
+    @pytest.fixture
+    def responder(self, mock_adapter):
+        return mock_adapter.responder
+
+    def test_unwrapped_method(self, wrapper, responder):
         # the 'quote' method isn't wrapped, we should get our expected inputs
-        self.assertEqual(self.wrapper.quote("test_value"), '"test_value"')
-        self.responder.quote.assert_called_once_with("test_value")
+        assert wrapper.quote("test_value") == '"test_value"'
+        responder.quote.assert_called_once_with("test_value")
 
 
 def assert_has_keys(required_keys: Set[str], maybe_keys: Set[str], ctx: Dict[str, Any]):
@@ -417,7 +441,7 @@ def postgres_adapter(config_postgres, get_adapter):
 
 
 def test_query_header_context(config_postgres, manifest_fx):
-    ctx = manifest.generate_query_header_context(
+    ctx = query_header.generate_query_header_context(
         config=config_postgres,
         manifest=manifest_fx,
     )
