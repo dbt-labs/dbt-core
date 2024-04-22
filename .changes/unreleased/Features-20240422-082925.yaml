@@ -1,0 +1,6 @@
+kind: Features
+body: Allows snapshots to take a list as a unique_key
+time: 2024-04-22T08:29:25.458309-04:00
+custom:
+  Author: agpapa
+  Issue: "9992"
