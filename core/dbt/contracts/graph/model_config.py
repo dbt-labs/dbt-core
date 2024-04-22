@@ -1,5 +1,5 @@
 from dataclasses import field, dataclass
-from typing import Any, List, Optional, Dict, Type
+from typing import Any, List, Optional, Dict, Type, Union
 
 from dbt.artifacts.resources import (
     ExposureConfig,
@@ -42,7 +42,7 @@ class UnitTestNodeConfig(NodeConfig):
 @dataclass
 class EmptySnapshotConfig(NodeConfig):
     materialized: str = "snapshot"
-    unique_key: Optional[str] = None  # override NodeConfig unique_key definition
+    unique_key: Union[str, List[str], None] = None  # override NodeConfig unique_key definition
 
 
 RESOURCE_TYPES: Dict[NodeType, Type[BaseConfig]] = {
