@@ -108,13 +108,6 @@ class GraphRunnableTask(ConfiguredTask):
 
     def get_selection_spec(self) -> SelectionSpec:
         default_selector_name = self.config.get_default_selector_name()
-        # TODO:  The "eager" string below needs to be replaced with programatic access
-        #  to the default value for the indirect selection parameter in
-        # dbt.cli.params.indirect_selection
-        #
-        # Doing that is actually a little tricky, so I'm punting it to a new ticket GH #6397
-        indirect_selection = getattr(self.args, "INDIRECT_SELECTION", "eager")
-
         if self.args.selector:
             # use pre-defined selector (--selector)
             spec = self.config.get_selector(self.args.selector)
@@ -125,7 +118,7 @@ class GraphRunnableTask(ConfiguredTask):
         else:
             # This is what's used with no default selector and no selection
             # use --select and --exclude args
-            spec = parse_difference(self.selection_arg, self.exclusion_arg, indirect_selection)
+            spec = parse_difference(self.selection_arg, self.exclusion_arg)
         # mypy complains because the return values of get_selector and parse_difference
         # are different
         return spec  # type: ignore

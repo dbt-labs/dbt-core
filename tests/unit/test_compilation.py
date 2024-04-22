@@ -75,7 +75,7 @@ class LinkerTest(unittest.TestCase):
         # dbt.cli.params.indirect_selection
         #
         # Doing that is actually a little tricky, so I'm punting it to a new ticket GH #6397
-        spec = parse_difference(include, exclude, "eager")
+        spec = parse_difference(include, exclude)
         return selector.get_graph_queue(spec)
 
     def test_linker_add_dependency(self):
