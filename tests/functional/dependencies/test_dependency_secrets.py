@@ -5,12 +5,12 @@ from dbt.tests.util import run_dbt_and_capture
 from dbt_common.constants import SECRET_ENV_PREFIX
 
 
-class TestAllowSecretProfilePackage:
+class TestSecretInPackage:
     @pytest.fixture(scope="class", autouse=True)
     def setUp(self):
-        os.environ[SECRET_ENV_PREFIX + "FOR_LOGGING"] = "super secret"
+        os.environ[SECRET_ENV_PREFIX + "_FOR_LOGGING"] = "super secret"
         yield
-        del os.environ[SECRET_ENV_PREFIX + "FOR_LOGGING"]
+        del os.environ[SECRET_ENV_PREFIX + "_FOR_LOGGING"]
 
     @pytest.fixture(scope="class")
     def packages(self):
@@ -23,7 +23,7 @@ class TestAllowSecretProfilePackage:
             ]
         }
 
-    def test_allow_secrets(self, project):
+    def test_mask_secrets(self, project):
         _, log_output = run_dbt_and_capture(["deps"])
         # this will not be written to logs
         assert not ("super secret" in log_output)
