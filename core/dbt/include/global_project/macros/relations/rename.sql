@@ -1,4 +1,12 @@
 {%- macro get_rename_sql(relation, new_name) -%}
+    {% set database = relation.database %}
+    {% set schema = relation.schema %}
+    {% set to_relation = adapter.get_relation(database=database, schema=schema, identifier=new_name) %}
+    {% if relation is not none %}
+        {% if to_relation is not none %}
+            {{ adapter.cache_renamed(from_relation=relation, to_relation=to_relation) }}
+        {% endif %}
+    {% endif %}
     {{- log('Applying RENAME to: ' ~ relation) -}}
     {{- adapter.dispatch('get_rename_sql', 'dbt')(relation, new_name) -}}
 {%- endmacro -%}
