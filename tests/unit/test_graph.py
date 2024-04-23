@@ -16,6 +16,7 @@ import dbt.utils
 import dbt.parser.manifest
 from dbt import tracking
 from dbt.contracts.files import SourceFile, FileHash, FilePath
+from dbt.contracts.project import ProjectFlags
 from dbt.contracts.graph.manifest import MacroManifest, ManifestStateCheck
 from dbt.graph import NodeSelector, parse_difference
 from dbt.events.functions import setup_event_logger
@@ -130,7 +131,7 @@ class GraphTest(unittest.TestCase):
         cfg.update(extra_cfg)
 
         config = config_from_parts_or_dicts(project=cfg, profile=self.profile)
-        dbt.flags.set_from_args(Namespace(), config)
+        dbt.flags.set_from_args(Namespace(), ProjectFlags())
         setup_event_logger(dbt.flags.get_flags())
         object.__setattr__(dbt.flags.get_flags(), "PARTIAL_PARSE", False)
         return config

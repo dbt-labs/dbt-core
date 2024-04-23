@@ -305,6 +305,10 @@ class ProjectFlags(ExtensibleDbtClassMixin, Replaceable):
     warn_error_options: Optional[Dict[str, Union[str, List[str]]]] = None
     write_json: Optional[bool] = None
 
+    @property
+    def project_only_flags(self) -> Dict[str, Any]:
+        return {}
+
 
 @dataclass
 class ProfileConfig(dbtClassMixin, Replaceable):
