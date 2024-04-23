@@ -1,5 +1,5 @@
 kind: Features
-body: Add flags.deprecate_package_materialization_builtin_override
+body: Add deprecate_package_materialization_builtin_override to dbt_project.yml flags, which can be used to opt-out of overriding built-in materializations from packages
 time: 2024-04-22T17:37:03.892268-04:00
 custom:
   Author: michelleark
