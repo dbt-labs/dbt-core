@@ -1239,7 +1239,7 @@ def test_find_generate_macros_by_name(macros, expectations):
 FindMaterializationSpec = namedtuple("FindMaterializationSpec", "macros,adapter_type,expected")
 
 
-def _materialization_parameter_sets():
+def _materialization_parameter_sets_legacy():
     # inject the plugins used for materialization parameter tests
     with mock.patch("dbt.adapters.base.plugin.project_name_from_path") as get_name:
         get_name.return_value = "foo"
@@ -1388,10 +1388,185 @@ def id_mat(arg):
 
 @pytest.mark.parametrize(
     "macros,adapter_type,expected",
+    _materialization_parameter_sets_legacy(),
+    ids=id_mat,
+)
+def test_find_materialization_by_name_legacy(macros, adapter_type, expected):
+    set_from_args(
+        Namespace(
+            SEND_ANONYMOUS_USAGE_STATS=False,
+            REQUIRE_EXPLICIT_PACKAGE_OVERRIDES_FOR_BUILTIN_MATERIALIZATIONS=False,
+        ),
+        None,
+    )
+
+    manifest = make_manifest(macros=macros)
+    result = manifest.find_materialization_macro_by_name(
+        project_name="root",
+        materialization_name="my_materialization",
+        adapter_type=adapter_type,
+    )
+    if expected is None:
+        assert result is expected
+    else:
+        expected_package, expected_adapter_type = expected
+        assert result.adapter_type == expected_adapter_type
+        assert result.package_name == expected_package
+
+
+def _materialization_parameter_sets():
+    # inject the plugins used for materialization parameter tests
+    with mock.patch("dbt.adapters.base.plugin.project_name_from_path") as get_name:
+        get_name.return_value = "foo"
+        FooPlugin = AdapterPlugin(
+            adapter=mock.MagicMock(),
+            credentials=mock.MagicMock(),
+            include_path="/path/to/root/plugin",
+        )
+        FooPlugin.adapter.type.return_value = "foo"
+        inject_plugin(FooPlugin)
+
+        BarPlugin = AdapterPlugin(
+            adapter=mock.MagicMock(),
+            credentials=mock.MagicMock(),
+            include_path="/path/to/root/plugin",
+            dependencies=["foo"],
+        )
+        BarPlugin.adapter.type.return_value = "bar"
+        inject_plugin(BarPlugin)
+
+        sets = [
+            FindMaterializationSpec(macros=[], adapter_type="foo", expected=None),
+        ]
+
+        # default only, each project
+        sets.extend(
+            FindMaterializationSpec(
+                macros=[MockMaterialization(project, adapter_type=None)],
+                adapter_type="foo",
+                expected=(project, "default"),
+            )
+            for project in ["root", "dep", "dbt"]
+        )
+
+        # other type only, each project
+        sets.extend(
+            FindMaterializationSpec(
+                macros=[MockMaterialization(project, adapter_type="bar")],
+                adapter_type="foo",
+                expected=None,
+            )
+            for project in ["root", "dep", "dbt"]
+        )
+
+        # matching type only, each project
+        sets.extend(
+            FindMaterializationSpec(
+                macros=[MockMaterialization(project, adapter_type="foo")],
+                adapter_type="foo",
+                expected=(project, "foo"),
+            )
+            for project in ["root", "dep", "dbt"]
+        )
+
+        sets.extend(
+            [
+                # matching type and default everywhere
+                FindMaterializationSpec(
+                    macros=[
+                        MockMaterialization(project, adapter_type=atype)
+                        for (project, atype) in product(["root", "dep", "dbt"], ["foo", None])
+                    ],
+                    adapter_type="foo",
+                    expected=("root", "foo"),
+                ),
+                # default in core, override is in dep, and root has unrelated override
+                # should find the dbt default because default materializations cannot be overwritten by packages.
+                FindMaterializationSpec(
+                    macros=[
+                        MockMaterialization("root", adapter_type="bar"),
+                        MockMaterialization("dep", adapter_type="foo"),
+                        MockMaterialization("dbt", adapter_type=None),
+                    ],
+                    adapter_type="foo",
+                    expected=("dbt", "default"),
+                ),
+                # default in core, unrelated override is in dep, and root has an override
+                # should find the root override.
+                FindMaterializationSpec(
+                    macros=[
+                        MockMaterialization("root", adapter_type="foo"),
+                        MockMaterialization("dep", adapter_type="bar"),
+                        MockMaterialization("dbt", adapter_type=None),
+                    ],
+                    adapter_type="foo",
+                    expected=("root", "foo"),
+                ),
+                # default in core, override is in dep, and root has an override too.
+                # should find the root override.
+                FindMaterializationSpec(
+                    macros=[
+                        MockMaterialization("root", adapter_type="foo"),
+                        MockMaterialization("dep", adapter_type="foo"),
+                        MockMaterialization("dbt", adapter_type=None),
+                    ],
+                    adapter_type="foo",
+                    expected=("root", "foo"),
+                ),
+                # core has default + adapter, dep has adapter, root has default
+                # should find the default adapter implementation, because it's the most specific
+                # and default materializations cannot be overwritten by packages
+                FindMaterializationSpec(
+                    macros=[
+                        MockMaterialization("root", adapter_type=None),
+                        MockMaterialization("dep", adapter_type="foo"),
+                        MockMaterialization("dbt", adapter_type=None),
+                        MockMaterialization("dbt", adapter_type="foo"),
+                    ],
+                    adapter_type="foo",
+                    expected=("dbt", "foo"),
+                ),
+            ]
+        )
+
+        # inherit from parent adapter
+        sets.extend(
+            FindMaterializationSpec(
+                macros=[MockMaterialization(project, adapter_type="foo")],
+                adapter_type="bar",
+                expected=(project, "foo"),
+            )
+            for project in ["root", "dep", "dbt"]
+        )
+        sets.extend(
+            FindMaterializationSpec(
+                macros=[
+                    MockMaterialization(project, adapter_type="foo"),
+                    MockMaterialization(project, adapter_type="bar"),
+                ],
+                adapter_type="bar",
+                expected=(project, "bar"),
+            )
+            for project in ["root", "dep", "dbt"]
+        )
+
+        return sets
+
+
+@pytest.mark.parametrize(
+    "macros,adapter_type,expected",
     _materialization_parameter_sets(),
     ids=id_mat,
 )
 def test_find_materialization_by_name(macros, adapter_type, expected):
+    set_from_args(
+        Namespace(
+            SEND_ANONYMOUS_USAGE_STATS=False,
+            REQUIRE_EXPLICIT_PACKAGE_OVERRIDES_FOR_BUILTIN_MATERIALIZATIONS=True,
+        ),
+        None,
+    )
+
     manifest = make_manifest(macros=macros)
     result = manifest.find_materialization_macro_by_name(
         project_name="root",

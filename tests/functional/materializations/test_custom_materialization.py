@@ -44,10 +44,106 @@ class TestOverrideAdapterDependency:
         assert deprecations.active_deprecations == {"package-materialization-override"}
 
 
+class TestOverrideAdapterDependencyDeprecated:
+    # make sure that if there's a dependency with an adapter-specific
+    # materialization, we honor that materialization
+    @pytest.fixture(scope="class")
+    def packages(self):
+        return {"packages": [{"local": "override-view-adapter-dep"}]}
+
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "flags": {
+                "require_explicit_package_overrides_for_builtin_materializations": True,
+            },
+        }
+
+    def test_adapter_dependency_deprecate_overrides(
+        self, project, override_view_adapter_dep, set_up_deprecations
+    ):
+        run_dbt(["deps"])
+        # this should pass because the override is buggy and unused
+        run_dbt(["run"])
+
+        # no deprecation warning -- flag used correctly
+        assert deprecations.active_deprecations == set()
+
+
+class TestOverrideAdapterDependencyLegacy:
+    # make sure that if there's a dependency with an adapter-specific
+    # materialization, we honor that materialization
+    @pytest.fixture(scope="class")
+    def packages(self):
+        return {"packages": [{"local": "override-view-adapter-dep"}]}
+
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "flags": {
+                "require_explicit_package_overrides_for_builtin_materializations": False,
+            },
+        }
+
+    def test_adapter_dependency(self, project, override_view_adapter_dep, set_up_deprecations):
+        run_dbt(["deps"])
+        # this should error because the override is buggy
+        run_dbt(["run"], expect_pass=False)
+
+        # overriding a built-in materialization scoped to adapter from package is deprecated
+        assert deprecations.active_deprecations == {"package-materialization-override"}
+
+
 class TestOverrideDefaultDependency:
     @pytest.fixture(scope="class")
     def packages(self):
         return {"packages": [{"local": "override-view-default-dep"}]}
+
+    def test_default_dependency(self, project, override_view_default_dep, set_up_deprecations):
+        run_dbt(["deps"])
+        # this should error because the override is buggy
+        run_dbt(["run"], expect_pass=False)
+
+        # overriding a built-in materialization from package is deprecated
+        assert deprecations.active_deprecations == {"package-materialization-override"}
+
+
+class TestOverrideDefaultDependencyDeprecated:
+    @pytest.fixture(scope="class")
+    def packages(self):
+        return {"packages": [{"local": "override-view-default-dep"}]}
+
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "flags": {
+                "require_explicit_package_overrides_for_builtin_materializations": True,
+            },
+        }
+
+    def test_default_dependency_deprecated(
+        self, project, override_view_default_dep, set_up_deprecations
+    ):
+        run_dbt(["deps"])
+        # this should pass because the override is buggy and unused
+        run_dbt(["run"])
+
+        # overriding a built-in materialization from package is deprecated
+        assert deprecations.active_deprecations == set()
+
+
+class TestOverrideDefaultDependencyLegacy:
+    @pytest.fixture(scope="class")
+    def packages(self):
+        return {"packages": [{"local": "override-view-default-dep"}]}
+
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "flags": {
+                "require_explicit_package_overrides_for_builtin_materializations": False,
+            },
+        }
 
     def test_default_dependency(self, project, override_view_default_dep, set_up_deprecations):
         run_dbt(["deps"])

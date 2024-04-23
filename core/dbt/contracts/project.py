@@ -295,6 +295,7 @@ class ProjectFlags(ExtensibleDbtClassMixin, Replaceable):
     partial_parse: Optional[bool] = None
     populate_cache: Optional[bool] = None
     printer_width: Optional[int] = None
+    require_explicit_package_overrides_for_builtin_materializations: bool = False
     send_anonymous_usage_stats: bool = DEFAULT_SEND_ANONYMOUS_USAGE_STATS
     static_parser: Optional[bool] = None
     use_colors: Optional[bool] = None
@@ -307,7 +308,9 @@ class ProjectFlags(ExtensibleDbtClassMixin, Replaceable):
 
     @property
     def project_only_flags(self) -> Dict[str, Any]:
-        return {}
+        return {
+            "require_explicit_package_overrides_for_builtin_materializations": self.require_explicit_package_overrides_for_builtin_materializations,
+        }
 
 
 @dataclass
