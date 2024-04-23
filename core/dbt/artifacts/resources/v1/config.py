@@ -1,3 +1,5 @@
+import re
+
 from dbt_common.dataclass_schema import dbtClassMixin, ValidationError
 from typing import Optional, List, Any, Dict, Union
 from typing_extensions import Annotated
@@ -250,6 +252,12 @@ class TestConfig(NodeAndTestConfig):
 
     @classmethod
     def validate(cls, data):
+        if data.get("severity") and not re.match(SEVERITY_PATTERN, data.get("severity")):
+            raise ValidationError(
+                f"Severity must be either 'warn' or 'error'. Got '{data.get('severity')}'"
+            )
+
         super().validate(data)
+
         if data.get("materialized") and data.get("materialized") != "test":
             raise ValidationError("A test must have a materialized value of 'test'")

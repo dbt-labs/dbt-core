@@ -273,6 +273,22 @@ models:
                 arg: 100
 """
 
+SINGLE_TABLE_MODEL_TESTS_WRONG_SEVERITY = """
+models:
+    - name: my_model
+      description: A description of my model
+      columns:
+        - name: color
+          description: The color value
+          data_tests:
+            - not_null:
+                severity: WARNING
+            - accepted_values:
+                values: ['red', 'blue', 'green']
+            - foreign_package.test_case:
+                arg: 100
+"""
+
 
 MULTIPLE_TABLE_VERSIONED_MODEL_TESTS = """
 models:
@@ -576,6 +592,11 @@ class SchemaParserModelsTest(SchemaParserTest):
         self.parser.parse_file(block, dct)
         self.assertEqual(len(list(self.parser.manifest.sources)), 0)
         self.assertEqual(len(list(self.parser.manifest.nodes)), 4)
+
+    def test__read_basic_model_tests_wrong_severity(self):
+        block = self.yaml_block_for(SINGLE_TABLE_MODEL_TESTS_WRONG_SEVERITY, "test_one.yml")
+        dct = yaml_from_file(block.file)
+        self.parser.parse_file(block, dct)
 
     def test__parse_basic_model_tests(self):
         block = self.file_block_for(SINGLE_TABLE_MODEL_TESTS, "test_one.yml")
