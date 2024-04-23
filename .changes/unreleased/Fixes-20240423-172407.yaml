@@ -1,0 +1,6 @@
+kind: Fixes
+body: remove materialized views from renambeable relation and remove a quote
+time: 2024-04-23T17:24:07.249421-05:00
+custom:
+  Author: McKnight-42
+  Issue: "127"
