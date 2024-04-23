@@ -137,7 +137,7 @@ class TestAllowSecretProfilePackage(FirstDependencyProject):
 class TestCloneFailSecretScrubbed:
     @pytest.fixture(scope="class", autouse=True)
     def setup(self):
-        os.environ[SECRET_ENV_PREFIX + "GIT_TOKEN"] = "abc123"
+        os.environ[SECRET_ENV_PREFIX + "_GIT_TOKEN"] = "abc123"
 
     @pytest.fixture(scope="class")
     def models(self):
