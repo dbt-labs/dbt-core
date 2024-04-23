@@ -55,7 +55,7 @@ class TestOverrideAdapterDependencyDeprecated:
     def project_config_update(self):
         return {
             "flags": {
-                "deprecate_package_materialization_builtin_override": True,
+                "require_explicit_package_overrides_for_builtin_materializations": True,
             },
         }
 
@@ -81,7 +81,7 @@ class TestOverrideAdapterDependencyLegacy:
     def project_config_update(self):
         return {
             "flags": {
-                "deprecate_package_materialization_builtin_override": False,
+                "require_explicit_package_overrides_for_builtin_materializations": False,
             },
         }
 
@@ -117,7 +117,7 @@ class TestOverrideDefaultDependencyDeprecated:
     def project_config_update(self):
         return {
             "flags": {
-                "deprecate_package_materialization_builtin_override": True,
+                "require_explicit_package_overrides_for_builtin_materializations": True,
             },
         }
 
@@ -141,7 +141,7 @@ class TestOverrideDefaultDependencyLegacy:
     def project_config_update(self):
         return {
             "flags": {
-                "deprecate_package_materialization_builtin_override": False,
+                "require_explicit_package_overrides_for_builtin_materializations": False,
             },
         }
 

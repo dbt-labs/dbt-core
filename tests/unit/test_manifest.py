@@ -1395,7 +1395,7 @@ def test_find_materialization_by_name_legacy(macros, adapter_type, expected):
     set_from_args(
         Namespace(
             SEND_ANONYMOUS_USAGE_STATS=False,
-            DEPRECATE_PACKAGE_MATERIALIZATION_BUILTIN_OVERRIDE=False,
+            REQUIRE_EXPLICIT_PACKAGE_OVERRIDES_FOR_BUILTIN_MATERIALIZATIONS=False,
         ),
         None,
     )
@@ -1562,7 +1562,7 @@ def test_find_materialization_by_name(macros, adapter_type, expected):
     set_from_args(
         Namespace(
             SEND_ANONYMOUS_USAGE_STATS=False,
-            DEPRECATE_PACKAGE_MATERIALIZATION_BUILTIN_OVERRIDE=True,
+            REQUIRE_EXPLICIT_PACKAGE_OVERRIDES_FOR_BUILTIN_MATERIALIZATIONS=True,
         ),
         None,
     )

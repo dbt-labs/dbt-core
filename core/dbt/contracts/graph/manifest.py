@@ -961,7 +961,10 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             and core_candidates
         ):
             # preserve legacy behaviour - allow materialization override
-            if get_flags().deprecate_package_materialization_builtin_override is False:
+            if (
+                get_flags().require_explicit_package_overrides_for_builtin_materializations
+                is False
+            ):
                 deprecations.warn(
                     "package-materialization-override",
                     package_name=materialization_candidate.macro.package_name,
