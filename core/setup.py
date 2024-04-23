@@ -25,7 +25,7 @@ with open(os.path.join(this_directory, "README.md")) as f:
 
 
 package_name = "dbt-core"
-package_version = "1.7.12"
+package_version = "1.7.13"
 description = """With dbt, data analysts and engineers can build analytics \
 the way engineers build applications."""
 
@@ -68,7 +68,7 @@ setup(
         "pathspec>=0.9,<0.12",
         "isodate>=0.6,<0.7",
         # ----
-        "sqlparse>=0.2.3,<0.5",
+        "sqlparse>=0.5.0,<0.6.0",
         # ----
         # These are major-version-0 packages also maintained by dbt-labs. Accept patches.
         "dbt-extractor~=0.5.0",
