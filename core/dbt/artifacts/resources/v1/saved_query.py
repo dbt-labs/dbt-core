@@ -21,6 +21,7 @@ class ExportConfig(dbtClassMixin):
     export_as: ExportDestinationType
     schema_name: Optional[str] = None
     alias: Optional[str] = None
+    database: Optional[str] = None
 
 
 @dataclass

@@ -422,6 +422,17 @@ message TotalModelNamesWithSpacesDeprecation {
     string level = 3;
 }
 
+// D016
+message PackageMaterializationOverrideDeprecation {
+    string package_name = 1;
+    string materialization_name = 2;
+}
+
+message PackageMaterializationOverrideDeprecationMsg {
+    CoreEventInfo info = 1;
+    PackageMaterializationOverrideDeprecation data = 2;
+}
+
 message TotalModelNamesWithSpacesDeprecationMsg {
     CoreEventInfo info = 1;
     TotalModelNamesWithSpacesDeprecation data = 2;
