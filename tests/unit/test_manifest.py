@@ -1392,6 +1392,14 @@ def id_mat(arg):
     ids=id_mat,
 )
 def test_find_materialization_by_name(macros, adapter_type, expected):
+    set_from_args(
+        Namespace(
+            SEND_ANONYMOUS_USAGE_STATS=False,
+            DEPRECATE_PACKAGE_MATERIALIZATION_BUILTIN_OVERRIDE=False,
+        ),
+        None,
+    )
+
     manifest = make_manifest(macros=macros)
     result = manifest.find_materialization_macro_by_name(
         project_name="root",
