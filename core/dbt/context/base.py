@@ -11,7 +11,8 @@ from dbt import tracking
 from dbt import utils
 from dbt.clients.jinja import get_rendered
 from dbt.clients.yaml_helper import yaml, safe_load, SafeLoader, Loader, Dumper  # noqa: F401
-from dbt.constants import SECRET_ENV_PREFIX, DEFAULT_ENV_PLACEHOLDER, SECRET_PLACEHOLDER
+from dbt_common.constants import SECRET_ENV_PREFIX
+from dbt.constants import DEFAULT_ENV_PLACEHOLDER, SECRET_PLACEHOLDER
 from dbt.contracts.graph.nodes import Resource
 from dbt.exceptions import (
     SecretEnvVarLocationError,

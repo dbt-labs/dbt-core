@@ -1,7 +1,8 @@
 import pytest
 import os
 
-from dbt.constants import SECRET_ENV_PREFIX, DEFAULT_ENV_PLACEHOLDER
+from dbt_common.constants import SECRET_ENV_PREFIX
+from dbt.constants import DEFAULT_ENV_PLACEHOLDER
 from dbt.tests.util import run_dbt, get_manifest, run_dbt_and_capture
 
 

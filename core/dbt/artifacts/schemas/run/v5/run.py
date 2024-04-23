@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 
-from dbt.constants import SECRET_ENV_PREFIX
+from dbt_common.constants import SECRET_ENV_PREFIX
 from dbt.artifacts.resources import CompiledResource
 from dbt.artifacts.schemas.base import (
     BaseArtifactMetadata,

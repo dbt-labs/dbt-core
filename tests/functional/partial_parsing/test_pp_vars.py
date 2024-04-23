@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 
 import pytest
-from dbt.constants import SECRET_ENV_PREFIX
+from dbt_common.constants import SECRET_ENV_PREFIX
 from dbt.exceptions import ParsingError
 from dbt.adapters.exceptions import FailedToConnectError
 from dbt.tests.util import get_manifest, run_dbt, run_dbt_and_capture, write_file

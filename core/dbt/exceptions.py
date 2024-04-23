@@ -17,7 +17,7 @@ from dbt.node_types import NodeType, AccessType, REFABLE_NODE_TYPES
 
 from dbt_common.dataclass_schema import ValidationError
 
-from dbt.constants import SECRET_ENV_PREFIX
+from dbt_common.constants import SECRET_ENV_PREFIX
 
 
 if TYPE_CHECKING:

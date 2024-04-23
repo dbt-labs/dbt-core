@@ -44,8 +44,8 @@ from dbt.constants import (
     MANIFEST_FILE_NAME,
     PARTIAL_PARSE_FILE_NAME,
     SEMANTIC_MANIFEST_FILE_NAME,
-    SECRET_ENV_PREFIX,
 )
+from dbt_common.constants import SECRET_ENV_PREFIX
 from dbt_common.helper_types import PathSet
 from dbt_common.events.functions import fire_event, get_invocation_id, warn_or_error
 from dbt_common.events.types import (
