@@ -15,6 +15,9 @@ import dbt.tracking
 import dbt.utils
 from dbt.adapters.base import BaseRelation
 from dbt.adapters.factory import get_adapter
+from dbt.cli.flags import Flags
+from dbt.config.runtime import RuntimeConfig
+from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import ResultNode
 from dbt.artifacts.schemas.results import NodeStatus, RunningStatus, RunStatus, BaseResult
 from dbt.artifacts.schemas.run import RunExecutionResult, RunResult
@@ -31,6 +34,7 @@ from dbt.events.types import (
     ConcurrencyLine,
     EndRunResult,
     NothingToDo,
+    GenericExceptionOnRun,
 )
 from dbt.exceptions import (
     DbtInternalError,
@@ -49,7 +53,6 @@ from dbt.logger import (
     ModelMetadata,
     NodeCount,
 )
-from dbt.node_types import NodeType
 from dbt.parser.manifest import write_manifest
 from dbt.task.base import ConfiguredTask, BaseRunner
 from .printer import (
@@ -64,8 +67,9 @@ RUNNING_STATE = DbtProcessState("running")
 class GraphRunnableTask(ConfiguredTask):
     MARK_DEPENDENT_ERRORS_STATUSES = [NodeStatus.Error]
 
-    def __init__(self, args, config, manifest) -> None:
+    def __init__(self, args: Flags, config: RuntimeConfig, manifest: Manifest) -> None:
         super().__init__(args, config, manifest)
+        self.config = config
         self._flattened_nodes: Optional[List[ResultNode]] = None
         self._raise_next_tick: Optional[DbtRuntimeError] = None
         self._skipped_children: Dict[str, Optional[RunResult]] = {}
@@ -116,7 +120,9 @@ class GraphRunnableTask(ConfiguredTask):
             # This is what's used with no default selector and no selection
             # use --select and --exclude args
             spec = parse_difference(self.selection_arg, self.exclusion_arg, indirect_selection)
-        return spec
+        # mypy complains because the return values of get_selector and parse_difference
+        # are different
+        return spec  # type: ignore
 
     @abstractmethod
     def get_node_selector(self) -> NodeSelector:
@@ -195,23 +201,47 @@ class GraphRunnableTask(ConfiguredTask):
                     )
                 )
             status: Dict[str, str] = {}
+            result = None
+            thread_exception = None
             try:
                 result = runner.run_with_hooks(self.manifest)
-            except Exception as exc:
-                raise DbtInternalError(f"Unable to execute node: {exc}")
+            except Exception as e:
+                thread_exception = e
             finally:
                 finishctx = TimestampNamed("finished_at")
                 with finishctx, DbtModelState(status):
-                    fire_event(
-                        NodeFinished(
-                            node_info=runner.node.node_info,
-                            run_result=result.to_msg_dict(),
+                    if result is not None:
+                        fire_event(
+                            NodeFinished(
+                                node_info=runner.node.node_info,
+                                run_result=result.to_msg_dict(),
+                            )
                         )
-                    )
+                    else:
+                        msg = f"Exception on worker thread. {thread_exception}"
+
+                        fire_event(
+                            GenericExceptionOnRun(
+                                unique_id=runner.node.unique_id,
+                                exc=str(thread_exception),
+                                node_info=runner.node.node_info,
+                            )
+                        )
+
+                        result = RunResult(
+                            status=RunStatus.Error,  # type: ignore
+                            timing=[],
+                            thread_id="",
+                            execution_time=0.0,
+                            adapter_response={},
+                            message=msg,
+                            failures=None,
+                            node=runner.node,
+                        )
+
             # `_event_status` dict is only used for logging.  Make sure
-            # it gets deleted when we're done with it, except for unit tests
-            if not runner.node.resource_type == NodeType.Unit:
-                runner.node.clear_event_status()
+            # it gets deleted when we're done with it
+            runner.node.clear_event_status()
 
         fail_fast = get_flags().FAIL_FAST
 
@@ -572,7 +602,9 @@ class GraphRunnableTask(ConfiguredTask):
         list_futures = []
         create_futures = []
 
-        with dbt_common.utils.executor(self.config) as tpe:
+        # TODO: following has a mypy issue because profile and project config
+        # defines threads as int and HasThreadingConfig defines it as Optional[int]
+        with dbt_common.utils.executor(self.config) as tpe:  # type: ignore
             for req in required_databases:
                 if req.database is None:
                     name = "list_schemas"

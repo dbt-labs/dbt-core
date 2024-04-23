@@ -118,6 +118,11 @@ class ProjectFlagsMovedDeprecation(DBTDeprecation):
             active_deprecations.add(self.name)
 
 
+class PackageMaterializationOverrideDeprecation(DBTDeprecation):
+    _name = "package-materialization-override"
+    _event = "PackageMaterializationOverrideDeprecation"
+
+
 def renamed_env_var(old_name: str, new_name: str):
     class EnvironmentVariableRenamed(DBTDeprecation):
         _name = f"environment-variable-renamed:{old_name}"
@@ -157,6 +162,7 @@ deprecations_list: List[DBTDeprecation] = [
     CollectFreshnessReturnSignature(),
     TestsConfigDeprecation(),
     ProjectFlagsMovedDeprecation(),
+    PackageMaterializationOverrideDeprecation(),
 ]
 
 deprecations: Dict[str, DBTDeprecation] = {d.name: d for d in deprecations_list}

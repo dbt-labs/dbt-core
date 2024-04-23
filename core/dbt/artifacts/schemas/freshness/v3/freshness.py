@@ -107,7 +107,11 @@ class FreshnessExecutionResultArtifact(
 
     @classmethod
     def from_result(cls, base: FreshnessResult):
-        processed = [process_freshness_result(r) for r in base.results]
+        processed = [
+            process_freshness_result(r)
+            for r in base.results
+            if isinstance(r, SourceFreshnessResult)
+        ]
         return cls(
             metadata=base.metadata,
             results=processed,

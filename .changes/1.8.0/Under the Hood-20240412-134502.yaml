@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Migrate to using `error_tag` provided by `dbt-common`
+time: 2024-04-12T13:45:02.879023-07:00
+custom:
+  Author: QMalcolm
+  Issue: "9914"

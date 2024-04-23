@@ -20,10 +20,11 @@ from typing import (
 from itertools import chain
 import time
 
-from dbt.context.manifest import generate_query_header_context
+from dbt.context.query_header import generate_query_header_context
 from dbt.contracts.graph.semantic_manifest import SemanticManifest
 from dbt.contracts.state import PreviousState
 from dbt_common.events.base_types import EventLevel
+from dbt_common.exceptions.base import DbtValidationError
 import dbt_common.utils
 import json
 import pprint
@@ -45,6 +46,7 @@ from dbt.constants import (
     MANIFEST_FILE_NAME,
     PARTIAL_PARSE_FILE_NAME,
     SEMANTIC_MANIFEST_FILE_NAME,
+    SECRET_ENV_PREFIX,
 )
 from dbt_common.helper_types import PathSet
 from dbt_common.events.functions import fire_event, get_invocation_id, warn_or_error
@@ -64,6 +66,8 @@ from dbt.events.types import (
     StateCheckVarsHash,
     DeprecatedModel,
     DeprecatedReference,
+    SpacesInModelNameDeprecation,
+    TotalModelNamesWithSpacesDeprecation,
     UpcomingReferenceDeprecation,
 )
 from dbt.logger import DbtProcessState
@@ -81,7 +85,7 @@ from dbt.context.docs import generate_runtime_docs_context
 from dbt.context.macro_resolver import MacroResolver, TestMacroNamespace
 from dbt.context.configured import generate_macro_context
 from dbt.context.providers import ParseProvider, generate_runtime_macro_context
-from dbt.contracts.files import FileHash, ParseFileType, SchemaSourceFile
+from dbt.contracts.files import ParseFileType, SchemaSourceFile
 from dbt.parser.read_files import (
     ReadFilesFromFileSystem,
     load_source_file,
@@ -109,13 +113,14 @@ from dbt.contracts.graph.nodes import (
     ResultNode,
     ModelNode,
 )
-from dbt.artifacts.resources import NodeRelation, NodeVersion
+from dbt.artifacts.resources import NodeRelation, NodeVersion, FileHash
 from dbt.artifacts.schemas.base import Writable
 from dbt.exceptions import (
     TargetNotFoundError,
     AmbiguousAliasError,
     InvalidAccessTypeError,
     DbtRuntimeError,
+    scrub_secrets,
 )
 from dbt.parser.base import Parser
 from dbt.parser.analysis import AnalysisParser
@@ -273,6 +278,7 @@ class ManifestLoader:
         # have been enabled, but not happening because of some issue.
         self.partially_parsing = False
         self.partial_parser: Optional[PartialParsing] = None
+        self.skip_parsing = False
 
         # This is a saved manifest from a previous run that's used for partial parsing
         self.saved_manifest: Optional[Manifest] = self.read_manifest_for_partial_parse()
@@ -377,71 +383,15 @@ class ManifestLoader:
         self._perf_info.path_count = len(self.manifest.files)
         self._perf_info.read_files_elapsed = time.perf_counter() - start_read_files
 
-        skip_parsing = False
-        if self.saved_manifest is not None:
-            self.partial_parser = PartialParsing(self.saved_manifest, self.manifest.files)
-            skip_parsing = self.partial_parser.skip_parsing()
-            if skip_parsing:
-                # nothing changed, so we don't need to generate project_parser_files
-                self.manifest = self.saved_manifest
-            else:
-                # create child_map and parent_map
-                self.saved_manifest.build_parent_and_child_maps()
-                # create group_map
-                self.saved_manifest.build_group_map()
-                # files are different, we need to create a new set of
-                # project_parser_files.
-                try:
-                    project_parser_files = self.partial_parser.get_parsing_files()
-                    self.partially_parsing = True
-                    self.manifest = self.saved_manifest
-                except Exception as exc:
-                    # pp_files should still be the full set and manifest is new manifest,
-                    # since get_parsing_files failed
-                    fire_event(
-                        UnableToPartialParse(
-                            reason="an error occurred. Switching to full reparse."
-                        )
-                    )
-
-                    # Get traceback info
-                    tb_info = traceback.format_exc()
-                    formatted_lines = tb_info.splitlines()
-                    (_, line, method) = formatted_lines[-3].split(", ")
-                    exc_info = {
-                        "traceback": tb_info,
-                        "exception": formatted_lines[-1],
-                        "code": formatted_lines[-2],
-                        "location": f"{line} {method}",
-                    }
-
-                    # get file info for local logs
-                    parse_file_type: str = ""
-                    file_id = self.partial_parser.processing_file
-                    if file_id:
-                        source_file = None
-                        if file_id in self.saved_manifest.files:
-                            source_file = self.saved_manifest.files[file_id]
-                        elif file_id in self.manifest.files:
-                            source_file = self.manifest.files[file_id]
-                        if source_file:
-                            parse_file_type = source_file.parse_file_type
-                            fire_event(PartialParsingErrorProcessingFile(file=file_id))
-                    exc_info["parse_file_type"] = parse_file_type
-                    fire_event(PartialParsingError(exc_info=exc_info))
-
-                    # Send event
-                    if dbt.tracking.active_user is not None:
-                        exc_info["full_reparse_reason"] = ReparseReason.exception
-                        dbt.tracking.track_partial_parser(exc_info)
-
-                    if os.environ.get("DBT_PP_TEST"):
-                        raise exc
+        self.skip_parsing = False
+        project_parser_files = self.safe_update_project_parser_files_partially(
+            project_parser_files
+        )
 
         if self.manifest._parsing_info is None:
             self.manifest._parsing_info = ParsingInfo()
 
-        if skip_parsing:
+        if self.skip_parsing:
             fire_event(PartialParsingSkipParsing())
         else:
             # Load Macros and tests
@@ -559,7 +509,7 @@ class ManifestLoader:
 
         # Inject any available external nodes, reprocess refs if changes to the manifest were made.
         external_nodes_modified = False
-        if skip_parsing:
+        if self.skip_parsing:
             # If we didn't skip parsing, this will have already run because it must run
             # before process_refs. If we did skip parsing, then it's possible that only
             # external nodes have changed and we need to run this to capture that.
@@ -573,13 +523,76 @@ class ManifestLoader:
                 )
                 # parent and child maps will be rebuilt by write_manifest
 
-        if not skip_parsing or external_nodes_modified:
+        if not self.skip_parsing or external_nodes_modified:
             # write out the fully parsed manifest
             self.write_manifest_for_partial_parse()
 
         self.check_for_model_deprecations()
+        self.check_for_spaces_in_model_names()
 
         return self.manifest
+
+    def safe_update_project_parser_files_partially(self, project_parser_files: Dict) -> Dict:
+        if self.saved_manifest is None:
+            return project_parser_files
+
+        self.partial_parser = PartialParsing(self.saved_manifest, self.manifest.files)  # type: ignore[arg-type]
+        self.skip_parsing = self.partial_parser.skip_parsing()
+        if self.skip_parsing:
+            # nothing changed, so we don't need to generate project_parser_files
+            self.manifest = self.saved_manifest  # type: ignore[assignment]
+        else:
+            # create child_map and parent_map
+            self.saved_manifest.build_parent_and_child_maps()  # type: ignore[union-attr]
+            # create group_map
+            self.saved_manifest.build_group_map()  # type: ignore[union-attr]
+            # files are different, we need to create a new set of
+            # project_parser_files.
+            try:
+                project_parser_files = self.partial_parser.get_parsing_files()
+                self.partially_parsing = True
+                self.manifest = self.saved_manifest  # type: ignore[assignment]
+            except Exception as exc:
+                # pp_files should still be the full set and manifest is new manifest,
+                # since get_parsing_files failed
+                fire_event(
+                    UnableToPartialParse(reason="an error occurred. Switching to full reparse.")
+                )
+
+                # Get traceback info
+                tb_info = traceback.format_exc()
+                # index last stack frame in traceback (i.e. lastest exception and its context)
+                tb_last_frame = traceback.extract_tb(exc.__traceback__)[-1]
+                exc_info = {
+                    "traceback": tb_info,
+                    "exception": tb_info.splitlines()[-1],
+                    "code": tb_last_frame.line,  # if the source is not available, it is None
+                    "location": f"line {tb_last_frame.lineno} in {tb_last_frame.name}",
+                }
+
+                # get file info for local logs
+                parse_file_type: str = ""
+                file_id = self.partial_parser.processing_file
+                if file_id:
+                    source_file = None
+                    if file_id in self.saved_manifest.files:
+                        source_file = self.saved_manifest.files[file_id]
+                    elif file_id in self.manifest.files:
+                        source_file = self.manifest.files[file_id]
+                    if source_file:
+                        parse_file_type = source_file.parse_file_type
+                        fire_event(PartialParsingErrorProcessingFile(file=file_id))
+                exc_info["parse_file_type"] = parse_file_type
+                fire_event(PartialParsingError(exc_info=exc_info))
+                # Send event
+                if dbt.tracking.active_user is not None:
+                    exc_info["full_reparse_reason"] = ReparseReason.exception
+                    dbt.tracking.track_partial_parser(exc_info)
+
+                if os.environ.get("DBT_PP_TEST"):
+                    raise exc
+
+        return project_parser_files
 
     def check_for_model_deprecations(self):
         for node in self.manifest.nodes.values():
@@ -616,6 +629,47 @@ class ManifestLoader:
                                 ref_model_deprecation_date=resolved_ref.deprecation_date.isoformat(),
                             )
                         )
+
+    def check_for_spaces_in_model_names(self):
+        """Validates that model names do not contain spaces
+
+        If `DEBUG` flag is `False`, logs only first bad model name
+        If `DEBUG` flag is `True`, logs every bad model name
+        If `ALLOW_SPACES_IN_MODEL_NAMES` is `False`, logs are `ERROR` level and an exception is raised if any names are bad
+        If `ALLOW_SPACES_IN_MODEL_NAMES` is `True`, logs are `WARN` level
+        """
+        improper_model_names = 0
+        level = (
+            EventLevel.WARN
+            if self.root_project.args.ALLOW_SPACES_IN_MODEL_NAMES
+            else EventLevel.ERROR
+        )
+
+        for node in self.manifest.nodes.values():
+            if isinstance(node, ModelNode) and " " in node.name:
+                if improper_model_names == 0 or self.root_project.args.DEBUG:
+                    fire_event(
+                        SpacesInModelNameDeprecation(
+                            model_name=node.name,
+                            model_version=version_to_str(node.version),
+                            level=level.value,
+                        ),
+                        level=level,
+                    )
+                improper_model_names += 1
+
+        if improper_model_names > 0:
+            fire_event(
+                TotalModelNamesWithSpacesDeprecation(
+                    count_invalid_names=improper_model_names,
+                    show_debug_hint=(not self.root_project.args.DEBUG),
+                    level=level.value,
+                ),
+                level=level,
+            )
+
+            if level == EventLevel.ERROR:
+                raise DbtValidationError("Model names cannot contain spaces")
 
     def load_and_parse_macros(self, project_parser_files):
         for project in self.all_projects.values():
@@ -831,13 +885,6 @@ class ManifestLoader:
             )
             valid = False
             reparse_reason = ReparseReason.proj_env_vars_changed
-        if (
-            self.manifest.state_check.profile_env_vars_hash
-            != manifest.state_check.profile_env_vars_hash
-        ):
-            fire_event(UnableToPartialParse(reason="env vars used in profiles.yml have changed"))
-            valid = False
-            reparse_reason = ReparseReason.prof_env_vars_changed
 
         missing_keys = {
             k
@@ -947,6 +994,9 @@ class ManifestLoader:
         # of env_vars, that would need to change.
         # We are using the parsed cli_vars instead of config.args.vars, in order
         # to sort them and avoid reparsing because of ordering issues.
+        secret_vars = [
+            v for k, v in config.cli_vars.items() if k.startswith(SECRET_ENV_PREFIX) and v.strip()
+        ]
         stringified_cli_vars = pprint.pformat(config.cli_vars)
         vars_hash = FileHash.from_contents(
             "\x00".join(
@@ -961,7 +1011,7 @@ class ManifestLoader:
         fire_event(
             StateCheckVarsHash(
                 checksum=vars_hash.checksum,
-                vars=stringified_cli_vars,
+                vars=scrub_secrets(stringified_cli_vars, secret_vars),
                 profile=config.args.profile,
                 target=config.args.target,
                 version=__version__,
@@ -976,18 +1026,18 @@ class ManifestLoader:
             env_var_str += f"{key}:{config.project_env_vars[key]}|"
         project_env_vars_hash = FileHash.from_contents(env_var_str)
 
-        # Create a FileHash of the env_vars in the project
-        key_list = list(config.profile_env_vars.keys())
-        key_list.sort()
-        env_var_str = ""
-        for key in key_list:
-            env_var_str += f"{key}:{config.profile_env_vars[key]}|"
-        profile_env_vars_hash = FileHash.from_contents(env_var_str)
+        # Create a hash of the connection_info, which user has access to in
+        # jinja context. Thus attributes here may affect the parsing result.
+        # Ideally we should not expose all of the connection info to the jinja.
 
-        # Create a FileHash of the profile file
-        profile_path = os.path.join(get_flags().PROFILES_DIR, "profiles.yml")
-        with open(profile_path) as fp:
-            profile_hash = FileHash.from_contents(fp.read())
+        # Renaming this variable mean that we will have to do a whole lot more
+        # change to make sure the previous manifest can be loaded correctly.
+        # This is an example of naming should be chosen based on the functionality
+        # rather than the implementation details.
+        connection_keys = list(config.credentials.connection_info())
+        # avoid reparsing because of ordering issues
+        connection_keys.sort()
+        profile_hash = FileHash.from_contents(pprint.pformat(connection_keys))
 
         # Create a FileHashes for dbt_project for all dependencies
         project_hashes = {}
@@ -999,7 +1049,6 @@ class ManifestLoader:
         # Create the ManifestStateCheck object
         state_check = ManifestStateCheck(
             project_env_vars_hash=project_env_vars_hash,
-            profile_env_vars_hash=profile_env_vars_hash,
             vars_hash=vars_hash,
             profile_hash=profile_hash,
             project_hashes=project_hashes,
@@ -1621,7 +1670,7 @@ def _process_metric_node(
         assert (
             metric.type_params.measure is not None
         ), f"{metric} should have a measure defined, but it does not."
-        metric.type_params.input_measures.append(metric.type_params.measure)
+        metric.add_input_measure(metric.type_params.measure)
         _process_metric_depends_on(
             manifest=manifest, current_project=current_project, metric=metric
         )
@@ -1630,8 +1679,8 @@ def _process_metric_node(
         assert (
             conversion_type_params
         ), f"{metric.name} is a conversion metric and must have conversion_type_params defined."
-        metric.type_params.input_measures.append(conversion_type_params.base_measure)
-        metric.type_params.input_measures.append(conversion_type_params.conversion_measure)
+        metric.add_input_measure(conversion_type_params.base_measure)
+        metric.add_input_measure(conversion_type_params.conversion_measure)
         _process_metric_depends_on(
             manifest=manifest, current_project=current_project, metric=metric
         )
@@ -1667,7 +1716,8 @@ def _process_metric_node(
             _process_metric_node(
                 manifest=manifest, current_project=current_project, metric=target_metric
             )
-            metric.type_params.input_measures.extend(target_metric.type_params.input_measures)
+            for input_measure in target_metric.type_params.input_measures:
+                metric.add_input_measure(input_measure)
             metric.depends_on.add_node(target_metric.unique_id)
     else:
         assert_values_exhausted(metric.type)

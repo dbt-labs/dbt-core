@@ -28,6 +28,7 @@ if os.name != "nt":
 FLAGS_DEFAULTS = {
     "INDIRECT_SELECTION": "eager",
     "TARGET_PATH": None,
+    "DEFER_STATE": None,  # necessary because of retry construction of flags
     "WARN_ERROR": None,
     # Cli args without project_flags or env var option.
     "FULL_REFRESH": False,
@@ -351,6 +352,11 @@ class Flags:
         if getattr(self, "MACRO_DEBUGGING", None) is not None:
             jinja.MACRO_DEBUGGING = getattr(self, "MACRO_DEBUGGING")
 
+    # This is here to prevent mypy from complaining about all of the
+    # attributes which we added dynamically.
+    def __getattr__(self, name: str) -> Any:
+        return super().__getattribute__(name)  # type: ignore
+
 
 CommandParams = List[str]
 
@@ -399,7 +405,10 @@ def command_params(command: CliCommand, args_dict: Dict[str, Any]) -> CommandPar
 
         # MultiOption flags come back as lists, but we want to pass them as space separated strings
         if isinstance(v, list):
-            v = " ".join(v)
+            if len(v) > 0:
+                v = " ".join(v)
+            else:
+                continue
 
         if k == "macro" and command == CliCommand.RUN_OPERATION:
             add_fn(v)

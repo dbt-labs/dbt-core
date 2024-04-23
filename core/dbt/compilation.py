@@ -52,7 +52,9 @@ def print_compile_stats(stats: Dict[NodeType, int]):
         dbt.tracking.track_resource_counts(resource_counts)
 
     # do not include resource types that are not actually defined in the project
-    stat_line = ", ".join([pluralize(ct, t) for t, ct in stats.items() if ct != 0])
+    stat_line = ", ".join(
+        [pluralize(ct, t).replace("_", " ") for t, ct in stats.items() if ct != 0]
+    )
     fire_event(FoundStats(stat_line=stat_line))
 
 
@@ -77,6 +79,7 @@ def _generate_stats(manifest: Manifest) -> Dict[NodeType, int]:
     stats[NodeType.Macro] += len(manifest.macros)
     stats[NodeType.Group] += len(manifest.groups)
     stats[NodeType.SemanticModel] += len(manifest.semantic_models)
+    stats[NodeType.SavedQuery] += len(manifest.saved_queries)
     stats[NodeType.Unit] += len(manifest.unit_tests)
 
     # TODO: should we be counting dimensions + entities?
@@ -271,7 +274,6 @@ class Compiler:
 
     def initialize(self):
         make_directory(self.config.project_target_path)
-        make_directory(self.config.packages_install_path)
 
     # creates a ModelContext which is converted to
     # a dict for jinja rendering of SQL

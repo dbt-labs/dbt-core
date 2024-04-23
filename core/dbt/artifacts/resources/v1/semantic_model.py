@@ -42,7 +42,7 @@ class NodeRelation(dbtClassMixin):
     alias: str
     schema_name: str  # TODO: Could this be called simply "schema" so we could reuse StateRelation?
     database: Optional[str] = None
-    relation_name: Optional[str] = None
+    relation_name: Optional[str] = ""
 
 
 # ====================================

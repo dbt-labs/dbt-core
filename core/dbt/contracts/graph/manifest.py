@@ -22,6 +22,8 @@ from typing import (
 )
 from typing_extensions import Protocol
 
+from dbt import deprecations
+from dbt import tracking
 from dbt.contracts.graph.nodes import (
     BaseNode,
     Documentation,
@@ -33,7 +35,6 @@ from dbt.contracts.graph.nodes import (
     ManifestNode,
     Metric,
     ModelNode,
-    DeferRelation,
     ResultNode,
     SavedQuery,
     SemanticModel,
@@ -41,11 +42,17 @@ from dbt.contracts.graph.nodes import (
     UnpatchedSourceDefinition,
     UnitTestDefinition,
     UnitTestFileFixture,
+    RESOURCE_CLASS_TO_NODE_CLASS,
 )
 from dbt.contracts.graph.unparsed import SourcePatch, UnparsedVersion
+from dbt.flags import get_flags
 
 # to preserve import paths
-from dbt.artifacts.resources import NodeVersion
+from dbt.artifacts.resources import (
+    NodeVersion,
+    DeferRelation,
+    BaseResource,
+)
 from dbt.artifacts.schemas.manifest import WritableManifest, ManifestMetadata, UniqueID
 from dbt.contracts.files import (
     SourceFile,
@@ -563,11 +570,29 @@ M = TypeVar("M", bound=MacroCandidate)
 
 
 class CandidateList(List[M]):
-    def last(self) -> Optional[Macro]:
+    def last_candidate(
+        self, valid_localities: Optional[List[Locality]] = None
+    ) -> Optional[MacroCandidate]:
+        """
+        Obtain the last (highest precedence) MacroCandidate from the CandidateList of any locality in valid_localities.
+        If valid_localities is not specified, return the last MacroCandidate of any locality.
+        """
         if not self:
             return None
         self.sort()
-        return self[-1].macro
+
+        if valid_localities is None:
+            return self[-1]
+
+        for candidate in reversed(self):
+            if candidate.locality in valid_localities:
+                return candidate
+
+        return None
+
+    def last(self) -> Optional[Macro]:
+        last_candidate = self.last_candidate()
+        return last_candidate.macro if last_candidate is not None else None
 
 
 def _get_locality(macro: Macro, root_project_name: str, internal_packages: Set[str]) -> Locality:
@@ -772,6 +797,7 @@ class ManifestStateCheck(dbtClassMixin):
 
 
 NodeClassT = TypeVar("NodeClassT", bound="BaseNode")
+ResourceClassT = TypeVar("ResourceClassT", bound="BaseResource")
 
 
 @dataclass
@@ -922,7 +948,33 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
                 for specificity, atype in enumerate(self._get_parent_adapter_types(adapter_type))
             )
         )
-        return candidates.last()
+        core_candidates = [
+            candidate for candidate in candidates if candidate.locality == Locality.Core
+        ]
+
+        materialization_candidate = candidates.last_candidate()
+        # If an imported materialization macro was found that also had a core candidate, fire a deprecation
+        if (
+            materialization_candidate is not None
+            and materialization_candidate.locality == Locality.Imported
+            and core_candidates
+        ):
+            # preserve legacy behaviour - allow materialization override
+            if (
+                get_flags().require_explicit_package_overrides_for_builtin_materializations
+                is False
+            ):
+                deprecations.warn(
+                    "package-materialization-override",
+                    package_name=materialization_candidate.macro.package_name,
+                    materialization_name=materialization_name,
+                )
+            else:
+                materialization_candidate = candidates.last_candidate(
+                    valid_localities=[Locality.Core, Locality.Root]
+                )
+
+        return materialization_candidate.macro if materialization_candidate else None
 
     def get_resource_fqns(self) -> Mapping[str, PathSet]:
         resource_fqns: Dict[str, Set[Tuple[str, ...]]] = {}
@@ -1022,29 +1074,85 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
                     group_map[node.group].append(node.unique_id)
         self.group_map = group_map
 
+    def fill_tracking_metadata(self):
+        self.metadata.user_id = tracking.active_user.id if tracking.active_user else None
+        self.metadata.send_anonymous_usage_stats = get_flags().SEND_ANONYMOUS_USAGE_STATS
+
     @classmethod
+    def from_writable_manifest(cls, writable_manifest: WritableManifest) -> "Manifest":
+        manifest = Manifest(
+            nodes=cls._map_resources_to_map_nodes(writable_manifest.nodes),
+            disabled=cls._map_list_resources_to_map_list_nodes(writable_manifest.disabled),
+            unit_tests=cls._map_resources_to_map_nodes(writable_manifest.unit_tests),
+            sources=cls._map_resources_to_map_nodes(writable_manifest.sources),
+            macros=cls._map_resources_to_map_nodes(writable_manifest.macros),
+            docs=cls._map_resources_to_map_nodes(writable_manifest.docs),
+            exposures=cls._map_resources_to_map_nodes(writable_manifest.exposures),
+            metrics=cls._map_resources_to_map_nodes(writable_manifest.metrics),
+            groups=cls._map_resources_to_map_nodes(writable_manifest.groups),
+            semantic_models=cls._map_resources_to_map_nodes(writable_manifest.semantic_models),
+            selectors={
+                selector_id: selector
+                for selector_id, selector in writable_manifest.selectors.items()
+            },
+        )
+
+        return manifest
+
     def _map_nodes_to_map_resources(cls, nodes_map: MutableMapping[str, NodeClassT]):
         return {node_id: node.to_resource() for node_id, node in nodes_map.items()}
+
+    def _map_list_nodes_to_map_list_resources(
+        cls, nodes_map: MutableMapping[str, List[NodeClassT]]
+    ):
+        return {
+            node_id: [node.to_resource() for node in node_list]
+            for node_id, node_list in nodes_map.items()
+        }
+
+    @classmethod
+    def _map_resources_to_map_nodes(cls, resources_map: Mapping[str, ResourceClassT]):
+        return {
+            node_id: RESOURCE_CLASS_TO_NODE_CLASS[type(resource)].from_resource(resource)
+            for node_id, resource in resources_map.items()
+        }
+
+    @classmethod
+    def _map_list_resources_to_map_list_nodes(
+        cls, resources_map: Optional[Mapping[str, List[ResourceClassT]]]
+    ):
+        if resources_map is None:
+            return {}
+
+        return {
+            node_id: [
+                RESOURCE_CLASS_TO_NODE_CLASS[type(resource)].from_resource(resource)
+                for resource in resource_list
+            ]
+            for node_id, resource_list in resources_map.items()
+        }
 
     def writable_manifest(self) -> "WritableManifest":
         self.build_parent_and_child_maps()
         self.build_group_map()
+        self.fill_tracking_metadata()
+
         return WritableManifest(
-            nodes=self.nodes,
+            nodes=self._map_nodes_to_map_resources(self.nodes),
             sources=self._map_nodes_to_map_resources(self.sources),
-            macros=self.macros,
-            docs=self.docs,
+            macros=self._map_nodes_to_map_resources(self.macros),
+            docs=self._map_nodes_to_map_resources(self.docs),
             exposures=self._map_nodes_to_map_resources(self.exposures),
             metrics=self._map_nodes_to_map_resources(self.metrics),
             groups=self._map_nodes_to_map_resources(self.groups),
             selectors=self.selectors,
             metadata=self.metadata,
-            disabled=self.disabled,
+            disabled=self._map_list_nodes_to_map_list_resources(self.disabled),
             child_map=self.child_map,
             parent_map=self.parent_map,
             group_map=self.group_map,
             semantic_models=self._map_nodes_to_map_resources(self.semantic_models),
-            unit_tests=self.unit_tests,
+            unit_tests=self._map_nodes_to_map_resources(self.unit_tests),
             saved_queries=self._map_nodes_to_map_resources(self.saved_queries),
         )
 
@@ -1358,7 +1466,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         )
 
     # Called by requires.manifest after ManifestLoader.get_full_manifest
-    def merge_from_artifact(self, other: "WritableManifest") -> None:
+    def merge_from_artifact(self, other: "Manifest") -> None:
         """Update this manifest by adding the 'defer_relation' attribute to all nodes
         with a counterpart in the stateful manifest used for deferral.
 
@@ -1553,7 +1661,12 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
 class MacroManifest(MacroMethods):
     def __init__(self, macros) -> None:
         self.macros = macros
-        self.metadata = ManifestMetadata()
+        self.metadata = ManifestMetadata(
+            user_id=tracking.active_user.id if tracking.active_user else None,
+            send_anonymous_usage_stats=get_flags().SEND_ANONYMOUS_USAGE_STATS
+            if tracking.active_user
+            else None,
+        )
         # This is returned by the 'graph' context property
         # in the ProviderContext class.
         self.flat_graph: Dict[str, Any] = {}

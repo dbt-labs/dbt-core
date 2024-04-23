@@ -1,21 +1,24 @@
-from distutils.util import strtobool
-
-import agate
 import daff
 import io
 import json
 import re
 from dataclasses import dataclass
-from dbt.utils import _coerce_decimal
+from dbt.utils import _coerce_decimal, strtobool
 from dbt_common.events.format import pluralize
 from dbt_common.dataclass_schema import dbtClassMixin
 import threading
-from typing import Dict, Any, Optional, Union, List
+from typing import Dict, Any, Optional, Union, List, TYPE_CHECKING, Tuple
 
 from .compile import CompileRunner
 from .run import RunTask
 
-from dbt.contracts.graph.nodes import TestNode, UnitTestDefinition, UnitTestNode
+from dbt.contracts.graph.nodes import (
+    TestNode,
+    UnitTestDefinition,
+    UnitTestNode,
+    GenericTestNode,
+    SingularTestNode,
+)
 from dbt.contracts.graph.manifest import Manifest
 from dbt.artifacts.schemas.results import TestStatus
 from dbt.artifacts.schemas.run import RunResult
@@ -37,6 +40,10 @@ from dbt.node_types import NodeType
 from dbt.parser.unit_tests import UnitTestManifestLoader
 from dbt.flags import get_flags
 from dbt_common.ui import green, red
+
+
+if TYPE_CHECKING:
+    import agate
 
 
 @dataclass
@@ -80,6 +87,7 @@ class UnitTestResultData(dbtClassMixin):
 
 class TestRunner(CompileRunner):
     _ANSI_ESCAPE = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+    _LOG_TEST_RESULT_EVENTS = LogTestResult
 
     def describe_node_name(self):
         if self.node.resource_type == NodeType.Unit:
@@ -95,7 +103,7 @@ class TestRunner(CompileRunner):
         model = result.node
 
         fire_event(
-            LogTestResult(
+            self._LOG_TEST_RESULT_EVENTS(
                 name=self.describe_node_name(),
                 status=str(result.status),
                 index=self.node_index,
@@ -179,7 +187,7 @@ class TestRunner(CompileRunner):
 
     def execute_unit_test(
         self, unit_test_def: UnitTestDefinition, manifest: Manifest
-    ) -> UnitTestResultData:
+    ) -> Tuple[UnitTestNode, UnitTestResultData]:
 
         unit_test_manifest = self.build_unit_test_manifest_from_test(unit_test_def, manifest)
 
@@ -189,6 +197,7 @@ class TestRunner(CompileRunner):
 
         # Compile the node
         unit_test_node = self.compiler.compile_node(unit_test_node, unit_test_manifest, {})
+        assert isinstance(unit_test_node, UnitTestNode)
 
         # generate_runtime_unit_test_context not strictly needed - this is to run the 'unit'
         # materialization, not compile the node.compiled_code
@@ -242,18 +251,21 @@ class TestRunner(CompileRunner):
                 rendered=rendered,
             )
 
-        return UnitTestResultData(
+        unit_test_result_data = UnitTestResultData(
             diff=diff,
             should_error=should_error,
             adapter_response=adapter_response,
         )
 
-    def execute(self, test: Union[TestNode, UnitTestDefinition], manifest: Manifest):
+        return unit_test_node, unit_test_result_data
+
+    def execute(self, test: Union[TestNode, UnitTestNode], manifest: Manifest):
         if isinstance(test, UnitTestDefinition):
-            unit_test_result = self.execute_unit_test(test, manifest)
-            return self.build_unit_test_run_result(test, unit_test_result)
+            unit_test_node, unit_test_result = self.execute_unit_test(test, manifest)
+            return self.build_unit_test_run_result(unit_test_node, unit_test_result)
         else:
             # Note: manifest here is a normal manifest
+            assert isinstance(test, (SingularTestNode, GenericTestNode))
             test_result = self.execute_data_test(test, manifest)
             return self.build_test_run_result(test, test_result)
 
@@ -269,7 +281,9 @@ class TestRunner(CompileRunner):
             message = f"Got {num_errors}, configured to fail if {test.config.error_if}"
             failures = result.failures
         elif result.should_warn:
-            if get_flags().WARN_ERROR:
+            if get_flags().WARN_ERROR or get_flags().WARN_ERROR_OPTIONS.includes(
+                self._LOG_TEST_RESULT_EVENTS.__name__
+            ):
                 status = TestStatus.Fail
                 message = f"Got {num_errors}, configured to fail if {test.config.warn_if}"
             else:
@@ -292,7 +306,7 @@ class TestRunner(CompileRunner):
         return run_result
 
     def build_unit_test_run_result(
-        self, test: UnitTestDefinition, result: UnitTestResultData
+        self, test: UnitTestNode, result: UnitTestResultData
     ) -> RunResult:
         thread_id = threading.current_thread().name
 
@@ -305,7 +319,7 @@ class TestRunner(CompileRunner):
             failures = 1
 
         return RunResult(
-            node=test,  # type: ignore
+            node=test,
             status=status,
             timing=[],
             thread_id=thread_id,
@@ -327,7 +341,7 @@ class TestRunner(CompileRunner):
         return unit_test_table.select(columns)
 
     def _get_daff_diff(
-        self, expected: agate.Table, actual: agate.Table, ordered: bool = False
+        self, expected: "agate.Table", actual: "agate.Table", ordered: bool = False
     ) -> daff.TableDiff:
 
         expected_daff_table = daff.PythonTableView(list_rows_from_table(expected))
@@ -390,7 +404,7 @@ class TestTask(RunTask):
 
 
 # This was originally in agate_helper, but that was moved out into dbt_common
-def json_rows_from_table(table: agate.Table) -> List[Dict[str, Any]]:
+def json_rows_from_table(table: "agate.Table") -> List[Dict[str, Any]]:
     "Convert a table to a list of row dict objects"
     output = io.StringIO()
     table.to_json(path=output)  # type: ignore
@@ -399,7 +413,7 @@ def json_rows_from_table(table: agate.Table) -> List[Dict[str, Any]]:
 
 
 # This was originally in agate_helper, but that was moved out into dbt_common
-def list_rows_from_table(table: agate.Table) -> List[Any]:
+def list_rows_from_table(table: "agate.Table") -> List[Any]:
     "Convert a table to a list of lists, where the first element represents the header"
     rows = [[col.name for col in table.columns]]
     for row in table.rows:

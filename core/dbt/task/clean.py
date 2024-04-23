@@ -9,6 +9,8 @@ from dbt.events.types import (
     FinishedCleanPaths,
 )
 from dbt_common.exceptions import DbtRuntimeError
+from dbt.cli.flags import Flags
+from dbt.config.project import Project
 from dbt.task.base import (
     BaseTask,
     move_to_nearest_project_dir,
@@ -16,6 +18,11 @@ from dbt.task.base import (
 
 
 class CleanTask(BaseTask):
+    def __init__(self, args: Flags, config: Project):
+        super().__init__(args)
+        self.config = config
+        self.project = config
+
     def run(self):
         """
         This function takes all the paths in the target file

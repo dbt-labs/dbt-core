@@ -12,11 +12,12 @@ from dbt.context.providers import (
     generate_generate_name_macro_context,
 )
 from dbt.adapters.factory import get_adapter  # noqa: F401
+from dbt.artifacts.resources import Contract
 from dbt.clients.jinja import get_rendered
 from dbt.config import Project, RuntimeConfig
 from dbt.context.context_config import ContextConfig
 from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.graph.nodes import Contract, BaseNode, ManifestNode
+from dbt.contracts.graph.nodes import BaseNode, ManifestNode
 from dbt.contracts.graph.unparsed import Docs, UnparsedNode
 from dbt.exceptions import (
     DbtInternalError,
@@ -108,7 +109,7 @@ class RelationUpdate:
         self.component = component
 
     def __call__(self, parsed_node: Any, override: Optional[str]) -> None:
-        if parsed_node.package_name in self.package_updaters:
+        if getattr(parsed_node, "package_name", None) in self.package_updaters:
             new_value = self.package_updaters[parsed_node.package_name](override, parsed_node)
         else:
             new_value = self.default_updater(override, parsed_node)
@@ -292,7 +293,7 @@ class ConfiguredParser(
         self._update_node_alias(parsed_node, config_dict.get("alias"))
 
         # Snapshot nodes use special "target_database" and "target_schema" fields for some reason
-        if parsed_node.resource_type == NodeType.Snapshot:
+        if getattr(parsed_node, "resource_type", None) == NodeType.Snapshot:
             if "target_database" in config_dict and config_dict["target_database"]:
                 parsed_node.database = config_dict["target_database"]
             if "target_schema" in config_dict and config_dict["target_schema"]:
@@ -451,7 +452,7 @@ class ConfiguredParser(
         # and TestNodes that store_failures.
         # TestNodes do not get a relation_name without store failures
         # because no schema is created.
-        if node.is_relational and not node.is_ephemeral_model:
+        if getattr(node, "is_relational", None) and not getattr(node, "is_ephemeral_model", None):
             adapter = get_adapter(self.root_project)
             relation_cls = adapter.Relation
             node.relation_name = str(relation_cls.create_from(self.root_project, node))

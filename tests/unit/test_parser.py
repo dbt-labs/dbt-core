@@ -1,5 +1,6 @@
 import os
 import unittest
+from argparse import Namespace
 from copy import deepcopy
 from unittest import mock
 
@@ -8,11 +9,12 @@ import yaml
 import dbt.flags
 import dbt.parser
 from dbt import tracking
+from dbt.artifacts.resources import ModelConfig
 from dbt.artifacts.resources import RefArgs
 from dbt.context.context_config import ContextConfig
 from dbt.contracts.files import SourceFile, FileHash, FilePath, SchemaSourceFile
 from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.graph.model_config import NodeConfig, TestConfig, SnapshotConfig, ModelConfig
+from dbt.contracts.graph.model_config import NodeConfig, TestConfig, SnapshotConfig
 from dbt.contracts.graph.nodes import (
     ModelNode,
     Macro,
@@ -22,7 +24,8 @@ from dbt.contracts.graph.nodes import (
     AnalysisNode,
     UnpatchedSourceDefinition,
 )
-from dbt.exceptions import CompilationError, ParsingError
+from dbt.exceptions import CompilationError, ParsingError, SchemaConfigError
+from dbt.flags import set_from_args
 from dbt.node_types import NodeType
 from dbt.parser import (
     ModelParser,
@@ -52,8 +55,6 @@ from dbt.parser.schemas import (
 from dbt.parser.search import FileBlock
 from dbt.parser.sources import SourcePatcher
 from .utils import config_from_parts_or_dicts, normalize, generate_name_macros, MockNode
-from dbt.flags import set_from_args
-from argparse import Namespace
 
 set_from_args(Namespace(WARN_ERROR=False), None)
 
@@ -224,6 +225,23 @@ sources:
         - name: my_table
 """
 
+
+MULTIPLE_TABLE_SOURCE_META = """
+sources:
+    - name: my_source
+      meta:
+        source_field: source_value
+        shared_field: shared_field_default
+      tables:
+        - name: my_table_shared_field_default
+          meta:
+            table_field: table_value
+        - name: my_table_shared_field_override
+          meta:
+            shared_field: shared_field_table_override
+            table_field: table_value
+"""
+
 SINGLE_TABLE_SOURCE_TESTS = """
 sources:
     - name: my_source
@@ -249,6 +267,22 @@ models:
           data_tests:
             - not_null:
                 severity: WARN
+            - accepted_values:
+                values: ['red', 'blue', 'green']
+            - foreign_package.test_case:
+                arg: 100
+"""
+
+SINGLE_TABLE_MODEL_TESTS_WRONG_SEVERITY = """
+models:
+    - name: my_model
+      description: A description of my model
+      columns:
+        - name: color
+          description: The color value
+          data_tests:
+            - not_null:
+                severity: WARNING
             - accepted_values:
                 values: ['red', 'blue', 'green']
             - foreign_package.test_case:
@@ -415,6 +449,41 @@ class SchemaParserSourceTest(SchemaParserTest):
         assert src.resource_type == NodeType.Source
         assert src.fqn == ["snowplow", "my_source", "my_table"]
 
+    @mock.patch("dbt.parser.sources.get_adapter")
+    def test__parse_basic_source_meta(self, mock_get_adapter):
+        block = self.file_block_for(MULTIPLE_TABLE_SOURCE_META, "test_one.yml")
+        dct = yaml_from_file(block.file)
+        self.parser.parse_file(block, dct)
+        self.assert_has_manifest_lengths(self.parser.manifest, sources=2)
+
+        unpatched_src_default = self.parser.manifest.sources[
+            "source.snowplow.my_source.my_table_shared_field_default"
+        ]
+        src_default = self.source_patcher.parse_source(unpatched_src_default)
+        assert src_default.meta == {
+            "source_field": "source_value",
+            "shared_field": "shared_field_default",
+            "table_field": "table_value",
+        }
+        assert src_default.source_meta == {
+            "source_field": "source_value",
+            "shared_field": "shared_field_default",
+        }
+
+        unpatched_src_override = self.parser.manifest.sources[
+            "source.snowplow.my_source.my_table_shared_field_override"
+        ]
+        src_override = self.source_patcher.parse_source(unpatched_src_override)
+        assert src_override.meta == {
+            "source_field": "source_value",
+            "shared_field": "shared_field_table_override",
+            "table_field": "table_value",
+        }
+        assert src_override.source_meta == {
+            "source_field": "source_value",
+            "shared_field": "shared_field_default",
+        }
+
     def test__read_basic_source_tests(self):
         block = self.yaml_block_for(SINGLE_TABLE_SOURCE_TESTS, "test_one.yml")
         analysis_tests = AnalysisPatchParser(self.parser, block, "analyses").parse().test_blocks
@@ -523,6 +592,14 @@ class SchemaParserModelsTest(SchemaParserTest):
         self.parser.parse_file(block, dct)
         self.assertEqual(len(list(self.parser.manifest.sources)), 0)
         self.assertEqual(len(list(self.parser.manifest.nodes)), 4)
+
+    def test__read_basic_model_tests_wrong_severity(self):
+        block = self.yaml_block_for(SINGLE_TABLE_MODEL_TESTS_WRONG_SEVERITY, "test_one.yml")
+        dct = yaml_from_file(block.file)
+        with self.assertRaisesRegex(
+            SchemaConfigError, "Severity must be either 'warn' or 'error'. Got 'WARNING'"
+        ):
+            self.parser.parse_file(block, dct)
 
     def test__parse_basic_model_tests(self):
         block = self.file_block_for(SINGLE_TABLE_MODEL_TESTS, "test_one.yml")

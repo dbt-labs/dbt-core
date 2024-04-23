@@ -30,13 +30,18 @@ CI_FLAGS =\
 .PHONY: dev_req
 dev_req: ## Installs dbt-* packages in develop mode along with only development dependencies.
 	@\
-	pip install -r dev-requirements.txt
-	pip install -r editable-requirements.txt
+	pip install -r dev-requirements.txt -r editable-requirements.txt
 
 .PHONY: dev
 dev: dev_req ## Installs dbt-* packages in develop mode along with development dependencies and pre-commit.
 	@\
 	pre-commit install
+
+.PHONY: dev-uninstall
+dev-uninstall: ## Uninstall all packages in venv except for build tools
+	@\
+    pip freeze | grep -v "^-e" | cut -d "@" -f1 | xargs pip uninstall -y; \
+    pip uninstall -y dbt-core
 
 .PHONY: core_proto_types
 core_proto_types:  ## generates google protobuf python file from core_types.proto

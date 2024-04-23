@@ -1,8 +1,7 @@
 import json
 import re
 import io
-import agate
-from typing import Any, Dict, List, Mapping, Optional, Union
+from typing import Any, Dict, List, Mapping, Optional, Union, TYPE_CHECKING
 
 from dbt_common.exceptions import (
     DbtRuntimeError,
@@ -17,6 +16,12 @@ from dbt_common.exceptions import (
 from dbt.node_types import NodeType, AccessType, REFABLE_NODE_TYPES
 
 from dbt_common.dataclass_schema import ValidationError
+
+from dbt.constants import SECRET_ENV_PREFIX
+
+
+if TYPE_CHECKING:
+    import agate
 
 
 class ContractBreakingChangeError(DbtRuntimeError):
@@ -72,34 +77,6 @@ class JSONValidationError(DbtValidationError):
     def __reduce__(self):
         # see https://stackoverflow.com/a/36342588 for why this is necessary
         return (JSONValidationError, (self.typename, self.errors))
-
-
-class IncompatibleSchemaError(DbtRuntimeError):
-    def __init__(self, expected: str, found: Optional[str] = None) -> None:
-        self.expected = expected
-        self.found = found
-        self.filename = "input file"
-
-        super().__init__(msg=self.get_message())
-
-    def add_filename(self, filename: str):
-        self.filename = filename
-        self.msg = self.get_message()
-
-    def get_message(self) -> str:
-        found_str = "nothing"
-        if self.found is not None:
-            found_str = f'"{self.found}"'
-
-        msg = (
-            f'Expected a schema version of "{self.expected}" in '
-            f"{self.filename}, but found {found_str}. Are you running with a "
-            f"different version of dbt?"
-        )
-        return msg
-
-    CODE = 10014
-    MESSAGE = "Incompatible Schema"
 
 
 class AliasError(DbtValidationError):
@@ -358,7 +335,10 @@ class RequiredVarNotFoundError(CompilationError):
         pretty_vars = json.dumps(dct, sort_keys=True, indent=4)
 
         msg = f"Required var '{self.var_name}' not found in config:\nVars supplied to {node_name} = {pretty_vars}"
-        return msg
+        return scrub_secrets(msg, self.var_secrets())
+
+    def var_secrets(self) -> List[str]:
+        return [v for k, v in self.merged.items() if k.startswith(SECRET_ENV_PREFIX) and v.strip()]
 
 
 class PackageNotFoundForMacroError(CompilationError):
@@ -1349,7 +1329,7 @@ class ContractError(CompilationError):
         self.sql_columns = sql_columns
         super().__init__(msg=self.get_message())
 
-    def get_mismatches(self) -> agate.Table:
+    def get_mismatches(self) -> "agate.Table":
         # avoid a circular import
         from dbt_common.clients.agate_helper import table_from_data_flat
 
@@ -1400,7 +1380,7 @@ class ContractError(CompilationError):
                 "This model has an enforced contract, and its 'columns' specification is missing"
             )
 
-        table: agate.Table = self.get_mismatches()
+        table: "agate.Table" = self.get_mismatches()
         # Hack to get Agate table output as string
         output = io.StringIO()
         table.print_table(output=output, max_rows=None, max_column_width=50)  # type: ignore

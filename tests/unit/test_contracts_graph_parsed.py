@@ -19,20 +19,22 @@ from dbt.artifacts.resources import (
     Owner,
     Quoting,
     RefArgs,
+    MacroDependsOn,
+    TestMetadata,
     SourceConfig,
     Time,
+    Hook,
 )
 from dbt.artifacts.resources.types import TimePeriod
 from dbt.node_types import NodeType, AccessType
 from dbt.contracts.files import FileHash
 from dbt.contracts.graph.model_config import (
-    ModelConfig,
     NodeConfig,
     SeedConfig,
     TestConfig,
     SnapshotConfig,
     EmptySnapshotConfig,
-    Hook,
+    ModelConfig,
 )
 from dbt.contracts.graph.nodes import (
     ModelNode,
@@ -45,11 +47,9 @@ from dbt.contracts.graph.nodes import (
     Metric,
     SeedNode,
     Docs,
-    MacroDependsOn,
     SourceDefinition,
     Documentation,
     HookNode,
-    TestMetadata,
     SemanticModel,
 )
 from dbt.artifacts.resources import SourceDefinition as SourceDefinitionResource
@@ -1937,30 +1937,6 @@ def basic_parsed_source_definition_dict():
         },
         "unrendered_config": {},
     }
-
-
-@pytest.fixture
-def basic_parsed_source_definition_object():
-    return SourceDefinition(
-        columns={},
-        database="some_db",
-        description="",
-        fqn=["test", "source", "my_source", "my_source_table"],
-        identifier="my_source_table",
-        loader="stitch",
-        name="my_source_table",
-        original_file_path="/root/models/sources.yml",
-        package_name="test",
-        path="/root/models/sources.yml",
-        quoting=Quoting(),
-        resource_type=NodeType.Source,
-        schema="some_schema",
-        source_description="my source description",
-        source_name="my_source",
-        unique_id="test.source.my_source.my_source_table",
-        tags=[],
-        config=SourceConfig(),
-    )
 
 
 @pytest.fixture

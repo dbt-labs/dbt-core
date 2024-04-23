@@ -98,6 +98,6 @@ class TestUnitTestSourceInput:
         for result in results:
             if result.node.unique_id == "model.test.customers":
                 assert result.status == RunStatus.Skipped
-            elif result.node.unique_id == "model.test.customers":
+            elif result.node.unique_id == "unit_test.test.customers.fail_test_customers":
                 assert result.status == TestStatus.Fail
         assert len(results) == 6

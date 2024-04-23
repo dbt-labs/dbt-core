@@ -211,6 +211,7 @@ class PartialParsing:
         if (
             file_id not in self.project_parser_files[project_name][parser_name]
             and file_id not in self.file_diff["deleted"]
+            and file_id not in self.file_diff["deleted_schema_files"]
         ):
             self.project_parser_files[project_name][parser_name].append(file_id)
 
@@ -467,7 +468,11 @@ class PartialParsing:
 
     def _schedule_for_parsing(self, dict_key: str, element, name, delete: Callable) -> None:
         file_id = element.file_id
-        if file_id in self.saved_files and file_id not in self.file_diff["deleted"]:
+        if (
+            file_id in self.saved_files
+            and file_id not in self.file_diff["deleted"]
+            and file_id not in self.file_diff["deleted_schema_files"]
+        ):
             schema_file = self.saved_files[file_id]
             elements = []
             assert isinstance(schema_file, SchemaSourceFile)

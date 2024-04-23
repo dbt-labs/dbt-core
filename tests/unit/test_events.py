@@ -153,6 +153,13 @@ sample_values = [
     adapter_types.CollectFreshnessReturnSignature(),
     core_types.TestsConfigDeprecation(deprecated_path="", exp_path=""),
     core_types.ProjectFlagsMovedDeprecation(),
+    core_types.SpacesInModelNameDeprecation(model_name="", model_version="", level=""),
+    core_types.TotalModelNamesWithSpacesDeprecation(
+        count_invalid_names=1, show_debug_hint=True, level=""
+    ),
+    core_types.PackageMaterializationOverrideDeprecation(
+        package_name="my_package", materialization_name="view"
+    ),
     # E - DB Adapter ======================
     adapter_types.AdapterEventDebug(),
     adapter_types.AdapterEventInfo(),
@@ -355,6 +362,13 @@ sample_values = [
     core_types.LogFreshnessResult(
         source_name="",
         table_name="",
+        index=0,
+        total=0,
+        execution_time=0,
+    ),
+    core_types.LogNodeNoOpResult(
+        description="",
+        status="",
         index=0,
         total=0,
         execution_time=0,
