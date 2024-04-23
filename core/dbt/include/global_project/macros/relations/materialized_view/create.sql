@@ -1,7 +1,4 @@
 {% macro get_create_materialized_view_as_sql(relation, sql) -%}
-    {% if execute %}
-        {{ adapter.cache_added(relation) }}
-    {% endif %}
     {{- adapter.dispatch('get_create_materialized_view_as_sql', 'dbt')(relation, sql) -}}
 {%- endmacro %}
 
