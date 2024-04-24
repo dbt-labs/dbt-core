@@ -116,6 +116,15 @@ def setup_record_replay():
     get_invocation_context().recorder = recorder
 
 
+def tear_down_record_replay():
+    recorder = get_invocation_context().recorder
+    if recorder is not None:
+        if recorder.mode == RecorderMode.RECORD:
+            recorder.write("recording.json")
+        elif recorder.mode == RecorderMode.REPLAY:
+            recorder.write_diffs("replay_diffs.json")
+
+
 def postflight(func):
     """The decorator that handles all exception handling for the click commands.
     This decorator must be used before any other decorators that may throw an exception."""
@@ -168,6 +177,8 @@ def postflight(func):
                     elapsed=time.perf_counter() - start_func,
                 )
             )
+
+            tear_down_record_replay()
 
         if not success:
             raise ResultExit(result)
