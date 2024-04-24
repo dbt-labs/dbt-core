@@ -450,7 +450,7 @@ class TestEmptyDependency:
             ]
         }
         write_config_file(empty_hub_package, "packages.yml")
-        with pytest.raises(DbtProjectError, match="A package is missing the value"):
+        with pytest.raises(DbtProjectError, match="A hub package is missing the value"):
             run_dbt(["deps"])
 
         empty_git_package = {
