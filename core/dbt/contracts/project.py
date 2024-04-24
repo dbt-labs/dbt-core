@@ -105,7 +105,7 @@ class PackageConfig(dbtClassMixin):
             if isinstance(package, dict):
                 if package.get("package") == "":
                     raise ValidationError(
-                        "A package is missing the value. It is a required property."
+                        "A hub package is missing the value. It is a required property."
                     )
                 if package.get("local") == "":
                     raise ValidationError(
