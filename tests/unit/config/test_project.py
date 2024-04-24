@@ -146,6 +146,9 @@ class TestProjectWithPytest:
         other.project_name = "other project"
         assert project != other
 
+    def test_hashed_name(self, project: Project):
+        assert project.hashed_name() == "6e72a69d5c5cca8f0400338441c022e4"
+
 
 class TestProject(BaseConfigTest):
     def test_defaults(self):
@@ -193,12 +196,6 @@ class TestProject(BaseConfigTest):
             set(project.docs_paths),
             set(["other-models", "seeds", "snapshots", "analyses", "macros"]),
         )
-
-    def test_hashed_name(self):
-        project = project_from_config_norender(
-            self.default_project_data, project_root=self.project_dir
-        )
-        self.assertEqual(project.hashed_name(), "754cd47eac1d6f50a5f7cd399ec43da4")
 
     def test_all_overrides(self):
         # log-path is not tested because it is set exclusively from flags, not cfg
