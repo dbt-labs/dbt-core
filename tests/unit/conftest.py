@@ -6,6 +6,7 @@ from dbt.contracts.graph.nodes import SourceDefinition
 
 # All manifest related fixtures.
 from tests.unit.utils.manifest import *  # noqa
+from tests.unit.utils.project import *  # noqa
 
 
 @pytest.fixture
