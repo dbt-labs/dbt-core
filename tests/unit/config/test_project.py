@@ -30,7 +30,7 @@ from tests.unit.config import (
 )
 
 
-class TestProjectWithPytest:
+class TestProjectMethods:
     @pytest.fixture(scope="function")
     def selector_config(self) -> SelectorConfig:
         return SelectorConfig.selectors_from_dict(
@@ -150,7 +150,7 @@ class TestProjectWithPytest:
         assert project.hashed_name() == "6e72a69d5c5cca8f0400338441c022e4"
 
 
-class TestProject(BaseConfigTest):
+class TestProjectInitialization(BaseConfigTest):
     def test_defaults(self):
         project = project_from_config_norender(
             self.default_project_data, project_root=self.project_dir
