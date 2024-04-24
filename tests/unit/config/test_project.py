@@ -11,8 +11,11 @@ from dbt.constants import DEPENDENCIES_FILE_NAME
 import dbt.exceptions
 from dbt.adapters.factory import load_plugin
 from dbt.adapters.contracts.connection import QueryComment, DEFAULT_QUERY_COMMENT
+from dbt.config.project import Project, RenderComponents, VarProvider
+from dbt.config.selectors import SelectorConfig
 from dbt.contracts.project import PackageConfig, LocalPackage, GitPackage
 from dbt.node_types import NodeType
+from dbt_common.exceptions import DbtRuntimeError
 from dbt_common.semver import VersionSpecifier
 
 from dbt.flags import set_from_args
@@ -25,6 +28,114 @@ from tests.unit.config import (
     empty_project_renderer,
     project_from_config_rendered,
 )
+
+
+class TestProjectWithPytest:
+    @pytest.fixture(scope="function")
+    def selector_config(self) -> SelectorConfig:
+        return SelectorConfig.selectors_from_dict(
+            data={
+                "selectors": [
+                    {
+                        "name": "my_selector",
+                        "definition": "give me cats",
+                        "default": True,
+                    }
+                ]
+            }
+        )
+
+    @pytest.fixture(scope="function")
+    def project(self, selector_config: SelectorConfig) -> Project:
+        return Project(
+            project_name="test_project",
+            version=1.0,
+            project_root="doesnt/actually/exist",
+            profile_name="test_profile",
+            model_paths=["models"],
+            macro_paths=["macros"],
+            seed_paths=["seeds"],
+            test_paths=["tests"],
+            analysis_paths=["analyses"],
+            docs_paths=["docs"],
+            asset_paths=["assets"],
+            target_path="target",
+            snapshot_paths=["snapshots"],
+            clean_targets=["target"],
+            log_path="path/to/project/logs",
+            packages_install_path="dbt_packages",
+            packages_specified_path="packages.yml",
+            quoting={"database": True, "schema": True, "identifier": True},
+            models={},
+            on_run_start=[],
+            on_run_end=[],
+            dispatch=[
+                {"macro_namespace": "dbt_utils", "search_order": ["test_project", "dbt_utils"]}
+            ],
+            seeds={},
+            snapshots={},
+            sources={},
+            data_tests={},
+            unit_tests={},
+            metrics={},
+            semantic_models={},
+            saved_queries={},
+            exposures={},
+            vars=VarProvider({}),
+            dbt_version=[VersionSpecifier.from_version_string(dbt.version.__version__)],
+            packages=PackageConfig([]),
+            manifest_selectors={},
+            selectors=selector_config,
+            query_comment=QueryComment(),
+            config_version=1,
+            unrendered=RenderComponents({}, {}, {}),
+            project_env_vars={},
+            restrict_access=False,
+            dbt_cloud={},
+        )
+
+    def test_all_source_paths(self, project: Project):
+        assert (
+            project.all_source_paths.sort()
+            == ["models", "seeds", "snapshots", "analyses", "macros"].sort()
+        )
+
+    def test_generic_test_paths(self, project: Project):
+        assert project.generic_test_paths == ["tests/generic"]
+
+    def test_fixture_paths(self, project: Project):
+        assert project.fixture_paths == ["tests/fixtures"]
+
+    def test__str__(self, project: Project):
+        assert (
+            str(project)
+            == "{'name': 'test_project', 'version': 1.0, 'project-root': 'doesnt/actually/exist', 'profile': 'test_profile', 'model-paths': ['models'], 'macro-paths': ['macros'], 'seed-paths': ['seeds'], 'test-paths': ['tests'], 'analysis-paths': ['analyses'], 'docs-paths': ['docs'], 'asset-paths': ['assets'], 'target-path': 'target', 'snapshot-paths': ['snapshots'], 'clean-targets': ['target'], 'log-path': 'path/to/project/logs', 'quoting': {'database': True, 'schema': True, 'identifier': True}, 'models': {}, 'on-run-start': [], 'on-run-end': [], 'dispatch': [{'macro_namespace': 'dbt_utils', 'search_order': ['test_project', 'dbt_utils']}], 'seeds': {}, 'snapshots': {}, 'sources': {}, 'data_tests': {}, 'unit_tests': {}, 'metrics': {}, 'semantic-models': {}, 'saved-queries': {}, 'exposures': {}, 'vars': {}, 'require-dbt-version': ['=1.8.0-b3'], 'restrict-access': False, 'dbt-cloud': {}, 'query-comment': {'comment': \"\\n{%- set comment_dict = {} -%}\\n{%- do comment_dict.update(\\n    app='dbt',\\n    dbt_version=dbt_version,\\n    profile_name=target.get('profile_name'),\\n    target_name=target.get('target_name'),\\n) -%}\\n{%- if node is not none -%}\\n  {%- do comment_dict.update(\\n    node_id=node.unique_id,\\n  ) -%}\\n{% else %}\\n  {# in the node context, the connection name is the node_id #}\\n  {%- do comment_dict.update(connection_name=connection_name) -%}\\n{%- endif -%}\\n{{ return(tojson(comment_dict)) }}\\n\", 'append': False, 'job-label': False}, 'packages': []}"
+        )
+
+    def test_get_selector(self, project: Project):
+        selector = project.get_selector("my_selector")
+        assert selector.raw == "give me cats"
+
+        with pytest.raises(DbtRuntimeError):
+            project.get_selector("doesnt_exist")
+
+    def test_get_default_selector_name(self, project: Project):
+        default_selector_name = project.get_default_selector_name()
+        assert default_selector_name == "my_selector"
+
+        project.selectors["my_selector"]["default"] = False
+        default_selector_name = project.get_default_selector_name()
+        assert default_selector_name is None
+
+    def test_get_macro_search_order(self, project: Project):
+        search_order = project.get_macro_search_order("dbt_utils")
+        assert search_order == ["test_project", "dbt_utils"]
+
+        search_order = project.get_macro_search_order("doesnt_exist")
+        assert search_order is None
+
+    def test_project_target_path(self, project: Project):
+        assert project.project_target_path == "doesnt/actually/exist/target"
 
 
 class TestProject(BaseConfigTest):
