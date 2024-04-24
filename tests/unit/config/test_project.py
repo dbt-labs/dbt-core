@@ -137,6 +137,15 @@ class TestProjectWithPytest:
     def test_project_target_path(self, project: Project):
         assert project.project_target_path == "doesnt/actually/exist/target"
 
+    def test_eq(self, project: Project):
+        other = deepcopy(project)
+        assert project == other
+
+    def test_neq(self, project: Project):
+        other = deepcopy(project)
+        other.project_name = "other project"
+        assert project != other
+
 
 class TestProject(BaseConfigTest):
     def test_defaults(self):
@@ -170,21 +179,6 @@ class TestProject(BaseConfigTest):
         # just make sure str() doesn't crash anything, that's always
         # embarrassing
         str(project)
-
-    def test_eq(self):
-        project = project_from_config_norender(
-            self.default_project_data, project_root=self.project_dir
-        )
-        other = project_from_config_norender(
-            self.default_project_data, project_root=self.project_dir
-        )
-        self.assertEqual(project, other)
-
-    def test_neq(self):
-        project = project_from_config_norender(
-            self.default_project_data, project_root=self.project_dir
-        )
-        self.assertNotEqual(project, object())
 
     def test_implicit_overrides(self):
         self.default_project_data.update(
