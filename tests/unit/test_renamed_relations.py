@@ -13,6 +13,5 @@ def test_renameable_relation():
         {
             RelationType.View,
             RelationType.Table,
-            RelationType.MaterializedView,
         }
     )
