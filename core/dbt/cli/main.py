@@ -170,6 +170,7 @@ def cli(ctx, **kwargs):
 @cli.command("build")
 @click.pass_context
 @global_flags
+@p.empty
 @p.exclude
 @p.export_saved_queries
 @p.full_refresh
