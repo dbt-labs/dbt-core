@@ -29,3 +29,6 @@ class EventCatcher:
     def catch(self, event: EventMsg):
         if event.info.name == self.event_to_catch.__name__:
             self.caught_events.append(event)
+
+    def flush(self) -> None:
+        self.caught_events = []

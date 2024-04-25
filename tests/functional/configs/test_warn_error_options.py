@@ -27,7 +27,7 @@ class TestWarnErrorOptionsFromCLI:
         runner.invoke(["run"])
         assert len(catcher.caught_events) == 1
 
-        catcher.caught_events = []
+        catcher.flush()
         runner.invoke(
             ["run", "--warn-error-options", "{'include': 'all', 'silence': ['DeprecatedModel']}"]
         )
