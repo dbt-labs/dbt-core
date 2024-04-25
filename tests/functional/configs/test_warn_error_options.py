@@ -1,6 +1,6 @@
 import pytest
 
-from dbt.cli.main import dbtRunner
+from dbt.cli.main import dbtRunner, dbtRunnerResult
 from dbt.events.types import DeprecatedModel
 from dbt.tests.util import update_config_file
 from dbt_common.events.base_types import EventLevel
@@ -33,10 +33,23 @@ def runner(catcher: EventCatcher) -> dbtRunner:
     return dbtRunner(callbacks=[catcher.catch])
 
 
+def assert_deprecation_warning(result: dbtRunnerResult, catcher: EventCatcher) -> None:
+    assert result.success
+    assert result.exception is None
+    assert len(catcher.caught_events) == 1
+    assert catcher.caught_events[0].info.level == EventLevel.WARN.value
+
+
+def assert_deprecation_error(result: dbtRunnerResult) -> None:
+    assert not result.success
+    assert result.exception is not None
+    assert "Model my_model has passed its deprecation date of" in str(result.exception)
+
+
 class TestWarnErrorOptionsFromCLI:
     def test_can_silence(self, project, catcher: EventCatcher, runner: dbtRunner) -> None:
-        runner.invoke(["run"])
-        assert len(catcher.caught_events) == 1
+        result = runner.invoke(["run"])
+        assert_deprecation_warning(result, catcher)
 
         catcher.flush()
         runner.invoke(
@@ -48,39 +61,27 @@ class TestWarnErrorOptionsFromCLI:
         self, project, catcher: EventCatcher, runner: dbtRunner
     ) -> None:
         result = runner.invoke(["run"])
-        assert result.success
-        assert result.exception is None
-        assert len(catcher.caught_events) == 1
-        assert catcher.caught_events[0].info.level == EventLevel.WARN.value
+        assert_deprecation_warning(result, catcher)
 
         catcher.flush()
         result = runner.invoke(["run", "--warn-error-options", "{'include': ['DeprecatedModel']}"])
-        assert not result.success
-        assert result.exception is not None
-        assert "Model my_model has passed its deprecation date of" in str(result.exception)
+        assert_deprecation_error(result)
 
         catcher.flush()
         result = runner.invoke(["run", "--warn-error-options", "{'include': 'all'}"])
-        assert not result.success
-        assert result.exception is not None
-        assert "Model my_model has passed its deprecation date of" in str(result.exception)
+        assert_deprecation_error(result)
 
     def test_can_exclude_specific_event(
         self, project, catcher: EventCatcher, runner: dbtRunner
     ) -> None:
         result = runner.invoke(["run", "--warn-error-options", "{'include': 'all'}"])
-        assert not result.success
-        assert result.exception is not None
-        assert "Model my_model has passed its deprecation date of" in str(result.exception)
+        assert_deprecation_error(result)
 
         catcher.flush()
         result = runner.invoke(
             ["run", "--warn-error-options", "{'include': 'all', exclude: ['DeprecatedModel']}"]
         )
-        assert result.success
-        assert result.exception is None
-        assert len(catcher.caught_events) == 1
-        assert catcher.caught_events[0].info.level == EventLevel.WARN.value
+        assert_deprecation_warning(result, catcher)
 
 
 class TestWarnErrorOptionsFromProject:
@@ -93,10 +94,7 @@ class TestWarnErrorOptionsFromProject:
         self, project, clear_project_flags, project_root, catcher: EventCatcher, runner: dbtRunner
     ) -> None:
         result = runner.invoke(["run"])
-        assert result.success
-        assert result.exception is None
-        assert len(catcher.caught_events) == 1
-        assert catcher.caught_events[0].info.level == EventLevel.WARN.value
+        assert_deprecation_warning(result, catcher)
 
         silence_options = {
             "flags": {"warn_error_options": {"include": "all", "silence": ["DeprecatedModel"]}}
@@ -111,28 +109,21 @@ class TestWarnErrorOptionsFromProject:
         self, project, clear_project_flags, project_root, catcher: EventCatcher, runner: dbtRunner
     ) -> None:
         result = runner.invoke(["run"])
-        assert result.success
-        assert result.exception is None
-        assert len(catcher.caught_events) == 1
-        assert catcher.caught_events[0].info.level == EventLevel.WARN.value
+        assert_deprecation_warning(result, catcher)
 
         include_options = {"flags": {"warn_error_options": {"include": ["DeprecatedModel"]}}}
         update_config_file(include_options, project_root, "dbt_project.yml")
 
         catcher.flush()
         result = runner.invoke(["run"])
-        assert not result.success
-        assert result.exception is not None
-        assert "Model my_model has passed its deprecation date of" in str(result.exception)
+        assert_deprecation_error(result)
 
         include_options = {"flags": {"warn_error_options": {"include": "all"}}}
         update_config_file(include_options, project_root, "dbt_project.yml")
 
         catcher.flush()
         result = runner.invoke(["run"])
-        assert not result.success
-        assert result.exception is not None
-        assert "Model my_model has passed its deprecation date of" in str(result.exception)
+        assert_deprecation_error(result)
 
     def test_can_exclude_specific_event(
         self, project, clear_project_flags, project_root, catcher: EventCatcher, runner: dbtRunner
@@ -140,9 +131,7 @@ class TestWarnErrorOptionsFromProject:
         include_options = {"flags": {"warn_error_options": {"include": "all"}}}
         update_config_file(include_options, project_root, "dbt_project.yml")
         result = runner.invoke(["run"])
-        assert not result.success
-        assert result.exception is not None
-        assert "Model my_model has passed its deprecation date of" in str(result.exception)
+        assert_deprecation_error(result)
 
         exclude_options = {
             "flags": {"warn_error_options": {"include": "all", "exclude": ["DeprecatedModel"]}}
@@ -151,7 +140,4 @@ class TestWarnErrorOptionsFromProject:
 
         catcher.flush()
         result = runner.invoke(["run"])
-        assert result.success
-        assert result.exception is None
-        assert len(catcher.caught_events) == 1
-        assert catcher.caught_events[0].info.level == EventLevel.WARN.value
+        assert_deprecation_warning(result, catcher)
