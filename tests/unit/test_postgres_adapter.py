@@ -657,8 +657,6 @@ class TestPostgresAdapterConversions(TestAdapterConversions):
         for col_idx, expect in enumerate(expected):
             assert PostgresAdapter.convert_time_type(agate_table, col_idx) == expect
 
-        return self.indexes != []
-
 
 def test_index_config_changes():
     index_0_old = {
