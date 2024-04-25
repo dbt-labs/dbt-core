@@ -1,0 +1,6 @@
+kind: Fixes
+body: Replace usage of `Set` with `List` to fix issue with index updates intermittently happening out of order
+time: 2024-04-25T13:34:01.018399-04:00
+custom:
+  Author: mikealfare
+  Issue: "72"
