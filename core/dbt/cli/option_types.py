@@ -56,6 +56,7 @@ class WarnErrorOptionsType(YAML):
         return WarnErrorOptions(
             include=include_exclude.get("include", []),
             exclude=include_exclude.get("exclude", []),
+            silence=include_exclude.get("silence", []),
             valid_error_names=ALL_EVENT_NAMES,
         )
 
