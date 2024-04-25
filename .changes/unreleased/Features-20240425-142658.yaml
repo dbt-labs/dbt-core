@@ -1,0 +1,6 @@
+kind: Features
+body: add primary key information to model level
+time: 2024-04-25T14:26:58.351967+02:00
+custom:
+  Author: salimmoulouel
+  Issue: '#10034'
