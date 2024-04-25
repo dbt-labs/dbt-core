@@ -2,6 +2,7 @@ import pytest
 
 from dbt.cli.main import dbtRunner
 from dbt.events.types import DeprecatedModel
+from dbt.tests.util import update_config_file
 from dbt_common.events.base_types import EventLevel
 from tests.functional.utils import EventCatcher
 from typing import Dict, Union
@@ -17,19 +18,22 @@ models:
 """
 
 
+@pytest.fixture(scope="class")
+def models() -> ModelsDictSpec:
+    return {"my_model.sql": my_model_sql, "schema.yml": schema_yml}
+
+
+@pytest.fixture(scope="function")
+def catcher() -> EventCatcher:
+    return EventCatcher(event_to_catch=DeprecatedModel)
+
+
+@pytest.fixture(scope="function")
+def runner(catcher: EventCatcher) -> dbtRunner:
+    return dbtRunner(callbacks=[catcher.catch])
+
+
 class TestWarnErrorOptionsFromCLI:
-    @pytest.fixture(scope="class")
-    def models(self) -> ModelsDictSpec:
-        return {"my_model.sql": my_model_sql, "schema.yml": schema_yml}
-
-    @pytest.fixture(scope="function")
-    def catcher(self) -> EventCatcher:
-        return EventCatcher(event_to_catch=DeprecatedModel)
-
-    @pytest.fixture(scope="function")
-    def runner(self, catcher: EventCatcher) -> dbtRunner:
-        return dbtRunner(callbacks=[catcher.catch])
-
     def test_can_silence(self, project, catcher: EventCatcher, runner: dbtRunner) -> None:
         runner.invoke(["run"])
         assert len(catcher.caught_events) == 1
@@ -77,3 +81,23 @@ class TestWarnErrorOptionsFromCLI:
         assert result.exception is None
         assert len(catcher.caught_events) == 1
         assert catcher.caught_events[0].info.level == EventLevel.WARN.value
+
+
+class TestWarnErrorOptionsFromProject:
+    def test_can_silence(
+        self, project, project_root, catcher: EventCatcher, runner: dbtRunner
+    ) -> None:
+        result = runner.invoke(["run"])
+        assert result.success
+        assert result.exception is None
+        assert len(catcher.caught_events) == 1
+        assert catcher.caught_events[0].info.level == EventLevel.WARN.value
+
+        silence_options = {
+            "flags": {"warn_error_options": {"include": "all", "silence": ["DeprecatedModel"]}}
+        }
+        update_config_file(silence_options, project_root, "dbt_project.yml")
+
+        catcher.flush()
+        runner.invoke(["run"])
+        assert len(catcher.caught_events) == 0
