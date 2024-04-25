@@ -126,7 +126,7 @@ jobs:
           - python-version: 3.8
             os: windows-latest
           - python-version: 3.8
-            os: macos-latest
+            os: macos-12
 
     env:
       TOXENV: integration
