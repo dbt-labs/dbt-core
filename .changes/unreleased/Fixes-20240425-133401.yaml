@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix issue where index updates were occassionally happening out of order
+time: 2024-04-25T13:34:01.018399-04:00
+custom:
+  Author: mikealfare
+  Issue: "72"
