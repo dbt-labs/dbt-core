@@ -84,8 +84,13 @@ class TestWarnErrorOptionsFromCLI:
 
 
 class TestWarnErrorOptionsFromProject:
+    @pytest.fixture(scope="function")
+    def clear_project_flags(self, project_root) -> None:
+        flags = {"flags": {}}
+        update_config_file(flags, project_root, "dbt_project.yml")
+
     def test_can_silence(
-        self, project, project_root, catcher: EventCatcher, runner: dbtRunner
+        self, project, clear_project_flags, project_root, catcher: EventCatcher, runner: dbtRunner
     ) -> None:
         result = runner.invoke(["run"])
         assert result.success
@@ -101,3 +106,52 @@ class TestWarnErrorOptionsFromProject:
         catcher.flush()
         runner.invoke(["run"])
         assert len(catcher.caught_events) == 0
+
+    def test_can_raise_warning_to_error(
+        self, project, clear_project_flags, project_root, catcher: EventCatcher, runner: dbtRunner
+    ) -> None:
+        result = runner.invoke(["run"])
+        assert result.success
+        assert result.exception is None
+        assert len(catcher.caught_events) == 1
+        assert catcher.caught_events[0].info.level == EventLevel.WARN.value
+
+        include_options = {"flags": {"warn_error_options": {"include": ["DeprecatedModel"]}}}
+        update_config_file(include_options, project_root, "dbt_project.yml")
+
+        catcher.flush()
+        result = runner.invoke(["run"])
+        assert not result.success
+        assert result.exception is not None
+        assert "Model my_model has passed its deprecation date of" in str(result.exception)
+
+        include_options = {"flags": {"warn_error_options": {"include": "all"}}}
+        update_config_file(include_options, project_root, "dbt_project.yml")
+
+        catcher.flush()
+        result = runner.invoke(["run"])
+        assert not result.success
+        assert result.exception is not None
+        assert "Model my_model has passed its deprecation date of" in str(result.exception)
+
+    def test_can_exclude_specific_event(
+        self, project, clear_project_flags, project_root, catcher: EventCatcher, runner: dbtRunner
+    ) -> None:
+        include_options = {"flags": {"warn_error_options": {"include": "all"}}}
+        update_config_file(include_options, project_root, "dbt_project.yml")
+        result = runner.invoke(["run"])
+        assert not result.success
+        assert result.exception is not None
+        assert "Model my_model has passed its deprecation date of" in str(result.exception)
+
+        exclude_options = {
+            "flags": {"warn_error_options": {"include": "all", "exclude": ["DeprecatedModel"]}}
+        }
+        update_config_file(exclude_options, project_root, "dbt_project.yml")
+
+        catcher.flush()
+        result = runner.invoke(["run"])
+        assert result.success
+        assert result.exception is None
+        assert len(catcher.caught_events) == 1
+        assert catcher.caught_events[0].info.level == EventLevel.WARN.value
