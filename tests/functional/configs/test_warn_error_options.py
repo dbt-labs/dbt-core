@@ -22,9 +22,15 @@ class TestWarnErrorOptionsFromCLI:
     def models(self) -> ModelsDictSpec:
         return {"my_model.sql": my_model_sql, "schema.yml": schema_yml}
 
-    def test_can_silence(self, project) -> None:
-        catcher = EventCatcher(event_to_catch=DeprecatedModel)
-        runner = dbtRunner(callbacks=[catcher.catch])
+    @pytest.fixture(scope="function")
+    def catcher(self) -> EventCatcher:
+        return EventCatcher(event_to_catch=DeprecatedModel)
+
+    @pytest.fixture(scope="function")
+    def runner(self, catcher: EventCatcher) -> dbtRunner:
+        return dbtRunner(callbacks=[catcher.catch])
+
+    def test_can_silence(self, project, catcher: EventCatcher, runner: dbtRunner) -> None:
         runner.invoke(["run"])
         assert len(catcher.caught_events) == 1
 
@@ -34,10 +40,9 @@ class TestWarnErrorOptionsFromCLI:
         )
         assert len(catcher.caught_events) == 0
 
-    def test_can_raise_warning_to_error(self, project) -> None:
-        catcher = EventCatcher(event_to_catch=DeprecatedModel)
-        runner = dbtRunner(callbacks=[catcher.catch])
-
+    def test_can_raise_warning_to_error(
+        self, project, catcher: EventCatcher, runner: dbtRunner
+    ) -> None:
         result = runner.invoke(["run"])
         assert result.success
         assert result.exception is None
@@ -56,9 +61,9 @@ class TestWarnErrorOptionsFromCLI:
         assert result.exception is not None
         assert "Model my_model has passed its deprecation date of" in str(result.exception)
 
-    def test_can_exclude_specific_event(self, project) -> None:
-        catcher = EventCatcher(event_to_catch=DeprecatedModel)
-        runner = dbtRunner(callbacks=[catcher.catch])
+    def test_can_exclude_specific_event(
+        self, project, catcher: EventCatcher, runner: dbtRunner
+    ) -> None:
         result = runner.invoke(["run", "--warn-error-options", "{'include': 'all'}"])
         assert not result.success
         assert result.exception is not None
