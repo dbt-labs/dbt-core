@@ -55,13 +55,13 @@ class TestEnvVars:
         os.environ["DBT_TEST_ENV_VAR"] = "1"
         os.environ["DBT_TEST_USER"] = "root"
         os.environ["DBT_TEST_PASS"] = "password"
-        os.environ[SECRET_ENV_PREFIX + "SECRET"] = "secret_variable"
+        os.environ[SECRET_ENV_PREFIX + "_SECRET"] = "secret_variable"
         os.environ["DBT_TEST_NOT_SECRET"] = "regular_variable"
         os.environ["DBT_TEST_IGNORE_DEFAULT"] = "ignored_default"
         yield
         del os.environ["DBT_TEST_ENV_VAR"]
         del os.environ["DBT_TEST_USER"]
-        del os.environ[SECRET_ENV_PREFIX + "SECRET"]
+        del os.environ[SECRET_ENV_PREFIX + "_SECRET"]
         del os.environ["DBT_TEST_NOT_SECRET"]
         del os.environ["DBT_TEST_IGNORE_DEFAULT"]
 
