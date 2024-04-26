@@ -4,8 +4,8 @@ from typing import Any, Dict
 from dbt.clients import yaml_helper
 from dbt_common.events.functions import fire_event
 from dbt.events.types import InvalidOptionYAML
-from dbt.exceptions import OptionNotYamlDictError
-from dbt_common.exceptions import DbtConfigError, DbtValidationError
+from dbt.exceptions import DbtWarnErrorOptionsError, OptionNotYamlDictError
+from dbt_common.exceptions import DbtValidationError
 
 
 def parse_cli_vars(var_string: str) -> Dict[str, Any]:
@@ -39,7 +39,7 @@ def exclusive_primary_alt_value_setting(
     alt_options = dictionary.get(alt)
 
     if primary_options and alt_options:
-        raise DbtConfigError(
+        raise DbtWarnErrorOptionsError(
             f"Only `{alt}` or `{primary}` can be specified in `warn_error_options`, not both"
         )
 

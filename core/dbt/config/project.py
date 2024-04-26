@@ -26,8 +26,8 @@ from dbt_common.clients.system import path_exists, load_file_contents
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.adapters.contracts.connection import QueryComment
 from dbt.exceptions import (
-    DbtConfigError,
     DbtProjectError,
+    DbtWarnErrorOptionsError,
     ProjectContractBrokenError,
     ProjectContractError,
     DbtRuntimeError,
@@ -846,7 +846,7 @@ def read_project_flags(project_dir: str, profiles_dir: str) -> ProjectFlags:
 
             ProjectFlags.validate(project_flags)
             return ProjectFlags.from_dict(project_flags)
-    except (DbtProjectError, DbtConfigError) as exc:
+    except (DbtProjectError, DbtWarnErrorOptionsError) as exc:
         # We don't want to eat the DbtProjectError for UserConfig to ProjectFlags or
         # DbtConfigError for warn_error_options munging
         raise exc

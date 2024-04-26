@@ -113,6 +113,10 @@ class DbtProfileError(DbtConfigError):
     pass
 
 
+class DbtWarnErrorOptionsError(DbtConfigError):
+    pass
+
+
 class InvalidSelectorError(DbtRuntimeError):
     def __init__(self, name: str) -> None:
         self.name = name
