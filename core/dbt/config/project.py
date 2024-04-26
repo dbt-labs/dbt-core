@@ -26,6 +26,7 @@ from dbt_common.clients.system import path_exists, load_file_contents
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.adapters.contracts.connection import QueryComment
 from dbt.exceptions import (
+    DbtConfigError,
     DbtProjectError,
     ProjectContractBrokenError,
     ProjectContractError,
@@ -39,6 +40,7 @@ from dbt.version import get_installed_version
 from dbt.utils import MultiDict, md5, coerce_dict_str
 from dbt.node_types import NodeType
 from dbt.config.selectors import SelectorDict
+from dbt.config.utils import exclusive_primary_alt_value_setting
 from dbt.contracts.project import (
     Project as ProjectContract,
     SemverString,
@@ -835,10 +837,18 @@ def read_project_flags(project_dir: str, profiles_dir: str) -> ProjectFlags:
             project_flags = profile_project_flags
 
         if project_flags is not None:
+            # if warn_error_options are set, handle collapsing `include` and `error` as well as
+            # collapsing `exclude` and `warn`
+            warn_error_options = project_flags.get("warn_error_options")
+            if warn_error_options:
+                exclusive_primary_alt_value_setting(warn_error_options, "include", "error")
+                exclusive_primary_alt_value_setting(warn_error_options, "exclude", "warn")
+
             ProjectFlags.validate(project_flags)
             return ProjectFlags.from_dict(project_flags)
-    except (DbtProjectError) as exc:
-        # We don't want to eat the DbtProjectError for UserConfig to ProjectFlags
+    except (DbtProjectError, DbtConfigError) as exc:
+        # We don't want to eat the DbtProjectError for UserConfig to ProjectFlags or
+        # DbtConfigError for warn_error_options munging
         raise exc
     except (DbtRuntimeError, ValidationError):
         pass

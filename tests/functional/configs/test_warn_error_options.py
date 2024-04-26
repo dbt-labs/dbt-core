@@ -175,3 +175,31 @@ class TestWarnErrorOptionsFromProject:
         catcher.flush()
         result = runner.invoke(["run"])
         assert_deprecation_warning(result, catcher)
+
+    def test_cant_set_both_include_and_error(
+        self, project, clear_project_flags, project_root, runner: dbtRunner
+    ) -> None:
+        exclude_options = {"flags": {"warn_error_options": {"include": "all", "error": "all"}}}
+        update_config_file(exclude_options, project_root, "dbt_project.yml")
+        result = runner.invoke(["run"])
+        assert not result.success
+        assert result.exception is not None
+        assert "Only `error` or `include` can be specified" in str(result.exception)
+
+    def test_cant_set_both_exclude_and_warn(
+        self, project, clear_project_flags, project_root, runner: dbtRunner
+    ) -> None:
+        exclude_options = {
+            "flags": {
+                "warn_error_options": {
+                    "include": "all",
+                    "exclude": ["DeprecatedModel"],
+                    "warn": ["DeprecatedModel"],
+                }
+            }
+        }
+        update_config_file(exclude_options, project_root, "dbt_project.yml")
+        result = runner.invoke(["run"])
+        assert not result.success
+        assert result.exception is not None
+        assert "Only `warn` or `exclude` can be specified" in str(result.exception)
