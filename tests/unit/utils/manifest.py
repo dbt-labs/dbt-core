@@ -1001,6 +1001,6 @@ def manifest(
         disabled={},
         selectors={},
         groups={},
-        metadata=ManifestMetadata(adapter_type="postgres"),
+        metadata=ManifestMetadata(adapter_type="postgres", project_name="pkg"),
     )
     return manifest
