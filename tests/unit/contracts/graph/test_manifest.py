@@ -43,7 +43,7 @@ from dbt.flags import set_from_args
 from dbt.node_types import NodeType
 from dbt_semantic_interfaces.type_enums import MetricType
 
-from .utils import (
+from tests.unit.utils import (
     MockMacro,
     MockDocumentation,
     MockSource,
