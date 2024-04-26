@@ -1,7 +1,5 @@
 import pytest
 
-import dbt.config
-import dbt.exceptions
 from dbt.adapters.contracts.connection import QueryComment
 from dbt.config.project import Project, RenderComponents, VarProvider
 from dbt.config.selectors import SelectorConfig
@@ -59,7 +57,7 @@ def project(selector_config: SelectorConfig) -> Project:
         saved_queries={},
         exposures={},
         vars=VarProvider({}),
-        dbt_version=[VersionSpecifier.from_version_string(dbt.version.__version__)],
+        dbt_version=[VersionSpecifier.from_version_string("0.0.0")],
         packages=PackageConfig([]),
         manifest_selectors={},
         selectors=selector_config,
