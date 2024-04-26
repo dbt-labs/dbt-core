@@ -3,9 +3,9 @@ from click import ParamType, Choice
 from dbt.config.utils import parse_cli_yaml_string
 from dbt.events import ALL_EVENT_NAMES
 from dbt.exceptions import ValidationError, OptionNotYamlDictError
-from dbt_common.exceptions import DbtValidationError
-
+from dbt_common.exceptions import DbtConfigError, DbtValidationError
 from dbt_common.helper_types import WarnErrorOptions
+from typing import Any, Dict
 
 
 class YAML(ParamType):
@@ -44,6 +44,28 @@ class Package(ParamType):
             return {"name": value, "version": None}
 
 
+def exclusive_primary_alt_value_setting(
+    dictionary: Dict[str, Any], primary: str, alt: str
+) -> None:
+    """Munges in place under the primary the options for the primary and alt values
+
+    Sometimes we allow setting something via TWO keys, but not at the same time. If both the primary
+    key and alt key have values, an error gets raised. If the alt key has values, then we update
+    the dictionary to ensure the primary key contains the values. If neither are set, nothing happens.
+    """
+
+    primary_options = dictionary.get(primary)
+    alt_options = dictionary.get(alt)
+
+    if primary_options and alt_options:
+        raise DbtConfigError(
+            f"Only `{alt}` or `{primary}` can be specified in `warn_error_options`, not both"
+        )
+
+    if alt_options:
+        dictionary[primary] = alt_options
+
+
 class WarnErrorOptionsType(YAML):
     """The Click WarnErrorOptions type. Converts YAML strings into objects."""
 
@@ -52,6 +74,8 @@ class WarnErrorOptionsType(YAML):
     def convert(self, value, param, ctx):
         # this function is being used by param in click
         include_exclude = super().convert(value, param, ctx)
+        exclusive_primary_alt_value_setting(include_exclude, "include", "error")
+        exclusive_primary_alt_value_setting(include_exclude, "exclude", "warn")
 
         return WarnErrorOptions(
             include=include_exclude.get("include", []),

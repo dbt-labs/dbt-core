@@ -71,6 +71,14 @@ class TestWarnErrorOptionsFromCLI:
         result = runner.invoke(["run", "--warn-error-options", "{'include': 'all'}"])
         assert_deprecation_error(result)
 
+        catcher.flush()
+        result = runner.invoke(["run", "--warn-error-options", "{'error': ['DeprecatedModel']}"])
+        assert_deprecation_error(result)
+
+        catcher.flush()
+        result = runner.invoke(["run", "--warn-error-options", "{'error': 'all'}"])
+        assert_deprecation_error(result)
+
     def test_can_exclude_specific_event(
         self, project, catcher: EventCatcher, runner: dbtRunner
     ) -> None:
@@ -79,9 +87,35 @@ class TestWarnErrorOptionsFromCLI:
 
         catcher.flush()
         result = runner.invoke(
-            ["run", "--warn-error-options", "{'include': 'all', exclude: ['DeprecatedModel']}"]
+            ["run", "--warn-error-options", "{'include': 'all', 'exclude': ['DeprecatedModel']}"]
         )
         assert_deprecation_warning(result, catcher)
+
+        catcher.flush()
+        result = runner.invoke(
+            ["run", "--warn-error-options", "{'include': 'all', 'warn': ['DeprecatedModel']}"]
+        )
+        assert_deprecation_warning(result, catcher)
+
+    def test_cant_set_both_include_and_error(self, project, runner: dbtRunner) -> None:
+        result = runner.invoke(
+            ["run", "--warn-error-options", "{'include': 'all', 'error': 'all'}"]
+        )
+        assert not result.success
+        assert result.exception is not None
+        assert "Only `error` or `include` can be specified" in str(result.exception)
+
+    def test_cant_set_both_exclude_and_warn(self, project, runner: dbtRunner) -> None:
+        result = runner.invoke(
+            [
+                "run",
+                "--warn-error-options",
+                "{'include': 'all', 'exclude': ['DeprecatedModel'], 'warn': ['DeprecatedModel']}",
+            ]
+        )
+        assert not result.success
+        assert result.exception is not None
+        assert "Only `warn` or `exclude` can be specified" in str(result.exception)
 
 
 class TestWarnErrorOptionsFromProject:
