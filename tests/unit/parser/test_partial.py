@@ -2,6 +2,7 @@ from copy import deepcopy
 
 import pytest
 import time
+from typing import Dict
 
 from dbt.parser.partial import PartialParsing
 from dbt.contracts.files import (
@@ -22,7 +23,7 @@ PROJECT_NAME = "my_test"
 
 
 @pytest.fixture
-def files() -> dict[str, BaseSourceFile]:
+def files() -> Dict[str, BaseSourceFile]:
     project_root = "/users/root"
     sql_model_file = SourceFile(
         path=FilePath(
