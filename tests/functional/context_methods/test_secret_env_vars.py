@@ -73,15 +73,15 @@ select
 class TestAllowSecretProfilePackage(FirstDependencyProject):
     @pytest.fixture(scope="class", autouse=True)
     def setup(self):
-        os.environ[SECRET_ENV_PREFIX + "USER"] = "root"
-        os.environ[SECRET_ENV_PREFIX + "PASS"] = "password"
-        os.environ[SECRET_ENV_PREFIX + "PACKAGE"] = "first_dependency"
-        os.environ[SECRET_ENV_PREFIX + "GIT_TOKEN"] = "abc123"
+        os.environ[SECRET_ENV_PREFIX + "_USER"] = "root"
+        os.environ[SECRET_ENV_PREFIX + "_PASS"] = "password"
+        os.environ[SECRET_ENV_PREFIX + "_PACKAGE"] = "first_dependency"
+        os.environ[SECRET_ENV_PREFIX + "_GIT_TOKEN"] = "abc123"
         yield
-        del os.environ[SECRET_ENV_PREFIX + "USER"]
-        del os.environ[SECRET_ENV_PREFIX + "PASS"]
-        del os.environ[SECRET_ENV_PREFIX + "PACKAGE"]
-        del os.environ[SECRET_ENV_PREFIX + "GIT_TOKEN"]
+        del os.environ[SECRET_ENV_PREFIX + "_USER"]
+        del os.environ[SECRET_ENV_PREFIX + "_PASS"]
+        del os.environ[SECRET_ENV_PREFIX + "_PACKAGE"]
+        del os.environ[SECRET_ENV_PREFIX + "_GIT_TOKEN"]
 
     @pytest.fixture(scope="class")
     def models(self):
@@ -137,7 +137,7 @@ class TestAllowSecretProfilePackage(FirstDependencyProject):
 class TestCloneFailSecretScrubbed:
     @pytest.fixture(scope="class", autouse=True)
     def setup(self):
-        os.environ[SECRET_ENV_PREFIX + "GIT_TOKEN"] = "abc123"
+        os.environ[SECRET_ENV_PREFIX + "_GIT_TOKEN"] = "abc123"
 
     @pytest.fixture(scope="class")
     def models(self):
