@@ -11,6 +11,7 @@ flaky
 freezegun>=1.4.0,<1.5
 hypothesis
 ipdb
+isort>=5.12,<6
 mypy==1.4.1
 pip-tools
 pre-commit
