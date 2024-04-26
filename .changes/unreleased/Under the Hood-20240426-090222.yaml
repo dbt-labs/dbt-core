@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Remove the final underscore from secret environment variable constants.
+time: 2024-04-26T09:02:22.481158-05:00
+custom:
+  Author: emmyoop
+  Issue: "10052"
