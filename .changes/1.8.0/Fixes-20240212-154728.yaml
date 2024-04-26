@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix Semantic Model Compare node relations
+time: 2024-02-12T15:47:28.752107-08:00
+custom:
+  Author: ChenyuLInx
+  Issue: "9548"

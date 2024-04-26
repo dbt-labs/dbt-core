@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Remove non dbt.artifacts dbt.* imports from dbt/artifacts
+time: 2024-04-12T13:20:00.017737-07:00
+custom:
+  Author: michelleark
+  Issue: "9926"

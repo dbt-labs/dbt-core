@@ -89,7 +89,7 @@ models__schema_yml = """
 version: 2
 snapshots:
   - name: snapshot_actual
-    tests:
+    data_tests:
       - mutually_exclusive_ranges
     config:
       meta:
@@ -100,7 +100,7 @@ models__schema_with_target_schema_yml = """
 version: 2
 snapshots:
   - name: snapshot_actual
-    tests:
+    data_tests:
       - mutually_exclusive_ranges
     config:
       meta:

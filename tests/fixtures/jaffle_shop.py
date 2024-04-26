@@ -179,7 +179,7 @@ models:
     columns:
       - name: customer_id
         description: This is a unique identifier for a customer
-        tests:
+        data_tests:
           - unique
           - not_null
 
@@ -206,14 +206,14 @@ models:
 
     columns:
       - name: order_id
-        tests:
+        data_tests:
           - unique
           - not_null
         description: This is a unique identifier for an order
 
       - name: customer_id
         description: Foreign key to the customers table
-        tests:
+        data_tests:
           - not_null
           - relationships:
               to: ref('customers')
@@ -224,33 +224,33 @@ models:
 
       - name: status
         description: '{{ doc("orders_status") }}'
-        tests:
+        data_tests:
           - accepted_values:
               values: ['placed', 'shipped', 'completed', 'return_pending', 'returned']
 
       - name: amount
         description: Total amount (AUD) of the order
-        tests:
+        data_tests:
           - not_null
 
       - name: credit_card_amount
         description: Amount of the order (AUD) paid for by credit card
-        tests:
+        data_tests:
           - not_null
 
       - name: coupon_amount
         description: Amount of the order (AUD) paid for by coupon
-        tests:
+        data_tests:
           - not_null
 
       - name: bank_transfer_amount
         description: Amount of the order (AUD) paid for by bank transfer
-        tests:
+        data_tests:
           - not_null
 
       - name: gift_card_amount
         description: Amount of the order (AUD) paid for by gift card
-        tests:
+        data_tests:
           - not_null
 """
 
@@ -262,29 +262,29 @@ models:
   - name: stg_customers
     columns:
       - name: customer_id
-        tests:
+        data_tests:
           - unique
           - not_null
 
   - name: stg_orders
     columns:
       - name: order_id
-        tests:
+        data_tests:
           - unique
           - not_null
       - name: status
-        tests:
+        data_tests:
           - accepted_values:
               values: ['placed', 'shipped', 'completed', 'return_pending', 'returned']
 
   - name: stg_payments
     columns:
       - name: payment_id
-        tests:
+        data_tests:
           - unique
           - not_null
       - name: payment_method
-        tests:
+        data_tests:
           - accepted_values:
               values: ['credit_card', 'coupon', 'bank_transfer', 'gift_card']
 """

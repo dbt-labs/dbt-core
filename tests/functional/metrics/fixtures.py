@@ -88,6 +88,14 @@ metrics:
       metrics:
         - average_tenure
       expr: "average_tenure + 1"
+
+  - name: tenured_people
+    label: Tenured People
+    description: People who have been here more than 1 year
+    type: simple
+    type_params:
+      measure: people
+    filter: "{{ Metric('collective_tenure', ['id']) }} > 2"
 """
 
 metricflow_time_spine_sql = """
@@ -105,8 +113,64 @@ metrics:
     type: simple
     type_params:
       measure: people
+    config:
+      meta:
+        my_meta_config: 'config'
+
+  - name: collective_tenure
+    label: "Collective tenure"
+    description: Total number of years of team experience
+    type: simple
+    type_params:
+      measure:
+        name: years_tenure
+        filter: "{{ Dimension('id__loves_dbt') }} is true"
+        join_to_timespine: true
+        fill_nulls_with: 0
+
+  - name: collective_window
+    label: "Collective window"
+    description: Testing window
+    type: simple
+    type_params:
+      measure:
+        name: years_tenure
+        filter: "{{ Dimension('id__loves_dbt') }} is true"
+      window: 14 days
+
+  - name: average_tenure
+    label: Average Tenure
+    description: The average tenure of our people
+    type: ratio
+    type_params:
+      numerator: collective_tenure
+      denominator: number_of_people
+
+  - name: average_tenure_minus_people
+    label: Average Tenure minus People
+    description: Well this isn't really useful is it?
+    type: derived
+    type_params:
+      expr: average_tenure - number_of_people
+      metrics:
+        - average_tenure
+        - number_of_people
+
+"""
+
+models_people_metrics_meta_top_yml = """
+version: 2
+
+metrics:
+
+  - name: number_of_people
+    label: "Number of people"
+    description: Total count of people
+    type: simple
+    type_params:
+      measure: people
     meta:
-        my_meta: 'testing'
+        my_meta_top: 'top'
 
   - name: collective_tenure
     label: "Collective tenure"
@@ -458,6 +522,34 @@ metrics:
 
 """
 
+meta_metric_level_schema_yml = """
+version: 2
+
+metrics:
+
+  - name: number_of_people
+    label: "Number of people"
+    description: Total count of people
+    type: simple
+    type_params:
+      measure: people
+    config:
+      meta:
+         my_meta_config: 'config
+    meta:
+        my_meta_direct: 'direct'
+
+  - name: collective_tenure
+    label: "Collective tenure"
+    description: Total number of years of team experience
+    type: simple
+    type_params:
+      measure:
+        name: years_tenure
+        filter: "{{ Dimension('id__loves_dbt') }} is true"
+
+"""
+
 enabled_metric_level_schema_yml = """
 version: 2
 
@@ -663,4 +755,87 @@ metrics:
           base_measure: num_visits
           conversion_measure: num_orders
           entity: purchase
+"""
+
+filtered_metrics_yml = """
+version: 2
+
+metrics:
+
+  - name: collective_tenure_measure_filter_str
+    label: "Collective tenure1"
+    description: Total number of years of team experience
+    type: simple
+    type_params:
+      measure:
+        name: "years_tenure"
+        filter: "{{ Dimension('id__loves_dbt') }} is true"
+
+  - name: collective_tenure_measure_filter_list
+    label: "Collective tenure2"
+    description: Total number of years of team experience
+    type: simple
+    type_params:
+      measure:
+        name: "years_tenure"
+        filter:
+          - "{{ Dimension('id__loves_dbt') }} is true"
+
+  - name: collective_tenure_metric_filter_str
+    label: Collective tenure3
+    description: Total number of years of team experience
+    type: simple
+    type_params:
+      measure:
+        name: "years_tenure"
+    filter: "{{ Dimension('id__loves_dbt') }} is true"
+
+  - name: collective_tenure_metric_filter_list
+    label: Collective tenure4
+    description: Total number of years of team experience
+    type: simple
+    type_params:
+      measure:
+        name: "years_tenure"
+    filter:
+      - "{{ Dimension('id__loves_dbt') }} is true"
+
+  - name: average_tenure_filter_str
+    label: Average tenure of people who love dbt1
+    description: Average tenure of people who love dbt
+    type: derived
+    type_params:
+      expr: "average_tenure"
+      metrics:
+        - name: average_tenure
+          filter: "{{ Dimension('id__loves_dbt') }} is true"
+
+  - name: average_tenure_filter_list
+    label: Average tenure of people who love dbt2
+    description: Average tenure of people who love dbt
+    type: derived
+    type_params:
+      expr: "average_tenure"
+      metrics:
+        - name: average_tenure
+          filter:
+            - "{{ Dimension('id__loves_dbt') }} is true"
+"""
+
+duplicate_measure_metric_yml = """
+metrics:
+  # Simple metrics
+  - name: people_with_tenure
+    description: "Count of people with tenure"
+    type: simple
+    label: People with tenure
+    type_params:
+      measure: people
+  - name: ratio_tenure_to_people
+    description: People to years of tenure
+    label: New customers to all customers
+    type: ratio
+    type_params:
+      numerator: people_with_tenure
+      denominator: number_of_people
 """

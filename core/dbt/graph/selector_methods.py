@@ -4,11 +4,11 @@ from itertools import chain
 from pathlib import Path
 from typing import Set, List, Dict, Iterator, Tuple, Any, Union, Type, Optional, Callable
 
-from dbt.dataclass_schema import StrEnum
+from dbt_common.dataclass_schema import StrEnum
 
 from .graph import UniqueId
 
-from dbt.contracts.graph.manifest import Manifest, WritableManifest
+from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import (
     SingularTestNode,
     Exposure,
@@ -18,17 +18,18 @@ from dbt.contracts.graph.nodes import (
     ResultNode,
     ManifestNode,
     ModelNode,
+    UnitTestDefinition,
     SavedQuery,
     SemanticModel,
 )
 from dbt.contracts.graph.unparsed import UnparsedVersion
 from dbt.contracts.state import PreviousState
-from dbt.exceptions import (
+from dbt_common.exceptions import (
     DbtInternalError,
     DbtRuntimeError,
 )
 from dbt.node_types import NodeType
-from dbt.events.contextvars import get_project_root
+from dbt_common.events.contextvars import get_project_root
 
 
 SELECTOR_GLOB = "*"
@@ -53,7 +54,6 @@ class MethodName(StrEnum):
     Metric = "metric"
     Result = "result"
     SourceStatus = "source_status"
-    Wildcard = "wildcard"
     Version = "version"
     SemanticModel = "semantic_model"
     SavedQuery = "saved_query"
@@ -101,7 +101,9 @@ def is_selected_node(fqn: List[str], node_selector: str, is_versioned: bool) -> 
     return True
 
 
-SelectorTarget = Union[SourceDefinition, ManifestNode, Exposure, Metric]
+SelectorTarget = Union[
+    SourceDefinition, ManifestNode, Exposure, Metric, SemanticModel, UnitTestDefinition
+]
 
 
 class SelectorMethod(metaclass=abc.ABCMeta):
@@ -148,6 +150,21 @@ class SelectorMethod(metaclass=abc.ABCMeta):
                 continue
             yield unique_id, metric
 
+    def unit_tests(
+        self, included_nodes: Set[UniqueId]
+    ) -> Iterator[Tuple[UniqueId, UnitTestDefinition]]:
+        for unique_id, unit_test in self.manifest.unit_tests.items():
+            unique_id = UniqueId(unique_id)
+            if unique_id not in included_nodes:
+                continue
+            yield unique_id, unit_test
+
+    def parsed_and_unit_nodes(self, included_nodes: Set[UniqueId]):
+        yield from chain(
+            self.parsed_nodes(included_nodes),
+            self.unit_tests(included_nodes),
+        )
+
     def semantic_model_nodes(
         self, included_nodes: Set[UniqueId]
     ) -> Iterator[Tuple[UniqueId, SemanticModel]]:
@@ -176,6 +193,7 @@ class SelectorMethod(metaclass=abc.ABCMeta):
             self.source_nodes(included_nodes),
             self.exposure_nodes(included_nodes),
             self.metric_nodes(included_nodes),
+            self.unit_tests(included_nodes),
             self.semantic_model_nodes(included_nodes),
         )
 
@@ -192,6 +210,7 @@ class SelectorMethod(metaclass=abc.ABCMeta):
             self.parsed_nodes(included_nodes),
             self.exposure_nodes(included_nodes),
             self.metric_nodes(included_nodes),
+            self.unit_tests(included_nodes),
             self.semantic_model_nodes(included_nodes),
             self.saved_query_nodes(included_nodes),
         )
@@ -238,37 +257,36 @@ class QualifiedNameSelectorMethod(SelectorMethod):
         :param str selector: The selector or node name
         """
         non_source_nodes = list(self.non_source_nodes(included_nodes))
-        for node, real_node in non_source_nodes:
-            if self.node_is_match(selector, real_node.fqn, real_node.is_versioned):
-                yield node
+        for unique_id, node in non_source_nodes:
+            if self.node_is_match(selector, node.fqn, node.is_versioned):
+                yield unique_id
 
 
 class TagSelectorMethod(SelectorMethod):
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
         """yields nodes from included that have the specified tag"""
-        for node, real_node in self.all_nodes(included_nodes):
-            if hasattr(real_node, "tags") and any(
-                fnmatch(tag, selector) for tag in real_node.tags
-            ):
-                yield node
+        for unique_id, node in self.all_nodes(included_nodes):
+            if hasattr(node, "tags") and any(fnmatch(tag, selector) for tag in node.tags):
+                yield unique_id
 
 
 class GroupSelectorMethod(SelectorMethod):
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
         """yields nodes from included in the specified group"""
-        for node, real_node in self.groupable_nodes(included_nodes):
-            if selector == real_node.config.get("group"):
-                yield node
+        for unique_id, node in self.groupable_nodes(included_nodes):
+            node_group = node.config.get("group")
+            if node_group and fnmatch(node_group, selector):
+                yield unique_id
 
 
 class AccessSelectorMethod(SelectorMethod):
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
         """yields model nodes matching the specified access level"""
-        for node, real_node in self.parsed_nodes(included_nodes):
-            if not isinstance(real_node, ModelNode):
+        for unique_id, node in self.parsed_nodes(included_nodes):
+            if not isinstance(node, ModelNode):
                 continue
-            if selector == real_node.access:
-                yield node
+            if selector == node.access:
+                yield unique_id
 
 
 class SourceSelectorMethod(SelectorMethod):
@@ -291,14 +309,14 @@ class SourceSelectorMethod(SelectorMethod):
             ).format(selector)
             raise DbtRuntimeError(msg)
 
-        for node, real_node in self.source_nodes(included_nodes):
-            if not fnmatch(real_node.package_name, target_package):
+        for unique_id, node in self.source_nodes(included_nodes):
+            if not fnmatch(node.package_name, target_package):
                 continue
-            if not fnmatch(real_node.source_name, target_source):
+            if not fnmatch(node.source_name, target_source):
                 continue
-            if not fnmatch(real_node.name, target_table):
+            if not fnmatch(node.name, target_table):
                 continue
-            yield node
+            yield unique_id
 
 
 class ExposureSelectorMethod(SelectorMethod):
@@ -317,13 +335,13 @@ class ExposureSelectorMethod(SelectorMethod):
             ).format(selector)
             raise DbtRuntimeError(msg)
 
-        for node, real_node in self.exposure_nodes(included_nodes):
-            if not fnmatch(real_node.package_name, target_package):
+        for unique_id, node in self.exposure_nodes(included_nodes):
+            if not fnmatch(node.package_name, target_package):
                 continue
-            if not fnmatch(real_node.name, target_name):
+            if not fnmatch(node.name, target_name):
                 continue
 
-            yield node
+            yield unique_id
 
 
 class MetricSelectorMethod(SelectorMethod):
@@ -342,13 +360,13 @@ class MetricSelectorMethod(SelectorMethod):
             ).format(selector)
             raise DbtRuntimeError(msg)
 
-        for node, real_node in self.metric_nodes(included_nodes):
-            if not fnmatch(real_node.package_name, target_package):
+        for unique_id, node in self.metric_nodes(included_nodes):
+            if not fnmatch(node.package_name, target_package):
                 continue
-            if not fnmatch(real_node.name, target_name):
+            if not fnmatch(node.name, target_name):
                 continue
 
-            yield node
+            yield unique_id
 
 
 class SemanticModelSelectorMethod(SelectorMethod):
@@ -367,13 +385,13 @@ class SemanticModelSelectorMethod(SelectorMethod):
             ).format(selector)
             raise DbtRuntimeError(msg)
 
-        for node, real_node in self.semantic_model_nodes(included_nodes):
-            if not fnmatch(real_node.package_name, target_package):
+        for unique_id, node in self.semantic_model_nodes(included_nodes):
+            if not fnmatch(node.package_name, target_package):
                 continue
-            if not fnmatch(real_node.name, target_name):
+            if not fnmatch(node.name, target_name):
                 continue
 
-            yield node
+            yield unique_id
 
 
 class SavedQuerySelectorMethod(SelectorMethod):
@@ -392,13 +410,13 @@ class SavedQuerySelectorMethod(SelectorMethod):
             ).format(selector)
             raise DbtRuntimeError(msg)
 
-        for node, real_node in self.saved_query_nodes(included_nodes):
-            if not fnmatch(real_node.package_name, target_package):
+        for unique_id, node in self.saved_query_nodes(included_nodes):
+            if not fnmatch(node.package_name, target_package):
                 continue
-            if not fnmatch(real_node.name, target_name):
+            if not fnmatch(node.name, target_name):
                 continue
 
-            yield node
+            yield unique_id
 
 
 class PathSelectorMethod(SelectorMethod):
@@ -411,27 +429,27 @@ class PathSelectorMethod(SelectorMethod):
         else:
             root = Path.cwd()
         paths = set(p.relative_to(root) for p in root.glob(selector))
-        for node, real_node in self.all_nodes(included_nodes):
-            ofp = Path(real_node.original_file_path)
+        for unique_id, node in self.all_nodes(included_nodes):
+            ofp = Path(node.original_file_path)
             if ofp in paths:
-                yield node
-            if hasattr(real_node, "patch_path") and real_node.patch_path:  # type: ignore
-                pfp = real_node.patch_path.split("://")[1]  # type: ignore
+                yield unique_id
+            if hasattr(node, "patch_path") and node.patch_path:  # type: ignore
+                pfp = node.patch_path.split("://")[1]  # type: ignore
                 ymlfp = Path(pfp)
                 if ymlfp in paths:
-                    yield node
+                    yield unique_id
             if any(parent in paths for parent in ofp.parents):
-                yield node
+                yield unique_id
 
 
 class FileSelectorMethod(SelectorMethod):
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
         """Yields nodes from included that match the given file name."""
-        for node, real_node in self.all_nodes(included_nodes):
-            if fnmatch(Path(real_node.original_file_path).name, selector):
-                yield node
-            elif fnmatch(Path(real_node.original_file_path).stem, selector):
-                yield node
+        for unique_id, node in self.all_nodes(included_nodes):
+            if fnmatch(Path(node.original_file_path).name, selector):
+                yield unique_id
+            elif fnmatch(Path(node.original_file_path).stem, selector):
+                yield unique_id
 
 
 class PackageSelectorMethod(SelectorMethod):
@@ -441,9 +459,9 @@ class PackageSelectorMethod(SelectorMethod):
         if selector == "this" and self.manifest.metadata.project_name is not None:
             selector = self.manifest.metadata.project_name
 
-        for node, real_node in self.all_nodes(included_nodes):
-            if fnmatch(real_node.package_name, selector):
-                yield node
+        for unique_id, node in self.all_nodes(included_nodes):
+            if fnmatch(node.package_name, selector):
+                yield unique_id
 
 
 def _getattr_descend(obj: Any, attrs: List[str]) -> Any:
@@ -485,9 +503,9 @@ class ConfigSelectorMethod(SelectorMethod):
         # search sources is kind of useless now source configs only have
         # 'enabled', which you can't really filter on anyway, but maybe we'll
         # add more someday, so search them anyway.
-        for node, real_node in self.configurable_nodes(included_nodes):
+        for unique_id, node in self.configurable_nodes(included_nodes):
             try:
-                value = _getattr_descend(real_node.config, parts)
+                value = _getattr_descend(node.config, parts)
             except AttributeError:
                 continue
             else:
@@ -497,7 +515,7 @@ class ConfigSelectorMethod(SelectorMethod):
                         or (CaseInsensitive(selector) == "true" and True in value)
                         or (CaseInsensitive(selector) == "false" and False in value)
                     ):
-                        yield node
+                        yield unique_id
                 else:
                     if (
                         (selector == value)
@@ -505,7 +523,7 @@ class ConfigSelectorMethod(SelectorMethod):
                         or (CaseInsensitive(selector) == "false")
                         and value is False
                     ):
-                        yield node
+                        yield unique_id
 
 
 class ResourceTypeSelectorMethod(SelectorMethod):
@@ -514,39 +532,46 @@ class ResourceTypeSelectorMethod(SelectorMethod):
             resource_type = NodeType(selector)
         except ValueError as exc:
             raise DbtRuntimeError(f'Invalid resource_type selector "{selector}"') from exc
-        for node, real_node in self.all_nodes(included_nodes):
-            if real_node.resource_type == resource_type:
-                yield node
+        for unique_id, node in self.all_nodes(included_nodes):
+            if node.resource_type == resource_type:
+                yield unique_id
 
 
 class TestNameSelectorMethod(SelectorMethod):
     __test__ = False
 
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
-        for node, real_node in self.parsed_nodes(included_nodes):
-            if real_node.resource_type == NodeType.Test and hasattr(real_node, "test_metadata"):
-                if fnmatch(real_node.test_metadata.name, selector):  # type: ignore[union-attr]
-                    yield node
+        for unique_id, node in self.parsed_and_unit_nodes(included_nodes):
+            if node.resource_type == NodeType.Test and hasattr(node, "test_metadata"):
+                if fnmatch(node.test_metadata.name, selector):  # type: ignore[union-attr]
+                    yield unique_id
+            elif node.resource_type == NodeType.Unit:
+                if fnmatch(node.name, selector):
+                    yield unique_id
 
 
 class TestTypeSelectorMethod(SelectorMethod):
     __test__ = False
 
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
-        search_type: Type
+        search_types: List[Any]
         # continue supporting 'schema' + 'data' for backwards compatibility
         if selector in ("generic", "schema"):
-            search_type = GenericTestNode
-        elif selector in ("singular", "data"):
-            search_type = SingularTestNode
+            search_types = [GenericTestNode]
+        elif selector in ("data"):
+            search_types = [GenericTestNode, SingularTestNode]
+        elif selector in ("singular"):
+            search_types = [SingularTestNode]
+        elif selector in ("unit"):
+            search_types = [UnitTestDefinition]
         else:
             raise DbtRuntimeError(
-                f'Invalid test type selector {selector}: expected "generic" or ' '"singular"'
+                f'Invalid test type selector {selector}: expected "generic", "singular", "unit", or "data"'
             )
 
-        for node, real_node in self.parsed_nodes(included_nodes):
-            if isinstance(real_node, search_type):
-                yield node
+        for unique_id, node in self.parsed_and_unit_nodes(included_nodes):
+            if isinstance(node, tuple(search_types)):
+                yield unique_id
 
 
 class StateSelectorMethod(SelectorMethod):
@@ -570,7 +595,7 @@ class StateSelectorMethod(SelectorMethod):
             else:
                 modified.append(uid)
 
-        for uid, macro in old_macros.items():
+        for uid, _ in old_macros.items():
             if uid not in new_macros:
                 modified.append(uid)
 
@@ -622,7 +647,9 @@ class StateSelectorMethod(SelectorMethod):
     def check_modified_content(
         self, old: Optional[SelectorTarget], new: SelectorTarget, adapter_type: str
     ) -> bool:
-        if isinstance(new, (SourceDefinition, Exposure, Metric, SemanticModel)):
+        if isinstance(
+            new, (SourceDefinition, Exposure, Metric, SemanticModel, UnitTestDefinition)
+        ):
             # these all overwrite `same_contents`
             different_contents = not new.same_contents(old)  # type: ignore
         else:
@@ -700,19 +727,23 @@ class StateSelectorMethod(SelectorMethod):
                 f'Got an invalid selector "{selector}", expected one of ' f'"{list(state_checks)}"'
             )
 
-        manifest: WritableManifest = self.previous_state.manifest
+        manifest: Manifest = self.previous_state.manifest
 
-        for node, real_node in self.all_nodes(included_nodes):
+        for unique_id, node in self.all_nodes(included_nodes):
             previous_node: Optional[SelectorTarget] = None
 
-            if node in manifest.nodes:
-                previous_node = manifest.nodes[node]
-            elif node in manifest.sources:
-                previous_node = manifest.sources[node]
-            elif node in manifest.exposures:
-                previous_node = manifest.exposures[node]
-            elif node in manifest.metrics:
-                previous_node = manifest.metrics[node]
+            if unique_id in manifest.nodes:
+                previous_node = manifest.nodes[unique_id]
+            elif unique_id in manifest.sources:
+                previous_node = SourceDefinition.from_resource(manifest.sources[unique_id])
+            elif unique_id in manifest.exposures:
+                previous_node = Exposure.from_resource(manifest.exposures[unique_id])
+            elif unique_id in manifest.metrics:
+                previous_node = Metric.from_resource(manifest.metrics[unique_id])
+            elif unique_id in manifest.semantic_models:
+                previous_node = SemanticModel.from_resource(manifest.semantic_models[unique_id])
+            elif unique_id in manifest.unit_tests:
+                previous_node = UnitTestDefinition.from_resource(manifest.unit_tests[unique_id])
 
             keyword_args = {}
             if checker.__name__ in [
@@ -722,8 +753,8 @@ class StateSelectorMethod(SelectorMethod):
             ]:
                 keyword_args["adapter_type"] = adapter_type  # type: ignore
 
-            if checker(previous_node, real_node, **keyword_args):  # type: ignore
-                yield node
+            if checker(previous_node, node, **keyword_args):  # type: ignore
+                yield unique_id
 
 
 class ResultSelectorMethod(SelectorMethod):
@@ -733,9 +764,9 @@ class ResultSelectorMethod(SelectorMethod):
         matches = set(
             result.unique_id for result in self.previous_state.results if result.status == selector
         )
-        for node, real_node in self.all_nodes(included_nodes):
-            if node in matches:
-                yield node
+        for unique_id, node in self.all_nodes(included_nodes):
+            if unique_id in matches:
+                yield unique_id
 
 
 class SourceStatusSelectorMethod(SelectorMethod):
@@ -787,37 +818,37 @@ class SourceStatusSelectorMethod(SelectorMethod):
                 ):
                     matches.remove(unique_id)
 
-        for node, real_node in self.all_nodes(included_nodes):
-            if node in matches:
-                yield node
+        for unique_id, node in self.all_nodes(included_nodes):
+            if unique_id in matches:
+                yield unique_id
 
 
 class VersionSelectorMethod(SelectorMethod):
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
-        for node, real_node in self.parsed_nodes(included_nodes):
-            if isinstance(real_node, ModelNode):
+        for unique_id, node in self.parsed_nodes(included_nodes):
+            if isinstance(node, ModelNode):
                 if selector == "latest":
-                    if real_node.is_latest_version:
-                        yield node
+                    if node.is_latest_version:
+                        yield unique_id
                 elif selector == "prerelease":
                     if (
-                        real_node.version
-                        and real_node.latest_version
-                        and UnparsedVersion(v=real_node.version)
-                        > UnparsedVersion(v=real_node.latest_version)
+                        node.version
+                        and node.latest_version
+                        and UnparsedVersion(v=node.version)
+                        > UnparsedVersion(v=node.latest_version)
                     ):
-                        yield node
+                        yield unique_id
                 elif selector == "old":
                     if (
-                        real_node.version
-                        and real_node.latest_version
-                        and UnparsedVersion(v=real_node.version)
-                        < UnparsedVersion(v=real_node.latest_version)
+                        node.version
+                        and node.latest_version
+                        and UnparsedVersion(v=node.version)
+                        < UnparsedVersion(v=node.latest_version)
                     ):
-                        yield node
+                        yield unique_id
                 elif selector == "none":
-                    if real_node.version is None:
-                        yield node
+                    if node.version is None:
+                        yield unique_id
                 else:
                     raise DbtRuntimeError(
                         f'Invalid version type selector {selector}: expected one of: "latest", "prerelease", "old", or "none"'

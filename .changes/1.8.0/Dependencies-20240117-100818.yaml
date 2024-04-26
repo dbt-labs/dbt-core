@@ -1,0 +1,6 @@
+kind: Dependencies
+body: Relax pathspec upper bound version restriction
+time: 2024-01-17T10:08:18.009949641+01:00
+custom:
+  Author: rzjfr
+  Issue: "9373"

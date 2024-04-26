@@ -2,13 +2,15 @@ from pathlib import Path
 from shutil import rmtree
 
 from dbt import deprecations
-from dbt.events.functions import fire_event
+from dbt_common.events.functions import fire_event
 from dbt.events.types import (
     CheckCleanPath,
     ConfirmCleanPath,
     FinishedCleanPaths,
 )
-from dbt.exceptions import DbtRuntimeError
+from dbt_common.exceptions import DbtRuntimeError
+from dbt.cli.flags import Flags
+from dbt.config.project import Project
 from dbt.task.base import (
     BaseTask,
     move_to_nearest_project_dir,
@@ -16,6 +18,11 @@ from dbt.task.base import (
 
 
 class CleanTask(BaseTask):
+    def __init__(self, args: Flags, config: Project):
+        super().__init__(args)
+        self.config = config
+        self.project = config
+
     def run(self):
         """
         This function takes all the paths in the target file

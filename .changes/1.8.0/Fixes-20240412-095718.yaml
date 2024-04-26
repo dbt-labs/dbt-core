@@ -1,0 +1,6 @@
+kind: Fixes
+body: Disambiguiate FreshnessConfigProblem error message
+time: 2024-04-12T09:57:18.417882-07:00
+custom:
+  Author: michelleark
+  Issue: "9891"

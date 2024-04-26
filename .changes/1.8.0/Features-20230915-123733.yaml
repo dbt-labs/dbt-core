@@ -1,0 +1,6 @@
+kind: Features
+body: 'Allow adapters to include package logs in dbt standard logging '
+time: 2023-09-15T12:37:33.862862-07:00
+custom:
+  Author: colin-rogers-dbt
+  Issue: "7859"

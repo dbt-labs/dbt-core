@@ -1,0 +1,6 @@
+kind: Features
+body: Allow metrics in semantic layer filters.
+time: 2024-03-22T10:31:24.76978-07:00
+custom:
+  Author: courtneyholcomb
+  Issue: "9804"

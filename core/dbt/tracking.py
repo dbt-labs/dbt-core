@@ -9,12 +9,14 @@ from typing import Optional
 import logbook
 import pytz
 import requests
+from packaging.version import Version
 from snowplow_tracker import Emitter, SelfDescribingJson, Subject, Tracker
+from snowplow_tracker import __version__ as snowplow_version  # type: ignore
 from snowplow_tracker import logger as sp_logger
 
 from dbt import version as dbt_version
 from dbt.clients.yaml_helper import safe_load, yaml  # noqa:F401
-from dbt.events.functions import fire_event, get_invocation_id
+from dbt_common.events.functions import fire_event, get_invocation_id
 from dbt.events.types import (
     DisableTracking,
     FlushEvents,
@@ -24,7 +26,8 @@ from dbt.events.types import (
     SendingEvent,
     TrackingInitializeFailure,
 )
-from dbt.exceptions import FailedToConnectError, NotImplementedError
+from dbt.adapters.exceptions import FailedToConnectError
+from dbt_common.exceptions import NotImplementedError
 
 sp_logger.setLevel(100)
 
@@ -48,17 +51,25 @@ RUNNABLE_TIMING = "iglu:com.dbt/runnable/jsonschema/1-0-0"
 RUN_MODEL_SPEC = "iglu:com.dbt/run_model/jsonschema/1-0-3"
 PLUGIN_GET_NODES = "iglu:com.dbt/plugin_get_nodes/jsonschema/1-0-0"
 
+SNOWPLOW_TRACKER_VERSION = Version(snowplow_version)
+
+# workaround in case real snowplow tracker is in the env
+# the argument was renamed in https://github.com/snowplow/snowplow-python-tracker/commit/39fd50a3aff98a5efdd5c5c7fb5518fe4761305b
+INIT_KW_ARGS = (
+    {"buffer_size": 30} if SNOWPLOW_TRACKER_VERSION < Version("0.13.0") else {"batch_size": 30}
+)
+
 
 class TimeoutEmitter(Emitter):
     def __init__(self) -> None:
         super().__init__(
             COLLECTOR_URL,
             protocol=COLLECTOR_PROTOCOL,
-            buffer_size=30,
             on_failure=self.handle_failure,
             method="post",
             # don't set this.
             byte_limit=None,
+            **INIT_KW_ARGS,
         )
 
     @staticmethod
@@ -103,7 +114,7 @@ class TimeoutEmitter(Emitter):
 
 emitter = TimeoutEmitter()
 tracker = Tracker(
-    emitter,
+    emitters=emitter,
     namespace="cf",
     app_id="dbt",
 )
@@ -471,7 +482,6 @@ class InvocationProcessor(logbook.Processor):
 
 
 def initialize_from_flags(send_anonymous_usage_stats, profiles_dir):
-    # Setting these used to be in UserConfig, but had to be moved here
     global active_user
     if send_anonymous_usage_stats:
         active_user = User(profiles_dir)

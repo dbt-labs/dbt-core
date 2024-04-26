@@ -1,0 +1,6 @@
+kind: Fixes
+body: Validate against empty strings in package definitions
+time: 2024-04-22T15:22:44.575999-05:00
+custom:
+  Author: emmyoop
+  Issue: "9985"

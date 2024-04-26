@@ -4,10 +4,10 @@ import shutil
 
 import pytest
 
-from dbt.contracts.util import get_artifact_schema_version
+from dbt.artifacts.schemas.base import get_artifact_schema_version
 from dbt.contracts.graph.manifest import WritableManifest
-from dbt.contracts.results import RunResultsArtifact
-from dbt.exceptions import IncompatibleSchemaError
+from dbt.artifacts.schemas.run import RunResultsArtifact
+from dbt.artifacts.exceptions import IncompatibleSchemaError
 from dbt.tests.util import run_dbt, get_manifest
 
 # This project must have one of each kind of node type, plus disabled versions, for
@@ -128,12 +128,12 @@ version: 2
 models:
   - name: my_model
     description: "Example model"
-    tests:
+    data_tests:
       - check_nothing
       - disabled_check_nothing
     columns:
      - name: id
-       tests:
+       data_tests:
        - not_null
 
 semantic_models:
@@ -412,7 +412,7 @@ class TestPreviousVersionState:
             current_manifest_schema_version == self.CURRENT_EXPECTED_MANIFEST_VERSION
         ), "Sounds like you've bumped the manifest version and need to update this test!"
         # If we need a newly generated manifest, uncomment the following line and commit the result
-        self.generate_latest_manifest(project, current_manifest_schema_version)
+        # self.generate_latest_manifest(project, current_manifest_schema_version)
         self.compare_previous_state(project, current_manifest_schema_version, True, 0)
 
     def test_backwards_compatible_versions(self, project):

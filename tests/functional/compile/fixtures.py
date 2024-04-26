@@ -50,9 +50,9 @@ models:
     description: "The second model"
     columns:
       - name: fun
-        tests:
+        data_tests:
           - not_null
       - name: schema
-        tests:
+        data_tests:
           - unique
 """
