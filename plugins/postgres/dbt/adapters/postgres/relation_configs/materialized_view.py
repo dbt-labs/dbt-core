@@ -102,7 +102,7 @@ class PostgresMaterializedViewConfig(RelationConfigBase, RelationConfigValidatio
 
 @dataclass
 class PostgresMaterializedViewConfigChangeCollection:
-    indexes: Set[PostgresIndexConfigChange] = field(default_factory=set)
+    indexes: List[PostgresIndexConfigChange] = field(default_factory=list)
 
     @property
     def requires_full_refresh(self) -> bool:
@@ -110,4 +110,4 @@ class PostgresMaterializedViewConfigChangeCollection:
 
     @property
     def has_changes(self) -> bool:
-        return self.indexes != set()
+        return self.indexes != []

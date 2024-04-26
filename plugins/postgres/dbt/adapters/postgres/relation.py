@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Optional, Set, FrozenSet
+from typing import FrozenSet, List, Optional
 
 from dbt.adapters.base.relation import BaseRelation
 from dbt.adapters.relation_configs import (
@@ -82,7 +82,7 @@ class PostgresRelation(BaseRelation):
         self,
         existing_indexes: FrozenSet[PostgresIndexConfig],
         new_indexes: FrozenSet[PostgresIndexConfig],
-    ) -> Set[PostgresIndexConfigChange]:
+    ) -> List[PostgresIndexConfigChange]:
         """
         Get the index updates that will occur as a result of a new run
 
@@ -93,18 +93,22 @@ class PostgresRelation(BaseRelation):
         3. Index is old -> drop these
         4. Indexes are not equal -> drop old, create new -> two actions
 
+        *Note:*
+            The order of the operations matters here because if the same index is dropped and recreated
+            (e.g. via --full-refresh) then we need to drop it first, then create it.
+
         Returns: a set of index updates in the form {"action": "drop/create", "context": <IndexConfig>}
         """
-        drop_changes = set(
+        drop_changes = [
             PostgresIndexConfigChange.from_dict(
                 {"action": RelationConfigChangeAction.drop, "context": index}
             )
             for index in existing_indexes.difference(new_indexes)
-        )
-        create_changes = set(
+        ]
+        create_changes = [
             PostgresIndexConfigChange.from_dict(
                 {"action": RelationConfigChangeAction.create, "context": index}
             )
             for index in new_indexes.difference(existing_indexes)
-        )
-        return set().union(drop_changes, create_changes)
+        ]
+        return drop_changes + create_changes
