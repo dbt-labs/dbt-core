@@ -2,7 +2,7 @@ from copy import deepcopy
 
 import pytest
 import time
-from typing import Dict
+from typing import Dict, List
 
 from dbt.parser.partial import PartialParsing
 from dbt.contracts.files import (
@@ -110,7 +110,7 @@ def files() -> Dict[str, BaseSourceFile]:
 
 
 @pytest.fixture
-def nodes() -> list[NodeType]:
+def nodes() -> List[NodeType]:
     patch_path = "my_test://" + normalize("models/schema.yml")
     my_model = make_model(PROJECT_NAME, "my_model", "", patch_path=patch_path)
     return [
