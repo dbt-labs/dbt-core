@@ -161,6 +161,7 @@ sample_values = [
     core_types.PackageMaterializationOverrideDeprecation(
         package_name="my_package", materialization_name="view"
     ),
+    core_types.SourceFreshnessProjectHooksNotRun(),
     # E - DB Adapter ======================
     adapter_types.AdapterEventDebug(),
     adapter_types.AdapterEventInfo(),

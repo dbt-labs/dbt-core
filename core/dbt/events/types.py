@@ -451,6 +451,16 @@ class PackageMaterializationOverrideDeprecation(WarnLevel):
         return line_wrap_message(warning_tag(description))
 
 
+class SourceFreshnessProjectHooksNotRun(WarnLevel):
+    def code(self) -> str:
+        return "D017"
+
+    def message(self) -> str:
+        description = "In a future version of dbt, the `source freshness` command will start running `on-run-start` and `on-run-end` hooks by default. Please refer to https://docs.getdbt.com/reference/global-configs/legacy-behaviors#source_freshness_run_project_hooks for detailed documentation and suggested workarounds."
+
+        return line_wrap_message(warning_tag(description))
+
+
 # =======================================================
 # I - Project parsing
 # =======================================================
