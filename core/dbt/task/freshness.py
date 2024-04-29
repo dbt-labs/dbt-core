@@ -243,7 +243,7 @@ class FreshnessTask(RunTask):
     def get_hooks_by_type(self, hook_type: RunHookType) -> List[HookNode]:
         hooks = super().get_hooks_by_type(hook_type)
         if self.args.source_freshness_run_project_hooks:
-            return super().get_hooks_by_type(hook_type)
+            return hooks
         else:
             if hooks:
                 deprecations.warn("source-freshness-project-hooks")
