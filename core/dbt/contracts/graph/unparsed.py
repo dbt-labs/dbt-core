@@ -269,7 +269,7 @@ class UnparsedMacroUpdate(HasConfig, HasColumnProps, HasYamlMetadata):
 class UnparsedSourceTableDefinition(HasColumnTests, HasColumnAndTestProps):
     config: Dict[str, Any] = field(default_factory=dict)
     loaded_at_field: Optional[str] = None
-    loaded_at_field_present: Optional[bool] = False
+    loaded_at_field_present: Optional[bool] = None
     identifier: Optional[str] = None
     quoting: Quoting = field(default_factory=Quoting)
     freshness: Optional[FreshnessThreshold] = field(default_factory=FreshnessThreshold)
@@ -294,7 +294,7 @@ class UnparsedSourceDefinition(dbtClassMixin):
     quoting: Quoting = field(default_factory=Quoting)
     freshness: Optional[FreshnessThreshold] = field(default_factory=FreshnessThreshold)
     loaded_at_field: Optional[str] = None
-    loaded_at_field_present: Optional[bool] = False
+    loaded_at_field_present: Optional[bool] = None
     tables: List[UnparsedSourceTableDefinition] = field(default_factory=list)
     tags: List[str] = field(default_factory=list)
     config: Dict[str, Any] = field(default_factory=dict)
@@ -318,7 +318,7 @@ class SourceTablePatch(dbtClassMixin):
     data_type: Optional[str] = None
     docs: Optional[Docs] = None
     loaded_at_field: Optional[str] = None
-    loaded_at_field_present: Optional[bool] = False
+    loaded_at_field_present: Optional[bool] = None
     identifier: Optional[str] = None
     quoting: Quoting = field(default_factory=Quoting)
     freshness: Optional[FreshnessThreshold] = field(default_factory=FreshnessThreshold)
@@ -361,7 +361,7 @@ class SourcePatch(dbtClassMixin):
     quoting: Optional[Quoting] = None
     freshness: Optional[Optional[FreshnessThreshold]] = field(default_factory=FreshnessThreshold)
     loaded_at_field: Optional[str] = None
-    loaded_at_field_present: Optional[bool] = False
+    loaded_at_field_present: Optional[bool] = None
     tables: Optional[List[SourceTablePatch]] = None
     tags: Optional[List[str]] = None
 

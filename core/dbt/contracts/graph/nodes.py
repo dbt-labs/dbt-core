@@ -1214,7 +1214,6 @@ class SourceDefinition(
         # messing around with external stuff is a change (uh, right?)
         # quoting changes are changes
         # freshness changes are changes, I guess
-        # TODO: what about loaded_at_field?
         # metadata/tags changes are not "changes"
         # patching/description changes are not "changes"
         return (
