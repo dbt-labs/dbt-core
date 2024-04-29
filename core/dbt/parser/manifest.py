@@ -29,6 +29,7 @@ import pprint
 from dbt.mp_context import get_mp_context
 import msgpack
 
+import dbt.deprecations
 import dbt.exceptions
 import dbt.tracking
 import dbt.utils
@@ -64,9 +65,8 @@ from dbt.events.types import (
     StateCheckVarsHash,
     DeprecatedModel,
     DeprecatedReference,
-    SpacesInModelNameDeprecation,
-    TotalModelNamesWithSpacesDeprecation,
     UpcomingReferenceDeprecation,
+    SpacesInResourceNameDeprecation,
 )
 from dbt.logger import DbtProcessState
 from dbt.node_types import NodeType, AccessType
@@ -525,7 +525,7 @@ class ManifestLoader:
             self.write_manifest_for_partial_parse()
 
         self.check_for_model_deprecations()
-        self.check_for_spaces_in_model_names()
+        self.check_for_spaces_in_resource_names()
 
         return self.manifest
 
@@ -627,46 +627,43 @@ class ManifestLoader:
                             )
                         )
 
-    def check_for_spaces_in_model_names(self):
-        """Validates that model names do not contain spaces
+    def check_for_spaces_in_resource_names(self):
+        """Validates that resource names do not contain spaces
 
         If `DEBUG` flag is `False`, logs only first bad model name
         If `DEBUG` flag is `True`, logs every bad model name
-        If `ALLOW_SPACES_IN_MODEL_NAMES` is `False`, logs are `ERROR` level and an exception is raised if any names are bad
-        If `ALLOW_SPACES_IN_MODEL_NAMES` is `True`, logs are `WARN` level
+        If `REQUIRE_RESOURCE_NAMES_WITHOUT_SPACES` is `True`, logs are `ERROR` level and an exception is raised if any names are bad
+        If `REQUIRE_RESOURCE_NAMES_WITHOUT_SPACES` is `False`, logs are `WARN` level
         """
-        improper_model_names = 0
+        improper_resource_names = 0
         level = (
-            EventLevel.WARN
-            if self.root_project.args.ALLOW_SPACES_IN_MODEL_NAMES
-            else EventLevel.ERROR
+            EventLevel.ERROR
+            if self.root_project.args.REQUIRE_RESOURCE_NAMES_WITHOUT_SPACES
+            else EventLevel.WARN
         )
 
         for node in self.manifest.nodes.values():
-            if isinstance(node, ModelNode) and " " in node.name:
-                if improper_model_names == 0 or self.root_project.args.DEBUG:
+            if " " in node.name:
+                if improper_resource_names == 0 or self.root_project.args.DEBUG:
                     fire_event(
-                        SpacesInModelNameDeprecation(
-                            model_name=node.name,
-                            model_version=version_to_str(node.version),
+                        SpacesInResourceNameDeprecation(
+                            unique_id=node.unique_id,
                             level=level.value,
                         ),
                         level=level,
                     )
-                improper_model_names += 1
+                improper_resource_names += 1
 
-        if improper_model_names > 0:
-            fire_event(
-                TotalModelNamesWithSpacesDeprecation(
-                    count_invalid_names=improper_model_names,
-                    show_debug_hint=(not self.root_project.args.DEBUG),
-                    level=level.value,
-                ),
-                level=level,
-            )
-
-            if level == EventLevel.ERROR:
-                raise DbtValidationError("Model names cannot contain spaces")
+        if improper_resource_names > 0:
+            if level == EventLevel.WARN:
+                flags = get_flags()
+                dbt.deprecations.warn(
+                    "resource-names-with-spaces",
+                    count_invalid_names=improper_resource_names,
+                    show_debug_hint=(not flags.DEBUG),
+                )
+            else:  # ERROR level
+                raise DbtValidationError("Resource names cannot contain spaces")
 
     def load_and_parse_macros(self, project_parser_files):
         for project in self.all_projects.values():
