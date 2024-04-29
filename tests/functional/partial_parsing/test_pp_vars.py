@@ -358,7 +358,7 @@ class TestProfileSecretEnvVars:
 
         # user is secret and password is not. postgres on macos doesn't care if the password
         # changes so we have to change the user. related: https://github.com/dbt-labs/dbt-core/pull/4250
-        os.environ[SECRET_ENV_PREFIX + "USER"] = "root"
+        os.environ[SECRET_ENV_PREFIX + "_USER"] = "root"
         os.environ["ENV_VAR_PASS"] = "password"
         return {
             "type": "postgres",
@@ -373,7 +373,7 @@ class TestProfileSecretEnvVars:
     def test_profile_secret_env_vars(self, project):
 
         # Initial run
-        os.environ[SECRET_ENV_PREFIX + "USER"] = "root"
+        os.environ[SECRET_ENV_PREFIX + "_USER"] = "root"
         os.environ["ENV_VAR_PASS"] = "password"
 
         results = run_dbt(["run"])
@@ -381,7 +381,7 @@ class TestProfileSecretEnvVars:
         env_vars_checksum = manifest.state_check.profile_env_vars_hash.checksum
 
         # Change a secret var, it shouldn't register because we shouldn't save secrets.
-        os.environ[SECRET_ENV_PREFIX + "USER"] = "fake_user"
+        os.environ[SECRET_ENV_PREFIX + "_USER"] = "fake_user"
         # we just want to see if the manifest has included
         # the secret in the hash of environment variables.
         (results, log_output) = run_dbt_and_capture(["run"], expect_pass=True)

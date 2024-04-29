@@ -21,7 +21,7 @@ class SecretContext(BaseContext):
 
         If the default is None, raise an exception for an undefined variable.
 
-        In this context *only*, env_var will accept env vars prefixed with DBT_ENV_SECRET_.
+        In this context *only*, env_var will accept env vars prefixed with DBT_ENV_SECRET.
         It will return the name of the secret env var, wrapped in 'start' and 'end' identifiers.
         The actual value will be subbed in later in SecretRenderer.render_value()
         """
