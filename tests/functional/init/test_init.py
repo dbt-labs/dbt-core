@@ -67,9 +67,7 @@ class TestInitProjectWithExistingProfilesYml:
         with open(os.path.join(project.profiles_dir, "profiles.yml"), "r") as f:
             assert (
                 f.read()
-                == """config:
-  send_anonymous_usage_stats: false
-test:
+                == """test:
   outputs:
     dev:
       dbname: test_db
@@ -369,9 +367,7 @@ class TestInitInvalidProfileTemplate:
         with open(os.path.join(project.profiles_dir, "profiles.yml"), "r") as f:
             assert (
                 f.read()
-                == """config:
-  send_anonymous_usage_stats: false
-test:
+                == """test:
   outputs:
     dev:
       dbname: test_db
@@ -408,7 +404,6 @@ class TestInitOutsideOfProject(TestInitOutsideOfProjectBase):
     @pytest.fixture(scope="class")
     def dbt_profile_data(self, unique_schema):
         return {
-            "config": {"send_anonymous_usage_stats": False},
             "test": {
                 "outputs": {
                     "default2": {
@@ -491,9 +486,7 @@ class TestInitOutsideOfProject(TestInitOutsideOfProjectBase):
         with open(os.path.join(project.profiles_dir, "profiles.yml"), "r") as f:
             assert (
                 f.read()
-                == f"""config:
-  send_anonymous_usage_stats: false
-{project_name}:
+                == f"""{project_name}:
   outputs:
     dev:
       dbname: test_db
@@ -538,7 +531,6 @@ test:
 # name or the intended use of these models
 name: '{project_name}'
 version: '1.0.0'
-config-version: 2
 
 # This setting configures which "profile" dbt uses for this project.
 profile: '{project_name}'
@@ -657,7 +649,6 @@ class TestInitProvidedProjectNameAndSkipProfileSetup(TestInitOutsideOfProjectBas
 # name or the intended use of these models
 name: '{project_name}'
 version: '1.0.0'
-config-version: 2
 
 # This setting configures which "profile" dbt uses for this project.
 profile: '{project_name}'

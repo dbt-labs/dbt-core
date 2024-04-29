@@ -13,9 +13,9 @@ import networkx as nx
 from dbt import flags
 
 from argparse import Namespace
-from dbt.contracts.project import UserConfig
+from dbt.contracts.project import ProjectFlags
 
-flags.set_from_args(Namespace(), UserConfig())
+flags.set_from_args(Namespace(), ProjectFlags())
 
 
 def _get_graph():

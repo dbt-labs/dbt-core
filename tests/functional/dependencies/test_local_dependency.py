@@ -253,21 +253,16 @@ class TestSimpleDependencyNoVersionCheckConfig(BaseDependencyTest):
     @pytest.fixture(scope="class")
     def project_config_update(self):
         return {
+            "flags": {
+                "send_anonymous_usage_stats": False,
+                "version_check": False,
+            },
             "models": {
                 "schema": "dbt_test",
             },
             "seeds": {
                 "schema": "dbt_test",
             },
-        }
-
-    @pytest.fixture(scope="class")
-    def profiles_config_update(self):
-        return {
-            "config": {
-                "send_anonymous_usage_stats": False,
-                "version_check": False,
-            }
         }
 
     @pytest.fixture(scope="class")

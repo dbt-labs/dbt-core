@@ -181,17 +181,9 @@ class Credentials(ExtensibleDbtClassMixin, Replaceable, metaclass=abc.ABCMeta):
         return dct
 
 
-class UserConfigContract(Protocol):
-    send_anonymous_usage_stats: bool
-    use_colors: Optional[bool] = None
-    partial_parse: Optional[bool] = None
-    printer_width: Optional[int] = None
-
-
 class HasCredentials(Protocol):
     credentials: Credentials
     profile_name: str
-    user_config: UserConfigContract
     target_name: str
     threads: int
 

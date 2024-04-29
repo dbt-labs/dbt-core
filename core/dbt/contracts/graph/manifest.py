@@ -561,11 +561,25 @@ M = TypeVar("M", bound=MacroCandidate)
 
 
 class CandidateList(List[M]):
-    def last_candidate(self) -> Optional[MacroCandidate]:
+    def last_candidate(
+        self, valid_localities: Optional[List[Locality]] = None
+    ) -> Optional[MacroCandidate]:
+        """
+        Obtain the last (highest precedence) MacroCandidate from the CandidateList of any locality in valid_localities.
+        If valid_localities is not specified, return the last MacroCandidate of any locality.
+        """
         if not self:
             return None
         self.sort()
-        return self[-1]
+
+        if valid_localities is None:
+            return self[-1]
+
+        for candidate in reversed(self):
+            if candidate.locality in valid_localities:
+                return candidate
+
+        return None
 
     def last(self) -> Optional[Macro]:
         last_candidate = self.last_candidate()
@@ -864,11 +878,20 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             and materialization_candidate.locality == Locality.Imported
             and core_candidates
         ):
-            deprecations.warn(
-                "package-materialization-override",
-                package_name=materialization_candidate.macro.package_name,
-                materialization_name=materialization_name,
-            )
+            # preserve legacy behaviour - allow materialization override
+            if (
+                get_flags().require_explicit_package_overrides_for_builtin_materializations
+                is False
+            ):
+                deprecations.warn(
+                    "package-materialization-override",
+                    package_name=materialization_candidate.macro.package_name,
+                    materialization_name=materialization_name,
+                )
+            else:
+                materialization_candidate = candidates.last_candidate(
+                    valid_localities=[Locality.Core, Locality.Root]
+                )
 
         return materialization_candidate.macro if materialization_candidate else None
 

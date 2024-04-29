@@ -1,5 +1,5 @@
 from dbt.contracts.util import Replaceable, Mergeable, list_str, Identifier
-from dbt.contracts.connection import QueryComment, UserConfigContract
+from dbt.contracts.connection import QueryComment
 from dbt.helper_types import NoValue
 from dbt.dataclass_schema import (
     dbtClassMixin,
@@ -248,7 +248,7 @@ class Project(HyphenatedDbtClassMixin, Replaceable):
 
 
 @dataclass
-class UserConfig(ExtensibleDbtClassMixin, Replaceable, UserConfigContract):
+class ProjectFlags(ExtensibleDbtClassMixin, Replaceable):
     cache_selected_only: Optional[bool] = None
     debug: Optional[bool] = None
     fail_fast: Optional[bool] = None
@@ -260,6 +260,7 @@ class UserConfig(ExtensibleDbtClassMixin, Replaceable, UserConfigContract):
     partial_parse: Optional[bool] = None
     populate_cache: Optional[bool] = None
     printer_width: Optional[int] = None
+    require_explicit_package_overrides_for_builtin_materializations: bool = False
     send_anonymous_usage_stats: bool = DEFAULT_SEND_ANONYMOUS_USAGE_STATS
     static_parser: Optional[bool] = None
     use_colors: Optional[bool] = None
@@ -270,12 +271,17 @@ class UserConfig(ExtensibleDbtClassMixin, Replaceable, UserConfigContract):
     warn_error_options: Optional[Dict[str, Union[str, List[str]]]] = None
     write_json: Optional[bool] = None
 
+    @property
+    def project_only_flags(self) -> Dict[str, Any]:
+        return {
+            "require_explicit_package_overrides_for_builtin_materializations": self.require_explicit_package_overrides_for_builtin_materializations,
+        }
+
 
 @dataclass
 class ProfileConfig(HyphenatedDbtClassMixin, Replaceable):
     profile_name: str = field(metadata={"preserve_underscore": True})
     target_name: str = field(metadata={"preserve_underscore": True})
-    user_config: UserConfig = field(metadata={"preserve_underscore": True})
     threads: int
     # TODO: make this a dynamic union of some kind?
     credentials: Optional[Dict[str, Any]]

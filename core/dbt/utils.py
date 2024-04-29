@@ -623,7 +623,7 @@ def _connection_exception_retry(fn, max_attempts: int, attempt: int = 0):
 def args_to_dict(args):
     var_args = vars(args).copy()
     # update the args with the flags, which could also come from environment
-    # variables or user_config
+    # variables or project_flags
     flag_dict = flags.get_flag_dict()
     var_args.update(flag_dict)
     dict_args = {}
