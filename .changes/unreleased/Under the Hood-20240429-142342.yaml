@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Consistent naming + deprecation warnings for "legacy behavior" flags
+time: 2024-04-29T14:23:42.804244+02:00
+custom:
+  Author: jtcohen6
+  Issue: "10062"
