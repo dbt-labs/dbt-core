@@ -331,7 +331,7 @@ class ProjectFlags(ExtensibleDbtClassMixin):
     write_json: Optional[bool] = None
 
     # legacy behaviors
-    require_explicit_package_overrides_for_builtin_materializations: bool = False
+    require_explicit_package_overrides_for_builtin_materializations: bool = True
     require_resource_names_without_spaces: bool = False
     source_freshness_run_project_hooks: bool = False
 
