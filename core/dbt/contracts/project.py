@@ -309,7 +309,6 @@ class Project(dbtClassMixin):
 
 @dataclass
 class ProjectFlags(ExtensibleDbtClassMixin):
-    allow_spaces_in_model_names: Optional[bool] = True
     cache_selected_only: Optional[bool] = None
     debug: Optional[bool] = None
     fail_fast: Optional[bool] = None
@@ -321,9 +320,7 @@ class ProjectFlags(ExtensibleDbtClassMixin):
     partial_parse: Optional[bool] = None
     populate_cache: Optional[bool] = None
     printer_width: Optional[int] = None
-    require_explicit_package_overrides_for_builtin_materializations: bool = False
     send_anonymous_usage_stats: bool = DEFAULT_SEND_ANONYMOUS_USAGE_STATS
-    source_freshness_run_project_hooks: bool = False
     static_parser: Optional[bool] = None
     use_colors: Optional[bool] = None
     use_colors_file: Optional[bool] = None
@@ -333,12 +330,17 @@ class ProjectFlags(ExtensibleDbtClassMixin):
     warn_error_options: Optional[Dict[str, Union[str, List[str]]]] = None
     write_json: Optional[bool] = None
 
+    # legacy behaviors
+    require_explicit_package_overrides_for_builtin_materializations: bool = False
+    require_resource_names_without_spaces: bool = False
+    source_freshness_run_project_hooks: bool = False
+
     @property
     def project_only_flags(self) -> Dict[str, Any]:
         return {
-            "source_freshness_run_project_hooks": self.source_freshness_run_project_hooks,
-            "allow_spaces_in_model_names": self.allow_spaces_in_model_names,
             "require_explicit_package_overrides_for_builtin_materializations": self.require_explicit_package_overrides_for_builtin_materializations,
+            "require_resource_names_without_spaces": self.require_resource_names_without_spaces,
+            "source_freshness_run_project_hooks": self.source_freshness_run_project_hooks,
         }
 
 
