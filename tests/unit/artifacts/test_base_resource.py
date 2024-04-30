@@ -7,7 +7,7 @@ from dbt.artifacts.resources.types import NodeType
 
 @dataclass
 class BaseResourceWithDefaultField(BaseResource):
-    new_field_with_default: bool = True
+    field_with_default: bool = True
 
 
 class TestMinorSchemaChange:
@@ -31,7 +31,7 @@ class TestMinorSchemaChange:
             path="test_path",
             original_file_path="test_original_file_path",
             unique_id="test_unique_id",
-            new_field_with_default=False,
+            field_with_default=False,
         )
 
     def test_serializing_new_default_field_is_backward_compatabile(
@@ -46,7 +46,9 @@ class TestMinorSchemaChange:
 
     def test_serializing_removed_default_field_is_backward_compatabile(self, base_resource):
         # old code (using old class with default field) can create an instance of itself given new data (class w/o default field)
-        BaseResourceWithDefaultField.from_dict(base_resource.to_dict())
+        old_resource = BaseResourceWithDefaultField.from_dict(base_resource.to_dict())
+        # set to the default value when not provided in data
+        assert old_resource.field_with_default is True
 
     def test_serializing_removed_default_field_is_forward_compatible(
         self, base_resource_new_default_field
