@@ -1,5 +1,5 @@
 kind: Features
-body: Abillity to `silence` warnings via `warn_error_options`
+body: Ability to `silence` warnings via `warn_error_options`
 time: 2024-04-26T23:31:26.601057-05:00
 custom:
   Author: QMalcolm
