@@ -34,7 +34,8 @@ All existing resources are defined under `dbt/artifacts/resources/v1`.
 
 Freely make incremental, non-breaking changes in-place to the latest major version of any artifact in mantle (via minor or patch bumps). The only changes that are fully forward and backward compatible are: 
 * Adding a new field with a default
-* Deleting an __optional__ field
+* Deleting a field with a default
+  * This is compatible in terms of serialization and deserialization in mashumaro, but still may be surprising for consumers relying on the fields existence (e.g. `manifest["deleted_field]` will stop working unless the access was implemented safely )
 
 ### Breaking changes
 A breaking change is anything that: 

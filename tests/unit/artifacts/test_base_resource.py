@@ -1,10 +1,12 @@
+from dataclasses import dataclass
 import pytest
 
 from dbt.artifacts.resources.base import BaseResource
 from dbt.artifacts.resources.types import NodeType
 
 
-class BaseResourceNewDefaultField(BaseResource):
+@dataclass
+class BaseResourceWithDefaultField(BaseResource):
     new_field_with_default: bool = True
 
 
@@ -22,7 +24,7 @@ class TestMinorSchemaChange:
 
     @pytest.fixture
     def base_resource_new_default_field(self):
-        return BaseResourceNewDefaultField(
+        return BaseResourceWithDefaultField(
             name="test",
             resource_type=NodeType.Model,
             package_name="test_package",
@@ -40,4 +42,4 @@ class TestMinorSchemaChange:
 
     def test_serializing_minor_change_new_default_field_is_forward_compatible(self, base_resource):
         # new code (using new class) can create an instance of itself given old data (old class)
-        BaseResourceNewDefaultField.from_dict(base_resource.to_dict())
+        BaseResourceWithDefaultField.from_dict(base_resource.to_dict())
