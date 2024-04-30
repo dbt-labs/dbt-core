@@ -51,8 +51,12 @@ class WarnErrorOptionsType(YAML):
     def convert(self, value, param, ctx):
         # this function is being used by param in click
         include_exclude = super().convert(value, param, ctx)
-        exclusive_primary_alt_value_setting(include_exclude, "include", "error")
-        exclusive_primary_alt_value_setting(include_exclude, "exclude", "warn")
+        exclusive_primary_alt_value_setting(
+            include_exclude, "include", "error", "warn_error_options"
+        )
+        exclusive_primary_alt_value_setting(
+            include_exclude, "exclude", "warn", "warn_error_options"
+        )
 
         return WarnErrorOptions(
             include=include_exclude.get("include", []),

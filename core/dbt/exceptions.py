@@ -113,7 +113,7 @@ class DbtProfileError(DbtConfigError):
     pass
 
 
-class DbtWarnErrorOptionsError(DbtConfigError):
+class DbtExclusivePropertyUseError(DbtConfigError):
     pass
 
 

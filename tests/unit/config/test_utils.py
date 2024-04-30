@@ -1,7 +1,7 @@
 import pytest
 
 from dbt.config.utils import exclusive_primary_alt_value_setting
-from dbt.exceptions import DbtWarnErrorOptionsError
+from dbt.exceptions import DbtExclusivePropertyUseError
 
 
 class TestExclusivePrimaryAltValueSetting:
@@ -31,7 +31,7 @@ class TestExclusivePrimaryAltValueSetting:
 
     def test_primary_and_alt_set(self, primary_key: str, alt_key: str, value: str):
         test_dict = {primary_key: value, alt_key: value}
-        with pytest.raises(DbtWarnErrorOptionsError):
+        with pytest.raises(DbtExclusivePropertyUseError):
             exclusive_primary_alt_value_setting(test_dict, primary_key, alt_key)
 
     def test_neither_primary_nor_alt_set(self, primary_key: str, alt_key: str):

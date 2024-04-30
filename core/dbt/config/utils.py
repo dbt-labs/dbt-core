@@ -4,7 +4,7 @@ from typing import Any, Dict, Optional
 from dbt.clients import yaml_helper
 from dbt_common.events.functions import fire_event
 from dbt.events.types import InvalidOptionYAML
-from dbt.exceptions import DbtWarnErrorOptionsError, OptionNotYamlDictError
+from dbt.exceptions import DbtExclusivePropertyUseError, OptionNotYamlDictError
 from dbt_common.exceptions import DbtValidationError
 
 
@@ -26,7 +26,10 @@ def parse_cli_yaml_string(var_string: str, cli_option_name: str) -> Dict[str, An
 
 
 def exclusive_primary_alt_value_setting(
-    dictionary: Optional[Dict[str, Any]], primary: str, alt: str
+    dictionary: Optional[Dict[str, Any]],
+    primary: str,
+    alt: str,
+    parent_config: Optional[str] = None,
 ) -> None:
     """Munges in place under the primary the options for the primary and alt values
 
@@ -42,8 +45,9 @@ def exclusive_primary_alt_value_setting(
     alt_options = dictionary.get(alt)
 
     if primary_options and alt_options:
-        raise DbtWarnErrorOptionsError(
-            f"Only `{alt}` or `{primary}` can be specified in `warn_error_options`, not both"
+        where = f" in `{parent_config}`" if parent_config is not None else ""
+        raise DbtExclusivePropertyUseError(
+            f"Only `{alt}` or `{primary}` can be specified{where}, not both"
         )
 
     if alt_options:
