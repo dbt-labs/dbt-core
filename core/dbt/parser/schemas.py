@@ -111,11 +111,14 @@ schema_file_keys = (
 # ===============================================================================
 
 
-def yaml_from_file(source_file: SchemaSourceFile) -> Dict[str, Any]:
+def yaml_from_file(source_file: SchemaSourceFile) -> Optional[Dict[str, Any]]:
     """If loading the yaml fails, raise an exception."""
     try:
         # source_file.contents can sometimes be None
         contents = load_yaml_text(source_file.contents or "", source_file.path)
+
+        if contents is None:
+            return contents
 
         # When loaded_loaded_at_field is defined as None or null, it shows up in
         # the dict but when it is not defined, it does not show up in the dict
