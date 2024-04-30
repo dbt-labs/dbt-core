@@ -1,4 +1,4 @@
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 
 from dbt.clients import yaml_helper
@@ -26,7 +26,7 @@ def parse_cli_yaml_string(var_string: str, cli_option_name: str) -> Dict[str, An
 
 
 def exclusive_primary_alt_value_setting(
-    dictionary: Dict[str, Any], primary: str, alt: str
+    dictionary: Optional[Dict[str, Any]], primary: str, alt: str
 ) -> None:
     """Munges in place under the primary the options for the primary and alt values
 
@@ -34,6 +34,9 @@ def exclusive_primary_alt_value_setting(
     key and alt key have values, an error gets raised. If the alt key has values, then we update
     the dictionary to ensure the primary key contains the values. If neither are set, nothing happens.
     """
+
+    if dictionary is None:
+        return
 
     primary_options = dictionary.get(primary)
     alt_options = dictionary.get(alt)

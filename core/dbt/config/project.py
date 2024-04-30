@@ -837,12 +837,11 @@ def read_project_flags(project_dir: str, profiles_dir: str) -> ProjectFlags:
             project_flags = profile_project_flags
 
         if project_flags is not None:
-            # if warn_error_options are set, handle collapsing `include` and `error` as well as
-            # collapsing `exclude` and `warn`
+            # handle collapsing `include` and `error` as well as collapsing `exclude` and `warn`
+            # for warn_error_options
             warn_error_options = project_flags.get("warn_error_options")
-            if warn_error_options:
-                exclusive_primary_alt_value_setting(warn_error_options, "include", "error")
-                exclusive_primary_alt_value_setting(warn_error_options, "exclude", "warn")
+            exclusive_primary_alt_value_setting(warn_error_options, "include", "error")
+            exclusive_primary_alt_value_setting(warn_error_options, "exclude", "warn")
 
             ProjectFlags.validate(project_flags)
             return ProjectFlags.from_dict(project_flags)
