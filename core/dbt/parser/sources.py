@@ -134,9 +134,14 @@ class SourcePatcher:
         description = table.description or ""
         source_description = source.description or ""
 
-        loaded_at_field = determine_loaded_at(
-            source.loaded_at_field, table.loaded_at_field, table.loaded_at_field_present
-        )
+        # We need to be able to tell the difference between explicitly setting the loaded_at_field to None/null
+        # and when it's simply not set.  This allows a user to override the source level loaded_at_field so that
+        # specific table can default to metadata-based freshness.
+        if table.loaded_at_field_present or table is not None:
+            loaded_at_field = table.loaded_at_field
+        else:
+            loaded_at_field = source.loaded_at_field  # may be None, that's okay
+
         loaded_at_field_present = table.loaded_at_field_present
 
         freshness = merge_freshness(source.freshness, table.freshness)
@@ -382,15 +387,3 @@ def merge_freshness(
         return update
     else:
         return None
-
-
-def determine_loaded_at(
-    source: Optional[str], table: Optional[str], table_loaded_at_field_present: Optional[bool]
-) -> Optional[str]:
-    # We need to be able to tell teh difference between explicitly setting the loaded_at_field to None/null
-    # and when it's simply not set.  This allows a user to override teh source level loaded_at_field so that
-    # specific table can default to metadata-based freshness.
-    if table_loaded_at_field_present or table is not None:
-        return table
-
-    return source  # may be None, that's okay
