@@ -135,14 +135,7 @@ class GraphRunnableTask(ConfiguredTask):
             raise DbtInternalError(
                 "Expected to defer to manifest, but there is no runtime manifest to defer from!"
             )
-        self.manifest.merge_from_artifact(
-            other=deferred_manifest,
-            favor_state=bool(self.args.favor_state),
-        )
-        # We're rewriting the manifest because it's been mutated during merge_from_artifact.
-        # This is to reflect which nodes had the defer_relation attribute added.
-        if self.args.write_json:
-            write_manifest(self.manifest, self.config.project_target_path)
+        self.manifest.merge_from_artifact(other=deferred_manifest)
 
     def get_graph_queue(self) -> GraphQueue:
         selector = self.get_node_selector()

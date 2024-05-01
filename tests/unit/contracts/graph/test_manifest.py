@@ -1045,10 +1045,10 @@ class MixedManifestTest(unittest.TestCase):
         # new node added should not be in original manifest
         assert "model.root.nested2" not in original_manifest.nodes
 
-        # old node removed should not have state relation in original manifest
+        # old node removed should not have defer_relation in original manifest
         assert original_manifest.nodes["model.root.nested"].defer_relation is None
 
-        # for all other nodes, check that state relation is updated
+        # for all other nodes, check that defer_relation is updated
         for k, v in original_manifest.nodes.items():
             if v.defer_relation:
                 self.assertEqual("other_" + v.database, v.defer_relation.database)

@@ -38,6 +38,7 @@ from dbt.contracts.graph.nodes import (
     ResultNode,
     SavedQuery,
     SemanticModel,
+    SeedNode,
     SourceDefinition,
     UnpatchedSourceDefinition,
     UnitTestDefinition,
@@ -53,6 +54,7 @@ from dbt.artifacts.resources import (
     DeferRelation,
     BaseResource,
 )
+from dbt.artifacts.resources.v1.config import NodeConfig
 from dbt.artifacts.schemas.manifest import WritableManifest, ManifestMetadata, UniqueID
 from dbt.contracts.files import (
     SourceFile,
@@ -1466,7 +1468,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         )
 
     # Called in GraphRunnableTask.before_run, RunTask.before_run, CloneTask.before_run
-    def merge_from_artifact(self, other: "Manifest", favor_state: bool = False) -> None:
+    def merge_from_artifact(self, other: "Manifest") -> None:
         """Update this manifest by adding the 'defer_relation' attribute to all nodes
         with a counterpart in the stateful manifest used for deferral.
 
@@ -1476,8 +1478,19 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         for unique_id, node in other.nodes.items():
             current = self.nodes.get(unique_id)
             if current and node.resource_type in refables and not node.is_ephemeral:
+                assert isinstance(node.config, NodeConfig)  # this makes mypy happy
                 defer_relation = DeferRelation(
-                    node.database, node.schema, node.alias, node.relation_name
+                    database=node.database,
+                    schema=node.schema,
+                    alias=node.alias,
+                    relation_name=node.relation_name,
+                    resource_type=node.resource_type,
+                    name=node.name,
+                    description=node.description,
+                    compiled_code=(node.compiled_code if not isinstance(node, SeedNode) else None),
+                    meta=node.meta,
+                    tags=node.tags,
+                    config=node.config,
                 )
                 self.nodes[unique_id] = replace(current, defer_relation=defer_relation)
 

@@ -877,6 +877,11 @@ Error raised for '{self.unique_id}', which has these hooks defined: \n{hook_list
         return "sql"
 
 
+#    @property
+#    def compiled_code(self):
+#        return None
+
+
 # ====================================
 # Singular Test node
 # ====================================

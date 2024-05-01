@@ -1,6 +1,7 @@
 import time
 from dataclasses import dataclass, field
 from dbt.artifacts.resources.base import GraphResource, FileHash, Docs
+from dbt.artifacts.resources.types import NodeType
 from dbt.artifacts.resources.v1.config import NodeConfig
 from dbt_common.dataclass_schema import dbtClassMixin, ExtensibleDbtClassMixin
 from dbt_common.contracts.config.properties import AdditionalPropertiesMixin
@@ -154,6 +155,14 @@ class HasRelationMetadata(dbtClassMixin):
 class DeferRelation(HasRelationMetadata):
     alias: str
     relation_name: Optional[str]
+    # The rest of these fields match RelationConfig protocol exactly
+    resource_type: NodeType
+    name: str
+    description: str
+    compiled_code: Optional[str]
+    meta: Dict[str, Any]
+    tags: List[str]
+    config: Optional[NodeConfig]
 
     @property
     def identifier(self):
