@@ -404,22 +404,26 @@ message ProjectFlagsMovedDeprecationMsg {
 }
 
 // D014
-message SpacesInModelNameDeprecation {
-    string model_name = 1;
-    string model_version = 2;
-    string level = 3;
+message SpacesInResourceNameDeprecation {
+    string unique_id = 1;
+    string level = 2;
 }
 
-message SpacesInModelNameDeprecationMsg {
+message SpacesInResourceNameDeprecationMsg {
     CoreEventInfo info = 1;
-    SpacesInModelNameDeprecation data = 2;
+    SpacesInResourceNameDeprecation data = 2;
 }
 
 // D015
-message TotalModelNamesWithSpacesDeprecation {
+message ResourceNamesWithSpacesDeprecation {
     int32 count_invalid_names = 1;
     bool show_debug_hint = 2;
     string level = 3;
+}
+
+message ResourceNamesWithSpacesDeprecationMsg {
+    CoreEventInfo info = 1;
+    ResourceNamesWithSpacesDeprecation data = 2;
 }
 
 // D016
@@ -433,9 +437,12 @@ message PackageMaterializationOverrideDeprecationMsg {
     PackageMaterializationOverrideDeprecation data = 2;
 }
 
-message TotalModelNamesWithSpacesDeprecationMsg {
+// D017
+message SourceFreshnessProjectHooksNotRun {}
+
+message SourceFreshnessProjectHooksNotRunMsg {
     CoreEventInfo info = 1;
-    TotalModelNamesWithSpacesDeprecation data = 2;
+    SourceFreshnessProjectHooksNotRun data = 2;
 }
 
 // I065

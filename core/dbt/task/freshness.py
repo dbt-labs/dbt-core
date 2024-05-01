@@ -18,6 +18,7 @@ from dbt.artifacts.schemas.freshness import (
 from dbt_common.exceptions import DbtRuntimeError, DbtInternalError
 from dbt_common.events.functions import fire_event
 from dbt_common.events.types import Note
+from dbt import deprecations
 from dbt.events.types import (
     FreshnessCheckComplete,
     LogStartLine,
@@ -240,9 +241,12 @@ class FreshnessTask(RunTask):
         fire_event(FreshnessCheckComplete())
 
     def get_hooks_by_type(self, hook_type: RunHookType) -> List[HookNode]:
+        hooks = super().get_hooks_by_type(hook_type)
         if self.args.source_freshness_run_project_hooks:
-            return super().get_hooks_by_type(hook_type)
+            return hooks
         else:
+            if hooks:
+                deprecations.warn("source-freshness-project-hooks")
             return []
 
     def populate_metadata_freshness_cache(self, adapter, selected_uids: AbstractSet[str]) -> None:

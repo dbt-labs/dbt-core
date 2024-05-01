@@ -343,6 +343,33 @@ def test_select_package(manifest):
     }
 
 
+def test_select_package_this(manifest):
+    new_manifest = copy.deepcopy(manifest)
+
+    # change the package name for all nodes except ones where the unique_id contains "table_model"
+    for id, node in new_manifest.nodes.items():
+        if "table_model" not in id:
+            node.package_name = "foo"
+
+    for source in new_manifest.sources.values():
+        if "table_model" not in source.unique_id:
+            source.package_name = "foo"
+
+    methods = MethodManager(new_manifest, None)
+    method = methods.get_method("package", [])
+    assert isinstance(method, PackageSelectorMethod)
+    assert method.arguments == []
+
+    assert search_manifest_using_method(new_manifest, method, "this") == {
+        "not_null_table_model_id",
+        "table_model",
+        "table_model_csv",
+        "table_model_py",
+        "unique_table_model_id",
+        "unit_test_table_model",
+    }
+
+
 def test_select_config_materialized(manifest):
     methods = MethodManager(manifest, None)
     method = methods.get_method("config", ["materialized"])

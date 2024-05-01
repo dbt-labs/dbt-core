@@ -1,9 +1,11 @@
 import os
 
-import dbt.tracking
-from dbt_common.context import set_invocation_context
+from dbt_common.context import get_invocation_context, set_invocation_context
+from dbt_common.record import Recorder, RecorderMode, get_record_mode_from_env
+from dbt_common.clients.system import get_env
 from dbt_common.invocation import reset_invocation_id
 
+import dbt.tracking
 from dbt.version import installed as installed_version
 from dbt.adapters.factory import adapter_management, register_adapter, get_adapter
 from dbt.context.providers import generate_runtime_macro_context
@@ -44,6 +46,7 @@ from functools import update_wrapper
 import importlib.util
 import time
 import traceback
+from typing import Optional
 
 
 def preflight(func):
@@ -52,7 +55,14 @@ def preflight(func):
         assert isinstance(ctx, Context)
         ctx.obj = ctx.obj or {}
 
-        set_invocation_context(os.environ)
+        set_invocation_context({})
+
+        # Record/Replay
+        setup_record_replay()
+
+        # Must be set after record/replay is set up so that the env can be
+        # recorded or replayed if needed.
+        get_invocation_context()._env = get_env()
 
         # Flags
         flags = Flags(ctx)
@@ -91,6 +101,28 @@ def preflight(func):
         return func(*args, **kwargs)
 
     return update_wrapper(wrapper, func)
+
+
+def setup_record_replay():
+    rec_mode = get_record_mode_from_env()
+
+    recorder: Optional[Recorder] = None
+    if rec_mode == RecorderMode.REPLAY:
+        recording_path = os.environ["DBT_REPLAY"]
+        recorder = Recorder(RecorderMode.REPLAY, recording_path)
+    elif rec_mode == RecorderMode.RECORD:
+        recorder = Recorder(RecorderMode.RECORD)
+
+    get_invocation_context().recorder = recorder
+
+
+def tear_down_record_replay():
+    recorder = get_invocation_context().recorder
+    if recorder is not None:
+        if recorder.mode == RecorderMode.RECORD:
+            recorder.write("recording.json")
+        elif recorder.mode == RecorderMode.REPLAY:
+            recorder.write_diffs("replay_diffs.json")
 
 
 def postflight(func):
@@ -145,6 +177,8 @@ def postflight(func):
                     elapsed=time.perf_counter() - start_func,
                 )
             )
+
+            tear_down_record_replay()
 
         if not success:
             raise ResultExit(result)

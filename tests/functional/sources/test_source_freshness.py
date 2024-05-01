@@ -8,6 +8,7 @@ import dbt.version
 from dbt.artifacts.schemas.freshness import FreshnessResult
 from dbt.artifacts.schemas.results import FreshnessStatus
 from dbt.cli.main import dbtRunner
+from dbt import deprecations
 from tests.functional.sources.common_source_setup import BaseSourcesTest
 from tests.functional.sources.fixtures import (
     error_models_schema_yml,
@@ -412,6 +413,38 @@ class TestMetadataFreshnessFails:
         freshness_result = result.result.results[0]
         assert freshness_result.status == FreshnessStatus.RuntimeErr
         assert "Could not compute freshness for source test_table" in freshness_result.message
+
+
+class TestSourceFreshnessProjectHooksNotRun(SuccessfulSourceFreshnessTest):
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "config-version": 2,
+            "on-run-start": ["{{ log('on-run-start hooks called') }}"],
+            "on-run-end": ["{{ log('on-run-end hooks called') }}"],
+            "flags": {
+                "source_freshness_run_project_hooks": False,
+            },
+        }
+
+    def test_hooks_do_run_for_source_freshness(
+        self,
+        project,
+    ):
+        deprecations.reset_deprecations()
+        assert deprecations.active_deprecations == set()
+        _, log_output = self.run_dbt_and_capture_with_vars(
+            project,
+            [
+                "source",
+                "freshness",
+            ],
+            expect_pass=False,
+        )
+        assert "on-run-start hooks called" not in log_output
+        assert "on-run-end hooks called" not in log_output
+        expected = {"source-freshness-project-hooks"}
+        assert expected == deprecations.active_deprecations
 
 
 class TestHooksInSourceFreshness(SuccessfulSourceFreshnessTest):

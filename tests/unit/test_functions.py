@@ -1,8 +1,11 @@
 from argparse import Namespace
 import pytest
 
+
 import dbt.flags as flags
 from dbt_common.events.functions import msg_to_dict, warn_or_error
+from dbt_common.events.event_manager_client import cleanup_event_logger
+
 from dbt.events.logging import setup_event_logger
 from dbt_common.events.types import InfoLevel
 from dbt_common.exceptions import EventCompilationError
@@ -92,3 +95,5 @@ def test_setup_event_logger_specify_max_bytes(mocker):
     patched_file_handler.assert_called_once_with(
         filename="logs/dbt.log", encoding="utf8", maxBytes=1234567, backupCount=5
     )
+    # XXX if we do not clean up event logger here we are going to affect other tests.
+    cleanup_event_logger()

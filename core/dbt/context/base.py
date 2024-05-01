@@ -11,7 +11,8 @@ from dbt import tracking
 from dbt import utils
 from dbt.clients.jinja import get_rendered
 from dbt.clients.yaml_helper import yaml, safe_load, SafeLoader, Loader, Dumper  # noqa: F401
-from dbt.constants import SECRET_ENV_PREFIX, DEFAULT_ENV_PLACEHOLDER
+from dbt_common.constants import SECRET_ENV_PREFIX
+from dbt.constants import DEFAULT_ENV_PLACEHOLDER, SECRET_PLACEHOLDER
 from dbt.contracts.graph.nodes import Resource
 from dbt.exceptions import (
     SecretEnvVarLocationError,
@@ -561,6 +562,18 @@ class BaseContext(metaclass=ContextMeta):
               {{ log("Running some_macro: " ~ arg1 ~ ", " ~ arg2) }}
             {% endmacro %}"
         """
+        # Detect instances of the placeholder value ($$$DBT_SECRET_START...DBT_SECRET_END$$$)
+        # and replace it with the standard mask '*****'
+        if "DBT_SECRET_START" in str(msg):
+            search_group = f"({SECRET_ENV_PREFIX}(.*))"
+            pattern = SECRET_PLACEHOLDER.format(search_group).replace("$", r"\$")
+            m = re.search(
+                pattern,
+                msg,
+            )
+            if m:
+                msg = re.sub(pattern, "*****", msg)
+
         if info:
             fire_event(JinjaLogInfo(msg=msg, node_info=get_node_info()))
         else:

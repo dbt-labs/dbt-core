@@ -37,11 +37,8 @@ class TestOverrideAdapterDependency:
 
     def test_adapter_dependency(self, project, override_view_adapter_dep, set_up_deprecations):
         run_dbt(["deps"])
-        # this should error because the override is buggy
-        run_dbt(["run"], expect_pass=False)
-
-        # overriding a built-in materialization scoped to adapter from package is deprecated
-        assert deprecations.active_deprecations == {"package-materialization-override"}
+        # this should pass because implicit overrides are now deprecated (= disabled by default)
+        run_dbt(["run"])
 
 
 class TestOverrideAdapterDependencyDeprecated:
@@ -101,11 +98,8 @@ class TestOverrideDefaultDependency:
 
     def test_default_dependency(self, project, override_view_default_dep, set_up_deprecations):
         run_dbt(["deps"])
-        # this should error because the override is buggy
-        run_dbt(["run"], expect_pass=False)
-
-        # overriding a built-in materialization from package is deprecated
-        assert deprecations.active_deprecations == {"package-materialization-override"}
+        # this should pass because implicit overrides are now deprecated (= disabled by default)
+        run_dbt(["run"])
 
 
 class TestOverrideDefaultDependencyDeprecated:

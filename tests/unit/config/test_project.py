@@ -11,8 +11,10 @@ from dbt.constants import DEPENDENCIES_FILE_NAME
 import dbt.exceptions
 from dbt.adapters.factory import load_plugin
 from dbt.adapters.contracts.connection import QueryComment, DEFAULT_QUERY_COMMENT
+from dbt.config.project import Project
 from dbt.contracts.project import PackageConfig, LocalPackage, GitPackage
 from dbt.node_types import NodeType
+from dbt_common.exceptions import DbtRuntimeError
 from dbt_common.semver import VersionSpecifier
 
 from dbt.flags import set_from_args
@@ -27,7 +29,64 @@ from tests.unit.config import (
 )
 
 
-class TestProject(BaseConfigTest):
+class TestProjectMethods:
+    def test_all_source_paths(self, project: Project):
+        assert (
+            project.all_source_paths.sort()
+            == ["models", "seeds", "snapshots", "analyses", "macros"].sort()
+        )
+
+    def test_generic_test_paths(self, project: Project):
+        assert project.generic_test_paths == ["tests/generic"]
+
+    def test_fixture_paths(self, project: Project):
+        assert project.fixture_paths == ["tests/fixtures"]
+
+    def test__str__(self, project: Project):
+        assert (
+            str(project)
+            == "{'name': 'test_project', 'version': 1.0, 'project-root': 'doesnt/actually/exist', 'profile': 'test_profile', 'model-paths': ['models'], 'macro-paths': ['macros'], 'seed-paths': ['seeds'], 'test-paths': ['tests'], 'analysis-paths': ['analyses'], 'docs-paths': ['docs'], 'asset-paths': ['assets'], 'target-path': 'target', 'snapshot-paths': ['snapshots'], 'clean-targets': ['target'], 'log-path': 'path/to/project/logs', 'quoting': {'database': True, 'schema': True, 'identifier': True}, 'models': {}, 'on-run-start': [], 'on-run-end': [], 'dispatch': [{'macro_namespace': 'dbt_utils', 'search_order': ['test_project', 'dbt_utils']}], 'seeds': {}, 'snapshots': {}, 'sources': {}, 'data_tests': {}, 'unit_tests': {}, 'metrics': {}, 'semantic-models': {}, 'saved-queries': {}, 'exposures': {}, 'vars': {}, 'require-dbt-version': ['=0.0.0'], 'restrict-access': False, 'dbt-cloud': {}, 'query-comment': {'comment': \"\\n{%- set comment_dict = {} -%}\\n{%- do comment_dict.update(\\n    app='dbt',\\n    dbt_version=dbt_version,\\n    profile_name=target.get('profile_name'),\\n    target_name=target.get('target_name'),\\n) -%}\\n{%- if node is not none -%}\\n  {%- do comment_dict.update(\\n    node_id=node.unique_id,\\n  ) -%}\\n{% else %}\\n  {# in the node context, the connection name is the node_id #}\\n  {%- do comment_dict.update(connection_name=connection_name) -%}\\n{%- endif -%}\\n{{ return(tojson(comment_dict)) }}\\n\", 'append': False, 'job-label': False}, 'packages': []}"
+        )
+
+    def test_get_selector(self, project: Project):
+        selector = project.get_selector("my_selector")
+        assert selector.raw == "give me cats"
+
+        with pytest.raises(DbtRuntimeError):
+            project.get_selector("doesnt_exist")
+
+    def test_get_default_selector_name(self, project: Project):
+        default_selector_name = project.get_default_selector_name()
+        assert default_selector_name == "my_selector"
+
+        project.selectors["my_selector"]["default"] = False
+        default_selector_name = project.get_default_selector_name()
+        assert default_selector_name is None
+
+    def test_get_macro_search_order(self, project: Project):
+        search_order = project.get_macro_search_order("dbt_utils")
+        assert search_order == ["test_project", "dbt_utils"]
+
+        search_order = project.get_macro_search_order("doesnt_exist")
+        assert search_order is None
+
+    def test_project_target_path(self, project: Project):
+        assert project.project_target_path == "doesnt/actually/exist/target"
+
+    def test_eq(self, project: Project):
+        other = deepcopy(project)
+        assert project == other
+
+    def test_neq(self, project: Project):
+        other = deepcopy(project)
+        other.project_name = "other project"
+        assert project != other
+
+    def test_hashed_name(self, project: Project):
+        assert project.hashed_name() == "6e72a69d5c5cca8f0400338441c022e4"
+
+
+class TestProjectInitialization(BaseConfigTest):
     def test_defaults(self):
         project = project_from_config_norender(
             self.default_project_data, project_root=self.project_dir
@@ -60,21 +119,6 @@ class TestProject(BaseConfigTest):
         # embarrassing
         str(project)
 
-    def test_eq(self):
-        project = project_from_config_norender(
-            self.default_project_data, project_root=self.project_dir
-        )
-        other = project_from_config_norender(
-            self.default_project_data, project_root=self.project_dir
-        )
-        self.assertEqual(project, other)
-
-    def test_neq(self):
-        project = project_from_config_norender(
-            self.default_project_data, project_root=self.project_dir
-        )
-        self.assertNotEqual(project, object())
-
     def test_implicit_overrides(self):
         self.default_project_data.update(
             {
@@ -88,12 +132,6 @@ class TestProject(BaseConfigTest):
             set(project.docs_paths),
             set(["other-models", "seeds", "snapshots", "analyses", "macros"]),
         )
-
-    def test_hashed_name(self):
-        project = project_from_config_norender(
-            self.default_project_data, project_root=self.project_dir
-        )
-        self.assertEqual(project.hashed_name(), "754cd47eac1d6f50a5f7cd399ec43da4")
 
     def test_all_overrides(self):
         # log-path is not tested because it is set exclusively from flags, not cfg

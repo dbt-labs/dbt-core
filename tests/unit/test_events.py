@@ -153,13 +153,14 @@ sample_values = [
     adapter_types.CollectFreshnessReturnSignature(),
     core_types.TestsConfigDeprecation(deprecated_path="", exp_path=""),
     core_types.ProjectFlagsMovedDeprecation(),
-    core_types.SpacesInModelNameDeprecation(model_name="", model_version="", level=""),
-    core_types.TotalModelNamesWithSpacesDeprecation(
+    core_types.SpacesInResourceNameDeprecation(unique_id="", level=""),
+    core_types.ResourceNamesWithSpacesDeprecation(
         count_invalid_names=1, show_debug_hint=True, level=""
     ),
     core_types.PackageMaterializationOverrideDeprecation(
         package_name="my_package", materialization_name="view"
     ),
+    core_types.SourceFreshnessProjectHooksNotRun(),
     # E - DB Adapter ======================
     adapter_types.AdapterEventDebug(),
     adapter_types.AdapterEventInfo(),

@@ -4,11 +4,9 @@ from dbt_common.context import get_invocation_context
 
 from .base import BaseContext, contextmember
 
-from dbt.constants import SECRET_ENV_PREFIX, DEFAULT_ENV_PLACEHOLDER
+from dbt_common.constants import SECRET_ENV_PREFIX
+from dbt.constants import DEFAULT_ENV_PLACEHOLDER, SECRET_PLACEHOLDER
 from dbt.exceptions import EnvVarMissingError
-
-
-SECRET_PLACEHOLDER = "$$$DBT_SECRET_START$$${}$$$DBT_SECRET_END$$$"
 
 
 class SecretContext(BaseContext):

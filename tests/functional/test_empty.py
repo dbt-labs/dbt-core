@@ -37,7 +37,7 @@ sources:
 """
 
 
-class BaseTestEmpty:
+class TestEmptyFlag:
     @pytest.fixture(scope="class")
     def seeds(self):
         return {
@@ -70,6 +70,13 @@ class BaseTestEmpty:
         run_dbt(["run", "--empty"])
         self.assert_row_count(project, "model", 0)
 
+        # build without empty - 3 expected rows in output - 1 from each input
+        run_dbt(["build"])
+        self.assert_row_count(project, "model", 3)
 
-class TestEmpty(BaseTestEmpty):
-    pass
+        # build with empty - 0 expected rows in output
+        run_dbt(["build", "--empty"])
+        self.assert_row_count(project, "model", 0)
+
+        # ensure dbt compile supports --empty flag
+        run_dbt(["compile", "--empty"])

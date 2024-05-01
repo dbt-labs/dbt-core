@@ -408,16 +408,12 @@ class ProjectFlagsMovedDeprecation(WarnLevel):
         return warning_tag(f"Deprecated functionality\n\n{description}")
 
 
-class SpacesInModelNameDeprecation(DynamicLevel):
+class SpacesInResourceNameDeprecation(DynamicLevel):
     def code(self) -> str:
         return "D014"
 
     def message(self) -> str:
-        version = ".v" + self.model_version if self.model_version else ""
-        description = (
-            f"Model `{self.model_name}{version}` has spaces in its name. This is deprecated and "
-            "may cause errors when using dbt."
-        )
+        description = f"Found spaces in the name of `{self.unique_id}`"
 
         if self.level == EventLevel.ERROR.value:
             description = error_tag(description)
@@ -427,22 +423,17 @@ class SpacesInModelNameDeprecation(DynamicLevel):
         return line_wrap_message(description)
 
 
-class TotalModelNamesWithSpacesDeprecation(DynamicLevel):
+class ResourceNamesWithSpacesDeprecation(WarnLevel):
     def code(self) -> str:
         return "D015"
 
     def message(self) -> str:
-        description = f"Spaces in model names found in {self.count_invalid_names} model(s), which is deprecated."
+        description = f"Spaces found in {self.count_invalid_names} resource name(s). This is deprecated, and may lead to errors when using dbt. For more information: https://docs.getdbt.com/reference/global-configs/legacy-behaviors#require_resource_names_without_spaces"
 
         if self.show_debug_hint:
             description += " Run again with `--debug` to see them all."
 
-        if self.level == EventLevel.ERROR.value:
-            description = error_tag(description)
-        elif self.level == EventLevel.WARN.value:
-            description = warning_tag(description)
-
-        return line_wrap_message(description)
+        return line_wrap_message(warning_tag(description))
 
 
 class PackageMaterializationOverrideDeprecation(WarnLevel):
@@ -451,6 +442,16 @@ class PackageMaterializationOverrideDeprecation(WarnLevel):
 
     def message(self) -> str:
         description = f"Installed package '{self.package_name}' is overriding the built-in materialization '{self.materialization_name}'. Overrides of built-in materializations from installed packages will be deprecated in future versions of dbt. Please refer to https://docs.getdbt.com/reference/global-configs/legacy-behaviors#require_explicit_package_overrides_for_builtin_materializations for detailed documentation and suggested workarounds."
+
+        return line_wrap_message(warning_tag(description))
+
+
+class SourceFreshnessProjectHooksNotRun(WarnLevel):
+    def code(self) -> str:
+        return "D017"
+
+    def message(self) -> str:
+        description = "In a future version of dbt, the `source freshness` command will start running `on-run-start` and `on-run-end` hooks by default. Please refer to https://docs.getdbt.com/reference/global-configs/legacy-behaviors#source_freshness_run_project_hooks for detailed documentation and suggested workarounds."
 
         return line_wrap_message(warning_tag(description))
 

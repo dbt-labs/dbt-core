@@ -123,6 +123,16 @@ class PackageMaterializationOverrideDeprecation(DBTDeprecation):
     _event = "PackageMaterializationOverrideDeprecation"
 
 
+class ResourceNamesWithSpacesDeprecation(DBTDeprecation):
+    _name = "resource-names-with-spaces"
+    _event = "ResourceNamesWithSpacesDeprecation"
+
+
+class SourceFreshnessProjectHooksNotRun(DBTDeprecation):
+    _name = "source-freshness-project-hooks"
+    _event = "SourceFreshnessProjectHooksNotRun"
+
+
 def renamed_env_var(old_name: str, new_name: str):
     class EnvironmentVariableRenamed(DBTDeprecation):
         _name = f"environment-variable-renamed:{old_name}"
@@ -163,6 +173,8 @@ deprecations_list: List[DBTDeprecation] = [
     TestsConfigDeprecation(),
     ProjectFlagsMovedDeprecation(),
     PackageMaterializationOverrideDeprecation(),
+    ResourceNamesWithSpacesDeprecation(),
+    SourceFreshnessProjectHooksNotRun(),
 ]
 
 deprecations: Dict[str, DBTDeprecation] = {d.name: d for d in deprecations_list}

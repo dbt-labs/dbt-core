@@ -101,13 +101,26 @@ class PackageConfig(dbtClassMixin):
     @classmethod
     def validate(cls, data):
         for package in data.get("packages", data):
+            # This can happen when the target is a variable that is not filled and results in hangs
+            if isinstance(package, dict):
+                if package.get("package") == "":
+                    raise ValidationError(
+                        "A hub package is missing the value. It is a required property."
+                    )
+                if package.get("local") == "":
+                    raise ValidationError(
+                        "A local package is missing the value. It is a required property."
+                    )
+                if package.get("git") == "":
+                    raise ValidationError(
+                        "A git package is missing the value. It is a required property."
+                    )
             if isinstance(package, dict) and package.get("package"):
                 if not package["version"]:
                     raise ValidationError(
                         f"{package['package']} is missing the version. When installing from the Hub "
                         "package index, version is a required property"
                     )
-
                 if "/" not in package["package"]:
                     raise ValidationError(
                         f"{package['package']} was not found in the package index. Packages on the index "
@@ -296,7 +309,6 @@ class Project(dbtClassMixin):
 
 @dataclass
 class ProjectFlags(ExtensibleDbtClassMixin):
-    allow_spaces_in_model_names: Optional[bool] = True
     cache_selected_only: Optional[bool] = None
     debug: Optional[bool] = None
     fail_fast: Optional[bool] = None
@@ -308,9 +320,7 @@ class ProjectFlags(ExtensibleDbtClassMixin):
     partial_parse: Optional[bool] = None
     populate_cache: Optional[bool] = None
     printer_width: Optional[int] = None
-    require_explicit_package_overrides_for_builtin_materializations: bool = False
     send_anonymous_usage_stats: bool = DEFAULT_SEND_ANONYMOUS_USAGE_STATS
-    source_freshness_run_project_hooks: bool = False
     static_parser: Optional[bool] = None
     use_colors: Optional[bool] = None
     use_colors_file: Optional[bool] = None
@@ -320,12 +330,17 @@ class ProjectFlags(ExtensibleDbtClassMixin):
     warn_error_options: Optional[Dict[str, Union[str, List[str]]]] = None
     write_json: Optional[bool] = None
 
+    # legacy behaviors
+    require_explicit_package_overrides_for_builtin_materializations: bool = True
+    require_resource_names_without_spaces: bool = False
+    source_freshness_run_project_hooks: bool = False
+
     @property
     def project_only_flags(self) -> Dict[str, Any]:
         return {
-            "source_freshness_run_project_hooks": self.source_freshness_run_project_hooks,
-            "allow_spaces_in_model_names": self.allow_spaces_in_model_names,
             "require_explicit_package_overrides_for_builtin_materializations": self.require_explicit_package_overrides_for_builtin_materializations,
+            "require_resource_names_without_spaces": self.require_resource_names_without_spaces,
+            "source_freshness_run_project_hooks": self.source_freshness_run_project_hooks,
         }
 
 

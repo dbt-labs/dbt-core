@@ -1,0 +1,7 @@
+kind: Fixes
+body: Fix default value for indirect selection in selector cannot overwritten by CLI
+  flag and env var
+time: 2024-04-22T17:35:32.465183-07:00
+custom:
+  Author: ChenyuLInx
+  Issue: 9976 7673

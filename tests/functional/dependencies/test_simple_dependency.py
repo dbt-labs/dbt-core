@@ -434,3 +434,44 @@ class TestBadTarballDependency(object):
         ) as e:
             run_dbt(["deps"])
             assert e is not None
+
+
+class TestEmptyDependency:
+    def test_empty_package(self, project):
+        # We have to specify the bad formatted package here because if we do it
+        # in a `packages` fixture, the test will blow up in the setup phase, meaning
+        # we can't appropriately catch it with a `pytest.raises`
+        empty_hub_package = {
+            "packages": [
+                {
+                    "package": "",
+                    "version": "1.0.0",
+                }
+            ]
+        }
+        write_config_file(empty_hub_package, "packages.yml")
+        with pytest.raises(DbtProjectError, match="A hub package is missing the value"):
+            run_dbt(["deps"])
+
+        empty_git_package = {
+            "packages": [
+                {
+                    "git": "",
+                    "revision": "1.0.0",
+                }
+            ]
+        }
+        write_config_file(empty_git_package, "packages.yml")
+        with pytest.raises(DbtProjectError, match="A git package is missing the value"):
+            run_dbt(["deps"])
+
+        empty_local_package = {
+            "packages": [
+                {
+                    "local": "",
+                }
+            ]
+        }
+        write_config_file(empty_local_package, "packages.yml")
+        with pytest.raises(DbtProjectError, match="A local package is missing the value"):
+            run_dbt(["deps"])
