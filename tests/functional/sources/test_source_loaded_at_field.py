@@ -53,12 +53,13 @@ sources:
 """
 
 
-class TestLoadedAtSourceLevel:
+class TestLoadedAtField:
     @pytest.fixture(scope="class")
     def models(self):
         return {"schema.yml": loaded_at_field_null_schema_yml}
 
-    def test_source_level(self, project):
+    def test_loaded_at_field(self, project):
+        # falls back to meteadata-based freshness but postgres doesn't support it
         run_dbt(["parse"])
         manifest = get_manifest(project.project_root)
 

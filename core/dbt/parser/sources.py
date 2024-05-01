@@ -137,7 +137,7 @@ class SourcePatcher:
         # We need to be able to tell the difference between explicitly setting the loaded_at_field to None/null
         # and when it's simply not set.  This allows a user to override the source level loaded_at_field so that
         # specific table can default to metadata-based freshness.
-        if table.loaded_at_field_present or table is not None:
+        if table.loaded_at_field_present or table.loaded_at_field is not None:
             loaded_at_field = table.loaded_at_field
         else:
             loaded_at_field = source.loaded_at_field  # may be None, that's okay
