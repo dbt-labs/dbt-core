@@ -1,22 +1,12 @@
 import pytest
 
-from dataclasses import dataclass, field
 from dbt.cli.main import dbtRunner
 from dbt import deprecations
-from dbt_common.events.base_types import BaseEvent, EventLevel, EventMsg
+from dbt_common.events.base_types import EventLevel
 from dbt.events.types import SpacesInResourceNameDeprecation, ResourceNamesWithSpacesDeprecation
 from dbt.tests.util import update_config_file
-from typing import Dict, List
-
-
-@dataclass
-class EventCatcher:
-    event_to_catch: BaseEvent
-    caught_events: List[EventMsg] = field(default_factory=list)
-
-    def catch(self, event: EventMsg):
-        if event.info.name == self.event_to_catch.__name__:
-            self.caught_events.append(event)
+from tests.functional.utils import EventCatcher
+from typing import Dict
 
 
 class TestSpacesInModelNamesHappyPath:
