@@ -1,6 +1,6 @@
 # Playbook: Behavior Change Flags
 
-User documentation: [https://github.com/dbt-labs/docs.getdbt.com/compare/jerco/update-legacy-behaviors?expand=1](https://github.com/dbt-labs/docs.getdbt.com/compare/jerco/update-legacy-behaviors?expand=1)
+User documentation: https://docs.getdbt.com/reference/global-configs/legacy-behaviors
 
 ## Rules for introducing a new flag
 
