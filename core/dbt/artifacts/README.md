@@ -3,8 +3,7 @@
 ## Overview
 This directory is meant to be a lightweight module that is independent (and upstream of) the rest of dbt-core internals.
 
-Its primary responsibility is to define simple data classes that represent the versioned artifact schemas that dbt
-writes as JSON files throughout execution.
+It's primary responsibility is to define simple data classes that represent the versioned artifact schemas that dbt writes as JSON files throughout execution. 
 
 Long term, this module may be released as a standalone package (e.g. dbt-artifacts) to support stable parsing dbt artifacts programmatically.
 
