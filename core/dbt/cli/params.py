@@ -108,7 +108,7 @@ exclude = click.option(
 export_saved_queries = click.option(
     "--export-saved-queries/--no-export-saved-queries",
     envvar="DBT_EXPORT_SAVED_QUERIES",
-    help="Export saved queries within the 'build' command, otherwise no-op.",
+    help="Export saved queries within the `build` command, otherwise no-op.",
     is_flag=True,
     hidden=True,
 )
@@ -272,7 +272,7 @@ output_path = click.option(
     "--output",
     "-o",
     envvar=None,
-    help="Specify the output path for the JSON report. By default, outputs to 'target/sources.json'.",
+    help="Specify the output path for the JSON report. By default, outputs to 'target.json` or `sources.json'.",
     type=click.Path(file_okay=True, dir_okay=False, writable=True),
     default=None,
 )
@@ -692,7 +692,7 @@ warn_error_options = click.option(
     envvar="DBT_WARN_ERROR_OPTIONS",
     default="{}",
     help="""If dbt would normally warn, instead raise an exception based on include/exclude configuration. Examples include `--select` that selects nothing, deprecations, configurations with no associated models, invalid test configurations,
-    and missing sources/refs in tests. This argument should be a YAML string, with keys 'include' or 'exclude'. eg. '{"include": "all", "exclude": ["NoNodesForSelectionCriteria"]}'.""",
+    and missing sources/refs in tests. This argument should be a YAML string, with keys `include` or `exclude`. eg. '{"include": "all", "exclude": ["NoNodesForSelectionCriteria"]}'.""",
     type=WarnErrorOptionsType(),
 )
 
