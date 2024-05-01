@@ -1465,8 +1465,8 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             node.package_name != target_model.package_name and restrict_package_access
         )
 
-    # Called by requires.manifest after ManifestLoader.get_full_manifest
-    def merge_from_artifact(self, other: "Manifest") -> None:
+    # Called in GraphRunnableTask.before_run, RunTask.before_run, CloneTask.before_run
+    def merge_from_artifact(self, other: "Manifest", favor_state: bool = False) -> None:
         """Update this manifest by adding the 'defer_relation' attribute to all nodes
         with a counterpart in the stateful manifest used for deferral.
 

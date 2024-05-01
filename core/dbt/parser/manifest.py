@@ -3,7 +3,6 @@ from dataclasses import dataclass
 from dataclasses import field
 import datetime
 import os
-from pathlib import Path
 import traceback
 from typing import (
     Dict,
@@ -22,7 +21,6 @@ import time
 
 from dbt.context.query_header import generate_query_header_context
 from dbt.contracts.graph.semantic_manifest import SemanticManifest
-from dbt.contracts.state import PreviousState
 from dbt_common.events.base_types import EventLevel
 from dbt_common.exceptions.base import DbtValidationError
 import dbt_common.utils
@@ -119,7 +117,6 @@ from dbt.exceptions import (
     TargetNotFoundError,
     AmbiguousAliasError,
     InvalidAccessTypeError,
-    DbtRuntimeError,
     scrub_secrets,
 )
 from dbt.parser.base import Parser
@@ -1902,25 +1899,6 @@ def parse_manifest(
         runtime_config,
         write_perf_info=write_perf_info,
     )
-
-    # If deferral is enabled, add 'defer_relation' attribute to all nodes
-    flags = get_flags()
-    if flags.defer:
-        defer_state_path = flags.defer_state or flags.state
-        if not defer_state_path:
-            raise DbtRuntimeError(
-                "Deferral is enabled and requires a stateful manifest, but none was provided"
-            )
-        defer_state = PreviousState(
-            state_path=defer_state_path,
-            target_path=Path(runtime_config.target_path),
-            project_root=Path(runtime_config.project_root),
-        )
-        if not defer_state.manifest:
-            raise DbtRuntimeError(
-                f'Could not find manifest in deferral state path: "{defer_state_path}"'
-            )
-        manifest.merge_from_artifact(defer_state.manifest)
 
     # If we should (over)write the manifest in the target path, do that now
     if write and write_json:

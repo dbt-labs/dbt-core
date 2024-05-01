@@ -116,7 +116,8 @@ class CloneTask(GraphRunnableTask):
 
     def before_run(self, adapter, selected_uids: AbstractSet[str]):
         with adapter.connection_named("master"):
-            # only create *our* schemas, but cache *other* schemas in addition
+            self.defer_to_manifest()
+            # only create target schemas, but also cache defer_relation schemas
             schemas_to_create = super().get_model_schemas(adapter, selected_uids)
             self.create_schemas(adapter, schemas_to_create)
             schemas_to_cache = self.get_model_schemas(adapter, selected_uids)
