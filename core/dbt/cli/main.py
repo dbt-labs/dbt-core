@@ -24,7 +24,7 @@ from dbt_common.events.base_types import EventMsg
 
 @dataclass
 class dbtRunnerResult:
-    """Contains the result of an invocation of the dbtRunner"""
+    """Contains the result of an invocation of the dbtRunner."""
 
     success: bool
 
@@ -162,7 +162,7 @@ def global_flags(func):
 @p.show_resource_report
 def cli(ctx, **kwargs):
     """An ELT tool for managing your SQL transformations and data models.
-    For more documentation on these commands, visit: docs.getdbt.com
+    For more documentation on these commands, visit: docs.getdbt.com.
     """
 
 
@@ -193,7 +193,7 @@ def cli(ctx, **kwargs):
 @requires.runtime_config
 @requires.manifest
 def build(ctx, **kwargs):
-    """Run all seeds, models, snapshots, and tests in DAG order"""
+    """Run all seeds, models, snapshots, and tests in DAG order."""
     from dbt.task.build import BuildTask
 
     task = BuildTask(
@@ -221,7 +221,7 @@ def build(ctx, **kwargs):
 @requires.unset_profile
 @requires.project
 def clean(ctx, **kwargs):
-    """Delete all folders in the clean-targets list (usually the dbt_packages and target directories.)"""
+    """Delete all folders in the clean-targets list (usually the dbt_packages and target directories)."""
     from dbt.task.clean import CleanTask
 
     task = CleanTask(ctx.obj["flags"], ctx.obj["project"])
@@ -236,7 +236,7 @@ def clean(ctx, **kwargs):
 @click.pass_context
 @global_flags
 def docs(ctx, **kwargs):
-    """Generate or serve the documentation website for your project"""
+    """Generate or serve the documentation website for your project."""
 
 
 # dbt docs generate
@@ -261,7 +261,7 @@ def docs(ctx, **kwargs):
 @requires.runtime_config
 @requires.manifest(write=False)
 def docs_generate(ctx, **kwargs):
-    """Generate the documentation website for your project"""
+    """Generate the documentation website for your project."""
     from dbt.task.docs.generate import GenerateTask
 
     task = GenerateTask(
@@ -291,7 +291,7 @@ def docs_generate(ctx, **kwargs):
 @requires.project
 @requires.runtime_config
 def docs_serve(ctx, **kwargs):
-    """Serve the documentation website for your project"""
+    """Serve the documentation website for your project."""
     from dbt.task.docs.serve import ServeTask
 
     task = ServeTask(
@@ -330,7 +330,7 @@ def docs_serve(ctx, **kwargs):
 @requires.manifest
 def compile(ctx, **kwargs):
     """Generates executable SQL from source, model, test, and analysis files. Compiled SQL files are written to the
-    target/ directory."""
+    target/directory."""
     from dbt.task.compile import CompileTask
 
     task = CompileTask(
@@ -494,7 +494,7 @@ def init(ctx, **kwargs):
 @requires.runtime_config
 @requires.manifest
 def list(ctx, **kwargs):
-    """List the resources in your project"""
+    """List the resources in your project."""
     from dbt.task.list import ListTask
 
     task = ListTask(
@@ -530,7 +530,7 @@ cli.add_command(ls, "ls")
 @requires.runtime_config
 @requires.manifest(write_perf_info=True)
 def parse(ctx, **kwargs):
-    """Parses the project and provides information on performance"""
+    """Parses the project and provides information on performance."""
     # manifest generation and writing happens in @requires.manifest
     return ctx.obj["manifest"], True
 
@@ -721,7 +721,7 @@ def seed(ctx, **kwargs):
 @requires.runtime_config
 @requires.manifest
 def snapshot(ctx, **kwargs):
-    """Execute snapshots defined in your project"""
+    """Execute snapshots defined in your project."""
     from dbt.task.snapshot import SnapshotTask
 
     task = SnapshotTask(
@@ -740,7 +740,7 @@ def snapshot(ctx, **kwargs):
 @click.pass_context
 @global_flags
 def source(ctx, **kwargs):
-    """Manage your project's sources"""
+    """Manage your project's sources."""
 
 
 # dbt source freshness
@@ -763,7 +763,7 @@ def source(ctx, **kwargs):
 @requires.runtime_config
 @requires.manifest
 def freshness(ctx, **kwargs):
-    """check the current freshness of the project's sources"""
+    """Check the current freshness of the project's sources."""
     from dbt.task.freshness import FreshnessTask
 
     task = FreshnessTask(
@@ -803,7 +803,7 @@ cli.commands["source"].add_command(snapshot_freshness, "snapshot-freshness")  # 
 @requires.runtime_config
 @requires.manifest
 def test(ctx, **kwargs):
-    """Runs tests on data in deployed models. Run this after `dbt run`"""
+    """Runs tests on data in deployed models. Run this after `dbt run`."""
     from dbt.task.test import TestTask
 
     task = TestTask(
