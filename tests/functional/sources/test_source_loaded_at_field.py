@@ -1,8 +1,25 @@
 import pytest
 from dbt.tests.util import run_dbt, get_manifest, write_file
+from dbt.exceptions import YamlParseDictError
 
 
 loaded_at_field_null_schema_yml = """
+sources:
+  - name: test_source
+    freshness:
+      warn_after:
+        count: 1
+        period: day
+      error_after:
+        count: 4
+        period: day
+    loaded_at_field: updated_at
+    tables:
+      - name: table1
+        loaded_at_field: null
+"""
+
+loaded_at_field_blank_schema_yml = """
 sources:
   - name: test_source
     freshness:
@@ -49,6 +66,22 @@ sources:
         loaded_at_field: updated_at_another_place
 """
 
+loaded_at_field_empty_string_schema_yml = """
+sources:
+  - name: test_source
+    freshness:
+      warn_after:
+        count: 1
+        period: day
+      error_after:
+        count: 4
+        period: day
+    loaded_at_field: updated_at
+    tables:
+      - name: table1
+        loaded_at_field: ""
+"""
+
 
 class TestParsingLoadedAtField:
     @pytest.fixture(scope="class")
@@ -75,9 +108,8 @@ class TestParsingLoadedAtField:
             manifest.sources.get("source.test.test_source.table1").loaded_at_field == "updated_at"
         )
 
-        # test setting loaded_at_field to null explicitly again to make sure the change is picked up
-        # by parser
-        write_file(loaded_at_field_null_schema_yml, project.project_root, "models", "schema.yml")
+        # test setting loaded_at_field to nothing, should override Source value for None
+        write_file(loaded_at_field_blank_schema_yml, project.project_root, "models", "schema.yml")
         run_dbt(["parse"])
         manifest = get_manifest(project.project_root)
 
@@ -95,3 +127,10 @@ class TestParsingLoadedAtField:
             manifest.sources.get("source.test.test_source.table1").loaded_at_field
             == "updated_at_another_place"
         )
+
+        # test setting loaded_at_field at table level to an empty string - should error
+        write_file(
+            loaded_at_field_empty_string_schema_yml, project.project_root, "models", "schema.yml"
+        )
+        with pytest.raises(YamlParseDictError):
+            run_dbt(["parse"])

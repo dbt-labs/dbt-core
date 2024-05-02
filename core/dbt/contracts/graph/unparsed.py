@@ -299,6 +299,17 @@ class UnparsedSourceDefinition(dbtClassMixin):
     tags: List[str] = field(default_factory=list)
     config: Dict[str, Any] = field(default_factory=dict)
 
+    @classmethod
+    def validate(cls, data):
+        super(UnparsedSourceDefinition, cls).validate(data)
+
+        if data.get("loaded_at_field", None) == "":
+            raise ValidationError("loaded_at_field cannot be an empty string.")
+        if "tables" in data:
+            for table in data["tables"]:
+                if table.get("loaded_at_field", None) == "":
+                    raise ValidationError("loaded_at_field cannot be an empty string.")
+
     @property
     def yaml_key(self) -> "str":
         return "sources"
