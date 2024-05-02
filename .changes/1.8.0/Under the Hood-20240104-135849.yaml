@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: Remove usage of dbt.adapters.factory in dbt/common
-time: 2024-01-04T13:58:49.221966-05:00
-custom:
-  Author: michelleark
-  Issue: "9334"

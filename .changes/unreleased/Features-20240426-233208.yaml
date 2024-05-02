@@ -1,6 +1,0 @@
-kind: Features
-body: Allow aliases `error` for `include` and `warn` for `exclude` in `warn_error_options`
-time: 2024-04-26T23:32:08.771114-05:00
-custom:
-  Author: QMalcolm
-  Issue: "9644"

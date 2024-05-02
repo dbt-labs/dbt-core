@@ -1,7 +1,0 @@
-kind: Fixes
-body: Fix back-compat parsing for model-level 'tests', source table-level 'tests',
-  and 'tests' defined on model versions
-time: 2024-01-19T21:52:14.090462+01:00
-custom:
-  Author: jtcohen6
-  Issue: "9411"

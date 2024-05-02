@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: Move data parts of `Exposure` class to dbt/artifacts
-time: 2024-01-30T16:16:37.176038-08:00
-custom:
-  Author: QMalcolm
-  Issue: "9380"

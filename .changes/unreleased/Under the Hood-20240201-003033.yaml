@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Split up deferral across parsing (adding 'defer_relation' from state manifest)
-  and runtime ref resolution"
-time: 2024-02-01T00:30:33.573665+01:00
-custom:
-  Author: jtcohen6
-  Issue: "9199"

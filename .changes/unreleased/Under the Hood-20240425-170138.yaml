@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: Enable use of record mode via environment variable
-time: 2024-04-25T17:01:38.093524-04:00
-custom:
-  Author: peterallenwebb
-  Issue: "10045"

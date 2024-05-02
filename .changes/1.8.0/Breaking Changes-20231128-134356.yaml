@@ -1,6 +1,0 @@
-kind: Breaking Changes
-body: Move AdapterLogger to adapters folder
-time: 2023-11-28T13:43:56.853925-08:00
-custom:
-  Author: colin-rogers-dbt
-  Issue: "9151"

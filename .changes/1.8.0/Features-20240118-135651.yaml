@@ -1,6 +1,0 @@
-kind: Features
-body: Align with order of unit test output when `actual` differs from `expected`
-time: 2024-01-18T13:56:51.131001-07:00
-custom:
-  Author: dbeatty10
-  Issue: "9370"

@@ -1,7 +1,0 @@
-kind: Fixes
-body: Ensure we produce valid jsonschema schemas for manifest, catalog, run-results,
-  and sources
-time: 2023-11-27T16:52:44.590313-08:00
-custom:
-  Author: QMalcolm
-  Issue: "8991"

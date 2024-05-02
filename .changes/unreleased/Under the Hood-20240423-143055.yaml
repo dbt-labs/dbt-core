@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: Use the SECRET_ENV_PREFIX from dbt_common instead of duplicating it in dbt-core
-time: 2024-04-23T14:30:55.739378-05:00
-custom:
-  Author: emmyoop
-  Issue: "10018"

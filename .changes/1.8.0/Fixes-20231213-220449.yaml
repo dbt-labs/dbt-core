@@ -1,6 +1,0 @@
-kind: Fixes
-body: Preserve the value of vars and the --full-refresh flags when using retry.
-time: 2023-12-13T22:04:49.228294-05:00
-custom:
-  Author: peterallenwebb, ChenyuLInx
-  Issue: "9112"

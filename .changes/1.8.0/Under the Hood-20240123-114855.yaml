@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: Add the @requires.manifest decorator to the retry command.
-time: 2024-01-23T11:48:55.627982-06:00
-custom:
-  Author: emmyoop
-  Issue: "9426"

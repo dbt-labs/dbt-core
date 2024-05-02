@@ -1,7 +1,0 @@
-kind: Breaking Changes
-body: Rm --dry-run flag from 'dbt deps --add-package', in favor of just 'dbt deps
-  --lock'
-time: 2023-11-29T09:19:21.071212+01:00
-custom:
-  Author: jtcohen6
-  Issue: "9100"

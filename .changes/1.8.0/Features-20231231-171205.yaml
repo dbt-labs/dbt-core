@@ -1,6 +1,0 @@
-kind: Features
-body: Added hook support for `dbt source freshness`
-time: 2023-12-31T17:12:05.587185+02:00
-custom:
-  Author: ofek1weiss
-  Issue: "5609"

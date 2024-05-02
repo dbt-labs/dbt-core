@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: Remove usage of dbt.contracts.graph.nodes.ResultNode in dbt/adapters
-time: 2023-12-05T16:58:12.932172+09:00
-custom:
-  Author: michelleark
-  Issue: "9214"

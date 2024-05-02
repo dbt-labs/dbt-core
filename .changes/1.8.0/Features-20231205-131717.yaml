@@ -1,7 +1,0 @@
-kind: Features
-body: Convert the `tests` config to `data_tests` in both dbt_project.yml and schema files.
-  in schema files.
-time: 2023-12-05T13:17:17.647765-06:00
-custom:
-  Author: emmyoop
-  Issue: "8699"
