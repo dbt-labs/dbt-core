@@ -1041,3 +1041,22 @@ def external_package():
             "external_model.sql": external_package__external_model_sql,
         },
     }
+
+
+model_select_1_sql = """
+select 1 as id
+"""
+
+model_select_2_sql = """
+select 2 as id
+"""
+
+test_expect_2_yml = """
+unit_tests:
+  - name: test_my_model
+    model: my_model
+    given: []
+    expect:
+      rows:
+        - {id: 2}
+"""
