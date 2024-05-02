@@ -1,13 +1,14 @@
 import os
+
 import pytest
+
 from dbt.tests.util import run_dbt
 from tests.functional.simple_snapshot.fixtures import (
-    models__schema_yml,
-    models__ref_snapshot_sql,
     macros__test_no_overlaps_sql,
+    models__ref_snapshot_sql,
+    models__schema_yml,
     snapshots_pg__snapshot_sql,
 )
-
 
 NUM_SNAPSHOT_MODELS = 1
 

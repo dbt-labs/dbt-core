@@ -1,6 +1,8 @@
-import pytest
-from dbt.tests.util import run_dbt
 import os
+
+import pytest
+
+from dbt.tests.util import run_dbt
 
 snapshots_with_comment_at_end__snapshot_sql = """
 {% snapshot snapshot_actual %}

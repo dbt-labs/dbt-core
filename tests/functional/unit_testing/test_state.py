@@ -1,24 +1,20 @@
 import os
-import pytest
 import shutil
 from copy import deepcopy
 
-from dbt.tests.util import (
-    run_dbt,
-    write_file,
-    write_config_file,
-)
+import pytest
 from fixtures import (
-    my_model_vars_sql,
-    my_model_a_sql,
-    my_model_b_sql,
-    test_my_model_simple_fixture_yml,
-    test_my_model_fixture_csv,
-    test_my_model_b_fixture_csv as test_my_model_fixture_csv_modified,
     model_select_1_sql,
     model_select_2_sql,
+    my_model_a_sql,
+    my_model_b_sql,
+    my_model_vars_sql,
     test_expect_2_yml,
 )
+from fixtures import test_my_model_b_fixture_csv as test_my_model_fixture_csv_modified
+from fixtures import test_my_model_fixture_csv, test_my_model_simple_fixture_yml
+
+from dbt.tests.util import run_dbt, write_config_file, write_file
 
 
 class UnitTestState:

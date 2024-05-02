@@ -1,24 +1,8 @@
-from datetime import timedelta
 import pickle
+from datetime import timedelta
+
 import pytest
 
-from dbt.contracts.graph.unparsed import (
-    UnparsedNode,
-    UnparsedRunHook,
-    UnparsedMacro,
-    UnparsedSourceDefinition,
-    UnparsedSourceTableDefinition,
-    UnparsedDocumentationFile,
-    UnparsedColumn,
-    UnparsedNodeUpdate,
-    UnparsedModelUpdate,
-    Docs,
-    UnparsedExposure,
-    UnparsedMetric,
-    UnparsedMetricTypeParams,
-    UnparsedMetricInputMeasure,
-    UnparsedVersion,
-)
 from dbt.artifacts.resources import (
     ExposureType,
     FreshnessThreshold,
@@ -29,7 +13,25 @@ from dbt.artifacts.resources import (
 )
 from dbt.artifacts.resources.types import TimePeriod
 from dbt.artifacts.schemas.results import FreshnessStatus
+from dbt.contracts.graph.unparsed import (
+    Docs,
+    UnparsedColumn,
+    UnparsedDocumentationFile,
+    UnparsedExposure,
+    UnparsedMacro,
+    UnparsedMetric,
+    UnparsedMetricInputMeasure,
+    UnparsedMetricTypeParams,
+    UnparsedModelUpdate,
+    UnparsedNode,
+    UnparsedNodeUpdate,
+    UnparsedRunHook,
+    UnparsedSourceDefinition,
+    UnparsedSourceTableDefinition,
+    UnparsedVersion,
+)
 from dbt.node_types import NodeType
+
 from .utils import ContractTestCase
 
 

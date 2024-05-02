@@ -1,8 +1,10 @@
-import click
 import inspect
 import typing as t
+
+import click
 from click import Context
 from click.parser import OptionParser, ParsingState
+
 from dbt.cli.option_types import ChoiceTuple
 
 

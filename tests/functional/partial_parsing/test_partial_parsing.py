@@ -1,85 +1,84 @@
+import os
+import re
 from argparse import Namespace
-import pytest
 from unittest import mock
 
-import dbt.flags as flags
-from dbt.tests.util import (
-    run_dbt,
-    get_manifest,
-    write_file,
-    rm_file,
-    run_dbt_and_capture,
-    rename_dir,
-)
+import pytest
 import yaml
-from tests.functional.utils import up_one
+
+import dbt.flags as flags
+from dbt.contracts.files import ParseFileType
+from dbt.contracts.results import TestStatus
+from dbt.exceptions import CompilationError
+from dbt.plugins.manifest import ModelNodeArgs, PluginNodes
 from dbt.tests.fixtures.project import write_project_files
+from dbt.tests.util import (
+    get_manifest,
+    rename_dir,
+    rm_file,
+    run_dbt,
+    run_dbt_and_capture,
+    write_file,
+)
 from tests.functional.partial_parsing.fixtures import (
+    custom_schema_tests1_sql,
+    custom_schema_tests2_sql,
+    customers1_md,
+    customers2_md,
+    customers_sql,
+    empty_schema_with_version_yml,
+    empty_schema_yml,
+    generic_schema_yml,
+    generic_test_edited_sql,
+    generic_test_schema_yml,
+    generic_test_sql,
+    gsm_override2_sql,
+    gsm_override_sql,
+    local_dependency__dbt_project_yml,
+    local_dependency__macros__dep_macro_sql,
+    local_dependency__models__model_to_import_sql,
+    local_dependency__models__schema_yml,
+    local_dependency__seeds__seed_csv,
+    macros_schema_yml,
+    macros_yml,
+    model_a_sql,
+    model_b_sql,
+    model_four1_sql,
+    model_four2_sql,
     model_one_sql,
+    model_three_disabled2_sql,
+    model_three_disabled_sql,
+    model_three_modified_sql,
+    model_three_sql,
     model_two_sql,
     models_schema1_yml,
     models_schema2_yml,
     models_schema2b_yml,
-    model_three_sql,
-    model_three_modified_sql,
-    model_four1_sql,
-    model_four2_sql,
+    models_schema3_yml,
     models_schema4_yml,
     models_schema4b_yml,
-    models_schema3_yml,
-    my_macro_sql,
+    my_analysis_sql,
     my_macro2_sql,
-    macros_yml,
-    empty_schema_yml,
-    empty_schema_with_version_yml,
-    model_three_disabled_sql,
-    model_three_disabled2_sql,
+    my_macro_sql,
+    my_test_sql,
+    orders_sql,
     raw_customers_csv,
-    customers_sql,
-    sources_tests1_sql,
+    ref_override2_sql,
+    ref_override_sql,
+    schema_models_c_yml,
     schema_sources1_yml,
     schema_sources2_yml,
     schema_sources3_yml,
     schema_sources4_yml,
     schema_sources5_yml,
-    customers1_md,
-    customers2_md,
-    test_macro_sql,
-    my_test_sql,
-    test_macro2_sql,
-    my_analysis_sql,
-    sources_tests2_sql,
-    local_dependency__dbt_project_yml,
-    local_dependency__models__schema_yml,
-    local_dependency__models__model_to_import_sql,
-    local_dependency__macros__dep_macro_sql,
-    local_dependency__seeds__seed_csv,
-    schema_models_c_yml,
-    model_a_sql,
-    model_b_sql,
-    macros_schema_yml,
-    custom_schema_tests1_sql,
-    custom_schema_tests2_sql,
-    ref_override_sql,
-    ref_override2_sql,
-    gsm_override_sql,
-    gsm_override2_sql,
-    orders_sql,
-    snapshot_sql,
     snapshot2_sql,
-    generic_schema_yml,
-    generic_test_sql,
-    generic_test_schema_yml,
-    generic_test_edited_sql,
+    snapshot_sql,
+    sources_tests1_sql,
+    sources_tests2_sql,
+    test_macro2_sql,
+    test_macro_sql,
 )
-
-from dbt.exceptions import CompilationError
-from dbt.contracts.files import ParseFileType
-from dbt.contracts.results import TestStatus
-from dbt.plugins.manifest import PluginNodes, ModelNodeArgs
-
-import re
-import os
+from tests.functional.utils import up_one
 
 os.environ["DBT_PP_TEST"] = "true"
 

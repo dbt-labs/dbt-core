@@ -1,21 +1,21 @@
-import pytest
-import os
 import json
+import os
 
-from dbt.tests.util import run_dbt
+import pytest
+
 from dbt.logger import log_manager
-
+from dbt.tests.util import run_dbt
 from tests.functional.list.fixtures import (  # noqa: F401
+    analyses,
+    macros,
+    metrics,
+    models,
+    project_files,
+    saved_queries,
+    seeds,
+    semantic_models,
     snapshots,
     tests,
-    models,
-    macros,
-    seeds,
-    analyses,
-    semantic_models,
-    metrics,
-    saved_queries,
-    project_files,
 )
 
 

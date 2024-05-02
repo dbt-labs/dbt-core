@@ -6,20 +6,22 @@ from pathlib import Path
 from pprint import pformat as pf
 from typing import Any, Callable, Dict, List, Optional, Set, Union
 
-from click import Context, get_current_context, Parameter
-from click.core import Command as ClickCommand, Group, ParameterSource
+from click import Context, Parameter, get_current_context
+from click.core import Command as ClickCommand
+from click.core import Group, ParameterSource
+
 from dbt.cli.exceptions import DbtUsageException
 from dbt.cli.resolvers import default_log_path, default_project_dir
 from dbt.cli.types import Command as CliCommand
 from dbt.config.project import read_project_flags
 from dbt.contracts.project import ProjectFlags
+from dbt.deprecations import renamed_env_var
+from dbt.events import ALL_EVENT_NAMES
 from dbt_common import ui
+from dbt_common.clients import jinja
 from dbt_common.events import functions
 from dbt_common.exceptions import DbtInternalError
-from dbt_common.clients import jinja
-from dbt.deprecations import renamed_env_var
 from dbt_common.helper_types import WarnErrorOptions
-from dbt.events import ALL_EVENT_NAMES
 
 if os.name != "nt":
     # https://bugs.python.org/issue41567

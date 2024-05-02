@@ -9,9 +9,9 @@ from dbt.cli.flags import Flags
 from dbt.cli.main import cli
 from dbt.cli.types import Command
 from dbt.contracts.project import ProjectFlags
+from dbt.tests.util import rm_file, write_file
 from dbt_common.exceptions import DbtInternalError
 from dbt_common.helper_types import WarnErrorOptions
-from dbt.tests.util import rm_file, write_file
 
 
 class TestFlags:

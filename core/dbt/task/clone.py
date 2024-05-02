@@ -1,18 +1,18 @@
 import threading
-from typing import AbstractSet, Any, List, Iterable, Set, Optional
+from typing import AbstractSet, Any, Iterable, List, Optional, Set
 
 from dbt.adapters.base import BaseRelation
+from dbt.artifacts.schemas.run import RunResult, RunStatus
 from dbt.clients.jinja import MacroGenerator
 from dbt.context.providers import generate_runtime_model_context
 from dbt.contracts.graph.manifest import Manifest
-from dbt.artifacts.schemas.run import RunStatus, RunResult
-from dbt_common.dataclass_schema import dbtClassMixin
-from dbt_common.exceptions import DbtInternalError, CompilationError
 from dbt.graph import ResourceTypeSelector
 from dbt.node_types import REFABLE_NODE_TYPES
 from dbt.task.base import BaseRunner, resource_types_from_args
 from dbt.task.run import _validate_materialization_relations_dict
 from dbt.task.runnable import GraphRunnableTask
+from dbt_common.dataclass_schema import dbtClassMixin
+from dbt_common.exceptions import CompilationError, DbtInternalError
 
 
 class CloneRunner(BaseRunner):

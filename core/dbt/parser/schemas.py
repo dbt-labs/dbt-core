@@ -1,25 +1,19 @@
 import datetime
 import time
-
 from abc import ABCMeta, abstractmethod
-from typing import Any, Callable, Dict, Generic, Iterable, List, Optional, Type, TypeVar
 from dataclasses import dataclass, field
+from typing import Any, Callable, Dict, Generic, Iterable, List, Optional, Type, TypeVar
 
 from dbt import deprecations
-from dbt_common.contracts.constraints import ConstraintType, ModelLevelConstraint
-from dbt_common.dataclass_schema import ValidationError, dbtClassMixin
-
 from dbt.clients.yaml_helper import load_yaml_text
-from dbt.parser.schema_renderer import SchemaYamlRenderer
-from dbt.parser.schema_generic_tests import SchemaGenericTestParser
+from dbt.context.configured import SchemaYamlVars, generate_schema_yml_context
 from dbt.context.context_config import ContextConfig
-from dbt.context.configured import generate_schema_yml_context, SchemaYamlVars
 from dbt.contracts.files import SchemaSourceFile
 from dbt.contracts.graph.nodes import (
-    ParsedNodePatch,
-    ParsedMacroPatch,
-    UnpatchedSourceDefinition,
     ModelNode,
+    ParsedMacroPatch,
+    ParsedNodePatch,
+    UnpatchedSourceDefinition,
 )
 from dbt.contracts.graph.unparsed import (
     HasColumnDocs,
@@ -27,45 +21,48 @@ from dbt.contracts.graph.unparsed import (
     SourcePatch,
     UnparsedAnalysisUpdate,
     UnparsedMacroUpdate,
-    UnparsedNodeUpdate,
     UnparsedModelUpdate,
+    UnparsedNodeUpdate,
     UnparsedSourceDefinition,
 )
+from dbt.events.types import (
+    MacroNotFoundForPatch,
+    NoNodeForYamlKey,
+    UnsupportedConstraintMaterialization,
+    ValidationWarning,
+    WrongResourceSchemaFile,
+)
 from dbt.exceptions import (
+    DbtInternalError,
     DuplicateMacroPatchNameError,
     DuplicatePatchPathError,
     DuplicateSourcePatchNameError,
+    InvalidAccessTypeError,
     JSONValidationError,
-    DbtInternalError,
     ParsingError,
     YamlLoadError,
     YamlParseDictError,
     YamlParseListError,
-    InvalidAccessTypeError,
 )
-from dbt_common.exceptions import DbtValidationError
-from dbt_common.events.functions import warn_or_error
-from dbt.events.types import (
-    MacroNotFoundForPatch,
-    NoNodeForYamlKey,
-    ValidationWarning,
-    UnsupportedConstraintMaterialization,
-    WrongResourceSchemaFile,
-)
-from dbt.node_types import NodeType, AccessType
+from dbt.node_types import AccessType, NodeType
 from dbt.parser.base import SimpleParser
-from dbt.parser.search import FileBlock
 from dbt.parser.common import (
-    YamlBlock,
+    ParserRef,
     TargetBlock,
     TestBlock,
     VersionedTestBlock,
-    ParserRef,
+    YamlBlock,
     trimmed,
 )
+from dbt.parser.schema_generic_tests import SchemaGenericTestParser
+from dbt.parser.schema_renderer import SchemaYamlRenderer
+from dbt.parser.search import FileBlock
 from dbt.utils import coerce_dict_str
+from dbt_common.contracts.constraints import ConstraintType, ModelLevelConstraint
+from dbt_common.dataclass_schema import ValidationError, dbtClassMixin
+from dbt_common.events.functions import warn_or_error
+from dbt_common.exceptions import DbtValidationError
 from dbt_common.utils import deep_merge
-
 
 schema_file_keys = (
     "models",

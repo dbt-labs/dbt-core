@@ -1,24 +1,21 @@
+import io
 import json
 import re
-import io
-from typing import Any, Dict, List, Mapping, Optional, Union, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, List, Mapping, Optional, Union
 
+from dbt.node_types import REFABLE_NODE_TYPES, AccessType, NodeType
+from dbt_common.constants import SECRET_ENV_PREFIX
+from dbt_common.dataclass_schema import ValidationError
 from dbt_common.exceptions import (
-    DbtRuntimeError,
+    CommandResultError,
     CompilationError,
-    DbtInternalError,
     DbtConfigError,
+    DbtInternalError,
+    DbtRuntimeError,
+    DbtValidationError,
     env_secrets,
     scrub_secrets,
-    DbtValidationError,
-    CommandResultError,
 )
-from dbt.node_types import NodeType, AccessType, REFABLE_NODE_TYPES
-
-from dbt_common.dataclass_schema import ValidationError
-
-from dbt_common.constants import SECRET_ENV_PREFIX
-
 
 if TYPE_CHECKING:
     import agate

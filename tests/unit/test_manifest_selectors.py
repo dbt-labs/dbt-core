@@ -1,7 +1,9 @@
 import textwrap
-import yaml
-from collections import OrderedDict
 import unittest
+from collections import OrderedDict
+
+import yaml
+
 from dbt.config.selectors import SelectorDict
 from dbt.exceptions import DbtSelectorsError
 

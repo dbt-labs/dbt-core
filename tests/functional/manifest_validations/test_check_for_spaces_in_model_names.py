@@ -1,12 +1,16 @@
+from typing import Dict
+
 import pytest
 
-from dbt.cli.main import dbtRunner
 from dbt import deprecations
-from dbt_common.events.base_types import EventLevel
-from dbt.events.types import SpacesInResourceNameDeprecation, ResourceNamesWithSpacesDeprecation
+from dbt.cli.main import dbtRunner
+from dbt.events.types import (
+    ResourceNamesWithSpacesDeprecation,
+    SpacesInResourceNameDeprecation,
+)
 from dbt.tests.util import update_config_file
+from dbt_common.events.base_types import EventLevel
 from tests.functional.utils import EventCatcher
-from typing import Dict
 
 
 class TestSpacesInModelNamesHappyPath:

@@ -1,9 +1,7 @@
 import pytest
-from tests.functional.adapter.basic.files import (
-    test_passing_sql,
-    test_failing_sql,
-)
+
 from dbt.tests.util import check_result_nodes_by_name, run_dbt
+from tests.functional.adapter.basic.files import test_failing_sql, test_passing_sql
 
 
 class BaseSingularTests:

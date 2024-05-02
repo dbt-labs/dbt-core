@@ -1,7 +1,9 @@
+import json
 from multiprocessing import Process
 from pathlib import Path
-import json
+
 import pytest
+
 from dbt.tests.util import run_dbt
 
 good_model_sql = """

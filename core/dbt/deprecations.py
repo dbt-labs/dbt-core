@@ -1,10 +1,9 @@
 import abc
-from typing import Optional, Set, List, Dict, ClassVar
+from typing import ClassVar, Dict, List, Optional, Set
 
 import dbt.tracking
-
 from dbt.events import types as core_types
-from dbt_common.events.functions import warn_or_error, fire_event
+from dbt_common.events.functions import fire_event, warn_or_error
 
 
 class DBTDeprecation:

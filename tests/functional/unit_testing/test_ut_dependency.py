@@ -1,6 +1,7 @@
 import pytest
-from dbt.tests.util import run_dbt, get_unique_ids_in_results
+
 from dbt.tests.fixtures.project import write_project_files
+from dbt.tests.util import get_unique_ids_in_results, run_dbt
 
 local_dependency__dbt_project_yml = """
 

@@ -4,10 +4,10 @@ import dbt.exceptions
 from dbt.tests.util import check_table_does_exist, check_table_does_not_exist, run_dbt
 from tests.functional.exit_codes.fixtures import (
     BaseConfigProject,
-    snapshots_bad_sql,
-    snapshots_good_sql,
     data_seed_bad_csv,
     data_seed_good_csv,
+    snapshots_bad_sql,
+    snapshots_good_sql,
 )
 
 

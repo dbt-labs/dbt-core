@@ -1,22 +1,18 @@
-from typing import Set, List, Optional, Tuple
+from typing import List, Optional, Set, Tuple
+
+from dbt import selected_resources
+from dbt.contracts.graph.manifest import Manifest
+from dbt.contracts.graph.nodes import GraphMemberNode
+from dbt.contracts.state import PreviousState
+from dbt.events.types import NoNodesForSelectionCriteria, SelectorReportInvalidSelector
+from dbt.exceptions import DbtInternalError, InvalidSelectorError
+from dbt.node_types import NodeType
+from dbt_common.events.functions import fire_event, warn_or_error
 
 from .graph import Graph, UniqueId
 from .queue import GraphQueue
 from .selector_methods import MethodManager
-from .selector_spec import SelectionCriteria, SelectionSpec, IndirectSelection
-
-from dbt_common.events.functions import fire_event, warn_or_error
-from dbt.events.types import SelectorReportInvalidSelector, NoNodesForSelectionCriteria
-from dbt.node_types import NodeType
-from dbt.exceptions import (
-    DbtInternalError,
-    InvalidSelectorError,
-)
-from dbt.contracts.graph.nodes import GraphMemberNode
-from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.state import PreviousState
-
-from dbt import selected_resources
+from .selector_spec import IndirectSelection, SelectionCriteria, SelectionSpec
 
 
 def get_package_names(nodes):

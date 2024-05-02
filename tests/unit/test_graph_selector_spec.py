@@ -1,14 +1,15 @@
+import os
+
 import pytest
 
 from dbt.exceptions import DbtRuntimeError
+from dbt.graph.selector_methods import MethodName
 from dbt.graph.selector_spec import (
     SelectionCriteria,
-    SelectionIntersection,
     SelectionDifference,
+    SelectionIntersection,
     SelectionUnion,
 )
-from dbt.graph.selector_methods import MethodName
-import os
 
 
 def test_raw_parse_simple():

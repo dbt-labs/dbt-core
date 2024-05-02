@@ -2,7 +2,6 @@ import pytest
 
 from dbt.tests.util import run_dbt
 
-
 models_get__any_model_sql = """
 -- models/any_model.sql
 select {{ config.get('made_up_nonexistent_key', 'default_value') }} as col_value

@@ -1,10 +1,13 @@
 import pickle
-import pytest
-
+from argparse import Namespace
 from dataclasses import replace
+
+import pytest
+from dbt_semantic_interfaces.type_enums import MetricType
 from hypothesis import given
 from hypothesis.strategies import builds, lists
 
+from dbt import flags
 from dbt.artifacts.resources import (
     ColumnInfo,
     Dimension,
@@ -12,6 +15,8 @@ from dbt.artifacts.resources import (
     ExposureConfig,
     ExposureType,
     FreshnessThreshold,
+    Hook,
+    MacroDependsOn,
     MaturityType,
     Measure,
     MetricInputMeasure,
@@ -19,51 +24,45 @@ from dbt.artifacts.resources import (
     Owner,
     Quoting,
     RefArgs,
-    MacroDependsOn,
-    TestMetadata,
     SourceConfig,
-    Time,
-    Hook,
-)
-from dbt.artifacts.resources.types import TimePeriod
-from dbt.node_types import NodeType, AccessType
-from dbt.contracts.files import FileHash
-from dbt.contracts.graph.model_config import (
-    NodeConfig,
-    SeedConfig,
-    TestConfig,
-    SnapshotConfig,
-    EmptySnapshotConfig,
-    ModelConfig,
-)
-from dbt.contracts.graph.nodes import (
-    ModelNode,
-    DependsOn,
-    GenericTestNode,
-    SnapshotNode,
-    IntermediateSnapshotNode,
-    Macro,
-    Exposure,
-    Metric,
-    SeedNode,
-    Docs,
-    SourceDefinition,
-    Documentation,
-    HookNode,
-    SemanticModel,
 )
 from dbt.artifacts.resources import SourceDefinition as SourceDefinitionResource
-from dbt import flags
-from argparse import Namespace
-
+from dbt.artifacts.resources import TestMetadata, Time
+from dbt.artifacts.resources.types import TimePeriod
+from dbt.contracts.files import FileHash
+from dbt.contracts.graph.model_config import (
+    EmptySnapshotConfig,
+    ModelConfig,
+    NodeConfig,
+    SeedConfig,
+    SnapshotConfig,
+    TestConfig,
+)
+from dbt.contracts.graph.nodes import (
+    DependsOn,
+    Docs,
+    Documentation,
+    Exposure,
+    GenericTestNode,
+    HookNode,
+    IntermediateSnapshotNode,
+    Macro,
+    Metric,
+    ModelNode,
+    SeedNode,
+    SemanticModel,
+    SnapshotNode,
+    SourceDefinition,
+)
+from dbt.node_types import AccessType, NodeType
 from dbt_common.dataclass_schema import ValidationError
-from dbt_semantic_interfaces.type_enums import MetricType
+
 from .utils import (
     ContractTestCase,
-    assert_symmetric,
-    assert_from_dict,
-    compare_dicts,
     assert_fails_validation,
+    assert_from_dict,
+    assert_symmetric,
+    compare_dicts,
     dict_replace,
     replace_config,
 )

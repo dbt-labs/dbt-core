@@ -3,33 +3,32 @@ import datetime
 import decimal
 import functools
 import itertools
-import jinja2
 import json
 import os
-from pathlib import PosixPath, WindowsPath
-
-from dbt_common.utils import md5
-from dbt_common.exceptions import (
-    RecursionError,
-)
-from dbt.exceptions import DuplicateAliasError
-from dbt_common.helper_types import WarnErrorOptions
-from dbt import flags
 from enum import Enum
+from pathlib import PosixPath, WindowsPath
 from typing import (
+    AbstractSet,
+    Any,
+    Dict,
+    Iterable,
+    Iterator,
+    List,
+    Mapping,
+    Optional,
+    Sequence,
+    Set,
     Tuple,
     Type,
-    Any,
-    Optional,
-    Dict,
-    List,
-    Iterator,
-    Mapping,
-    Iterable,
-    AbstractSet,
-    Set,
-    Sequence,
 )
+
+import jinja2
+
+from dbt import flags
+from dbt.exceptions import DuplicateAliasError
+from dbt_common.exceptions import RecursionError
+from dbt_common.helper_types import WarnErrorOptions
+from dbt_common.utils import md5
 
 DECIMALS: Tuple[Type[Any], ...]
 try:

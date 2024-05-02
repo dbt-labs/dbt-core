@@ -1,12 +1,14 @@
 import os
+
 import pytest
-from dbt.tests.util import run_dbt, check_relations_equal, check_table_does_not_exist
+
+from dbt.tests.util import check_relations_equal, check_table_does_not_exist, run_dbt
 from tests.functional.simple_snapshot.fixtures import (
-    seeds__seed_newcol_csv,
-    seeds__seed_csv,
-    models__schema_yml,
-    models__ref_snapshot_sql,
     macros__test_no_overlaps_sql,
+    models__ref_snapshot_sql,
+    models__schema_yml,
+    seeds__seed_csv,
+    seeds__seed_newcol_csv,
     snapshots_pg__snapshot_sql,
     snapshots_select__snapshot_sql,
     snapshots_select_noconfig__snapshot_sql,

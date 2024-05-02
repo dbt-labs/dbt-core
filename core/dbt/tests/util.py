@@ -1,28 +1,29 @@
-from contextvars import ContextVar, copy_context
-from io import StringIO
+import json
 import os
 import shutil
-import yaml
-import json
 import warnings
-from datetime import datetime
-from typing import Any, Dict, List, Optional
 from contextlib import contextmanager
-from dbt.adapters.factory import Adapter
+from contextvars import ContextVar, copy_context
+from datetime import datetime
+from io import StringIO
+from typing import Any, Dict, List, Optional
 
-from dbt.cli.main import dbtRunner
-from dbt.logger import log_manager
-from dbt.contracts.graph.manifest import Manifest
-from dbt_common.context import _INVOCATION_CONTEXT_VAR, InvocationContext
-from dbt_common.events.functions import (
-    fire_event,
-    capture_stdout_logs,
-    stop_capture_stdout_logs,
-    reset_metadata_vars,
-)
-from dbt_common.events.base_types import EventLevel
-from dbt_common.events.types import Note
+import yaml
+
 from dbt.adapters.base.relation import BaseRelation
+from dbt.adapters.factory import Adapter
+from dbt.cli.main import dbtRunner
+from dbt.contracts.graph.manifest import Manifest
+from dbt.logger import log_manager
+from dbt_common.context import _INVOCATION_CONTEXT_VAR, InvocationContext
+from dbt_common.events.base_types import EventLevel
+from dbt_common.events.functions import (
+    capture_stdout_logs,
+    fire_event,
+    reset_metadata_vars,
+    stop_capture_stdout_logs,
+)
+from dbt_common.events.types import Note
 
 # =============================================================================
 # Test utilities

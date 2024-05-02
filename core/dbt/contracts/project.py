@@ -1,20 +1,21 @@
+from dataclasses import dataclass, field
+from typing import Any, ClassVar, Dict, List, Optional, Union
+
+from mashumaro.jsonschema.annotations import Pattern
+from mashumaro.types import SerializableType
+from typing_extensions import Annotated
+
 from dbt import deprecations
-from dbt.contracts.util import list_str, Identifier
 from dbt.adapters.contracts.connection import QueryComment
-from dbt_common.helper_types import NoValue
+from dbt.contracts.util import Identifier, list_str
 from dbt_common.contracts.util import Mergeable
 from dbt_common.dataclass_schema import (
-    dbtClassMixin,
-    ValidationError,
     ExtensibleDbtClassMixin,
+    ValidationError,
+    dbtClassMixin,
     dbtMashConfig,
 )
-from dataclasses import dataclass, field
-from typing import Optional, List, Dict, Union, Any, ClassVar
-from typing_extensions import Annotated
-from mashumaro.types import SerializableType
-from mashumaro.jsonschema.annotations import Pattern
-
+from dbt_common.helper_types import NoValue
 
 DEFAULT_SEND_ANONYMOUS_USAGE_STATS = True
 

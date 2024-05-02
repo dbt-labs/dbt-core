@@ -1,16 +1,15 @@
 import time
 from dataclasses import dataclass, field
-from dbt.artifacts.resources.base import GraphResource, FileHash, Docs
-from dbt.artifacts.resources.types import NodeType
+from datetime import timedelta
+from typing import Any, Dict, List, Optional, Union
+
+from dbt.artifacts.resources.base import Docs, FileHash, GraphResource
+from dbt.artifacts.resources.types import NodeType, TimePeriod
 from dbt.artifacts.resources.v1.config import NodeConfig
-from dbt_common.dataclass_schema import dbtClassMixin, ExtensibleDbtClassMixin
 from dbt_common.contracts.config.properties import AdditionalPropertiesMixin
 from dbt_common.contracts.constraints import ColumnLevelConstraint
-from typing import Dict, List, Optional, Union, Any
-from datetime import timedelta
-from dbt.artifacts.resources.types import TimePeriod
 from dbt_common.contracts.util import Mergeable
-
+from dbt_common.dataclass_schema import ExtensibleDbtClassMixin, dbtClassMixin
 
 NodeVersion = Union[str, float]
 

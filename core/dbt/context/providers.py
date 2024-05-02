@@ -1,53 +1,86 @@
 import abc
-from copy import deepcopy
 import os
+from copy import deepcopy
 from typing import (
-    Callable,
-    Any,
-    Dict,
-    Optional,
-    Union,
-    List,
-    TypeVar,
-    Type,
-    Iterable,
-    Mapping,
-    Tuple,
     TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    List,
+    Mapping,
+    Optional,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
 )
 
 from typing_extensions import Protocol
 
+from dbt import selected_resources
 from dbt.adapters.base.column import Column
+from dbt.adapters.contracts.connection import AdapterResponse
+from dbt.adapters.exceptions import MissingConfigError
+from dbt.adapters.factory import (
+    get_adapter,
+    get_adapter_package_names,
+    get_adapter_type_names,
+)
 from dbt.artifacts.resources import NodeVersion, RefArgs
-from dbt_common.clients.jinja import MacroProtocol
-from dbt_common.context import get_invocation_context
-from dbt.adapters.factory import get_adapter, get_adapter_package_names, get_adapter_type_names
-from dbt.clients.jinja import get_rendered, MacroGenerator, MacroStack, UnitTestMacroGenerator
-from dbt.config import RuntimeConfig, Project
-from dbt_common.constants import SECRET_ENV_PREFIX
+from dbt.clients.jinja import (
+    MacroGenerator,
+    MacroStack,
+    UnitTestMacroGenerator,
+    get_rendered,
+)
+from dbt.config import IsFQNResource, Project, RuntimeConfig
 from dbt.constants import DEFAULT_ENV_PLACEHOLDER
-from dbt.context.base import contextmember, contextproperty, Var
+from dbt.context.base import Var, contextmember, contextproperty
 from dbt.context.configured import FQNLookup
 from dbt.context.context_config import ContextConfig
 from dbt.context.exceptions_jinja import wrapped_exports
 from dbt.context.macro_resolver import MacroResolver, TestMacroNamespace
-from dbt.context.macros import MacroNamespaceBuilder, MacroNamespace
+from dbt.context.macros import MacroNamespace, MacroNamespaceBuilder
 from dbt.context.manifest import ManifestContext
-from dbt.adapters.contracts.connection import AdapterResponse
-from dbt.contracts.graph.manifest import Manifest, Disabled
+from dbt.contracts.graph.manifest import Disabled, Manifest
+from dbt.contracts.graph.metrics import MetricReference, ResolvedMetricReference
 from dbt.contracts.graph.nodes import (
-    Macro,
-    Exposure,
-    SeedNode,
-    SourceDefinition,
-    Resource,
-    ManifestNode,
     AccessType,
+    Exposure,
+    Macro,
+    ManifestNode,
+    Resource,
+    SeedNode,
     SemanticModel,
+    SourceDefinition,
     UnitTestNode,
 )
-from dbt.contracts.graph.metrics import MetricReference, ResolvedMetricReference
+from dbt.exceptions import (
+    CompilationError,
+    ConflictingConfigKeysError,
+    DbtReferenceError,
+    EnvVarMissingError,
+    InlineModelConfigError,
+    LoadAgateTableNotSeedError,
+    LoadAgateTableValueError,
+    MacroDispatchArgError,
+    MacroResultAlreadyLoadedError,
+    MetricArgsError,
+    NumberSourceArgsError,
+    OperationsCannotRefEphemeralNodesError,
+    ParsingError,
+    PersistDocsValueTypeError,
+    RefArgsError,
+    RefBadContextError,
+    SecretEnvVarLocationError,
+    TargetNotFoundError,
+)
+from dbt.node_types import ModelLanguage, NodeType
+from dbt.utils import MultiDict, args_to_dict
+from dbt_common.clients.jinja import MacroProtocol
+from dbt_common.constants import SECRET_ENV_PREFIX
+from dbt_common.context import get_invocation_context
 from dbt_common.events.functions import get_metadata_vars
 from dbt_common.exceptions import (
     DbtInternalError,
@@ -55,33 +88,7 @@ from dbt_common.exceptions import (
     DbtValidationError,
     MacrosSourcesUnWriteableError,
 )
-from dbt.adapters.exceptions import MissingConfigError
-from dbt.exceptions import (
-    CompilationError,
-    ConflictingConfigKeysError,
-    SecretEnvVarLocationError,
-    EnvVarMissingError,
-    InlineModelConfigError,
-    NumberSourceArgsError,
-    PersistDocsValueTypeError,
-    LoadAgateTableNotSeedError,
-    LoadAgateTableValueError,
-    MacroDispatchArgError,
-    MacroResultAlreadyLoadedError,
-    MetricArgsError,
-    OperationsCannotRefEphemeralNodesError,
-    ParsingError,
-    RefBadContextError,
-    RefArgsError,
-    TargetNotFoundError,
-    DbtReferenceError,
-)
-from dbt.config import IsFQNResource
-from dbt.node_types import NodeType, ModelLanguage
-
-from dbt.utils import MultiDict, args_to_dict
-from dbt_common.utils import merge, AttrDict, cast_to_str
-from dbt import selected_resources
+from dbt_common.utils import AttrDict, cast_to_str, merge
 
 if TYPE_CHECKING:
     import agate

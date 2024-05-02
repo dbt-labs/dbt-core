@@ -1,9 +1,14 @@
-import pytest
 from unittest import mock
+
+import pytest
 
 from dbt.adapters.base import BaseRelation
 from dbt.artifacts.resources import Quoting
-from dbt.context.providers import BaseResolver, RuntimeRefResolver, RuntimeSourceResolver
+from dbt.context.providers import (
+    BaseResolver,
+    RuntimeRefResolver,
+    RuntimeSourceResolver,
+)
 
 
 class TestBaseResolver:

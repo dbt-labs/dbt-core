@@ -1,22 +1,22 @@
-from dataclasses import field, dataclass
-from typing import Any, List, Optional, Dict, Type
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional, Type
 
 from dbt.artifacts.resources import (
     ExposureConfig,
     MetricConfig,
-    SavedQueryConfig,
-    SemanticModelConfig,
+    ModelConfig,
     NodeConfig,
+    SavedQueryConfig,
     SeedConfig,
-    TestConfig,
+    SemanticModelConfig,
     SnapshotConfig,
     SourceConfig,
-    ModelConfig,
+    TestConfig,
     UnitTestConfig,
 )
+from dbt.node_types import NodeType
 from dbt_common.contracts.config.base import BaseConfig
 from dbt_common.contracts.config.metadata import Metadata
-from dbt.node_types import NodeType
 
 
 def metas(*metas: Metadata) -> Dict[str, Any]:

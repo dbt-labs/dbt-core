@@ -1,10 +1,8 @@
-from typing import List, Any, Tuple
-
-from dbt_common.dataclass_schema import ValidatedStringMixin, ValidationError
+from typing import Any, List, Tuple
 
 # Leave imports of `Mergeable` to preserve import paths
 from dbt_common.contracts.util import Mergeable  # noqa:F401
-
+from dbt_common.dataclass_schema import ValidatedStringMixin, ValidationError
 
 SourceKey = Tuple[str, str]
 

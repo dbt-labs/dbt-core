@@ -1,14 +1,13 @@
 import os
 from typing import List
 
-from dbt_common.dataclass_schema import ValidationError
-
 from dbt.contracts.graph.nodes import IntermediateSnapshotNode, SnapshotNode
 from dbt.exceptions import SnapshopConfigError
 from dbt.node_types import NodeType
 from dbt.parser.base import SQLParser
 from dbt.parser.search import BlockContents, BlockSearcher, FileBlock
 from dbt.utils import split_path
+from dbt_common.dataclass_schema import ValidationError
 
 
 class SnapshotParser(SQLParser[IntermediateSnapshotNode, SnapshotNode]):

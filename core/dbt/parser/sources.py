@@ -1,15 +1,11 @@
-from dataclasses import replace
 import itertools
+from dataclasses import replace
 from pathlib import Path
-from typing import Iterable, Dict, Optional, Set, Any, List
+from typing import Any, Dict, Iterable, List, Optional, Set
 
 from dbt.adapters.capability import Capability
 from dbt.adapters.factory import get_adapter
-from dbt.artifacts.resources import (
-    FreshnessThreshold,
-    SourceConfig,
-    Time,
-)
+from dbt.artifacts.resources import FreshnessThreshold, SourceConfig, Time
 from dbt.config import RuntimeConfig
 from dbt.context.context_config import (
     BaseContextConfigGenerator,
@@ -18,25 +14,23 @@ from dbt.context.context_config import (
 )
 from dbt.contracts.graph.manifest import Manifest, SourceKey
 from dbt.contracts.graph.nodes import (
-    UnpatchedSourceDefinition,
-    SourceDefinition,
     GenericTestNode,
+    SourceDefinition,
+    UnpatchedSourceDefinition,
 )
 from dbt.contracts.graph.unparsed import (
-    UnparsedSourceDefinition,
     SourcePatch,
     SourceTablePatch,
-    UnparsedSourceTableDefinition,
     UnparsedColumn,
+    UnparsedSourceDefinition,
+    UnparsedSourceTableDefinition,
 )
-from dbt_common.events.functions import warn_or_error, fire_event
-from dbt.events.types import UnusedTables, FreshnessConfigProblem
-
-from dbt_common.exceptions import DbtInternalError
+from dbt.events.types import FreshnessConfigProblem, UnusedTables
 from dbt.node_types import NodeType
-
 from dbt.parser.common import ParserRef
 from dbt.parser.schema_generic_tests import SchemaGenericTestParser
+from dbt_common.events.functions import fire_event, warn_or_error
+from dbt_common.exceptions import DbtInternalError
 
 
 # An UnparsedSourceDefinition is taken directly from the yaml

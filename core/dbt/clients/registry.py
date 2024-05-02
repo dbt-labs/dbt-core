@@ -1,22 +1,24 @@
 import functools
+import os
 from typing import Any, Dict, List
+
 import requests
-from dbt_common.events.functions import fire_event
+
+from dbt import deprecations
 from dbt.events.types import (
-    RegistryProgressGETRequest,
-    RegistryProgressGETResponse,
     RegistryIndexProgressGETRequest,
     RegistryIndexProgressGETResponse,
-    RegistryResponseUnexpectedType,
-    RegistryResponseMissingTopKeys,
-    RegistryResponseMissingNestedKeys,
+    RegistryProgressGETRequest,
+    RegistryProgressGETResponse,
     RegistryResponseExtraNestedKeys,
+    RegistryResponseMissingNestedKeys,
+    RegistryResponseMissingTopKeys,
+    RegistryResponseUnexpectedType,
 )
 from dbt.utils import memoized
-from dbt_common.utils.connection import connection_exception_retry
-from dbt import deprecations
 from dbt_common import semver
-import os
+from dbt_common.events.functions import fire_event
+from dbt_common.utils.connection import connection_exception_retry
 
 if os.getenv("DBT_PACKAGE_HUB_URL"):
     DEFAULT_REGISTRY_BASE_URL = os.getenv("DBT_PACKAGE_HUB_URL")

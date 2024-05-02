@@ -1,10 +1,10 @@
-import dbt.exceptions
 import textwrap
-import yaml
 import unittest
-from dbt.config.selectors import selector_config_from_data
 
-from dbt.config.selectors import SelectorConfig
+import yaml
+
+import dbt.exceptions
+from dbt.config.selectors import SelectorConfig, selector_config_from_data
 
 
 def get_selector_dict(txt: str) -> dict:

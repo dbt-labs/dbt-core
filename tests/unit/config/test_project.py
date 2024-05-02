@@ -1,30 +1,27 @@
-from copy import deepcopy
 import json
 import os
 import unittest
-import pytest
-
+from copy import deepcopy
 from unittest import mock
 
+import pytest
+
 import dbt.config
-from dbt.constants import DEPENDENCIES_FILE_NAME
 import dbt.exceptions
+from dbt.adapters.contracts.connection import DEFAULT_QUERY_COMMENT, QueryComment
 from dbt.adapters.factory import load_plugin
-from dbt.adapters.contracts.connection import QueryComment, DEFAULT_QUERY_COMMENT
 from dbt.config.project import Project
-from dbt.contracts.project import PackageConfig, LocalPackage, GitPackage
+from dbt.constants import DEPENDENCIES_FILE_NAME
+from dbt.contracts.project import GitPackage, LocalPackage, PackageConfig
+from dbt.flags import set_from_args
 from dbt.node_types import NodeType
+from dbt.tests.util import safe_set_invocation_context
 from dbt_common.exceptions import DbtRuntimeError
 from dbt_common.semver import VersionSpecifier
-
-from dbt.flags import set_from_args
-from dbt.tests.util import safe_set_invocation_context
-
-
 from tests.unit.config import (
     BaseConfigTest,
-    project_from_config_norender,
     empty_project_renderer,
+    project_from_config_norender,
     project_from_config_rendered,
 )
 

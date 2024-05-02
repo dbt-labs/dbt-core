@@ -1,95 +1,91 @@
-import os
-from datetime import datetime
-from dataclasses import dataclass, field
 import hashlib
-
-from mashumaro.types import SerializableType
+import os
+from dataclasses import dataclass, field
+from datetime import datetime
 from typing import (
-    Optional,
-    Union,
-    List,
-    Dict,
     Any,
+    Dict,
+    Iterator,
+    List,
+    Literal,
+    Optional,
     Sequence,
     Tuple,
     Type,
-    Iterator,
-    Literal,
+    Union,
     get_args,
 )
 
-from dbt import deprecations
-from dbt_common.contracts.constraints import ConstraintType
+from mashumaro.types import SerializableType
 
-from dbt_common.clients.system import write_file
+from dbt import deprecations
+from dbt.artifacts.resources import Analysis as AnalysisResource
+from dbt.artifacts.resources import (
+    BaseResource,
+    ColumnInfo,
+    CompiledResource,
+    DependsOn,
+    Docs,
+)
+from dbt.artifacts.resources import Documentation as DocumentationResource
+from dbt.artifacts.resources import Exposure as ExposureResource
+from dbt.artifacts.resources import FileHash
+from dbt.artifacts.resources import GenericTest as GenericTestResource
+from dbt.artifacts.resources import GraphResource
+from dbt.artifacts.resources import Group as GroupResource
+from dbt.artifacts.resources import HasRelationMetadata as HasRelationMetadataResource
+from dbt.artifacts.resources import HookNode as HookNodeResource
+from dbt.artifacts.resources import InjectedCTE
+from dbt.artifacts.resources import Macro as MacroResource
+from dbt.artifacts.resources import MacroArgument
+from dbt.artifacts.resources import Metric as MetricResource
+from dbt.artifacts.resources import MetricInputMeasure
+from dbt.artifacts.resources import Model as ModelResource
+from dbt.artifacts.resources import (
+    ModelConfig,
+    NodeConfig,
+    NodeVersion,
+    ParsedResource,
+    ParsedResourceMandatory,
+)
+from dbt.artifacts.resources import Quoting as QuotingResource
+from dbt.artifacts.resources import SavedQuery as SavedQueryResource
+from dbt.artifacts.resources import Seed as SeedResource
+from dbt.artifacts.resources import SemanticModel as SemanticModelResource
+from dbt.artifacts.resources import SingularTest as SingularTestResource
+from dbt.artifacts.resources import Snapshot as SnapshotResource
+from dbt.artifacts.resources import SourceDefinition as SourceDefinitionResource
+from dbt.artifacts.resources import SqlOperation as SqlOperationResource
+from dbt.artifacts.resources import UnitTestDefinition as UnitTestDefinitionResource
+from dbt.contracts.graph.model_config import EmptySnapshotConfig, UnitTestNodeConfig
+from dbt.contracts.graph.node_args import ModelNodeArgs
 from dbt.contracts.graph.unparsed import (
     HasYamlMetadata,
     TestDef,
+    UnitTestOverrides,
+    UnparsedColumn,
     UnparsedSourceDefinition,
     UnparsedSourceTableDefinition,
-    UnparsedColumn,
-    UnitTestOverrides,
 )
-from dbt.contracts.graph.model_config import (
-    UnitTestNodeConfig,
-    EmptySnapshotConfig,
-)
-from dbt.contracts.graph.node_args import ModelNodeArgs
-from dbt_common.events.functions import warn_or_error
-from dbt.exceptions import ParsingError, ContractBreakingChangeError, ValidationError
 from dbt.events.types import (
-    SeedIncreased,
-    SeedExceedsLimitSamePath,
     SeedExceedsLimitAndPathChanged,
     SeedExceedsLimitChecksumChanged,
+    SeedExceedsLimitSamePath,
+    SeedIncreased,
     UnversionedBreakingChange,
 )
-from dbt_common.events.contextvars import set_log_contextvars
+from dbt.exceptions import ContractBreakingChangeError, ParsingError, ValidationError
 from dbt.flags import get_flags
 from dbt.node_types import (
-    NodeType,
-    AccessType,
     REFABLE_NODE_TYPES,
     VERSIONED_NODE_TYPES,
+    AccessType,
+    NodeType,
 )
-
-
-from dbt.artifacts.resources import (
-    BaseResource,
-    DependsOn,
-    Docs,
-    Exposure as ExposureResource,
-    MacroArgument,
-    Documentation as DocumentationResource,
-    Macro as MacroResource,
-    Metric as MetricResource,
-    NodeVersion,
-    Group as GroupResource,
-    GraphResource,
-    SavedQuery as SavedQueryResource,
-    SemanticModel as SemanticModelResource,
-    ParsedResourceMandatory,
-    ParsedResource,
-    CompiledResource,
-    HasRelationMetadata as HasRelationMetadataResource,
-    FileHash,
-    NodeConfig,
-    ColumnInfo,
-    InjectedCTE,
-    Analysis as AnalysisResource,
-    HookNode as HookNodeResource,
-    Model as ModelResource,
-    ModelConfig,
-    SqlOperation as SqlOperationResource,
-    Seed as SeedResource,
-    SingularTest as SingularTestResource,
-    GenericTest as GenericTestResource,
-    Snapshot as SnapshotResource,
-    Quoting as QuotingResource,
-    SourceDefinition as SourceDefinitionResource,
-    MetricInputMeasure,
-    UnitTestDefinition as UnitTestDefinitionResource,
-)
+from dbt_common.clients.system import write_file
+from dbt_common.contracts.constraints import ConstraintType
+from dbt_common.events.contextvars import set_log_contextvars
+from dbt_common.events.functions import warn_or_error
 
 # =====================================================================
 # This contains the classes for all of the nodes and node-like objects
@@ -606,8 +602,8 @@ class ModelNode(ModelResource, CompiledNode):
             contract_enforced_disabled = True
 
         # TODO: this avoid the circular imports but isn't ideal
-        from dbt.adapters.factory import get_adapter_constraint_support
         from dbt.adapters.base import ConstraintSupport
+        from dbt.adapters.factory import get_adapter_constraint_support
 
         constraint_support = get_adapter_constraint_support(adapter_type)
         column_constraints_exist = False

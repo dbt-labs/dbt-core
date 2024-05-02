@@ -1,61 +1,51 @@
 import functools
 import threading
 import time
-from typing import List, Dict, Any, Iterable, Set, Tuple, Optional, AbstractSet
-
-from dbt_common.dataclass_schema import dbtClassMixin
-
-from .compile import CompileRunner, CompileTask
-
-from .printer import (
-    print_run_end_messages,
-    get_counts,
-)
 from datetime import datetime
-from dbt import tracking
-from dbt import utils
+from typing import AbstractSet, Any, Dict, Iterable, List, Optional, Set, Tuple
+
+from dbt import tracking, utils
 from dbt.adapters.base import BaseRelation
+from dbt.adapters.events.types import (
+    DatabaseErrorRunningHook,
+    FinishedRunningStats,
+    HooksRunning,
+)
+from dbt.adapters.exceptions import MissingMaterializationError
+from dbt.artifacts.resources import Hook
+from dbt.artifacts.schemas.results import (
+    BaseResult,
+    NodeStatus,
+    RunningStatus,
+    RunStatus,
+)
+from dbt.artifacts.schemas.run import RunResult
 from dbt.cli.flags import Flags
 from dbt.clients.jinja import MacroGenerator
 from dbt.config.runtime import RuntimeConfig
 from dbt.context.providers import generate_runtime_model_context
-from dbt.contracts.graph.nodes import HookNode, ResultNode
 from dbt.contracts.graph.manifest import Manifest
-from dbt.artifacts.schemas.results import NodeStatus, RunStatus, RunningStatus, BaseResult
-from dbt.artifacts.schemas.run import RunResult
-from dbt.artifacts.resources import Hook
-from dbt.exceptions import (
-    CompilationError,
-    DbtInternalError,
-    DbtRuntimeError,
+from dbt.contracts.graph.nodes import HookNode, ResultNode
+from dbt.events.types import (
+    LogHookEndLine,
+    LogHookStartLine,
+    LogModelResult,
+    LogStartLine,
 )
-from dbt_common.exceptions import DbtValidationError
-from dbt.adapters.exceptions import MissingMaterializationError
-from dbt.adapters.events.types import (
-    DatabaseErrorRunningHook,
-    HooksRunning,
-    FinishedRunningStats,
-)
+from dbt.exceptions import CompilationError, DbtInternalError, DbtRuntimeError
+from dbt.graph import ResourceTypeSelector
+from dbt.hooks import get_hook_dict
+from dbt.logger import DbtModelState, HookMetadata, TextOnly, TimestampNamed, UniqueID
+from dbt.node_types import NodeType, RunHookType
+from dbt_common.dataclass_schema import dbtClassMixin
+from dbt_common.events.base_types import EventLevel
 from dbt_common.events.contextvars import log_contextvars
 from dbt_common.events.functions import fire_event, get_invocation_id
 from dbt_common.events.types import Formatting
-from dbt_common.events.base_types import EventLevel
-from dbt.events.types import (
-    LogModelResult,
-    LogStartLine,
-    LogHookEndLine,
-    LogHookStartLine,
-)
-from dbt.logger import (
-    TextOnly,
-    HookMetadata,
-    UniqueID,
-    TimestampNamed,
-    DbtModelState,
-)
-from dbt.graph import ResourceTypeSelector
-from dbt.hooks import get_hook_dict
-from dbt.node_types import NodeType, RunHookType
+from dbt_common.exceptions import DbtValidationError
+
+from .compile import CompileRunner, CompileTask
+from .printer import get_counts, print_run_end_messages
 
 
 class Timer:

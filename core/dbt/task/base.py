@@ -8,46 +8,49 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
-from dbt.compilation import Compiler
-import dbt_common.exceptions.base
 import dbt.exceptions
+import dbt_common.exceptions.base
 from dbt import tracking
+from dbt.artifacts.resources.types import NodeType
+from dbt.artifacts.schemas.results import (
+    NodeStatus,
+    RunningStatus,
+    RunStatus,
+    TimingInfo,
+    collect_timing_info,
+)
+from dbt.artifacts.schemas.run import RunResult
 from dbt.cli.flags import Flags
+from dbt.compilation import Compiler
 from dbt.config import RuntimeConfig
 from dbt.config.profile import read_profile
 from dbt.constants import DBT_PROJECT_FILE_NAME
 from dbt.contracts.graph.manifest import Manifest
-from dbt.artifacts.resources.types import NodeType
-from dbt.artifacts.schemas.results import TimingInfo, collect_timing_info
-from dbt.artifacts.schemas.results import NodeStatus, RunningStatus, RunStatus
-from dbt.artifacts.schemas.run import RunResult
-from dbt_common.events.contextvars import get_node_info
-from dbt_common.events.functions import fire_event
 from dbt.events.types import (
-    SkippingDetails,
-    NodeCompiling,
-    NodeExecuting,
     CatchableExceptionOnRun,
-    InternalErrorOnRun,
     GenericExceptionOnRun,
-    NodeConnectionReleaseError,
+    InternalErrorOnRun,
+    LogDbtProfileError,
+    LogDbtProjectError,
     LogDebugStackTrace,
     LogSkipBecauseError,
-)
-from dbt_common.exceptions import (
-    DbtRuntimeError,
-    DbtInternalError,
-    CompilationError,
-    NotImplementedError,
-)
-from dbt.events.types import (
-    LogDbtProjectError,
-    LogDbtProfileError,
+    NodeCompiling,
+    NodeConnectionReleaseError,
+    NodeExecuting,
+    SkippingDetails,
 )
 from dbt.flags import get_flags
 from dbt.graph import Graph
 from dbt.logger import log_manager
 from dbt.task.printer import print_run_result_error
+from dbt_common.events.contextvars import get_node_info
+from dbt_common.events.functions import fire_event
+from dbt_common.exceptions import (
+    CompilationError,
+    DbtInternalError,
+    DbtRuntimeError,
+    NotImplementedError,
+)
 
 
 def read_profiles(profiles_dir=None):

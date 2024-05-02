@@ -1,46 +1,43 @@
 from argparse import Namespace
-import pytest
 
-from dbt.artifacts.resources.v1.model import ModelConfig
-from dbt.contracts.files import FileHash
-from dbt.contracts.graph.nodes import (
-    DependsOn,
-    NodeConfig,
-    Macro,
-    ModelNode,
-    Exposure,
-    Metric,
-    Group,
-    SavedQuery,
-    SeedNode,
-    SemanticModel,
-    SingularTestNode,
-    GenericTestNode,
-    SourceDefinition,
-    AccessType,
-    UnitTestDefinition,
-)
-from dbt.contracts.graph.manifest import Manifest, ManifestMetadata
+import pytest
+from dbt_semantic_interfaces.type_enums import MetricType
+
 from dbt.artifacts.resources import (
     ExposureType,
+    MacroDependsOn,
     MetricInputMeasure,
     MetricTypeParams,
     NodeRelation,
     Owner,
     QueryParams,
-    MacroDependsOn,
+    RefArgs,
     TestConfig,
     TestMetadata,
-    RefArgs,
 )
-from dbt.contracts.graph.unparsed import (
-    UnitTestInputFixture,
-    UnitTestOutputFixture,
+from dbt.artifacts.resources.v1.model import ModelConfig
+from dbt.contracts.files import FileHash
+from dbt.contracts.graph.manifest import Manifest, ManifestMetadata
+from dbt.contracts.graph.nodes import (
+    AccessType,
+    DependsOn,
+    Exposure,
+    GenericTestNode,
+    Group,
+    Macro,
+    Metric,
+    ModelNode,
+    NodeConfig,
+    SavedQuery,
+    SeedNode,
+    SemanticModel,
+    SingularTestNode,
+    SourceDefinition,
+    UnitTestDefinition,
 )
-from dbt.node_types import NodeType
-
-from dbt_semantic_interfaces.type_enums import MetricType
+from dbt.contracts.graph.unparsed import UnitTestInputFixture, UnitTestOutputFixture
 from dbt.flags import set_from_args
+from dbt.node_types import NodeType
 
 set_from_args(Namespace(WARN_ERROR=False), None)
 

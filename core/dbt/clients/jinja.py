@@ -1,7 +1,7 @@
 import re
 import threading
 from contextlib import contextmanager
-from typing import List, Union, Optional, Dict, Any, NoReturn, Tuple
+from typing import Any, Dict, List, NoReturn, Optional, Tuple, Union
 
 import jinja2
 import jinja2.ext
@@ -10,22 +10,20 @@ import jinja2.nodes
 import jinja2.parser
 import jinja2.sandbox
 
-from dbt_common.clients.jinja import (
-    render_template,
-    get_template,
-    CallableMacroGenerator,
-    MacroProtocol,
-)
-from dbt_common.utils import deep_map_render
 from dbt.contracts.graph.nodes import GenericTestNode
-
 from dbt.exceptions import (
     DbtInternalError,
     MaterializtionMacroNotUsedError,
     NoSupportedLanguagesFoundError,
 )
 from dbt.node_types import ModelLanguage
-
+from dbt_common.clients.jinja import (
+    CallableMacroGenerator,
+    MacroProtocol,
+    get_template,
+    render_template,
+)
+from dbt_common.utils import deep_map_render
 
 SUPPORTED_LANG_ARG = jinja2.nodes.Name("supported_languages", "param")
 

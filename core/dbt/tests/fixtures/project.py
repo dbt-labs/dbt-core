@@ -1,32 +1,36 @@
 import os
+import random
+import warnings
+from argparse import Namespace
+from datetime import datetime
 from pathlib import Path
 from typing import Mapping
 
 import pytest  # type: ignore
-import random
-from argparse import Namespace
-from datetime import datetime
-import warnings
 import yaml
 
+import dbt.flags as flags
+from dbt.adapters.factory import (
+    get_adapter,
+    get_adapter_by_type,
+    register_adapter,
+    reset_adapters,
+)
+from dbt.config.runtime import RuntimeConfig
+from dbt.context.providers import generate_runtime_macro_context
+from dbt.events.logging import setup_event_logger
 from dbt.mp_context import get_mp_context
 from dbt.parser.manifest import ManifestLoader
-from dbt_common.context import set_invocation_context
-from dbt_common.exceptions import CompilationError, DbtDatabaseError
-from dbt.context.providers import generate_runtime_macro_context
-import dbt.flags as flags
-from dbt_common.tests import enable_test_caching
-from dbt.config.runtime import RuntimeConfig
-from dbt.adapters.factory import get_adapter, register_adapter, reset_adapters, get_adapter_by_type
-from dbt_common.events.event_manager_client import cleanup_event_logger
-from dbt.events.logging import setup_event_logger
 from dbt.tests.util import (
-    write_file,
-    run_sql_with_adapter,
     TestProcessingException,
     get_connection,
+    run_sql_with_adapter,
+    write_file,
 )
-
+from dbt_common.context import set_invocation_context
+from dbt_common.events.event_manager_client import cleanup_event_logger
+from dbt_common.exceptions import CompilationError, DbtDatabaseError
+from dbt_common.tests import enable_test_caching
 
 # These are the fixtures that are used in dbt core functional tests
 #

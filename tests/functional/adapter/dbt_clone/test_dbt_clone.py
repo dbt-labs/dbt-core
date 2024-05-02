@@ -6,20 +6,20 @@ from copy import deepcopy
 import pytest
 
 from dbt.exceptions import DbtRuntimeError
+from dbt.tests.util import run_dbt, run_dbt_and_capture
 from tests.functional.adapter.dbt_clone.fixtures import (
-    seed_csv,
-    table_model_sql,
-    view_model_sql,
+    custom_can_clone_tables_false_macros_sql,
     ephemeral_model_sql,
     exposures_yml,
-    schema_yml,
-    snapshot_sql,
     get_schema_name_sql,
-    macros_sql,
     infinite_macros_sql,
-    custom_can_clone_tables_false_macros_sql,
+    macros_sql,
+    schema_yml,
+    seed_csv,
+    snapshot_sql,
+    table_model_sql,
+    view_model_sql,
 )
-from dbt.tests.util import run_dbt, run_dbt_and_capture
 
 
 class BaseClone:

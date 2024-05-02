@@ -2,14 +2,14 @@ import functools
 import importlib
 import pkgutil
 from types import ModuleType
-from typing import Dict, List, Callable, Mapping
+from typing import Callable, Dict, List, Mapping
 
+import dbt.tracking
 from dbt.contracts.graph.manifest import Manifest
-from dbt_common.tests import test_caching_enabled
-from dbt_common.exceptions import DbtRuntimeError
 from dbt.plugins.contracts import PluginArtifacts
 from dbt.plugins.manifest import PluginNodes
-import dbt.tracking
+from dbt_common.exceptions import DbtRuntimeError
+from dbt_common.tests import test_caching_enabled
 
 
 def dbt_hook(func):

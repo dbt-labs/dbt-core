@@ -1,146 +1,124 @@
-from copy import deepcopy
-from dataclasses import dataclass
-from dataclasses import field
 import datetime
-import os
-import traceback
-from typing import (
-    Dict,
-    Optional,
-    Mapping,
-    Callable,
-    Any,
-    List,
-    Type,
-    Union,
-    Tuple,
-    Set,
-)
-from itertools import chain
-import time
-
-from dbt.context.query_header import generate_query_header_context
-from dbt.contracts.graph.semantic_manifest import SemanticManifest
-from dbt_common.events.base_types import EventLevel
-from dbt_common.exceptions.base import DbtValidationError
-import dbt_common.utils
 import json
+import os
 import pprint
-from dbt.mp_context import get_mp_context
+import time
+import traceback
+from copy import deepcopy
+from dataclasses import dataclass, field
+from itertools import chain
+from typing import Any, Callable, Dict, List, Mapping, Optional, Set, Tuple, Type, Union
+
 import msgpack
+from dbt_semantic_interfaces.enum_extension import assert_values_exhausted
+from dbt_semantic_interfaces.type_enums import MetricType
 
 import dbt.deprecations
 import dbt.exceptions
 import dbt.tracking
 import dbt.utils
-from dbt.flags import get_flags
-
+import dbt_common.utils
+from dbt import plugins
 from dbt.adapters.factory import (
     get_adapter,
-    get_relation_class_by_name,
     get_adapter_package_names,
+    get_relation_class_by_name,
     register_adapter,
 )
+from dbt.artifacts.resources import FileHash, NodeRelation, NodeVersion
+from dbt.artifacts.schemas.base import Writable
+from dbt.clients.jinja import MacroStack, get_rendered
+from dbt.clients.jinja_static import statically_extract_macro_calls
+from dbt.config import Project, RuntimeConfig
 from dbt.constants import (
     MANIFEST_FILE_NAME,
     PARTIAL_PARSE_FILE_NAME,
     SEMANTIC_MANIFEST_FILE_NAME,
 )
-from dbt_common.constants import SECRET_ENV_PREFIX
-from dbt_common.helper_types import PathSet
-from dbt_common.events.functions import fire_event, get_invocation_id, warn_or_error
-from dbt_common.events.types import (
-    Note,
-)
-from dbt.events.types import (
-    PartialParsingErrorProcessingFile,
-    PartialParsingError,
-    ParsePerfInfoPath,
-    PartialParsingSkipParsing,
-    UnableToPartialParse,
-    PartialParsingNotEnabled,
-    ParsedFileLoadFailed,
-    InvalidDisabledTargetInTestNode,
-    NodeNotFoundOrDisabled,
-    StateCheckVarsHash,
-    DeprecatedModel,
-    DeprecatedReference,
-    UpcomingReferenceDeprecation,
-    SpacesInResourceNameDeprecation,
-)
-from dbt.logger import DbtProcessState
-from dbt.node_types import NodeType, AccessType
-from dbt.clients.jinja import get_rendered, MacroStack
-from dbt.clients.jinja_static import statically_extract_macro_calls
-from dbt_common.clients.system import (
-    make_directory,
-    path_exists,
-    read_json,
-    write_file,
-)
-from dbt.config import Project, RuntimeConfig
+from dbt.context.configured import generate_macro_context
 from dbt.context.docs import generate_runtime_docs_context
 from dbt.context.macro_resolver import MacroResolver, TestMacroNamespace
-from dbt.context.configured import generate_macro_context
 from dbt.context.providers import ParseProvider, generate_runtime_macro_context
+from dbt.context.query_header import generate_query_header_context
 from dbt.contracts.files import ParseFileType, SchemaSourceFile
-from dbt.parser.read_files import (
-    ReadFilesFromFileSystem,
-    load_source_file,
-    FileDiff,
-    ReadFilesFromDiff,
-    ReadFiles,
-)
-from dbt.parser.partial import PartialParsing, special_override_macros
 from dbt.contracts.graph.manifest import (
-    Manifest,
     Disabled,
     MacroManifest,
+    Manifest,
     ManifestStateCheck,
     ParsingInfo,
 )
 from dbt.contracts.graph.nodes import (
-    SourceDefinition,
-    Macro,
     Exposure,
+    Macro,
+    ManifestNode,
     Metric,
+    ModelNode,
+    ResultNode,
     SavedQuery,
     SeedNode,
     SemanticModel,
-    ManifestNode,
-    ResultNode,
-    ModelNode,
+    SourceDefinition,
 )
-from dbt.artifacts.resources import NodeRelation, NodeVersion, FileHash
-from dbt.artifacts.schemas.base import Writable
+from dbt.contracts.graph.semantic_manifest import SemanticManifest
+from dbt.events.types import (
+    DeprecatedModel,
+    DeprecatedReference,
+    InvalidDisabledTargetInTestNode,
+    NodeNotFoundOrDisabled,
+    ParsedFileLoadFailed,
+    ParsePerfInfoPath,
+    PartialParsingError,
+    PartialParsingErrorProcessingFile,
+    PartialParsingNotEnabled,
+    PartialParsingSkipParsing,
+    SpacesInResourceNameDeprecation,
+    StateCheckVarsHash,
+    UnableToPartialParse,
+    UpcomingReferenceDeprecation,
+)
 from dbt.exceptions import (
-    TargetNotFoundError,
     AmbiguousAliasError,
     InvalidAccessTypeError,
+    TargetNotFoundError,
     scrub_secrets,
 )
-from dbt.parser.base import Parser
+from dbt.flags import get_flags
+from dbt.logger import DbtProcessState
+from dbt.mp_context import get_mp_context
+from dbt.node_types import AccessType, NodeType
 from dbt.parser.analysis import AnalysisParser
-from dbt.parser.generic_test import GenericTestParser
-from dbt.parser.singular_test import SingularTestParser
+from dbt.parser.base import Parser
 from dbt.parser.docs import DocumentationParser
 from dbt.parser.fixtures import FixtureParser
+from dbt.parser.generic_test import GenericTestParser
 from dbt.parser.hooks import HookParser
 from dbt.parser.macros import MacroParser
 from dbt.parser.models import ModelParser
+from dbt.parser.partial import PartialParsing, special_override_macros
+from dbt.parser.read_files import (
+    FileDiff,
+    ReadFiles,
+    ReadFilesFromDiff,
+    ReadFilesFromFileSystem,
+    load_source_file,
+)
 from dbt.parser.schemas import SchemaParser
 from dbt.parser.search import FileBlock
 from dbt.parser.seeds import SeedParser
+from dbt.parser.singular_test import SingularTestParser
 from dbt.parser.snapshots import SnapshotParser
 from dbt.parser.sources import SourcePatcher
 from dbt.parser.unit_tests import process_models_for_unit_test
 from dbt.version import __version__
-
+from dbt_common.clients.system import make_directory, path_exists, read_json, write_file
+from dbt_common.constants import SECRET_ENV_PREFIX
 from dbt_common.dataclass_schema import StrEnum, dbtClassMixin
-from dbt import plugins
-
-from dbt_semantic_interfaces.enum_extension import assert_values_exhausted
-from dbt_semantic_interfaces.type_enums import MetricType
+from dbt_common.events.base_types import EventLevel
+from dbt_common.events.functions import fire_event, get_invocation_id, warn_or_error
+from dbt_common.events.types import Note
+from dbt_common.exceptions.base import DbtValidationError
+from dbt_common.helper_types import PathSet
 
 PARSING_STATE = DbtProcessState("parsing")
 PERF_INFO_FILE_NAME = "perf_info.json"

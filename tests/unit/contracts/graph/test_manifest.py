@@ -9,23 +9,13 @@ from unittest import mock
 
 import freezegun
 import pytest
+from dbt_semantic_interfaces.type_enums import MetricType
 
 import dbt.flags
 import dbt.version
+import dbt_common.invocation
 from dbt import tracking
 from dbt.adapters.base.plugin import AdapterPlugin
-from dbt.contracts.files import FileHash
-from dbt.contracts.graph.manifest import Manifest, ManifestMetadata
-from dbt.contracts.graph.nodes import (
-    ModelNode,
-    DependsOn,
-    ModelConfig,
-    SeedNode,
-    SourceDefinition,
-    Exposure,
-    Metric,
-    Group,
-)
 from dbt.artifacts.resources import (
     ExposureType,
     MaturityType,
@@ -36,20 +26,29 @@ from dbt.artifacts.resources import (
     WhereFilter,
     WhereFilterIntersection,
 )
-import dbt_common.invocation
-from dbt_common.events.functions import reset_metadata_vars
+from dbt.contracts.files import FileHash
+from dbt.contracts.graph.manifest import Manifest, ManifestMetadata
+from dbt.contracts.graph.nodes import (
+    DependsOn,
+    Exposure,
+    Group,
+    Metric,
+    ModelConfig,
+    ModelNode,
+    SeedNode,
+    SourceDefinition,
+)
 from dbt.exceptions import AmbiguousResourceNameRefError
 from dbt.flags import set_from_args
 from dbt.node_types import NodeType
-from dbt_semantic_interfaces.type_enums import MetricType
-
+from dbt_common.events.functions import reset_metadata_vars
 from tests.unit.utils import (
-    MockMacro,
     MockDocumentation,
-    MockSource,
-    MockNode,
-    MockMaterialization,
     MockGenerateMacro,
+    MockMacro,
+    MockMaterialization,
+    MockNode,
+    MockSource,
     inject_plugin,
 )
 

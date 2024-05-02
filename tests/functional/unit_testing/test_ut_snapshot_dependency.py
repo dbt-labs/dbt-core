@@ -1,6 +1,7 @@
 import pytest
-from dbt.tests.util import run_dbt
+
 from dbt.contracts.results import RunStatus, TestStatus
+from dbt.tests.util import run_dbt
 
 raw_customers_csv = """id,first_name,last_name,email,gender,ip_address,updated_at
 1,'Judith','Kennedy','(not provided)','Female','54.60.24.128','2015-12-24 12:19:28'

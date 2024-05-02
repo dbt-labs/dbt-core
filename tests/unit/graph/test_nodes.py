@@ -1,13 +1,18 @@
 from copy import deepcopy
-import pytest
 from typing import List
 
-from dbt.artifacts.resources import Dimension, Entity, Measure, Defaults
-from dbt.contracts.graph.nodes import SemanticModel
-from dbt.artifacts.resources.v1.semantic_model import NodeRelation
-from dbt.node_types import NodeType
+import pytest
 from dbt_semantic_interfaces.references import MeasureReference
-from dbt_semantic_interfaces.type_enums import AggregationType, DimensionType, EntityType
+from dbt_semantic_interfaces.type_enums import (
+    AggregationType,
+    DimensionType,
+    EntityType,
+)
+
+from dbt.artifacts.resources import Defaults, Dimension, Entity, Measure
+from dbt.artifacts.resources.v1.semantic_model import NodeRelation
+from dbt.contracts.graph.nodes import SemanticModel
+from dbt.node_types import NodeType
 
 
 class TestSemanticModel:

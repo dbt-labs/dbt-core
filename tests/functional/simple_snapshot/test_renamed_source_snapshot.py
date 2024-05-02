@@ -1,12 +1,12 @@
 import pytest
+
 from dbt.tests.util import run_dbt
 from tests.functional.simple_snapshot.fixtures import (
-    seeds__seed_newcol_csv,
-    seeds__seed_csv,
     macros__test_no_overlaps_sql,
     macros_custom_snapshot__custom_sql,
+    seeds__seed_csv,
+    seeds__seed_newcol_csv,
 )
-
 
 snapshots_checkall__snapshot_sql = """
 {% snapshot my_snapshot %}

@@ -1,15 +1,20 @@
 import json
 
 from dbt.constants import MAXIMUM_SEED_SIZE_NAME, PIN_PACKAGE_URL
-from dbt_common.ui import error_tag, warning_tag, line_wrap_message, green, yellow, red
+from dbt.events.base_types import (
+    DebugLevel,
+    DynamicLevel,
+    ErrorLevel,
+    InfoLevel,
+    WarnLevel,
+)
 from dbt_common.events.base_types import EventLevel
 from dbt_common.events.format import (
     format_fancy_output_line,
-    timestamp_to_datetime_string,
     pluralize,
+    timestamp_to_datetime_string,
 )
-from dbt.events.base_types import WarnLevel, InfoLevel, DebugLevel, ErrorLevel, DynamicLevel
-
+from dbt_common.ui import error_tag, green, line_wrap_message, red, warning_tag, yellow
 
 # Event codes have prefixes which follow this table
 #

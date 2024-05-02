@@ -1,10 +1,10 @@
-from contextlib import contextmanager
-import pytest
 import unittest
+from contextlib import contextmanager
+
+import pytest
 import yaml
 
-from dbt.clients.jinja import get_rendered
-from dbt.clients.jinja import get_template
+from dbt.clients.jinja import get_rendered, get_template
 from dbt_common.exceptions import JinjaRenderingError
 
 

@@ -1,22 +1,20 @@
-import os
 import json
+import os
 import shutil
-import pytest
 from datetime import datetime, timedelta
 
-from dbt_common.exceptions import DbtInternalError
+import pytest
 
-
-from dbt.tests.util import AnyStringWith, AnyFloat
 import dbt.version
+from dbt.contracts.results import FreshnessExecutionResultArtifact
+from dbt.tests.util import AnyFloat, AnyStringWith
+from dbt_common.exceptions import DbtInternalError
 from tests.functional.sources.common_source_setup import BaseSourcesTest
-
 from tests.functional.sources.fixtures import (
     error_models_schema_yml,
-    models_newly_added_model_sql,
     models_newly_added_error_model_sql,
+    models_newly_added_model_sql,
 )
-from dbt.contracts.results import FreshnessExecutionResultArtifact
 
 
 # TODO: We may create utility classes to handle reusable fixtures.

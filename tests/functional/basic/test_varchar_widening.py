@@ -1,7 +1,8 @@
-import pytest
 import os
-from dbt.tests.util import run_dbt, check_relations_equal
 
+import pytest
+
+from dbt.tests.util import check_relations_equal, run_dbt
 
 incremental_sql = """
 {{

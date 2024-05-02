@@ -1,7 +1,8 @@
-import pytest
 from unittest.mock import patch
 
-from dbt.graph.selector_spec import SelectionCriteria, IndirectSelection
+import pytest
+
+from dbt.graph.selector_spec import IndirectSelection, SelectionCriteria
 
 
 @pytest.mark.parametrize(

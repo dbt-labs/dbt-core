@@ -1,15 +1,15 @@
 from abc import abstractmethod
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import List, Iterator, Dict, Any, TypeVar, Generic, Optional
+from typing import Any, Dict, Generic, Iterator, List, Optional, TypeVar
 
 from dbt.adapters.factory import get_config_class_by_name
-from dbt.config import RuntimeConfig, Project, IsFQNResource
+from dbt.config import IsFQNResource, Project, RuntimeConfig
 from dbt.contracts.graph.model_config import get_config_for
-from dbt_common.contracts.config.base import BaseConfig, _listify
-from dbt_common.exceptions import DbtInternalError
 from dbt.node_types import NodeType
 from dbt.utils import fqn_search
+from dbt_common.contracts.config.base import BaseConfig, _listify
+from dbt_common.exceptions import DbtInternalError
 
 
 @dataclass

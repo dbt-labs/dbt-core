@@ -1,6 +1,6 @@
 import pytest
-from dbt.tests.fixtures.project import write_project_files
 
+from dbt.tests.fixtures.project import write_project_files
 
 override_view_adapter_pass_dep__dbt_project_yml = """
 name: view_adapter_override

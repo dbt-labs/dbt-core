@@ -1,20 +1,22 @@
 import os
-from typing import List, Optional, Dict
+from typing import Dict, List, Optional
 
 from dbt.clients import git
-from dbt_common.clients import system
 from dbt.config.project import PartialProject, Project
 from dbt.config.renderer import PackageRenderer
-from dbt.contracts.project import (
-    ProjectPackageMetadata,
-    GitPackage,
-)
+from dbt.contracts.project import GitPackage, ProjectPackageMetadata
 from dbt.deps.base import PinnedPackage, UnpinnedPackage, get_downloads_path
-from dbt_common.exceptions import ExecutableError
+from dbt.events.types import DepsScrubbedPackageName, DepsUnpinned, EnsureGitInstalled
 from dbt.exceptions import MultipleVersionGitDepsError
-from dbt_common.events.functions import fire_event, warn_or_error, scrub_secrets, env_secrets
-from dbt.events.types import EnsureGitInstalled, DepsUnpinned, DepsScrubbedPackageName
 from dbt.utils import md5
+from dbt_common.clients import system
+from dbt_common.events.functions import (
+    env_secrets,
+    fire_event,
+    scrub_secrets,
+    warn_or_error,
+)
+from dbt_common.exceptions import ExecutableError
 
 
 def md5sum(s: str):

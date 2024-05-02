@@ -1,19 +1,16 @@
+import string
+from argparse import Namespace
 from unittest import mock
 
+import networkx as nx
 import pytest
 
-import string
-import dbt_common.exceptions
-import dbt.graph.selector as graph_selector
 import dbt.graph.cli as graph_cli
-from dbt.node_types import NodeType
-
-import networkx as nx
-
+import dbt.graph.selector as graph_selector
+import dbt_common.exceptions
 from dbt import flags
-
-from argparse import Namespace
 from dbt.contracts.project import ProjectFlags
+from dbt.node_types import NodeType
 
 flags.set_from_args(Namespace(), ProjectFlags())
 

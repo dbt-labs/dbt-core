@@ -1,10 +1,9 @@
+from typing import Dict, Iterable, List
+
 import pytest
 
-from typing import Dict, List, Iterable
 from dbt.tests.util import run_dbt
-
-from tests.functional.adapter.simple_snapshot import common
-from tests.functional.adapter.simple_snapshot import seeds, snapshots
+from tests.functional.adapter.simple_snapshot import common, seeds, snapshots
 
 MODEL_FACT_SQL = """
 {{ config(materialized="table") }}

@@ -1,8 +1,8 @@
 from typing import List, Optional
+
 import pytest
 
 from dbt.tests.util import run_dbt
-
 
 _DEFAULT_CHANGE_RELATION_TYPE_MODEL = """
 {{ config(materialized=var('materialized')) }}

@@ -1,9 +1,10 @@
 import pytest
+
 from tests.functional.adapter.utils.base_utils import BaseUtils
 from tests.functional.adapter.utils.fixture_right import (
-    seeds__data_right_csv,
     models__test_right_sql,
     models__test_right_yml,
+    seeds__data_right_csv,
 )
 
 

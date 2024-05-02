@@ -1,20 +1,19 @@
+import traceback
 from abc import abstractmethod
 from datetime import datetime
 from typing import Generic, TypeVar
-import traceback
 
-import dbt_common.exceptions.base
 import dbt.exceptions
+import dbt_common.exceptions.base
 from dbt.contracts.sql import (
     RemoteCompileResult,
     RemoteCompileResultMixin,
     RemoteRunResult,
     ResultTable,
 )
-from dbt_common.events.functions import fire_event
 from dbt.events.types import SQLRunnerException
 from dbt.task.compile import CompileRunner
-
+from dbt_common.events.functions import fire_event
 
 SQLResult = TypeVar("SQLResult", bound=RemoteCompileResultMixin)
 

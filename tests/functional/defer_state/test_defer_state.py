@@ -6,21 +6,21 @@ import pytest
 
 from dbt.contracts.results import RunStatus
 from dbt.exceptions import DbtRuntimeError
-from dbt.tests.util import run_dbt, write_file, rm_file
+from dbt.tests.util import rm_file, run_dbt, write_file
 from tests.functional.defer_state.fixtures import (
-    seed_csv,
-    table_model_sql,
+    changed_ephemeral_model_sql,
     changed_table_model_sql,
-    view_model_sql,
     changed_view_model_sql,
     ephemeral_model_sql,
-    changed_ephemeral_model_sql,
-    schema_yml,
     exposures_yml,
-    macros_sql,
     infinite_macros_sql,
+    macros_sql,
+    schema_yml,
+    seed_csv,
     snapshot_sql,
+    table_model_sql,
     view_model_now_table_sql,
+    view_model_sql,
 )
 
 

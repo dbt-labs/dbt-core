@@ -1,11 +1,12 @@
-import click
-import click.types as click_t
-import dbt.cli.option_types as dbt_t
-from docutils import nodes
-from docutils.parsers.rst import Directive
 import traceback
 import typing as t
 
+import click
+import click.types as click_t
+from docutils import nodes
+from docutils.parsers.rst import Directive
+
+import dbt.cli.option_types as dbt_t
 
 PARAM_TYPE_MAP = {
     click_t.BoolParamType: lambda _: "boolean",

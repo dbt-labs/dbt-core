@@ -1,8 +1,9 @@
+import datetime
+import tempfile
+
 import pytest
 
 import dbt.tracking
-import datetime
-import tempfile
 
 
 @pytest.fixture(scope="function")

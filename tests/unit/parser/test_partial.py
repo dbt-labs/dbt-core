@@ -1,23 +1,22 @@
-from copy import deepcopy
-
-import pytest
 import time
+from copy import deepcopy
 from typing import Dict, List
 
-from dbt.parser.partial import PartialParsing
+import pytest
+
 from dbt.contracts.files import (
-    ParseFileType,
-    SourceFile,
-    SchemaSourceFile,
-    FilePath,
-    FileHash,
     BaseSourceFile,
+    FileHash,
+    FilePath,
+    ParseFileType,
+    SchemaSourceFile,
+    SourceFile,
 )
 from dbt.node_types import NodeType
+from dbt.parser.partial import PartialParsing
 from dbt.tests.util import safe_set_invocation_context
 from tests.unit.utils import normalize
-from tests.unit.utils.manifest import make_model, make_generic_test
-
+from tests.unit.utils.manifest import make_generic_test, make_model
 
 PROJECT_NAME = "my_test"
 

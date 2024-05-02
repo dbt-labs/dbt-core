@@ -1,21 +1,11 @@
 import re
 from copy import deepcopy
-from typing import (
-    Generic,
-    Dict,
-    Any,
-    Tuple,
-    Optional,
-    List,
-)
+from typing import Any, Dict, Generic, List, Optional, Tuple
 
 from dbt.artifacts.resources import NodeVersion
-from dbt.clients.jinja import get_rendered, GENERIC_TEST_KWARGS_NAME
+from dbt.clients.jinja import GENERIC_TEST_KWARGS_NAME, get_rendered
 from dbt.contracts.graph.nodes import UnpatchedSourceDefinition
-from dbt.contracts.graph.unparsed import (
-    UnparsedNodeUpdate,
-    UnparsedModelUpdate,
-)
+from dbt.contracts.graph.unparsed import UnparsedModelUpdate, UnparsedNodeUpdate
 from dbt.exceptions import (
     CustomMacroPopulatingConfigValueError,
     SameKeyNestedError,
@@ -24,13 +14,13 @@ from dbt.exceptions import (
     TestArgIncludesModelError,
     TestArgsNotDictError,
     TestDefinitionDictLengthError,
-    TestTypeError,
     TestNameNotStringError,
+    TestTypeError,
     UnexpectedTestNamePatternError,
 )
-from dbt_common.exceptions.macros import UndefinedMacroError
 from dbt.parser.common import Testable
 from dbt.utils import md5
+from dbt_common.exceptions.macros import UndefinedMacroError
 
 
 def synthesize_generic_test_names(

@@ -1,7 +1,6 @@
 import pytest
 
-from dbt.tests.util import run_dbt, check_relations_equal
-
+from dbt.tests.util import check_relations_equal, run_dbt
 
 models__ref_override_sql = """
 select

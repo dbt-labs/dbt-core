@@ -1,18 +1,20 @@
 import pytest
+from dbt_semantic_interfaces.type_enums.export_destination_type import (
+    ExportDestinationType,
+)
 
 from dbt.contracts.graph.manifest import Manifest
 from dbt.tests.util import update_config_file
-from dbt_semantic_interfaces.type_enums.export_destination_type import ExportDestinationType
 from tests.functional.assertions.test_runner import dbtTestRunner
 from tests.functional.configs.fixtures import BaseConfigProject
 from tests.functional.saved_queries.fixtures import (
+    saved_queries_with_defaults_yml,
     saved_queries_yml,
     saved_query_description,
     saved_query_with_cache_configs_defined_yml,
-    saved_query_with_extra_config_attributes_yml,
     saved_query_with_export_configs_defined_at_saved_query_level_yml,
+    saved_query_with_extra_config_attributes_yml,
     saved_query_without_export_configs_defined_yml,
-    saved_queries_with_defaults_yml,
 )
 from tests.functional.semantic_models.fixtures import (
     fct_revenue_sql,

@@ -1,6 +1,3 @@
-import dbt.flags
-import dbt_common.ui
-
 import json
 import logging
 import sys
@@ -8,10 +5,12 @@ import time
 import warnings
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional, List, ContextManager, Callable, Dict, Any, Set
+from typing import Any, Callable, ContextManager, Dict, List, Optional, Set
 
 import logbook
 
+import dbt.flags
+import dbt_common.ui
 from dbt_common.context import get_invocation_context
 from dbt_common.dataclass_schema import dbtClassMixin
 

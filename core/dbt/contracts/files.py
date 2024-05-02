@@ -1,12 +1,12 @@
 import os
 from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional, Union
 
 from mashumaro.types import SerializableType
-from typing import List, Optional, Union, Dict, Any
 
-from dbt.constants import MAXIMUM_SEED_SIZE
-from dbt_common.dataclass_schema import dbtClassMixin, StrEnum
 from dbt.artifacts.resources.base import FileHash
+from dbt.constants import MAXIMUM_SEED_SIZE
+from dbt_common.dataclass_schema import StrEnum, dbtClassMixin
 
 from .util import SourceKey
 

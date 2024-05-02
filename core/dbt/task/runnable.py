@@ -5,60 +5,64 @@ from concurrent.futures import as_completed
 from datetime import datetime
 from multiprocessing.dummy import Pool as ThreadPool
 from pathlib import Path
-from typing import AbstractSet, Optional, Dict, List, Set, Tuple, Iterable
-
-from dbt_common.context import get_invocation_context, _INVOCATION_CONTEXT_VAR
-import dbt_common.utils.formatting
+from typing import AbstractSet, Dict, Iterable, List, Optional, Set, Tuple
 
 import dbt.exceptions
 import dbt.tracking
 import dbt.utils
+import dbt_common.utils.formatting
 from dbt.adapters.base import BaseRelation
 from dbt.adapters.factory import get_adapter
+from dbt.artifacts.schemas.results import (
+    BaseResult,
+    NodeStatus,
+    RunningStatus,
+    RunStatus,
+)
+from dbt.artifacts.schemas.run import RunExecutionResult, RunResult
 from dbt.cli.flags import Flags
 from dbt.config.runtime import RuntimeConfig
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import ResultNode
-from dbt.artifacts.schemas.results import NodeStatus, RunningStatus, RunStatus, BaseResult
-from dbt.artifacts.schemas.run import RunExecutionResult, RunResult
 from dbt.contracts.state import PreviousState
+from dbt.events.types import (
+    ConcurrencyLine,
+    DefaultSelector,
+    EndRunResult,
+    GenericExceptionOnRun,
+    LogCancelLine,
+    NodeFinished,
+    NodeStart,
+    NothingToDo,
+    QueryCancelationUnsupported,
+)
+from dbt.exceptions import DbtInternalError, DbtRuntimeError, FailFastError
+from dbt.flags import get_flags
+from dbt.graph import (
+    GraphQueue,
+    NodeSelector,
+    SelectionSpec,
+    UniqueId,
+    parse_difference,
+)
+from dbt.logger import (
+    DbtModelState,
+    DbtProcessState,
+    ModelMetadata,
+    NodeCount,
+    TextOnly,
+    TimestampNamed,
+    UniqueID,
+)
+from dbt.parser.manifest import write_manifest
+from dbt.task.base import BaseRunner, ConfiguredTask
+from dbt_common.context import _INVOCATION_CONTEXT_VAR, get_invocation_context
 from dbt_common.events.contextvars import log_contextvars, task_contextvars
 from dbt_common.events.functions import fire_event, warn_or_error
 from dbt_common.events.types import Formatting
-from dbt.events.types import (
-    LogCancelLine,
-    DefaultSelector,
-    NodeStart,
-    NodeFinished,
-    QueryCancelationUnsupported,
-    ConcurrencyLine,
-    EndRunResult,
-    NothingToDo,
-    GenericExceptionOnRun,
-)
-from dbt.exceptions import (
-    DbtInternalError,
-    DbtRuntimeError,
-    FailFastError,
-)
 from dbt_common.exceptions import NotImplementedError
-from dbt.flags import get_flags
-from dbt.graph import GraphQueue, NodeSelector, SelectionSpec, parse_difference, UniqueId
-from dbt.logger import (
-    DbtProcessState,
-    TextOnly,
-    UniqueID,
-    TimestampNamed,
-    DbtModelState,
-    ModelMetadata,
-    NodeCount,
-)
-from dbt.parser.manifest import write_manifest
-from dbt.task.base import ConfiguredTask, BaseRunner
-from .printer import (
-    print_run_result_error,
-    print_run_end_messages,
-)
+
+from .printer import print_run_end_messages, print_run_result_error
 
 RESULT_FILE_NAME = "run_results.json"
 RUNNING_STATE = DbtProcessState("running")

@@ -1,7 +1,8 @@
-from typing import Set, Iterable, Iterator, Optional, NewType
-from itertools import product
-import networkx as nx  # type: ignore
 from functools import partial
+from itertools import product
+from typing import Iterable, Iterator, NewType, Optional, Set
+
+import networkx as nx  # type: ignore
 
 from dbt_common.exceptions import DbtInternalError
 

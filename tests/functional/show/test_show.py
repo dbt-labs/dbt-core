@@ -1,17 +1,18 @@
 import pytest
 
-from dbt_common.exceptions import DbtRuntimeError, DbtBaseException as DbtException
-from dbt.tests.util import run_dbt_and_capture, run_dbt
+from dbt.tests.util import run_dbt, run_dbt_and_capture
+from dbt_common.exceptions import DbtBaseException as DbtException
+from dbt_common.exceptions import DbtRuntimeError
 from tests.functional.show.fixtures import (
-    models__second_ephemeral_model,
-    seeds__sample_seed,
+    models__ephemeral_model,
     models__sample_model,
     models__sample_number_model,
     models__sample_number_model_with_nulls,
+    models__second_ephemeral_model,
     models__second_model,
-    models__ephemeral_model,
-    schema_yml,
     private_model_yml,
+    schema_yml,
+    seeds__sample_seed,
 )
 
 

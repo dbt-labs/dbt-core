@@ -6,12 +6,9 @@ from typing import TypeVar
 import pytest
 
 from dbt.adapters.events import types as adapter_types
-from dbt_common.events.event_manager_client import ctx_set_event_manager
-from dbt.artifacts.schemas.results import TimingInfo, RunStatus
-from dbt.artifacts.schemas.run import RunResult
-from dbt_common.events import types
 from dbt.adapters.events.logging import AdapterLogger
-from dbt_common.events.base_types import msg_from_base_event
+from dbt.artifacts.schemas.results import RunStatus, TimingInfo
+from dbt.artifacts.schemas.run import RunResult
 from dbt.events import types as core_types
 from dbt.events.base_types import (
     CoreBaseEvent,
@@ -22,12 +19,15 @@ from dbt.events.base_types import (
     TestLevel,
     WarnLevel,
 )
-from dbt_common.events.event_manager import TestEventManager, EventManager
-from dbt_common.events.functions import msg_to_dict, msg_to_json
-from dbt_common.events.helpers import get_json_string_utcnow
 from dbt.events.types import RunResultError
 from dbt.flags import set_from_args
 from dbt.task.printer import print_run_result_error
+from dbt_common.events import types
+from dbt_common.events.base_types import msg_from_base_event
+from dbt_common.events.event_manager import EventManager, TestEventManager
+from dbt_common.events.event_manager_client import ctx_set_event_manager
+from dbt_common.events.functions import msg_to_dict, msg_to_json
+from dbt_common.events.helpers import get_json_string_utcnow
 
 set_from_args(Namespace(WARN_ERROR=False), None)
 

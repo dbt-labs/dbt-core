@@ -1,9 +1,10 @@
 import pytest
+
 from tests.functional.adapter.utils.base_utils import BaseUtils
 from tests.functional.adapter.utils.fixture_concat import (
-    seeds__data_concat_csv,
     models__test_concat_sql,
     models__test_concat_yml,
+    seeds__data_concat_csv,
 )
 
 

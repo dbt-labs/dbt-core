@@ -1,30 +1,30 @@
+import pytest
+
 from dbt.contracts.graph.nodes import ModelNode
 from dbt.contracts.results import RunExecutionResult, RunResult
-import pytest
 from dbt.tests.util import run_dbt
+from tests.functional.materializations.fixtures import (
+    bar1_sql,
+    bar2_sql,
+    bar3_sql,
+    bar4_sql,
+    bar5_sql,
+    bar_sql,
+    baz1_sql,
+    baz_sql,
+    fct_eph_first_sql,
+    foo1_sql,
+    foo2_sql,
+    foo_sql,
+    int_eph_first_sql,
+    schema_yml,
+)
 
 # Note: This tests compilation only, so is a dbt Core test and not an adapter test.
 # There is some complicated logic in core/dbt/compilation.py having to do with
 # ephemeral nodes and handling multiple threads at the same time. This test
 # fails fairly regularly if that is broken, but does occasionally work (depending
 # on the order in which things are compiled). It requires multi-threading to fail.
-
-from tests.functional.materializations.fixtures import (
-    fct_eph_first_sql,
-    int_eph_first_sql,
-    schema_yml,
-    bar_sql,
-    bar1_sql,
-    bar2_sql,
-    bar3_sql,
-    bar4_sql,
-    bar5_sql,
-    baz_sql,
-    baz1_sql,
-    foo_sql,
-    foo1_sql,
-    foo2_sql,
-)
 
 
 SUPPRESSED_CTE_EXPECTED_OUTPUT = """-- fct_eph_first.sql

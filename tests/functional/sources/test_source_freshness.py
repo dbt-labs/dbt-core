@@ -1,24 +1,25 @@
-import os
 import json
-import pytest
+import os
 from datetime import datetime, timedelta
+
+import pytest
 import yaml
 
 import dbt.version
+from dbt import deprecations
 from dbt.artifacts.schemas.freshness import FreshnessResult
 from dbt.artifacts.schemas.results import FreshnessStatus
 from dbt.cli.main import dbtRunner
-from dbt import deprecations
+from dbt.tests.util import AnyFloat, AnyStringWith
 from tests.functional.sources.common_source_setup import BaseSourcesTest
 from tests.functional.sources.fixtures import (
-    error_models_schema_yml,
-    error_models_model_sql,
-    filtered_models_schema_yml,
-    override_freshness_models_schema_yml,
     collect_freshness_macro_override_previous_return_signature,
+    error_models_model_sql,
+    error_models_schema_yml,
+    filtered_models_schema_yml,
     freshness_via_metadata_schema_yml,
+    override_freshness_models_schema_yml,
 )
-from dbt.tests.util import AnyStringWith, AnyFloat
 
 
 class SuccessfulSourceFreshnessTest(BaseSourcesTest):

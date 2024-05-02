@@ -1,52 +1,47 @@
-import os
-
-from dbt_common.context import get_invocation_context, set_invocation_context
-from dbt_common.record import Recorder, RecorderMode, get_record_mode_from_env
-from dbt_common.clients.system import get_env
-from dbt_common.invocation import reset_invocation_id
-
-import dbt.tracking
-from dbt.version import installed as installed_version
-from dbt.adapters.factory import adapter_management, register_adapter, get_adapter
-from dbt.context.providers import generate_runtime_macro_context
-from dbt.flags import set_flags, get_flag_dict
-from dbt.cli.exceptions import (
-    ExceptionExit,
-    ResultExit,
-)
-from dbt.cli.flags import Flags
-from dbt.config import RuntimeConfig
-from dbt.config.runtime import load_project, load_profile, UnsetProfile
-from dbt.context.query_header import generate_query_header_context
-
-from dbt_common.events.base_types import EventLevel
-from dbt_common.events.functions import (
-    fire_event,
-    LOG_VERSION,
-)
-from dbt.events.logging import setup_event_logger
-from dbt.events.types import (
-    MainReportVersion,
-    MainReportArgs,
-    MainTrackingUserState,
-)
-from dbt_common.events.helpers import get_json_string_utcnow
-from dbt.events.types import CommandCompleted, MainEncounteredError, MainStackTrace, ResourceReport
-from dbt_common.exceptions import DbtBaseException as DbtException
-from dbt.exceptions import DbtProjectError, FailFastError
-from dbt.parser.manifest import parse_manifest
-from dbt.profiler import profiler
-from dbt.tracking import active_user, initialize_from_flags, track_run
-from dbt_common.utils import cast_dict_to_dict_of_strings
-from dbt.plugins import set_up_plugin_manager
-from dbt.mp_context import get_mp_context
-
-from click import Context
-from functools import update_wrapper
 import importlib.util
+import os
 import time
 import traceback
+from functools import update_wrapper
 from typing import Optional
+
+from click import Context
+
+import dbt.tracking
+from dbt.adapters.factory import adapter_management, get_adapter, register_adapter
+from dbt.cli.exceptions import ExceptionExit, ResultExit
+from dbt.cli.flags import Flags
+from dbt.config import RuntimeConfig
+from dbt.config.runtime import UnsetProfile, load_profile, load_project
+from dbt.context.providers import generate_runtime_macro_context
+from dbt.context.query_header import generate_query_header_context
+from dbt.events.logging import setup_event_logger
+from dbt.events.types import (
+    CommandCompleted,
+    MainEncounteredError,
+    MainReportArgs,
+    MainReportVersion,
+    MainStackTrace,
+    MainTrackingUserState,
+    ResourceReport,
+)
+from dbt.exceptions import DbtProjectError, FailFastError
+from dbt.flags import get_flag_dict, set_flags
+from dbt.mp_context import get_mp_context
+from dbt.parser.manifest import parse_manifest
+from dbt.plugins import set_up_plugin_manager
+from dbt.profiler import profiler
+from dbt.tracking import active_user, initialize_from_flags, track_run
+from dbt.version import installed as installed_version
+from dbt_common.clients.system import get_env
+from dbt_common.context import get_invocation_context, set_invocation_context
+from dbt_common.events.base_types import EventLevel
+from dbt_common.events.functions import LOG_VERSION, fire_event
+from dbt_common.events.helpers import get_json_string_utcnow
+from dbt_common.exceptions import DbtBaseException as DbtException
+from dbt_common.invocation import reset_invocation_id
+from dbt_common.record import Recorder, RecorderMode, get_record_mode_from_env
+from dbt_common.utils import cast_dict_to_dict_of_strings
 
 
 def preflight(func):

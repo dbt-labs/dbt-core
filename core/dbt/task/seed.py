@@ -1,23 +1,17 @@
 import random
 
-from .run import ModelRunner, RunTask
-from .printer import (
-    print_run_end_messages,
-)
-
-from dbt.artifacts.schemas.results import RunStatus, NodeStatus
-from dbt_common.exceptions import DbtInternalError
+from dbt.artifacts.schemas.results import NodeStatus, RunStatus
+from dbt.events.types import LogSeedResult, LogStartLine, SeedHeader
 from dbt.graph import ResourceTypeSelector
 from dbt.logger import TextOnly
+from dbt.node_types import NodeType
+from dbt_common.events.base_types import EventLevel
 from dbt_common.events.functions import fire_event
 from dbt_common.events.types import Formatting
-from dbt_common.events.base_types import EventLevel
-from dbt.events.types import (
-    SeedHeader,
-    LogSeedResult,
-    LogStartLine,
-)
-from dbt.node_types import NodeType
+from dbt_common.exceptions import DbtInternalError
+
+from .printer import print_run_end_messages
+from .run import ModelRunner, RunTask
 
 
 class SeedRunner(ModelRunner):

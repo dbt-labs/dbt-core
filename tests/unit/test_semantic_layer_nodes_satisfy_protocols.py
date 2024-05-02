@@ -1,11 +1,25 @@
-import pytest
 import copy
+from typing import Protocol, runtime_checkable
 
-from dbt.contracts.graph.nodes import (
-    Metric,
-    SavedQuery,
-    SemanticModel,
+import pytest
+from dbt_semantic_interfaces.protocols import WhereFilter as WhereFilterProtocol
+from dbt_semantic_interfaces.protocols import dimension as DimensionProtocols
+from dbt_semantic_interfaces.protocols import entity as EntityProtocols
+from dbt_semantic_interfaces.protocols import measure as MeasureProtocols
+from dbt_semantic_interfaces.protocols import metadata as MetadataProtocols
+from dbt_semantic_interfaces.protocols import metric as MetricProtocols
+from dbt_semantic_interfaces.protocols import saved_query as SavedQueryProtocols
+from dbt_semantic_interfaces.protocols import semantic_model as SemanticModelProtocols
+from dbt_semantic_interfaces.type_enums import (
+    AggregationType,
+    DimensionType,
+    EntityType,
+    MetricType,
+    TimeGranularity,
 )
+from hypothesis import given
+from hypothesis.strategies import builds, none, text
+
 from dbt.artifacts.resources import (
     ConstantPropertyInput,
     ConversionTypeParams,
@@ -26,27 +40,8 @@ from dbt.artifacts.resources import (
     SourceFileMetadata,
     WhereFilter,
 )
+from dbt.contracts.graph.nodes import Metric, SavedQuery, SemanticModel
 from dbt.node_types import NodeType
-from dbt_semantic_interfaces.protocols import (
-    dimension as DimensionProtocols,
-    entity as EntityProtocols,
-    measure as MeasureProtocols,
-    metadata as MetadataProtocols,
-    metric as MetricProtocols,
-    saved_query as SavedQueryProtocols,
-    semantic_model as SemanticModelProtocols,
-    WhereFilter as WhereFilterProtocol,
-)
-from dbt_semantic_interfaces.type_enums import (
-    AggregationType,
-    DimensionType,
-    EntityType,
-    MetricType,
-    TimeGranularity,
-)
-from hypothesis import given
-from hypothesis.strategies import builds, none, text
-from typing import Protocol, runtime_checkable
 
 
 @runtime_checkable

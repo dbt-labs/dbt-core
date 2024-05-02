@@ -1,7 +1,7 @@
-from dbt_common.dataclass_schema import StrEnum
 import json
+from typing import Any, Dict, Union
 
-from typing import Union, Dict, Any
+from dbt_common.dataclass_schema import StrEnum
 
 
 class ModelHookType(StrEnum):

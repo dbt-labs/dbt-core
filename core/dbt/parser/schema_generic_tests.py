@@ -1,38 +1,43 @@
-import pathlib
 import itertools
 import os
+import pathlib
+from typing import Any, Dict, List, Optional, Union
 
-from typing import List, Dict, Optional, Union, Any
+from dbt.adapters.factory import get_adapter, get_adapter_package_names
 from dbt.artifacts.resources import NodeVersion, RefArgs
-from dbt.parser.base import SimpleParser
-from dbt.parser.generic_test_builders import TestBuilder
-from dbt.parser.search import FileBlock
+from dbt.clients.jinja import add_rendered_test_kwargs, get_rendered
+from dbt.context.configured import SchemaYamlVars, generate_schema_yml_context
+from dbt.context.context_config import ContextConfig
+from dbt.context.macro_resolver import MacroResolver
 from dbt.context.providers import generate_test_context
+from dbt.contracts.files import FileHash
+from dbt.contracts.graph.nodes import (
+    GenericTestNode,
+    GraphMemberNode,
+    ManifestNode,
+    UnpatchedSourceDefinition,
+)
+from dbt.contracts.graph.unparsed import UnparsedColumn, UnparsedNodeUpdate
+from dbt.exceptions import (
+    CompilationError,
+    ParsingError,
+    SchemaConfigError,
+    TestConfigError,
+)
+from dbt.node_types import NodeType
+from dbt.parser.base import SimpleParser
 from dbt.parser.common import (
-    TestBlock,
-    Testable,
-    TestDef,
     GenericTestBlock,
+    Testable,
+    TestBlock,
+    TestDef,
     VersionedTestBlock,
     trimmed,
 )
-from dbt.contracts.graph.unparsed import UnparsedNodeUpdate, UnparsedColumn
-from dbt.contracts.graph.nodes import (
-    GenericTestNode,
-    UnpatchedSourceDefinition,
-    ManifestNode,
-    GraphMemberNode,
-)
-from dbt.context.context_config import ContextConfig
-from dbt.context.configured import generate_schema_yml_context, SchemaYamlVars
+from dbt.parser.generic_test_builders import TestBuilder
+from dbt.parser.search import FileBlock
+from dbt.utils import get_pseudo_test_path, md5
 from dbt_common.dataclass_schema import ValidationError
-from dbt.exceptions import SchemaConfigError, CompilationError, ParsingError, TestConfigError
-from dbt.contracts.files import FileHash
-from dbt.utils import md5, get_pseudo_test_path
-from dbt.clients.jinja import get_rendered, add_rendered_test_kwargs
-from dbt.adapters.factory import get_adapter, get_adapter_package_names
-from dbt.node_types import NodeType
-from dbt.context.macro_resolver import MacroResolver
 
 
 # This parser handles the tests that are defined in "schema" (yaml) files, on models,

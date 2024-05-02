@@ -2,29 +2,48 @@ import enum
 from collections import defaultdict
 from dataclasses import dataclass, field, replace
 from itertools import chain
-from mashumaro.mixins.msgpack import DataClassMessagePackMixin
 from multiprocessing.synchronize import Lock
 from typing import (
+    Any,
+    Callable,
+    ClassVar,
     DefaultDict,
     Dict,
+    Generic,
     List,
-    Optional,
-    Union,
     Mapping,
     MutableMapping,
-    Any,
+    Optional,
     Set,
     Tuple,
     TypeVar,
-    Callable,
-    Generic,
-    ClassVar,
+    Union,
 )
+
+from mashumaro.mixins.msgpack import DataClassMessagePackMixin
 from typing_extensions import Protocol
 
-from dbt import deprecations
-from dbt import tracking
+import dbt_common.exceptions
+import dbt_common.utils
+from dbt import deprecations, tracking
+from dbt.adapters.exceptions import (
+    DuplicateMacroInPackageError,
+    DuplicateMaterializationNameError,
+)
+
+# to preserve import paths
+from dbt.artifacts.resources import BaseResource, DeferRelation, NodeVersion
+from dbt.artifacts.resources.v1.config import NodeConfig
+from dbt.artifacts.schemas.manifest import ManifestMetadata, UniqueID, WritableManifest
+from dbt.contracts.files import (
+    AnySourceFile,
+    FileHash,
+    FixtureSourceFile,
+    SchemaSourceFile,
+    SourceFile,
+)
 from dbt.contracts.graph.nodes import (
+    RESOURCE_CLASS_TO_NODE_CLASS,
     BaseNode,
     Documentation,
     Exposure,
@@ -37,50 +56,33 @@ from dbt.contracts.graph.nodes import (
     ModelNode,
     ResultNode,
     SavedQuery,
-    SemanticModel,
     SeedNode,
+    SemanticModel,
     SourceDefinition,
-    UnpatchedSourceDefinition,
     UnitTestDefinition,
     UnitTestFileFixture,
-    RESOURCE_CLASS_TO_NODE_CLASS,
+    UnpatchedSourceDefinition,
 )
 from dbt.contracts.graph.unparsed import SourcePatch, UnparsedVersion
-from dbt.flags import get_flags
-
-# to preserve import paths
-from dbt.artifacts.resources import (
-    NodeVersion,
-    DeferRelation,
-    BaseResource,
-)
-from dbt.artifacts.resources.v1.config import NodeConfig
-from dbt.artifacts.schemas.manifest import WritableManifest, ManifestMetadata, UniqueID
-from dbt.contracts.files import (
-    SourceFile,
-    SchemaSourceFile,
-    FileHash,
-    AnySourceFile,
-    FixtureSourceFile,
-)
 from dbt.contracts.util import SourceKey
-from dbt_common.dataclass_schema import dbtClassMixin
-
+from dbt.events.types import UnpinnedRefNewVersionAvailable
 from dbt.exceptions import (
+    AmbiguousResourceNameRefError,
     CompilationError,
     DuplicateResourceNameError,
-    AmbiguousResourceNameRefError,
 )
-from dbt.adapters.exceptions import DuplicateMacroInPackageError, DuplicateMaterializationNameError
-from dbt_common.helper_types import PathSet
-from dbt_common.events.functions import fire_event
-from dbt_common.events.contextvars import get_node_info
-from dbt.events.types import UnpinnedRefNewVersionAvailable
-from dbt.node_types import NodeType, AccessType, REFABLE_NODE_TYPES, VERSIONED_NODE_TYPES
+from dbt.flags import get_flags
 from dbt.mp_context import get_mp_context
-import dbt_common.utils
-import dbt_common.exceptions
-
+from dbt.node_types import (
+    REFABLE_NODE_TYPES,
+    VERSIONED_NODE_TYPES,
+    AccessType,
+    NodeType,
+)
+from dbt_common.dataclass_schema import dbtClassMixin
+from dbt_common.events.contextvars import get_node_info
+from dbt_common.events.functions import fire_event
+from dbt_common.helper_types import PathSet
 
 PackageName = str
 DocName = str

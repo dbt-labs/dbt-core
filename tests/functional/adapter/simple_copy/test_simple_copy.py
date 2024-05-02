@@ -1,16 +1,12 @@
 # mix in biguery
 # mix in snowflake
 
-import pytest
-
 from pathlib import Path
 
-from dbt.tests.util import run_dbt, rm_file, write_file, check_relations_equal
+import pytest
 
+from dbt.tests.util import check_relations_equal, rm_file, run_dbt, write_file
 from tests.functional.adapter.simple_copy.fixtures import (
-    _PROPERTIES__SCHEMA_YML,
-    _SEEDS__SEED_INITIAL,
-    _SEEDS__SEED_UPDATE,
     _MODELS__ADVANCED_INCREMENTAL,
     _MODELS__COMPOUND_SORT,
     _MODELS__DISABLED,
@@ -20,6 +16,9 @@ from tests.functional.adapter.simple_copy.fixtures import (
     _MODELS__INTERLEAVED_SORT,
     _MODELS__MATERIALIZED,
     _MODELS__VIEW_MODEL,
+    _PROPERTIES__SCHEMA_YML,
+    _SEEDS__SEED_INITIAL,
+    _SEEDS__SEED_UPDATE,
 )
 
 

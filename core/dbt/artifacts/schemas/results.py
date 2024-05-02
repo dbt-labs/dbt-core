@@ -1,11 +1,11 @@
-from dbt.contracts.graph.nodes import ResultNode
-from dbt_common.events.helpers import datetime_to_json_string
-from dbt_common.utils import cast_to_str, cast_to_int
-from dbt_common.dataclass_schema import dbtClassMixin, StrEnum
-
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional, Sequence, Union
+
+from dbt.contracts.graph.nodes import ResultNode
+from dbt_common.dataclass_schema import StrEnum, dbtClassMixin
+from dbt_common.events.helpers import datetime_to_json_string
+from dbt_common.utils import cast_to_int, cast_to_str
 
 
 @dataclass

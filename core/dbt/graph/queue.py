@@ -1,18 +1,19 @@
-import networkx as nx  # type: ignore
 import threading
-
 from queue import PriorityQueue
-from typing import Dict, Set, List, Generator, Optional
+from typing import Dict, Generator, List, Optional, Set
+
+import networkx as nx  # type: ignore
+
+from dbt.contracts.graph.manifest import Manifest
+from dbt.contracts.graph.nodes import (
+    Exposure,
+    GraphMemberNode,
+    Metric,
+    SourceDefinition,
+)
+from dbt.node_types import NodeType
 
 from .graph import UniqueId
-from dbt.contracts.graph.nodes import (
-    SourceDefinition,
-    Exposure,
-    Metric,
-    GraphMemberNode,
-)
-from dbt.contracts.graph.manifest import Manifest
-from dbt.node_types import NodeType
 
 
 class GraphQueue:

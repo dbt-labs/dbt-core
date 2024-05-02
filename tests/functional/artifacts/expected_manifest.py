@@ -1,7 +1,8 @@
 import hashlib
-import dbt
 import os
 from unittest.mock import ANY
+
+import dbt
 from dbt.tests.util import AnyStringWith
 
 # This produces an "expected manifest", with a number of the fields

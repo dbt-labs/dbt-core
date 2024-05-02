@@ -2,35 +2,41 @@ import abc
 from fnmatch import fnmatch
 from itertools import chain
 from pathlib import Path
-from typing import Set, List, Dict, Iterator, Tuple, Any, Union, Type, Optional, Callable
-
-from dbt_common.dataclass_schema import StrEnum
-
-from .graph import UniqueId
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Iterator,
+    List,
+    Optional,
+    Set,
+    Tuple,
+    Type,
+    Union,
+)
 
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import (
-    SingularTestNode,
     Exposure,
-    Metric,
     GenericTestNode,
-    SourceDefinition,
-    ResultNode,
     ManifestNode,
+    Metric,
     ModelNode,
-    UnitTestDefinition,
+    ResultNode,
     SavedQuery,
     SemanticModel,
+    SingularTestNode,
+    SourceDefinition,
+    UnitTestDefinition,
 )
 from dbt.contracts.graph.unparsed import UnparsedVersion
 from dbt.contracts.state import PreviousState
-from dbt_common.exceptions import (
-    DbtInternalError,
-    DbtRuntimeError,
-)
 from dbt.node_types import NodeType
+from dbt_common.dataclass_schema import StrEnum
 from dbt_common.events.contextvars import get_project_root
+from dbt_common.exceptions import DbtInternalError, DbtRuntimeError
 
+from .graph import UniqueId
 
 SELECTOR_GLOB = "*"
 SELECTOR_DELIMITER = ":"

@@ -1,22 +1,21 @@
 # special support for CLI argument parsing.
 # TODO: Remove as part of https://github.com/dbt-labs/dbt-core/issues/6701
-from dbt.flags import get_flags
-from copy import deepcopy
 import itertools
-from dbt.clients.yaml_helper import yaml, Loader, Dumper  # noqa: F401
+from copy import deepcopy
+from typing import Any, Dict, List, Optional, Tuple, Union
 
-from typing import Dict, List, Optional, Tuple, Any, Union
-
+from dbt.clients.yaml_helper import Dumper, Loader, yaml  # noqa: F401
 from dbt.contracts.selection import SelectorDefinition, SelectorFile
+from dbt.flags import get_flags
 from dbt_common.exceptions import DbtInternalError, DbtValidationError
 
 from .selector_spec import (
-    SelectionUnion,
-    SelectionSpec,
-    SelectionIntersection,
-    SelectionDifference,
-    SelectionCriteria,
     IndirectSelection,
+    SelectionCriteria,
+    SelectionDifference,
+    SelectionIntersection,
+    SelectionSpec,
+    SelectionUnion,
 )
 
 INTERSECTION_DELIMITER = ","

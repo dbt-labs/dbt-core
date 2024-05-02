@@ -1,28 +1,26 @@
-import threading
-from typing import Any, Optional, Iterable, Tuple, Sequence, Dict, TYPE_CHECKING
 import copy
+import threading
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import TYPE_CHECKING, Any, Dict, Iterable, Optional, Sequence, Tuple
 
-
-from dbt_common.constants import SECRET_ENV_PREFIX
 from dbt.artifacts.resources import CompiledResource
 from dbt.artifacts.schemas.base import (
-    BaseArtifactMetadata,
     ArtifactMixin,
-    schema_version,
+    BaseArtifactMetadata,
     get_artifact_schema_version,
+    schema_version,
 )
 from dbt.artifacts.schemas.results import (
     BaseResult,
-    NodeResult,
-    RunStatus,
-    ResultNode,
     ExecutionResult,
+    NodeResult,
+    ResultNode,
+    RunStatus,
 )
-from dbt_common.clients.system import write_json
 from dbt.exceptions import scrub_secrets
-
+from dbt_common.clients.system import write_json
+from dbt_common.constants import SECRET_ENV_PREFIX
 
 if TYPE_CHECKING:
     import agate

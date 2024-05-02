@@ -1,10 +1,9 @@
-from contextlib import contextmanager
 import os
 import shutil
 import tempfile
 import unittest
 from argparse import Namespace
-
+from contextlib import contextmanager
 
 import yaml
 
@@ -12,10 +11,7 @@ import dbt.config
 import dbt.exceptions
 from dbt import flags
 from dbt.constants import PACKAGES_FILE_NAME
-
-
 from dbt.flags import set_from_args
-
 from tests.unit.utils import normalize
 
 INITIAL_ROOT = os.getcwd()

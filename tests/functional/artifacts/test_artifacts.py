@@ -1,24 +1,29 @@
-import pytest
 import os
 from datetime import datetime
-import dbt
-import jsonschema
 
-from dbt.tests.util import run_dbt, get_artifact, check_datetime_between, run_dbt_and_capture
+import jsonschema
+import pytest
+
+import dbt
+from dbt.artifacts.schemas.results import RunStatus
+from dbt.artifacts.schemas.run import RunResultsArtifact
+from dbt.contracts.graph.manifest import WritableManifest
+from dbt.tests.util import (
+    check_datetime_between,
+    get_artifact,
+    run_dbt,
+    run_dbt_and_capture,
+)
 from tests.functional.artifacts.expected_manifest import (
-    expected_seeded_manifest,
     expected_references_manifest,
+    expected_seeded_manifest,
     expected_versions_manifest,
 )
 from tests.functional.artifacts.expected_run_results import (
-    expected_run_results,
     expected_references_run_results,
+    expected_run_results,
     expected_versions_run_results,
 )
-
-from dbt.contracts.graph.manifest import WritableManifest
-from dbt.artifacts.schemas.results import RunStatus
-from dbt.artifacts.schemas.run import RunResultsArtifact
 
 models__schema_yml = """
 version: 2
