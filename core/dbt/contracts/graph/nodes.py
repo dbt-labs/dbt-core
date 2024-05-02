@@ -1,7 +1,11 @@
+import importlib.util
+from types import ModuleType
 import os
 from datetime import datetime
 from dataclasses import dataclass, field
+from functools import cached_property
 import hashlib
+from zipfile import ZipFile
 
 from mashumaro.types import SerializableType
 from typing import (
@@ -1040,6 +1044,90 @@ class Macro(MacroResource, BaseNode):
     @property
     def depends_on_macros(self):
         return self.depends_on.macros
+
+
+# ====================================
+# PythonModule
+# ====================================
+
+
+def load_python_module(name: str, path: str, files: List[str]) -> ModuleType:
+    files.append(path)
+    spec: Any = importlib.util.spec_from_file_location(name, path)
+    module: ModuleType = importlib.util.module_from_spec(spec)
+    # # relative importing in the python macros is not supported if modules are not
+    # # added to sys.modules.
+    # # this may increase the probability of module name conflicts.
+    # sys.modules[self.name] = module
+    spec.loader.exec_module(module)
+    f_init = "__init__.py"
+    if os.path.basename(path) == f_init:
+        dir_path = os.path.dirname(path)
+        for sub_obj in os.listdir(dir_path):
+            sub_obj_path = os.path.join(dir_path, sub_obj)
+            sub_obj_name, sub_obj_ext = os.path.splitext(sub_obj)
+            if (
+                os.path.isfile(sub_obj_path)
+                and sub_obj_ext == ".py"
+                and sub_obj != f_init
+                and sub_obj_name.isidentifier()
+                and sub_obj_name not in dir(module)
+            ):
+                setattr(
+                    module,
+                    sub_obj_name,
+                    load_python_module(name=sub_obj_name, path=sub_obj_path, files=files),
+                )
+            elif (
+                os.path.isdir(sub_obj_path)
+                and os.path.isfile(os.path.join(sub_obj_path, f_init))
+                and sub_obj_name.isidentifier()
+                and sub_obj_name not in dir(module)
+            ):
+                setattr(
+                    module,
+                    sub_obj_name,
+                    load_python_module(
+                        name=sub_obj_name, path=os.path.join(sub_obj_path, f_init), files=files
+                    ),
+                )
+    return module
+
+
+@dataclass
+class PythonModule(Macro):
+    absolute_path: str = ""
+    relative_path: str = ""
+    resource_type: Literal[NodeType.PythonModule] = field(
+        metadata={"restrict": Literal[NodeType.PythonModule]}
+    )
+    files: List[str] = field(default_factory=list)
+
+    def __post_init__(self):
+        _ = self.module
+
+    @cached_property
+    def module(self) -> ModuleType:
+        module = load_python_module(name=self.name, path=self.absolute_path, files=self.files)
+        # # relative importing in the python macros is not supported if modules are not
+        # # added to sys.modules.
+        # # this may increase the probability of module name conflicts.
+        # sys.modules[self.name] = module
+        return module
+
+    def add_to_zipfile(
+        self,
+        zipfile: str,
+        mode: Literal["r", "w", "x", "a"] = "a",
+        is_in_root_package: bool = True,
+    ):
+        len_root_path = len(self.absolute_path) - len(self.relative_path)
+        with ZipFile(zipfile, mode=mode) as f:
+            for file in self.files:
+                arcname = file[len_root_path:]
+                if not is_in_root_package:
+                    arcname = os.path.join(self.package_name, arcname)
+                f.write(filename=file, arcname=arcname)
 
 
 # ====================================

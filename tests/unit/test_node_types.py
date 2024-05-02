@@ -13,6 +13,7 @@ node_type_pluralizations = {
     NodeType.Documentation: "docs",
     NodeType.Source: "sources",
     NodeType.Macro: "macros",
+    NodeType.PythonModule: "python_modules",
     NodeType.Exposure: "exposures",
     NodeType.Metric: "metrics",
     NodeType.Group: "groups",

@@ -1,0 +1,6 @@
+kind: Features
+body: support local/package level and serializable python modules/macros. (#10078)
+time: 2024-05-02T20:14:19.303925629+08:00
+custom:
+  Author: woods-chen
+  Issue: "10078"

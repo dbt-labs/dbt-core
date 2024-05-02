@@ -18,7 +18,7 @@ class MacroArgument(dbtClassMixin):
 @dataclass
 class Macro(BaseResource):
     macro_sql: str
-    resource_type: Literal[NodeType.Macro]
+    resource_type: Literal[NodeType.PythonModule, NodeType.Macro]
     depends_on: MacroDependsOn = field(default_factory=MacroDependsOn)
     description: str = ""
     meta: Dict[str, Any] = field(default_factory=dict)

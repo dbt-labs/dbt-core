@@ -33,6 +33,7 @@ from dbt.contracts.graph.nodes import (
     GraphMemberNode,
     Group,
     Macro,
+    PythonModule,
     ManifestNode,
     Metric,
     ModelNode,
@@ -489,7 +490,11 @@ def build_node_edges(nodes: List[ManifestNode]):
 # Build a map of children of macros and generic tests
 def build_macro_edges(nodes: List[Any]):
     forward_edges: Dict[str, List[str]] = {
-        n.unique_id: [] for n in nodes if n.unique_id.startswith("macro") or n.depends_on_macros
+        n.unique_id: []
+        for n in nodes
+        if n.unique_id.startswith("macro")
+        or n.unique_id.startswith("python_module")
+        or n.depends_on_macros
     }
     for node in nodes:
         for unique_id in node.depends_on_macros:
@@ -511,7 +516,7 @@ class Locality(enum.IntEnum):
 @dataclass
 class MacroCandidate:
     locality: Locality
-    macro: Macro
+    macro: Union[PythonModule, Macro]
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, MacroCandidate):
@@ -591,12 +596,14 @@ class CandidateList(List[M]):
 
         return None
 
-    def last(self) -> Optional[Macro]:
+    def last(self) -> Optional[Union[PythonModule, Macro]]:
         last_candidate = self.last_candidate()
         return last_candidate.macro if last_candidate is not None else None
 
 
-def _get_locality(macro: Macro, root_project_name: str, internal_packages: Set[str]) -> Locality:
+def _get_locality(
+    macro: Union[PythonModule, Macro], root_project_name: str, internal_packages: Set[str]
+) -> Locality:
     if macro.package_name == root_project_name:
         return Locality.Root
     elif macro.package_name in internal_packages:
@@ -657,7 +664,7 @@ class MacroMethods:
 
     def find_macro_by_name(
         self, name: str, root_project_name: str, package: Optional[str]
-    ) -> Optional[Macro]:
+    ) -> Optional[Union[PythonModule, Macro]]:
         """Find a macro in the graph by its name and package name, or None for
         any package. The root project name is used to determine priority:
          - locally defined macros come first
@@ -680,7 +687,7 @@ class MacroMethods:
 
     def find_generate_macro_by_name(
         self, component: str, root_project_name: str, imported_package: Optional[str] = None
-    ) -> Optional[Macro]:
+    ) -> Optional[Union[PythonModule, Macro]]:
         """
         The default `generate_X_name` macros are similar to regular ones, but only
         includes imported packages when searching for a package.
@@ -738,7 +745,7 @@ class MacroMethods:
 
         return candidates
 
-    def get_macros_by_name(self) -> Dict[str, List[Macro]]:
+    def get_macros_by_name(self) -> Dict[str, List[Union[PythonModule, Macro]]]:
         if self._macros_by_name is None:
             # The by-name mapping doesn't exist yet (perhaps because the manifest
             # was deserialized), so we build it.
@@ -747,11 +754,13 @@ class MacroMethods:
         return self._macros_by_name
 
     @staticmethod
-    def _build_macros_by_name(macros: Mapping[str, Macro]) -> Dict[str, List[Macro]]:
+    def _build_macros_by_name(
+        macros: Mapping[str, Union[PythonModule, Macro]]
+    ) -> Dict[str, List[Union[PythonModule, Macro]]]:
         # Convert a macro dictionary keyed on unique id to a flattened version
         # keyed on macro name for faster lookup by name. Since macro names are
         # not necessarily unique, the dict value is a list.
-        macros_by_name: Dict[str, List[Macro]] = {}
+        macros_by_name: Dict[str, List[Union[PythonModule, Macro]]] = {}
         for macro in macros.values():
             if macro.name not in macros_by_name:
                 macros_by_name[macro.name] = []
@@ -760,7 +769,7 @@ class MacroMethods:
 
         return macros_by_name
 
-    def get_macros_by_package(self) -> Dict[str, Dict[str, Macro]]:
+    def get_macros_by_package(self) -> Dict[str, Dict[str, Union[PythonModule, Macro]]]:
         if self._macros_by_package is None:
             # The by-package mapping doesn't exist yet (perhaps because the manifest
             # was deserialized), so we build it.
@@ -769,10 +778,12 @@ class MacroMethods:
         return self._macros_by_package
 
     @staticmethod
-    def _build_macros_by_package(macros: Mapping[str, Macro]) -> Dict[str, Dict[str, Macro]]:
+    def _build_macros_by_package(
+        macros: Mapping[str, Union[PythonModule, Macro]]
+    ) -> Dict[str, Dict[str, Union[PythonModule, Macro]]]:
         # Convert a macro dictionary keyed on unique id to a flattened version
         # keyed on package name for faster lookup by name.
-        macros_by_package: Dict[str, Dict[str, Macro]] = {}
+        macros_by_package: Dict[str, Dict[str, Union[PythonModule, Macro]]] = {}
         for macro in macros.values():
             if macro.package_name not in macros_by_package:
                 macros_by_package[macro.package_name] = {}
@@ -810,7 +821,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     # args tuple in the right position.
     nodes: MutableMapping[str, ManifestNode] = field(default_factory=dict)
     sources: MutableMapping[str, SourceDefinition] = field(default_factory=dict)
-    macros: MutableMapping[str, Macro] = field(default_factory=dict)
+    macros: MutableMapping[str, Union[PythonModule, Macro]] = field(default_factory=dict)
     docs: MutableMapping[str, Documentation] = field(default_factory=dict)
     exposures: MutableMapping[str, Exposure] = field(default_factory=dict)
     metrics: MutableMapping[str, Metric] = field(default_factory=dict)
@@ -860,11 +871,11 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         default_factory=get_mp_context().Lock,
         metadata={"serialize": lambda x: None, "deserialize": lambda x: None},
     )
-    _macros_by_name: Optional[Dict[str, List[Macro]]] = field(
+    _macros_by_name: Optional[Dict[str, List[Union[PythonModule, Macro]]]] = field(
         default=None,
         metadata={"serialize": lambda x: None, "deserialize": lambda x: None},
     )
-    _macros_by_package: Optional[Dict[str, Dict[str, Macro]]] = field(
+    _macros_by_package: Optional[Dict[str, Dict[str, Union[PythonModule, Macro]]]] = field(
         default=None,
         metadata={"serialize": lambda x: None, "deserialize": lambda x: None},
     )
@@ -937,7 +948,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
 
     def find_materialization_macro_by_name(
         self, project_name: str, materialization_name: str, adapter_type: str
-    ) -> Optional[Macro]:
+    ) -> Optional[Union[PythonModule, Macro]]:
         candidates: CandidateList = CandidateList(
             chain.from_iterable(
                 self._materialization_candidates_for(
@@ -1511,7 +1522,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         fire_event(MergedFromState(num_merged=len(merged), sample=sample))
 
     # Methods that were formerly in ParseResult
-    def add_macro(self, source_file: SourceFile, macro: Macro):
+    def add_macro(self, source_file: SourceFile, macro: Union[PythonModule, Macro]):
         if macro.unique_id in self.macros:
             # detect that the macro exists and emit an error
             raise DuplicateMacroInPackageError(macro=macro, macro_mapping=self.macros)
@@ -1696,8 +1707,8 @@ class MacroManifest(MacroMethods):
         # This is returned by the 'graph' context property
         # in the ProviderContext class.
         self.flat_graph: Dict[str, Any] = {}
-        self._macros_by_name: Optional[Dict[str, List[Macro]]] = None
-        self._macros_by_package: Optional[Dict[str, Dict[str, Macro]]] = None
+        self._macros_by_name: Optional[Dict[str, List[Union[PythonModule, Macro]]]] = None
+        self._macros_by_package: Optional[Dict[str, Dict[str, Union[PythonModule, Macro]]]] = None
 
 
 AnyManifest = Union[Manifest, MacroManifest]

@@ -389,6 +389,11 @@ def get_file_types_for_project(project):
             "extensions": [".sql"],
             "parser": "MacroParser",
         },
+        ParseFileType.PythonModule: {
+            "paths": project.macro_paths,
+            "extensions": [".py"],
+            "parser": "PythonModuleParser",
+        },
         ParseFileType.Model: {
             "paths": project.model_paths,
             "extensions": [".sql", ".py"],

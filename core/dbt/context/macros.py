@@ -1,13 +1,17 @@
+from types import ModuleType
 from typing import Any, Dict, Iterable, Union, Optional, List, Iterator, Mapping, Set
 
 from dbt.clients.jinja import MacroGenerator, MacroStack
-from dbt.contracts.graph.nodes import Macro
+from dbt.contracts.graph.nodes import (
+    Macro,
+    PythonModule,
+)
 from dbt.include.global_project import PROJECT_NAME as GLOBAL_PROJECT_NAME
 from dbt.exceptions import DuplicateMacroNameError, PackageNotFoundForMacroError
 
 
-FlatNamespace = Dict[str, MacroGenerator]
-NamespaceMember = Union[FlatNamespace, MacroGenerator]
+FlatNamespace = Dict[str, Union[MacroGenerator, ModuleType]]
+NamespaceMember = Union[FlatNamespace, Union[MacroGenerator, ModuleType]]
 FullNamespace = Dict[str, NamespaceMember]
 
 
@@ -66,7 +70,9 @@ class MacroNamespace(Mapping):
                 return dct[key]
         raise KeyError(key)
 
-    def get_from_package(self, package_name: Optional[str], name: str) -> Optional[MacroGenerator]:
+    def get_from_package(
+        self, package_name: Optional[str], name: str
+    ) -> Optional[Union[MacroGenerator, ModuleType]]:
         if package_name is None:
             return self.get(name)
         elif package_name == GLOBAL_PROJECT_NAME:
@@ -112,7 +118,7 @@ class MacroNamespaceBuilder:
         self,
         hierarchy: Dict[str, FlatNamespace],
         macro: Macro,
-        macro_func: MacroGenerator,
+        macro_func: Union[MacroGenerator, ModuleType],
     ):
         if macro.package_name in hierarchy:
             namespace = hierarchy[macro.package_name]
@@ -124,13 +130,17 @@ class MacroNamespaceBuilder:
             raise DuplicateMacroNameError(macro_func.macro, macro, macro.package_name)
         hierarchy[macro.package_name][macro.name] = macro_func
 
-    def add_macro(self, macro: Macro, ctx: Dict[str, Any]) -> None:
+    def add_macro(self, macro: Union[PythonModule, Macro], ctx: Dict[str, Any]) -> None:
         macro_name: str = macro.name
 
         # MacroGenerator is in clients/jinja.py
         # a MacroGenerator object is a callable object that will
         # execute the MacroGenerator.__call__ function
-        macro_func: MacroGenerator = MacroGenerator(macro, ctx, self.node, self.thread_ctx)
+        macro_func: Union[MacroGenerator, ModuleType] = (
+            macro.module
+            if isinstance(macro, PythonModule)
+            else MacroGenerator(macro, ctx, self.node, self.thread_ctx)
+        )
 
         # internal macros (from plugins) will be processed separately from
         # project macros, so store them in a different place

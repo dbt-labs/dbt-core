@@ -126,7 +126,10 @@ from dbt.parser.singular_test import SingularTestParser
 from dbt.parser.docs import DocumentationParser
 from dbt.parser.fixtures import FixtureParser
 from dbt.parser.hooks import HookParser
-from dbt.parser.macros import MacroParser
+from dbt.parser.macros import (
+    MacroParser,
+    PythonModuleParser,
+)
 from dbt.parser.models import ModelParser
 from dbt.parser.schemas import SchemaParser
 from dbt.parser.search import FileBlock
@@ -677,6 +680,13 @@ class ManifestLoader:
                     parser.parse_file(block)
                     # increment parsed path count for performance tracking
                     self._perf_info.parsed_path_count += 1
+            if "PythonModuleParser" in parser_files:
+                parser = PythonModuleParser(project, self.manifest)
+                for file_id in parser_files["PythonModuleParser"]:
+                    block = FileBlock(self.manifest.files[file_id])
+                    parser.parse_file(block)
+                    # increment parsed path count for performance tracking
+                    self._perf_info.parsed_path_count += 1
             # generic tests hisotrically lived in the macros directoy but can now be nested
             # in a /generic directory under /tests so we want to process them here as well
             if "GenericTestParser" in parser_files:
@@ -1071,6 +1081,16 @@ class ManifestLoader:
                 # This does not add the file to the manifest.files,
                 # but that shouldn't be necessary here.
                 macro_parser.parse_file(block)
+            # what is the manifest passed in actually used for?
+            python_module_parser = PythonModuleParser(project, self.manifest)
+            for path in python_module_parser.get_paths():
+                source_file = load_source_file(
+                    path, ParseFileType.PythonModule, project.project_name, {}
+                )
+                block = FileBlock(source_file)
+                # This does not add the file to the manifest.files,
+                # but that shouldn't be necessary here.
+                python_module_parser.parse_file(block)
         macro_manifest = MacroManifest(self.manifest.macros)
         return macro_manifest
 
