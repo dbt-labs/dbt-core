@@ -13,6 +13,7 @@ from .util import SourceKey
 
 class ParseFileType(StrEnum):
     Macro = "macro"
+    PythonModule = "python_module"
     Model = "model"
     Snapshot = "snapshot"
     Analysis = "analysis"
@@ -27,6 +28,7 @@ class ParseFileType(StrEnum):
 
 parse_file_type_to_parser = {
     ParseFileType.Macro: "MacroParser",
+    ParseFileType.PythonModule: "PythonModuleParser",
     ParseFileType.Model: "ModelParser",
     ParseFileType.Snapshot: "SnapshotParser",
     ParseFileType.Analysis: "AnalysisParser",

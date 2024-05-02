@@ -28,6 +28,7 @@ class NodeType(StrEnum):
     Documentation = "doc"
     Source = "source"
     Macro = "macro"
+    PythonModule = "python_module"
     Exposure = "exposure"
     Metric = "metric"
     Group = "group"

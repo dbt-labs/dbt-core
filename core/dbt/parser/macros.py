@@ -1,11 +1,15 @@
 from typing import Iterable, List
 
+import os
 import jinja2
 
 from dbt_common.clients import jinja
 from dbt.clients.jinja import get_supported_languages
 from dbt.contracts.graph.unparsed import UnparsedMacro
-from dbt.contracts.graph.nodes import Macro
+from dbt.contracts.graph.nodes import (
+    Macro,
+    PythonModule,
+)
 from dbt.contracts.files import FilePath, SourceFile
 from dbt.exceptions import ParsingError
 from dbt.node_types import NodeType
@@ -117,3 +121,67 @@ class MacroParser(BaseParser[Macro]):
 
         for node in self.parse_unparsed_macros(base_node):
             self.manifest.add_macro(block.file, node)
+
+
+class PythonModuleParser(BaseParser[Macro]):
+    _module = None
+
+    def get_paths(self) -> List[FilePath]:
+        return filesystem_search(
+            project=self.project, relative_dirs=self.project.macro_paths, extension=".py"
+        )
+
+    @property
+    def resource_type(self) -> NodeType:
+        return NodeType.PythonModule
+
+    @classmethod
+    def get_compiled_path(cls, block: FileBlock):
+        return block.path.relative_path
+
+    @classmethod
+    def get_module_name(cls, block: FileBlock):
+        relative_path = block.path.relative_path
+        paths = os.path.normpath(relative_path).split(os.sep)
+        file_name = paths[-1]
+        if file_name == "__init__.py":
+            paths.pop()
+        else:
+            file_name = ".".join(file_name.split(".")[:-1])
+            paths[-1] = file_name
+        if not all(i.isidentifier() for i in paths):
+            raise ParsingError(f'invalid python module name: "{relative_path}"')
+        name = ".".join(paths)
+        return name
+
+    def parse_file(self, block: FileBlock):
+        assert isinstance(block.file, SourceFile)
+        source_file: SourceFile = block.file
+        assert isinstance(source_file.contents, str)
+        name: str = self.get_module_name(block=block)
+        if not name:
+            return
+        # only parse top level python modules, the sub-modules will be loaded by
+        # their parent modules.
+        if len(name.split(".")) > 1:
+            return
+        # root_unique_id: str = self.generate_unique_id(name.split('.')[0])
+        # if root_unique_id in self.manifest.macros:
+        #     return
+        original_file_path: str = source_file.path.original_file_path
+        absolute_path: str = block.path.absolute_path
+        relative_path: str = block.path.relative_path
+        unique_id: str = self.generate_unique_id(name)
+        node = PythonModule(
+            path=original_file_path,
+            macro_sql=source_file.contents,
+            original_file_path=original_file_path,
+            package_name=self.project.project_name,
+            resource_type=NodeType.PythonModule,
+            name=name,
+            unique_id=unique_id,
+            absolute_path=absolute_path,
+            relative_path=relative_path,
+            files=[],
+        )
+        self.manifest.add_macro(block.file, node)

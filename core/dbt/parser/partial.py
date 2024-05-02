@@ -30,6 +30,7 @@ mssat_files = (
 
 mg_files = (
     ParseFileType.Macro,
+    ParseFileType.PythonModule,
     ParseFileType.GenericTest,
 )
 
