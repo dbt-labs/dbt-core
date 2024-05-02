@@ -15,7 +15,6 @@ sources:
     loaded_at_field: updated_at
     tables:
       - name: table1
-        identifier: example
         loaded_at_field: null
 """
 
@@ -32,7 +31,6 @@ sources:
     loaded_at_field: updated_at
     tables:
       - name: table1
-        identifier: example
 """
 
 loaded_at_field_defined_schema_yml = """
@@ -48,27 +46,25 @@ sources:
     loaded_at_field: updated_at
     tables:
       - name: table1
-        identifier: example
         loaded_at_field: updated_at_another_place
 """
 
 
-class TestLoadedAtField:
+class TestParsingLoadedAtField:
     @pytest.fixture(scope="class")
     def models(self):
         return {"schema.yml": loaded_at_field_null_schema_yml}
 
     def test_loaded_at_field(self, project):
-        # falls back to meteadata-based freshness but postgres doesn't support it
+        # test setting loaded_at_field to null explicitly at table level
         run_dbt(["parse"])
         manifest = get_manifest(project.project_root)
 
-        # test setting loaded_at_field at source level, should trickle to table
         assert "source.test.test_source.table1" in manifest.sources
         assert manifest.sources.get("source.test.test_source.table1").loaded_at_field is None
 
-        # test setting loaded_at_field at source level, and explicitly set to
-        # null at table level, end up with source level being None
+        # test setting loaded_at_field at source level, do not set at table level
+        # end up with source level loaded_at_field
         write_file(
             loaded_at_field_missing_schema_yml, project.project_root, "models", "schema.yml"
         )
@@ -79,7 +75,16 @@ class TestLoadedAtField:
             manifest.sources.get("source.test.test_source.table1").loaded_at_field == "updated_at"
         )
 
-        # test setting loaded_at_field at table level overrides source level
+        # test setting loaded_at_field to null explicitly again to make sure the change is picked up
+        # by parser
+        write_file(loaded_at_field_null_schema_yml, project.project_root, "models", "schema.yml")
+        run_dbt(["parse"])
+        manifest = get_manifest(project.project_root)
+
+        assert "source.test.test_source.table1" in manifest.sources
+        assert manifest.sources.get("source.test.test_source.table1").loaded_at_field is None
+
+        # test setting loaded_at_field at table level to a value - it should override source level
         write_file(
             loaded_at_field_defined_schema_yml, project.project_root, "models", "schema.yml"
         )

@@ -1190,7 +1190,6 @@ class SourceDefinition(
         return (
             self.freshness == other.freshness
             and self.loaded_at_field == other.loaded_at_field
-            and self.loaded_at_field_present == other.loaded_at_field_present
             and True
         )
 

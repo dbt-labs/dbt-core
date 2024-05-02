@@ -123,10 +123,7 @@ def yaml_from_file(source_file: SchemaSourceFile) -> Optional[Dict[str, Any]]:
         # When loaded_loaded_at_field is defined as None or null, it shows up in
         # the dict but when it is not defined, it does not show up in the dict
         # We need to capture this to be able to override source level settings later.
-        # It defaults to False so only need to set to true here.
         for source in contents.get("sources", []):
-            if "loaded_at_field" in source:
-                source["loaded_at_field_present"] = True
             for table in source.get("tables", []):
                 if "loaded_at_field" in table:
                     table["loaded_at_field_present"] = True

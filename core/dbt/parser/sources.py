@@ -142,8 +142,6 @@ class SourcePatcher:
         else:
             loaded_at_field = source.loaded_at_field  # may be None, that's okay
 
-        loaded_at_field_present = table.loaded_at_field_present
-
         freshness = merge_freshness(source.freshness, table.freshness)
         quoting = source.quoting.merged(table.quoting)
         # path = block.path.original_file_path
@@ -191,7 +189,6 @@ class SourcePatcher:
             meta=meta,
             loader=source.loader,
             loaded_at_field=loaded_at_field,
-            loaded_at_field_present=loaded_at_field_present,
             freshness=freshness,
             quoting=quoting,
             resource_type=NodeType.Source,
