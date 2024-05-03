@@ -1,5 +1,6 @@
 import pytest
 
+from dbt.exceptions import ConfigUpdateError
 from dbt.tests.util import get_manifest, run_dbt
 from dbt_common.dataclass_schema import ValidationError
 
@@ -304,7 +305,7 @@ class TestCustomNodeColorIncorrectColorModelConfig:
         self,
         project,
     ):
-        with pytest.raises(ValidationError):
+        with pytest.raises((ValidationError, ConfigUpdateError)):
             run_dbt(["compile"])
 
 
