@@ -11,7 +11,7 @@ flaky
 freezegun>=1.4.0,<1.5
 hypothesis
 ipdb
-mypy==1.4.1
+mypy==1.5.0
 pip-tools
 pre-commit
 pytest>=7.4,<8.0
