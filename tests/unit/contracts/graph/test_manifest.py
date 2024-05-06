@@ -74,6 +74,7 @@ REQUIRED_PARSED_NODE_KEYS = frozenset(
         "raw_code",
         "language",
         "description",
+        "primary_key",
         "columns",
         "fqn",
         "build_path",

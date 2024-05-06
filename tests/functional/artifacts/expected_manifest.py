@@ -282,6 +282,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "database": model_database,
                 "alias": "model",
                 "description": "The test model",
+                "primary_key": ["id"],
                 "columns": {
                     "id": {
                         "name": "id",
@@ -374,6 +375,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "database": project.database,
                 "alias": "second_model",
                 "description": "The second test model",
+                "primary_key": [],
                 "columns": {
                     "id": {
                         "name": "id",
@@ -924,6 +926,7 @@ def expected_references_manifest(project):
                 },
                 "deprecation_date": None,
                 "description": "",
+                "primary_key": [],
                 "docs": {"node_color": None, "show": True},
                 "fqn": ["test", "ephemeral_copy"],
                 "group": None,
@@ -989,6 +992,7 @@ def expected_references_manifest(project):
                 },
                 "deprecation_date": None,
                 "description": "A summmary table of the ephemeral copy of the seed data",
+                "primary_key": [],
                 "docs": {"node_color": None, "show": True},
                 "fqn": ["test", "ephemeral_summary"],
                 "group": "test_group",
@@ -1057,6 +1061,7 @@ def expected_references_manifest(project):
                 },
                 "deprecation_date": None,
                 "description": "A view of the summary of the ephemeral copy of the seed data",
+                "primary_key": [],
                 "docs": {"node_color": None, "show": True},
                 "fqn": ["test", "view_summary"],
                 "group": None,
@@ -1502,6 +1507,7 @@ def expected_versions_manifest(project):
                 "sources": [],
                 "depends_on": {"macros": [], "nodes": []},
                 "description": "A versioned model",
+                "primary_key": ["count", "first_name"],
                 "deprecation_date": ANY,
                 "docs": {"node_color": None, "show": True},
                 "fqn": ["test", "versioned_model", "v1"],
@@ -1572,6 +1578,7 @@ def expected_versions_manifest(project):
                 "sources": [],
                 "depends_on": {"macros": [], "nodes": []},
                 "description": "A versioned model",
+                "primary_key": ["first_name"],
                 "deprecation_date": None,
                 "docs": {"node_color": None, "show": True},
                 "fqn": ["test", "versioned_model", "v2"],
@@ -1625,6 +1632,7 @@ def expected_versions_manifest(project):
                 },
                 "deprecation_date": None,
                 "description": "",
+                "primary_key": [],
                 "docs": {"node_color": None, "show": True},
                 "fqn": ["test", "ref_versioned_model"],
                 "group": None,

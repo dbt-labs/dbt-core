@@ -1142,25 +1142,6 @@ class ManifestLoader:
                 continue
             _process_metrics_for_node(self.manifest, current_project, exposure)
 
-    def get_model_generic_tests(
-        self,
-        model: ModelNode,
-    ) -> List[GenericTestNode]:
-        # This is only needed for audit right now, but we should add a link
-        # from model to tests if another use case comes up
-        tests = []
-        for _, node in self.manifest.nodes.items():
-            if isinstance(node, GenericTestNode) and node.attached_node == model.unique_id:
-                tests.append(node)
-        for _, nodes in self.manifest.disabled.items():
-            for disabled_node in nodes:
-                if (
-                    isinstance(disabled_node, GenericTestNode)
-                    and disabled_node.attached_node == model.unique_id
-                ):
-                    tests.append(disabled_node)
-        return tests
-
     def process_saved_queries(self, config: RuntimeConfig):
         """Processes SavedQuery nodes to populate their `depends_on`."""
         current_project = config.project_name
@@ -1171,13 +1152,13 @@ class ManifestLoader:
             _process_metrics_for_node(self.manifest, current_project, saved_query)
 
     def process_model_inferred_primary_keys(self):
-        """Processes SavedQuery nodes to populate their `depends_on`."""
+        """Processes Model nodes to populate their `primary_key`."""
         for node in self.manifest.nodes.values():
             if not isinstance(node, ModelNode):
                 continue
-            generic_tests = self.get_model_generic_tests(node)
+            generic_tests = self._get_generic_tests_for_model(node)
             primary_key = node.infer_primary_key(generic_tests)
-            node.primary_key = primary_key
+            node.primary_key = sorted(primary_key)
 
     def update_semantic_model(self, semantic_model) -> None:
         # This has to be done at the end of parsing because the referenced model
@@ -1373,6 +1354,24 @@ class ManifestLoader:
         path = os.path.join(target_path, PERF_INFO_FILE_NAME)
         write_file(path, json.dumps(self._perf_info, cls=dbt.utils.JSONEncoder, indent=4))
         fire_event(ParsePerfInfoPath(path=path))
+
+    def _get_generic_tests_for_model(
+        self,
+        model: ModelNode,
+    ) -> List[GenericTestNode]:
+        """Return a list of generic tests that are attached to the given model, including disabled tests"""
+        tests = []
+        for _, node in self.manifest.nodes.items():
+            if isinstance(node, GenericTestNode) and node.attached_node == model.unique_id:
+                tests.append(node)
+        for _, nodes in self.manifest.disabled.items():
+            for disabled_node in nodes:
+                if (
+                    isinstance(disabled_node, GenericTestNode)
+                    and disabled_node.attached_node == model.unique_id
+                ):
+                    tests.append(disabled_node)
+        return tests
 
 
 def invalid_target_fail_unless_test(
