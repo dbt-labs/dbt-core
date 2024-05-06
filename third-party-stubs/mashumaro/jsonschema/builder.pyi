@@ -16,7 +16,7 @@ def build_json_schema(
 
 class JSONSchemaDefinitions(DataClassJSONMixin):
     definitions: Dict[str, JSONSchema]
-    def __post_serialize__(self, d: Dict[Any, Any]) -> List[Dict[str, Any]]: ...  # type: ignore
+    def __post_serialize__(self, d: Dict[Any, Any], context: Optional[Dict]) -> List[Dict[str, Any]]: ...  # type: ignore
     def __init__(self, definitions) -> None: ...
 
 class JSONSchemaBuilder:

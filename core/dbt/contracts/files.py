@@ -139,8 +139,8 @@ class BaseSourceFile(dbtClassMixin, SerializableType):
             sf = SourceFile.from_dict(dct)
         return sf
 
-    def __post_serialize__(self, dct):
-        dct = super().__post_serialize__(dct)
+    def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
+        dct = super().__post_serialize__(dct, context)
         # remove empty lists to save space
         dct_keys = list(dct.keys())
         for key in dct_keys:
@@ -226,8 +226,8 @@ class SchemaSourceFile(BaseSourceFile):
     def source_patches(self):
         return self.sop
 
-    def __post_serialize__(self, dct):
-        dct = super().__post_serialize__(dct)
+    def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
+        dct = super().__post_serialize__(dct, context)
         # Remove partial parsing specific data
         for key in ("pp_test_index", "pp_dict"):
             if key in dct:

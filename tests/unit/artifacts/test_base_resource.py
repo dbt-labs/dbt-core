@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+
 import pytest
 
 from dbt.artifacts.resources.base import BaseResource

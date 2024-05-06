@@ -181,7 +181,8 @@ class WritableManifest(ArtifactMixin):
             data = upgrade_manifest_json(data, manifest_schema_version)
         return cls.from_dict(data)
 
-    def __post_serialize__(self, dct):
+    # TODO: Move this to nodes
+    def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
         for unique_id, node in dct["nodes"].items():
             if "config_call_dict" in node:
                 del node["config_call_dict"]

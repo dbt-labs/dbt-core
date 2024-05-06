@@ -59,8 +59,8 @@ class BaseArtifactMetadata(dbtClassMixin):
     invocation_id: Optional[str] = dataclasses.field(default_factory=get_invocation_id)
     env: Dict[str, str] = dataclasses.field(default_factory=get_metadata_vars)
 
-    def __post_serialize__(self, dct):
-        dct = super().__post_serialize__(dct)
+    def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
+        dct = super().__post_serialize__(dct, context)
         if dct["generated_at"] and dct["generated_at"].endswith("+00:00"):
             dct["generated_at"] = dct["generated_at"].replace("+00:00", "") + "Z"
         return dct
