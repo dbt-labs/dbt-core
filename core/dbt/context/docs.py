@@ -1,15 +1,11 @@
 from typing import Any, Dict, Union
 
-from dbt.exceptions import (
-    DocTargetNotFoundError,
-    DocArgsError,
-)
 from dbt.config.runtime import RuntimeConfig
-from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.graph.nodes import Macro, ResultNode
-
 from dbt.context.base import contextmember
 from dbt.context.configured import SchemaYamlContext
+from dbt.contracts.graph.manifest import Manifest
+from dbt.contracts.graph.nodes import Macro, ResultNode
+from dbt.exceptions import DocArgsError, DocTargetNotFoundError
 
 
 class DocsRuntimeContext(SchemaYamlContext):

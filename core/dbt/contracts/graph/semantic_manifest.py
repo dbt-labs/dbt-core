@@ -3,7 +3,9 @@ from dbt_semantic_interfaces.implementations.project_configuration import (
     PydanticProjectConfiguration,
 )
 from dbt_semantic_interfaces.implementations.saved_query import PydanticSavedQuery
-from dbt_semantic_interfaces.implementations.semantic_manifest import PydanticSemanticManifest
+from dbt_semantic_interfaces.implementations.semantic_manifest import (
+    PydanticSemanticManifest,
+)
 from dbt_semantic_interfaces.implementations.semantic_model import PydanticSemanticModel
 from dbt_semantic_interfaces.implementations.time_spine_table_configuration import (
     PydanticTimeSpineTableConfiguration,
@@ -13,11 +15,11 @@ from dbt_semantic_interfaces.validations.semantic_manifest_validator import (
     SemanticManifestValidator,
 )
 
+from dbt.events.types import SemanticValidationFailure
+from dbt.exceptions import ParsingError
 from dbt_common.clients.system import write_file
 from dbt_common.events.base_types import EventLevel
 from dbt_common.events.functions import fire_event
-from dbt.events.types import SemanticValidationFailure
-from dbt.exceptions import ParsingError
 
 
 class SemanticManifest:

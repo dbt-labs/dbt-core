@@ -1,37 +1,39 @@
-import pytest
 import os
 from unittest import mock
-from dbt.tests.util import (
-    run_dbt,
-    write_file,
-    get_manifest,
-    run_dbt_and_capture,
-    read_file,
-    file_exists,
-)
-from dbt.contracts.results import NodeStatus
-from dbt.exceptions import DuplicateResourceNameError, ParsingError
-from dbt.plugins.manifest import PluginNodes, ModelNodeArgs
-from dbt.tests.fixtures.project import write_project_files
+
+import pytest
 from fixtures import (  # noqa: F401
-    my_model_sql,
-    my_model_vars_sql,
+    datetime_test,
+    event_sql,
+    external_package,
+    external_package__accounts_seed_csv,
+    my_incremental_model_sql,
     my_model_a_sql,
     my_model_b_sql,
-    test_my_model_yml,
-    datetime_test,
-    my_incremental_model_sql,
-    event_sql,
+    my_model_sql,
+    my_model_vars_sql,
     test_my_model_incremental_yml_basic,
+    test_my_model_incremental_yml_no_override,
+    test_my_model_incremental_yml_no_this_input,
+    test_my_model_incremental_yml_wrong_override,
+    test_my_model_yml,
     test_my_model_yml_invalid,
     test_my_model_yml_invalid_ref,
-    valid_emails_sql,
     top_level_domains_sql,
-    external_package__accounts_seed_csv,
-    external_package,
-    test_my_model_incremental_yml_no_override,
-    test_my_model_incremental_yml_wrong_override,
-    test_my_model_incremental_yml_no_this_input,
+    valid_emails_sql,
+)
+
+from dbt.contracts.results import NodeStatus
+from dbt.exceptions import DuplicateResourceNameError, ParsingError
+from dbt.plugins.manifest import ModelNodeArgs, PluginNodes
+from dbt.tests.fixtures.project import write_project_files
+from dbt.tests.util import (
+    file_exists,
+    get_manifest,
+    read_file,
+    run_dbt,
+    run_dbt_and_capture,
+    write_file,
 )
 from tests.unit.utils import normalize
 

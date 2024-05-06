@@ -1,8 +1,8 @@
 # Do not import the os package because we expose this package in jinja
-from os import getenv as os_getenv
 from argparse import Namespace
-from typing import Optional
+from os import getenv as os_getenv
 from pathlib import Path
+from typing import Optional
 
 
 # for setting up logger for legacy logger
@@ -37,8 +37,8 @@ def get_flags():
 
 def set_from_args(args: Namespace, project_flags):
     global GLOBAL_FLAGS
-    from dbt.cli.main import cli
     from dbt.cli.flags import Flags, convert_config
+    from dbt.cli.main import cli
 
     # we set attributes of args after initialize the flags, but project_flags
     # is being read in the Flags constructor, so we need to read it here and pass in

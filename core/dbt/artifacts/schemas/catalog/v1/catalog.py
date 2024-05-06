@@ -1,10 +1,14 @@
-from typing import Dict, Union, Optional, NamedTuple, Any, List
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Any, Dict, List, NamedTuple, Optional, Union
 
+from dbt.artifacts.schemas.base import (
+    ArtifactMixin,
+    BaseArtifactMetadata,
+    schema_version,
+)
 from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_common.utils.formatting import lowercase
-from dbt.artifacts.schemas.base import ArtifactMixin, BaseArtifactMetadata, schema_version
 
 Primitive = Union[bool, str, float, None]
 PrimitiveDict = Dict[str, Primitive]

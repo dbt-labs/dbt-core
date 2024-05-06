@@ -1,16 +1,11 @@
 import os
-import pytest
 import tempfile
-
 from pathlib import Path
 
-from dbt.exceptions import DbtProjectError
-from dbt.tests.util import (
-    check_relations_equal,
-    run_dbt,
-    write_config_file,
-)
+import pytest
 
+from dbt.exceptions import DbtProjectError
+from dbt.tests.util import check_relations_equal, run_dbt, write_config_file
 
 models__disabled_one = """
 {{config(enabled=False)}}

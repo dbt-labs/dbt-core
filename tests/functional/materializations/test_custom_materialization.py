@@ -1,7 +1,7 @@
 import pytest
 
-from dbt.tests.util import run_dbt
 from dbt import deprecations
+from dbt.tests.util import run_dbt
 
 models__model_sql = """
 {{ config(materialized='view') }}

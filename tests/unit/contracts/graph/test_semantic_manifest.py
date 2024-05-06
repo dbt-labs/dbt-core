@@ -1,4 +1,5 @@
 import pytest
+
 from dbt.contracts.graph.semantic_manifest import SemanticManifest
 
 

@@ -3,15 +3,15 @@
 Note that all imports should be inside the functions to avoid import/mocking
 issues.
 """
-import string
 import os
-from unittest import mock
-from unittest import TestCase
+import string
+from unittest import TestCase, mock
 
 import agate
 import pytest
-from dbt_common.dataclass_schema import ValidationError
+
 from dbt.config.project import PartialProject
+from dbt_common.dataclass_schema import ValidationError
 
 
 def normalize(path):
@@ -76,8 +76,9 @@ def project_from_dict(project, profile, packages=None, selectors=None, cli_vars=
 
 
 def config_from_parts_or_dicts(project, profile, packages=None, selectors=None, cli_vars={}):
-    from dbt.config import Project, Profile, RuntimeConfig
     from copy import deepcopy
+
+    from dbt.config import Profile, Project, RuntimeConfig
 
     if isinstance(project, Project):
         profile_name = project.profile_name
@@ -305,8 +306,8 @@ def MockGenerateMacro(package, component="some_component", **kwargs):
 
 
 def MockSource(package, source_name, name, **kwargs):
-    from dbt.node_types import NodeType
     from dbt.contracts.graph.nodes import SourceDefinition
+    from dbt.node_types import NodeType
 
     src = mock.MagicMock(
         __class__=SourceDefinition,
@@ -322,8 +323,8 @@ def MockSource(package, source_name, name, **kwargs):
 
 
 def MockNode(package, name, resource_type=None, **kwargs):
-    from dbt.node_types import NodeType
     from dbt.contracts.graph.nodes import ModelNode, SeedNode
+    from dbt.node_types import NodeType
 
     if resource_type is None:
         resource_type = NodeType.Model
@@ -351,8 +352,8 @@ def MockNode(package, name, resource_type=None, **kwargs):
 
 
 def MockDocumentation(package, name, **kwargs):
-    from dbt.node_types import NodeType
     from dbt.contracts.graph.nodes import Documentation
+    from dbt.node_types import NodeType
 
     doc = mock.MagicMock(
         __class__=Documentation,

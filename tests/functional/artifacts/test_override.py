@@ -1,6 +1,7 @@
 import pytest
-from dbt.tests.util import run_dbt
+
 from dbt.exceptions import CompilationError
+from dbt.tests.util import run_dbt
 
 model_sql = """
 select 1 as id

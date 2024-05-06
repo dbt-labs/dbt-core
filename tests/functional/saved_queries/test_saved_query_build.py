@@ -1,7 +1,10 @@
 import pytest
 
 from dbt.tests.util import run_dbt
-from tests.functional.saved_queries.fixtures import saved_queries_yml, saved_query_description
+from tests.functional.saved_queries.fixtures import (
+    saved_queries_yml,
+    saved_query_description,
+)
 from tests.functional.semantic_models.fixtures import (
     fct_revenue_sql,
     metricflow_time_spine_sql,

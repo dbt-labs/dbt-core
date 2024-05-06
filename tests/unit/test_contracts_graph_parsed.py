@@ -1,10 +1,13 @@
 import pickle
-import pytest
-
+from argparse import Namespace
 from dataclasses import replace
+
+import pytest
+from dbt_semantic_interfaces.type_enums import MetricType
 from hypothesis import given
 from hypothesis.strategies import builds, lists
 
+from dbt import flags
 from dbt.artifacts.resources import (
     ColumnInfo,
     Dimension,
@@ -12,6 +15,8 @@ from dbt.artifacts.resources import (
     ExposureConfig,
     ExposureType,
     FreshnessThreshold,
+    Hook,
+    MacroDependsOn,
     MaturityType,
     Measure,
     MetricInputMeasure,
@@ -19,51 +24,45 @@ from dbt.artifacts.resources import (
     Owner,
     Quoting,
     RefArgs,
-    MacroDependsOn,
-    TestMetadata,
     SourceConfig,
-    Time,
-    Hook,
-)
-from dbt.artifacts.resources.types import TimePeriod
-from dbt.node_types import NodeType, AccessType
-from dbt.contracts.files import FileHash
-from dbt.contracts.graph.model_config import (
-    NodeConfig,
-    SeedConfig,
-    TestConfig,
-    SnapshotConfig,
-    EmptySnapshotConfig,
-    ModelConfig,
-)
-from dbt.contracts.graph.nodes import (
-    ModelNode,
-    DependsOn,
-    GenericTestNode,
-    SnapshotNode,
-    IntermediateSnapshotNode,
-    Macro,
-    Exposure,
-    Metric,
-    SeedNode,
-    Docs,
-    SourceDefinition,
-    Documentation,
-    HookNode,
-    SemanticModel,
 )
 from dbt.artifacts.resources import SourceDefinition as SourceDefinitionResource
-from dbt import flags
-from argparse import Namespace
-
+from dbt.artifacts.resources import TestMetadata, Time
+from dbt.artifacts.resources.types import TimePeriod
+from dbt.contracts.files import FileHash
+from dbt.contracts.graph.model_config import (
+    EmptySnapshotConfig,
+    ModelConfig,
+    NodeConfig,
+    SeedConfig,
+    SnapshotConfig,
+    TestConfig,
+)
+from dbt.contracts.graph.nodes import (
+    DependsOn,
+    Docs,
+    Documentation,
+    Exposure,
+    GenericTestNode,
+    HookNode,
+    IntermediateSnapshotNode,
+    Macro,
+    Metric,
+    ModelNode,
+    SeedNode,
+    SemanticModel,
+    SnapshotNode,
+    SourceDefinition,
+)
+from dbt.node_types import AccessType, NodeType
 from dbt_common.dataclass_schema import ValidationError
-from dbt_semantic_interfaces.type_enums import MetricType
+
 from .utils import (
     ContractTestCase,
-    assert_symmetric,
-    assert_from_dict,
-    compare_dicts,
     assert_fails_validation,
+    assert_from_dict,
+    assert_symmetric,
+    compare_dicts,
     dict_replace,
     replace_config,
 )
@@ -189,7 +188,6 @@ def base_parsed_model_dict():
             "packages": [],
             "access": "protected",
         },
-        "deferred": False,
         "docs": {"show": True},
         "contract": {"enforced": False, "alias_types": True},
         "columns": {},
@@ -275,7 +273,6 @@ def complex_parsed_model_dict():
         "metrics": [],
         "depends_on": {"macros": [], "nodes": ["model.test.bar"]},
         "database": "test_db",
-        "deferred": True,
         "description": "My parsed node",
         "schema": "test_schema",
         "alias": "bar",
@@ -341,7 +338,6 @@ def complex_parsed_model_object():
         sources=[],
         metrics=[],
         depends_on=DependsOn(nodes=["model.test.bar"]),
-        deferred=True,
         description="My parsed node",
         database="test_db",
         schema="test_schema",
@@ -523,7 +519,6 @@ def basic_parsed_seed_dict():
             "contract": {"enforced": False, "alias_types": True},
             "packages": [],
         },
-        "deferred": False,
         "docs": {"show": True},
         "columns": {},
         "meta": {},
@@ -551,7 +546,6 @@ def basic_parsed_seed_object():
         alias="foo",
         config=SeedConfig(),
         # config=SeedConfig(quote_columns=True),
-        deferred=False,
         docs=Docs(show=True),
         columns={},
         meta={},
@@ -616,7 +610,6 @@ def complex_parsed_seed_dict():
             "contract": {"enforced": False, "alias_types": True},
             "packages": [],
         },
-        "deferred": False,
         "docs": {"show": True},
         "columns": {
             "a": {
@@ -661,7 +654,6 @@ def complex_parsed_seed_object():
             delimiter=",",
             persist_docs={"relation": True, "columns": True},
         ),
-        deferred=False,
         docs=Docs(show=True),
         columns={"a": ColumnInfo(name="a", description="a column description")},
         meta={"foo": 1000},
@@ -804,7 +796,6 @@ def base_parsed_hook_dict():
         "metrics": [],
         "depends_on": {"macros": [], "nodes": []},
         "database": "test_db",
-        "deferred": False,
         "description": "",
         "schema": "test_schema",
         "alias": "bar",
@@ -856,7 +847,6 @@ def base_parsed_hook_object():
         metrics=[],
         depends_on=DependsOn(),
         description="",
-        deferred=False,
         database="test_db",
         schema="test_schema",
         alias="bar",
@@ -885,7 +875,6 @@ def complex_parsed_hook_dict():
         "sources": [],
         "metrics": [],
         "depends_on": {"macros": [], "nodes": ["model.test.bar"]},
-        "deferred": False,
         "database": "test_db",
         "description": "My parsed node",
         "schema": "test_schema",
@@ -950,7 +939,6 @@ def complex_parsed_hook_object():
         metrics=[],
         depends_on=DependsOn(nodes=["model.test.bar"]),
         description="My parsed node",
-        deferred=False,
         database="test_db",
         schema="test_schema",
         alias="bar",
@@ -1044,7 +1032,6 @@ def basic_parsed_schema_test_dict():
         "sources": [],
         "metrics": [],
         "depends_on": {"macros": [], "nodes": []},
-        "deferred": False,
         "database": "test_db",
         "description": "",
         "schema": "test_schema",
@@ -1124,7 +1111,6 @@ def complex_parsed_schema_test_dict():
         "metrics": [],
         "depends_on": {"macros": [], "nodes": ["model.test.bar"]},
         "database": "test_db",
-        "deferred": False,
         "description": "My parsed node",
         "schema": "test_schema",
         "alias": "bar",
@@ -1497,7 +1483,6 @@ def basic_timestamp_snapshot_dict():
         "sources": [],
         "metrics": [],
         "depends_on": {"macros": [], "nodes": []},
-        "deferred": False,
         "database": "test_db",
         "description": "",
         "schema": "test_schema",
@@ -1646,7 +1631,6 @@ def basic_check_snapshot_dict():
         "metrics": [],
         "depends_on": {"macros": [], "nodes": []},
         "database": "test_db",
-        "deferred": False,
         "description": "",
         "schema": "test_schema",
         "alias": "bar",

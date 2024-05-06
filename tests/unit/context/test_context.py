@@ -1,35 +1,29 @@
 import os
-from typing import Set, Dict, Any
+from argparse import Namespace
+from typing import Any, Dict, Set
 from unittest import mock
 
 import pytest
 
-from dbt.adapters import postgres
-from dbt.adapters import factory
+import dbt_common.exceptions
+from dbt.adapters import factory, postgres
 from dbt.clients.jinja import MacroStack
+from dbt.config.project import VarProvider
+from dbt.context import base, docs, macros, providers, query_header
+from dbt.contracts.files import FileHash
 from dbt.contracts.graph.nodes import (
-    ModelNode,
-    NodeConfig,
     DependsOn,
     Macro,
+    ModelNode,
+    NodeConfig,
     UnitTestNode,
     UnitTestOverrides,
 )
-from dbt.config.project import VarProvider
-from dbt.context import base, providers, docs, macros, query_header
-from dbt.contracts.files import FileHash
-from dbt_common.events.functions import reset_metadata_vars
 from dbt.flags import set_from_args
 from dbt.node_types import NodeType
-import dbt_common.exceptions
-
-from tests.unit.utils import (
-    config_from_parts_or_dicts,
-    inject_adapter,
-    clear_plugin,
-)
+from dbt_common.events.functions import reset_metadata_vars
 from tests.unit.mock_adapter import adapter_factory
-from argparse import Namespace
+from tests.unit.utils import clear_plugin, config_from_parts_or_dicts, inject_adapter
 
 set_from_args(Namespace(WARN_ERROR=False), None)
 

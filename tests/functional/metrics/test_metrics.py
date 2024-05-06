@@ -3,34 +3,32 @@ import pytest
 from dbt.cli.main import dbtRunner
 from dbt.contracts.graph.manifest import Manifest
 from dbt.exceptions import ParsingError
-from dbt.tests.util import run_dbt, get_manifest
-
-
+from dbt.tests.util import get_manifest, run_dbt
 from tests.functional.metrics.fixtures import (
-    conversion_semantic_model_purchasing_yml,
+    basic_metrics_yml,
     conversion_metric_yml,
-    mock_purchase_data_csv,
-    models_people_sql,
-    models_people_metrics_yml,
-    invalid_models_people_metrics_yml,
-    invalid_metrics_missing_model_yml,
-    invalid_metrics_missing_expression_yml,
-    names_with_spaces_metrics_yml,
-    names_with_special_chars_metrics_yml,
-    names_with_leading_numeric_metrics_yml,
-    long_name_metrics_yml,
-    downstream_model_sql,
-    invalid_derived_metric_contains_model_yml,
+    conversion_semantic_model_purchasing_yml,
     derived_metric_yml,
+    downstream_model_sql,
+    duplicate_measure_metric_yml,
+    filtered_metrics_yml,
+    invalid_derived_metric_contains_model_yml,
     invalid_metric_without_timestamp_with_time_grains_yml,
     invalid_metric_without_timestamp_with_window_yml,
+    invalid_metrics_missing_expression_yml,
+    invalid_metrics_missing_model_yml,
+    invalid_models_people_metrics_yml,
+    long_name_metrics_yml,
     metricflow_time_spine_sql,
+    mock_purchase_data_csv,
+    models_people_metrics_yml,
+    models_people_sql,
+    names_with_leading_numeric_metrics_yml,
+    names_with_spaces_metrics_yml,
+    names_with_special_chars_metrics_yml,
+    purchasing_model_sql,
     semantic_model_people_yml,
     semantic_model_purchasing_yml,
-    purchasing_model_sql,
-    filtered_metrics_yml,
-    basic_metrics_yml,
-    duplicate_measure_metric_yml,
 )
 
 

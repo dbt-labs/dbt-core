@@ -1,34 +1,33 @@
 from dataclasses import dataclass, field
-from typing import Mapping, Iterable, Tuple, Optional, Dict, List, Any, Union
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple, Union
 from uuid import UUID
 
-from dbt.artifacts.schemas.base import (
-    BaseArtifactMetadata,
-    ArtifactMixin,
-    schema_version,
-    get_artifact_schema_version,
-)
-from dbt.artifacts.schemas.upgrades import upgrade_manifest_json
 from dbt.artifacts.resources import (
+    Analysis,
     Documentation,
     Exposure,
+    GenericTest,
     Group,
+    HookNode,
     Macro,
     Metric,
-    SavedQuery,
-    SemanticModel,
-    SourceDefinition,
-    UnitTestDefinition,
-    Seed,
-    Analysis,
-    SingularTest,
-    HookNode,
     Model,
-    SqlOperation,
-    GenericTest,
+    SavedQuery,
+    Seed,
+    SemanticModel,
+    SingularTest,
     Snapshot,
+    SourceDefinition,
+    SqlOperation,
+    UnitTestDefinition,
 )
-
+from dbt.artifacts.schemas.base import (
+    ArtifactMixin,
+    BaseArtifactMetadata,
+    get_artifact_schema_version,
+    schema_version,
+)
+from dbt.artifacts.schemas.upgrades import upgrade_manifest_json
 
 NodeEdgeMap = Dict[str, List[str]]
 UniqueID = str

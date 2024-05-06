@@ -1,27 +1,23 @@
 from typing import Dict
-from dbt.logger import (
-    DbtStatusMessage,
-    TextOnly,
-)
-from dbt_common.events.functions import fire_event
-from dbt_common.events.types import Formatting
-from dbt.events.types import (
-    RunResultWarning,
-    RunResultWarningMessage,
-    RunResultFailure,
-    StatsLine,
-    RunResultError,
-    RunResultErrorNoMessage,
-    SQLCompiledPath,
-    CheckNodeTestFailure,
-    EndOfRunSummary,
-)
-
-from dbt.tracking import InvocationProcessor
-from dbt_common.events.format import pluralize
 
 from dbt.artifacts.schemas.results import NodeStatus
+from dbt.events.types import (
+    CheckNodeTestFailure,
+    EndOfRunSummary,
+    RunResultError,
+    RunResultErrorNoMessage,
+    RunResultFailure,
+    RunResultWarning,
+    RunResultWarningMessage,
+    SQLCompiledPath,
+    StatsLine,
+)
+from dbt.logger import DbtStatusMessage, TextOnly
 from dbt.node_types import NodeType
+from dbt.tracking import InvocationProcessor
+from dbt_common.events.format import pluralize
+from dbt_common.events.functions import fire_event
+from dbt_common.events.types import Formatting
 
 
 def get_counts(flat_nodes) -> str:

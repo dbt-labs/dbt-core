@@ -1,9 +1,10 @@
 import pytest
+
 from tests.functional.adapter.utils.base_utils import BaseUtils
 from tests.functional.adapter.utils.fixture_hash import (
-    seeds__data_hash_csv,
     models__test_hash_sql,
     models__test_hash_yml,
+    seeds__data_hash_csv,
 )
 
 

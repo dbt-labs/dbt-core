@@ -1,14 +1,15 @@
-import pytest
 import os
 from datetime import datetime
-import dbt
 
-from dbt.tests.util import run_dbt, rm_file, get_artifact, check_datetime_between
+import pytest
+
+import dbt
 from dbt.tests.fixtures.project import write_project_files
+from dbt.tests.util import check_datetime_between, get_artifact, rm_file, run_dbt
 from tests.functional.adapter.basic.expected_catalog import (
     base_expected_catalog,
-    no_stats,
     expected_references_catalog,
+    no_stats,
 )
 
 models__schema_yml = """

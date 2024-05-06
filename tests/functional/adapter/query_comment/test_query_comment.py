@@ -1,8 +1,13 @@
-import pytest
 import json
+
+import pytest
+
 from dbt.exceptions import DbtRuntimeError
 from dbt.tests.util import run_dbt_and_capture
-from tests.functional.adapter.query_comment.fixtures import MACROS__MACRO_SQL, MODELS__X_SQL
+from tests.functional.adapter.query_comment.fixtures import (
+    MACROS__MACRO_SQL,
+    MODELS__X_SQL,
+)
 
 
 class BaseDefaultQueryComments:

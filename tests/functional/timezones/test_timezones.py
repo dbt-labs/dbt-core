@@ -1,8 +1,8 @@
 import os
+
 import pytest
 
 from dbt.tests.util import run_dbt
-
 
 # Canada/Saskatchewan does not observe DST so the time diff won't change depending on when it is in the year
 model_sql = """

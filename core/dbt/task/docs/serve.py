@@ -6,8 +6,8 @@ from http.server import SimpleHTTPRequestHandler
 
 import click
 
-from dbt.task.docs import DOCS_INDEX_FILE_PATH
 from dbt.task.base import ConfiguredTask
+from dbt.task.docs import DOCS_INDEX_FILE_PATH
 
 
 class ServeTask(ConfiguredTask):

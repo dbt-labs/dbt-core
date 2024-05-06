@@ -1,45 +1,46 @@
 import copy
-import pytest
 from dataclasses import replace
+from pathlib import Path
 from unittest import mock
 
-from pathlib import Path
+import pytest
+
+import dbt_common.exceptions
 from dbt.artifacts.resources import ColumnInfo, FileHash
 from dbt.contracts.graph.manifest import Manifest
-
 from dbt.contracts.state import PreviousState
 from dbt.graph.selector_methods import (
-    MethodManager,
-    QualifiedNameSelectorMethod,
-    TagSelectorMethod,
-    GroupSelectorMethod,
     AccessSelectorMethod,
-    SourceSelectorMethod,
-    PathSelectorMethod,
-    FileSelectorMethod,
-    PackageSelectorMethod,
     ConfigSelectorMethod,
-    TestNameSelectorMethod,
-    TestTypeSelectorMethod,
-    StateSelectorMethod,
     ExposureSelectorMethod,
+    FileSelectorMethod,
+    GroupSelectorMethod,
+    MethodManager,
     MetricSelectorMethod,
-    VersionSelectorMethod,
+    PackageSelectorMethod,
+    PathSelectorMethod,
+    QualifiedNameSelectorMethod,
     SavedQuerySelectorMethod,
     SemanticModelSelectorMethod,
+    SourceSelectorMethod,
+    StateSelectorMethod,
+    TagSelectorMethod,
+    TestNameSelectorMethod,
+    TestTypeSelectorMethod,
+    VersionSelectorMethod,
 )
-import dbt_common.exceptions
-from .utils import replace_config
 from tests.unit.utils.manifest import (
-    make_model,
-    make_seed,
     make_exposure,
-    make_metric,
-    make_saved_query,
-    make_semantic_model,
     make_group,
     make_macro,
+    make_metric,
+    make_model,
+    make_saved_query,
+    make_seed,
+    make_semantic_model,
 )
+
+from .utils import replace_config
 
 
 def search_manifest_using_method(manifest, method, selection):

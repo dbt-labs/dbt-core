@@ -1,12 +1,11 @@
 from typing import List
 
-from dbt.clients.jinja import MacroStack
 from dbt.adapters.contracts.connection import AdapterRequiredConfig
-from dbt.contracts.graph.manifest import Manifest
+from dbt.clients.jinja import MacroStack
 from dbt.context.macro_resolver import TestMacroNamespace
+from dbt.contracts.graph.manifest import Manifest
+
 from .base import contextproperty
-
-
 from .configured import ConfiguredContext
 from .macros import MacroNamespace, MacroNamespaceBuilder
 

@@ -1,26 +1,27 @@
 import os
-import pathspec  # type: ignore
 import pathlib
 from dataclasses import dataclass, field
-from dbt_common.clients.system import load_file_contents
-from dbt.contracts.files import (
-    FilePath,
-    ParseFileType,
-    SourceFile,
-    FileHash,
-    AnySourceFile,
-    SchemaSourceFile,
-    FixtureSourceFile,
-)
+from typing import Dict, List, Mapping, MutableMapping, Optional, Protocol
+
+import pathspec  # type: ignore
+
 from dbt.config import Project
-from dbt_common.dataclass_schema import dbtClassMixin
-from dbt.parser.schemas import yaml_from_file, schema_file_keys
-from dbt.exceptions import ParsingError
-from dbt.parser.search import filesystem_search
-from typing import Optional, Dict, List, Mapping, MutableMapping
+from dbt.contracts.files import (
+    AnySourceFile,
+    FileHash,
+    FilePath,
+    FixtureSourceFile,
+    ParseFileType,
+    SchemaSourceFile,
+    SourceFile,
+)
 from dbt.events.types import InputFileDiffError
+from dbt.exceptions import ParsingError
+from dbt.parser.schemas import schema_file_keys, yaml_from_file
+from dbt.parser.search import filesystem_search
+from dbt_common.clients.system import load_file_contents
+from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_common.events.functions import fire_event
-from typing import Protocol
 
 
 @dataclass

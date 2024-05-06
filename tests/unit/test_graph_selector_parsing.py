@@ -1,15 +1,16 @@
-from dbt.graph import (
-    cli,
-    SelectionUnion,
-    SelectionIntersection,
-    SelectionDifference,
-    SelectionCriteria,
-)
-from dbt.graph.selector_methods import MethodName
 import textwrap
+
 import yaml
 
 from dbt.contracts.selection import SelectorFile
+from dbt.graph import (
+    SelectionCriteria,
+    SelectionDifference,
+    SelectionIntersection,
+    SelectionUnion,
+    cli,
+)
+from dbt.graph.selector_methods import MethodName
 
 
 def parse_file(txt: str) -> SelectorFile:

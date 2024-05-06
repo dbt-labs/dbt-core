@@ -1,6 +1,6 @@
+import unittest
 from decimal import Decimal
 from unittest import mock
-import unittest
 
 from dbt.task.docs import generate
 

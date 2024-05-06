@@ -1,9 +1,14 @@
 from dataclasses import dataclass, field
-from typing import Optional, Literal
-from dbt_common.dataclass_schema import ValidationError
+from typing import Literal, Optional
+
 from dbt.artifacts.resources.types import NodeType
-from dbt.artifacts.resources.v1.components import MacroDependsOn, DeferRelation, ParsedResource
+from dbt.artifacts.resources.v1.components import (
+    DeferRelation,
+    MacroDependsOn,
+    ParsedResource,
+)
 from dbt.artifacts.resources.v1.config import NodeConfig
+from dbt_common.dataclass_schema import ValidationError
 
 
 @dataclass

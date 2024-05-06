@@ -1,13 +1,24 @@
 import os
 from dataclasses import dataclass
-from typing import List, Callable, Iterable, Set, Union, Iterator, TypeVar, Generic, Optional
+from typing import (
+    Callable,
+    Generic,
+    Iterable,
+    Iterator,
+    List,
+    Optional,
+    Set,
+    TypeVar,
+    Union,
+)
+
 from pathspec import PathSpec  # type: ignore
 
-from dbt_common.clients.jinja import extract_toplevel_blocks, BlockTag
-from dbt_common.clients.system import find_matching
 from dbt.config import Project
-from dbt.contracts.files import FilePath, AnySourceFile
-from dbt.exceptions import ParsingError, DbtInternalError
+from dbt.contracts.files import AnySourceFile, FilePath
+from dbt.exceptions import DbtInternalError, ParsingError
+from dbt_common.clients.jinja import BlockTag, extract_toplevel_blocks
+from dbt_common.clients.system import find_matching
 
 
 # What's the point of wrapping a SourceFile with this class?

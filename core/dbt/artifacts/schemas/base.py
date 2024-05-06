@@ -1,19 +1,18 @@
 import dataclasses
-from datetime import datetime
 import functools
+from datetime import datetime
+from typing import Any, ClassVar, Dict, Optional, Type, TypeVar
+
 from mashumaro.jsonschema import build_json_schema
 from mashumaro.jsonschema.dialects import DRAFT_2020_12
-from typing import ClassVar, Type, TypeVar, Dict, Any, Optional
 
-from dbt_common.clients.system import write_json, read_json
-from dbt_common.exceptions import DbtInternalError, DbtRuntimeError
-from dbt_common.events.functions import get_metadata_vars
-from dbt_common.invocation import get_invocation_id
-from dbt_common.dataclass_schema import dbtClassMixin
-
-from dbt.version import __version__
 from dbt.artifacts.exceptions import IncompatibleSchemaError
-
+from dbt.version import __version__
+from dbt_common.clients.system import read_json, write_json
+from dbt_common.dataclass_schema import dbtClassMixin
+from dbt_common.events.functions import get_metadata_vars
+from dbt_common.exceptions import DbtInternalError, DbtRuntimeError
+from dbt_common.invocation import get_invocation_id
 
 BASE_SCHEMAS_URL = "https://schemas.getdbt.com/"
 SCHEMA_PATH = "dbt/{name}/v{version}.json"

@@ -2,17 +2,16 @@ import pytest
 
 from dbt import deprecations
 from dbt.exceptions import CompilationError, ProjectContractError, YamlParseDictError
-from dbt.tests.util import run_dbt, update_config_file
 from dbt.tests.fixtures.project import write_project_files
-
+from dbt.tests.util import run_dbt, update_config_file
 from tests.functional.deprecations.fixtures import (
-    macros__custom_test_sql,
-    models_trivial__model_sql,
-    old_tests_yml,
+    data_tests_yaml,
     local_dependency__dbt_project_yml,
     local_dependency__schema_yml,
     local_dependency__seed_csv,
-    data_tests_yaml,
+    macros__custom_test_sql,
+    models_trivial__model_sql,
+    old_tests_yml,
     seed_csv,
     sources_old_tests_yaml,
     test_type_mixed_yaml,

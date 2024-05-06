@@ -1,9 +1,9 @@
-from dataclasses import dataclass
-from dbt_common.dataclass_schema import dbtClassMixin
-from typing import List, Optional
 import hashlib
+from dataclasses import dataclass
+from typing import List, Optional
 
 from dbt.artifacts.resources.types import NodeType
+from dbt_common.dataclass_schema import dbtClassMixin
 
 
 @dataclass

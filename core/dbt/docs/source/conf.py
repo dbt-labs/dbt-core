@@ -1,5 +1,5 @@
-import sys
 import os
+import sys
 import typing as t
 
 # Configuration file for the Sphinx documentation builder.

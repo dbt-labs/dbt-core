@@ -1,10 +1,10 @@
-import pytest
+import os
 
-from dbt.tests.util import run_dbt
+import pytest
 
 from dbt.artifacts.resources import RefArgs
 from dbt.contracts.graph.manifest import Manifest
-import os
+from dbt.tests.util import run_dbt
 
 
 def get_manifest():

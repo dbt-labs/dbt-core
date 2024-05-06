@@ -1,7 +1,6 @@
 import pytest
 
 from dbt.tests.util import run_dbt
-
 from tests.functional.configs.fixtures import BaseConfigProject
 
 

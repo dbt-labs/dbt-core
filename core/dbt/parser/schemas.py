@@ -1,25 +1,19 @@
 import datetime
 import time
-
 from abc import ABCMeta, abstractmethod
-from typing import Any, Callable, Dict, Generic, Iterable, List, Optional, Type, TypeVar
 from dataclasses import dataclass, field
+from typing import Any, Callable, Dict, Generic, Iterable, List, Optional, Type, TypeVar
 
 from dbt import deprecations
-from dbt_common.contracts.constraints import ConstraintType, ModelLevelConstraint
-from dbt_common.dataclass_schema import ValidationError, dbtClassMixin
-
 from dbt.clients.yaml_helper import load_yaml_text
-from dbt.parser.schema_renderer import SchemaYamlRenderer
-from dbt.parser.schema_generic_tests import SchemaGenericTestParser
+from dbt.context.configured import SchemaYamlVars, generate_schema_yml_context
 from dbt.context.context_config import ContextConfig
-from dbt.context.configured import generate_schema_yml_context, SchemaYamlVars
 from dbt.contracts.files import SchemaSourceFile
 from dbt.contracts.graph.nodes import (
-    ParsedNodePatch,
-    ParsedMacroPatch,
-    UnpatchedSourceDefinition,
     ModelNode,
+    ParsedMacroPatch,
+    ParsedNodePatch,
+    UnpatchedSourceDefinition,
 )
 from dbt.contracts.graph.unparsed import (
     HasColumnDocs,
@@ -27,45 +21,48 @@ from dbt.contracts.graph.unparsed import (
     SourcePatch,
     UnparsedAnalysisUpdate,
     UnparsedMacroUpdate,
-    UnparsedNodeUpdate,
     UnparsedModelUpdate,
+    UnparsedNodeUpdate,
     UnparsedSourceDefinition,
 )
+from dbt.events.types import (
+    MacroNotFoundForPatch,
+    NoNodeForYamlKey,
+    UnsupportedConstraintMaterialization,
+    ValidationWarning,
+    WrongResourceSchemaFile,
+)
 from dbt.exceptions import (
+    DbtInternalError,
     DuplicateMacroPatchNameError,
     DuplicatePatchPathError,
     DuplicateSourcePatchNameError,
+    InvalidAccessTypeError,
     JSONValidationError,
-    DbtInternalError,
     ParsingError,
     YamlLoadError,
     YamlParseDictError,
     YamlParseListError,
-    InvalidAccessTypeError,
 )
-from dbt_common.exceptions import DbtValidationError
-from dbt_common.events.functions import warn_or_error
-from dbt.events.types import (
-    MacroNotFoundForPatch,
-    NoNodeForYamlKey,
-    ValidationWarning,
-    UnsupportedConstraintMaterialization,
-    WrongResourceSchemaFile,
-)
-from dbt.node_types import NodeType, AccessType
+from dbt.node_types import AccessType, NodeType
 from dbt.parser.base import SimpleParser
-from dbt.parser.search import FileBlock
 from dbt.parser.common import (
-    YamlBlock,
+    ParserRef,
     TargetBlock,
     TestBlock,
     VersionedTestBlock,
-    ParserRef,
+    YamlBlock,
     trimmed,
 )
+from dbt.parser.schema_generic_tests import SchemaGenericTestParser
+from dbt.parser.schema_renderer import SchemaYamlRenderer
+from dbt.parser.search import FileBlock
 from dbt.utils import coerce_dict_str
+from dbt_common.contracts.constraints import ConstraintType, ModelLevelConstraint
+from dbt_common.dataclass_schema import ValidationError, dbtClassMixin
+from dbt_common.events.functions import warn_or_error
+from dbt_common.exceptions import DbtValidationError
 from dbt_common.utils import deep_merge
-
 
 schema_file_keys = (
     "models",
@@ -111,11 +108,24 @@ schema_file_keys = (
 # ===============================================================================
 
 
-def yaml_from_file(source_file: SchemaSourceFile) -> Dict[str, Any]:
+def yaml_from_file(source_file: SchemaSourceFile) -> Optional[Dict[str, Any]]:
     """If loading the yaml fails, raise an exception."""
     try:
         # source_file.contents can sometimes be None
-        return load_yaml_text(source_file.contents or "", source_file.path)
+        contents = load_yaml_text(source_file.contents or "", source_file.path)
+
+        if contents is None:
+            return contents
+
+        # When loaded_loaded_at_field is defined as None or null, it shows up in
+        # the dict but when it is not defined, it does not show up in the dict
+        # We need to capture this to be able to override source level settings later.
+        for source in contents.get("sources", []):
+            for table in source.get("tables", []):
+                if "loaded_at_field" in table:
+                    table["loaded_at_field_present"] = True
+
+        return contents
     except DbtValidationError as e:
         raise YamlLoadError(
             project_name=source_file.project_name, path=source_file.path.relative_path, exc=e

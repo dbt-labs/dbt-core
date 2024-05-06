@@ -1,9 +1,10 @@
 import pytest
+
 from tests.functional.adapter.utils.base_utils import BaseUtils
 from tests.functional.adapter.utils.fixture_safe_cast import (
-    seeds__data_safe_cast_csv,
     models__test_safe_cast_sql,
     models__test_safe_cast_yml,
+    seeds__data_safe_cast_csv,
 )
 
 

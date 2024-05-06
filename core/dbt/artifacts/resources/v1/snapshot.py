@@ -1,9 +1,10 @@
-from typing import Union, List, Optional, Literal
 from dataclasses import dataclass
-from dbt_common.dataclass_schema import ValidationError
+from typing import List, Literal, Optional, Union
+
 from dbt.artifacts.resources.types import NodeType
 from dbt.artifacts.resources.v1.components import CompiledResource, DeferRelation
 from dbt.artifacts.resources.v1.config import NodeConfig
+from dbt_common.dataclass_schema import ValidationError
 
 
 @dataclass

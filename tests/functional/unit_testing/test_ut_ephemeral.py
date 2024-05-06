@@ -1,7 +1,7 @@
 import pytest
-from dbt.tests.util import run_dbt, write_file
-from dbt.contracts.results import RunStatus, TestStatus
 
+from dbt.contracts.results import RunStatus, TestStatus
+from dbt.tests.util import run_dbt, write_file
 
 ephemeral_model_sql = """
 {{ config(materialized="ephemeral") }}

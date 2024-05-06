@@ -1,4 +1,5 @@
 import pytest
+
 from tests.functional.adapter.utils.base_utils import BaseUtils
 from tests.functional.adapter.utils.fixture_cast_bool_to_text import (
     models__test_cast_bool_to_text_sql,

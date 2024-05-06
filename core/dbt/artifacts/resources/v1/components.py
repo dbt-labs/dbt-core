@@ -1,15 +1,15 @@
 import time
 from dataclasses import dataclass, field
-from dbt.artifacts.resources.base import GraphResource, FileHash, Docs
+from datetime import timedelta
+from typing import Any, Dict, List, Optional, Union
+
+from dbt.artifacts.resources.base import Docs, FileHash, GraphResource
+from dbt.artifacts.resources.types import NodeType, TimePeriod
 from dbt.artifacts.resources.v1.config import NodeConfig
-from dbt_common.dataclass_schema import dbtClassMixin, ExtensibleDbtClassMixin
 from dbt_common.contracts.config.properties import AdditionalPropertiesMixin
 from dbt_common.contracts.constraints import ColumnLevelConstraint
-from typing import Dict, List, Optional, Union, Any
-from datetime import timedelta
-from dbt.artifacts.resources.types import TimePeriod
 from dbt_common.contracts.util import Mergeable
-
+from dbt_common.dataclass_schema import ExtensibleDbtClassMixin, dbtClassMixin
 
 NodeVersion = Union[str, float]
 
@@ -154,6 +154,14 @@ class HasRelationMetadata(dbtClassMixin):
 class DeferRelation(HasRelationMetadata):
     alias: str
     relation_name: Optional[str]
+    # The rest of these fields match RelationConfig protocol exactly
+    resource_type: NodeType
+    name: str
+    description: str
+    compiled_code: Optional[str]
+    meta: Dict[str, Any]
+    tags: List[str]
+    config: Optional[NodeConfig]
 
     @property
     def identifier(self):
@@ -181,7 +189,6 @@ class ParsedResource(ParsedResourceMandatory):
     docs: Docs = field(default_factory=Docs)
     patch_path: Optional[str] = None
     build_path: Optional[str] = None
-    deferred: bool = False
     unrendered_config: Dict[str, Any] = field(default_factory=dict)
     created_at: float = field(default_factory=lambda: time.time())
     config_call_dict: Dict[str, Any] = field(default_factory=dict)

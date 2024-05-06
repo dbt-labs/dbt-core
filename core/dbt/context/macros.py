@@ -1,10 +1,9 @@
-from typing import Any, Dict, Iterable, Union, Optional, List, Iterator, Mapping, Set
+from typing import Any, Dict, Iterable, Iterator, List, Mapping, Optional, Set, Union
 
 from dbt.clients.jinja import MacroGenerator, MacroStack
 from dbt.contracts.graph.nodes import Macro
-from dbt.include.global_project import PROJECT_NAME as GLOBAL_PROJECT_NAME
 from dbt.exceptions import DuplicateMacroNameError, PackageNotFoundForMacroError
-
+from dbt.include.global_project import PROJECT_NAME as GLOBAL_PROJECT_NAME
 
 FlatNamespace = Dict[str, MacroGenerator]
 NamespaceMember = Union[FlatNamespace, MacroGenerator]

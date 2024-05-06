@@ -1,17 +1,15 @@
 from argparse import Namespace
+
 import pytest
 
-
 import dbt.flags as flags
-from dbt_common.events.functions import msg_to_dict, warn_or_error
-from dbt_common.events.event_manager_client import cleanup_event_logger
-
-from dbt.events.logging import setup_event_logger
-from dbt_common.events.types import InfoLevel
-from dbt_common.exceptions import EventCompilationError
-from dbt.events.types import NoNodesForSelectionCriteria
 from dbt.adapters.events.types import AdapterDeprecationWarning
-from dbt_common.events.types import RetryExternalCall
+from dbt.events.logging import setup_event_logger
+from dbt.events.types import NoNodesForSelectionCriteria
+from dbt_common.events.event_manager_client import cleanup_event_logger
+from dbt_common.events.functions import msg_to_dict, warn_or_error
+from dbt_common.events.types import InfoLevel, RetryExternalCall
+from dbt_common.exceptions import EventCompilationError
 
 
 @pytest.mark.parametrize(

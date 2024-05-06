@@ -1,15 +1,14 @@
 import os
 import tempfile
 import unittest
+from argparse import Namespace
+from queue import Empty
 from unittest import mock
 
 from dbt import compilation
-from dbt.graph.selector import NodeSelector
-from dbt.graph.cli import parse_difference
-from queue import Empty
-
 from dbt.flags import set_from_args
-from argparse import Namespace
+from dbt.graph.cli import parse_difference
+from dbt.graph.selector import NodeSelector
 
 set_from_args(Namespace(WARN_ERROR=False), None)
 

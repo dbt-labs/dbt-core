@@ -4,10 +4,8 @@ from typing import Set
 import pytest
 
 from dbt.artifacts.schemas.results import TestStatus
-from dbt.tests.util import run_dbt, check_relation_types
-
+from dbt.tests.util import check_relation_types, run_dbt
 from tests.functional.adapter.store_test_failures_tests import _files
-
 
 TestResult = namedtuple("TestResult", ["name", "status", "type"])
 

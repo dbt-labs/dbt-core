@@ -1,6 +1,6 @@
 import pytest
-from dbt.tests.util import run_dbt
 
+from dbt.tests.util import run_dbt
 
 snapshot_sql = """
 {% snapshot check_cols_cycle %}

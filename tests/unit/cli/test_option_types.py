@@ -1,5 +1,5 @@
-from click import Option, BadParameter
 import pytest
+from click import BadParameter, Option
 
 from dbt.cli.option_types import YAML
 

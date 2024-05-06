@@ -2,19 +2,12 @@ from pathlib import Path
 from shutil import rmtree
 
 from dbt import deprecations
-from dbt_common.events.functions import fire_event
-from dbt.events.types import (
-    CheckCleanPath,
-    ConfirmCleanPath,
-    FinishedCleanPaths,
-)
-from dbt_common.exceptions import DbtRuntimeError
 from dbt.cli.flags import Flags
 from dbt.config.project import Project
-from dbt.task.base import (
-    BaseTask,
-    move_to_nearest_project_dir,
-)
+from dbt.events.types import CheckCleanPath, ConfirmCleanPath, FinishedCleanPaths
+from dbt.task.base import BaseTask, move_to_nearest_project_dir
+from dbt_common.events.functions import fire_event
+from dbt_common.exceptions import DbtRuntimeError
 
 
 class CleanTask(BaseTask):

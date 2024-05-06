@@ -1,18 +1,13 @@
+from dbt.artifacts.resources import TestMetadata
+from dbt.contracts.graph.model_config import TestConfig
+from dbt.contracts.graph.nodes import ColumnInfo
 from dbt_common.contracts.constraints import (
+    ColumnLevelConstraint,
     ConstraintType,
     ModelLevelConstraint,
-    ColumnLevelConstraint,
 )
 
-from .fixtures import model_node, generic_test_node
-
-from dbt.contracts.graph.model_config import (
-    TestConfig,
-)
-from dbt.contracts.graph.nodes import (
-    ColumnInfo,
-)
-from dbt.artifacts.resources import TestMetadata
+from .fixtures import generic_test_node, model_node
 
 
 def test_no_primary_key():

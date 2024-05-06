@@ -15,8 +15,8 @@ from snowplow_tracker import __version__ as snowplow_version  # type: ignore
 from snowplow_tracker import logger as sp_logger
 
 from dbt import version as dbt_version
+from dbt.adapters.exceptions import FailedToConnectError
 from dbt.clients.yaml_helper import safe_load, yaml  # noqa:F401
-from dbt_common.events.functions import fire_event, get_invocation_id
 from dbt.events.types import (
     DisableTracking,
     FlushEvents,
@@ -26,7 +26,7 @@ from dbt.events.types import (
     SendingEvent,
     TrackingInitializeFailure,
 )
-from dbt.adapters.exceptions import FailedToConnectError
+from dbt_common.events.functions import fire_event, get_invocation_id
 from dbt_common.exceptions import NotImplementedError
 
 sp_logger.setLevel(100)

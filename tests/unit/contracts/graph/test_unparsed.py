@@ -1,6 +1,6 @@
 import pytest
 
-from dbt.contracts.graph.unparsed import UnparsedColumn, HasColumnTests
+from dbt.contracts.graph.unparsed import HasColumnTests, UnparsedColumn
 from dbt.exceptions import ParsingError
 from dbt.parser.schemas import ParserRef
 

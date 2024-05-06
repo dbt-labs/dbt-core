@@ -1,18 +1,13 @@
-from dataclasses import dataclass, field
 import time
-from typing import Optional, Sequence, Dict, Any, List, Union
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional, Sequence, Union
 
-from dbt_common.contracts.config.base import (
-    BaseConfig,
-    CompareBehavior,
-    MergeBehavior,
-)
-from dbt_common.contracts.config.metadata import ShowBehavior
-from dbt_common.dataclass_schema import dbtClassMixin, StrEnum
-
-from dbt.artifacts.resources.v1.config import metas, list_str
+from dbt.artifacts.resources import DependsOn, NodeVersion
 from dbt.artifacts.resources.base import GraphResource
-from dbt.artifacts.resources import NodeVersion, DependsOn
+from dbt.artifacts.resources.v1.config import list_str, metas
+from dbt_common.contracts.config.base import BaseConfig, CompareBehavior, MergeBehavior
+from dbt_common.contracts.config.metadata import ShowBehavior
+from dbt_common.dataclass_schema import StrEnum, dbtClassMixin
 
 
 @dataclass

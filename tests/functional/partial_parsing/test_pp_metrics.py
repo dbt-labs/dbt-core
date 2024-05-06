@@ -2,19 +2,18 @@ import pytest
 
 from dbt.cli.main import dbtRunner
 from dbt.contracts.graph.manifest import Manifest
-from dbt.tests.util import run_dbt, rm_file, write_file, get_manifest
-from tests.functional.partial_parsing.fixtures import (
-    people_sql,
-    metricflow_time_spine_sql,
-    people_semantic_models_yml,
-    people_metrics_yml,
-    people_metrics2_yml,
-    metric_model_a_sql,
-    people_metrics3_yml,
-    people_sl_yml,
-)
-
 from dbt.exceptions import CompilationError
+from dbt.tests.util import get_manifest, rm_file, run_dbt, write_file
+from tests.functional.partial_parsing.fixtures import (
+    metric_model_a_sql,
+    metricflow_time_spine_sql,
+    people_metrics2_yml,
+    people_metrics3_yml,
+    people_metrics_yml,
+    people_semantic_models_yml,
+    people_sl_yml,
+    people_sql,
+)
 
 
 class TestMetrics:

@@ -1,8 +1,8 @@
 import unittest
 from unittest import mock
 
-from dbt.contracts.graph.nodes import Macro
 from dbt.context.macro_resolver import MacroResolver
+from dbt.contracts.graph.nodes import Macro
 
 
 def mock_macro(name, package_name):

@@ -1,12 +1,12 @@
-import pytest
-from unittest.mock import patch, MagicMock
 from argparse import Namespace
+from unittest.mock import MagicMock, patch
 
+import pytest
 
-from dbt.contracts.graph.manifest import Manifest
-from dbt.parser.manifest import ManifestLoader
 from dbt.config import RuntimeConfig
+from dbt.contracts.graph.manifest import Manifest
 from dbt.flags import set_from_args
+from dbt.parser.manifest import ManifestLoader
 
 
 @pytest.fixture

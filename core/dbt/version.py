@@ -3,12 +3,11 @@ import importlib
 import importlib.util
 import json
 import os
-import requests
-
 from typing import Iterator, List, Optional, Tuple
 
-import dbt_common.semver as semver
+import requests
 
+import dbt_common.semver as semver
 from dbt_common.ui import green, red, yellow
 
 PYPI_VERSION_URL = "https://pypi.org/pypi/dbt-core/json"

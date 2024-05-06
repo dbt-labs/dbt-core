@@ -1,8 +1,7 @@
-from .utils import ContractTestCase
-
+from dbt.contracts.project import Project
 from dbt_common.dataclass_schema import ValidationError
 
-from dbt.contracts.project import Project
+from .utils import ContractTestCase
 
 
 class TestProject(ContractTestCase):

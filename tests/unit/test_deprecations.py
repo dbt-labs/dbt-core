@@ -1,6 +1,7 @@
-from dbt.internal_deprecations import deprecated
-from dbt.flags import set_from_args
 from argparse import Namespace
+
+from dbt.flags import set_from_args
+from dbt.internal_deprecations import deprecated
 
 
 @deprecated(reason="just because", version="1.23.0", suggested_action="Make some updates")

@@ -1,7 +1,6 @@
 import pytest
 
-from dbt.tests.util import run_dbt, check_relations_equal
-
+from dbt.tests.util import check_relations_equal, run_dbt
 
 seeds__seed_csv = """id,first_name,last_name,email,gender,ip_address
 1,Jack,Hunter,jhunter0@pbs.org,Male,59.80.20.168

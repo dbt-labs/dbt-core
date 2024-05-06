@@ -1,16 +1,13 @@
 import shutil
 from typing import Dict
 
-from dbt_common.clients import system
-from dbt.deps.base import PinnedPackage, UnpinnedPackage
-from dbt.contracts.project import (
-    ProjectPackageMetadata,
-    LocalPackage,
-)
-from dbt_common.events.functions import fire_event
-from dbt.events.types import DepsCreatingLocalSymlink, DepsSymlinkNotAvailable
 from dbt.config.project import PartialProject, Project
 from dbt.config.renderer import PackageRenderer
+from dbt.contracts.project import LocalPackage, ProjectPackageMetadata
+from dbt.deps.base import PinnedPackage, UnpinnedPackage
+from dbt.events.types import DepsCreatingLocalSymlink, DepsSymlinkNotAvailable
+from dbt_common.clients import system
+from dbt_common.events.functions import fire_event
 
 
 class LocalPackageMixin:

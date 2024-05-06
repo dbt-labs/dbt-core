@@ -33,7 +33,11 @@ All existing resources are defined under `dbt/artifacts/resources/v1`.
 
 Freely make incremental, non-breaking changes in-place to the latest major version of any artifact (minor or patch bumps). The only changes that are fully forward and backward compatible are:
 * Adding a new field with a default
-* Deleting an __optional__ field
+* Deleting a field with a default. This is compatible in terms of serialization and deserialization, but still may be lead to suprising behaviour:
+    * For artifact consumers relying on the fields existence (e.g. `manifest["deleted_field"]` will stop working unless the access was implemented safely)
+    * Old code (e.g. in dbt-core) that relies on the value of the deleted field may have surprising behaviour given only the default value will be set when instantiated from the new schema
+
+These types of minor, non-breaking changes are tested by [tests/unit/artifacts/test_base_resource.py::TestMinorSchemaChange](https://github.com/dbt-labs/dbt-core/blob/main/tests/unit/artifacts/test_base_resource.py).
 
 ### Breaking changes
 A breaking change is anything that:

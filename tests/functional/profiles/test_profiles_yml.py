@@ -1,4 +1,5 @@
 import pathlib
+
 from test_profile_dir import environ
 
 from dbt.cli.main import dbtRunner

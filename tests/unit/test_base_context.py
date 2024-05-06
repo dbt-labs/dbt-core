@@ -1,7 +1,8 @@
 import os
 
-from dbt.context.base import BaseContext
 from jinja2.runtime import Undefined
+
+from dbt.context.base import BaseContext
 
 
 class TestBaseContext:

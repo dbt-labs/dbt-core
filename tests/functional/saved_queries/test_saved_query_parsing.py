@@ -1,16 +1,18 @@
 from typing import List
 
 import pytest
+from dbt_semantic_interfaces.type_enums.export_destination_type import (
+    ExportDestinationType,
+)
 
 from dbt.contracts.graph.manifest import Manifest
-from dbt_common.events.base_types import BaseEvent
 from dbt.tests.util import write_file
-from dbt_semantic_interfaces.type_enums.export_destination_type import ExportDestinationType
+from dbt_common.events.base_types import BaseEvent
 from tests.functional.assertions.test_runner import dbtTestRunner
 from tests.functional.saved_queries.fixtures import (
+    saved_queries_with_diff_filters_yml,
     saved_queries_yml,
     saved_query_description,
-    saved_queries_with_diff_filters_yml,
 )
 from tests.functional.semantic_models.fixtures import (
     fct_revenue_sql,

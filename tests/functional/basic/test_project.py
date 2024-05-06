@@ -1,10 +1,11 @@
 import os
+from pathlib import Path
+
 import pytest
 import yaml
-from pathlib import Path
-from dbt.tests.util import run_dbt, update_config_file, write_config_file
-from dbt.exceptions import ProjectContractError
 
+from dbt.exceptions import ProjectContractError
+from dbt.tests.util import run_dbt, update_config_file, write_config_file
 
 simple_model_sql = """
 select true as my_column

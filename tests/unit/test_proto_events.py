@@ -1,22 +1,26 @@
-from dbt.adapters.events.types import (
-    RollbackFailed,
-    PluginLoadError,
-)
-from dbt_common.events.functions import msg_to_dict, msg_to_json, LOG_VERSION, reset_metadata_vars
-from dbt_common.events import types_pb2
-from dbt_common.events.base_types import msg_from_base_event, EventLevel
+from argparse import Namespace
+
+from google.protobuf.json_format import MessageToDict
+
+from dbt.adapters.events.types import PluginLoadError, RollbackFailed
+from dbt.events import core_types_pb2
 from dbt.events.types import (
-    MainReportVersion,
-    MainReportArgs,
-    MainEncounteredError,
     LogStartLine,
     LogTestResult,
+    MainEncounteredError,
+    MainReportArgs,
+    MainReportVersion,
 )
-from dbt.events import core_types_pb2
-from dbt.version import installed
-from google.protobuf.json_format import MessageToDict
 from dbt.flags import set_from_args
-from argparse import Namespace
+from dbt.version import installed
+from dbt_common.events import types_pb2
+from dbt_common.events.base_types import EventLevel, msg_from_base_event
+from dbt_common.events.functions import (
+    LOG_VERSION,
+    msg_to_dict,
+    msg_to_json,
+    reset_metadata_vars,
+)
 
 set_from_args(Namespace(WARN_ERROR=False), None)
 

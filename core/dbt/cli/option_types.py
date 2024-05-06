@@ -1,8 +1,8 @@
-from click import ParamType, Choice
+from click import Choice, ParamType
 
-from dbt.config.utils import parse_cli_yaml_string, exclusive_primary_alt_value_setting
+from dbt.config.utils import exclusive_primary_alt_value_setting, parse_cli_yaml_string
 from dbt.events import ALL_EVENT_NAMES
-from dbt.exceptions import ValidationError, OptionNotYamlDictError
+from dbt.exceptions import OptionNotYamlDictError, ValidationError
 from dbt_common.exceptions import DbtValidationError
 from dbt_common.helper_types import WarnErrorOptions
 

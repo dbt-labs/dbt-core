@@ -1,7 +1,7 @@
 import unittest
 
-from dbt_common.exceptions import ConnectionError
 from dbt.clients.registry import _get_with_retries
+from dbt_common.exceptions import ConnectionError
 
 
 class testRegistryGetRequestException(unittest.TestCase):

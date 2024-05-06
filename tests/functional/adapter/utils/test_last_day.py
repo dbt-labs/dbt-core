@@ -1,9 +1,10 @@
 import pytest
+
 from tests.functional.adapter.utils.base_utils import BaseUtils
 from tests.functional.adapter.utils.fixture_last_day import (
-    seeds__data_last_day_csv,
     models__test_last_day_sql,
     models__test_last_day_yml,
+    seeds__data_last_day_csv,
 )
 
 

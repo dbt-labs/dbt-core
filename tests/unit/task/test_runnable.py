@@ -1,9 +1,9 @@
-import pytest
-
 from dataclasses import dataclass
-from dbt.task.runnable import GraphRunnableTask
 from typing import AbstractSet, Any, Dict, Optional
 
+import pytest
+
+from dbt.task.runnable import GraphRunnableTask
 from dbt.tests.util import safe_set_invocation_context
 
 

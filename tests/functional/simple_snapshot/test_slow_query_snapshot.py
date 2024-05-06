@@ -1,4 +1,5 @@
 import pytest
+
 from dbt.tests.util import run_dbt
 from tests.functional.simple_snapshot.fixtures import models_slow__gen_sql
 

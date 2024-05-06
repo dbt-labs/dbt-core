@@ -1,11 +1,12 @@
-import pytest
 from unittest import mock
 
+import pytest
+
 from dbt.exceptions import DbtRuntimeError
-from dbt.plugins import PluginManager, dbtPlugin, dbt_hook
-from dbt.plugins.manifest import PluginNodes, ModelNodeArgs
-from dbt.plugins.contracts import PluginArtifacts, PluginArtifact
+from dbt.plugins import PluginManager, dbt_hook, dbtPlugin
+from dbt.plugins.contracts import PluginArtifact, PluginArtifacts
 from dbt.plugins.exceptions import dbtPluginError
+from dbt.plugins.manifest import ModelNodeArgs, PluginNodes
 
 
 class ExceptionInitializePlugin(dbtPlugin):

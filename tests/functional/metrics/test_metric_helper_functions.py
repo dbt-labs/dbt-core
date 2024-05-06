@@ -1,14 +1,13 @@
 import pytest
 
-from dbt.tests.util import run_dbt
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.metrics import ResolvedMetricReference
-
+from dbt.tests.util import run_dbt
 from tests.functional.metrics.fixtures import (
-    models_people_sql,
     basic_metrics_yml,
-    semantic_model_people_yml,
     metricflow_time_spine_sql,
+    models_people_sql,
+    semantic_model_people_yml,
 )
 
 

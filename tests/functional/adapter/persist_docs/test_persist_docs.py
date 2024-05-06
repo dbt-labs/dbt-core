@@ -1,9 +1,9 @@
 import json
 import os
+
 import pytest
 
 from dbt.tests.util import run_dbt
-
 from tests.functional.adapter.persist_docs.fixtures import (
     _DOCS__MY_FUN_DOCS,
     _MODELS__MISSING_COLUMN,
@@ -11,8 +11,8 @@ from tests.functional.adapter.persist_docs.fixtures import (
     _MODELS__NO_DOCS_MODEL,
     _MODELS__TABLE,
     _MODELS__VIEW,
-    _PROPERTIES__QUOTE_MODEL,
     _PROPERITES__SCHEMA_MISSING_COL,
+    _PROPERTIES__QUOTE_MODEL,
     _PROPERTIES__SCHEMA_YML,
     _SEEDS__SEED,
 )

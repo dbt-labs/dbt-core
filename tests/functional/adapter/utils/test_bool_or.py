@@ -1,10 +1,11 @@
 import pytest
+
 from tests.functional.adapter.utils.base_utils import BaseUtils
 from tests.functional.adapter.utils.fixture_bool_or import (
-    seeds__data_bool_or_csv,
-    seeds__data_bool_or_expected_csv,
     models__test_bool_or_sql,
     models__test_bool_or_yml,
+    seeds__data_bool_or_csv,
+    seeds__data_bool_or_expected_csv,
 )
 
 

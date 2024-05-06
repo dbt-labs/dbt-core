@@ -1,16 +1,16 @@
-import unittest
 import itertools
-
+import unittest
 from typing import List
+
 from dbt_common.exceptions import VersionsNotCompatibleError
 from dbt_common.semver import (
-    VersionSpecifier,
     UnboundedVersionSpecifier,
     VersionRange,
-    reduce_versions,
-    versions_compatible,
-    resolve_to_specific_version,
+    VersionSpecifier,
     filter_installable,
+    reduce_versions,
+    resolve_to_specific_version,
+    versions_compatible,
 )
 
 

@@ -1,13 +1,13 @@
 import pytest
-import dbt_common
-
-from dbt import deprecations
-from tests.functional.deprecations.fixtures import (
-    models_trivial__model_sql,
-    bad_name_yaml,
-)
-from dbt.tests.util import run_dbt, write_file
 import yaml
+
+import dbt_common
+from dbt import deprecations
+from dbt.tests.util import run_dbt, write_file
+from tests.functional.deprecations.fixtures import (
+    bad_name_yaml,
+    models_trivial__model_sql,
+)
 
 
 class TestConfigPathDeprecation:

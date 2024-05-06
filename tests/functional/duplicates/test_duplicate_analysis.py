@@ -3,7 +3,6 @@ import pytest
 from dbt.exceptions import CompilationError
 from dbt.tests.util import run_dbt
 
-
 my_model_sql = """
 select 1 as id
 """

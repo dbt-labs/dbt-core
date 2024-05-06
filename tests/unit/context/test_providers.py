@@ -1,9 +1,14 @@
-import pytest
 from unittest import mock
+
+import pytest
 
 from dbt.adapters.base import BaseRelation
 from dbt.artifacts.resources import Quoting
-from dbt.context.providers import BaseResolver, RuntimeRefResolver, RuntimeSourceResolver
+from dbt.context.providers import (
+    BaseResolver,
+    RuntimeRefResolver,
+    RuntimeSourceResolver,
+)
 
 
 class TestBaseResolver:
@@ -63,6 +68,7 @@ class TestRuntimeRefResolver:
         mock_node.quoting_dict = {}
         mock_node.alias = "test"
         mock_node.is_ephemeral_model = is_ephemeral_model
+        mock_node.defer_relation = None
 
         # create limited relation
         with mock.patch("dbt.contracts.graph.nodes.ParsedNode", new=mock.Mock):

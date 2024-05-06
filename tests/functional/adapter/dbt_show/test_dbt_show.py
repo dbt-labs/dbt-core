@@ -1,11 +1,11 @@
 import pytest
-from dbt.tests.util import run_dbt
 
+from dbt.tests.util import run_dbt
 from tests.functional.adapter.dbt_show.fixtures import (
-    models__sql_header,
     models__ephemeral_model,
-    models__second_ephemeral_model,
     models__sample_model,
+    models__second_ephemeral_model,
+    models__sql_header,
     seeds__sample_seed,
 )
 

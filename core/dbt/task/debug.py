@@ -3,34 +3,28 @@ import importlib
 import os
 import platform
 import sys
-
 from collections import namedtuple
 from enum import Flag
 from pathlib import Path
-from typing import Optional, Dict, Any, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
-from dbt_common.events.functions import fire_event
-from dbt.events.types import (
-    OpenCommand,
-    DebugCmdOut,
-    DebugCmdResult,
-)
-import dbt_common.clients.system
 import dbt.exceptions
+import dbt_common.clients.system
 import dbt_common.exceptions
 from dbt.adapters.factory import get_adapter, register_adapter
-from dbt.cli.flags import Flags
-from dbt.config import PartialProject, Project, Profile
-from dbt.config.renderer import DbtProjectYamlRenderer, ProfileRenderer
 from dbt.artifacts.schemas.results import RunStatus
+from dbt.cli.flags import Flags
 from dbt.clients.yaml_helper import load_yaml_text
+from dbt.config import PartialProject, Profile, Project
+from dbt.config.renderer import DbtProjectYamlRenderer, ProfileRenderer
+from dbt.events.types import DebugCmdOut, DebugCmdResult, OpenCommand
 from dbt.links import ProfileConfigDocs
-from dbt_common.ui import green, red
-from dbt_common.events.format import pluralize
 from dbt.mp_context import get_mp_context
-from dbt.version import get_installed_version
-
 from dbt.task.base import BaseTask, get_nearest_project_dir
+from dbt.version import get_installed_version
+from dbt_common.events.format import pluralize
+from dbt_common.events.functions import fire_event
+from dbt_common.ui import green, red
 
 ONLY_PROFILE_MESSAGE = """
 A `dbt_project.yml` file was not found in this directory.

@@ -5,60 +5,64 @@ from concurrent.futures import as_completed
 from datetime import datetime
 from multiprocessing.dummy import Pool as ThreadPool
 from pathlib import Path
-from typing import AbstractSet, Optional, Dict, List, Set, Tuple, Iterable
-
-from dbt_common.context import get_invocation_context, _INVOCATION_CONTEXT_VAR
-import dbt_common.utils.formatting
+from typing import AbstractSet, Dict, Iterable, List, Optional, Set, Tuple
 
 import dbt.exceptions
 import dbt.tracking
 import dbt.utils
+import dbt_common.utils.formatting
 from dbt.adapters.base import BaseRelation
 from dbt.adapters.factory import get_adapter
+from dbt.artifacts.schemas.results import (
+    BaseResult,
+    NodeStatus,
+    RunningStatus,
+    RunStatus,
+)
+from dbt.artifacts.schemas.run import RunExecutionResult, RunResult
 from dbt.cli.flags import Flags
 from dbt.config.runtime import RuntimeConfig
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import ResultNode
-from dbt.artifacts.schemas.results import NodeStatus, RunningStatus, RunStatus, BaseResult
-from dbt.artifacts.schemas.run import RunExecutionResult, RunResult
 from dbt.contracts.state import PreviousState
+from dbt.events.types import (
+    ConcurrencyLine,
+    DefaultSelector,
+    EndRunResult,
+    GenericExceptionOnRun,
+    LogCancelLine,
+    NodeFinished,
+    NodeStart,
+    NothingToDo,
+    QueryCancelationUnsupported,
+)
+from dbt.exceptions import DbtInternalError, DbtRuntimeError, FailFastError
+from dbt.flags import get_flags
+from dbt.graph import (
+    GraphQueue,
+    NodeSelector,
+    SelectionSpec,
+    UniqueId,
+    parse_difference,
+)
+from dbt.logger import (
+    DbtModelState,
+    DbtProcessState,
+    ModelMetadata,
+    NodeCount,
+    TextOnly,
+    TimestampNamed,
+    UniqueID,
+)
+from dbt.parser.manifest import write_manifest
+from dbt.task.base import BaseRunner, ConfiguredTask
+from dbt_common.context import _INVOCATION_CONTEXT_VAR, get_invocation_context
 from dbt_common.events.contextvars import log_contextvars, task_contextvars
 from dbt_common.events.functions import fire_event, warn_or_error
 from dbt_common.events.types import Formatting
-from dbt.events.types import (
-    LogCancelLine,
-    DefaultSelector,
-    NodeStart,
-    NodeFinished,
-    QueryCancelationUnsupported,
-    ConcurrencyLine,
-    EndRunResult,
-    NothingToDo,
-    GenericExceptionOnRun,
-)
-from dbt.exceptions import (
-    DbtInternalError,
-    DbtRuntimeError,
-    FailFastError,
-)
 from dbt_common.exceptions import NotImplementedError
-from dbt.flags import get_flags
-from dbt.graph import GraphQueue, NodeSelector, SelectionSpec, parse_difference, UniqueId
-from dbt.logger import (
-    DbtProcessState,
-    TextOnly,
-    UniqueID,
-    TimestampNamed,
-    DbtModelState,
-    ModelMetadata,
-    NodeCount,
-)
-from dbt.parser.manifest import write_manifest
-from dbt.task.base import ConfiguredTask, BaseRunner
-from .printer import (
-    print_run_result_error,
-    print_run_end_messages,
-)
+
+from .printer import print_run_end_messages, print_run_result_error
 
 RESULT_FILE_NAME = "run_results.json"
 RUNNING_STATE = DbtProcessState("running")
@@ -127,7 +131,7 @@ class GraphRunnableTask(ConfiguredTask):
     def get_node_selector(self) -> NodeSelector:
         raise NotImplementedError(f"get_node_selector not implemented for task {type(self)}")
 
-    def defer_to_manifest(self, adapter, selected_uids: AbstractSet[str]):
+    def defer_to_manifest(self):
         deferred_manifest = self._get_deferred_manifest()
         if deferred_manifest is None:
             return
@@ -135,16 +139,7 @@ class GraphRunnableTask(ConfiguredTask):
             raise DbtInternalError(
                 "Expected to defer to manifest, but there is no runtime manifest to defer from!"
             )
-        self.manifest.merge_from_artifact(
-            adapter=adapter,
-            other=deferred_manifest,
-            selected=selected_uids,
-            favor_state=bool(self.args.favor_state),
-        )
-        # We're rewriting the manifest because it's been mutated during merge_from_artifact.
-        # This is to reflect which nodes had been deferred to (= replaced with) their counterparts.
-        if self.args.write_json:
-            write_manifest(self.manifest, self.config.project_target_path)
+        self.manifest.merge_from_artifact(other=deferred_manifest)
 
     def get_graph_queue(self) -> GraphQueue:
         selector = self.get_node_selector()
@@ -479,8 +474,8 @@ class GraphRunnableTask(ConfiguredTask):
 
     def before_run(self, adapter, selected_uids: AbstractSet[str]):
         with adapter.connection_named("master"):
+            self.defer_to_manifest()
             self.populate_adapter_cache(adapter)
-            self.defer_to_manifest(adapter, selected_uids)
 
     def after_run(self, adapter, results):
         pass

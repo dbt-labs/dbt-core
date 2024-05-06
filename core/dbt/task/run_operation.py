@@ -6,19 +6,19 @@ from typing import TYPE_CHECKING
 
 import dbt_common.exceptions
 from dbt.adapters.factory import get_adapter
+from dbt.artifacts.schemas.results import RunStatus, TimingInfo
+from dbt.artifacts.schemas.run import RunResult, RunResultsArtifact
 from dbt.contracts.files import FileHash
 from dbt.contracts.graph.nodes import HookNode
-from dbt.artifacts.schemas.results import RunStatus, TimingInfo
-from dbt.artifacts.schemas.run import RunResultsArtifact, RunResult
-from dbt_common.events.functions import fire_event
 from dbt.events.types import (
     LogDebugStackTrace,
     RunningOperationCaughtError,
     RunningOperationUncaughtError,
 )
-from dbt_common.exceptions import DbtInternalError
 from dbt.node_types import NodeType
 from dbt.task.base import ConfiguredTask
+from dbt_common.events.functions import fire_event
+from dbt_common.exceptions import DbtInternalError
 
 RESULT_FILE_NAME = "run_results.json"
 

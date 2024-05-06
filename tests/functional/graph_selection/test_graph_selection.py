@@ -1,10 +1,10 @@
-import os
 import json
+import os
+
 import pytest
 
-from dbt.tests.util import run_dbt, check_result_nodes_by_name
+from dbt.tests.util import check_result_nodes_by_name, run_dbt
 from tests.functional.graph_selection.fixtures import SelectionFixtures
-
 
 selectors_yml = """
             selectors:

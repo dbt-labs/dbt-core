@@ -2,9 +2,10 @@ import os
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
-from dbt_common.events.base_types import BaseEvent, EventMsg
-from typing import List, Optional
 from pathlib import Path
+from typing import List, Optional
+
+from dbt_common.events.base_types import BaseEvent, EventMsg
 
 
 @contextmanager

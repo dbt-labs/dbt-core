@@ -2,10 +2,10 @@ from unittest import mock
 
 import pytest
 
+from dbt.adapters.factory import FACTORY, reset_adapters
 from dbt.cli.exceptions import DbtUsageException
 from dbt.cli.main import dbtRunner
 from dbt.exceptions import DbtProjectError
-from dbt.adapters.factory import reset_adapters, FACTORY
 from dbt.tests.util import read_file, write_file
 from dbt.version import __version__ as dbt_version
 from dbt_common.events.contextvars import get_node_info

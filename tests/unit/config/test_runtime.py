@@ -1,16 +1,13 @@
 import os
 from argparse import Namespace
-
 from unittest import mock
 
 import dbt.config
 import dbt.exceptions
 from dbt import tracking
 from dbt.contracts.project import PackageConfig
-
 from dbt.flags import set_from_args
 from dbt.tests.util import safe_set_invocation_context
-
 from tests.unit.config import (
     BaseConfigTest,
     empty_profile_renderer,

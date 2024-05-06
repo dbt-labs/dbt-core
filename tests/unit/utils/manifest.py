@@ -1,46 +1,43 @@
 from argparse import Namespace
-import pytest
 
-from dbt.artifacts.resources.v1.model import ModelConfig
-from dbt.contracts.files import FileHash
-from dbt.contracts.graph.nodes import (
-    DependsOn,
-    NodeConfig,
-    Macro,
-    ModelNode,
-    Exposure,
-    Metric,
-    Group,
-    SavedQuery,
-    SeedNode,
-    SemanticModel,
-    SingularTestNode,
-    GenericTestNode,
-    SourceDefinition,
-    AccessType,
-    UnitTestDefinition,
-)
-from dbt.contracts.graph.manifest import Manifest, ManifestMetadata
+import pytest
+from dbt_semantic_interfaces.type_enums import MetricType
+
 from dbt.artifacts.resources import (
     ExposureType,
+    MacroDependsOn,
     MetricInputMeasure,
     MetricTypeParams,
     NodeRelation,
     Owner,
     QueryParams,
-    MacroDependsOn,
+    RefArgs,
     TestConfig,
     TestMetadata,
-    RefArgs,
 )
-from dbt.contracts.graph.unparsed import (
-    UnitTestInputFixture,
-    UnitTestOutputFixture,
+from dbt.artifacts.resources.v1.model import ModelConfig
+from dbt.contracts.files import FileHash
+from dbt.contracts.graph.manifest import Manifest, ManifestMetadata
+from dbt.contracts.graph.nodes import (
+    AccessType,
+    DependsOn,
+    Exposure,
+    GenericTestNode,
+    Group,
+    Macro,
+    Metric,
+    ModelNode,
+    NodeConfig,
+    SavedQuery,
+    SeedNode,
+    SemanticModel,
+    SingularTestNode,
+    SourceDefinition,
+    UnitTestDefinition,
 )
-from dbt.node_types import NodeType
-
-from dbt_semantic_interfaces.type_enums import MetricType
+from dbt.contracts.graph.unparsed import UnitTestInputFixture, UnitTestOutputFixture
 from dbt.flags import set_from_args
+from dbt.node_types import NodeType
 
 set_from_args(Namespace(WARN_ERROR=False), None)
 
@@ -48,7 +45,8 @@ set_from_args(Namespace(WARN_ERROR=False), None)
 def make_model(
     pkg,
     name,
-    sql,
+    code,
+    language="sql",
     refs=None,
     sources=None,
     tags=None,
@@ -60,6 +58,7 @@ def make_model(
     version=None,
     latest_version=None,
     access=None,
+    patch_path=None,
 ):
     if refs is None:
         refs = []
@@ -68,7 +67,12 @@ def make_model(
     if tags is None:
         tags = []
     if path is None:
-        path = f"{name}.sql"
+        if language == "sql":
+            path = f"{name}.sql"
+        elif language == "python":
+            path = f"{name}.py"
+        else:
+            raise ValueError(f"Unknown language: {language}")
     if alias is None:
         alias = name
     if config_kwargs is None:
@@ -96,7 +100,7 @@ def make_model(
 
     return ModelNode(
         language="sql",
-        raw_code=sql,
+        raw_code=code,
         database="dbt",
         schema="dbt_schema",
         alias=alias,
@@ -119,6 +123,7 @@ def make_model(
         version=version,
         latest_version=latest_version,
         access=access or AccessType.Protected,
+        patch_path=patch_path,
     )
 
 
@@ -978,6 +983,11 @@ def semantic_models() -> list:
 
 
 @pytest.fixture
+def files() -> dict:
+    return {}
+
+
+@pytest.fixture
 def manifest(
     metric,
     semantic_model,
@@ -987,6 +997,7 @@ def manifest(
     unit_tests,
     metrics,
     semantic_models,
+    files,
 ) -> Manifest:
     manifest = Manifest(
         nodes={n.unique_id: n for n in nodes},
@@ -995,7 +1006,7 @@ def manifest(
         unit_tests={t.unique_id: t for t in unit_tests},
         semantic_models={s.unique_id: s for s in semantic_models},
         docs={},
-        files={},
+        files=files,
         exposures={},
         metrics={m.unique_id: m for m in metrics},
         disabled={},
@@ -1003,4 +1014,5 @@ def manifest(
         groups={},
         metadata=ManifestMetadata(adapter_type="postgres", project_name="pkg"),
     )
+    manifest.build_parent_and_child_maps()
     return manifest

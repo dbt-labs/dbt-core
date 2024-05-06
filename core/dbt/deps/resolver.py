@@ -1,27 +1,25 @@
 from dataclasses import dataclass, field
-from typing import Dict, List, NoReturn, Type, Iterator, Set, Any
-
-from dbt.exceptions import (
-    DuplicateDependencyToRootError,
-    DuplicateProjectDependencyError,
-    MismatchedDependencyTypeError,
-    DbtInternalError,
-)
+from typing import Any, Dict, Iterator, List, NoReturn, Set, Type
 
 from dbt.config import Project
 from dbt.config.renderer import PackageRenderer
-from dbt.deps.base import BasePackage, PinnedPackage, UnpinnedPackage
-from dbt.deps.local import LocalUnpinnedPackage
-from dbt.deps.tarball import TarballUnpinnedPackage
-from dbt.deps.git import GitUnpinnedPackage
-from dbt.deps.registry import RegistryUnpinnedPackage
-
 from dbt.contracts.project import (
-    PackageSpec,
-    LocalPackage,
-    TarballPackage,
     GitPackage,
+    LocalPackage,
+    PackageSpec,
     RegistryPackage,
+    TarballPackage,
+)
+from dbt.deps.base import BasePackage, PinnedPackage, UnpinnedPackage
+from dbt.deps.git import GitUnpinnedPackage
+from dbt.deps.local import LocalUnpinnedPackage
+from dbt.deps.registry import RegistryUnpinnedPackage
+from dbt.deps.tarball import TarballUnpinnedPackage
+from dbt.exceptions import (
+    DbtInternalError,
+    DuplicateDependencyToRootError,
+    DuplicateProjectDependencyError,
+    MismatchedDependencyTypeError,
 )
 
 

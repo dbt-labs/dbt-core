@@ -1,6 +1,8 @@
-import pytest
-from dbt.tests.util import run_dbt, read_file
 import json
+
+import pytest
+
+from dbt.tests.util import read_file, run_dbt
 
 model1 = "select 1 as fun"
 model2 = '{{ config(meta={"owners": ["team1", "team2"]})}} select 1 as fun'

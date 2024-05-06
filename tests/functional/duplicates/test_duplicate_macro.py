@@ -3,7 +3,6 @@ import pytest
 from dbt.exceptions import CompilationError
 from dbt.tests.util import run_dbt
 
-
 bad_same_macros_sql = """
 {% macro some_macro() %}
 {% endmacro %}

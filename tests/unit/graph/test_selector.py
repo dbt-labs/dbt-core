@@ -1,41 +1,39 @@
 import os
-
+import string
 import unittest
+from argparse import Namespace
+from queue import Empty
 from unittest.mock import MagicMock, patch
 
-from dbt.adapters.postgres import Plugin as PostgresPlugin
-from dbt.adapters.factory import reset_adapters, register_adapter
-import dbt.compilation
-import dbt.exceptions
-import dbt.parser
-import dbt.config
-import dbt.utils
-import dbt.parser.manifest
-from dbt import tracking
-from dbt.cli.flags import convert_config
-from dbt.contracts.files import SourceFile, FileHash, FilePath
-from dbt.contracts.graph.manifest import MacroManifest, ManifestStateCheck
-from dbt.contracts.project import ProjectFlags
-from dbt.flags import get_flags, set_from_args
-from dbt.graph import NodeSelector, parse_difference
-from dbt.events.logging import setup_event_logger
-from dbt.mp_context import get_mp_context
-from queue import Empty
-from tests.unit.utils import config_from_parts_or_dicts, generate_name_macros, inject_plugin
-
-from argparse import Namespace
-
-
+import networkx as nx
 import pytest
 
-import string
-import dbt_common.exceptions
-import dbt.graph.selector as graph_selector
+import dbt.compilation
+import dbt.config
+import dbt.exceptions
 import dbt.graph.cli as graph_cli
+import dbt.graph.selector as graph_selector
+import dbt.parser
+import dbt.parser.manifest
+import dbt.utils
+import dbt_common.exceptions
+from dbt import tracking
+from dbt.adapters.factory import register_adapter, reset_adapters
+from dbt.adapters.postgres import Plugin as PostgresPlugin
+from dbt.cli.flags import convert_config
+from dbt.contracts.files import FileHash, FilePath, SourceFile
+from dbt.contracts.graph.manifest import MacroManifest, ManifestStateCheck
+from dbt.contracts.project import ProjectFlags
+from dbt.events.logging import setup_event_logger
+from dbt.flags import get_flags, set_from_args
+from dbt.graph import NodeSelector, parse_difference
+from dbt.mp_context import get_mp_context
 from dbt.node_types import NodeType
-
-import networkx as nx
-
+from tests.unit.utils import (
+    config_from_parts_or_dicts,
+    generate_name_macros,
+    inject_plugin,
+)
 
 set_from_args(Namespace(WARN_ERROR=False), None)
 

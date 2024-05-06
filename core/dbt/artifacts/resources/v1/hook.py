@@ -1,7 +1,8 @@
 from dataclasses import dataclass
-from typing import Optional, Literal
-from dbt.artifacts.resources.v1.components import CompiledResource
+from typing import Literal, Optional
+
 from dbt.artifacts.resources.types import NodeType
+from dbt.artifacts.resources.v1.components import CompiledResource
 
 
 @dataclass

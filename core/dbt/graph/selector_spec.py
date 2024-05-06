@@ -2,16 +2,15 @@ import os
 import re
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
-from dbt_common.dataclass_schema import StrEnum, dbtClassMixin
+from typing import Any, Dict, Iterable, Iterator, List, Optional, Set, Tuple, Union
 
-
-from typing import Set, Iterator, List, Optional, Dict, Union, Any, Iterable, Tuple
-from .graph import UniqueId
-from .selector_methods import MethodName
-from dbt_common.exceptions import DbtRuntimeError
 from dbt.exceptions import InvalidSelectorError
 from dbt.flags import get_flags
+from dbt_common.dataclass_schema import StrEnum, dbtClassMixin
+from dbt_common.exceptions import DbtRuntimeError
 
+from .graph import UniqueId
+from .selector_methods import MethodName
 
 RAW_SELECTOR_PATTERN = re.compile(
     r"\A"

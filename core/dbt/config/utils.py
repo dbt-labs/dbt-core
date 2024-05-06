@@ -1,10 +1,9 @@
 from typing import Any, Dict, Optional
 
-
 from dbt.clients import yaml_helper
-from dbt_common.events.functions import fire_event
 from dbt.events.types import InvalidOptionYAML
 from dbt.exceptions import DbtExclusivePropertyUseError, OptionNotYamlDictError
+from dbt_common.events.functions import fire_event
 from dbt_common.exceptions import DbtValidationError
 
 

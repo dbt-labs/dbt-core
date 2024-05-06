@@ -1,5 +1,6 @@
 import pytest
-from dbt.tests.util import run_dbt, check_relations_equal
+
+from dbt.tests.util import check_relations_equal, run_dbt
 
 snapshot_sql = """
 {% snapshot snapshot_check_cols_new_column %}

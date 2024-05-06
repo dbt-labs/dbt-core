@@ -1,31 +1,14 @@
-from dbt.parser.schemas import YamlReader, SchemaParser, ParseResult
-from dbt.parser.common import YamlBlock
-from dbt.node_types import NodeType
-from dbt.contracts.graph.unparsed import (
-    UnparsedDimension,
-    UnparsedDimensionTypeParams,
-    UnparsedEntity,
-    UnparsedExport,
-    UnparsedExposure,
-    UnparsedGroup,
-    UnparsedMeasure,
-    UnparsedMetric,
-    UnparsedMetricInput,
-    UnparsedMetricInputMeasure,
-    UnparsedMetricTypeParams,
-    UnparsedNonAdditiveDimension,
-    UnparsedQueryParams,
-    UnparsedSavedQuery,
-    UnparsedSemanticModel,
-    UnparsedConversionTypeParams,
+from typing import Any, Dict, List, Optional, Union
+
+from dbt_semantic_interfaces.type_enums import (
+    AggregationType,
+    ConversionCalculationType,
+    DimensionType,
+    EntityType,
+    MetricType,
+    TimeGranularity,
 )
-from dbt.contracts.graph.nodes import (
-    Exposure,
-    Group,
-    Metric,
-    SemanticModel,
-    SavedQuery,
-)
+
 from dbt.artifacts.resources import (
     ConversionTypeParams,
     Dimension,
@@ -46,26 +29,41 @@ from dbt.artifacts.resources import (
     WhereFilter,
     WhereFilterIntersection,
 )
-from dbt_common.exceptions import DbtInternalError
-from dbt.exceptions import YamlParseDictError, JSONValidationError
-from dbt.context.providers import generate_parse_exposure, generate_parse_semantic_models
-
+from dbt.clients.jinja import get_rendered
 from dbt.context.context_config import (
     BaseContextConfigGenerator,
     ContextConfigGenerator,
     UnrenderedConfigGenerator,
 )
-from dbt.clients.jinja import get_rendered
-from dbt_common.dataclass_schema import ValidationError
-from dbt_semantic_interfaces.type_enums import (
-    AggregationType,
-    ConversionCalculationType,
-    DimensionType,
-    EntityType,
-    MetricType,
-    TimeGranularity,
+from dbt.context.providers import (
+    generate_parse_exposure,
+    generate_parse_semantic_models,
 )
-from typing import Any, Dict, List, Optional, Union
+from dbt.contracts.graph.nodes import Exposure, Group, Metric, SavedQuery, SemanticModel
+from dbt.contracts.graph.unparsed import (
+    UnparsedConversionTypeParams,
+    UnparsedDimension,
+    UnparsedDimensionTypeParams,
+    UnparsedEntity,
+    UnparsedExport,
+    UnparsedExposure,
+    UnparsedGroup,
+    UnparsedMeasure,
+    UnparsedMetric,
+    UnparsedMetricInput,
+    UnparsedMetricInputMeasure,
+    UnparsedMetricTypeParams,
+    UnparsedNonAdditiveDimension,
+    UnparsedQueryParams,
+    UnparsedSavedQuery,
+    UnparsedSemanticModel,
+)
+from dbt.exceptions import JSONValidationError, YamlParseDictError
+from dbt.node_types import NodeType
+from dbt.parser.common import YamlBlock
+from dbt.parser.schemas import ParseResult, SchemaParser, YamlReader
+from dbt_common.dataclass_schema import ValidationError
+from dbt_common.exceptions import DbtInternalError
 
 
 def parse_where_filter(

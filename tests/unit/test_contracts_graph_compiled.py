@@ -1,24 +1,18 @@
 import pickle
-import pytest
-
 from dataclasses import replace
 
-from dbt.artifacts.resources import ColumnInfo
+import pytest
+
+from dbt.artifacts.resources import ColumnInfo, TestConfig, TestMetadata
 from dbt.contracts.files import FileHash
-from dbt.contracts.graph.nodes import (
-    DependsOn,
-    GenericTestNode,
-    ModelNode,
-    ModelConfig,
-)
-from dbt.artifacts.resources import TestConfig, TestMetadata
-from tests.unit.fixtures import generic_test_node, model_node
+from dbt.contracts.graph.nodes import DependsOn, GenericTestNode, ModelConfig, ModelNode
 from dbt.node_types import NodeType
+from tests.unit.fixtures import generic_test_node, model_node
 
 from .utils import (
-    assert_symmetric,
-    assert_from_dict,
     assert_fails_validation,
+    assert_from_dict,
+    assert_symmetric,
     replace_config,
 )
 
@@ -39,7 +33,6 @@ def basic_uncompiled_model():
         sources=[],
         metrics=[],
         depends_on=DependsOn(),
-        deferred=False,
         description="",
         database="test_db",
         schema="test_schema",
@@ -103,7 +96,6 @@ def basic_uncompiled_dict():
         "metrics": [],
         "depends_on": {"macros": [], "nodes": []},
         "database": "test_db",
-        "deferred": False,
         "description": "",
         "schema": "test_schema",
         "alias": "bar",
@@ -156,7 +148,6 @@ def basic_compiled_dict():
         "metrics": [],
         "depends_on": {"macros": [], "nodes": []},
         "database": "test_db",
-        "deferred": True,
         "description": "",
         "schema": "test_schema",
         "alias": "bar",
@@ -383,7 +374,6 @@ def basic_uncompiled_schema_test_node():
         refs=[],
         sources=[],
         metrics=[],
-        deferred=False,
         depends_on=DependsOn(),
         description="",
         database="test_db",
@@ -439,7 +429,6 @@ def basic_uncompiled_schema_test_dict():
             "fail_calc": "count(*)",
             "meta": {},
         },
-        "deferred": False,
         "docs": {"show": True},
         "columns": {},
         "meta": {},
@@ -476,7 +465,6 @@ def basic_compiled_schema_test_dict():
         "sources": [],
         "metrics": [],
         "depends_on": {"macros": [], "nodes": []},
-        "deferred": False,
         "database": "test_db",
         "description": "",
         "schema": "dbt_test__audit",

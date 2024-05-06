@@ -1,18 +1,16 @@
 from typing import List
 
 import pytest
-
 from dbt_semantic_interfaces.type_enums.time_granularity import TimeGranularity
 
 from dbt.contracts.graph.manifest import Manifest
-from dbt_common.events.base_types import BaseEvent
 from dbt.tests.util import write_file
+from dbt_common.events.base_types import BaseEvent
 from tests.functional.assertions.test_runner import dbtTestRunner
-
 from tests.functional.semantic_models.fixtures import (
-    schema_without_semantic_model_yml,
     fct_revenue_sql,
     metricflow_time_spine_sql,
+    schema_without_semantic_model_yml,
     schema_yml,
 )
 

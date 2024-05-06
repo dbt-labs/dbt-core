@@ -1,4 +1,5 @@
 import pytest
+
 from tests.functional.adapter.utils.base_utils import BaseUtils
 from tests.functional.adapter.utils.fixture_date_spine import (
     models__test_date_spine_sql,

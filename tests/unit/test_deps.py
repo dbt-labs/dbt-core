@@ -1,30 +1,29 @@
-from copy import deepcopy
-
 import unittest
+from argparse import Namespace
+from copy import deepcopy
 from unittest import mock
 
 import dbt.deps
 import dbt.exceptions
-from dbt.deps.git import GitUnpinnedPackage
-from dbt.deps.local import LocalUnpinnedPackage, LocalPinnedPackage
-from dbt.deps.tarball import TarballUnpinnedPackage
-from dbt.deps.registry import RegistryUnpinnedPackage
 from dbt.clients.registry import is_compatible_version
-from dbt.config.renderer import DbtProjectYamlRenderer
-from dbt.deps.resolver import resolve_packages
-from dbt.contracts.project import (
-    LocalPackage,
-    TarballPackage,
-    GitPackage,
-    RegistryPackage,
-)
 from dbt.config.project import PartialProject
-from dbt.contracts.project import PackageConfig
-from dbt_common.semver import VersionSpecifier
+from dbt.config.renderer import DbtProjectYamlRenderer
+from dbt.contracts.project import (
+    GitPackage,
+    LocalPackage,
+    PackageConfig,
+    RegistryPackage,
+    TarballPackage,
+)
+from dbt.deps.git import GitUnpinnedPackage
+from dbt.deps.local import LocalPinnedPackage, LocalUnpinnedPackage
+from dbt.deps.registry import RegistryUnpinnedPackage
+from dbt.deps.resolver import resolve_packages
+from dbt.deps.tarball import TarballUnpinnedPackage
+from dbt.flags import set_from_args
 from dbt.version import get_installed_version
 from dbt_common.dataclass_schema import ValidationError
-from dbt.flags import set_from_args
-from argparse import Namespace
+from dbt_common.semver import VersionSpecifier
 
 set_from_args(Namespace(WARN_ERROR=False), None)
 

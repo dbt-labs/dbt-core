@@ -1,18 +1,17 @@
-from copy import deepcopy
-
 import os
+from copy import deepcopy
 from unittest import mock
+
 import dbt.config
 import dbt.exceptions
-
 from dbt.adapters.postgres import PostgresCredentials
-
-
 from dbt.flags import set_from_args
 from dbt.tests.util import safe_set_invocation_context
-
-
-from tests.unit.config import BaseConfigTest, empty_profile_renderer, project_from_config_norender
+from tests.unit.config import (
+    BaseConfigTest,
+    empty_profile_renderer,
+    project_from_config_norender,
+)
 
 
 class TestProfile(BaseConfigTest):

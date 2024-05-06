@@ -1,6 +1,7 @@
+import re
+
 from dbt.compilation import inject_ctes_into_sql
 from dbt.contracts.graph.nodes import InjectedCTE
-import re
 
 
 def norm_whitespace(string):

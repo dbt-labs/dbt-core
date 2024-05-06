@@ -1,6 +1,6 @@
 import pytest
-from dbt.tests.util import run_dbt, write_file
 
+from dbt.tests.util import run_dbt, write_file
 
 my_model_sql = """
 select 'some string' as string_column
