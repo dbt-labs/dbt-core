@@ -31,3 +31,4 @@ class Model(CompiledResource):
     latest_version: Optional[NodeVersion] = None
     deprecation_date: Optional[datetime] = None
     defer_relation: Optional[DeferRelation] = None
+    primary_key: List[str] = field(default_factory=list)
