@@ -39,7 +39,7 @@ Freely make incremental, non-breaking changes in-place to the latest major versi
 A breaking change is anything that:
 * Deletes a required field
 * Changes the name or type of an existing field
-* Removes the default value from a field
+* Removes the default value of an existing field
 
 These should be avoided however possible. When necessary, multiple breaking changes should be bundled together, to aim for minimal disruption across the ecosystem of tools that leverage dbt metadata. 
 
