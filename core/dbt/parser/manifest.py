@@ -50,6 +50,7 @@ from dbt.contracts.graph.manifest import (
 )
 from dbt.contracts.graph.nodes import (
     Exposure,
+    GenericTestNode,
     Macro,
     ManifestNode,
     Metric,
@@ -466,6 +467,7 @@ class ManifestLoader:
             self.process_docs(self.root_project)
             self.process_metrics(self.root_project)
             self.process_saved_queries(self.root_project)
+            self.process_model_inferred_primary_keys()
             self.check_valid_group_config()
             self.check_valid_access_property()
 
@@ -1140,6 +1142,25 @@ class ManifestLoader:
                 continue
             _process_metrics_for_node(self.manifest, current_project, exposure)
 
+    def get_model_generic_tests(
+        self,
+        model: ModelNode,
+    ) -> List[GenericTestNode]:
+        # This is only needed for audit right now, but we should add a link
+        # from model to tests if another use case comes up
+        tests = []
+        for _, node in self.manifest.nodes.items():
+            if isinstance(node, GenericTestNode) and node.attached_node == model.unique_id:
+                tests.append(node)
+        for _, nodes in self.manifest.disabled.items():
+            for disabled_node in nodes:
+                if (
+                    isinstance(disabled_node, GenericTestNode)
+                    and disabled_node.attached_node == model.unique_id
+                ):
+                    tests.append(disabled_node)
+        return tests
+
     def process_saved_queries(self, config: RuntimeConfig):
         """Processes SavedQuery nodes to populate their `depends_on`."""
         current_project = config.project_name
@@ -1148,6 +1169,15 @@ class ManifestLoader:
             # 1. process `where` of SavedQuery for `depends_on`s
             # 2. process `group_by` of SavedQuery for `depends_on``
             _process_metrics_for_node(self.manifest, current_project, saved_query)
+
+    def process_model_inferred_primary_keys(self):
+        """Processes SavedQuery nodes to populate their `depends_on`."""
+        for node in self.manifest.nodes.values():
+            if not isinstance(node, ModelNode):
+                continue
+            generic_tests = self.get_model_generic_tests(node)
+            primary_key = node.infer_primary_key(generic_tests)
+            node.primary_key = primary_key
 
     def update_semantic_model(self, semantic_model) -> None:
         # This has to be done at the end of parsing because the referenced model
