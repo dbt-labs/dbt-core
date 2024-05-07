@@ -800,7 +800,7 @@ class TestPackageSpec(unittest.TestCase):
             }
         )
         with self.assertRaisesRegex(
-            dbt.exceptions.DbtInternalError, "Cannot resolve private package"
+            dbt.exceptions.DependencyError, "Cannot resolve private package"
         ):
             resolve_packages(package_config.packages, mock.MagicMock(project_name="test"), {})
 
