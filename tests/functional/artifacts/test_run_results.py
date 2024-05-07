@@ -42,6 +42,22 @@ class TestRunResultsTimingFailure:
         assert len(results.results[0].timing) > 0
 
 
+class TestRunResultsSerializableInContext:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"model.sql": good_model_sql}
+
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "on-run-end": ["{% for result in results %}{{ log(result.to_dict()) }}{% endfor %}"]
+        }
+
+    def test_results_serializable(self, project):
+        results = run_dbt(["run"])
+        assert len(results.results) == 1
+
+
 # This test is failing due to the faulty assumptions that run_results.json would
 # be written multiple times. Temporarily disabling.
 @pytest.mark.skip()
