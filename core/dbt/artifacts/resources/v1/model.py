@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import List, Literal, Optional
+from typing import Dict, List, Literal, Optional
 
 from dbt.artifacts.resources.types import AccessType, NodeType
 from dbt.artifacts.resources.v1.components import (
@@ -31,3 +31,9 @@ class Model(CompiledResource):
     latest_version: Optional[NodeVersion] = None
     deprecation_date: Optional[datetime] = None
     defer_relation: Optional[DeferRelation] = None
+
+    def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
+        dct = super().__post_serialize__(dct, context)
+        if context and context.get("artifact") and "defer_relation" in dct:
+            del dct["defer_relation"]
+        return dct

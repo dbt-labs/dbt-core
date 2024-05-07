@@ -180,12 +180,3 @@ class WritableManifest(ArtifactMixin):
         if manifest_schema_version < cls.dbt_schema_version.version:
             data = upgrade_manifest_json(data, manifest_schema_version)
         return cls.from_dict(data)
-
-    # TODO: Move this to nodes
-    def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
-        for unique_id, node in dct["nodes"].items():
-            if "config_call_dict" in node:
-                del node["config_call_dict"]
-            if "defer_relation" in node:
-                del node["defer_relation"]
-        return dct

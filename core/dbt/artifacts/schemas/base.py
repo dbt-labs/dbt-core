@@ -33,7 +33,7 @@ class SchemaVersion:
 
 class Writable:
     def write(self, path: str):
-        write_json(path, self.to_dict(omit_none=False))  # type: ignore
+        write_json(path, self.to_dict(omit_none=False, context={"artifact": True}))  # type: ignore
 
 
 class Readable:
