@@ -233,7 +233,7 @@ class ManifestLoaderInfo(dbtClassMixin, Writable):
     projects: List[ProjectLoaderInfo] = field(default_factory=list)
     _project_index: Dict[str, ProjectLoaderInfo] = field(default_factory=dict)
 
-    def __post_serialize__(self, dct):
+    def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
         del dct["_project_index"]
         return dct
 

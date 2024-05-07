@@ -2,7 +2,6 @@ import enum
 from collections import defaultdict
 from dataclasses import dataclass, field, replace
 from itertools import chain
-from mashumaro.mixins.msgpack import DataClassMessagePackMixin
 from multiprocessing.synchronize import Lock
 from typing import (
     DefaultDict,
@@ -803,7 +802,7 @@ ResourceClassT = TypeVar("ResourceClassT", bound="BaseResource")
 
 
 @dataclass
-class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
+class Manifest(MacroMethods, dbtClassMixin):
     """The manifest for the full graph, after parsing and during compilation."""
 
     # These attributes are both positional and by keyword. If an attribute
@@ -870,7 +869,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         metadata={"serialize": lambda x: None, "deserialize": lambda x: None},
     )
 
-    def __pre_serialize__(self):
+    def __pre_serialize__(self, context: Optional[Dict] = None):
         # serialization won't work with anything except an empty source_patches because
         # tuple keys are not supported, so ensure it's empty
         self.source_patches = {}

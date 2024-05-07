@@ -276,8 +276,8 @@ class UnparsedSourceTableDefinition(HasColumnTests, HasColumnAndTestProps):
     external: Optional[ExternalTable] = None
     tags: List[str] = field(default_factory=list)
 
-    def __post_serialize__(self, dct):
-        dct = super().__post_serialize__(dct)
+    def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
+        dct = super().__post_serialize__(dct, context)
         if "freshness" not in dct and self.freshness is None:
             dct["freshness"] = None
         return dct
@@ -314,8 +314,8 @@ class UnparsedSourceDefinition(dbtClassMixin):
     def yaml_key(self) -> "str":
         return "sources"
 
-    def __post_serialize__(self, dct):
-        dct = super().__post_serialize__(dct)
+    def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
+        dct = super().__post_serialize__(dct, context)
         if "freshness" not in dct and self.freshness is None:
             dct["freshness"] = None
         return dct

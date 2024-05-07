@@ -196,6 +196,12 @@ class ParsedResource(ParsedResourceMandatory):
     relation_name: Optional[str] = None
     raw_code: str = ""
 
+    def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
+        dct = super().__post_serialize__(dct, context)
+        if context and context.get("artifact") and "config_call_dict" in dct:
+            del dct["config_call_dict"]
+        return dct
+
 
 @dataclass
 class CompiledResource(ParsedResource):
@@ -215,8 +221,8 @@ class CompiledResource(ParsedResource):
     _pre_injected_sql: Optional[str] = None
     contract: Contract = field(default_factory=Contract)
 
-    def __post_serialize__(self, dct):
-        dct = super().__post_serialize__(dct)
+    def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
+        dct = super().__post_serialize__(dct, context)
         if "_pre_injected_sql" in dct:
             del dct["_pre_injected_sql"]
         # Remove compiled attributes

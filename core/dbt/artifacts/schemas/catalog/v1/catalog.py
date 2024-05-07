@@ -77,8 +77,8 @@ class CatalogResults(dbtClassMixin):
     errors: Optional[List[str]] = None
     _compile_results: Optional[Any] = None
 
-    def __post_serialize__(self, dct):
-        dct = super().__post_serialize__(dct)
+    def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
+        dct = super().__post_serialize__(dct, context)
         if "_compile_results" in dct:
             del dct["_compile_results"]
         return dct
