@@ -149,6 +149,7 @@ def basic_compiled_dict():
         "depends_on": {"macros": [], "nodes": []},
         "database": "test_db",
         "description": "",
+        "primary_key": [],
         "schema": "test_schema",
         "alias": "bar",
         "tags": [],
