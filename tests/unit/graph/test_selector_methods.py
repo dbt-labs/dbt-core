@@ -30,6 +30,7 @@ from dbt.graph.selector_methods import (
     UnitTestSelectorMethod,
     VersionSelectorMethod,
 )
+from tests.unit.utils import replace_config
 from tests.unit.utils.manifest import (
     make_exposure,
     make_group,
@@ -41,8 +42,6 @@ from tests.unit.utils.manifest import (
     make_semantic_model,
     make_unit_test,
 )
-
-from .utils import replace_config
 
 
 def search_manifest_using_method(manifest, method, selection):
