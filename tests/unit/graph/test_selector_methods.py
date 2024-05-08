@@ -24,12 +24,13 @@ from dbt.graph.selector_methods import (
     StateSelectorMethod,
     ExposureSelectorMethod,
     MetricSelectorMethod,
+    UnitTestSelectorMethod,
     VersionSelectorMethod,
     SavedQuerySelectorMethod,
     SemanticModelSelectorMethod,
 )
 import dbt_common.exceptions
-from .utils import replace_config
+from tests.unit.utils import replace_config
 from tests.unit.utils.manifest import (
     make_model,
     make_seed,
@@ -39,6 +40,7 @@ from tests.unit.utils.manifest import (
     make_semantic_model,
     make_group,
     make_macro,
+    make_unit_test,
 )
 
 
@@ -583,6 +585,24 @@ def test_select_saved_query_by_tag(manifest: Manifest) -> None:
     assert isinstance(method, TagSelectorMethod)
     assert method.arguments == []
     search_manifest_using_method(manifest, method, "any_tag")
+
+
+def test_select_unit_test(manifest: Manifest) -> None:
+    test_model = make_model("test", "my_model", "select 1 as id")
+    unit_test = make_unit_test("test", "my_unit_test", test_model)
+    manifest.unit_tests[unit_test.unique_id] = unit_test
+    methods = MethodManager(manifest, None)
+    method = methods.get_method("unit_test", [])
+
+    assert isinstance(method, UnitTestSelectorMethod)
+    assert not search_manifest_using_method(manifest, method, "not_test_unit_test")
+    assert search_manifest_using_method(manifest, method, "*nit_test") == {unit_test.search_name}
+    assert search_manifest_using_method(manifest, method, "test.my_unit_test") == {
+        unit_test.search_name
+    }
+    assert search_manifest_using_method(manifest, method, "my_unit_test") == {
+        unit_test.search_name
+    }
 
 
 @pytest.fixture
