@@ -2,11 +2,15 @@ from argparse import Namespace
 from unittest.mock import MagicMock, patch
 
 import pytest
+from pytest_mock import MockerFixture
 
+from dbt.adapters.postgres import PostgresAdapter
+from dbt.adapters.sql import SQLConnectionManager
 from dbt.config import RuntimeConfig
 from dbt.contracts.graph.manifest import Manifest
 from dbt.flags import set_from_args
 from dbt.parser.manifest import ManifestLoader
+from dbt.tracking import User
 
 
 @pytest.fixture
@@ -21,6 +25,20 @@ def mock_project():
     mock_project.project_target_path = "mock_target_path"
     mock_project.credentials = MagicMock()
     return mock_project
+
+
+@pytest.fixture
+def mock_connection_manager():
+    mock_connection_manager = MagicMock(SQLConnectionManager)
+    mock_connection_manager.set_query_header = lambda query_header_context: None
+    return mock_connection_manager
+
+
+@pytest.fixture
+def mock_adapter(mock_connection_manager: MagicMock):
+    mock_adapter = MagicMock(PostgresAdapter)
+    mock_adapter.connections = mock_connection_manager
+    return mock_adapter
 
 
 class TestPartialParse:
@@ -91,3 +109,33 @@ class TestFailedPartialParse:
         assert "full_reparse_reason" in exc_info
         assert "KeyError: 'Whoopsie!'" == exc_info["exception"]
         assert isinstance(exc_info["code"], str) or isinstance(exc_info["code"], type(None))
+
+
+class TestGetFullManifest:
+    def test_write_perf_info(
+        self,
+        manifest: Manifest,
+        mock_project: MagicMock,
+        mock_adapter: MagicMock,
+        mocker: MockerFixture,
+    ) -> None:
+        mocker.patch("dbt.parser.manifest.get_adapter").return_value = mock_adapter
+        mocker.patch("dbt.parser.manifest.ManifestLoader.load").return_value = manifest
+        mocker.patch("dbt.parser.manifest._check_manifest").return_value = None
+        mocker.patch(
+            "dbt.parser.manifest.ManifestLoader.save_macros_to_adapter"
+        ).return_value = None
+        mocker.patch("dbt.tracking.active_user").return_value = User(None)
+        write_perf_info = mocker.patch("dbt.parser.manifest.ManifestLoader.write_perf_info")
+
+        ManifestLoader.get_full_manifest(
+            config=mock_project,
+            # write_perf_info=False let it default instead
+        )
+        assert not write_perf_info.called
+
+        ManifestLoader.get_full_manifest(config=mock_project, write_perf_info=False)
+        assert not write_perf_info.called
+
+        ManifestLoader.get_full_manifest(config=mock_project, write_perf_info=True)
+        assert write_perf_info.called
