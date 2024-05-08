@@ -1,8 +1,14 @@
 import threading
-from typing import Any, Optional, Iterable, Tuple, Sequence, Dict, TYPE_CHECKING
+from typing import Any, Optional, Iterable, Tuple, Sequence, Dict
 import copy
 from dataclasses import dataclass, field
 from datetime import datetime
+
+# https://github.com/dbt-labs/dbt-core/issues/10098
+# Needed for Mashumaro serialization of RunResult below
+# TODO: investigate alternative approaches to restore conditional import
+# if TYPE_CHECKING:
+import agate
 
 
 from dbt_common.constants import SECRET_ENV_PREFIX
@@ -22,10 +28,6 @@ from dbt.artifacts.schemas.results import (
 )
 from dbt_common.clients.system import write_json
 from dbt.exceptions import scrub_secrets
-
-
-if TYPE_CHECKING:
-    import agate
 
 
 @dataclass
