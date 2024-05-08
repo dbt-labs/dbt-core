@@ -554,8 +554,11 @@ class RuntimeRefResolver(BaseRefResolver):
             and target_model.defer_relation
             and self.config.args.defer
             and (
-                # User has explicitly opted to prefer defer_relation
-                self.config.args.favor_state
+                # User has explicitly opted to prefer defer_relation for unselected resources
+                (
+                    self.config.args.favor_state
+                    and target_model.unique_id not in selected_resources.SELECTED_RESOURCES
+                )
                 # Or, this node's relation does not exist in the expected target location (cache lookup)
                 or not get_adapter(self.config).get_relation(
                     target_model.database, target_model.schema, target_model.identifier
