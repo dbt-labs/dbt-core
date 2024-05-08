@@ -230,6 +230,26 @@ class TestRunDeferStateIFFNotExists(BaseDeferState):
         assert len(results) == 2
         assert other_schema not in results[0].node.compiled_code
 
+        # again with --favor-state, but this time select both the seed and the view
+        # because the seed is also selected, the view should select from the seed in our schema ('other_schema')
+        results = run_dbt(
+            [
+                "build",
+                "--state",
+                "state",
+                "--select",
+                "seed view_model",
+                "--resource-type",
+                "seed model",
+                "--defer",
+                "--favor-state",
+                "--target",
+                "otherschema",
+            ]
+        )
+        assert len(results) == 2
+        assert other_schema in results[1].node.compiled_code
+
 
 class TestDeferStateDeletedUpstream(BaseDeferState):
     def test_run_defer_deleted_upstream(self, project, unique_schema, other_schema):
