@@ -1,0 +1,7 @@
+kind: Fixes
+body: Undo conditional agate import to prevent UnresolvedTypeReferenceError during
+  RunResult serialization
+time: 2024-05-08T13:21:33.604231+02:00
+custom:
+  Author: jtcohen6
+  Issue: "10098"
