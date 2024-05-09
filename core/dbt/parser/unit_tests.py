@@ -365,11 +365,17 @@ class UnitTestParser(YamlReader):
                 )
 
             if ut_fixture.fixture:
-                ut_fixture.rows = self.get_fixture_file_rows(
+                csv_rows = self.get_fixture_file_rows(
                     ut_fixture.fixture, self.project.project_name, unit_test_definition.unique_id
                 )
             else:
-                ut_fixture.rows = self._convert_csv_to_list_of_dicts(ut_fixture.rows)
+                csv_rows = self._convert_csv_to_list_of_dicts(ut_fixture.rows)
+
+            # Empty values (e.g. ,,) in a csv fixture should default to null, not ""
+            ut_fixture.rows = [
+                {k: (None if v == "" else v) for k, v in row.items()} for row in csv_rows
+            ]
+
         elif ut_fixture.format == UnitTestFormat.SQL:
             if not (isinstance(ut_fixture.rows, str) or isinstance(ut_fixture.fixture, str)):
                 raise ParsingError(
