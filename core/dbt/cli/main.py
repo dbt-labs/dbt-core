@@ -104,7 +104,6 @@ def global_flags(func):
     @p.deprecated_favor_state
     @p.deprecated_print
     @p.deprecated_state
-    @p.enable_legacy_logger
     @p.fail_fast
     @p.favor_state
     @p.indirect_selection
