@@ -24,6 +24,7 @@ def mock_project():
     mock_project.profile_env_vars = {}
     mock_project.project_target_path = "mock_target_path"
     mock_project.credentials = MagicMock()
+    mock_project.clear_dependencies = MagicMock()
     return mock_project
 
 
@@ -38,6 +39,7 @@ def mock_connection_manager():
 def mock_adapter(mock_connection_manager: MagicMock):
     mock_adapter = MagicMock(PostgresAdapter)
     mock_adapter.connections = mock_connection_manager
+    mock_adapter.clear_macro_resolver = MagicMock()
     return mock_adapter
 
 
@@ -139,3 +141,33 @@ class TestGetFullManifest:
 
         ManifestLoader.get_full_manifest(config=mock_project, write_perf_info=True)
         assert write_perf_info.called
+
+    def test_reset(
+        self,
+        manifest: Manifest,
+        mock_project: MagicMock,
+        mock_adapter: MagicMock,
+        mocker: MockerFixture,
+    ) -> None:
+        mocker.patch("dbt.parser.manifest.get_adapter").return_value = mock_adapter
+        mocker.patch("dbt.parser.manifest.ManifestLoader.load").return_value = manifest
+        mocker.patch("dbt.parser.manifest._check_manifest").return_value = None
+        mocker.patch(
+            "dbt.parser.manifest.ManifestLoader.save_macros_to_adapter"
+        ).return_value = None
+        mocker.patch("dbt.tracking.active_user").return_value = User(None)
+
+        ManifestLoader.get_full_manifest(
+            config=mock_project,
+            # reset=False let it default instead
+        )
+        assert not mock_project.clear_dependencies.called
+        assert not mock_adapter.clear_macro_resolver.called
+
+        ManifestLoader.get_full_manifest(config=mock_project, reset=False)
+        assert not mock_project.clear_dependencies.called
+        assert not mock_adapter.clear_macro_resolver.called
+
+        ManifestLoader.get_full_manifest(config=mock_project, reset=True)
+        assert mock_project.clear_dependencies.called
+        assert mock_adapter.clear_macro_resolver.called
