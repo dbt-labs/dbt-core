@@ -1,7 +1,0 @@
-kind: Fixes
-body: Add TestGenerateCatalogWithExternalNodes, include empty nodes in node selection
-  during docs generate
-time: 2024-01-25T18:22:43.253228-05:00
-custom:
-  Author: michelleark
-  Issue: "9456"

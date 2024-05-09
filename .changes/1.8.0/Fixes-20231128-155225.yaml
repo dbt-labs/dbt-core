@@ -1,6 +1,0 @@
-kind: Fixes
-body: 'Get sources working again in dbt docs generate'
-time: 2023-11-28T15:52:25.738256Z
-custom:
-  Author: aranke
-  Issue: "9119"

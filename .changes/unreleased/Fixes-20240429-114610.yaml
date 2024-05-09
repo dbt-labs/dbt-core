@@ -1,6 +1,0 @@
-kind: Fixes
-body: Support overriding source level loaded_at_field with a null table level definition
-time: 2024-04-29T11:46:10.100373-05:00
-custom:
-  Author: emmyoop
-  Issue: "9320"

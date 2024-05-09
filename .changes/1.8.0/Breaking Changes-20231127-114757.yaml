@@ -1,6 +1,0 @@
-kind: Breaking Changes
-body: Remove adapter.get_compiler interface
-time: 2023-11-27T11:47:57.443202-05:00
-custom:
-  Author: michelleark
-  Issue: "9148"

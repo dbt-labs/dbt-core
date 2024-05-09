@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: Cache dbt plugin modules to improve integration test performance
-time: 2023-11-07T19:15:46.170151-05:00
-custom:
-  Author: peterallenwebb
-  Issue: "9029"

@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: Restrict protobuf to major version 4.
-time: 2024-02-21T10:45:18.315195-05:00
-custom:
-  Author: peterallenwebb
-  Issue: "9566"

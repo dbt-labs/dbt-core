@@ -1,6 +1,0 @@
-kind: Features
-body: Unit tests support --defer and state:modified
-time: 2023-11-07T23:10:06.376588-05:00
-custom:
-  Author: jtcohen6
-  Issue: "8517"

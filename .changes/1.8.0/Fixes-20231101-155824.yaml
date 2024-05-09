@@ -1,6 +1,0 @@
-kind: Fixes
-body: Make relation filtering None-tolerant for maximal flexibility across adapters.
-time: 2023-11-01T15:58:24.552054-04:00
-custom:
-  Author: peterallenwebb
-  Issue: "8974"

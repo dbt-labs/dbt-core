@@ -1,6 +1,0 @@
-kind: Features
-body: Move flags from UserConfig in profiles.yml to flags in dbt_project.yml
-time: 2023-12-18T19:58:54.075811-05:00
-custom:
-  Author: gshank
-  Issue: "9183"

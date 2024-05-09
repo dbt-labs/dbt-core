@@ -1,6 +1,0 @@
-kind: Features
-body: Make fixture files full-fledged parts of the manifest and enable partial parsing
-time: 2023-12-05T20:04:47.117029-05:00
-custom:
-  Author: gshank
-  Issue: "9067"

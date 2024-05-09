@@ -79,6 +79,16 @@ class GitPackage(Package):
 
 
 @dataclass
+class PrivatePackage(Package):
+    private: str
+    provider: Optional[str] = None
+    revision: Optional[RawVersion] = None
+    warn_unpinned: Optional[bool] = field(default=None, metadata={"alias": "warn-unpinned"})
+    subdirectory: Optional[str] = None
+    unrendered: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
 class RegistryPackage(Package):
     package: str
     version: Union[RawVersion, List[RawVersion]]
@@ -92,7 +102,7 @@ class RegistryPackage(Package):
             return [str(self.version)]
 
 
-PackageSpec = Union[LocalPackage, TarballPackage, GitPackage, RegistryPackage]
+PackageSpec = Union[LocalPackage, TarballPackage, GitPackage, RegistryPackage, PrivatePackage]
 
 
 @dataclass

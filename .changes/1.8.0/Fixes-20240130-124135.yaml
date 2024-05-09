@@ -1,7 +1,0 @@
-kind: Fixes
-body: Run manifest upgrade preprocessing on any older manifest version, including
-  v11
-time: 2024-01-30T12:41:35.899412+01:00
-custom:
-  Author: jtcohen6
-  Issue: "9487"

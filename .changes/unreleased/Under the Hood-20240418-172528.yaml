@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: Raise deprecation warning if installed package overrides built-in materialization
-time: 2024-04-18T17:25:28.37886-04:00
-custom:
-  Author: michelleark
-  Issue: "9971"

@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Fix test_current_timestamp_matches_utc test; allow for MacOS runner system clock
-  variance
-time: 2023-11-11T17:53:50.098843-05:00
-custom:
-  Author: mikealfare
-  Issue: "9057"

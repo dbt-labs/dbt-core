@@ -1,6 +1,0 @@
-kind: Features
-body: Add require_explicit_package_overrides_for_builtin_materializations to dbt_project.yml flags, which can be used to opt-out of overriding built-in materializations from packages
-time: 2024-04-22T17:37:03.892268-04:00
-custom:
-  Author: michelleark
-  Issue: "10007"

@@ -1,6 +1,0 @@
-kind: Fixes
-body: Use consistent secret scrubbing with the log function.
-time: 2024-04-22T14:58:11.990326-05:00
-custom:
-  Author: emmyoop
-  Issue: "9987"

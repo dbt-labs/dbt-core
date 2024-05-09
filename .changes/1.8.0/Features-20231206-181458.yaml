@@ -1,7 +1,0 @@
-kind: Features
-body: Adds support for parsing conversion metric related properties for the semantic
-  layer.
-time: 2023-12-06T18:14:58.688221-05:00
-custom:
-  Author: WilliamDee
-  Issue: "9203"

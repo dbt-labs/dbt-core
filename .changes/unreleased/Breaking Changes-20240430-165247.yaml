@@ -1,7 +1,0 @@
-kind: Breaking Changes
-body: Update the default behaviour of require_explicit_package_overrides_for_builtin_materializations
-  to True.
-time: 2024-04-30T16:52:47.610025-04:00
-custom:
-  Author: jtcohen6
-  Issue: "10062"

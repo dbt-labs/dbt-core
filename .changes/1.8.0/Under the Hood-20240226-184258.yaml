@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: Use Manifest instead of WritableManifest in PreviousState and _get_deferred_manifest
-time: 2024-02-26T18:42:58.740808-05:00
-custom:
-  Author: michelleark
-  Issue: "9567"

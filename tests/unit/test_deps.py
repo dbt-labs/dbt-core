@@ -791,6 +791,19 @@ class TestPackageSpec(unittest.TestCase):
         self.assertEqual(resolved[1].name, "dbt-labs-test/b")
         self.assertEqual(resolved[1].version, "0.2.1")
 
+    def test_private_package_raise_error(self):
+        package_config = PackageConfig.from_dict(
+            {
+                "packages": [
+                    {"private": "dbt-labs-test/a", "subdirectory": "foo-bar"},
+                ],
+            }
+        )
+        with self.assertRaisesRegex(
+            dbt.exceptions.DependencyError, "Cannot resolve private package"
+        ):
+            resolve_packages(package_config.packages, mock.MagicMock(project_name="test"), {})
+
     def test_dependency_resolution_allow_prerelease(self):
         package_config = PackageConfig.from_dict(
             {
