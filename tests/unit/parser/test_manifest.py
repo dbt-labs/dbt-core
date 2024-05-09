@@ -114,13 +114,9 @@ class TestFailedPartialParse:
 
 
 class TestGetFullManifest:
-    def test_write_perf_info(
-        self,
-        manifest: Manifest,
-        mock_project: MagicMock,
-        mock_adapter: MagicMock,
-        mocker: MockerFixture,
-    ) -> None:
+    def set_required_mocks(
+        self, mocker: MockerFixture, manifest: Manifest, mock_adapter: MagicMock
+    ):
         mocker.patch("dbt.parser.manifest.get_adapter").return_value = mock_adapter
         mocker.patch("dbt.parser.manifest.ManifestLoader.load").return_value = manifest
         mocker.patch("dbt.parser.manifest._check_manifest").return_value = None
@@ -128,6 +124,15 @@ class TestGetFullManifest:
             "dbt.parser.manifest.ManifestLoader.save_macros_to_adapter"
         ).return_value = None
         mocker.patch("dbt.tracking.active_user").return_value = User(None)
+
+    def test_write_perf_info(
+        self,
+        manifest: Manifest,
+        mock_project: MagicMock,
+        mock_adapter: MagicMock,
+        mocker: MockerFixture,
+    ) -> None:
+        self.set_required_mocks(mocker, manifest, mock_adapter)
         write_perf_info = mocker.patch("dbt.parser.manifest.ManifestLoader.write_perf_info")
 
         ManifestLoader.get_full_manifest(
@@ -149,13 +154,7 @@ class TestGetFullManifest:
         mock_adapter: MagicMock,
         mocker: MockerFixture,
     ) -> None:
-        mocker.patch("dbt.parser.manifest.get_adapter").return_value = mock_adapter
-        mocker.patch("dbt.parser.manifest.ManifestLoader.load").return_value = manifest
-        mocker.patch("dbt.parser.manifest._check_manifest").return_value = None
-        mocker.patch(
-            "dbt.parser.manifest.ManifestLoader.save_macros_to_adapter"
-        ).return_value = None
-        mocker.patch("dbt.tracking.active_user").return_value = User(None)
+        self.set_required_mocks(mocker, manifest, mock_adapter)
 
         ManifestLoader.get_full_manifest(
             config=mock_project,
