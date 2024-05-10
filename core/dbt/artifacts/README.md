@@ -39,6 +39,15 @@ Freely make incremental, non-breaking changes in-place to the latest major versi
 
 These types of minor, non-breaking changes are tested by [tests/unit/artifacts/test_base_resource.py::TestMinorSchemaChange](https://github.com/dbt-labs/dbt-core/blob/main/tests/unit/artifacts/test_base_resource.py).
 
+
+#### Updating [schemas.getdbt.com](https://schemas.getdbt.com)
+Non-breaking changes to artifact schemas require an update to the corresponding jsonschemas published to [schemas.getdbt.com](https://schemas.getdbt.com), which are defined in https://github.com/dbt-labs/schemas.getdbt.com. To do so: 
+1. Create a PR in https://github.com/dbt-labs/schemas.getdbt.com which reflects the schema changes to the artifact. The schema can be updated in-place for non-breaking changes. Example PR: https://github.com/dbt-labs/schemas.getdbt.com/pull/39
+2. Merge the https://github.com/dbt-labs/schemas.getdbt.com PR
+3. Observe the `Artifact Schema Check` CI check pass on the `dbt-core` PR that updates the artifact schemas, and merge the `dbt-core` PR!
+
+Note: Although `jsonschema` validation using the schemas in [schemas.getdbt.com](https://schemas.getdbt.com) is not encouraged or formally supported, `jsonschema` validation should still continue to work once the schemas are updated because they are forward-compatible and can therefore be used to validate previous minor versions of the schema.
+
 ### Breaking changes
 A breaking change is anything that:
 * Deletes a required field
