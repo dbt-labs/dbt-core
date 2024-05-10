@@ -88,7 +88,7 @@ def schema_version(name: str, version: int):
     return inner
 
 
-# This is used in the ArtifactMixin and RemoteResult classes
+# This is used in the ArtifactMixin and RemoteCompileResultMixin classes
 @dataclasses.dataclass
 class VersionedSchema(dbtClassMixin):
     dbt_schema_version: ClassVar[SchemaVersion]

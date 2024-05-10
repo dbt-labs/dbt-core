@@ -1071,9 +1071,8 @@ class ManifestLoader:
         # and then throws it away, returning only the
         # manifest
         loader = cls(root_config, projects, macro_hook)
-        macro_manifest = loader.create_macro_manifest()
 
-        return macro_manifest
+        return loader.create_macro_manifest()
 
     # Create tracking event for saving performance info
     def track_project_load(self):

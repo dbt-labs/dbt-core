@@ -48,7 +48,7 @@ from dbt.graph import (
 from dbt.parser.manifest import write_manifest
 from dbt.task.base import BaseRunner, ConfiguredTask
 from dbt_common.context import _INVOCATION_CONTEXT_VAR, get_invocation_context
-from dbt_common.events.contextvars import task_contextvars
+from dbt_common.events.contextvars import log_contextvars, task_contextvars
 from dbt_common.events.functions import fire_event, warn_or_error
 from dbt_common.events.types import Formatting
 from dbt_common.exceptions import NotImplementedError
@@ -188,51 +188,52 @@ class GraphRunnableTask(ConfiguredTask):
         return cls(self.config, adapter, node, run_count, num_nodes)
 
     def call_runner(self, runner: BaseRunner) -> RunResult:
-        runner.node.update_event_status(
-            started_at=datetime.utcnow().isoformat(), node_status=RunningStatus.Started
-        )
-        fire_event(
-            NodeStart(
-                node_info=runner.node.node_info,
+        with log_contextvars(node_info=runner.node.node_info):
+            runner.node.update_event_status(
+                started_at=datetime.utcnow().isoformat(), node_status=RunningStatus.Started
             )
-        )
-        try:
-            result = runner.run_with_hooks(self.manifest)
-        except Exception as e:
-            thread_exception = e
-        finally:
-            if result is not None:
-                fire_event(
-                    NodeFinished(
-                        node_info=runner.node.node_info,
-                        run_result=result.to_msg_dict(),
+            fire_event(
+                NodeStart(
+                    node_info=runner.node.node_info,
+                )
+            )
+            try:
+                result = runner.run_with_hooks(self.manifest)
+            except Exception as e:
+                thread_exception = e
+            finally:
+                if result is not None:
+                    fire_event(
+                        NodeFinished(
+                            node_info=runner.node.node_info,
+                            run_result=result.to_msg_dict(),
+                        )
                     )
-                )
-            else:
-                msg = f"Exception on worker thread. {thread_exception}"
+                else:
+                    msg = f"Exception on worker thread. {thread_exception}"
 
-                fire_event(
-                    GenericExceptionOnRun(
-                        unique_id=runner.node.unique_id,
-                        exc=str(thread_exception),
-                        node_info=runner.node.node_info,
+                    fire_event(
+                        GenericExceptionOnRun(
+                            unique_id=runner.node.unique_id,
+                            exc=str(thread_exception),
+                            node_info=runner.node.node_info,
+                        )
                     )
-                )
 
-                result = RunResult(
-                    status=RunStatus.Error,  # type: ignore
-                    timing=[],
-                    thread_id="",
-                    execution_time=0.0,
-                    adapter_response={},
-                    message=msg,
-                    failures=None,
-                    node=runner.node,
-                )
+                    result = RunResult(
+                        status=RunStatus.Error,  # type: ignore
+                        timing=[],
+                        thread_id="",
+                        execution_time=0.0,
+                        adapter_response={},
+                        message=msg,
+                        failures=None,
+                        node=runner.node,
+                    )
 
-        # `_event_status` dict is only used for logging.  Make sure
-        # it gets deleted when we're done with it
-        runner.node.clear_event_status()
+            # `_event_status` dict is only used for logging.  Make sure
+            # it gets deleted when we're done with it
+            runner.node.clear_event_status()
 
         fail_fast = get_flags().FAIL_FAST
 

@@ -368,29 +368,29 @@ class RunTask(CompileTask):
                     )
                 )
 
-            with Timer() as timer:
-                if len(sql.strip()) > 0:
-                    response, _ = adapter.execute(sql, auto_begin=False, fetch=False)
-                    status = response._message
-                else:
-                    status = "OK"
+                with Timer() as timer:
+                    if len(sql.strip()) > 0:
+                        response, _ = adapter.execute(sql, auto_begin=False, fetch=False)
+                        status = response._message
+                    else:
+                        status = "OK"
 
-            self.ran_hooks.append(hook)
-            hook.update_event_status(finished_at=datetime.utcnow().isoformat())
-            hook.update_event_status(node_status=RunStatus.Success)
-            fire_event(
-                LogHookEndLine(
-                    statement=hook_text,
-                    status=status,
-                    index=idx,
-                    total=num_hooks,
-                    execution_time=timer.elapsed,
-                    node_info=hook.node_info,
+                self.ran_hooks.append(hook)
+                hook.update_event_status(finished_at=datetime.utcnow().isoformat())
+                hook.update_event_status(node_status=RunStatus.Success)
+                fire_event(
+                    LogHookEndLine(
+                        statement=hook_text,
+                        status=status,
+                        index=idx,
+                        total=num_hooks,
+                        execution_time=timer.elapsed,
+                        node_info=hook.node_info,
+                    )
                 )
-            )
-            # `_event_status` dict is only used for logging.  Make sure
-            # it gets deleted when we're done with it
-            hook.clear_event_status()
+                # `_event_status` dict is only used for logging.  Make sure
+                # it gets deleted when we're done with it
+                hook.clear_event_status()
 
         self._total_executed += len(ordered_hooks)
 
