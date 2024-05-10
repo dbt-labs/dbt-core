@@ -10,6 +10,7 @@ from dbt.config import RuntimeConfig
 from dbt.contracts.graph.manifest import Manifest
 from dbt.flags import set_from_args
 from dbt.parser.manifest import ManifestLoader
+from dbt.parser.read_files import FileDiff
 from dbt.tracking import User
 
 
@@ -170,3 +171,30 @@ class TestGetFullManifest:
         ManifestLoader.get_full_manifest(config=mock_project, reset=True)
         assert mock_project.clear_dependencies.called
         assert mock_adapter.clear_macro_resolver.called
+
+    def test_partial_parse_file_diff_flag(
+        self,
+        manifest: Manifest,
+        mock_project: MagicMock,
+        mock_adapter: MagicMock,
+        mocker: MockerFixture,
+    ) -> None:
+        self.set_required_mocks(mocker, manifest, mock_adapter)
+
+        # FileDiff.from_dict is only called if PARTIAL_PARSE_FILE_DIFF == False
+        # So we can track this function call to check if setting PARTIAL_PARSE_FILE_DIFF
+        # works appropriately
+        mock_file_diff = mocker.patch("dbt.parser.read_files.FileDiff.from_dict")
+        mock_file_diff.return_value = FileDiff([], [], [])
+
+        set_from_args(Namespace(), {})
+        ManifestLoader.get_full_manifest(config=mock_project)
+        assert not mock_file_diff.called
+
+        set_from_args(Namespace(PARTIAL_PARSE_FILE_DIFF=True), {})
+        ManifestLoader.get_full_manifest(config=mock_project)
+        assert not mock_file_diff.called
+
+        set_from_args(Namespace(PARTIAL_PARSE_FILE_DIFF=False), {})
+        ManifestLoader.get_full_manifest(config=mock_project)
+        assert mock_file_diff.called
