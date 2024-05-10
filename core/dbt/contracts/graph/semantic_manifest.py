@@ -1,3 +1,5 @@
+from typing import List
+
 from dbt_semantic_interfaces.implementations.metric import PydanticMetric
 from dbt_semantic_interfaces.implementations.project_configuration import (
     PydanticProjectConfiguration,
@@ -26,32 +28,36 @@ class SemanticManifest:
     def __init__(self, manifest) -> None:
         self.manifest = manifest
 
-    def validate(self) -> bool:
+    def validate(self) -> None:
+        validation_error_messages: List[str] = []
+
+        if self.manifest.metrics and self.manifest.semantic_models:
+            semantic_manifest = self._get_pydantic_semantic_manifest()
+            validator = SemanticManifestValidator[PydanticSemanticManifest]()
+            validation_results = validator.validate_semantic_manifest(semantic_manifest)
+
+            for warning in validation_results.warnings:
+                fire_event(SemanticValidationFailure(msg=warning.message), EventLevel.WARN)
+
+            for error in validation_results.errors:
+                fire_event(SemanticValidationFailure(msg=error.message), EventLevel.ERROR)
+                validation_error_messages.append(error.message)
 
         # TODO: Enforce this check.
-        # if self.manifest.metrics and not self.manifest.semantic_models:
+        # elif self.manifest.metrics and not self.manifest.semantic_models:
+        #    validation_error_messages.append("Metrics require semantic models, but none were found.")
         #    fire_event(
         #        SemanticValidationFailure(
-        #            msg="Metrics require semantic models, but none were found."
+        #            msg=validation_error_messages[0]
         #        ),
         #        EventLevel.ERROR,
         #    )
-        #    return False
 
-        if not self.manifest.metrics or not self.manifest.semantic_models:
-            return True
-
-        semantic_manifest = self._get_pydantic_semantic_manifest()
-        validator = SemanticManifestValidator[PydanticSemanticManifest]()
-        validation_results = validator.validate_semantic_manifest(semantic_manifest)
-
-        for warning in validation_results.warnings:
-            fire_event(SemanticValidationFailure(msg=warning.message))
-
-        for error in validation_results.errors:
-            fire_event(SemanticValidationFailure(msg=error.message), EventLevel.ERROR)
-
-        return not validation_results.errors
+        if validation_error_messages:
+            validation_error_msg = "\n".join(validation_error_messages)
+            raise ParsingError(
+                f"Semantic Manifest validation failed due to the following:\n{ validation_error_msg }"
+            )
 
     def write_json_to_file(self, file_path: str):
         semantic_manifest = self._get_pydantic_semantic_manifest()
