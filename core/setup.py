@@ -75,8 +75,8 @@ setup(
         "minimal-snowplow-tracker>=0.0.2,<0.1",
         "dbt-semantic-interfaces>=0.5.1,<0.6",
         # Minor versions for these are expected to be backwards-compatible
-        "dbt-common>=1.0.2,<2.0",
-        "dbt-adapters>=0.1.0a2,<2.0",
+        "dbt-common>=1.0.4,<2.0",
+        "dbt-adapters>=1.1.1,<2.0",
         # ----
         # Expect compatibility with all new versions of these packages, so lower bounds only.
         "packaging>20.9",
