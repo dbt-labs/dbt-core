@@ -1,0 +1,6 @@
+kind: "Dependencies"
+body: "Update logbook requirement from <1.6,>=1.5 to >=1.5,<1.7 in /core"
+time: 2023-07-31T00:33:48.00000Z
+custom:
+  Author: dependabot[bot]
+  PR: 8254
