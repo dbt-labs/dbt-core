@@ -54,9 +54,9 @@ class SemanticManifest:
         #    )
 
         if validation_error_messages:
-            validation_error_msg = "\n".join(validation_error_messages)
+            validation_error_msg = "\n- ".join(validation_error_messages)
             raise ParsingError(
-                f"Semantic Manifest validation failed due to the following:\n{ validation_error_msg }"
+                f"Semantic Manifest validation failed due to the following:\n- { validation_error_msg }"
             )
 
     def write_json_to_file(self, file_path: str):
