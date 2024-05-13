@@ -6,7 +6,6 @@ from contextlib import contextmanager
 from datetime import datetime
 from typing import Optional
 
-import logbook
 import pytz
 import requests
 from packaging.version import Version
@@ -465,20 +464,6 @@ def disable_tracking():
 def do_not_track():
     global active_user
     active_user = User(None)
-
-
-class InvocationProcessor(logbook.Processor):
-    def __init__(self) -> None:
-        super().__init__()
-
-    def process(self, record):
-        if active_user is not None:
-            record.extra.update(
-                {
-                    "run_started_at": active_user.run_started_at.isoformat(),
-                    "invocation_id": get_invocation_id(),
-                }
-            )
 
 
 def initialize_from_flags(send_anonymous_usage_stats, profiles_dir):

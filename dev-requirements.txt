@@ -19,7 +19,6 @@ pytest>=7.4,<8.0
 pytest-cov
 pytest-csv>=3.0,<4.0
 pytest-dotenv
-pytest-logbook
 pytest-mock
 pytest-split
 pytest-xdist

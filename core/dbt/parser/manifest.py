@@ -85,7 +85,6 @@ from dbt.exceptions import (
     scrub_secrets,
 )
 from dbt.flags import get_flags
-from dbt.logger import DbtProcessState
 from dbt.mp_context import get_mp_context
 from dbt.node_types import AccessType, NodeType
 from dbt.parser.analysis import AnalysisParser
@@ -121,7 +120,6 @@ from dbt_common.events.types import Note
 from dbt_common.exceptions.base import DbtValidationError
 from dbt_common.helper_types import PathSet
 
-PARSING_STATE = DbtProcessState("parsing")
 PERF_INFO_FILE_NAME = "perf_info.json"
 
 
@@ -294,33 +292,32 @@ class ManifestLoader:
                 file_diff_dct = read_json(file_diff_path)
                 file_diff = FileDiff.from_dict(file_diff_dct)
 
-        with PARSING_STATE:  # set up logbook.Processor for parsing
-            # Start performance counting
-            start_load_all = time.perf_counter()
+        # Start performance counting
+        start_load_all = time.perf_counter()
 
-            projects = config.load_dependencies()
-            loader = cls(
-                config,
-                projects,
-                macro_hook=macro_hook,
-                file_diff=file_diff,
-            )
+        projects = config.load_dependencies()
+        loader = cls(
+            config,
+            projects,
+            macro_hook=macro_hook,
+            file_diff=file_diff,
+        )
 
-            manifest = loader.load()
+        manifest = loader.load()
 
-            _check_manifest(manifest, config)
-            manifest.build_flat_graph()
+        _check_manifest(manifest, config)
+        manifest.build_flat_graph()
 
-            # This needs to happen after loading from a partial parse,
-            # so that the adapter has the query headers from the macro_hook.
-            loader.save_macros_to_adapter(adapter)
+        # This needs to happen after loading from a partial parse,
+        # so that the adapter has the query headers from the macro_hook.
+        loader.save_macros_to_adapter(adapter)
 
-            # Save performance info
-            loader._perf_info.load_all_elapsed = time.perf_counter() - start_load_all
-            loader.track_project_load()
+        # Save performance info
+        loader._perf_info.load_all_elapsed = time.perf_counter() - start_load_all
+        loader.track_project_load()
 
-            if write_perf_info:
-                loader.write_perf_info(config.project_target_path)
+        if write_perf_info:
+            loader.write_perf_info(config.project_target_path)
 
         return manifest
 
@@ -1068,18 +1065,16 @@ class ManifestLoader:
         macro_hook: Callable[[Manifest], Any],
         base_macros_only=False,
     ) -> Manifest:
-        with PARSING_STATE:
-            # base_only/base_macros_only: for testing only,
-            # allows loading macros without running 'dbt deps' first
-            projects = root_config.load_dependencies(base_only=base_macros_only)
+        # base_only/base_macros_only: for testing only,
+        # allows loading macros without running 'dbt deps' first
+        projects = root_config.load_dependencies(base_only=base_macros_only)
 
-            # This creates a loader object, including result,
-            # and then throws it away, returning only the
-            # manifest
-            loader = cls(root_config, projects, macro_hook)
-            macro_manifest = loader.create_macro_manifest()
+        # This creates a loader object, including result,
+        # and then throws it away, returning only the
+        # manifest
+        loader = cls(root_config, projects, macro_hook)
 
-        return macro_manifest
+        return loader.create_macro_manifest()
 
     # Create tracking event for saving performance info
     def track_project_load(self):

@@ -45,15 +45,6 @@ from dbt.graph import (
     UniqueId,
     parse_difference,
 )
-from dbt.logger import (
-    DbtModelState,
-    DbtProcessState,
-    ModelMetadata,
-    NodeCount,
-    TextOnly,
-    TimestampNamed,
-    UniqueID,
-)
 from dbt.parser.manifest import write_manifest
 from dbt.task.base import BaseRunner, ConfiguredTask
 from dbt_common.context import _INVOCATION_CONTEXT_VAR, get_invocation_context
@@ -65,7 +56,6 @@ from dbt_common.exceptions import NotImplementedError
 from .printer import print_run_end_messages, print_run_result_error
 
 RESULT_FILE_NAME = "run_results.json"
-RUNNING_STATE = DbtProcessState("running")
 
 
 class GraphRunnableTask(ConfiguredTask):
@@ -198,59 +188,48 @@ class GraphRunnableTask(ConfiguredTask):
         return cls(self.config, adapter, node, run_count, num_nodes)
 
     def call_runner(self, runner: BaseRunner) -> RunResult:
-        uid_context = UniqueID(runner.node.unique_id)
-        with RUNNING_STATE, uid_context, log_contextvars(node_info=runner.node.node_info):
-            startctx = TimestampNamed("node_started_at")
-            index = self.index_offset(runner.node_index)
+        with log_contextvars(node_info=runner.node.node_info):
             runner.node.update_event_status(
                 started_at=datetime.utcnow().isoformat(), node_status=RunningStatus.Started
             )
-            extended_metadata = ModelMetadata(runner.node, index)
-
-            with startctx, extended_metadata:
-                fire_event(
-                    NodeStart(
-                        node_info=runner.node.node_info,
-                    )
+            fire_event(
+                NodeStart(
+                    node_info=runner.node.node_info,
                 )
-            status: Dict[str, str] = {}
-            result = None
-            thread_exception = None
+            )
             try:
                 result = runner.run_with_hooks(self.manifest)
             except Exception as e:
                 thread_exception = e
             finally:
-                finishctx = TimestampNamed("finished_at")
-                with finishctx, DbtModelState(status):
-                    if result is not None:
-                        fire_event(
-                            NodeFinished(
-                                node_info=runner.node.node_info,
-                                run_result=result.to_msg_dict(),
-                            )
+                if result is not None:
+                    fire_event(
+                        NodeFinished(
+                            node_info=runner.node.node_info,
+                            run_result=result.to_msg_dict(),
                         )
-                    else:
-                        msg = f"Exception on worker thread. {thread_exception}"
+                    )
+                else:
+                    msg = f"Exception on worker thread. {thread_exception}"
 
-                        fire_event(
-                            GenericExceptionOnRun(
-                                unique_id=runner.node.unique_id,
-                                exc=str(thread_exception),
-                                node_info=runner.node.node_info,
-                            )
+                    fire_event(
+                        GenericExceptionOnRun(
+                            unique_id=runner.node.unique_id,
+                            exc=str(thread_exception),
+                            node_info=runner.node.node_info,
                         )
+                    )
 
-                        result = RunResult(
-                            status=RunStatus.Error,  # type: ignore
-                            timing=[],
-                            thread_id="",
-                            execution_time=0.0,
-                            adapter_response={},
-                            message=msg,
-                            failures=None,
-                            node=runner.node,
-                        )
+                    result = RunResult(
+                        status=RunStatus.Error,  # type: ignore
+                        timing=[],
+                        thread_id="",
+                        execution_time=0.0,
+                        adapter_response={},
+                        message=msg,
+                        failures=None,
+                        node=runner.node,
+                    )
 
             # `_event_status` dict is only used for logging.  Make sure
             # it gets deleted when we're done with it
@@ -386,15 +365,12 @@ class GraphRunnableTask(ConfiguredTask):
         num_threads = self.config.threads
         target_name = self.config.target_name
 
-        # following line can be removed when legacy logger is removed
-        with NodeCount(self.num_nodes):
-            fire_event(
-                ConcurrencyLine(
-                    num_threads=num_threads, target_name=target_name, node_count=self.num_nodes
-                )
+        fire_event(
+            ConcurrencyLine(
+                num_threads=num_threads, target_name=target_name, node_count=self.num_nodes
             )
-        with TextOnly():
-            fire_event(Formatting(""))
+        )
+        fire_event(Formatting(""))
 
         pool = ThreadPool(num_threads, self._pool_thread_initializer, [get_invocation_context()])
         try:
@@ -515,8 +491,7 @@ class GraphRunnableTask(ConfiguredTask):
                 )
 
             if len(self._flattened_nodes) == 0:
-                with TextOnly():
-                    fire_event(Formatting(""))
+                fire_event(Formatting(""))
                 warn_or_error(NothingToDo())
                 result = self.get_result(
                     results=[],
@@ -524,8 +499,7 @@ class GraphRunnableTask(ConfiguredTask):
                     elapsed_time=0.0,
                 )
             else:
-                with TextOnly():
-                    fire_event(Formatting(""))
+                fire_event(Formatting(""))
                 selected_uids = frozenset(n.unique_id for n in self._flattened_nodes)
                 result = self.execute_with_hooks(selected_uids)
 

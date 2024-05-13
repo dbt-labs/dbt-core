@@ -3,7 +3,6 @@ import os
 
 import pytest
 
-from dbt.logger import log_manager
 from dbt.tests.util import run_dbt
 from tests.functional.list.fixtures import (  # noqa: F401
     analyses,
@@ -45,14 +44,12 @@ class TestList:
         assert not os.path.exists(packages_install_path)
 
     def run_dbt_ls(self, args=None, expect_pass=True):
-        log_manager.stdout_console()
         full_args = ["ls"]
         if args is not None:
             full_args += args
 
         result = run_dbt(args=full_args, expect_pass=expect_pass)
 
-        log_manager.stdout_console()
         return result
 
     def assert_json_equal(self, json_str, expected):

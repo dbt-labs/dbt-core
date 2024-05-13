@@ -41,7 +41,6 @@ from dbt.events.types import (
 )
 from dbt.flags import get_flags
 from dbt.graph import Graph
-from dbt.logger import log_manager
 from dbt.task.printer import print_run_result_error
 from dbt_common.events.contextvars import get_node_info
 from dbt_common.events.functions import fire_event
@@ -71,21 +70,6 @@ def read_profiles(profiles_dir=None):
 class BaseTask(metaclass=ABCMeta):
     def __init__(self, args: Flags) -> None:
         self.args = args
-
-    @classmethod
-    def pre_init_hook(cls, args: Flags):
-        """A hook called before the task is initialized."""
-        if args.log_format == "json":
-            log_manager.format_json()
-        else:
-            log_manager.format_text()
-
-    @classmethod
-    def set_log_format(cls):
-        if get_flags().LOG_FORMAT == "json":
-            log_manager.format_json()
-        else:
-            log_manager.format_text()
 
     @abstractmethod
     def run(self):

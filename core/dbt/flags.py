@@ -1,24 +1,6 @@
 # Do not import the os package because we expose this package in jinja
 from argparse import Namespace
-from os import getenv as os_getenv
 from pathlib import Path
-from typing import Optional
-
-
-# for setting up logger for legacy logger
-def env_set_truthy(key: str) -> Optional[str]:
-    """Return the value if it was set to a "truthy" string value or None
-    otherwise.
-    """
-    value = os_getenv(key)
-    if not value or value.lower() in ("0", "false", "f"):
-        return None
-    return value
-
-
-# for setting up logger for legacy logger
-ENABLE_LEGACY_LOGGER = env_set_truthy("DBT_ENABLE_LEGACY_LOGGER")
-
 
 # this roughly follows the patten of EVENT_MANAGER in dbt/common/events/functions.py
 # During de-globlization, we'll need to handle both similarly
