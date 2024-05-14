@@ -20,7 +20,6 @@ pytest-mock
 pytest-xdist
 sphinx
 tox>=3.13
-twine
 types-colorama
 types-docutils
 types-PyYAML
@@ -32,4 +31,3 @@ types-python-dateutil
 types-pytz
 types-requests
 types-setuptools
-wheel
