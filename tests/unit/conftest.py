@@ -5,6 +5,7 @@ from dbt.artifacts.resources.types import NodeType
 from dbt.contracts.graph.nodes import SourceDefinition
 
 # All manifest related fixtures.
+from tests.unit.utils.adapter import *  # noqa
 from tests.unit.utils.manifest import *  # noqa
 from tests.unit.utils.project import *  # noqa
 

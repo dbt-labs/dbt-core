@@ -1,47 +1,14 @@
 from argparse import Namespace
 from unittest.mock import MagicMock, patch
 
-import pytest
 from pytest_mock import MockerFixture
 
-from dbt.adapters.postgres import PostgresAdapter
-from dbt.adapters.sql import SQLConnectionManager
 from dbt.config import RuntimeConfig
 from dbt.contracts.graph.manifest import Manifest
 from dbt.flags import set_from_args
 from dbt.parser.manifest import ManifestLoader
 from dbt.parser.read_files import FileDiff
 from dbt.tracking import User
-
-
-@pytest.fixture
-def mock_project():
-    mock_project = MagicMock(RuntimeConfig)
-    mock_project.cli_vars = {}
-    mock_project.args = MagicMock()
-    mock_project.args.profile = "test"
-    mock_project.args.target = "test"
-    mock_project.project_env_vars = {}
-    mock_project.profile_env_vars = {}
-    mock_project.project_target_path = "mock_target_path"
-    mock_project.credentials = MagicMock()
-    mock_project.clear_dependencies = MagicMock()
-    return mock_project
-
-
-@pytest.fixture
-def mock_connection_manager():
-    mock_connection_manager = MagicMock(SQLConnectionManager)
-    mock_connection_manager.set_query_header = lambda query_header_context: None
-    return mock_connection_manager
-
-
-@pytest.fixture
-def mock_adapter(mock_connection_manager: MagicMock):
-    mock_adapter = MagicMock(PostgresAdapter)
-    mock_adapter.connections = mock_connection_manager
-    mock_adapter.clear_macro_resolver = MagicMock()
-    return mock_adapter
 
 
 class TestPartialParse:
