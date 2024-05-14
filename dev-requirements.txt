@@ -15,9 +15,7 @@ pytest-logbook
 pytest-mock
 pytest-xdist
 tox>=3.13
-twine
 types-python-dateutil
 types-pytz
 types-PyYAML
 types-requests
-wheel
