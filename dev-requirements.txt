@@ -16,7 +16,6 @@ pytest-logbook
 pytest-mock
 pytest-xdist
 tox>=3.13
-twine
 types-colorama
 types-PyYAML
 types-freezegun
@@ -26,4 +25,3 @@ types-python-dateutil
 types-pytz
 types-requests
 types-setuptools
-wheel
