@@ -24,7 +24,6 @@ pytest-split
 pytest-xdist
 sphinx
 tox>=3.13
-twine
 types-docutils
 types-PyYAML
 types-Jinja2
@@ -33,5 +32,4 @@ types-protobuf>=4.0.0,<5.0.0
 types-pytz
 types-requests
 types-setuptools
-wheel
 mocker
