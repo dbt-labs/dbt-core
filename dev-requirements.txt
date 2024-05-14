@@ -12,5 +12,3 @@ pytest-csv
 pytest-xdist
 pytz
 tox>=3.13
-twine
-wheel
