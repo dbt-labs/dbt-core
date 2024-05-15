@@ -6,7 +6,7 @@ from dbt.cli.main import dbtRunner, dbtRunnerResult
 from dbt.events.types import DeprecatedModel
 from dbt.tests.util import update_config_file
 from dbt_common.events.base_types import EventLevel
-from tests.functional.utils import EventCatcher
+from tests.utils import EventCatcher
 
 ModelsDictSpec = Dict[str, Union[str, "ModelsDictSpec"]]
 
