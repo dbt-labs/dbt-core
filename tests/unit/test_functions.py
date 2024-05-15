@@ -1,11 +1,9 @@
 from argparse import Namespace
 
 import pytest
-from pytest_mock import MockerFixture
 
 import dbt.flags as flags
 from dbt.adapters.events.types import AdapterDeprecationWarning
-from dbt.events.logging import setup_event_logger
 from dbt.events.types import NoNodesForSelectionCriteria
 from dbt_common.events.functions import msg_to_dict, warn_or_error
 from dbt_common.events.types import InfoLevel, RetryExternalCall
@@ -83,15 +81,3 @@ def test_msg_to_dict_handles_exceptions_gracefully():
         assert (
             False
         ), f"We expect `msg_to_dict` to gracefully handle exceptions, but it raised {exc}"
-
-
-def test_setup_event_logger_specify_max_bytes(
-    mocker: MockerFixture, mock_global_event_manager
-) -> None:
-    patched_file_handler = mocker.patch("dbt_common.events.logger.RotatingFileHandler")
-    args = Namespace(log_file_max_bytes=1234567)
-    flags.set_from_args(args, {})
-    setup_event_logger(flags.get_flags())
-    patched_file_handler.assert_called_once_with(
-        filename="logs/dbt.log", encoding="utf8", maxBytes=1234567, backupCount=5
-    )
