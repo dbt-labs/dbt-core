@@ -1,12 +1,13 @@
 from argparse import Namespace
 
 import pytest
+from pytest_mock import MockerFixture
 
 import dbt.flags as flags
 from dbt.adapters.events.types import AdapterDeprecationWarning
 from dbt.events.logging import setup_event_logger
 from dbt.events.types import NoNodesForSelectionCriteria
-from dbt_common.events.event_manager_client import cleanup_event_logger
+from dbt_common.events.event_manager import EventManager
 from dbt_common.events.functions import msg_to_dict, warn_or_error
 from dbt_common.events.types import InfoLevel, RetryExternalCall
 from dbt_common.exceptions import EventCompilationError
@@ -85,7 +86,8 @@ def test_msg_to_dict_handles_exceptions_gracefully():
         ), f"We expect `msg_to_dict` to gracefully handle exceptions, but it raised {exc}"
 
 
-def test_setup_event_logger_specify_max_bytes(mocker):
+def test_setup_event_logger_specify_max_bytes(mocker: MockerFixture) -> None:
+    mocker.patch("dbt_common.events.event_manager_client._EVENT_MANAGER", EventManager())
     patched_file_handler = mocker.patch("dbt_common.events.logger.RotatingFileHandler")
     args = Namespace(log_file_max_bytes=1234567)
     flags.set_from_args(args, {})
@@ -93,5 +95,3 @@ def test_setup_event_logger_specify_max_bytes(mocker):
     patched_file_handler.assert_called_once_with(
         filename="logs/dbt.log", encoding="utf8", maxBytes=1234567, backupCount=5
     )
-    # XXX if we do not clean up event logger here we are going to affect other tests.
-    cleanup_event_logger()
