@@ -1,6 +1,7 @@
 from argparse import Namespace
 from unittest.mock import MagicMock, patch
 
+import pytest
 from pytest_mock import MockerFixture
 
 from dbt.config import RuntimeConfig
@@ -82,6 +83,7 @@ class TestFailedPartialParse:
 
 
 class TestGetFullManifest:
+    @pytest.fixture
     def set_required_mocks(
         self, mocker: MockerFixture, manifest: Manifest, mock_adapter: MagicMock
     ):
@@ -95,12 +97,10 @@ class TestGetFullManifest:
 
     def test_write_perf_info(
         self,
-        manifest: Manifest,
         mock_project: MagicMock,
-        mock_adapter: MagicMock,
         mocker: MockerFixture,
+        set_required_mocks,
     ) -> None:
-        self.set_required_mocks(mocker, manifest, mock_adapter)
         write_perf_info = mocker.patch("dbt.parser.manifest.ManifestLoader.write_perf_info")
 
         ManifestLoader.get_full_manifest(
@@ -117,12 +117,10 @@ class TestGetFullManifest:
 
     def test_reset(
         self,
-        manifest: Manifest,
         mock_project: MagicMock,
         mock_adapter: MagicMock,
-        mocker: MockerFixture,
+        set_required_mocks,
     ) -> None:
-        self.set_required_mocks(mocker, manifest, mock_adapter)
 
         ManifestLoader.get_full_manifest(
             config=mock_project,
@@ -141,12 +139,10 @@ class TestGetFullManifest:
 
     def test_partial_parse_file_diff_flag(
         self,
-        manifest: Manifest,
         mock_project: MagicMock,
-        mock_adapter: MagicMock,
         mocker: MockerFixture,
+        set_required_mocks,
     ) -> None:
-        self.set_required_mocks(mocker, manifest, mock_adapter)
 
         # FileDiff.from_dict is only called if PARTIAL_PARSE_FILE_DIFF == False
         # So we can track this function call to check if setting PARTIAL_PARSE_FILE_DIFF
