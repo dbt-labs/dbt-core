@@ -12,7 +12,7 @@ from tests.utils import EventCatcher
 
 
 class TestSetupEventLogger:
-    def test_clears_preexisting_event_manager_state(self, mock_global_event_manager) -> None:
+    def test_clears_preexisting_event_manager_state(self) -> None:
         manager = get_event_manager()
         manager.add_logger(LoggerConfig(name="test_logger"))
         manager.callbacks.append(EventCatcher(BaseEvent).catch)
@@ -31,7 +31,6 @@ class TestSetupEventLogger:
     def test_specify_max_bytes(
         self,
         mocker: MockerFixture,
-        mock_global_event_manager,
     ) -> None:
         patched_file_handler = mocker.patch("dbt_common.events.logger.RotatingFileHandler")
         args = Namespace(log_file_max_bytes=1234567)
