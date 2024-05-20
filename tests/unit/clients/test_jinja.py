@@ -1,4 +1,3 @@
-import unittest
 from contextlib import contextmanager
 
 import pytest
@@ -367,7 +366,7 @@ jinja_tests = [
 
 
 @pytest.mark.parametrize("value,text_expectation,native_expectation", jinja_tests, ids=expected_id)
-def test_jinja_rendering(value, text_expectation, native_expectation):
+def test_jinja_rendering_string(value, text_expectation, native_expectation):
     foo_value = yaml.safe_load(value)["foo"]
     ctx = {"a_str": "100", "a_int": 100, "b_str": "hello"}
     with text_expectation as text_result:
@@ -377,40 +376,41 @@ def test_jinja_rendering(value, text_expectation, native_expectation):
         assert native_result == get_rendered(foo_value, ctx, native=True)
 
 
-class TestJinja(unittest.TestCase):
-    def test_do(self):
-        s = "{% set my_dict = {} %}\n{% do my_dict.update(a=1) %}"
+def test_do():
+    s = "{% set my_dict = {} %}\n{% do my_dict.update(a=1) %}"
 
-        template = get_template(s, {})
-        mod = template.make_module()
-        self.assertEqual(mod.my_dict, {"a": 1})
+    template = get_template(s, {})
+    mod = template.make_module()
+    assert mod.my_dict == {"a": 1}
 
-    def test_regular_render(self):
-        s = '{{ "some_value" | as_native }}'
-        value = get_rendered(s, {}, native=False)
-        assert value == "some_value"
-        s = "{{ 1991 | as_native }}"
-        value = get_rendered(s, {}, native=False)
-        assert value == "1991"
 
-        s = '{{ "some_value" | as_text }}'
-        value = get_rendered(s, {}, native=False)
-        assert value == "some_value"
-        s = "{{ 1991 | as_text }}"
-        value = get_rendered(s, {}, native=False)
-        assert value == "1991"
+def test_regular_render():
+    s = '{{ "some_value" | as_native }}'
+    value = get_rendered(s, {}, native=False)
+    assert value == "some_value"
+    s = "{{ 1991 | as_native }}"
+    value = get_rendered(s, {}, native=False)
+    assert value == "1991"
 
-    def test_native_render(self):
-        s = '{{ "some_value" | as_native }}'
-        value = get_rendered(s, {}, native=True)
-        assert value == "some_value"
-        s = "{{ 1991 | as_native }}"
-        value = get_rendered(s, {}, native=True)
-        assert value == 1991
+    s = '{{ "some_value" | as_text }}'
+    value = get_rendered(s, {}, native=False)
+    assert value == "some_value"
+    s = "{{ 1991 | as_text }}"
+    value = get_rendered(s, {}, native=False)
+    assert value == "1991"
 
-        s = '{{ "some_value" | as_text }}'
-        value = get_rendered(s, {}, native=True)
-        assert value == "some_value"
-        s = "{{ 1991 | as_text }}"
-        value = get_rendered(s, {}, native=True)
-        assert value == "1991"
+
+def test_native_render():
+    s = '{{ "some_value" | as_native }}'
+    value = get_rendered(s, {}, native=True)
+    assert value == "some_value"
+    s = "{{ 1991 | as_native }}"
+    value = get_rendered(s, {}, native=True)
+    assert value == 1991
+
+    s = '{{ "some_value" | as_text }}'
+    value = get_rendered(s, {}, native=True)
+    assert value == "some_value"
+    s = "{{ 1991 | as_text }}"
+    value = get_rendered(s, {}, native=True)
+    assert value == "1991"
