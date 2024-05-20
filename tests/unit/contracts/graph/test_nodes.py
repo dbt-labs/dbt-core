@@ -8,8 +8,7 @@ from dbt.contracts.files import FileHash
 from dbt.contracts.graph.nodes import DependsOn, GenericTestNode, ModelConfig, ModelNode
 from dbt.node_types import NodeType
 from tests.unit.fixtures import generic_test_node, model_node
-
-from .utils import (
+from tests.unit.utils import (
     assert_fails_validation,
     assert_from_dict,
     assert_symmetric,
