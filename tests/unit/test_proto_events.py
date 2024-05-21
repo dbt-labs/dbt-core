@@ -1,5 +1,3 @@
-from argparse import Namespace
-
 from google.protobuf.json_format import MessageToDict
 
 from dbt.adapters.events.types import PluginLoadError, RollbackFailed
@@ -11,7 +9,6 @@ from dbt.events.types import (
     MainReportArgs,
     MainReportVersion,
 )
-from dbt.flags import set_from_args
 from dbt.version import installed
 from dbt_common.events import types_pb2
 from dbt_common.events.base_types import EventLevel, msg_from_base_event
@@ -21,9 +18,6 @@ from dbt_common.events.functions import (
     msg_to_json,
     reset_metadata_vars,
 )
-
-set_from_args(Namespace(WARN_ERROR=False), None)
-
 
 info_keys = {
     "name",

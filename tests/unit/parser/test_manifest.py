@@ -20,7 +20,6 @@ class TestPartialParse:
         mock_project = MagicMock(RuntimeConfig)
         mock_project.project_target_path = "mock_target_path"
         patched_os_exist.return_value = True
-        set_from_args(Namespace(), {})
         ManifestLoader(mock_project, {})
         # by default we use the project_target_path
         patched_open.assert_called_with("mock_target_path/partial_parse.msgpack", "rb")
@@ -33,7 +32,6 @@ class TestPartialParse:
         # This test validate that the profile_hash is updated when the connection keys change
         profile_hash = "750bc99c1d64ca518536ead26b28465a224be5ffc918bf2a490102faa5a1bcf5"
         mock_project.credentials.connection_info.return_value = "test"
-        set_from_args(Namespace(), {})
         manifest = ManifestLoader(mock_project, {})
         assert manifest.manifest.state_check.profile_hash.checksum == profile_hash
         mock_project.credentials.connection_info.return_value = "test1"
@@ -67,7 +65,6 @@ class TestFailedPartialParse:
         mock_saved_manifest.files = {}
         patched_read_manifest_for_partial_parse.return_value = mock_saved_manifest
 
-        set_from_args(Namespace(), {})
         loader = ManifestLoader(mock_project, {})
         loader.safe_update_project_parser_files_partially({})
 
@@ -150,7 +147,6 @@ class TestGetFullManifest:
         mock_file_diff = mocker.patch("dbt.parser.read_files.FileDiff.from_dict")
         mock_file_diff.return_value = FileDiff([], [], [])
 
-        set_from_args(Namespace(), {})
         ManifestLoader.get_full_manifest(config=mock_project)
         assert not mock_file_diff.called
 

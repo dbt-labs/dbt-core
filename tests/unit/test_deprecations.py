@@ -1,6 +1,3 @@
-from argparse import Namespace
-
-from dbt.flags import set_from_args
 from dbt.internal_deprecations import deprecated
 
 
@@ -11,6 +8,5 @@ def to_be_decorated():
 
 # simple test that the return value is not modified
 def test_deprecated_func():
-    set_from_args(Namespace(WARN_ERROR=False), None)
     assert hasattr(to_be_decorated, "__wrapped__")
     assert to_be_decorated() == 5
