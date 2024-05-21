@@ -1,5 +1,4 @@
 from argparse import Namespace
-from copy import deepcopy
 
 from pytest_mock import MockerFixture
 
@@ -19,12 +18,10 @@ class TestSetupEventLogger:
         assert len(manager.loggers) == 1
         assert len(manager.callbacks) == 1
 
-        flags = deepcopy(get_flags())
-        # setting both of these to none guarantees that no logger will be added
-        object.__setattr__(flags, "LOG_LEVEL", "none")
-        object.__setattr__(flags, "LOG_LEVEL_FILE", "none")
+        args = Namespace(log_level="none", log_level_file="none")
+        set_from_args(args, {})
 
-        setup_event_logger(flags=flags)
+        setup_event_logger(get_flags())
         assert len(manager.loggers) == 0
         assert len(manager.callbacks) == 0
 
