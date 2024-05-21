@@ -1,17 +1,13 @@
 import os
 import tempfile
-from argparse import Namespace
 from queue import Empty
 from unittest import mock
 
 import pytest
 
 from dbt import compilation
-from dbt.flags import set_from_args
 from dbt.graph.cli import parse_difference
 from dbt.graph.selector import NodeSelector
-
-set_from_args(Namespace(WARN_ERROR=False), None)
 
 
 def _mock_manifest(nodes):
