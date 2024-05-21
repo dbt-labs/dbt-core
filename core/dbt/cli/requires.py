@@ -149,9 +149,6 @@ def postflight(func):
                 import resource
 
                 rusage = resource.getrusage(resource.RUSAGE_SELF)
-                max_rss = try_get_max_rss_kb()
-                if max_rss is None:
-                    max_rss = rusage.ru_maxrss
                 fire_event(
                     ResourceReport(
                         command_name=ctx.command.name,
@@ -159,7 +156,7 @@ def postflight(func):
                         command_wall_clock_time=time.perf_counter() - start_func,
                         process_user_time=rusage.ru_utime,
                         process_kernel_time=rusage.ru_stime,
-                        process_mem_max_rss=max_rss,
+                        process_mem_max_rss=try_get_max_rss_kb() or rusage.ru_maxrss,
                         process_in_blocks=rusage.ru_inblock,
                         process_out_blocks=rusage.ru_oublock,
                     ),
