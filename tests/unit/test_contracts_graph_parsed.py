@@ -7,7 +7,6 @@ from dbt_semantic_interfaces.type_enums import MetricType
 from hypothesis import given
 from hypothesis.strategies import builds, lists
 
-from dbt import flags
 from dbt.artifacts.resources import (
     ColumnInfo,
     Dimension,
@@ -67,7 +66,10 @@ from .utils import (
     replace_config,
 )
 
-flags.set_from_args(Namespace(SEND_ANONYMOUS_USAGE_STATS=False), None)
+
+@pytest.fixture
+def flags_for_args() -> Namespace:
+    return Namespace(SEND_ANONYMOUS_USAGE_STATS=False)
 
 
 @pytest.fixture
