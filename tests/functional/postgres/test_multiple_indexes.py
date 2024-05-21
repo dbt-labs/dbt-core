@@ -1,6 +1,6 @@
 import pytest
 
-from tests.functional.utils import run_dbt
+from dbt.tests.util import run_dbt
 
 
 REF_MULTIPLE_INDEX_MODEL = """
