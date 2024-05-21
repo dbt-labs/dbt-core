@@ -30,13 +30,14 @@
 
         {%- if _index_change.action == "drop" -%}
 
-            {{ postgres__get_drop_index_sql(relation, _index.name) }};
+            {{ postgres__get_drop_index_sql(relation, _index.name) }}
 
         {%- elif _index_change.action == "create" -%}
 
             {{ postgres__get_create_index_sql(relation, _index.as_node_config) }}
 
         {%- endif -%}
+    {{ ';' if not loop.last else "" }}
 
     {%- endfor -%}
 

@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix the semicolon semantics for indexes while respecting other bug fix
+time: 2024-05-14T19:32:01.149383-07:00
+custom:
+  Author: versusfacit
+  Issue: "85"
