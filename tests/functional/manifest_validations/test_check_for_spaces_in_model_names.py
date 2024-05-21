@@ -10,7 +10,7 @@ from dbt.events.types import (
 )
 from dbt.tests.util import update_config_file
 from dbt_common.events.base_types import EventLevel
-from tests.functional.utils import EventCatcher
+from tests.utils import EventCatcher
 
 
 class TestSpacesInModelNamesHappyPath:

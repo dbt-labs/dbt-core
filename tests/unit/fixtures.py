@@ -26,6 +26,7 @@ def model_node():
         metrics=[],
         depends_on=DependsOn(),
         description="",
+        primary_key=[],
         database="test_db",
         schema="test_schema",
         alias="bar",

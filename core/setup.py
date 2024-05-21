@@ -53,10 +53,6 @@ setup(
         "Jinja2>=3.1.3,<4",
         "mashumaro[msgpack]>=3.9,<4.0",
         # ----
-        # Legacy: This package has not been updated since 2019, and it is unused in dbt's logging system (since v1.0)
-        # The dependency here will be removed along with the removal of 'legacy logging', in a future release of dbt-core
-        "logbook>=1.5,<1.6",
-        # ----
         # dbt-core uses these packages in standard ways. Pin to the major version, and check compatibility
         # with major versions in each new minor version of dbt-core.
         "click>=8.0.2,<9.0",
@@ -76,7 +72,7 @@ setup(
         "dbt-semantic-interfaces>=0.5.1,<0.6",
         # Minor versions for these are expected to be backwards-compatible
         "dbt-common>=1.1.0,<2.0",
-        "dbt-adapters>=0.1.0a2,<2.0",
+        "dbt-adapters>=1.1.1,<2.0",
         # ----
         # Expect compatibility with all new versions of these packages, so lower bounds only.
         "packaging>20.9",

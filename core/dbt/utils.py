@@ -5,6 +5,7 @@ import functools
 import itertools
 import json
 import os
+import sys
 from enum import Enum
 from pathlib import PosixPath, WindowsPath
 from typing import (
@@ -386,3 +387,22 @@ def strtobool(val: str) -> bool:
         return False
     else:
         raise ValueError("invalid truth value %r" % (val,))
+
+
+def try_get_max_rss_kb() -> Optional[int]:
+    """Attempts to get the high water mark for this process's memory use via
+    the most reliable and accurate mechanism available through the host OS.
+    Currently only implemented for Linux."""
+    if sys.platform == "linux" and os.path.isfile("/proc/self/status"):
+        try:
+            # On Linux, the most reliable documented mechanism for getting the RSS
+            # high-water-mark comes from the line confusingly labeled VmHWM in the
+            # /proc/self/status virtual file.
+            with open("/proc/self/status") as f:
+                for line in f:
+                    if line.startswith("VmHWM:"):
+                        return int(str.split(line)[1])
+        except Exception:
+            pass
+
+    return None

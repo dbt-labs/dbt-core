@@ -1,6 +1,5 @@
 import logging
 import re
-from argparse import Namespace
 from typing import TypeVar
 
 import pytest
@@ -20,7 +19,6 @@ from dbt.events.base_types import (
     WarnLevel,
 )
 from dbt.events.types import RunResultError
-from dbt.flags import set_from_args
 from dbt.task.printer import print_run_result_error
 from dbt_common.events import types
 from dbt_common.events.base_types import msg_from_base_event
@@ -28,8 +26,6 @@ from dbt_common.events.event_manager import EventManager, TestEventManager
 from dbt_common.events.event_manager_client import ctx_set_event_manager
 from dbt_common.events.functions import msg_to_dict, msg_to_json
 from dbt_common.events.helpers import get_json_string_utcnow
-
-set_from_args(Namespace(WARN_ERROR=False), None)
 
 
 # takes in a class and finds any subclasses for it

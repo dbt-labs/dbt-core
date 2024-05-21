@@ -41,6 +41,15 @@ SELECT
 'b' as string_b
 """
 
+my_model_check_null_sql = """
+SELECT
+CASE
+  WHEN a IS null THEN True
+  ELSE False
+END a_is_null
+FROM {{ ref('my_model_a') }}
+"""
+
 test_my_model_yml = """
 unit_tests:
   - name: test_my_model
@@ -505,6 +514,11 @@ test_my_model_fixture_csv = """id,b
 
 test_my_model_a_fixture_csv = """id,string_a
 1,a
+"""
+
+test_my_model_a_with_null_fixture_csv = """id,a
+1,
+2,3
 """
 
 test_my_model_a_empty_fixture_csv = """
@@ -1059,4 +1073,40 @@ unit_tests:
     expect:
       rows:
         - {id: 2}
+"""
+
+
+test_my_model_csv_null_yml = """
+unit_tests:
+  - name: test_my_model_check_null
+    model: my_model_check_null
+    given:
+      - input: ref('my_model_a')
+        format: csv
+        rows: |
+          id,a
+          1,
+          2,3
+    expect:
+      format: csv
+      rows: |
+        a_is_null
+        True
+        False
+"""
+
+test_my_model_file_csv_null_yml = """
+unit_tests:
+  - name: test_my_model_check_null
+    model: my_model_check_null
+    given:
+      - input: ref('my_model_a')
+        format: csv
+        fixture: test_my_model_a_with_null_fixture
+    expect:
+      format: csv
+      rows: |
+        a_is_null
+        True
+        False
 """

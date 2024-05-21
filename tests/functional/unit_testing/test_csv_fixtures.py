@@ -5,15 +5,19 @@ from fixtures import (
     datetime_test_invalid_format_key,
     my_model_a_sql,
     my_model_b_sql,
+    my_model_check_null_sql,
     my_model_sql,
     test_my_model_a_empty_fixture_csv,
     test_my_model_a_fixture_csv,
     test_my_model_a_numeric_fixture_csv,
+    test_my_model_a_with_null_fixture_csv,
     test_my_model_b_fixture_csv,
     test_my_model_basic_fixture_csv,
     test_my_model_concat_fixture_csv,
+    test_my_model_csv_null_yml,
     test_my_model_csv_yml,
     test_my_model_duplicate_csv_yml,
+    test_my_model_file_csv_null_yml,
     test_my_model_file_csv_yml,
     test_my_model_fixture_csv,
     test_my_model_missing_csv_yml,
@@ -206,6 +210,50 @@ class TestUnitTestsWithMixedCSV:
         )
         with pytest.raises(ParsingError):
             results = run_dbt(["test", "--select", "my_model"], expect_pass=False)
+
+
+class TestUnitTestsInlineCSVEmptyValueIsNull:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_model_a.sql": my_model_a_sql,
+            "my_model_check_null.sql": my_model_check_null_sql,
+            "test_my_model_csv_null.yml": test_my_model_csv_null_yml,
+        }
+
+    def test_unit_test(self, project):
+        results = run_dbt(["run"])
+        assert len(results) == 2
+
+        # Select by model name
+        results = run_dbt(["test", "--select", "my_model_check_null"], expect_pass=True)
+        assert len(results) == 1
+
+
+class TestUnitTestsFileCSVEmptyValueIsNull:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_model_a.sql": my_model_a_sql,
+            "my_model_check_null.sql": my_model_check_null_sql,
+            "test_my_model_file_csv_null.yml": test_my_model_file_csv_null_yml,
+        }
+
+    @pytest.fixture(scope="class")
+    def tests(self):
+        return {
+            "fixtures": {
+                "test_my_model_a_with_null_fixture.csv": test_my_model_a_with_null_fixture_csv,
+            }
+        }
+
+    def test_unit_test(self, project):
+        results = run_dbt(["run"])
+        assert len(results) == 2
+
+        # Select by model name
+        results = run_dbt(["test", "--select", "my_model_check_null"], expect_pass=True)
+        assert len(results) == 1
 
 
 class TestUnitTestsMissingCSVFile:

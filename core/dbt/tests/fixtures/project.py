@@ -1,6 +1,5 @@
 import os
 import random
-import warnings
 from argparse import Namespace
 from datetime import datetime
 from pathlib import Path
@@ -540,9 +539,6 @@ def project(
     logs_dir,
     test_config,
 ):
-    # Logbook warnings are ignored so we don't have to fork logbook to support python 3.10.
-    # This _only_ works for tests in `tests/` that use the project fixture.
-    warnings.filterwarnings("ignore", category=DeprecationWarning, module="logbook")
     log_flags = Namespace(
         LOG_PATH=logs_dir,
         LOG_FORMAT="json",

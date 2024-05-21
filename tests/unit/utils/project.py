@@ -1,6 +1,9 @@
+from unittest.mock import MagicMock
+
 import pytest
 
 from dbt.adapters.contracts.connection import QueryComment
+from dbt.config import RuntimeConfig
 from dbt.config.project import Project, RenderComponents, VarProvider
 from dbt.config.selectors import SelectorConfig
 from dbt.contracts.project import PackageConfig
@@ -68,3 +71,18 @@ def project(selector_config: SelectorConfig) -> Project:
         restrict_access=False,
         dbt_cloud={},
     )
+
+
+@pytest.fixture
+def mock_project():
+    mock_project = MagicMock(RuntimeConfig)
+    mock_project.cli_vars = {}
+    mock_project.args = MagicMock()
+    mock_project.args.profile = "test"
+    mock_project.args.target = "test"
+    mock_project.project_env_vars = {}
+    mock_project.profile_env_vars = {}
+    mock_project.project_target_path = "mock_target_path"
+    mock_project.credentials = MagicMock()
+    mock_project.clear_dependencies = MagicMock()
+    return mock_project

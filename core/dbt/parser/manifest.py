@@ -50,6 +50,7 @@ from dbt.contracts.graph.manifest import (
 )
 from dbt.contracts.graph.nodes import (
     Exposure,
+    GenericTestNode,
     Macro,
     ManifestNode,
     Metric,
@@ -84,7 +85,6 @@ from dbt.exceptions import (
     scrub_secrets,
 )
 from dbt.flags import get_flags
-from dbt.logger import DbtProcessState
 from dbt.mp_context import get_mp_context
 from dbt.node_types import AccessType, NodeType
 from dbt.parser.analysis import AnalysisParser
@@ -120,7 +120,6 @@ from dbt_common.events.types import Note
 from dbt_common.exceptions.base import DbtValidationError
 from dbt_common.helper_types import PathSet
 
-PARSING_STATE = DbtProcessState("parsing")
 PERF_INFO_FILE_NAME = "perf_info.json"
 
 
@@ -293,33 +292,32 @@ class ManifestLoader:
                 file_diff_dct = read_json(file_diff_path)
                 file_diff = FileDiff.from_dict(file_diff_dct)
 
-        with PARSING_STATE:  # set up logbook.Processor for parsing
-            # Start performance counting
-            start_load_all = time.perf_counter()
+        # Start performance counting
+        start_load_all = time.perf_counter()
 
-            projects = config.load_dependencies()
-            loader = cls(
-                config,
-                projects,
-                macro_hook=macro_hook,
-                file_diff=file_diff,
-            )
+        projects = config.load_dependencies()
+        loader = cls(
+            config,
+            projects,
+            macro_hook=macro_hook,
+            file_diff=file_diff,
+        )
 
-            manifest = loader.load()
+        manifest = loader.load()
 
-            _check_manifest(manifest, config)
-            manifest.build_flat_graph()
+        _check_manifest(manifest, config)
+        manifest.build_flat_graph()
 
-            # This needs to happen after loading from a partial parse,
-            # so that the adapter has the query headers from the macro_hook.
-            loader.save_macros_to_adapter(adapter)
+        # This needs to happen after loading from a partial parse,
+        # so that the adapter has the query headers from the macro_hook.
+        loader.save_macros_to_adapter(adapter)
 
-            # Save performance info
-            loader._perf_info.load_all_elapsed = time.perf_counter() - start_load_all
-            loader.track_project_load()
+        # Save performance info
+        loader._perf_info.load_all_elapsed = time.perf_counter() - start_load_all
+        loader.track_project_load()
 
-            if write_perf_info:
-                loader.write_perf_info(config.project_target_path)
+        if write_perf_info:
+            loader.write_perf_info(config.project_target_path)
 
         return manifest
 
@@ -466,6 +464,7 @@ class ManifestLoader:
             self.process_docs(self.root_project)
             self.process_metrics(self.root_project)
             self.process_saved_queries(self.root_project)
+            self.process_model_inferred_primary_keys()
             self.check_valid_group_config()
             self.check_valid_access_property()
 
@@ -1066,18 +1065,16 @@ class ManifestLoader:
         macro_hook: Callable[[Manifest], Any],
         base_macros_only=False,
     ) -> Manifest:
-        with PARSING_STATE:
-            # base_only/base_macros_only: for testing only,
-            # allows loading macros without running 'dbt deps' first
-            projects = root_config.load_dependencies(base_only=base_macros_only)
+        # base_only/base_macros_only: for testing only,
+        # allows loading macros without running 'dbt deps' first
+        projects = root_config.load_dependencies(base_only=base_macros_only)
 
-            # This creates a loader object, including result,
-            # and then throws it away, returning only the
-            # manifest
-            loader = cls(root_config, projects, macro_hook)
-            macro_manifest = loader.create_macro_manifest()
+        # This creates a loader object, including result,
+        # and then throws it away, returning only the
+        # manifest
+        loader = cls(root_config, projects, macro_hook)
 
-        return macro_manifest
+        return loader.create_macro_manifest()
 
     # Create tracking event for saving performance info
     def track_project_load(self):
@@ -1148,6 +1145,15 @@ class ManifestLoader:
             # 1. process `where` of SavedQuery for `depends_on`s
             # 2. process `group_by` of SavedQuery for `depends_on``
             _process_metrics_for_node(self.manifest, current_project, saved_query)
+
+    def process_model_inferred_primary_keys(self):
+        """Processes Model nodes to populate their `primary_key`."""
+        for node in self.manifest.nodes.values():
+            if not isinstance(node, ModelNode):
+                continue
+            generic_tests = self._get_generic_tests_for_model(node)
+            primary_key = node.infer_primary_key(generic_tests)
+            node.primary_key = sorted(primary_key)
 
     def update_semantic_model(self, semantic_model) -> None:
         # This has to be done at the end of parsing because the referenced model
@@ -1343,6 +1349,24 @@ class ManifestLoader:
         path = os.path.join(target_path, PERF_INFO_FILE_NAME)
         write_file(path, json.dumps(self._perf_info, cls=dbt.utils.JSONEncoder, indent=4))
         fire_event(ParsePerfInfoPath(path=path))
+
+    def _get_generic_tests_for_model(
+        self,
+        model: ModelNode,
+    ) -> List[GenericTestNode]:
+        """Return a list of generic tests that are attached to the given model, including disabled tests"""
+        tests = []
+        for _, node in self.manifest.nodes.items():
+            if isinstance(node, GenericTestNode) and node.attached_node == model.unique_id:
+                tests.append(node)
+        for _, nodes in self.manifest.disabled.items():
+            for disabled_node in nodes:
+                if (
+                    isinstance(disabled_node, GenericTestNode)
+                    and disabled_node.attached_node == model.unique_id
+                ):
+                    tests.append(disabled_node)
+        return tests
 
 
 def invalid_target_fail_unless_test(

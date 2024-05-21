@@ -63,6 +63,7 @@ class MethodName(StrEnum):
     Version = "version"
     SemanticModel = "semantic_model"
     SavedQuery = "saved_query"
+    UnitTest = "unit_test"
 
 
 def is_selected_node(fqn: List[str], node_selector: str, is_versioned: bool) -> bool:
@@ -425,6 +426,31 @@ class SavedQuerySelectorMethod(SelectorMethod):
             yield unique_id
 
 
+class UnitTestSelectorMethod(SelectorMethod):
+    def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
+        parts = selector.split(".")
+        target_package = SELECTOR_GLOB
+        if len(parts) == 1:
+            target_name = parts[0]
+        elif len(parts) == 2:
+            target_package, target_name = parts
+        else:
+            msg = (
+                'Invalid unit test selector value "{}". Saved queries must be of '
+                "the form ${{unit_test_name}} or "
+                "${{unit_test_package_name.unit_test_name}}"
+            ).format(selector)
+            raise DbtRuntimeError(msg)
+
+        for unique_id, node in self.unit_tests(included_nodes):
+            if not fnmatch(node.package_name, target_package):
+                continue
+            if not fnmatch(node.name, target_name):
+                continue
+
+            yield unique_id
+
+
 class PathSelectorMethod(SelectorMethod):
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
         """Yields nodes from included that match the given path."""
@@ -701,9 +727,6 @@ class StateSelectorMethod(SelectorMethod):
 
         return check_modified_contract
 
-    def check_new(self, old: Optional[SelectorTarget], new: SelectorTarget) -> bool:
-        return old is None
-
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
         if self.previous_state is None or self.previous_state.manifest is None:
             raise DbtRuntimeError("Got a state selector method, but no comparison manifest")
@@ -883,6 +906,7 @@ class MethodManager:
         MethodName.Version: VersionSelectorMethod,
         MethodName.SemanticModel: SemanticModelSelectorMethod,
         MethodName.SavedQuery: SavedQuerySelectorMethod,
+        MethodName.UnitTest: UnitTestSelectorMethod,
     }
 
     def __init__(

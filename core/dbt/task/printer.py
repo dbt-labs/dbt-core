@@ -12,9 +12,7 @@ from dbt.events.types import (
     SQLCompiledPath,
     StatsLine,
 )
-from dbt.logger import DbtStatusMessage, TextOnly
 from dbt.node_types import NodeType
-from dbt.tracking import InvocationProcessor
 from dbt_common.events.format import pluralize
 from dbt_common.events.functions import fire_event
 from dbt_common.events.types import Formatting
@@ -65,15 +63,13 @@ def print_run_status_line(results) -> None:
         stats[result_type] += 1
         stats["total"] += 1
 
-    with TextOnly():
-        fire_event(Formatting(""))
+    fire_event(Formatting(""))
     fire_event(StatsLine(stats=stats))
 
 
 def print_run_result_error(result, newline: bool = True, is_warning: bool = False) -> None:
     if newline:
-        with TextOnly():
-            fire_event(Formatting(""))
+        fire_event(Formatting(""))
 
     # set node_info for logging events
     node_info = None
@@ -108,13 +104,11 @@ def print_run_result_error(result, newline: bool = True, is_warning: bool = Fals
             fire_event(RunResultErrorNoMessage(status=result.status, node_info=node_info))
 
         if result.node.compiled_path is not None:
-            with TextOnly():
-                fire_event(Formatting(""))
+            fire_event(Formatting(""))
             fire_event(SQLCompiledPath(path=result.node.compiled_path, node_info=node_info))
 
         if result.node.should_store_failures:
-            with TextOnly():
-                fire_event(Formatting(""))
+            fire_event(Formatting(""))
             fire_event(
                 CheckNodeTestFailure(relation_name=result.node.relation_name, node_info=node_info)
             )
@@ -135,21 +129,19 @@ def print_run_end_messages(results, keyboard_interrupt: bool = False) -> None:
         elif r.status == NodeStatus.Warn:
             warnings.append(r)
 
-    with DbtStatusMessage(), InvocationProcessor():
-        with TextOnly():
-            fire_event(Formatting(""))
-        fire_event(
-            EndOfRunSummary(
-                num_errors=len(errors),
-                num_warnings=len(warnings),
-                keyboard_interrupt=keyboard_interrupt,
-            )
+    fire_event(Formatting(""))
+    fire_event(
+        EndOfRunSummary(
+            num_errors=len(errors),
+            num_warnings=len(warnings),
+            keyboard_interrupt=keyboard_interrupt,
         )
+    )
 
-        for error in errors:
-            print_run_result_error(error, is_warning=False)
+    for error in errors:
+        print_run_result_error(error, is_warning=False)
 
-        for warning in warnings:
-            print_run_result_error(warning, is_warning=True)
+    for warning in warnings:
+        print_run_result_error(warning, is_warning=True)
 
-        print_run_status_line(results)
+    print_run_status_line(results)
