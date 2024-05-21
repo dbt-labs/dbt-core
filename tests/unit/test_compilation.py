@@ -7,6 +7,7 @@ import pytest
 
 from dbt import compilation
 from dbt.graph.cli import parse_difference
+from dbt.graph.queue import GraphQueue
 from dbt.graph.selector import NodeSelector
 
 
@@ -35,7 +36,7 @@ class TestLinker:
     def linker(self) -> compilation.Linker:
         return compilation.Linker()
 
-    def test_linker_add_node(self, linker: compilation.Linker):
+    def test_linker_add_node(self, linker: compilation.Linker) -> None:
         expected_nodes = ["A", "B", "C"]
         for node in expected_nodes:
             linker.add_node(node)
@@ -46,7 +47,7 @@ class TestLinker:
 
         assert len(actual_nodes) == len(expected_nodes)
 
-    def test_linker_write_graph(self, linker: compilation.Linker):
+    def test_linker_write_graph(self, linker: compilation.Linker) -> None:
         expected_nodes = ["A", "B", "C"]
         for node in expected_nodes:
             linker.add_node(node)
@@ -60,11 +61,17 @@ class TestLinker:
         finally:
             os.unlink(fname)
 
-    def assert_would_join(self, queue):
+    def assert_would_join(self, queue: GraphQueue) -> None:
         """test join() without timeout risk"""
         assert queue.inner.unfinished_tasks == 0
 
-    def _get_graph_queue(self, manifest, linker: compilation.Linker, include=None, exclude=None):
+    def _get_graph_queue(
+        self,
+        manifest,
+        linker: compilation.Linker,
+        include=None,
+        exclude=None,
+    ) -> GraphQueue:
         graph = compilation.Graph(linker.graph)
         selector = NodeSelector(graph, manifest)
         # TODO:  The "eager" string below needs to be replaced with programatic access
@@ -75,7 +82,7 @@ class TestLinker:
         spec = parse_difference(include, exclude)
         return selector.get_graph_queue(spec)
 
-    def test_linker_add_dependency(self, linker: compilation.Linker):
+    def test_linker_add_dependency(self, linker: compilation.Linker) -> None:
         actual_deps = [("A", "B"), ("A", "C"), ("B", "C")]
 
         for (l, r) in actual_deps:
@@ -108,7 +115,7 @@ class TestLinker:
         self.assert_would_join(queue)
         assert queue.empty()
 
-    def test_linker_add_disjoint_dependencies(self, linker: compilation.Linker):
+    def test_linker_add_disjoint_dependencies(self, linker: compilation.Linker) -> None:
         actual_deps = [("A", "B")]
         additional_node = "Z"
 
@@ -140,7 +147,7 @@ class TestLinker:
         self.assert_would_join(queue)
         assert queue.empty()
 
-    def test_linker_dependencies_limited_to_some_nodes(self, linker: compilation.Linker):
+    def test_linker_dependencies_limited_to_some_nodes(self, linker: compilation.Linker) -> None:
         actual_deps = [("A", "B"), ("B", "C"), ("C", "D")]
 
         for (l, r) in actual_deps:
@@ -171,7 +178,7 @@ class TestLinker:
         queue_2.mark_done("A")
         self.assert_would_join(queue_2)
 
-    def test__find_cycles__cycles(self, linker: compilation.Linker):
+    def test__find_cycles__cycles(self, linker: compilation.Linker) -> None:
         actual_deps = [("A", "B"), ("B", "C"), ("C", "A")]
 
         for (l, r) in actual_deps:
@@ -179,7 +186,7 @@ class TestLinker:
 
         assert linker.find_cycles() is not None
 
-    def test__find_cycles__no_cycles(self, linker: compilation.Linker):
+    def test__find_cycles__no_cycles(self, linker: compilation.Linker) -> None:
         actual_deps = [("A", "B"), ("B", "C"), ("C", "D")]
 
         for (l, r) in actual_deps:
