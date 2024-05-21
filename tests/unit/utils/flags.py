@@ -1,5 +1,10 @@
+import sys
 from argparse import Namespace
-from collections.abc import Generator
+
+if sys.version_info < (3, 9):
+    from typing import Generator
+else:
+    from collections.abc import Generator
 
 import pytest
 
