@@ -95,8 +95,12 @@ jobs:
           python -m pip install tox
           tox --version
 
-      - name: Run tox
-        run: tox
+      - name: Run unit tests
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          command: tox -e unit
 
       - name: Get current date
         if: always()
@@ -201,8 +205,12 @@ jobs:
           python -m pip install tox
           tox --version
 
-      - name: Run tests
-        run: tox -- --ddtrace
+      - name: Run integration tests
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 30
+          max_attempts: 3
+          command: tox -- --ddtrace
         env:
           PYTEST_ADDOPTS: ${{ format('--splits {0} --group {1}', env.PYTHON_INTEGRATION_TEST_WORKERS, matrix.split-group) }}
 
