@@ -5,8 +5,9 @@ from dbt.contracts.graph.nodes import NodeType, UnitTestDefinition
 from dbt.contracts.graph.unparsed import UnitTestOutputFixture
 from dbt.parser import SchemaParser
 from dbt.parser.unit_tests import UnitTestParser
-from tests.unit.test_parser import SchemaParserTest, assertEqualNodes
 from tests.unit.utils import MockNode
+
+from .test_parser import SchemaParserTest, assertEqualNodes
 
 UNIT_TEST_MODEL_NOT_FOUND_SOURCE = """
 unit_tests:

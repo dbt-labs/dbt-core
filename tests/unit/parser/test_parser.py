@@ -53,8 +53,12 @@ from dbt.parser.schemas import (
 )
 from dbt.parser.search import FileBlock
 from dbt.parser.sources import SourcePatcher
-
-from .utils import MockNode, config_from_parts_or_dicts, generate_name_macros, normalize
+from tests.unit.utils import (
+    MockNode,
+    config_from_parts_or_dicts,
+    generate_name_macros,
+    normalize,
+)
 
 set_from_args(Namespace(WARN_ERROR=False), None)
 
