@@ -15,6 +15,7 @@ from dbt.artifacts.resources.types import TimePeriod
 from dbt.artifacts.schemas.results import FreshnessStatus
 from dbt.contracts.graph.unparsed import (
     Docs,
+    HasColumnTests,
     UnparsedColumn,
     UnparsedDocumentationFile,
     UnparsedExposure,
@@ -30,7 +31,9 @@ from dbt.contracts.graph.unparsed import (
     UnparsedSourceTableDefinition,
     UnparsedVersion,
 )
+from dbt.exceptions import ParsingError
 from dbt.node_types import NodeType
+from dbt.parser.schemas import ParserRef
 from tests.unit.utils import ContractTestCase
 
 
@@ -983,3 +986,12 @@ class TestUnparsedVersion(ContractTestCase):
 )
 def test_unparsed_version_lt(left, right, expected_lt):
     assert (UnparsedVersion(left) < UnparsedVersion(right)) == expected_lt
+
+
+def test_column_parse():
+    unparsed_col = HasColumnTests(
+        columns=[UnparsedColumn(name="TestCol", constraints=[{"type": "!INVALID!"}])]
+    )
+
+    with pytest.raises(ParsingError):
+        ParserRef.from_target(unparsed_col)
