@@ -1,5 +1,3 @@
-from argparse import Namespace
-
 import pytest
 from dbt_semantic_interfaces.type_enums import MetricType
 
@@ -36,10 +34,7 @@ from dbt.contracts.graph.nodes import (
     UnitTestDefinition,
 )
 from dbt.contracts.graph.unparsed import UnitTestInputFixture, UnitTestOutputFixture
-from dbt.flags import set_from_args
 from dbt.node_types import NodeType
-
-set_from_args(Namespace(WARN_ERROR=False), None)
 
 
 def make_model(

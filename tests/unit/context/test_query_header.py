@@ -1,15 +1,11 @@
 import re
-from argparse import Namespace
 from unittest import mock
 
 import pytest
 
 from dbt.adapters.base.query_headers import MacroQueryStringSetter
 from dbt.context.query_header import generate_query_header_context
-from dbt.flags import set_from_args
 from tests.unit.utils import config_from_parts_or_dicts
-
-set_from_args(Namespace(WARN_ERROR=False), None)
 
 
 class TestQueryHeaderContext:

@@ -7,6 +7,7 @@ from dbt.contracts.graph.nodes import SourceDefinition
 # All manifest related fixtures.
 from tests.unit.utils.adapter import *  # noqa
 from tests.unit.utils.event_manager import *  # noqa
+from tests.unit.utils.flags import *  # noqa
 from tests.unit.utils.manifest import *  # noqa
 from tests.unit.utils.project import *  # noqa
 

@@ -1,5 +1,4 @@
 import os
-from argparse import Namespace
 from typing import Any, Dict, Set
 from unittest import mock
 
@@ -19,13 +18,10 @@ from dbt.contracts.graph.nodes import (
     UnitTestNode,
     UnitTestOverrides,
 )
-from dbt.flags import set_from_args
 from dbt.node_types import NodeType
 from dbt_common.events.functions import reset_metadata_vars
 from tests.unit.mock_adapter import adapter_factory
 from tests.unit.utils import clear_plugin, config_from_parts_or_dicts, inject_adapter
-
-set_from_args(Namespace(WARN_ERROR=False), None)
 
 
 class TestVar:
