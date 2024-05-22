@@ -57,6 +57,7 @@ from dbt.logger import (
 from dbt.parser.manifest import write_manifest
 from dbt.task.base import BaseRunner, ConfiguredTask
 from dbt_common.context import _INVOCATION_CONTEXT_VAR, get_invocation_context
+from dbt_common.dataclass_schema import StrEnum
 from dbt_common.events.contextvars import log_contextvars, task_contextvars
 from dbt_common.events.functions import fire_event, warn_or_error
 from dbt_common.events.types import Formatting
@@ -68,9 +69,13 @@ RESULT_FILE_NAME = "run_results.json"
 RUNNING_STATE = DbtProcessState("running")
 
 
+class GraphRunnableMode(StrEnum):
+    Topological = "topological"
+    Independent = "independent"
+
+
 class GraphRunnableTask(ConfiguredTask):
     MARK_DEPENDENT_ERRORS_STATUSES = [NodeStatus.Error]
-    PRESERVE_EDGES = True
 
     def __init__(self, args: Flags, config: RuntimeConfig, manifest: Manifest) -> None:
         super().__init__(args, config, manifest)
@@ -146,7 +151,15 @@ class GraphRunnableTask(ConfiguredTask):
         selector = self.get_node_selector()
         # Following uses self.selection_arg and self.exclusion_arg
         spec = self.get_selection_spec()
-        return selector.get_graph_queue(spec, self.PRESERVE_EDGES)
+
+        preserve_edges = True
+        if self.get_run_mode() == GraphRunnableMode.Independent:
+            preserve_edges = False
+
+        return selector.get_graph_queue(spec, preserve_edges)
+
+    def get_run_mode(self) -> GraphRunnableMode:
+        return GraphRunnableMode.Topological
 
     def _runtime_initialize(self):
         self.compile_manifest()

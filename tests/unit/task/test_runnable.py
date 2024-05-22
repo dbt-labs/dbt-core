@@ -6,7 +6,7 @@ import pytest
 
 from dbt.artifacts.resources.types import NodeType
 from dbt.graph import Graph, ResourceTypeSelector
-from dbt.task.runnable import GraphRunnableTask
+from dbt.task.runnable import GraphRunnableMode, GraphRunnableTask
 from dbt.tests.util import safe_set_invocation_context
 from tests.unit.utils import MockNode, make_manifest
 
@@ -77,6 +77,11 @@ class MockRunnableTask(GraphRunnableTask):
         return None
 
 
+class MockRunnableTaskIndependent(MockRunnableTask):
+    def get_run_mode(self) -> GraphRunnableMode:
+        return GraphRunnableMode.Independent
+
+
 def test_graph_runnable_task_cancels_connection_on_system_exit():
 
     safe_set_invocation_context()
@@ -121,7 +126,7 @@ def test_graph_runnable_preserves_edges_by_default():
         ],
         edges=[("model.test.upstream_node", "model.test.downstream_node")],
     )
-    assert task.PRESERVE_EDGES
+    assert task.get_run_mode() == GraphRunnableMode.Topological
     graph_queue = task.get_graph_queue()
 
     assert graph_queue.queued == {"model.test.upstream_node"}
@@ -129,14 +134,14 @@ def test_graph_runnable_preserves_edges_by_default():
 
 
 def test_graph_runnable_preserves_edges_false():
-    task = MockRunnableTask(
+    task = MockRunnableTaskIndependent(
         nodes=[
             MockNode("test", "upstream_node", fqn="model.test.upstream_node"),
             MockNode("test", "downstream_node", fqn="model.test.downstream_node"),
         ],
         edges=[("model.test.upstream_node", "model.test.downstream_node")],
     )
-    task.PRESERVE_EDGES = False
+    assert task.get_run_mode() == GraphRunnableMode.Independent
     graph_queue = task.get_graph_queue()
 
     assert graph_queue.queued == {"model.test.downstream_node", "model.test.upstream_node"}
