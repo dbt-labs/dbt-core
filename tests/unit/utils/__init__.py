@@ -11,6 +11,7 @@ import agate
 import pytest
 
 from dbt.config.project import PartialProject
+from dbt.contracts.graph.manifest import Manifest
 from dbt_common.dataclass_schema import ValidationError
 
 
@@ -386,4 +387,18 @@ def replace_config(n, **kwargs):
         n,
         config=n.config.replace(**kwargs),
         unrendered_config=dict_replace(n.unrendered_config, **kwargs),
+    )
+
+
+def make_manifest(nodes=[], sources=[], macros=[], docs=[]) -> Manifest:
+    return Manifest(
+        nodes={n.unique_id: n for n in nodes},
+        macros={m.unique_id: m for m in macros},
+        sources={s.unique_id: s for s in sources},
+        docs={d.unique_id: d for d in docs},
+        disabled={},
+        files={},
+        exposures={},
+        metrics={},
+        selectors={},
     )
