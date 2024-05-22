@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from dbt.task.docs.serve import ServeTask
+from dbt.task.serve import ServeTask
 
 
 @pytest.fixture
@@ -17,7 +17,7 @@ def serve_task():
 
 def test_serve_bind_to_127(serve_task):
     serve_task.args.browser = False
-    with patch("dbt.task.docs.serve.socketserver.TCPServer") as patched_TCPServer:
+    with patch("dbt.task.serve.socketserver.TCPServer") as patched_TCPServer:
         patched_TCPServer.return_value = MagicMock()
         serve_task.run()
         patched_TCPServer.assert_called_once_with(("127.0.0.1", 8000), SimpleHTTPRequestHandler)
