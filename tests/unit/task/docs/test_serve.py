@@ -1,8 +1,9 @@
+from http.server import SimpleHTTPRequestHandler
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 
 from dbt.task.docs.serve import ServeTask
-from http.server import SimpleHTTPRequestHandler
 
 
 @pytest.fixture
