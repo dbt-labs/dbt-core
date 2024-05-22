@@ -51,7 +51,6 @@ jobs:
         with:
           repository: dbt-labs/schemas.getdbt.com
           ref: 'main'
-          ssh-key: ${{ secrets.SCHEMA_SSH_PRIVATE_KEY }}
           path: ${{ env.SCHEMA_REPO_DIRECTORY }}
 
       - name: Generate current schema
