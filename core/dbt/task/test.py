@@ -341,11 +341,11 @@ class TestRunner(CompileRunner):
         expected_daff_table = daff.PythonTableView(list_rows_from_table(expected, sort=True))
         actual_daff_table = daff.PythonTableView(list_rows_from_table(actual, sort=True))
 
-        alignment = daff.Coopy.compareTables(expected_daff_table, actual_daff_table).align()
-        result = daff.PythonTableView([])
-
         flags = daff.CompareFlags()
         flags.ordered = ordered
+
+        alignment = daff.Coopy.compareTables(expected_daff_table, actual_daff_table, flags).align()
+        result = daff.PythonTableView([])
 
         diff = daff.TableDiff(alignment, flags)
         diff.hilite(result)
