@@ -338,6 +338,8 @@ class TestRunner(CompileRunner):
     def _get_daff_diff(
         self, expected: "agate.Table", actual: "agate.Table", ordered: bool = False
     ) -> daff.TableDiff:
+        # Sort expected and actual inputs prior to creating daff diff to ensure order insensitivity
+        # https://github.com/paulfitz/daff/issues/200
         expected_daff_table = daff.PythonTableView(list_rows_from_table(expected, sort=True))
         actual_daff_table = daff.PythonTableView(list_rows_from_table(actual, sort=True))
 
