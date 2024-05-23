@@ -32,6 +32,7 @@ class GraphQueue:
         selected: Set[UniqueId],
         preserve_edges: bool = True,
     ) -> None:
+        # 'create_empty_copy' returns a copy of the graph G with all of the edges removed, and leaves nodes intact.
         self.graph = graph if preserve_edges else nx.classes.function.create_empty_copy(graph)
         self.manifest = manifest
         self._selected = selected
