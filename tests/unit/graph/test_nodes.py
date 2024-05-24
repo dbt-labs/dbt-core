@@ -1,4 +1,5 @@
 from copy import deepcopy
+from datetime import datetime
 from typing import List
 
 import pytest
@@ -8,11 +9,19 @@ from dbt_semantic_interfaces.type_enums import (
     DimensionType,
     EntityType,
 )
+from freezegun import freeze_time
 
-from dbt.artifacts.resources import Defaults, Dimension, Entity, Measure, TestMetadata
+from dbt.artifacts.resources import (
+    Defaults,
+    Dimension,
+    Entity,
+    FileHash,
+    Measure,
+    TestMetadata,
+)
 from dbt.artifacts.resources.v1.semantic_model import NodeRelation
 from dbt.contracts.graph.model_config import TestConfig
-from dbt.contracts.graph.nodes import ColumnInfo, SemanticModel
+from dbt.contracts.graph.nodes import ColumnInfo, ModelNode, SemanticModel
 from dbt.node_types import NodeType
 from dbt_common.contracts.constraints import (
     ColumnLevelConstraint,
@@ -20,6 +29,44 @@ from dbt_common.contracts.constraints import (
     ModelLevelConstraint,
 )
 from tests.unit.fixtures import generic_test_node, model_node
+
+
+class TestModelNode:
+    @pytest.fixture(scope="class")
+    def default_model_node(self):
+        return ModelNode(
+            resource_type=NodeType.Model,
+            unique_id="model.test_package.test_name",
+            name="test_name",
+            package_name="test_package",
+            schema="test_schema",
+            alias="test_alias",
+            fqn=["models", "test_name"],
+            original_file_path="test_original_file_path",
+            checksum=FileHash.from_contents("checksum"),
+            path="test_path",
+            database=None,
+        )
+
+    @pytest.mark.parametrize(
+        "deprecation_date,current_date,expected_is_past_deprecation_date",
+        [
+            (None, "2024-05-02", False),
+            ("2024-05-01", "2024-05-02", True),
+            ("2024-05-01", "2024-05-01", False),
+            ("2024-05-01", "2024-04-30", False),
+        ],
+    )
+    def test_is_past_deprecation_date(
+        self, default_model_node, deprecation_date, current_date, expected_is_past_deprecation_date
+    ):
+        with freeze_time(current_date):
+            if deprecation_date is not None:
+                default_model_node.deprecation_date = datetime.strptime(
+                    deprecation_date, "%Y-%m-%d"
+                ).astimezone()
+
+            assert default_model_node.is_past_deprecation_date is expected_is_past_deprecation_date
 
 
 class TestSemanticModel:

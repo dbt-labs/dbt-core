@@ -570,25 +570,21 @@ class ManifestLoader:
 
     def check_for_model_deprecations(self):
         for node in self.manifest.nodes.values():
-            if isinstance(node, ModelNode):
-                if (
-                    node.deprecation_date
-                    and node.deprecation_date < datetime.datetime.now().astimezone()
-                ):
-                    warn_or_error(
-                        DeprecatedModel(
-                            model_name=node.name,
-                            model_version=version_to_str(node.version),
-                            deprecation_date=node.deprecation_date.isoformat(),
-                        )
+            if isinstance(node, ModelNode) and node.is_past_deprecation_date:
+                warn_or_error(
+                    DeprecatedModel(
+                        model_name=node.name,
+                        model_version=version_to_str(node.version),
+                        deprecation_date=node.deprecation_date.isoformat(),
                     )
+                )
 
                 resolved_refs = self.manifest.resolve_refs(node, self.root_project.project_name)
                 resolved_model_refs = [r for r in resolved_refs if isinstance(r, ModelNode)]
                 node.depends_on
                 for resolved_ref in resolved_model_refs:
                     if resolved_ref.deprecation_date:
-                        if resolved_ref.deprecation_date < datetime.datetime.now().astimezone():
+                        if resolved_ref.is_past_deprecation_date:
                             event_cls = DeprecatedReference
                         else:
                             event_cls = UpcomingReferenceDeprecation
