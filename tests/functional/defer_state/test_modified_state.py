@@ -8,6 +8,7 @@ import pytest
 from dbt.exceptions import CompilationError, ContractBreakingChangeError
 from dbt.tests.util import (
     get_manifest,
+    rm_file,
     run_dbt,
     run_dbt_and_capture,
     update_config_file,
@@ -647,6 +648,50 @@ class TestChangedContractVersioned(BaseModifiedState):
         write_file(self.DISABLED_SCHEMA_YML, "models", "schema.yml")
         with pytest.raises(ContractBreakingChangeError):
             results = run_dbt(["run", "--models", "state:modified.contract", "--state", "./state"])
+
+
+class TestDeleteUnversionedContractedModel(BaseModifiedState):
+    MODEL_UNIQUE_ID = "model.test.table_model"
+    CONTRACT_SCHEMA_YML = contract_schema_yml
+
+    def test_delete_unversioned_contracted_model(self, project):
+        # ensure table_model is contracted
+        write_file(self.CONTRACT_SCHEMA_YML, "models", "schema.yml")
+        self.run_and_save_state()
+
+        # delete versioned contracted model
+        rm_file(project.project_root, "models", "table_model.sql")
+
+        # since the models are unversioned, they raise a warning but not an error
+        _, logs = run_dbt_and_capture(
+            ["run", "--models", "state:modified.contract", "--state", "./state"]
+        )
+
+        expected_warning = "While comparing to previous project state, dbt detected a breaking change to an unversioned model"
+        expected_change = "Contracted model 'model.test.table_model' was deleted or renamed"
+        assert expected_warning in logs
+        assert expected_change in logs
+
+
+class TestDeleteVersionedContractedModel(BaseModifiedState):
+    MODEL_UNIQUE_ID = "model.test.table_model.v1"
+    CONTRACT_SCHEMA_YML = versioned_contract_schema_yml
+
+    def test_delete_unversioned_contracted_model(self, project):
+        # ensure table_model is versioned + contracted
+        write_file(self.CONTRACT_SCHEMA_YML, "models", "schema.yml")
+        self.run_and_save_state()
+
+        # delete versioned contracted model
+        rm_file(project.project_root, "models", "table_model.sql")
+
+        # since the models are unversioned, they raise a warning but not an error
+        with pytest.raises(ContractBreakingChangeError) as e:
+            run_dbt(["run", "--models", "state:modified.contract", "--state", "./state"])
+
+        assert "Contracted model 'model.test.table_model.v1' was deleted or renamed." in str(
+            e.value
+        )
 
 
 class TestChangedConstraintUnversioned(BaseModifiedState):
