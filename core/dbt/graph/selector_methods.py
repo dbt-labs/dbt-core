@@ -719,7 +719,9 @@ class StateSelectorMethod(SelectorMethod):
     ) -> Callable[[Optional[SelectorTarget], SelectorTarget], bool]:
         # get a function that compares two selector target based on compare method provided
         def check_modified_contract(old: Optional[SelectorTarget], new: SelectorTarget) -> bool:
-            if hasattr(new, compare_method):
+            if new is None and hasattr(old, compare_method + "_deleted"):
+                return getattr(old, compare_method + "_deleted")()
+            elif hasattr(new, compare_method):
                 # when old body does not exist or old and new are not the same
                 return not old or not getattr(new, compare_method)(old, adapter_type)  # type: ignore
             else:
@@ -784,6 +786,16 @@ class StateSelectorMethod(SelectorMethod):
 
             if checker(previous_node, node, **keyword_args):  # type: ignore
                 yield unique_id
+
+        # checkers that can handle deleted nodes
+        if checker.__name__ in ["check_modified_contract"]:
+            # ignore included_nodes, since those cannot contain deleted nodes
+            for previous_unique_id, previous_node in manifest.nodes.items():
+                # detect deleted or renamed node
+                if previous_unique_id not in self.manifest.nodes.keys():
+                    # do not yield -- deleted nodes should never be selected for downstream execution
+                    # as they are not part of the current project's manifest
+                    checker(previous_node, None, **keyword_args)  # type: ignore
 
 
 class ResultSelectorMethod(SelectorMethod):
