@@ -808,8 +808,12 @@ class ManifestLoader:
         plugin_model_nodes = pm.get_nodes().models
         for node_arg in plugin_model_nodes.values():
             node = ModelNode.from_args(node_arg)
-            # node may already exist from package or running project - in which case we should avoid clobbering it with an external node
-            if node.unique_id not in self.manifest.nodes:
+            # node may already exist from package or running project (even if it is disabled),
+            # in which case we should avoid clobbering it with an external node
+            if (
+                node.unique_id not in self.manifest.nodes
+                and node.unique_id not in self.manifest.disabled
+            ):
                 self.manifest.add_node_nofile(node)
                 manifest_nodes_modified = True
 
