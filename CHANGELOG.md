@@ -126,6 +126,7 @@
 -  ([#5033](https://github.com/dbt-labs/dbt-core/issues/5033), [#5032](https://github.com/dbt-labs/dbt-core/pull/5032))
 
 ### Contributors
+- [@triedandtested-dev](https://github.com/triedandtested-dev) ([#4618](https://github.com/dbt-labs/dbt-core/pull/4618))
 - [@NiallRees](https://github.com/NiallRees) ([#4447](https://github.com/dbt-labs/dbt-core/pull/4447))
 - [@agoblet](https://github.com/agoblet) ([#5000](https://github.com/dbt-labs/dbt-core/pull/5000))
 - [@alswang18](https://github.com/alswang18) ([#4644](https://github.com/dbt-labs/dbt-core/pull/4644))
