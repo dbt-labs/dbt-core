@@ -1,15 +1,15 @@
 import abc
-import os
 import functools
+import os
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
-from typing import List, Optional, Generic, TypeVar, Dict
+from typing import Dict, Generic, List, Optional, TypeVar
 
-from dbt_common.clients import system
 from dbt.contracts.project import ProjectPackageMetadata
-from dbt_common.events.functions import fire_event
 from dbt.events.types import DepsSetDownloadDirectory
+from dbt_common.clients import system
+from dbt_common.events.functions import fire_event
 from dbt_common.utils.connection import connection_exception_retry
 
 DOWNLOADS_PATH = None

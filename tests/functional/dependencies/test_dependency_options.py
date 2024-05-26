@@ -1,5 +1,6 @@
 import os
 import shutil
+
 import pytest
 
 from dbt.tests.util import run_dbt

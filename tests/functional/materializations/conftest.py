@@ -1,6 +1,6 @@
 import pytest
-from dbt.tests.fixtures.project import write_project_files
 
+from dbt.tests.fixtures.project import write_project_files
 
 override_view_adapter_pass_dep__dbt_project_yml = """
 name: view_adapter_override
@@ -325,6 +325,21 @@ override_view_return_no_relation__macros__override_view_sql = """
 {%- endmaterialization -%}
 """
 
+custom_materialization_dep__dbt_project_yml = """
+name: custom_materialization_default
+macro-paths: ['macros']
+"""
+
+custom_materialization_sql = """
+{% materialization custom_materialization, default %}
+    {%- set target_relation = this.incorporate(type='table') %}
+    {% call statement('main') -%}
+        select 1 as column1
+    {%- endcall %}
+    {{ return({'relations': [target_relation]}) }}
+{% endmaterialization %}
+"""
+
 
 @pytest.fixture(scope="class")
 def override_view_adapter_pass_dep(project_root):
@@ -368,3 +383,12 @@ def override_view_return_no_relation(project_root):
         },
     }
     write_project_files(project_root, "override-view-return-no-relation", files)
+
+
+@pytest.fixture(scope="class")
+def custom_materialization_dep(project_root):
+    files = {
+        "dbt_project.yml": custom_materialization_dep__dbt_project_yml,
+        "macros": {"custom_materialization.sql": custom_materialization_sql},
+    }
+    write_project_files(project_root, "custom-materialization-dep", files)

@@ -3,7 +3,6 @@ from typing import Optional
 import pytest
 
 from dbt.adapters.base.relation import BaseRelation
-from dbt_common.contracts.config.materialization import OnConfigurationChangeOption
 from dbt.adapters.contracts.relation import RelationType
 from dbt.tests.util import (
     assert_message_in_logs,
@@ -12,7 +11,7 @@ from dbt.tests.util import (
     run_dbt_and_capture,
     set_model_file,
 )
-
+from dbt_common.contracts.config.materialization import OnConfigurationChangeOption
 from tests.functional.adapter.materialized_view.files import (
     MY_MATERIALIZED_VIEW,
     MY_SEED,

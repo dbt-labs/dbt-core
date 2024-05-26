@@ -1,6 +1,5 @@
 import pytest
 
-
 dupe_models__schema2_yml = """
 version: 2
 sources:

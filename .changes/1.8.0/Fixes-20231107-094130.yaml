@@ -1,7 +1,0 @@
-kind: Fixes
-body: Use MANIFEST.in to recursively include all jinja templates; fixes issue where
-  some templates were not included in the distribution
-time: 2023-11-07T09:41:30.121733-05:00
-custom:
-  Author: mikealfare
-  Issue: "9016"

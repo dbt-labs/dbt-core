@@ -4,21 +4,16 @@ from dataclasses import dataclass
 from typing import Callable, List, Optional, Union
 
 import click
-from click.exceptions import (
-    Exit as ClickExit,
-    BadOptionUsage,
-    NoSuchOption,
-    UsageError,
-)
+from click.exceptions import BadOptionUsage
+from click.exceptions import Exit as ClickExit
+from click.exceptions import NoSuchOption, UsageError
 
-from dbt.cli import requires, params as p
-from dbt.cli.exceptions import (
-    DbtInternalException,
-    DbtUsageException,
-)
-from dbt.contracts.graph.manifest import Manifest
 from dbt.artifacts.schemas.catalog import CatalogArtifact
 from dbt.artifacts.schemas.run import RunExecutionResult
+from dbt.cli import params as p
+from dbt.cli import requires
+from dbt.cli.exceptions import DbtInternalException, DbtUsageException
+from dbt.contracts.graph.manifest import Manifest
 from dbt_common.events.base_types import EventMsg
 
 
@@ -109,7 +104,6 @@ def global_flags(func):
     @p.deprecated_favor_state
     @p.deprecated_print
     @p.deprecated_state
-    @p.enable_legacy_logger
     @p.fail_fast
     @p.favor_state
     @p.indirect_selection
@@ -170,6 +164,7 @@ def cli(ctx, **kwargs):
 @cli.command("build")
 @click.pass_context
 @global_flags
+@p.empty
 @p.exclude
 @p.export_saved_queries
 @p.full_refresh

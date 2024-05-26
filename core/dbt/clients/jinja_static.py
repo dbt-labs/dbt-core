@@ -1,11 +1,11 @@
 from typing import Any, Dict, Optional
 
 import jinja2
-from dbt_common.clients.jinja import get_environment
-from dbt_common.tests import test_caching_enabled
-from dbt.exceptions import MacroNamespaceNotStringError
-from dbt_common.exceptions.macros import MacroNameNotStringError
 
+from dbt.exceptions import MacroNamespaceNotStringError
+from dbt_common.clients.jinja import get_environment
+from dbt_common.exceptions.macros import MacroNameNotStringError
+from dbt_common.tests import test_caching_enabled
 
 _TESTING_MACRO_CACHE: Optional[Dict[str, Any]] = {}
 

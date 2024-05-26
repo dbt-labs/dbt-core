@@ -1,8 +1,9 @@
 import pytest
+
 from tests.functional.adapter.utils.base_utils import BaseUtils
 from tests.functional.adapter.utils.fixture_escape_single_quotes import (
-    models__test_escape_single_quotes_quote_sql,
     models__test_escape_single_quotes_backslash_sql,
+    models__test_escape_single_quotes_quote_sql,
     models__test_escape_single_quotes_yml,
 )
 

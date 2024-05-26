@@ -1,8 +1,8 @@
-from typing import Dict, Any, Set
+from typing import Any, Dict, Set
 
 import dbt.adapters.events.types as adapter_dbt_event_types
-import dbt_common.events.types as dbt_event_types
 import dbt.events.types as core_dbt_event_types
+import dbt_common.events.types as dbt_event_types
 
 ALL_EVENT_TYPES: Dict[str, Any] = {
     **dbt_event_types.__dict__,

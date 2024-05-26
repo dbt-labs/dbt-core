@@ -1,6 +1,0 @@
-kind: Fixes
-body: Tighten exception handling to avoid worker thread hangs.
-time: 2024-02-16T14:56:32.858967-05:00
-custom:
-  Author: peterallenwebb
-  Issue: "9583"

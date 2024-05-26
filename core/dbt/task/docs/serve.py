@@ -6,8 +6,8 @@ from http.server import SimpleHTTPRequestHandler
 
 import click
 
-from dbt.task.docs import DOCS_INDEX_FILE_PATH
 from dbt.task.base import ConfiguredTask
+from dbt.task.docs import DOCS_INDEX_FILE_PATH
 
 
 class ServeTask(ConfiguredTask):
@@ -20,7 +20,7 @@ class ServeTask(ConfiguredTask):
         if self.args.browser:
             webbrowser.open_new_tab(f"http://localhost:{port}")
 
-        with socketserver.TCPServer(("", port), SimpleHTTPRequestHandler) as httpd:
+        with socketserver.TCPServer(("127.0.0.1", port), SimpleHTTPRequestHandler) as httpd:
             click.echo(f"Serving docs at {port}")
             click.echo(f"To access from your browser, navigate to: http://localhost:{port}")
             click.echo("\n\n")

@@ -1,6 +1,6 @@
 import pytest
-from dbt.tests.util import run_dbt
 
+from dbt.tests.util import run_dbt
 
 my_model_with_macros = """
 SELECT

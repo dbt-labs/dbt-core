@@ -1,15 +1,20 @@
 import json
 
 from dbt.constants import MAXIMUM_SEED_SIZE_NAME, PIN_PACKAGE_URL
-from dbt_common.ui import error_tag, warning_tag, line_wrap_message, green, yellow, red
+from dbt.events.base_types import (
+    DebugLevel,
+    DynamicLevel,
+    ErrorLevel,
+    InfoLevel,
+    WarnLevel,
+)
 from dbt_common.events.base_types import EventLevel
 from dbt_common.events.format import (
     format_fancy_output_line,
-    timestamp_to_datetime_string,
     pluralize,
+    timestamp_to_datetime_string,
 )
-from dbt.events.base_types import WarnLevel, InfoLevel, DebugLevel, ErrorLevel, DynamicLevel
-
+from dbt_common.ui import error_tag, green, line_wrap_message, red, warning_tag, yellow
 
 # Event codes have prefixes which follow this table
 #
@@ -57,12 +62,7 @@ class MainTrackingUserState(DebugLevel):
         return f"Tracking: {self.user_state}"
 
 
-class MergedFromState(DebugLevel):
-    def code(self) -> str:
-        return "A004"
-
-    def message(self) -> str:
-        return f"Merged {self.num_merged} items from state (sample: {self.sample})"
+# Removed A004: MergedFromState
 
 
 class MissingProfileTarget(InfoLevel):
@@ -413,16 +413,12 @@ class ProjectFlagsMovedDeprecation(WarnLevel):
         return warning_tag(f"Deprecated functionality\n\n{description}")
 
 
-class SpacesInModelNameDeprecation(DynamicLevel):
+class SpacesInResourceNameDeprecation(DynamicLevel):
     def code(self) -> str:
         return "D014"
 
     def message(self) -> str:
-        version = ".v" + self.model_version if self.model_version else ""
-        description = (
-            f"Model `{self.model_name}{version}` has spaces in its name. This is deprecated and "
-            "may cause errors when using dbt."
-        )
+        description = f"Found spaces in the name of `{self.unique_id}`"
 
         if self.level == EventLevel.ERROR.value:
             description = error_tag(description)
@@ -432,22 +428,39 @@ class SpacesInModelNameDeprecation(DynamicLevel):
         return line_wrap_message(description)
 
 
-class TotalModelNamesWithSpacesDeprecation(DynamicLevel):
+class ResourceNamesWithSpacesDeprecation(WarnLevel):
     def code(self) -> str:
         return "D015"
 
     def message(self) -> str:
-        description = f"Spaces in model names found in {self.count_invalid_names} model(s), which is deprecated."
+        description = f"Spaces found in {self.count_invalid_names} resource name(s). This is deprecated, and may lead to errors when using dbt."
 
         if self.show_debug_hint:
             description += " Run again with `--debug` to see them all."
 
-        if self.level == EventLevel.ERROR.value:
-            description = error_tag(description)
-        elif self.level == EventLevel.WARN.value:
-            description = warning_tag(description)
+        description += " For more information: https://docs.getdbt.com/reference/global-configs/legacy-behaviors"
 
-        return line_wrap_message(description)
+        return line_wrap_message(warning_tag(description))
+
+
+class PackageMaterializationOverrideDeprecation(WarnLevel):
+    def code(self) -> str:
+        return "D016"
+
+    def message(self) -> str:
+        description = f"Installed package '{self.package_name}' is overriding the built-in materialization '{self.materialization_name}'. Overrides of built-in materializations from installed packages will be deprecated in future versions of dbt. For more information: https://docs.getdbt.com/reference/global-configs/legacy-behaviors"
+
+        return line_wrap_message(warning_tag(description))
+
+
+class SourceFreshnessProjectHooksNotRun(WarnLevel):
+    def code(self) -> str:
+        return "D017"
+
+    def message(self) -> str:
+        description = "In a future version of dbt, the `source freshness` command will start running `on-run-start` and `on-run-end` hooks by default. For more information: https://docs.getdbt.com/reference/global-configs/legacy-behaviors"
+
+        return line_wrap_message(warning_tag(description))
 
 
 # =======================================================
@@ -1809,7 +1822,7 @@ class SQLCompiledPath(InfoLevel):
         return "Z026"
 
     def message(self) -> str:
-        return f"  compiled Code at {self.path}"
+        return f"  compiled code at {self.path}"
 
 
 class CheckNodeTestFailure(InfoLevel):
@@ -1969,6 +1982,7 @@ class DebugCmdResult(InfoLevel):
 
 
 class ListCmdOut(InfoLevel):
+    # No longer in use, switching to Z051 PrintEvent in dbt-common
     def code(self) -> str:
         return "Z049"
 

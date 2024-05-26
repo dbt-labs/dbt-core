@@ -1,8 +1,7 @@
 import pytest
 
-from dbt.tests.util import run_dbt, get_manifest, check_relations_equal, write_file
-
 from dbt.exceptions import CompilationError, ParsingError
+from dbt.tests.util import check_relations_equal, get_manifest, run_dbt, write_file
 
 models_alt__schema_yml = """
 version: 2

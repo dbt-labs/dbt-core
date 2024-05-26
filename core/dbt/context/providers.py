@@ -1,52 +1,86 @@
 import abc
-from copy import deepcopy
 import os
+from copy import deepcopy
 from typing import (
-    Callable,
-    Any,
-    Dict,
-    Optional,
-    Union,
-    List,
-    TypeVar,
-    Type,
-    Iterable,
-    Mapping,
-    Tuple,
     TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    List,
+    Mapping,
+    Optional,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
 )
 
 from typing_extensions import Protocol
 
+from dbt import selected_resources
 from dbt.adapters.base.column import Column
+from dbt.adapters.contracts.connection import AdapterResponse
+from dbt.adapters.exceptions import MissingConfigError
+from dbt.adapters.factory import (
+    get_adapter,
+    get_adapter_package_names,
+    get_adapter_type_names,
+)
 from dbt.artifacts.resources import NodeVersion, RefArgs
-from dbt_common.clients.jinja import MacroProtocol
-from dbt_common.context import get_invocation_context
-from dbt.adapters.factory import get_adapter, get_adapter_package_names, get_adapter_type_names
-from dbt.clients.jinja import get_rendered, MacroGenerator, MacroStack, UnitTestMacroGenerator
-from dbt.config import RuntimeConfig, Project
-from dbt.constants import SECRET_ENV_PREFIX, DEFAULT_ENV_PLACEHOLDER
-from dbt.context.base import contextmember, contextproperty, Var
+from dbt.clients.jinja import (
+    MacroGenerator,
+    MacroStack,
+    UnitTestMacroGenerator,
+    get_rendered,
+)
+from dbt.config import IsFQNResource, Project, RuntimeConfig
+from dbt.constants import DEFAULT_ENV_PLACEHOLDER
+from dbt.context.base import Var, contextmember, contextproperty
 from dbt.context.configured import FQNLookup
 from dbt.context.context_config import ContextConfig
 from dbt.context.exceptions_jinja import wrapped_exports
 from dbt.context.macro_resolver import MacroResolver, TestMacroNamespace
-from dbt.context.macros import MacroNamespaceBuilder, MacroNamespace
+from dbt.context.macros import MacroNamespace, MacroNamespaceBuilder
 from dbt.context.manifest import ManifestContext
-from dbt.adapters.contracts.connection import AdapterResponse
-from dbt.contracts.graph.manifest import Manifest, Disabled
+from dbt.contracts.graph.manifest import Disabled, Manifest
+from dbt.contracts.graph.metrics import MetricReference, ResolvedMetricReference
 from dbt.contracts.graph.nodes import (
-    Macro,
-    Exposure,
-    SeedNode,
-    SourceDefinition,
-    Resource,
-    ManifestNode,
     AccessType,
+    Exposure,
+    Macro,
+    ManifestNode,
+    Resource,
+    SeedNode,
     SemanticModel,
+    SourceDefinition,
     UnitTestNode,
 )
-from dbt.contracts.graph.metrics import MetricReference, ResolvedMetricReference
+from dbt.exceptions import (
+    CompilationError,
+    ConflictingConfigKeysError,
+    DbtReferenceError,
+    EnvVarMissingError,
+    InlineModelConfigError,
+    LoadAgateTableNotSeedError,
+    LoadAgateTableValueError,
+    MacroDispatchArgError,
+    MacroResultAlreadyLoadedError,
+    MetricArgsError,
+    NumberSourceArgsError,
+    OperationsCannotRefEphemeralNodesError,
+    ParsingError,
+    PersistDocsValueTypeError,
+    RefArgsError,
+    RefBadContextError,
+    SecretEnvVarLocationError,
+    TargetNotFoundError,
+)
+from dbt.node_types import ModelLanguage, NodeType
+from dbt.utils import MultiDict, args_to_dict
+from dbt_common.clients.jinja import MacroProtocol
+from dbt_common.constants import SECRET_ENV_PREFIX
+from dbt_common.context import get_invocation_context
 from dbt_common.events.functions import get_metadata_vars
 from dbt_common.exceptions import (
     DbtInternalError,
@@ -54,33 +88,7 @@ from dbt_common.exceptions import (
     DbtValidationError,
     MacrosSourcesUnWriteableError,
 )
-from dbt.adapters.exceptions import MissingConfigError
-from dbt.exceptions import (
-    CompilationError,
-    ConflictingConfigKeysError,
-    SecretEnvVarLocationError,
-    EnvVarMissingError,
-    InlineModelConfigError,
-    NumberSourceArgsError,
-    PersistDocsValueTypeError,
-    LoadAgateTableNotSeedError,
-    LoadAgateTableValueError,
-    MacroDispatchArgError,
-    MacroResultAlreadyLoadedError,
-    MetricArgsError,
-    OperationsCannotRefEphemeralNodesError,
-    ParsingError,
-    RefBadContextError,
-    RefArgsError,
-    TargetNotFoundError,
-    DbtReferenceError,
-)
-from dbt.config import IsFQNResource
-from dbt.node_types import NodeType, ModelLanguage
-
-from dbt.utils import MultiDict, args_to_dict
-from dbt_common.utils import merge, AttrDict, cast_to_str
-from dbt import selected_resources
+from dbt_common.utils import AttrDict, cast_to_str, merge
 
 if TYPE_CHECKING:
     import agate
@@ -503,6 +511,7 @@ class RuntimeRefResolver(BaseRefResolver):
             self.model.package_name,
         )
 
+        # Raise an error if the reference target is missing
         if target_model is None or isinstance(target_model, Disabled):
             raise TargetNotFoundError(
                 node=self.model,
@@ -512,6 +521,8 @@ class RuntimeRefResolver(BaseRefResolver):
                 target_version=target_version,
                 disabled=isinstance(target_model, Disabled),
             )
+
+        # Raise error if trying to reference a 'private' resource outside its 'group'
         elif self.manifest.is_invalid_private_ref(
             self.model, target_model, self.config.dependencies
         ):
@@ -521,6 +532,7 @@ class RuntimeRefResolver(BaseRefResolver):
                 access=AccessType.Private,
                 scope=cast_to_str(target_model.group),
             )
+        # Or a 'protected' resource outside its project/package namespace
         elif self.manifest.is_invalid_protected_ref(
             self.model, target_model, self.config.dependencies
         ):
@@ -530,7 +542,6 @@ class RuntimeRefResolver(BaseRefResolver):
                 access=AccessType.Protected,
                 scope=target_model.package_name,
             )
-
         self.validate(target_model, target_name, target_package, target_version)
         return self.create_relation(target_model)
 
@@ -538,6 +549,25 @@ class RuntimeRefResolver(BaseRefResolver):
         if target_model.is_ephemeral_model:
             self.model.set_cte(target_model.unique_id, None)
             return self.Relation.create_ephemeral_from(target_model, limit=self.resolve_limit)
+        elif (
+            hasattr(target_model, "defer_relation")
+            and target_model.defer_relation
+            and self.config.args.defer
+            and (
+                # User has explicitly opted to prefer defer_relation for unselected resources
+                (
+                    self.config.args.favor_state
+                    and target_model.unique_id not in selected_resources.SELECTED_RESOURCES
+                )
+                # Or, this node's relation does not exist in the expected target location (cache lookup)
+                or not get_adapter(self.config).get_relation(
+                    target_model.database, target_model.schema, target_model.identifier
+                )
+            )
+        ):
+            return self.Relation.create_from(
+                self.config, target_model.defer_relation, limit=self.resolve_limit
+            )
         else:
             return self.Relation.create_from(self.config, target_model, limit=self.resolve_limit)
 

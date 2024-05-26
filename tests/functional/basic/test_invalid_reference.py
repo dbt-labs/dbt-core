@@ -1,7 +1,7 @@
 import pytest
-from dbt.tests.util import run_dbt
-from dbt.exceptions import CompilationError
 
+from dbt.exceptions import CompilationError
+from dbt.tests.util import run_dbt
 
 descendant_sql = """
 -- should be ref('model')

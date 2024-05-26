@@ -1,12 +1,11 @@
 import pytest
 
 from dbt.tests.util import run_dbt
-
 from tests.functional.custom_aliases.fixtures import (
+    macros_config_sql,
+    macros_sql,
     model1_sql,
     model2_sql,
-    macros_sql,
-    macros_config_sql,
     schema_yml,
 )
 

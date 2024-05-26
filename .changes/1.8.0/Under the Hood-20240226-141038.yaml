@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: Define UnitTestDefinition resource in dbt/artifacts/resources
-time: 2024-02-26T14:10:38.807154-05:00
-custom:
-  Author: michelleark
-  Issue: "9667"

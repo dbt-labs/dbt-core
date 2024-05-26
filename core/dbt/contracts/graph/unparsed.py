@@ -1,42 +1,44 @@
 import datetime
 import re
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Dict, List, Literal, Optional, Sequence, Union
 
-from dbt import deprecations
-from dbt.artifacts.resources import ConstantPropertyInput, Quoting
-from dbt_common.contracts.config.properties import AdditionalPropertiesMixin
-from dbt_common.contracts.util import Mergeable
-from dbt_common.exceptions import DbtInternalError
-from dbt_common.dataclass_schema import (
-    dbtClassMixin,
-    StrEnum,
-    ExtensibleDbtClassMixin,
-    ValidationError,
-)
-from dbt.node_types import NodeType
-from dbt.artifacts.resources import (
-    Defaults,
-    DimensionValidityParams,
-    ExposureType,
-    ExternalTable,
-    FreshnessThreshold,
-    MaturityType,
-    MeasureAggregationParameters,
-    UnitTestInputFixture,
-    UnitTestOutputFixture,
-    UnitTestNodeVersions,
-    UnitTestOverrides,
-)
+from dbt_semantic_interfaces.type_enums import ConversionCalculationType
 
 # trigger the PathEncoder
 import dbt_common.helper_types  # noqa:F401
+from dbt import deprecations
+from dbt.artifacts.resources import (
+    ConstantPropertyInput,
+    Defaults,
+    DimensionValidityParams,
+    Docs,
+    ExposureType,
+    ExternalTable,
+    FreshnessThreshold,
+    MacroArgument,
+    MaturityType,
+    MeasureAggregationParameters,
+    NodeVersion,
+    Owner,
+    Quoting,
+    UnitTestInputFixture,
+    UnitTestNodeVersions,
+    UnitTestOutputFixture,
+    UnitTestOverrides,
+)
 from dbt.exceptions import ParsingError
-
-from dbt_semantic_interfaces.type_enums import ConversionCalculationType
-from dbt.artifacts.resources import Docs, MacroArgument, NodeVersion, Owner
-
-from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Optional, List, Union, Dict, Any, Sequence, Literal
+from dbt.node_types import NodeType
+from dbt_common.contracts.config.properties import AdditionalPropertiesMixin
+from dbt_common.contracts.util import Mergeable
+from dbt_common.dataclass_schema import (
+    ExtensibleDbtClassMixin,
+    StrEnum,
+    ValidationError,
+    dbtClassMixin,
+)
+from dbt_common.exceptions import DbtInternalError
 
 
 @dataclass
@@ -269,14 +271,15 @@ class UnparsedMacroUpdate(HasConfig, HasColumnProps, HasYamlMetadata):
 class UnparsedSourceTableDefinition(HasColumnTests, HasColumnAndTestProps):
     config: Dict[str, Any] = field(default_factory=dict)
     loaded_at_field: Optional[str] = None
+    loaded_at_field_present: Optional[bool] = None
     identifier: Optional[str] = None
     quoting: Quoting = field(default_factory=Quoting)
     freshness: Optional[FreshnessThreshold] = field(default_factory=FreshnessThreshold)
     external: Optional[ExternalTable] = None
     tags: List[str] = field(default_factory=list)
 
-    def __post_serialize__(self, dct):
-        dct = super().__post_serialize__(dct)
+    def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
+        dct = super().__post_serialize__(dct, context)
         if "freshness" not in dct and self.freshness is None:
             dct["freshness"] = None
         return dct
@@ -293,16 +296,28 @@ class UnparsedSourceDefinition(dbtClassMixin):
     quoting: Quoting = field(default_factory=Quoting)
     freshness: Optional[FreshnessThreshold] = field(default_factory=FreshnessThreshold)
     loaded_at_field: Optional[str] = None
+    loaded_at_field_present: Optional[bool] = None
     tables: List[UnparsedSourceTableDefinition] = field(default_factory=list)
     tags: List[str] = field(default_factory=list)
     config: Dict[str, Any] = field(default_factory=dict)
+
+    @classmethod
+    def validate(cls, data):
+        super(UnparsedSourceDefinition, cls).validate(data)
+
+        if data.get("loaded_at_field", None) == "":
+            raise ValidationError("loaded_at_field cannot be an empty string.")
+        if "tables" in data:
+            for table in data["tables"]:
+                if table.get("loaded_at_field", None) == "":
+                    raise ValidationError("loaded_at_field cannot be an empty string.")
 
     @property
     def yaml_key(self) -> "str":
         return "sources"
 
-    def __post_serialize__(self, dct):
-        dct = super().__post_serialize__(dct)
+    def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
+        dct = super().__post_serialize__(dct, context)
         if "freshness" not in dct and self.freshness is None:
             dct["freshness"] = None
         return dct
@@ -316,6 +331,7 @@ class SourceTablePatch(dbtClassMixin):
     data_type: Optional[str] = None
     docs: Optional[Docs] = None
     loaded_at_field: Optional[str] = None
+    loaded_at_field_present: Optional[bool] = None
     identifier: Optional[str] = None
     quoting: Quoting = field(default_factory=Quoting)
     freshness: Optional[FreshnessThreshold] = field(default_factory=FreshnessThreshold)
@@ -358,6 +374,7 @@ class SourcePatch(dbtClassMixin):
     quoting: Optional[Quoting] = None
     freshness: Optional[Optional[FreshnessThreshold]] = field(default_factory=FreshnessThreshold)
     loaded_at_field: Optional[str] = None
+    loaded_at_field_present: Optional[bool] = None
     tables: Optional[List[SourceTablePatch]] = None
     tags: Optional[List[str]] = None
 

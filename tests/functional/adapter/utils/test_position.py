@@ -1,9 +1,10 @@
 import pytest
+
 from tests.functional.adapter.utils.base_utils import BaseUtils
 from tests.functional.adapter.utils.fixture_position import (
-    seeds__data_position_csv,
     models__test_position_sql,
     models__test_position_yml,
+    seeds__data_position_csv,
 )
 
 

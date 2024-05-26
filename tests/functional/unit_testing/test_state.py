@@ -1,21 +1,20 @@
 import os
-import pytest
 import shutil
 from copy import deepcopy
 
-from dbt.tests.util import (
-    run_dbt,
-    write_file,
-    write_config_file,
-)
+import pytest
 from fixtures import (
-    my_model_vars_sql,
+    model_select_1_sql,
+    model_select_2_sql,
     my_model_a_sql,
     my_model_b_sql,
-    test_my_model_simple_fixture_yml,
-    test_my_model_fixture_csv,
-    test_my_model_b_fixture_csv as test_my_model_fixture_csv_modified,
+    my_model_vars_sql,
+    test_expect_2_yml,
 )
+from fixtures import test_my_model_b_fixture_csv as test_my_model_fixture_csv_modified
+from fixtures import test_my_model_fixture_csv, test_my_model_simple_fixture_yml
+
+from dbt.tests.util import run_dbt, write_config_file, write_file
 
 
 class UnitTestState:
@@ -131,3 +130,22 @@ class TestUnitTestDeferState(UnitTestState):
         results = run_dbt(["test", "--defer", "--state", "state"], expect_pass=False)
         assert len(results) == 4
         assert sorted([r.status for r in results]) == ["fail", "pass", "pass", "pass"]
+
+
+class TestUnitTestDeferDoesntOverwrite(UnitTestState):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"my_model.sql": model_select_1_sql, "test_my_model.yml": test_expect_2_yml}
+
+    def test_unit_test_defer_state(self, project):
+        run_dbt(["test"], expect_pass=False)
+        self.copy_state(project.project_root)
+        write_file(
+            model_select_2_sql,
+            project.project_root,
+            "models",
+            "my_model.sql",
+        )
+        results = run_dbt(["test", "--defer", "--state", "state"])
+        assert len(results) == 1
+        assert sorted([r.status for r in results]) == ["pass"]

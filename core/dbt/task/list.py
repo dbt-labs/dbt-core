@@ -1,29 +1,26 @@
 import json
 
-from dbt.contracts.graph.nodes import (
-    Exposure,
-    SourceDefinition,
-    Metric,
-    SavedQuery,
-    SemanticModel,
-    UnitTestDefinition,
-)
 from dbt.cli.flags import Flags
 from dbt.config.runtime import RuntimeConfig
 from dbt.contracts.graph.manifest import Manifest
-from dbt.flags import get_flags
+from dbt.contracts.graph.nodes import (
+    Exposure,
+    Metric,
+    SavedQuery,
+    SemanticModel,
+    SourceDefinition,
+    UnitTestDefinition,
+)
+from dbt.events.types import NoNodesSelected
 from dbt.graph import ResourceTypeSelector
+from dbt.node_types import NodeType
 from dbt.task.base import resource_types_from_args
 from dbt.task.runnable import GraphRunnableTask
 from dbt.task.test import TestSelector
-from dbt.node_types import NodeType
-from dbt_common.events.functions import (
-    fire_event,
-    warn_or_error,
-)
-from dbt.events.types import NoNodesSelected, ListCmdOut
-from dbt_common.exceptions import DbtRuntimeError, DbtInternalError
 from dbt_common.events.contextvars import task_contextvars
+from dbt_common.events.functions import fire_event, warn_or_error
+from dbt_common.events.types import PrintEvent
+from dbt_common.exceptions import DbtInternalError, DbtRuntimeError
 
 
 class ListTask(GraphRunnableTask):
@@ -175,11 +172,8 @@ class ListTask(GraphRunnableTask):
         """Log, or output a plain, newline-delimited, and ready-to-pipe list of nodes found."""
         for result in results:
             self.node_results.append(result)
-            if get_flags().LOG_FORMAT == "json":
-                fire_event(ListCmdOut(msg=result))
-            else:
-                # Cleaner to leave as print than to mutate the logger not to print timestamps.
-                print(result)
+            # No formatting, still get to stdout when --quiet is used
+            fire_event(PrintEvent(msg=result))
         return self.node_results
 
     @property

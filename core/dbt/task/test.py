@@ -1,46 +1,41 @@
-import daff
 import io
 import json
 import re
-from dataclasses import dataclass
-from dbt.utils import _coerce_decimal, strtobool
-from dbt_common.events.format import pluralize
-from dbt_common.dataclass_schema import dbtClassMixin
 import threading
-from typing import Dict, Any, Optional, Union, List, TYPE_CHECKING, Tuple
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
 
-from .compile import CompileRunner
-from .run import RunTask
+import daff
 
+from dbt.adapters.exceptions import MissingMaterializationError
+from dbt.artifacts.schemas.catalog import PrimitiveDict
+from dbt.artifacts.schemas.results import TestStatus
+from dbt.artifacts.schemas.run import RunResult
+from dbt.clients.jinja import MacroGenerator
+from dbt.context.providers import generate_runtime_model_context
+from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import (
+    GenericTestNode,
+    SingularTestNode,
     TestNode,
     UnitTestDefinition,
     UnitTestNode,
-    GenericTestNode,
-    SingularTestNode,
 )
-from dbt.contracts.graph.manifest import Manifest
-from dbt.artifacts.schemas.results import TestStatus
-from dbt.artifacts.schemas.run import RunResult
-from dbt.artifacts.schemas.catalog import PrimitiveDict
-from dbt.context.providers import generate_runtime_model_context
-from dbt.clients.jinja import MacroGenerator
-from dbt_common.events.functions import fire_event
-from dbt.events.types import (
-    LogTestResult,
-    LogStartLine,
-)
-from dbt.exceptions import DbtInternalError, BooleanError
-from dbt_common.exceptions import DbtBaseException, DbtRuntimeError
-from dbt.adapters.exceptions import MissingMaterializationError
-from dbt.graph import (
-    ResourceTypeSelector,
-)
+from dbt.events.types import LogStartLine, LogTestResult
+from dbt.exceptions import BooleanError, DbtInternalError
+from dbt.flags import get_flags
+from dbt.graph import ResourceTypeSelector
 from dbt.node_types import NodeType
 from dbt.parser.unit_tests import UnitTestManifestLoader
-from dbt.flags import get_flags
+from dbt.utils import _coerce_decimal, strtobool
+from dbt_common.dataclass_schema import dbtClassMixin
+from dbt_common.events.format import pluralize
+from dbt_common.events.functions import fire_event
+from dbt_common.exceptions import DbtBaseException, DbtRuntimeError
 from dbt_common.ui import green, red
 
+from .compile import CompileRunner
+from .run import RunTask
 
 if TYPE_CHECKING:
     import agate
@@ -343,15 +338,16 @@ class TestRunner(CompileRunner):
     def _get_daff_diff(
         self, expected: "agate.Table", actual: "agate.Table", ordered: bool = False
     ) -> daff.TableDiff:
-
-        expected_daff_table = daff.PythonTableView(list_rows_from_table(expected))
-        actual_daff_table = daff.PythonTableView(list_rows_from_table(actual))
-
-        alignment = daff.Coopy.compareTables(expected_daff_table, actual_daff_table).align()
-        result = daff.PythonTableView([])
+        # Sort expected and actual inputs prior to creating daff diff to ensure order insensitivity
+        # https://github.com/paulfitz/daff/issues/200
+        expected_daff_table = daff.PythonTableView(list_rows_from_table(expected, sort=True))
+        actual_daff_table = daff.PythonTableView(list_rows_from_table(actual, sort=True))
 
         flags = daff.CompareFlags()
         flags.ordered = ordered
+
+        alignment = daff.Coopy.compareTables(expected_daff_table, actual_daff_table, flags).align()
+        result = daff.PythonTableView([])
 
         diff = daff.TableDiff(alignment, flags)
         diff.hilite(result)
@@ -413,10 +409,25 @@ def json_rows_from_table(table: "agate.Table") -> List[Dict[str, Any]]:
 
 
 # This was originally in agate_helper, but that was moved out into dbt_common
-def list_rows_from_table(table: "agate.Table") -> List[Any]:
-    "Convert a table to a list of lists, where the first element represents the header"
-    rows = [[col.name for col in table.columns]]
+def list_rows_from_table(table: "agate.Table", sort: bool = False) -> List[Any]:
+    """
+    Convert given table to a list of lists, where the first element represents the header
+
+    By default, sort is False and no sort order is applied to the non-header rows of the given table.
+
+    If sort is True, sort the non-header rows hierarchically, treating None values as lower in order.
+    Examples:
+        * [['a','b','c'],[4,5,6],[1,2,3]] -> [['a','b','c'],[1,2,3],[4,5,6]]
+        * [['a','b','c'],[4,5,6],[1,null,3]] -> [['a','b','c'],[1,null,3],[4,5,6]]
+        * [['a','b','c'],[4,5,6],[null,2,3]] -> [['a','b','c'],[4,5,6],[null,2,3]]
+    """
+    header = [col.name for col in table.columns]
+
+    rows = []
     for row in table.rows:
         rows.append(list(row.values()))
 
-    return rows
+    if sort:
+        rows = sorted(rows, key=lambda x: [(elem is None, elem) for elem in x])
+
+    return [header] + rows

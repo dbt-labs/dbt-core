@@ -1,13 +1,9 @@
-import pytest
 import pathlib
-from dbt.tests.util import (
-    run_dbt,
-    get_manifest,
-    write_file,
-    rm_file,
-    read_file,
-)
+
+import pytest
+
 from dbt.exceptions import DuplicateVersionedUnversionedError
+from dbt.tests.util import get_manifest, read_file, rm_file, run_dbt, write_file
 
 model_one_sql = """
 select 1 as fun

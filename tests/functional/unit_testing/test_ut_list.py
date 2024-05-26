@@ -1,15 +1,16 @@
-import pytest
-from dbt.tests.util import run_dbt
 import json
 import os
 
+import pytest
 from fixtures import (  # noqa: F401
-    my_model_vars_sql,
+    datetime_test,
     my_model_a_sql,
     my_model_b_sql,
+    my_model_vars_sql,
     test_my_model_yml,
-    datetime_test,
 )
+
+from dbt.tests.util import run_dbt
 
 
 class TestUnitTestList:

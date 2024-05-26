@@ -1,9 +1,9 @@
 import pytest
-from dbt.tests.util import run_dbt, check_relations_equal
 
+from dbt.tests.util import check_relations_equal, run_dbt
 from tests.functional.context_methods.first_dependency import (
-    FirstDependencyProject,
     FirstDependencyConfigProject,
+    FirstDependencyProject,
 )
 
 dependency_seeds__root_model_expected_csv = """first_dep_global,from_root

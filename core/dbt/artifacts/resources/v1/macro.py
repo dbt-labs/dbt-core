@@ -1,11 +1,11 @@
-from dataclasses import dataclass, field
 import time
-from typing import Literal, List, Dict, Optional, Any
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Literal, Optional
 
-from dbt_common.dataclass_schema import dbtClassMixin
 from dbt.artifacts.resources.base import BaseResource, Docs
-from dbt.artifacts.resources.types import NodeType, ModelLanguage
+from dbt.artifacts.resources.types import ModelLanguage, NodeType
 from dbt.artifacts.resources.v1.components import MacroDependsOn
+from dbt_common.dataclass_schema import dbtClassMixin
 
 
 @dataclass

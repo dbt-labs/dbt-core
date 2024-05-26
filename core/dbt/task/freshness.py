@@ -1,38 +1,32 @@
 import os
 import threading
 import time
-from typing import Optional, List, AbstractSet, Dict
+from typing import AbstractSet, Dict, List, Optional
 
-from .base import BaseRunner
-from .printer import (
-    print_run_result_error,
-)
-from .run import RunTask
-
-from dbt.artifacts.schemas.freshness import (
-    FreshnessResult,
-    PartialSourceFreshnessResult,
-    SourceFreshnessResult,
-    FreshnessStatus,
-)
-from dbt_common.exceptions import DbtRuntimeError, DbtInternalError
-from dbt_common.events.functions import fire_event
-from dbt_common.events.types import Note
-from dbt.events.types import (
-    FreshnessCheckComplete,
-    LogStartLine,
-    LogFreshnessResult,
-)
-from dbt.contracts.results import RunStatus
-from dbt.node_types import NodeType, RunHookType
-
+from dbt import deprecations
+from dbt.adapters.base.impl import FreshnessResponse
+from dbt.adapters.base.relation import BaseRelation
 from dbt.adapters.capability import Capability
 from dbt.adapters.contracts.connection import AdapterResponse
-from dbt.adapters.base.relation import BaseRelation
-from dbt.adapters.base.impl import FreshnessResponse
-from dbt.contracts.graph.nodes import SourceDefinition, HookNode
-from dbt_common.events.base_types import EventLevel
+from dbt.artifacts.schemas.freshness import (
+    FreshnessResult,
+    FreshnessStatus,
+    PartialSourceFreshnessResult,
+    SourceFreshnessResult,
+)
+from dbt.contracts.graph.nodes import HookNode, SourceDefinition
+from dbt.contracts.results import RunStatus
+from dbt.events.types import FreshnessCheckComplete, LogFreshnessResult, LogStartLine
 from dbt.graph import ResourceTypeSelector
+from dbt.node_types import NodeType, RunHookType
+from dbt_common.events.base_types import EventLevel
+from dbt_common.events.functions import fire_event
+from dbt_common.events.types import Note
+from dbt_common.exceptions import DbtInternalError, DbtRuntimeError
+
+from .base import BaseRunner
+from .printer import print_run_result_error
+from .run import RunTask
 
 RESULT_FILE_NAME = "sources.json"
 
@@ -240,9 +234,12 @@ class FreshnessTask(RunTask):
         fire_event(FreshnessCheckComplete())
 
     def get_hooks_by_type(self, hook_type: RunHookType) -> List[HookNode]:
+        hooks = super().get_hooks_by_type(hook_type)
         if self.args.source_freshness_run_project_hooks:
-            return super().get_hooks_by_type(hook_type)
+            return hooks
         else:
+            if hooks:
+                deprecations.warn("source-freshness-project-hooks")
             return []
 
     def populate_metadata_freshness_cache(self, adapter, selected_uids: AbstractSet[str]) -> None:

@@ -1,42 +1,41 @@
-from csv import DictReader
-from copy import deepcopy
-from pathlib import Path
-from typing import List, Set, Dict, Any, Optional
-import os
-from io import StringIO
 import csv
-
-from dbt_extractor import py_extract_from_source, ExtractionError  # type: ignore
+import os
+from copy import deepcopy
+from csv import DictReader
+from io import StringIO
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Set
 
 from dbt import utils
+from dbt.artifacts.resources import ModelConfig, UnitTestConfig, UnitTestFormat
 from dbt.config import RuntimeConfig
 from dbt.context.context_config import ContextConfig
 from dbt.context.providers import generate_parse_exposure, get_rendered
 from dbt.contracts.files import FileHash, SchemaSourceFile
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.model_config import UnitTestNodeConfig
-from dbt.artifacts.resources import ModelConfig, UnitTestConfig, UnitTestFormat
 from dbt.contracts.graph.nodes import (
-    ModelNode,
-    UnitTestNode,
-    UnitTestDefinition,
     DependsOn,
+    ModelNode,
+    UnitTestDefinition,
+    UnitTestNode,
     UnitTestSourceDefinition,
 )
 from dbt.contracts.graph.unparsed import UnparsedUnitTest
-from dbt.exceptions import ParsingError, InvalidUnitTestGivenInput
+from dbt.exceptions import InvalidUnitTestGivenInput, ParsingError
 from dbt.graph import UniqueId
 from dbt.node_types import NodeType
 from dbt.parser.schemas import (
-    SchemaParser,
-    YamlBlock,
-    ValidationError,
     JSONValidationError,
+    ParseResult,
+    SchemaParser,
+    ValidationError,
+    YamlBlock,
     YamlParseDictError,
     YamlReader,
-    ParseResult,
 )
 from dbt.utils import get_pseudo_test_path
+from dbt_extractor import ExtractionError, py_extract_from_source  # type: ignore
 
 
 class UnitTestManifestLoader:
@@ -152,7 +151,10 @@ class UnitTestManifestLoader:
                 NodeType.Seed,
                 NodeType.Snapshot,
             ):
-                input_node = ModelNode(**common_fields)
+                input_node = ModelNode(
+                    **common_fields,
+                    defer_relation=original_input_node.defer_relation,
+                )
                 if (
                     original_input_node.resource_type == NodeType.Model
                     and original_input_node.version
@@ -363,11 +365,17 @@ class UnitTestParser(YamlReader):
                 )
 
             if ut_fixture.fixture:
-                ut_fixture.rows = self.get_fixture_file_rows(
+                csv_rows = self.get_fixture_file_rows(
                     ut_fixture.fixture, self.project.project_name, unit_test_definition.unique_id
                 )
             else:
-                ut_fixture.rows = self._convert_csv_to_list_of_dicts(ut_fixture.rows)
+                csv_rows = self._convert_csv_to_list_of_dicts(ut_fixture.rows)
+
+            # Empty values (e.g. ,,) in a csv fixture should default to null, not ""
+            ut_fixture.rows = [
+                {k: (None if v == "" else v) for k, v in row.items()} for row in csv_rows
+            ]
+
         elif ut_fixture.format == UnitTestFormat.SQL:
             if not (isinstance(ut_fixture.rows, str) or isinstance(ut_fixture.fixture, str)):
                 raise ParsingError(

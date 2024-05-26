@@ -1,6 +1,0 @@
-kind: Fixes
-body: Fix git repository with subdirectory for Deps
-time: 2023-11-07T09:23:58.214271-08:00
-custom:
-  Author: ChenyuLInx
-  Issue: "9000"

@@ -1,19 +1,13 @@
 import os
+from argparse import Namespace
+from contextlib import contextmanager
+from pathlib import Path
+
 import pytest
 import yaml
 
-from contextlib import contextmanager
-from pathlib import Path
-from argparse import Namespace
-
 import dbt.flags as flags
-
-from dbt.tests.util import (
-    run_dbt,
-    run_dbt_and_capture,
-    write_file,
-    rm_file,
-)
+from dbt.tests.util import rm_file, run_dbt, run_dbt_and_capture, write_file
 
 
 @pytest.fixture(scope="class")

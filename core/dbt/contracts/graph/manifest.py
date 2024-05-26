@@ -1,30 +1,48 @@
 import enum
 from collections import defaultdict
 from dataclasses import dataclass, field, replace
-from itertools import chain, islice
-from mashumaro.mixins.msgpack import DataClassMessagePackMixin
+from itertools import chain
 from multiprocessing.synchronize import Lock
 from typing import (
+    Any,
+    Callable,
+    ClassVar,
     DefaultDict,
     Dict,
+    Generic,
     List,
-    Optional,
-    Union,
     Mapping,
     MutableMapping,
-    Any,
+    Optional,
     Set,
     Tuple,
     TypeVar,
-    Callable,
-    Generic,
-    AbstractSet,
-    ClassVar,
+    Union,
 )
+
 from typing_extensions import Protocol
 
-from dbt import tracking
+import dbt_common.exceptions
+import dbt_common.utils
+from dbt import deprecations, tracking
+from dbt.adapters.exceptions import (
+    DuplicateMacroInPackageError,
+    DuplicateMaterializationNameError,
+)
+
+# to preserve import paths
+from dbt.artifacts.resources import BaseResource, DeferRelation, NodeVersion
+from dbt.artifacts.resources.v1.config import NodeConfig
+from dbt.artifacts.schemas.manifest import ManifestMetadata, UniqueID, WritableManifest
+from dbt.contracts.files import (
+    AnySourceFile,
+    FileHash,
+    FixtureSourceFile,
+    SchemaSourceFile,
+    SourceFile,
+)
 from dbt.contracts.graph.nodes import (
+    RESOURCE_CLASS_TO_NODE_CLASS,
     BaseNode,
     Documentation,
     Exposure,
@@ -37,48 +55,33 @@ from dbt.contracts.graph.nodes import (
     ModelNode,
     ResultNode,
     SavedQuery,
+    SeedNode,
     SemanticModel,
     SourceDefinition,
-    UnpatchedSourceDefinition,
     UnitTestDefinition,
     UnitTestFileFixture,
-    RESOURCE_CLASS_TO_NODE_CLASS,
+    UnpatchedSourceDefinition,
 )
 from dbt.contracts.graph.unparsed import SourcePatch, UnparsedVersion
-from dbt.flags import get_flags
-
-# to preserve import paths
-from dbt.artifacts.resources import (
-    NodeVersion,
-    DeferRelation,
-    BaseResource,
-)
-from dbt.artifacts.schemas.manifest import WritableManifest, ManifestMetadata, UniqueID
-from dbt.contracts.files import (
-    SourceFile,
-    SchemaSourceFile,
-    FileHash,
-    AnySourceFile,
-    FixtureSourceFile,
-)
 from dbt.contracts.util import SourceKey
-from dbt_common.dataclass_schema import dbtClassMixin
-
+from dbt.events.types import UnpinnedRefNewVersionAvailable
 from dbt.exceptions import (
+    AmbiguousResourceNameRefError,
     CompilationError,
     DuplicateResourceNameError,
-    AmbiguousResourceNameRefError,
 )
-from dbt.adapters.exceptions import DuplicateMacroInPackageError, DuplicateMaterializationNameError
-from dbt_common.helper_types import PathSet
-from dbt_common.events.functions import fire_event
-from dbt_common.events.contextvars import get_node_info
-from dbt.events.types import MergedFromState, UnpinnedRefNewVersionAvailable
-from dbt.node_types import NodeType, AccessType, REFABLE_NODE_TYPES, VERSIONED_NODE_TYPES
+from dbt.flags import get_flags
 from dbt.mp_context import get_mp_context
-import dbt_common.utils
-import dbt_common.exceptions
-
+from dbt.node_types import (
+    REFABLE_NODE_TYPES,
+    VERSIONED_NODE_TYPES,
+    AccessType,
+    NodeType,
+)
+from dbt_common.dataclass_schema import dbtClassMixin
+from dbt_common.events.contextvars import get_node_info
+from dbt_common.events.functions import fire_event
+from dbt_common.helper_types import PathSet
 
 PackageName = str
 DocName = str
@@ -570,11 +573,29 @@ M = TypeVar("M", bound=MacroCandidate)
 
 
 class CandidateList(List[M]):
-    def last(self) -> Optional[Macro]:
+    def last_candidate(
+        self, valid_localities: Optional[List[Locality]] = None
+    ) -> Optional[MacroCandidate]:
+        """
+        Obtain the last (highest precedence) MacroCandidate from the CandidateList of any locality in valid_localities.
+        If valid_localities is not specified, return the last MacroCandidate of any locality.
+        """
         if not self:
             return None
         self.sort()
-        return self[-1].macro
+
+        if valid_localities is None:
+            return self[-1]
+
+        for candidate in reversed(self):
+            if candidate.locality in valid_localities:
+                return candidate
+
+        return None
+
+    def last(self) -> Optional[Macro]:
+        last_candidate = self.last_candidate()
+        return last_candidate.macro if last_candidate is not None else None
 
 
 def _get_locality(macro: Macro, root_project_name: str, internal_packages: Set[str]) -> Locality:
@@ -783,7 +804,7 @@ ResourceClassT = TypeVar("ResourceClassT", bound="BaseResource")
 
 
 @dataclass
-class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
+class Manifest(MacroMethods, dbtClassMixin):
     """The manifest for the full graph, after parsing and during compilation."""
 
     # These attributes are both positional and by keyword. If an attribute
@@ -850,7 +871,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         metadata={"serialize": lambda x: None, "deserialize": lambda x: None},
     )
 
-    def __pre_serialize__(self):
+    def __pre_serialize__(self, context: Optional[Dict] = None):
         # serialization won't work with anything except an empty source_patches because
         # tuple keys are not supported, so ensure it's empty
         self.source_patches = {}
@@ -930,7 +951,33 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
                 for specificity, atype in enumerate(self._get_parent_adapter_types(adapter_type))
             )
         )
-        return candidates.last()
+        core_candidates = [
+            candidate for candidate in candidates if candidate.locality == Locality.Core
+        ]
+
+        materialization_candidate = candidates.last_candidate()
+        # If an imported materialization macro was found that also had a core candidate, fire a deprecation
+        if (
+            materialization_candidate is not None
+            and materialization_candidate.locality == Locality.Imported
+            and core_candidates
+        ):
+            # preserve legacy behaviour - allow materialization override
+            if (
+                get_flags().require_explicit_package_overrides_for_builtin_materializations
+                is False
+            ):
+                deprecations.warn(
+                    "package-materialization-override",
+                    package_name=materialization_candidate.macro.package_name,
+                    materialization_name=materialization_name,
+                )
+            else:
+                materialization_candidate = candidates.last_candidate(
+                    valid_localities=[Locality.Core, Locality.Root]
+                )
+
+        return materialization_candidate.macro if materialization_candidate else None
 
     def get_resource_fqns(self) -> Mapping[str, PathSet]:
         resource_fqns: Dict[str, Set[Tuple[str, ...]]] = {}
@@ -1421,49 +1468,35 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             node.package_name != target_model.package_name and restrict_package_access
         )
 
-    # Called by GraphRunnableTask.defer_to_manifest
-    def merge_from_artifact(
-        self,
-        adapter,
-        other: "Manifest",
-        selected: AbstractSet[UniqueID],
-        favor_state: bool = False,
-    ) -> None:
-        """Given the selected unique IDs and a writable manifest, update this
-        manifest by replacing any unselected nodes with their counterpart.
+    # Called in GraphRunnableTask.before_run, RunTask.before_run, CloneTask.before_run
+    def merge_from_artifact(self, other: "Manifest") -> None:
+        """Update this manifest by adding the 'defer_relation' attribute to all nodes
+        with a counterpart in the stateful manifest used for deferral.
 
         Only non-ephemeral refable nodes are examined.
         """
         refables = set(REFABLE_NODE_TYPES)
-        merged = set()
         for unique_id, node in other.nodes.items():
             current = self.nodes.get(unique_id)
-            if current and (
-                node.resource_type in refables
-                and not node.is_ephemeral
-                and unique_id not in selected
-                and (
-                    not adapter.get_relation(current.database, current.schema, current.identifier)
-                    or favor_state
-                )
-            ):
-                merged.add(unique_id)
-                self.nodes[unique_id] = replace(node, deferred=True)
-
-            # for all other nodes, add 'defer_relation'
-            elif current and node.resource_type in refables and not node.is_ephemeral:
+            if current and node.resource_type in refables and not node.is_ephemeral:
+                assert isinstance(node.config, NodeConfig)  # this makes mypy happy
                 defer_relation = DeferRelation(
-                    node.database, node.schema, node.alias, node.relation_name
+                    database=node.database,
+                    schema=node.schema,
+                    alias=node.alias,
+                    relation_name=node.relation_name,
+                    resource_type=node.resource_type,
+                    name=node.name,
+                    description=node.description,
+                    compiled_code=(node.compiled_code if not isinstance(node, SeedNode) else None),
+                    meta=node.meta,
+                    tags=node.tags,
+                    config=node.config,
                 )
                 self.nodes[unique_id] = replace(current, defer_relation=defer_relation)
 
-        # Rebuild the flat_graph, which powers the 'graph' context variable,
-        # now that we've deferred some nodes
+        # Rebuild the flat_graph, which powers the 'graph' context variable
         self.build_flat_graph()
-
-        # log up to 5 items
-        sample = list(islice(merged, 5))
-        fire_event(MergedFromState(num_merged=len(merged), sample=sample))
 
     # Methods that were formerly in ParseResult
     def add_macro(self, source_file: SourceFile, macro: Macro):

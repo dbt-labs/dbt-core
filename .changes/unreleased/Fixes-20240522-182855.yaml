@@ -1,0 +1,7 @@
+kind: Fixes
+body: 'Fix: Order-insensitive unit test equality assertion for expected/actual with
+  multiple nulls'
+time: 2024-05-22T18:28:55.91733-04:00
+custom:
+  Author: michelleark
+  Issue: "10167"

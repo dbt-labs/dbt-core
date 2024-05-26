@@ -1,7 +1,7 @@
 import pytest
 
-from dbt.tests.util import run_dbt, update_config_file
 from dbt.exceptions import CompilationError
+from dbt.tests.util import run_dbt, update_config_file
 
 model_sql = """
 select 1 as id

@@ -1,9 +1,10 @@
 from pathlib import Path
 
 import click
+
+from dbt.cli.option_types import YAML, ChoiceTuple, Package, WarnErrorOptionsType
 from dbt.cli.options import MultiOption
-from dbt.cli.option_types import YAML, ChoiceTuple, WarnErrorOptionsType, Package
-from dbt.cli.resolvers import default_project_dir, default_profiles_dir
+from dbt.cli.resolvers import default_profiles_dir, default_project_dir
 from dbt.version import get_version_information
 
 add_package = click.option(
@@ -88,12 +89,6 @@ empty = click.option(
     envvar="DBT_EMPTY",
     help="If specified, limit input refs and sources to zero rows.",
     is_flag=True,
-)
-
-enable_legacy_logger = click.option(
-    "--enable-legacy-logger/--no-enable-legacy-logger",
-    envvar="DBT_ENABLE_LEGACY_LOGGER",
-    hidden=True,
 )
 
 exclude = click.option(

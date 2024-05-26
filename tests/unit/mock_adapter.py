@@ -1,7 +1,7 @@
+from contextlib import contextmanager
 from unittest import mock
 
 from dbt.adapters.base import BaseAdapter
-from contextlib import contextmanager
 
 
 def adapter_factory():

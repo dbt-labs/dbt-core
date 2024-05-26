@@ -1,21 +1,21 @@
-import os
-import pytest
 import json
+import os
 import shutil
-import yaml
-
-# todo: make self.unique_schema to fixture
-
 from pathlib import Path
 from unittest import mock
 
-import dbt_common.semver as semver
-import dbt_common.exceptions
+import pytest
+import yaml
+
 import dbt.config
 import dbt.exceptions
-
+import dbt_common.exceptions
+import dbt_common.semver as semver
 from dbt.tests.util import check_relations_equal, run_dbt, run_dbt_and_capture
 from tests.functional.utils import up_one
+
+# todo: make self.unique_schema to fixture
+
 
 models__dep_source = """
 {# If our dependency source didn't exist, this would be an errror #}

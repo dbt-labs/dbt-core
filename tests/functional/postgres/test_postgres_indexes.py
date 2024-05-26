@@ -1,20 +1,18 @@
-import pytest
 import re
-from dbt.tests.util import (
-    run_dbt,
-    run_dbt_and_capture,
-)
+
+import pytest
+
+from dbt.tests.util import run_dbt, run_dbt_and_capture
 from tests.functional.postgres.fixtures import (
     models__incremental_sql,
     models__table_sql,
-    models_invalid__missing_columns_sql,
     models_invalid__invalid_columns_type_sql,
     models_invalid__invalid_type_sql,
     models_invalid__invalid_unique_config_sql,
+    models_invalid__missing_columns_sql,
     seeds__seed_csv,
     snapshots__colors_sql,
 )
-
 
 INDEX_DEFINITION_PATTERN = re.compile(r"using\s+(\w+)\s+\((.+)\)\Z")
 

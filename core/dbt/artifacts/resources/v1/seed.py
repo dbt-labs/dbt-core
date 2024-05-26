@@ -1,9 +1,14 @@
 from dataclasses import dataclass, field
-from typing import Optional, Literal
-from dbt_common.dataclass_schema import ValidationError
+from typing import Dict, Literal, Optional
+
 from dbt.artifacts.resources.types import NodeType
-from dbt.artifacts.resources.v1.components import MacroDependsOn, DeferRelation, ParsedResource
+from dbt.artifacts.resources.v1.components import (
+    DeferRelation,
+    MacroDependsOn,
+    ParsedResource,
+)
 from dbt.artifacts.resources.v1.config import NodeConfig
+from dbt_common.dataclass_schema import ValidationError
 
 
 @dataclass
@@ -28,3 +33,9 @@ class Seed(ParsedResource):  # No SQLDefaults!
     root_path: Optional[str] = None
     depends_on: MacroDependsOn = field(default_factory=MacroDependsOn)
     defer_relation: Optional[DeferRelation] = None
+
+    def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
+        dct = super().__post_serialize__(dct, context)
+        if context and context.get("artifact") and "defer_relation" in dct:
+            del dct["defer_relation"]
+        return dct

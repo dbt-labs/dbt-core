@@ -1,19 +1,16 @@
-from typing import List, Dict
+from typing import Dict, List
 
-from dbt_common import semver
-from dbt.flags import get_flags
-from dbt.version import get_installed_version
 from dbt.clients import registry
-from dbt.contracts.project import (
-    RegistryPackageMetadata,
-    RegistryPackage,
-)
+from dbt.contracts.project import RegistryPackage, RegistryPackageMetadata
 from dbt.deps.base import PinnedPackage, UnpinnedPackage
 from dbt.exceptions import (
     DependencyError,
     PackageNotFoundError,
     PackageVersionNotFoundError,
 )
+from dbt.flags import get_flags
+from dbt.version import get_installed_version
+from dbt_common import semver
 from dbt_common.exceptions import VersionsNotCompatibleError
 
 

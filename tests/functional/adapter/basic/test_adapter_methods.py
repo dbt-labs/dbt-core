@@ -1,8 +1,7 @@
 import pytest
 
-from dbt.tests.util import run_dbt, check_relations_equal
 from dbt.tests.fixtures.project import write_project_files
-
+from dbt.tests.util import check_relations_equal, run_dbt
 
 tests__get_columns_in_relation_sql = """
 {% set columns = adapter.get_columns_in_relation(ref('model')) %}

@@ -1,6 +1,0 @@
-kind: Features
-body: remove usage of dbt.config.PartialProject from dbt/adapters
-time: 2023-10-26T12:39:13.904116-07:00
-custom:
-  Author: MichelleArk
-  Issue: "8928"

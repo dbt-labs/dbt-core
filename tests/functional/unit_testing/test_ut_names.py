@@ -1,14 +1,13 @@
 import pytest
-
-from dbt.tests.util import run_dbt, run_dbt_and_capture
-from dbt.exceptions import DuplicateResourceNameError
-
 from fixtures import (
     my_model_a_sql,
     my_model_b_sql,
     test_model_a_b_yml,
     test_model_a_with_duplicate_test_name_yml,
 )
+
+from dbt.exceptions import DuplicateResourceNameError
+from dbt.tests.util import run_dbt, run_dbt_and_capture
 
 
 class TestUnitTestDuplicateTestNamesAcrossModels:

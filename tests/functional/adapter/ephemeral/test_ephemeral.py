@@ -1,8 +1,9 @@
-import pytest
-import re
 import os
-from dbt.tests.util import run_dbt, check_relations_equal
+import re
 
+import pytest
+
+from dbt.tests.util import check_relations_equal, run_dbt
 
 models__dependent_sql = """
 

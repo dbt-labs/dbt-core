@@ -1,8 +1,9 @@
 import datetime
-import pytest
 from unittest import mock
 
-from dbt.task.freshness import FreshnessTask, FreshnessResponse
+import pytest
+
+from dbt.task.freshness import FreshnessResponse, FreshnessTask
 
 
 class TestFreshnessTaskMetadataCache:

@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: move exceptions used only in dbt/common to dbt/common/exceptions
-time: 2024-01-04T13:32:49.076149-05:00
-custom:
-  Author: michelleark
-  Issue: "9332"

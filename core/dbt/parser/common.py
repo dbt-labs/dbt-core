@@ -1,21 +1,23 @@
-from dbt.artifacts.resources import ColumnInfo, NodeVersion
-from dbt_common.contracts.constraints import ColumnLevelConstraint, ConstraintType
-from dbt.contracts.graph.unparsed import (
-    HasColumnProps,
-    UnparsedColumn,
-    UnparsedNodeUpdate,
-    UnparsedMacroUpdate,
-    UnparsedAnalysisUpdate,
-    UnparsedExposure,
-    UnparsedModelUpdate,
-)
-from dbt.contracts.graph.unparsed import HasColumnTests, HasColumnDocs
-from dbt.contracts.graph.nodes import UnpatchedSourceDefinition
-from dbt.parser.search import FileBlock
-from typing import List, Dict, Any, TypeVar, Generic, Union, Optional
 from dataclasses import dataclass
-from dbt_common.exceptions import DbtInternalError
+from typing import Any, Dict, Generic, List, Optional, TypeVar, Union
+
+from dbt.artifacts.resources import ColumnInfo, NodeVersion
+from dbt.contracts.graph.nodes import UnpatchedSourceDefinition
+from dbt.contracts.graph.unparsed import (
+    HasColumnDocs,
+    HasColumnProps,
+    HasColumnTests,
+    UnparsedAnalysisUpdate,
+    UnparsedColumn,
+    UnparsedExposure,
+    UnparsedMacroUpdate,
+    UnparsedModelUpdate,
+    UnparsedNodeUpdate,
+)
 from dbt.exceptions import ParsingError
+from dbt.parser.search import FileBlock
+from dbt_common.contracts.constraints import ColumnLevelConstraint, ConstraintType
+from dbt_common.exceptions import DbtInternalError
 
 
 def trimmed(inp: str) -> str:

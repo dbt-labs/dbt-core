@@ -2,7 +2,6 @@ import pytest
 
 from dbt.tests.util import run_dbt
 
-
 my_model_sql = """
 select 1 as fun
 """

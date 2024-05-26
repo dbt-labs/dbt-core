@@ -1,17 +1,16 @@
 import pytest
-from dbt.tests.util import run_dbt, get_manifest, write_file
 
 from dbt.exceptions import ParsingError
-
+from dbt.tests.util import get_manifest, run_dbt, write_file
 from tests.functional.partial_parsing.fixtures import (
-    orders_sql,
-    orders_downstream_sql,
     groups_schema_yml_one_group,
+    groups_schema_yml_one_group_model_in_group2,
     groups_schema_yml_two_groups,
     groups_schema_yml_two_groups_edited,
-    groups_schema_yml_one_group_model_in_group2,
-    groups_schema_yml_two_groups_private_orders_valid_access,
     groups_schema_yml_two_groups_private_orders_invalid_access,
+    groups_schema_yml_two_groups_private_orders_valid_access,
+    orders_downstream_sql,
+    orders_sql,
 )
 
 

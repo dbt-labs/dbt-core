@@ -1,12 +1,12 @@
 import os
 from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional, Union
 
 from mashumaro.types import SerializableType
-from typing import List, Optional, Union, Dict, Any
 
-from dbt.constants import MAXIMUM_SEED_SIZE
-from dbt_common.dataclass_schema import dbtClassMixin, StrEnum
 from dbt.artifacts.resources.base import FileHash
+from dbt.constants import MAXIMUM_SEED_SIZE
+from dbt_common.dataclass_schema import StrEnum, dbtClassMixin
 
 from .util import SourceKey
 
@@ -139,8 +139,8 @@ class BaseSourceFile(dbtClassMixin, SerializableType):
             sf = SourceFile.from_dict(dct)
         return sf
 
-    def __post_serialize__(self, dct):
-        dct = super().__post_serialize__(dct)
+    def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
+        dct = super().__post_serialize__(dct, context)
         # remove empty lists to save space
         dct_keys = list(dct.keys())
         for key in dct_keys:
@@ -226,8 +226,8 @@ class SchemaSourceFile(BaseSourceFile):
     def source_patches(self):
         return self.sop
 
-    def __post_serialize__(self, dct):
-        dct = super().__post_serialize__(dct)
+    def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
+        dct = super().__post_serialize__(dct, context)
         # Remove partial parsing specific data
         for key in ("pp_test_index", "pp_dict"):
             if key in dct:

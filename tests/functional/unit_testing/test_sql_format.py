@@ -1,4 +1,5 @@
 import pytest
+
 from dbt.tests.util import run_dbt
 
 wizards_csv = """id,w_name,email,email_tld,phone,world

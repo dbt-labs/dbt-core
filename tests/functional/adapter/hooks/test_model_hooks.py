@@ -1,15 +1,10 @@
-import pytest
-
 from pathlib import Path
 
-from dbt_common.exceptions import CompilationError
+import pytest
+
 from dbt.exceptions import ParsingError
-
-from dbt.tests.util import (
-    run_dbt,
-    write_file,
-)
-
+from dbt.tests.util import run_dbt, write_file
+from dbt_common.exceptions import CompilationError
 from tests.functional.adapter.hooks.fixtures import (
     models__hooked,
     models__hooks,

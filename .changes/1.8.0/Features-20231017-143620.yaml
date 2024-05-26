@@ -1,6 +1,0 @@
-kind: Features
-body: Add drop_schema_named macro
-time: 2023-10-17T14:36:20.612289-07:00
-custom:
-  Author: colin-rogers-dbt
-  Issue: "8025"

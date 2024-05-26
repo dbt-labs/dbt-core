@@ -1,19 +1,20 @@
 import os
+
 import pytest
 import yaml
 
 from dbt.tests.util import run_dbt, run_dbt_and_capture
 from tests.functional.sources.fixtures import (
-    models_schema_yml,
-    models_view_model_sql,
-    models_ephemeral_model_sql,
     models_descendant_model_sql,
+    models_ephemeral_model_sql,
     models_multi_source_model_sql,
     models_nonsource_descendant_sql,
-    seeds_source_csv,
-    seeds_other_table_csv,
+    models_schema_yml,
+    models_view_model_sql,
     seeds_expected_multi_source_csv,
     seeds_other_source_table_csv,
+    seeds_other_table_csv,
+    seeds_source_csv,
 )
 
 

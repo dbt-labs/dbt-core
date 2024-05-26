@@ -1,25 +1,26 @@
-import re
 import os.path
+import re
 
-from dbt_common.clients.system import run_cmd, rmdir
-from dbt_common.events.functions import fire_event
+from packaging import version
+
 from dbt.events.types import (
-    GitSparseCheckoutSubdirectory,
-    GitProgressCheckoutRevision,
-    GitProgressUpdatingExistingDependency,
-    GitProgressPullingNewDependency,
     GitNothingToDo,
-    GitProgressUpdatedCheckoutRange,
     GitProgressCheckedOutAt,
+    GitProgressCheckoutRevision,
+    GitProgressPullingNewDependency,
+    GitProgressUpdatedCheckoutRange,
+    GitProgressUpdatingExistingDependency,
+    GitSparseCheckoutSubdirectory,
 )
 from dbt.exceptions import (
     CommandResultError,
+    DbtRuntimeError,
     GitCheckoutError,
     GitCloningError,
     UnknownGitCloningProblemError,
-    DbtRuntimeError,
 )
-from packaging import version
+from dbt_common.clients.system import rmdir, run_cmd
+from dbt_common.events.functions import fire_event
 
 
 def _is_commit(revision: str) -> bool:

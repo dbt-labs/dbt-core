@@ -1,27 +1,26 @@
 from dataclasses import dataclass, field
-from typing import Dict, List, NoReturn, Type, Iterator, Set, Any
-
-from dbt.exceptions import (
-    DuplicateDependencyToRootError,
-    DuplicateProjectDependencyError,
-    MismatchedDependencyTypeError,
-    DbtInternalError,
-)
+from typing import Any, Dict, Iterator, List, NoReturn, Set, Type
 
 from dbt.config import Project
 from dbt.config.renderer import PackageRenderer
-from dbt.deps.base import BasePackage, PinnedPackage, UnpinnedPackage
-from dbt.deps.local import LocalUnpinnedPackage
-from dbt.deps.tarball import TarballUnpinnedPackage
-from dbt.deps.git import GitUnpinnedPackage
-from dbt.deps.registry import RegistryUnpinnedPackage
-
 from dbt.contracts.project import (
-    PackageSpec,
-    LocalPackage,
-    TarballPackage,
     GitPackage,
+    LocalPackage,
+    PackageSpec,
+    PrivatePackage,
     RegistryPackage,
+    TarballPackage,
+)
+from dbt.deps.base import BasePackage, PinnedPackage, UnpinnedPackage
+from dbt.deps.git import GitUnpinnedPackage
+from dbt.deps.local import LocalUnpinnedPackage
+from dbt.deps.registry import RegistryUnpinnedPackage
+from dbt.deps.tarball import TarballUnpinnedPackage
+from dbt.exceptions import (
+    DependencyError,
+    DuplicateDependencyToRootError,
+    DuplicateProjectDependencyError,
+    MismatchedDependencyTypeError,
 )
 
 
@@ -76,10 +75,14 @@ class PackageListing:
                 pkg = TarballUnpinnedPackage.from_contract(contract)
             elif isinstance(contract, GitPackage):
                 pkg = GitUnpinnedPackage.from_contract(contract)
+            elif isinstance(contract, PrivatePackage):
+                raise DependencyError(
+                    f'Cannot resolve private package {contract.private} because git provider integration is missing. Please use a "git" package instead.'
+                )
             elif isinstance(contract, RegistryPackage):
                 pkg = RegistryUnpinnedPackage.from_contract(contract)
             else:
-                raise DbtInternalError("Invalid package type {}".format(type(contract)))
+                raise DependencyError("Invalid package type {}".format(type(contract)))
             self.incorporate(pkg)
 
     @classmethod

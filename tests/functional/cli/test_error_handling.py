@@ -2,7 +2,6 @@ import pytest
 
 from dbt.tests.util import run_dbt
 
-
 model_one_sql = """
 someting bad
 """

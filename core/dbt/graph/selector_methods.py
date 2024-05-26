@@ -2,35 +2,41 @@ import abc
 from fnmatch import fnmatch
 from itertools import chain
 from pathlib import Path
-from typing import Set, List, Dict, Iterator, Tuple, Any, Union, Type, Optional, Callable
-
-from dbt_common.dataclass_schema import StrEnum
-
-from .graph import UniqueId
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Iterator,
+    List,
+    Optional,
+    Set,
+    Tuple,
+    Type,
+    Union,
+)
 
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import (
-    SingularTestNode,
     Exposure,
-    Metric,
     GenericTestNode,
-    SourceDefinition,
-    ResultNode,
     ManifestNode,
+    Metric,
     ModelNode,
-    UnitTestDefinition,
+    ResultNode,
     SavedQuery,
     SemanticModel,
+    SingularTestNode,
+    SourceDefinition,
+    UnitTestDefinition,
 )
 from dbt.contracts.graph.unparsed import UnparsedVersion
 from dbt.contracts.state import PreviousState
-from dbt_common.exceptions import (
-    DbtInternalError,
-    DbtRuntimeError,
-)
 from dbt.node_types import NodeType
+from dbt_common.dataclass_schema import StrEnum
 from dbt_common.events.contextvars import get_project_root
+from dbt_common.exceptions import DbtInternalError, DbtRuntimeError
 
+from .graph import UniqueId
 
 SELECTOR_GLOB = "*"
 SELECTOR_DELIMITER = ":"
@@ -57,6 +63,7 @@ class MethodName(StrEnum):
     Version = "version"
     SemanticModel = "semantic_model"
     SavedQuery = "saved_query"
+    UnitTest = "unit_test"
 
 
 def is_selected_node(fqn: List[str], node_selector: str, is_versioned: bool) -> bool:
@@ -419,6 +426,31 @@ class SavedQuerySelectorMethod(SelectorMethod):
             yield unique_id
 
 
+class UnitTestSelectorMethod(SelectorMethod):
+    def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
+        parts = selector.split(".")
+        target_package = SELECTOR_GLOB
+        if len(parts) == 1:
+            target_name = parts[0]
+        elif len(parts) == 2:
+            target_package, target_name = parts
+        else:
+            msg = (
+                'Invalid unit test selector value "{}". Saved queries must be of '
+                "the form ${{unit_test_name}} or "
+                "${{unit_test_package_name.unit_test_name}}"
+            ).format(selector)
+            raise DbtRuntimeError(msg)
+
+        for unique_id, node in self.unit_tests(included_nodes):
+            if not fnmatch(node.package_name, target_package):
+                continue
+            if not fnmatch(node.name, target_name):
+                continue
+
+            yield unique_id
+
+
 class PathSelectorMethod(SelectorMethod):
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
         """Yields nodes from included that match the given path."""
@@ -455,6 +487,10 @@ class FileSelectorMethod(SelectorMethod):
 class PackageSelectorMethod(SelectorMethod):
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
         """Yields nodes from included that have the specified package"""
+        # `this` is an alias for the current dbt project name
+        if selector == "this" and self.manifest.metadata.project_name is not None:
+            selector = self.manifest.metadata.project_name
+
         for unique_id, node in self.all_nodes(included_nodes):
             if fnmatch(node.package_name, selector):
                 yield unique_id
@@ -691,9 +727,6 @@ class StateSelectorMethod(SelectorMethod):
 
         return check_modified_contract
 
-    def check_new(self, old: Optional[SelectorTarget], new: SelectorTarget) -> bool:
-        return old is None
-
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
         if self.previous_state is None or self.previous_state.manifest is None:
             raise DbtRuntimeError("Got a state selector method, but no comparison manifest")
@@ -873,6 +906,7 @@ class MethodManager:
         MethodName.Version: VersionSelectorMethod,
         MethodName.SemanticModel: SemanticModelSelectorMethod,
         MethodName.SavedQuery: SavedQuerySelectorMethod,
+        MethodName.UnitTest: UnitTestSelectorMethod,
     }
 
     def __init__(

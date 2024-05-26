@@ -95,8 +95,12 @@ jobs:
           python -m pip install tox
           tox --version
 
-      - name: Run tox
-        run: tox
+      - name: Run unit tests
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          command: tox -e unit
 
       - name: Get current date
         if: always()
@@ -135,7 +139,7 @@ jobs:
       - name: generate include
         id: generate-include
         run: |
-          INCLUDE=('"python-version":"3.8","os":"windows-latest"' '"python-version":"3.8","os":"macos-latest"' )
+          INCLUDE=('"python-version":"3.8","os":"windows-latest"' '"python-version":"3.8","os":"macos-12"' )
           INCLUDE_GROUPS="["
           for include in ${INCLUDE[@]}; do
               for group in $(seq 1 ${{ env.PYTHON_INTEGRATION_TEST_WORKERS }}); do
@@ -201,8 +205,12 @@ jobs:
           python -m pip install tox
           tox --version
 
-      - name: Run tests
-        run: tox -- --ddtrace
+      - name: Run integration tests
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 30
+          max_attempts: 3
+          command: tox -- --ddtrace
         env:
           PYTEST_ADDOPTS: ${{ format('--splits {0} --group {1}', env.PYTHON_INTEGRATION_TEST_WORKERS, matrix.split-group) }}
 

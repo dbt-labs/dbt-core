@@ -5,42 +5,40 @@ import string
 
 import pytest
 
+from dbt.exceptions import CompilationError, ContractBreakingChangeError
 from dbt.tests.util import (
+    get_manifest,
     run_dbt,
+    run_dbt_and_capture,
     update_config_file,
     write_file,
-    get_manifest,
-    run_dbt_and_capture,
 )
-
-from dbt.exceptions import CompilationError, ContractBreakingChangeError
-
 from tests.functional.defer_state.fixtures import (
-    seed_csv,
-    table_model_sql,
-    view_model_sql,
-    ephemeral_model_sql,
-    schema_yml,
-    exposures_yml,
-    macros_sql,
-    infinite_macros_sql,
-    no_contract_schema_yml,
-    contract_schema_yml,
-    modified_contract_schema_yml,
-    disabled_contract_schema_yml,
     constraint_schema_yml,
-    versioned_no_contract_schema_yml,
+    contract_schema_yml,
+    disabled_contract_schema_yml,
+    ephemeral_model_sql,
+    exposures_yml,
+    infinite_macros_sql,
+    macros_sql,
+    metricflow_time_spine_sql,
+    modified_column_constraint_schema_yml,
+    modified_contract_schema_yml,
+    modified_model_constraint_schema_yml,
+    modified_semantic_model_schema_yml,
+    no_contract_schema_yml,
+    schema_yml,
+    seed_csv,
+    semantic_model_schema_yml,
+    table_model_now_incremental_sql,
+    table_model_now_view_sql,
+    table_model_sql,
     versioned_contract_schema_yml,
     versioned_disabled_contract_schema_yml,
     versioned_modified_contract_schema_yml,
-    modified_column_constraint_schema_yml,
-    modified_model_constraint_schema_yml,
-    table_model_now_view_sql,
-    table_model_now_incremental_sql,
+    versioned_no_contract_schema_yml,
     view_model_now_table_sql,
-    metricflow_time_spine_sql,
-    semantic_model_schema_yml,
-    modified_semantic_model_schema_yml,
+    view_model_sql,
 )
 
 

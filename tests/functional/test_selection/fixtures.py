@@ -1,6 +1,6 @@
 import pytest
-from dbt.tests.fixtures.project import write_project_files
 
+from dbt.tests.fixtures.project import write_project_files
 
 tests__cf_a_b_sql = """
 select * from {{ ref('model_a') }}

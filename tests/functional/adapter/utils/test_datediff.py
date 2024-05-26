@@ -1,9 +1,10 @@
 import pytest
+
 from tests.functional.adapter.utils.base_utils import BaseUtils
 from tests.functional.adapter.utils.fixture_datediff import (
-    seeds__data_datediff_csv,
     models__test_datediff_sql,
     models__test_datediff_yml,
+    seeds__data_datediff_csv,
 )
 
 

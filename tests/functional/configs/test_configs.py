@@ -1,9 +1,15 @@
-from dbt_common.dataclass_schema import ValidationError
-import pytest
 import os
 
+import pytest
+
 from dbt.exceptions import ParsingError
-from dbt.tests.util import run_dbt, update_config_file, write_file, check_relations_equal
+from dbt.tests.util import (
+    check_relations_equal,
+    run_dbt,
+    update_config_file,
+    write_file,
+)
+from dbt_common.dataclass_schema import ValidationError
 from tests.functional.configs.fixtures import BaseConfigProject, simple_snapshot
 
 

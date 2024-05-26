@@ -1,15 +1,14 @@
 from typing import Any, Dict, Optional
 
-from dbt_common.context import get_invocation_context
-
-from dbt.constants import SECRET_ENV_PREFIX, DEFAULT_ENV_PLACEHOLDER
 from dbt.adapters.contracts.connection import AdapterRequiredConfig
-from dbt.node_types import NodeType
-from dbt.utils import MultiDict
-
-from dbt.context.base import contextproperty, contextmember, Var
+from dbt.constants import DEFAULT_ENV_PLACEHOLDER
+from dbt.context.base import Var, contextmember, contextproperty
 from dbt.context.target import TargetContext
 from dbt.exceptions import EnvVarMissingError, SecretEnvVarLocationError
+from dbt.node_types import NodeType
+from dbt.utils import MultiDict
+from dbt_common.constants import SECRET_ENV_PREFIX
+from dbt_common.context import get_invocation_context
 
 
 class ConfiguredContext(TargetContext):

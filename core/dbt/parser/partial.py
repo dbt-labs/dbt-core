@@ -1,24 +1,20 @@
 import os
 from copy import deepcopy
-from typing import MutableMapping, Dict, List, Callable
+from typing import Callable, Dict, List, MutableMapping
 
-from dbt.contracts.graph.manifest import Manifest
+from dbt.constants import DEFAULT_ENV_PLACEHOLDER
 from dbt.contracts.files import (
     AnySourceFile,
     ParseFileType,
-    parse_file_type_to_parser,
     SchemaSourceFile,
+    parse_file_type_to_parser,
 )
-from dbt_common.context import get_invocation_context
-from dbt_common.events.functions import fire_event
-from dbt_common.events.base_types import EventLevel
-from dbt.events.types import (
-    PartialParsingEnabled,
-    PartialParsingFile,
-)
-from dbt.constants import DEFAULT_ENV_PLACEHOLDER
+from dbt.contracts.graph.manifest import Manifest
+from dbt.events.types import PartialParsingEnabled, PartialParsingFile
 from dbt.node_types import NodeType
-
+from dbt_common.context import get_invocation_context
+from dbt_common.events.base_types import EventLevel
+from dbt_common.events.functions import fire_event
 
 mssat_files = (
     ParseFileType.Model,

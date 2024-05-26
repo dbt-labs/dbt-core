@@ -1,148 +1,125 @@
-from copy import deepcopy
-from dataclasses import dataclass
-from dataclasses import field
 import datetime
-import os
-import traceback
-from typing import (
-    Dict,
-    Optional,
-    Mapping,
-    Callable,
-    Any,
-    List,
-    Type,
-    Union,
-    Tuple,
-    Set,
-)
-from itertools import chain
-import time
-
-from dbt.context.query_header import generate_query_header_context
-from dbt.contracts.graph.semantic_manifest import SemanticManifest
-from dbt_common.events.base_types import EventLevel
-from dbt_common.exceptions.base import DbtValidationError
-import dbt_common.utils
 import json
+import os
 import pprint
-from dbt.mp_context import get_mp_context
-import msgpack
+import time
+import traceback
+from copy import deepcopy
+from dataclasses import dataclass, field
+from itertools import chain
+from typing import Any, Callable, Dict, List, Mapping, Optional, Set, Tuple, Type, Union
 
+import msgpack
+from dbt_semantic_interfaces.enum_extension import assert_values_exhausted
+from dbt_semantic_interfaces.type_enums import MetricType
+
+import dbt.deprecations
 import dbt.exceptions
 import dbt.tracking
 import dbt.utils
-from dbt.flags import get_flags
-
+import dbt_common.utils
+from dbt import plugins
 from dbt.adapters.factory import (
     get_adapter,
-    get_relation_class_by_name,
     get_adapter_package_names,
+    get_relation_class_by_name,
     register_adapter,
 )
+from dbt.artifacts.resources import FileHash, NodeRelation, NodeVersion
+from dbt.artifacts.schemas.base import Writable
+from dbt.clients.jinja import MacroStack, get_rendered
+from dbt.clients.jinja_static import statically_extract_macro_calls
+from dbt.config import Project, RuntimeConfig
 from dbt.constants import (
     MANIFEST_FILE_NAME,
     PARTIAL_PARSE_FILE_NAME,
     SEMANTIC_MANIFEST_FILE_NAME,
-    SECRET_ENV_PREFIX,
 )
-from dbt_common.helper_types import PathSet
-from dbt_common.events.functions import fire_event, get_invocation_id, warn_or_error
-from dbt_common.events.types import (
-    Note,
-)
-from dbt.events.types import (
-    PartialParsingErrorProcessingFile,
-    PartialParsingError,
-    ParsePerfInfoPath,
-    PartialParsingSkipParsing,
-    UnableToPartialParse,
-    PartialParsingNotEnabled,
-    ParsedFileLoadFailed,
-    InvalidDisabledTargetInTestNode,
-    NodeNotFoundOrDisabled,
-    StateCheckVarsHash,
-    DeprecatedModel,
-    DeprecatedReference,
-    SpacesInModelNameDeprecation,
-    TotalModelNamesWithSpacesDeprecation,
-    UpcomingReferenceDeprecation,
-)
-from dbt.logger import DbtProcessState
-from dbt.node_types import NodeType, AccessType
-from dbt.clients.jinja import get_rendered, MacroStack
-from dbt.clients.jinja_static import statically_extract_macro_calls
-from dbt_common.clients.system import (
-    make_directory,
-    path_exists,
-    read_json,
-    write_file,
-)
-from dbt.config import Project, RuntimeConfig
+from dbt.context.configured import generate_macro_context
 from dbt.context.docs import generate_runtime_docs_context
 from dbt.context.macro_resolver import MacroResolver, TestMacroNamespace
-from dbt.context.configured import generate_macro_context
 from dbt.context.providers import ParseProvider, generate_runtime_macro_context
+from dbt.context.query_header import generate_query_header_context
 from dbt.contracts.files import ParseFileType, SchemaSourceFile
-from dbt.parser.read_files import (
-    ReadFilesFromFileSystem,
-    load_source_file,
-    FileDiff,
-    ReadFilesFromDiff,
-    ReadFiles,
-)
-from dbt.parser.partial import PartialParsing, special_override_macros
 from dbt.contracts.graph.manifest import (
-    Manifest,
     Disabled,
     MacroManifest,
+    Manifest,
     ManifestStateCheck,
     ParsingInfo,
 )
 from dbt.contracts.graph.nodes import (
-    SourceDefinition,
-    Macro,
     Exposure,
+    GenericTestNode,
+    Macro,
+    ManifestNode,
     Metric,
+    ModelNode,
+    ResultNode,
     SavedQuery,
     SeedNode,
     SemanticModel,
-    ManifestNode,
-    ResultNode,
-    ModelNode,
+    SourceDefinition,
 )
-from dbt.artifacts.resources import NodeRelation, NodeVersion, FileHash
-from dbt.artifacts.schemas.base import Writable
+from dbt.contracts.graph.semantic_manifest import SemanticManifest
+from dbt.events.types import (
+    DeprecatedModel,
+    DeprecatedReference,
+    InvalidDisabledTargetInTestNode,
+    NodeNotFoundOrDisabled,
+    ParsedFileLoadFailed,
+    ParsePerfInfoPath,
+    PartialParsingError,
+    PartialParsingErrorProcessingFile,
+    PartialParsingNotEnabled,
+    PartialParsingSkipParsing,
+    SpacesInResourceNameDeprecation,
+    StateCheckVarsHash,
+    UnableToPartialParse,
+    UpcomingReferenceDeprecation,
+)
 from dbt.exceptions import (
-    TargetNotFoundError,
     AmbiguousAliasError,
     InvalidAccessTypeError,
+    TargetNotFoundError,
     scrub_secrets,
 )
-from dbt.parser.base import Parser
+from dbt.flags import get_flags
+from dbt.mp_context import get_mp_context
+from dbt.node_types import AccessType, NodeType
 from dbt.parser.analysis import AnalysisParser
-from dbt.parser.generic_test import GenericTestParser
-from dbt.parser.singular_test import SingularTestParser
+from dbt.parser.base import Parser
 from dbt.parser.docs import DocumentationParser
 from dbt.parser.fixtures import FixtureParser
+from dbt.parser.generic_test import GenericTestParser
 from dbt.parser.hooks import HookParser
 from dbt.parser.macros import MacroParser
 from dbt.parser.models import ModelParser
+from dbt.parser.partial import PartialParsing, special_override_macros
+from dbt.parser.read_files import (
+    FileDiff,
+    ReadFiles,
+    ReadFilesFromDiff,
+    ReadFilesFromFileSystem,
+    load_source_file,
+)
 from dbt.parser.schemas import SchemaParser
 from dbt.parser.search import FileBlock
 from dbt.parser.seeds import SeedParser
+from dbt.parser.singular_test import SingularTestParser
 from dbt.parser.snapshots import SnapshotParser
 from dbt.parser.sources import SourcePatcher
 from dbt.parser.unit_tests import process_models_for_unit_test
 from dbt.version import __version__
-
+from dbt_common.clients.system import make_directory, path_exists, read_json, write_file
+from dbt_common.constants import SECRET_ENV_PREFIX
 from dbt_common.dataclass_schema import StrEnum, dbtClassMixin
-from dbt import plugins
+from dbt_common.events.base_types import EventLevel
+from dbt_common.events.functions import fire_event, get_invocation_id, warn_or_error
+from dbt_common.events.types import Note
+from dbt_common.exceptions.base import DbtValidationError
+from dbt_common.helper_types import PathSet
 
-from dbt_semantic_interfaces.enum_extension import assert_values_exhausted
-from dbt_semantic_interfaces.type_enums import MetricType
-
-PARSING_STATE = DbtProcessState("parsing")
 PERF_INFO_FILE_NAME = "perf_info.json"
 
 
@@ -233,7 +210,7 @@ class ManifestLoaderInfo(dbtClassMixin, Writable):
     projects: List[ProjectLoaderInfo] = field(default_factory=list)
     _project_index: Dict[str, ProjectLoaderInfo] = field(default_factory=dict)
 
-    def __post_serialize__(self, dct):
+    def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
         del dct["_project_index"]
         return dct
 
@@ -315,33 +292,32 @@ class ManifestLoader:
                 file_diff_dct = read_json(file_diff_path)
                 file_diff = FileDiff.from_dict(file_diff_dct)
 
-        with PARSING_STATE:  # set up logbook.Processor for parsing
-            # Start performance counting
-            start_load_all = time.perf_counter()
+        # Start performance counting
+        start_load_all = time.perf_counter()
 
-            projects = config.load_dependencies()
-            loader = cls(
-                config,
-                projects,
-                macro_hook=macro_hook,
-                file_diff=file_diff,
-            )
+        projects = config.load_dependencies()
+        loader = cls(
+            config,
+            projects,
+            macro_hook=macro_hook,
+            file_diff=file_diff,
+        )
 
-            manifest = loader.load()
+        manifest = loader.load()
 
-            _check_manifest(manifest, config)
-            manifest.build_flat_graph()
+        _check_manifest(manifest, config)
+        manifest.build_flat_graph()
 
-            # This needs to happen after loading from a partial parse,
-            # so that the adapter has the query headers from the macro_hook.
-            loader.save_macros_to_adapter(adapter)
+        # This needs to happen after loading from a partial parse,
+        # so that the adapter has the query headers from the macro_hook.
+        loader.save_macros_to_adapter(adapter)
 
-            # Save performance info
-            loader._perf_info.load_all_elapsed = time.perf_counter() - start_load_all
-            loader.track_project_load()
+        # Save performance info
+        loader._perf_info.load_all_elapsed = time.perf_counter() - start_load_all
+        loader.track_project_load()
 
-            if write_perf_info:
-                loader.write_perf_info(config.project_target_path)
+        if write_perf_info:
+            loader.write_perf_info(config.project_target_path)
 
         return manifest
 
@@ -488,6 +464,7 @@ class ManifestLoader:
             self.process_docs(self.root_project)
             self.process_metrics(self.root_project)
             self.process_saved_queries(self.root_project)
+            self.process_model_inferred_primary_keys()
             self.check_valid_group_config()
             self.check_valid_access_property()
 
@@ -525,7 +502,7 @@ class ManifestLoader:
             self.write_manifest_for_partial_parse()
 
         self.check_for_model_deprecations()
-        self.check_for_spaces_in_model_names()
+        self.check_for_spaces_in_resource_names()
 
         return self.manifest
 
@@ -627,46 +604,43 @@ class ManifestLoader:
                             )
                         )
 
-    def check_for_spaces_in_model_names(self):
-        """Validates that model names do not contain spaces
+    def check_for_spaces_in_resource_names(self):
+        """Validates that resource names do not contain spaces
 
         If `DEBUG` flag is `False`, logs only first bad model name
         If `DEBUG` flag is `True`, logs every bad model name
-        If `ALLOW_SPACES_IN_MODEL_NAMES` is `False`, logs are `ERROR` level and an exception is raised if any names are bad
-        If `ALLOW_SPACES_IN_MODEL_NAMES` is `True`, logs are `WARN` level
+        If `REQUIRE_RESOURCE_NAMES_WITHOUT_SPACES` is `True`, logs are `ERROR` level and an exception is raised if any names are bad
+        If `REQUIRE_RESOURCE_NAMES_WITHOUT_SPACES` is `False`, logs are `WARN` level
         """
-        improper_model_names = 0
+        improper_resource_names = 0
         level = (
-            EventLevel.WARN
-            if self.root_project.args.ALLOW_SPACES_IN_MODEL_NAMES
-            else EventLevel.ERROR
+            EventLevel.ERROR
+            if self.root_project.args.REQUIRE_RESOURCE_NAMES_WITHOUT_SPACES
+            else EventLevel.WARN
         )
 
         for node in self.manifest.nodes.values():
-            if isinstance(node, ModelNode) and " " in node.name:
-                if improper_model_names == 0 or self.root_project.args.DEBUG:
+            if " " in node.name:
+                if improper_resource_names == 0 or self.root_project.args.DEBUG:
                     fire_event(
-                        SpacesInModelNameDeprecation(
-                            model_name=node.name,
-                            model_version=version_to_str(node.version),
+                        SpacesInResourceNameDeprecation(
+                            unique_id=node.unique_id,
                             level=level.value,
                         ),
                         level=level,
                     )
-                improper_model_names += 1
+                improper_resource_names += 1
 
-        if improper_model_names > 0:
-            fire_event(
-                TotalModelNamesWithSpacesDeprecation(
-                    count_invalid_names=improper_model_names,
-                    show_debug_hint=(not self.root_project.args.DEBUG),
-                    level=level.value,
-                ),
-                level=level,
-            )
-
-            if level == EventLevel.ERROR:
-                raise DbtValidationError("Model names cannot contain spaces")
+        if improper_resource_names > 0:
+            if level == EventLevel.WARN:
+                flags = get_flags()
+                dbt.deprecations.warn(
+                    "resource-names-with-spaces",
+                    count_invalid_names=improper_resource_names,
+                    show_debug_hint=(not flags.DEBUG),
+                )
+            else:  # ERROR level
+                raise DbtValidationError("Resource names cannot contain spaces")
 
     def load_and_parse_macros(self, project_parser_files):
         for project in self.all_projects.values():
@@ -1091,18 +1065,16 @@ class ManifestLoader:
         macro_hook: Callable[[Manifest], Any],
         base_macros_only=False,
     ) -> Manifest:
-        with PARSING_STATE:
-            # base_only/base_macros_only: for testing only,
-            # allows loading macros without running 'dbt deps' first
-            projects = root_config.load_dependencies(base_only=base_macros_only)
+        # base_only/base_macros_only: for testing only,
+        # allows loading macros without running 'dbt deps' first
+        projects = root_config.load_dependencies(base_only=base_macros_only)
 
-            # This creates a loader object, including result,
-            # and then throws it away, returning only the
-            # manifest
-            loader = cls(root_config, projects, macro_hook)
-            macro_manifest = loader.create_macro_manifest()
+        # This creates a loader object, including result,
+        # and then throws it away, returning only the
+        # manifest
+        loader = cls(root_config, projects, macro_hook)
 
-        return macro_manifest
+        return loader.create_macro_manifest()
 
     # Create tracking event for saving performance info
     def track_project_load(self):
@@ -1173,6 +1145,15 @@ class ManifestLoader:
             # 1. process `where` of SavedQuery for `depends_on`s
             # 2. process `group_by` of SavedQuery for `depends_on``
             _process_metrics_for_node(self.manifest, current_project, saved_query)
+
+    def process_model_inferred_primary_keys(self):
+        """Processes Model nodes to populate their `primary_key`."""
+        for node in self.manifest.nodes.values():
+            if not isinstance(node, ModelNode):
+                continue
+            generic_tests = self._get_generic_tests_for_model(node)
+            primary_key = node.infer_primary_key(generic_tests)
+            node.primary_key = sorted(primary_key)
 
     def update_semantic_model(self, semantic_model) -> None:
         # This has to be done at the end of parsing because the referenced model
@@ -1368,6 +1349,24 @@ class ManifestLoader:
         path = os.path.join(target_path, PERF_INFO_FILE_NAME)
         write_file(path, json.dumps(self._perf_info, cls=dbt.utils.JSONEncoder, indent=4))
         fire_event(ParsePerfInfoPath(path=path))
+
+    def _get_generic_tests_for_model(
+        self,
+        model: ModelNode,
+    ) -> List[GenericTestNode]:
+        """Return a list of generic tests that are attached to the given model, including disabled tests"""
+        tests = []
+        for _, node in self.manifest.nodes.items():
+            if isinstance(node, GenericTestNode) and node.attached_node == model.unique_id:
+                tests.append(node)
+        for _, nodes in self.manifest.disabled.items():
+            for disabled_node in nodes:
+                if (
+                    isinstance(disabled_node, GenericTestNode)
+                    and disabled_node.attached_node == model.unique_id
+                ):
+                    tests.append(disabled_node)
+        return tests
 
 
 def invalid_target_fail_unless_test(
@@ -1889,7 +1888,12 @@ def write_manifest(manifest: Manifest, target_path: str, which: Optional[str] = 
     write_semantic_manifest(manifest=manifest, target_path=target_path)
 
 
-def parse_manifest(runtime_config, write_perf_info, write, write_json):
+def parse_manifest(
+    runtime_config: RuntimeConfig,
+    write_perf_info: bool,
+    write: bool,
+    write_json: bool,
+) -> Manifest:
     register_adapter(runtime_config, get_mp_context())
     adapter = get_adapter(runtime_config)
     adapter.set_macro_context_generator(generate_runtime_macro_context)
@@ -1898,6 +1902,7 @@ def parse_manifest(runtime_config, write_perf_info, write, write_json):
         write_perf_info=write_perf_info,
     )
 
+    # If we should (over)write the manifest in the target path, do that now
     if write and write_json:
         write_manifest(manifest, runtime_config.project_target_path)
         pm = plugins.get_plugin_manager(runtime_config.project_name)

@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: Remove usages of dbt.clients.jinja in dbt/adapters
-time: 2023-12-05T09:35:44.845352+09:00
-custom:
-  Author: michelleark
-  Issue: "9205"

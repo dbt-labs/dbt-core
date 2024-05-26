@@ -1,4 +1,4 @@
-from typing import Set, Any
+from typing import Any, Set
 
 SELECTED_RESOURCES = []
 

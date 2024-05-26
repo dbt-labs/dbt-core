@@ -1,6 +1,6 @@
-from typing import Optional, Dict, List, Any
-from io import StringIO
 import csv
+from io import StringIO
+from typing import Any, Dict, List, Optional
 
 from dbt.contracts.files import FixtureSourceFile
 from dbt.contracts.graph.nodes import UnitTestFileFixture

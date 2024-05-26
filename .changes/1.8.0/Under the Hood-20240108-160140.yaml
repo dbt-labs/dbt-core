@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: Move result objects to dbt.artifacts
-time: 2024-01-08T16:01:40.20348-05:00
-custom:
-  Author: gshank
-  Issue: "9193"

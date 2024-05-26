@@ -1,5 +1,6 @@
-import click
 from typing import Optional
+
+import click
 
 from dbt.cli.main import cli as dbt
 

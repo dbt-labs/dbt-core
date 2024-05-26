@@ -11,7 +11,6 @@ from dbt.tests.util import (
     run_dbt_and_capture,
     set_model_file,
 )
-
 from tests.functional.adapter.materialized_view.files import (
     MY_MATERIALIZED_VIEW,
     MY_SEED,

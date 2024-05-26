@@ -1,6 +1,0 @@
-kind: Fixes
-body: Handle unknown `type_code` for model contracts
-time: 2023-10-24T11:01:51.980781-06:00
-custom:
-  Author: dbeatty10
-  Issue: 8877 8353

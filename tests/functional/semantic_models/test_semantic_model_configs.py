@@ -1,17 +1,17 @@
 import pytest
+
 from dbt.artifacts.resources import SemanticModelConfig
 from dbt.exceptions import ParsingError
-from dbt.tests.util import run_dbt, update_config_file, get_manifest
-
+from dbt.tests.util import get_manifest, run_dbt, update_config_file
 from tests.functional.semantic_models.fixtures import (
-    models_people_sql,
-    metricflow_time_spine_sql,
-    semantic_model_people_yml,
     disabled_models_people_metrics_yml,
-    models_people_metrics_yml,
     disabled_semantic_model_people_yml,
     enabled_semantic_model_people_yml,
     groups_yml,
+    metricflow_time_spine_sql,
+    models_people_metrics_yml,
+    models_people_sql,
+    semantic_model_people_yml,
 )
 
 

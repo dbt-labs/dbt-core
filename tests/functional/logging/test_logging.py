@@ -1,10 +1,11 @@
-import pytest
-from dbt.tests.util import run_dbt, get_manifest, read_file
 import json
 import os
-from dbt_common.events.functions import fire_event
-from dbt.events.types import InvalidOptionYAML
 
+import pytest
+
+from dbt.events.types import InvalidOptionYAML
+from dbt.tests.util import get_manifest, read_file, run_dbt
+from dbt_common.events.functions import fire_event
 
 my_model_sql = """
   select 1 as fun

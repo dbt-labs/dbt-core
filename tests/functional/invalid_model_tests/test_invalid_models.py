@@ -1,10 +1,7 @@
 import pytest
 
 from dbt.exceptions import CompilationError, ParsingError
-
-from dbt.tests.util import (
-    run_dbt,
-)
+from dbt.tests.util import run_dbt
 
 # from `test/integration/011_invalid_model_tests`, invalid_model_tests
 

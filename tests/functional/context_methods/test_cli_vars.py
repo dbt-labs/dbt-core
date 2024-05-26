@@ -1,18 +1,16 @@
 import pytest
 import yaml
 
-from tests.fixtures.dbt_integration_project import dbt_integration_project  # noqa: F401
-
+from dbt.exceptions import CompilationError, DbtRuntimeError
+from dbt.tests.fixtures.project import write_project_files
 from dbt.tests.util import (
+    get_artifact,
+    get_logging_events,
     run_dbt,
     run_dbt_and_capture,
-    get_logging_events,
-    get_artifact,
     write_config_file,
 )
-from dbt.tests.fixtures.project import write_project_files
-from dbt.exceptions import DbtRuntimeError, CompilationError
-
+from tests.fixtures.dbt_integration_project import dbt_integration_project  # noqa: F401
 
 models_complex__schema_yml = """
 version: 2

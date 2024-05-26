@@ -5,13 +5,13 @@ import pytest
 
 from dbt.contracts.results import RunStatus, TestStatus
 from dbt.exceptions import DbtRuntimeError, TargetNotFoundError
-from dbt.tests.util import run_dbt, write_file, rm_file
+from dbt.tests.util import rm_file, run_dbt, write_file
 from tests.functional.retry.fixtures import (
+    macros__alter_timezone_sql,
     models__sample_model,
+    models__second_model,
     models__union_model,
     schema_yml,
-    models__second_model,
-    macros__alter_timezone_sql,
     simple_model,
     simple_schema,
 )

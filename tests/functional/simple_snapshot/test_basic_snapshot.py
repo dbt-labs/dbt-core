@@ -1,20 +1,27 @@
 import os
 from datetime import datetime
-import pytz
+
 import pytest
-from dbt.tests.util import run_dbt, check_relations_equal, relation_from_name, write_file
+import pytz
+
+from dbt.tests.util import (
+    check_relations_equal,
+    relation_from_name,
+    run_dbt,
+    write_file,
+)
 from tests.functional.simple_snapshot.fixtures import (
-    models__schema_yml,
-    models__schema_with_target_schema_yml,
-    models__ref_snapshot_sql,
-    seeds__seed_newcol_csv,
-    seeds__seed_csv,
-    snapshots_pg__snapshot_sql,
-    snapshots_pg__snapshot_no_target_schema_sql,
     macros__test_no_overlaps_sql,
     macros_custom_snapshot__custom_sql,
-    snapshots_pg_custom_namespaced__snapshot_sql,
+    models__ref_snapshot_sql,
+    models__schema_with_target_schema_yml,
+    models__schema_yml,
+    seeds__seed_csv,
+    seeds__seed_newcol_csv,
+    snapshots_pg__snapshot_no_target_schema_sql,
+    snapshots_pg__snapshot_sql,
     snapshots_pg_custom__snapshot_sql,
+    snapshots_pg_custom_namespaced__snapshot_sql,
 )
 
 snapshots_check_col__snapshot_sql = """

@@ -1,36 +1,34 @@
 import csv
-import pytest
-
 from codecs import BOM_UTF8
 from pathlib import Path
 
+import pytest
+
 from dbt.tests.util import (
-    copy_file,
-    mkdir,
-    rm_dir,
-    run_dbt,
-    read_file,
     check_relations_equal,
     check_table_does_exist,
     check_table_does_not_exist,
+    copy_file,
+    mkdir,
+    read_file,
+    rm_dir,
+    run_dbt,
 )
-
 from tests.functional.adapter.simple_seed.fixtures import (
     models__downstream_from_seed_actual,
-    models__from_basic_seed,
     models__downstream_from_seed_pipe_separated,
+    models__from_basic_seed,
 )
-
 from tests.functional.adapter.simple_seed.seeds import (
     seed__actual_csv,
-    seeds__expected_sql,
-    seeds__enabled_in_config_csv,
-    seeds__disabled_in_config_csv,
-    seeds__tricky_csv,
-    seeds__wont_parse_csv,
     seed__unicode_csv,
     seed__with_dots_csv,
+    seeds__disabled_in_config_csv,
+    seeds__enabled_in_config_csv,
+    seeds__expected_sql,
     seeds__pipe_separated_csv,
+    seeds__tricky_csv,
+    seeds__wont_parse_csv,
 )
 
 

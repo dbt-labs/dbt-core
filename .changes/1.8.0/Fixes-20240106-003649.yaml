@@ -1,6 +1,0 @@
-kind: Fixes
-body: fix lock-file bad indentation
-time: 2024-01-06T00:36:49.547533+09:00
-custom:
-  Author: jx2lee
-  Issue: "9319"

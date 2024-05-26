@@ -1,6 +1,0 @@
-kind: Fixes
-body: 'deps: Use PackageRenderer to read package-lock.json'
-time: 2023-11-27T15:43:47.842423+01:00
-custom:
-  Author: jtcohen6
-  Issue: "9127"

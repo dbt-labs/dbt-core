@@ -1,20 +1,16 @@
 import os
-import pytest
-
 from pathlib import Path
 
-from tests.functional.adapter.hooks.fixtures import (
-    macros__hook,
-    macros__before_and_after,
-    models__hooks,
-    seeds__example_seed_csv,
-    macros_missing_column,
-    models__missing_column,
-)
+import pytest
 
-from dbt.tests.util import (
-    check_table_does_not_exist,
-    run_dbt,
+from dbt.tests.util import check_table_does_not_exist, run_dbt
+from tests.functional.adapter.hooks.fixtures import (
+    macros__before_and_after,
+    macros__hook,
+    macros_missing_column,
+    models__hooks,
+    models__missing_column,
+    seeds__example_seed_csv,
 )
 
 

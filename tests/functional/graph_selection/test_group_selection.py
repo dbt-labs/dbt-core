@@ -1,21 +1,20 @@
 import pytest
 
-from dbt.tests.util import run_dbt, read_file
+from dbt.tests.util import read_file, run_dbt
 from tests.functional.graph_selection.fixtures import (
-    schema_yml,
-    base_users_sql,
-    users_sql,
-    users_rollup_sql,
-    users_rollup_dependency_sql,
-    emails_sql,
-    emails_alt_sql,
     alternative_users_sql,
-    never_selected_sql,
-    subdir_sql,
+    base_users_sql,
+    emails_alt_sql,
+    emails_sql,
     nested_users_sql,
+    never_selected_sql,
     properties_yml,
+    schema_yml,
+    subdir_sql,
+    users_rollup_dependency_sql,
+    users_rollup_sql,
+    users_sql,
 )
-
 
 selectors_yml = """
             selectors:

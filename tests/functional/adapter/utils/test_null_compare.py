@@ -1,5 +1,6 @@
 import pytest
 
+from dbt.tests.util import run_dbt
 from tests.functional.adapter.utils.base_utils import BaseUtils
 from tests.functional.adapter.utils.fixture_null_compare import (
     MODELS__TEST_MIXED_NULL_COMPARE_SQL,
@@ -7,7 +8,6 @@ from tests.functional.adapter.utils.fixture_null_compare import (
     MODELS__TEST_NULL_COMPARE_SQL,
     MODELS__TEST_NULL_COMPARE_YML,
 )
-from dbt.tests.util import run_dbt
 
 
 class BaseMixedNullCompare(BaseUtils):
