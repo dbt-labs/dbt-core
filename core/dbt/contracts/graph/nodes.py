@@ -579,23 +579,28 @@ class ModelNode(ModelResource, CompiledNode):
             data = contract_state.encode("utf-8")
             self.contract.checksum = hashlib.new("sha256", data).hexdigest()
 
-    def same_contract_deleted(self) -> bool:
+    def same_contract_removed(self) -> bool:
         """
-        self: the deleted model node
+        self: the removed (deleted, renamed, or disabled) model node
         """
-        # If the contract wasn't previously enforced, so contract has not changed
+        # If the contract wasn't previously enforced, no contract change has occurred
         if self.contract.enforced is False:
             return True
 
-        # Deleted node is passed its deprecation_date, so deletion does not constitute a contract change
+        # Removed node is past its deprecation_date, so deletion does not constitute a contract change
         if self.is_past_deprecation_date:
             return True
 
-        breaking_changes = [f"Contracted model '{self.unique_id}' was deleted or renamed."]
+        # Disabled, deleted, or renamed node with previously enforced contract.
+        if not self.config.enabled:
+            breaking_change = f"Contracted model '{self.unique_id}' was disabled."
+        else:
+            breaking_change = f"Contracted model '{self.unique_id}' was deleted or renamed."
+
         if self.version is None:
             warn_or_error(
                 UnversionedBreakingChange(
-                    breaking_changes=breaking_changes,
+                    breaking_changes=[breaking_change],
                     model_name=self.name,
                     model_file_path=self.original_file_path,
                 ),
@@ -605,7 +610,7 @@ class ModelNode(ModelResource, CompiledNode):
         else:
             raise (
                 ContractBreakingChangeError(
-                    breaking_changes=breaking_changes,
+                    breaking_changes=[breaking_change],
                     node=self,
                 )
             )
