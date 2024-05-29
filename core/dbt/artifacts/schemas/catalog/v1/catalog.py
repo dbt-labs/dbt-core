@@ -7,7 +7,7 @@ from dbt.artifacts.schemas.base import (
     BaseArtifactMetadata,
     schema_version,
 )
-from dbt_common.artifacts.catalog import StatsDict, TableMetadata
+from dbt_common.contracts.metadata import StatsDict, TableMetadata
 from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_common.utils.formatting import lowercase
 
