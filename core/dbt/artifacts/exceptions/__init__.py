@@ -1,1 +1,1 @@
-from dbt_common.artifacts.exceptions import *  # noqa
+from dbt.artifacts.exceptions.schemas import IncompatibleSchemaError
