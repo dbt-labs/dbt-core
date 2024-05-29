@@ -38,6 +38,7 @@ from dbt_common.constants import SECRET_ENV_PREFIX
 from dbt_common.context import get_invocation_context
 from dbt_common.events.contextvars import get_node_info
 from dbt_common.events.functions import fire_event, get_invocation_id
+from dbt_common.events.types import PrintEvent
 from dbt_common.exceptions.macros import MacroReturn
 
 # See the `contexts` module README for more information on how contexts work
@@ -683,7 +684,8 @@ class BaseContext(metaclass=ContextMeta):
         """
 
         if get_flags().PRINT:
-            print(msg)
+            # No formatting, still get to stdout when --quiet is used
+            fire_event(PrintEvent(msg=msg))
         return ""
 
     @contextmember()

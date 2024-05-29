@@ -570,25 +570,21 @@ class ManifestLoader:
 
     def check_for_model_deprecations(self):
         for node in self.manifest.nodes.values():
-            if isinstance(node, ModelNode):
-                if (
-                    node.deprecation_date
-                    and node.deprecation_date < datetime.datetime.now().astimezone()
-                ):
-                    warn_or_error(
-                        DeprecatedModel(
-                            model_name=node.name,
-                            model_version=version_to_str(node.version),
-                            deprecation_date=node.deprecation_date.isoformat(),
-                        )
+            if isinstance(node, ModelNode) and node.is_past_deprecation_date:
+                warn_or_error(
+                    DeprecatedModel(
+                        model_name=node.name,
+                        model_version=version_to_str(node.version),
+                        deprecation_date=node.deprecation_date.isoformat(),
                     )
+                )
 
                 resolved_refs = self.manifest.resolve_refs(node, self.root_project.project_name)
                 resolved_model_refs = [r for r in resolved_refs if isinstance(r, ModelNode)]
                 node.depends_on
                 for resolved_ref in resolved_model_refs:
                     if resolved_ref.deprecation_date:
-                        if resolved_ref.deprecation_date < datetime.datetime.now().astimezone():
+                        if resolved_ref.is_past_deprecation_date:
                             event_cls = DeprecatedReference
                         else:
                             event_cls = UpcomingReferenceDeprecation
@@ -808,8 +804,12 @@ class ManifestLoader:
         plugin_model_nodes = pm.get_nodes().models
         for node_arg in plugin_model_nodes.values():
             node = ModelNode.from_args(node_arg)
-            # node may already exist from package or running project - in which case we should avoid clobbering it with an external node
-            if node.unique_id not in self.manifest.nodes:
+            # node may already exist from package or running project (even if it is disabled),
+            # in which case we should avoid clobbering it with an external node
+            if (
+                node.unique_id not in self.manifest.nodes
+                and node.unique_id not in self.manifest.disabled
+            ):
                 self.manifest.add_node_nofile(node)
                 manifest_nodes_modified = True
 

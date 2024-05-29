@@ -50,6 +50,7 @@ from tests.unit.utils import (
     MockNode,
     MockSource,
     inject_plugin,
+    make_manifest,
 )
 
 REQUIRED_PARSED_NODE_KEYS = frozenset(
@@ -1089,20 +1090,6 @@ class TestManifestSearch(unittest.TestCase):
             metrics={},
             selectors={},
         )
-
-
-def make_manifest(nodes=[], sources=[], macros=[], docs=[]):
-    return Manifest(
-        nodes={n.unique_id: n for n in nodes},
-        macros={m.unique_id: m for m in macros},
-        sources={s.unique_id: s for s in sources},
-        docs={d.unique_id: d for d in docs},
-        disabled={},
-        files={},
-        exposures={},
-        metrics={},
-        selectors={},
-    )
 
 
 FindMacroSpec = namedtuple("FindMacroSpec", "macros,expected")

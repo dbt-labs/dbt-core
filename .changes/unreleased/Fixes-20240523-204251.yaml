@@ -1,0 +1,6 @@
+kind: Fixes
+body: Renaming or removing a contracted model should raise a BreakingChange warning/error
+time: 2024-05-23T20:42:51.033946-04:00
+custom:
+  Author: michelleark
+  Issue: "10116"

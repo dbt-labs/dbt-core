@@ -1,0 +1,6 @@
+kind: Fixes
+body: prefer disabled project nodes to external node
+time: 2024-05-24T13:11:35.440443-04:00
+custom:
+  Author: michelleark
+  Issue: "10224"

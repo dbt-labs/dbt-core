@@ -50,6 +50,7 @@ from tests.functional.partial_parsing.fixtures import (
     model_three_disabled_sql,
     model_three_modified_sql,
     model_three_sql,
+    model_two_disabled_sql,
     model_two_sql,
     models_schema1_yml,
     models_schema2_yml,
@@ -696,6 +697,15 @@ class TestExternalModels:
         )
 
     @pytest.fixture(scope="class")
+    def external_model_node_merge(self):
+        return ModelNodeArgs(
+            name="model_two",
+            package_name="test",
+            identifier="test_identifier",
+            schema="test_schema",
+        )
+
+    @pytest.fixture(scope="class")
     def models(self):
         return {"model_one.sql": model_one_sql}
 
@@ -708,6 +718,7 @@ class TestExternalModels:
         external_model_node_versioned,
         external_model_node_depends_on,
         external_model_node_depends_on_parent,
+        external_model_node_merge,
     ):
         # initial plugin - one external model
         external_nodes = PluginNodes()
@@ -724,12 +735,30 @@ class TestExternalModels:
         assert len(manifest.external_node_unique_ids) == 1
         assert manifest.external_node_unique_ids == ["model.external.external_model"]
 
-        # add a model file
+        # add a model file - test.model_two
         write_file(model_two_sql, project.project_root, "models", "model_two.sql")
         manifest = run_dbt(["--partial-parse", "parse"])
         assert len(manifest.nodes) == 3
 
-        # add an external model
+        # add an external model that is already in project - test.model_two
+        # project model should be preferred to external model
+        external_nodes.add_model(external_model_node_merge)
+        manifest = run_dbt(["--partial-parse", "parse"])
+        assert len(manifest.nodes) == 3
+        assert len(manifest.external_node_unique_ids) == 1
+
+        # disable test.model_two in project
+        # project models should still be preferred to external model
+        write_file(model_two_disabled_sql, project.project_root, "models", "model_two.sql")
+        manifest = run_dbt(["--partial-parse", "parse"])
+        assert len(manifest.nodes) == 2
+        assert len(manifest.disabled) == 1
+        assert len(manifest.external_node_unique_ids) == 1
+
+        # re-enable model_2.sql
+        write_file(model_two_sql, project.project_root, "models", "model_two.sql")
+
+        # add a new external model
         external_nodes.add_model(external_model_node_versioned)
         manifest = run_dbt(["--partial-parse", "parse"])
         assert len(manifest.nodes) == 4

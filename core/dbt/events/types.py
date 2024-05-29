@@ -1982,6 +1982,7 @@ class DebugCmdResult(InfoLevel):
 
 
 class ListCmdOut(InfoLevel):
+    # No longer in use, switching to Z051 PrintEvent in dbt-common
     def code(self) -> str:
         return "Z049"
 

@@ -760,6 +760,14 @@ select 1 as notfun
 
 """
 
+model_two_disabled_sql = """
+{{ config(
+  enabled=false
+) }}
+
+select 1 as notfun
+"""
+
 generic_test_schema_yml = """
 
 models:

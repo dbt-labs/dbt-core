@@ -108,6 +108,25 @@ models:
         data_type: text
 """
 
+disabled_contract_schema_yml = """
+version: 2
+models:
+  - name: table_model
+    config:
+      contract:
+        enforced: True
+      enabled: False
+    columns:
+      - name: id
+        data_type: integer
+        data_tests:
+          - unique:
+              severity: error
+          - not_null
+      - name: name
+        data_type: text
+"""
+
 modified_contract_schema_yml = """
 version: 2
 models:
@@ -126,13 +145,32 @@ models:
         data_type: text
 """
 
-disabled_contract_schema_yml = """
+unenforced_contract_schema_yml = """
 version: 2
 models:
   - name: table_model
     config:
       contract:
         enforced: False
+    columns:
+      - name: id
+        data_type: integer
+        data_tests:
+          - unique:
+              severity: error
+          - not_null
+      - name: name
+        data_type: text
+"""
+
+disabled_unenforced_contract_schema_yml = """
+version: 2
+models:
+  - name: table_model
+    config:
+      contract:
+        enforced: False
+      enabled: False
     columns:
       - name: id
         data_type: integer
@@ -182,6 +220,27 @@ models:
         data_type: text
 """
 
+disabled_versioned_contract_schema_yml = """
+version: 2
+models:
+  - name: table_model
+    config:
+      contract:
+        enforced: True
+      enabled: False
+    versions:
+      - v: 1
+    columns:
+      - name: id
+        data_type: integer
+        data_tests:
+          - unique:
+              severity: error
+          - not_null
+      - name: name
+        data_type: text
+"""
+
 versioned_modified_contract_schema_yml = """
 version: 2
 models:
@@ -202,7 +261,28 @@ models:
         data_type: text
 """
 
-versioned_disabled_contract_schema_yml = """
+disabled_versioned_unenforced_contract_schema_yml = """
+version: 2
+models:
+  - name: table_model
+    config:
+      contract:
+        enforced: False
+      enabled: False
+    versions:
+      - v: 1
+    columns:
+      - name: id
+        data_type: integer
+        data_tests:
+          - unique:
+              severity: error
+          - not_null
+      - name: name
+        data_type: text
+"""
+
+versioned_unenforced_contract_schema_yml = """
 version: 2
 models:
   - name: table_model

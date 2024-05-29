@@ -55,8 +55,7 @@ from dbt.contracts.graph.nodes import (
 )
 from dbt.node_types import AccessType, NodeType
 from dbt_common.dataclass_schema import ValidationError
-
-from .utils import (
+from tests.unit.utils import (
     ContractTestCase,
     assert_fails_validation,
     assert_from_dict,

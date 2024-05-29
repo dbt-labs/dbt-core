@@ -10,7 +10,7 @@ from dbt.graph import ResourceTypeSelector
 from dbt.node_types import REFABLE_NODE_TYPES
 from dbt.task.base import BaseRunner, resource_types_from_args
 from dbt.task.run import _validate_materialization_relations_dict
-from dbt.task.runnable import GraphRunnableTask
+from dbt.task.runnable import GraphRunnableMode, GraphRunnableTask
 from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_common.exceptions import CompilationError, DbtInternalError
 
@@ -93,6 +93,9 @@ class CloneRunner(BaseRunner):
 class CloneTask(GraphRunnableTask):
     def raise_on_first_error(self):
         return False
+
+    def get_run_mode(self) -> GraphRunnableMode:
+        return GraphRunnableMode.Independent
 
     def _get_deferred_manifest(self) -> Optional[Manifest]:
         # Unlike other commands, 'clone' always requires a state manifest

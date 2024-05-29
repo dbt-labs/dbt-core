@@ -19,6 +19,8 @@ from typing import (
 from mashumaro.types import SerializableType
 
 from dbt import deprecations
+from dbt.adapters.base import ConstraintSupport
+from dbt.adapters.factory import get_adapter_constraint_support
 from dbt.artifacts.resources import Analysis as AnalysisResource
 from dbt.artifacts.resources import (
     BaseResource,
@@ -470,6 +472,13 @@ class ModelNode(ModelResource, CompiledNode):
         return self.version is not None and self.version == self.latest_version
 
     @property
+    def is_past_deprecation_date(self) -> bool:
+        return (
+            self.deprecation_date is not None
+            and self.deprecation_date < datetime.now().astimezone()
+        )
+
+    @property
     def search_name(self):
         if self.version is None:
             return self.name
@@ -570,6 +579,42 @@ class ModelNode(ModelResource, CompiledNode):
             data = contract_state.encode("utf-8")
             self.contract.checksum = hashlib.new("sha256", data).hexdigest()
 
+    def same_contract_removed(self) -> bool:
+        """
+        self: the removed (deleted, renamed, or disabled) model node
+        """
+        # If the contract wasn't previously enforced, no contract change has occurred
+        if self.contract.enforced is False:
+            return True
+
+        # Removed node is past its deprecation_date, so deletion does not constitute a contract change
+        if self.is_past_deprecation_date:
+            return True
+
+        # Disabled, deleted, or renamed node with previously enforced contract.
+        if not self.config.enabled:
+            breaking_change = f"Contracted model '{self.unique_id}' was disabled."
+        else:
+            breaking_change = f"Contracted model '{self.unique_id}' was deleted or renamed."
+
+        if self.version is None:
+            warn_or_error(
+                UnversionedBreakingChange(
+                    breaking_changes=[breaking_change],
+                    model_name=self.name,
+                    model_file_path=self.original_file_path,
+                ),
+                node=self,
+            )
+            return False
+        else:
+            raise (
+                ContractBreakingChangeError(
+                    breaking_changes=[breaking_change],
+                    node=self,
+                )
+            )
+
     def same_contract(self, old, adapter_type=None) -> bool:
         # If the contract wasn't previously enforced:
         if old.contract.enforced is False and self.contract.enforced is False:
@@ -600,10 +645,6 @@ class ModelNode(ModelResource, CompiledNode):
         if old.contract.enforced is True and self.contract.enforced is False:
             # Breaking change: the contract was previously enforced, and it no longer is
             contract_enforced_disabled = True
-
-        # TODO: this avoid the circular imports but isn't ideal
-        from dbt.adapters.base import ConstraintSupport
-        from dbt.adapters.factory import get_adapter_constraint_support
 
         constraint_support = get_adapter_constraint_support(adapter_type)
         column_constraints_exist = False

@@ -9,8 +9,7 @@ from dbt.flags import set_from_args
 from dbt.node_types import NodeType
 from dbt.parser import docs
 from dbt.parser.search import FileBlock
-
-from .utils import config_from_parts_or_dicts
+from tests.unit.utils import config_from_parts_or_dicts
 
 set_from_args(Namespace(WARN_ERROR=False), None)
 

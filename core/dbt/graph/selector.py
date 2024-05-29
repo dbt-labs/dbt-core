@@ -319,7 +319,7 @@ class NodeSelector(MethodManager):
 
         return filtered_nodes
 
-    def get_graph_queue(self, spec: SelectionSpec) -> GraphQueue:
+    def get_graph_queue(self, spec: SelectionSpec, preserve_edges: bool = True) -> GraphQueue:
         """Returns a queue over nodes in the graph that tracks progress of
         dependecies.
         """
@@ -330,7 +330,7 @@ class NodeSelector(MethodManager):
         # Construct a new graph using the selected_nodes
         new_graph = self.full_graph.get_subset_graph(selected_nodes)
         # should we give a way here for consumers to mutate the graph?
-        return GraphQueue(new_graph.graph, self.manifest, selected_nodes)
+        return GraphQueue(new_graph.graph, self.manifest, selected_nodes, preserve_edges)
 
 
 class ResourceTypeSelector(NodeSelector):

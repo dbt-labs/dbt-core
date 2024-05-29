@@ -8,6 +8,7 @@ import pytest
 from dbt.exceptions import CompilationError, ContractBreakingChangeError
 from dbt.tests.util import (
     get_manifest,
+    rm_file,
     run_dbt,
     run_dbt_and_capture,
     update_config_file,
@@ -17,6 +18,9 @@ from tests.functional.defer_state.fixtures import (
     constraint_schema_yml,
     contract_schema_yml,
     disabled_contract_schema_yml,
+    disabled_unenforced_contract_schema_yml,
+    disabled_versioned_contract_schema_yml,
+    disabled_versioned_unenforced_contract_schema_yml,
     ephemeral_model_sql,
     exposures_yml,
     infinite_macros_sql,
@@ -33,10 +37,11 @@ from tests.functional.defer_state.fixtures import (
     table_model_now_incremental_sql,
     table_model_now_view_sql,
     table_model_sql,
+    unenforced_contract_schema_yml,
     versioned_contract_schema_yml,
-    versioned_disabled_contract_schema_yml,
     versioned_modified_contract_schema_yml,
     versioned_no_contract_schema_yml,
+    versioned_unenforced_contract_schema_yml,
     view_model_now_table_sql,
     view_model_sql,
 )
@@ -507,7 +512,7 @@ class TestChangedContractUnversioned(BaseModifiedState):
     MODEL_UNIQUE_ID = "model.test.table_model"
     CONTRACT_SCHEMA_YML = contract_schema_yml
     MODIFIED_SCHEMA_YML = modified_contract_schema_yml
-    DISABLED_SCHEMA_YML = disabled_contract_schema_yml
+    UNENFORCED_SCHEMA_YML = unenforced_contract_schema_yml
     NO_CONTRACT_SCHEMA_YML = no_contract_schema_yml
 
     def test_changed_contract(self, project):
@@ -570,8 +575,8 @@ class TestChangedContractUnversioned(BaseModifiedState):
         expected_warning = "While comparing to previous project state, dbt detected a breaking change to an unversioned model"
         expected_change = "Contract enforcement was removed"
 
-        # Now disable the contract. Should throw a warning - force warning into an error.
-        write_file(self.DISABLED_SCHEMA_YML, "models", "schema.yml")
+        # Now unenforce the contract. Should throw a warning - force warning into an error.
+        write_file(self.UNENFORCED_SCHEMA_YML, "models", "schema.yml")
         with pytest.raises(CompilationError):
             _, logs = run_dbt_and_capture(
                 [
@@ -591,7 +596,7 @@ class TestChangedContractVersioned(BaseModifiedState):
     MODEL_UNIQUE_ID = "model.test.table_model.v1"
     CONTRACT_SCHEMA_YML = versioned_contract_schema_yml
     MODIFIED_SCHEMA_YML = versioned_modified_contract_schema_yml
-    DISABLED_SCHEMA_YML = versioned_disabled_contract_schema_yml
+    UNENFORCED_SCHEMA_YML = versioned_unenforced_contract_schema_yml
     NO_CONTRACT_SCHEMA_YML = versioned_no_contract_schema_yml
 
     def test_changed_contract_versioned(self, project):
@@ -643,10 +648,136 @@ class TestChangedContractVersioned(BaseModifiedState):
         with pytest.raises(ContractBreakingChangeError):
             results = run_dbt(["run", "--models", "state:modified.contract", "--state", "./state"])
 
-        # Now disable the contract. Should raise an error.
-        write_file(self.DISABLED_SCHEMA_YML, "models", "schema.yml")
+        # Now unenforce the contract. Should raise an error.
+        write_file(self.UNENFORCED_SCHEMA_YML, "models", "schema.yml")
         with pytest.raises(ContractBreakingChangeError):
             results = run_dbt(["run", "--models", "state:modified.contract", "--state", "./state"])
+
+
+class TestDeleteUnversionedContractedModel(BaseModifiedState):
+    MODEL_UNIQUE_ID = "model.test.table_model"
+    CONTRACT_SCHEMA_YML = contract_schema_yml
+
+    def test_delete_unversioned_contracted_model(self, project):
+        # ensure table_model is contracted
+        write_file(self.CONTRACT_SCHEMA_YML, "models", "schema.yml")
+        self.run_and_save_state()
+
+        # delete versioned contracted model
+        rm_file(project.project_root, "models", "table_model.sql")
+
+        # since the models are unversioned, they raise a warning but not an error
+        _, logs = run_dbt_and_capture(
+            ["run", "--models", "state:modified.contract", "--state", "./state"]
+        )
+
+        expected_warning = "While comparing to previous project state, dbt detected a breaking change to an unversioned model"
+        expected_change = "Contracted model 'model.test.table_model' was deleted or renamed"
+        assert expected_warning in logs
+        assert expected_change in logs
+
+
+class TestDeleteVersionedContractedModel(BaseModifiedState):
+    MODEL_UNIQUE_ID = "model.test.table_model.v1"
+    CONTRACT_SCHEMA_YML = versioned_contract_schema_yml
+
+    def test_delete_versioned_contracted_model(self, project):
+        # ensure table_model is versioned + contracted
+        write_file(self.CONTRACT_SCHEMA_YML, "models", "schema.yml")
+        self.run_and_save_state()
+
+        # delete versioned contracted model
+        rm_file(project.project_root, "models", "table_model.sql")
+
+        # since the models are versioned, they raise an error
+        with pytest.raises(ContractBreakingChangeError) as e:
+            run_dbt(["run", "--models", "state:modified.contract", "--state", "./state"])
+
+        assert "Contracted model 'model.test.table_model.v1' was deleted or renamed." in str(
+            e.value
+        )
+
+
+class TestDisableUnversionedContractedModel(BaseModifiedState):
+    MODEL_UNIQUE_ID = "model.test.table_model"
+    CONTRACT_SCHEMA_YML = contract_schema_yml
+    DISABLED_CONTRACT_SCHEMA_YML = disabled_contract_schema_yml
+
+    def test_disable_unversioned_contracted_model(self, project):
+        # ensure table_model is contracted and enabled
+        write_file(self.CONTRACT_SCHEMA_YML, "models", "schema.yml")
+        self.run_and_save_state()
+
+        # disable unversioned + contracted model
+        write_file(self.DISABLED_CONTRACT_SCHEMA_YML, "models", "schema.yml")
+
+        # since the models are unversioned, they raise a warning but not an error
+        _, logs = run_dbt_and_capture(
+            ["run", "--models", "state:modified.contract", "--state", "./state"]
+        )
+
+        expected_warning = "While comparing to previous project state, dbt detected a breaking change to an unversioned model"
+        expected_change = "Contracted model 'model.test.table_model' was disabled"
+        assert expected_warning in logs
+        assert expected_change in logs
+
+
+class TestDisableVersionedContractedModel(BaseModifiedState):
+    MODEL_UNIQUE_ID = "model.test.table_model.v1"
+    CONTRACT_SCHEMA_YML = versioned_contract_schema_yml
+    DISABLED_CONTRACT_SCHEMA_YML = disabled_versioned_contract_schema_yml
+
+    def test_disable_versioned_contracted_model(self, project):
+        # ensure table_model is versioned + contracted
+        write_file(self.CONTRACT_SCHEMA_YML, "models", "schema.yml")
+        self.run_and_save_state()
+
+        # disable versioned + contracted model
+        write_file(self.DISABLED_CONTRACT_SCHEMA_YML, "models", "schema.yml")
+
+        # since the models are versioned, they raise an error
+        with pytest.raises(ContractBreakingChangeError) as e:
+            run_dbt(["run", "--models", "state:modified.contract", "--state", "./state"])
+
+        assert "Contracted model 'model.test.table_model.v1' was disabled." in str(e.value)
+
+
+class TestDisableUnversionedUncontractedModel(BaseModifiedState):
+    MODEL_UNIQUE_ID = "model.test.table_model"
+    NO_CONTRACT_SCHEMA_YML = unenforced_contract_schema_yml
+    DISABLED_NO_CONTRACT_SCHEMA_YML = disabled_unenforced_contract_schema_yml
+
+    def test_delete_versioned_contracted_model(self, project):
+        # ensure table_model is not contracted
+        write_file(self.NO_CONTRACT_SCHEMA_YML, "models", "schema.yml")
+        self.run_and_save_state()
+
+        # disable uncontracted model
+        write_file(self.DISABLED_NO_CONTRACT_SCHEMA_YML, "models", "schema.yml")
+
+        # since the models are unversioned, no warning or error is raised
+        _, logs = run_dbt_and_capture(
+            ["run", "--models", "state:modified.contract", "--state", "./state"]
+        )
+
+        assert "breaking change" not in logs.lower()
+
+
+class TestDisableVersionedUncontractedModel(BaseModifiedState):
+    MODEL_UNIQUE_ID = "model.test.table_model.v1"
+    NO_CONTRACT_SCHEMA_YML = versioned_unenforced_contract_schema_yml
+    DISABLED_NO_CONTRACT_SCHEMA_YML = disabled_versioned_unenforced_contract_schema_yml
+
+    def test_delete_versioned_contracted_model(self, project):
+        # ensure table_model is not contracted
+        write_file(self.NO_CONTRACT_SCHEMA_YML, "models", "schema.yml")
+        self.run_and_save_state()
+
+        # disable uncontracted model
+        write_file(self.DISABLED_NO_CONTRACT_SCHEMA_YML, "models", "schema.yml")
+
+        # since the models are unversioned, no warning or error is raised
+        run_dbt_and_capture(["run", "--models", "state:modified.contract", "--state", "./state"])
 
 
 class TestChangedConstraintUnversioned(BaseModifiedState):
