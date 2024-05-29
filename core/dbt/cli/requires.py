@@ -41,7 +41,12 @@ from dbt_common.events.functions import LOG_VERSION, fire_event
 from dbt_common.events.helpers import get_json_string_utcnow
 from dbt_common.exceptions import DbtBaseException as DbtException
 from dbt_common.invocation import reset_invocation_id
-from dbt_common.record import Recorder, RecorderMode, get_record_mode_from_env
+from dbt_common.record import (
+    Recorder,
+    RecorderMode,
+    get_record_mode_from_env,
+    get_record_types_from_env,
+)
 from dbt_common.utils import cast_dict_to_dict_of_strings
 
 
@@ -101,13 +106,14 @@ def preflight(func):
 
 def setup_record_replay():
     rec_mode = get_record_mode_from_env()
+    rec_types = get_record_types_from_env()
 
     recorder: Optional[Recorder] = None
     if rec_mode == RecorderMode.REPLAY:
-        recording_path = os.environ["DBT_REPLAY"]
-        recorder = Recorder(RecorderMode.REPLAY, recording_path)
+        recording_path = os.environ.get("DBT_RECORDER_FILE_PATH")
+        recorder = Recorder(RecorderMode.REPLAY, types=rec_types, recording_path=recording_path)
     elif rec_mode == RecorderMode.RECORD:
-        recorder = Recorder(RecorderMode.RECORD)
+        recorder = Recorder(RecorderMode.RECORD, types=rec_types)
 
     get_invocation_context().recorder = recorder
 
