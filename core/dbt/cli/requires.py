@@ -109,7 +109,7 @@ def setup_record_replay():
 
     recorder: Optional[Recorder] = None
     if rec_mode == RecorderMode.REPLAY:
-        recording_path = os.environ.get("DBT_RECORDER_REPLAY_PATH")
+        recording_path = os.environ.get("DBT_RECORDER_FILE_PATH")
         recorder = Recorder(RecorderMode.REPLAY, types=rec_types, recording_path=recording_path)
     elif rec_mode == RecorderMode.RECORD:
         recorder = Recorder(RecorderMode.RECORD, types=rec_types)
