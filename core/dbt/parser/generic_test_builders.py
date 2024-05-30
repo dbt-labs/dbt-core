@@ -171,6 +171,7 @@ class TestBuilder(Generic[Testable]):
                             key=key,
                             err_msg=e.msg,
                         )
+                if value is not None:
                     self.config[key] = value
             del self.args["config"]
 
