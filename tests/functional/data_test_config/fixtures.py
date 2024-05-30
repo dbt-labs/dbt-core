@@ -1,7 +1,7 @@
 empty_configuration_yml = """
 version: 2
 models:
-  - name: table_copy
+  - name: table
     columns:
       - name: color
         data_tests:
@@ -9,10 +9,11 @@ models:
               values: ['blue', 'red']
 """
 
+
 custom_config_yml = """
 version: 2
 models:
-  - name: table_copy
+  - name: table
     columns:
       - name: color
         tests:
@@ -25,7 +26,7 @@ models:
 mixed_config_yml = """
 version: 2
 models:
-  - name: table_copy
+  - name: table
     columns:
       - name: color
         tests:
@@ -39,7 +40,7 @@ models:
 same_key_error_yml = """
 version: 2
 models:
-  - name: table_copy
+  - name: table
     columns:
       - name: color
         tests:
@@ -66,6 +67,6 @@ id,color,value
 """
 
 table_sql = """
--- content of the table_copy.sql
+-- content of the table.sql
 select * from {{ ref('seed') }}
 """

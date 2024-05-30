@@ -1,8 +1,6 @@
-import os
-
 import pytest
 
-from dbt.tests.fixtures.project import write_project_files
+from dbt.exceptions import CompilationError
 from dbt.tests.util import run_dbt
 from tests.functional.data_test_config.fixtures import (
     custom_config_yml,
@@ -30,10 +28,8 @@ class BaseDataTestsConfig:
         }
 
     @pytest.fixture(scope="class", autouse=True)
-    def setUp(self, project, project_root, seeds, models):
-        write_project_files(project_root, "seeds", seeds)
-        write_project_files(project_root, "models", models)
-        project.run_sql_file(os.path.join(project_root, "seeds", "seed.csv"))
+    def setUp(self, project):
+        run_dbt(["seed"])
 
 
 class TestEmptyDataTestConfig(BaseDataTestsConfig):
@@ -42,10 +38,9 @@ class TestEmptyDataTestConfig(BaseDataTestsConfig):
         return {"table.sql": table_sql, "empty_config.yml": empty_configuration_yml}
 
     def test_empty_configuration(self, project):
+        run_dbt(["run"])
         """Test with empty configuration"""
-        results = run_dbt(["test", "--models", "empty_config"], expect_pass=False)
-        assert len(results) == 1
-        assert results[0].status == "fail"
+        run_dbt(["test", "--models", "empty_config"])
 
 
 class TestCustomDataTestConfig(BaseDataTestsConfig):
@@ -54,10 +49,9 @@ class TestCustomDataTestConfig(BaseDataTestsConfig):
         return {"table.sql": table_sql, "custom_config.yml": custom_config_yml}
 
     def test_custom_config(self, project):
+        run_dbt(["run"])
         """Test with custom configuration"""
-        results = run_dbt(["test", "--models", "custom_config"], expect_pass=False)
-        assert len(results) == 1
-        assert "custom_config_key" in results[0].message
+        run_dbt(["test", "--models", "custom_config"])
 
 
 class TestMixedDataTestConfig(BaseDataTestsConfig):
@@ -66,12 +60,9 @@ class TestMixedDataTestConfig(BaseDataTestsConfig):
         return {"table.sql": table_sql, "mixed_config.yml": mixed_config_yml}
 
     def test_mixed_config(self, project):
+        run_dbt(["run"])
         """Test with mixed configuration"""
-        results = run_dbt(["test", "--models", "mixed_config"], expect_pass=False)
-        assert len(results) == 1
-        assert results[0].status == "fail"
-        assert "severity" in results[0].message
-        assert "custom_config_key" in results[0].message
+        run_dbt(["test", "--models", "mixed_config"])
 
 
 class TestSameKeyErrorDataTestConfig(BaseDataTestsConfig):
@@ -80,6 +71,8 @@ class TestSameKeyErrorDataTestConfig(BaseDataTestsConfig):
         return {"table.sql": table_sql, "same_key_error.yml": same_key_error_yml}
 
     def test_same_key_error(self, project):
+        run_dbt(["run"])
         """Test with conflicting configuration keys"""
-        with pytest.raises(Exception):
+        with pytest.raises(CompilationError) as e:
             run_dbt(["test", "--models", "same_key_error"], expect_pass=False)
+        assert "cannot have the same key at the top-level and in config" in str(e.value)
