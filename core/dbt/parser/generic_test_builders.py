@@ -157,6 +157,21 @@ class TestBuilder(Generic[Testable]):
                 self.config[key] = value
 
         if "config" in self.args:
+            for key, value in self.args["config"].items():
+                if isinstance(value, str):
+
+                    try:
+                        value = get_rendered(value, render_ctx, native=True)
+                    except UndefinedMacroError as e:
+
+                        raise CustomMacroPopulatingConfigValueError(
+                            target_name=self.target.name,
+                            column_name=column_name,
+                            name=self.name,
+                            key=key,
+                            err_msg=e.msg,
+                        )
+                    self.config[key] = value
             del self.args["config"]
 
         if self.namespace is not None:
