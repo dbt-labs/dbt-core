@@ -1280,7 +1280,7 @@ models:
   - name: table
     columns:
       - name: color
-        tests:
+        data_tests:
           - accepted_values:
               values: ['blue', 'red']
               config:
@@ -1293,7 +1293,7 @@ models:
   - name: table
     columns:
       - name: color
-        tests:
+        data_tests:
           - accepted_values:
               values: ['blue', 'red']
               severity: warn
@@ -1307,7 +1307,7 @@ models:
   - name: table
     columns:
       - name: color
-        tests:
+        data_tests:
           - accepted_values:
               values: ['blue', 'red']
               severity: warn
@@ -1327,7 +1327,6 @@ id,color,value
 8,green,80
 9,yellow,90
 10,blue,100
-
 """
 
 table_sql = """
