@@ -115,7 +115,7 @@ class TestBuilder(Generic[Testable]):
         self.target: Testable = target
         self.version: Optional[NodeVersion] = version
         self.render_ctx: Dict[str, Any] = render_ctx
-
+        self.column_name: Optional[str] = column_name
         self.args["model"] = self.build_model_str()
 
         match = self.TEST_NAME_PATTERN.match(test_name)
