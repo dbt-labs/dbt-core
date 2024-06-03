@@ -1,49 +1,17 @@
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List, NamedTuple, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 from dbt.artifacts.schemas.base import (
     ArtifactMixin,
     BaseArtifactMetadata,
     schema_version,
 )
-from dbt_common.contracts.metadata import StatsDict, TableMetadata
+from dbt_common.contracts.metadata import CatalogTable
 from dbt_common.dataclass_schema import dbtClassMixin
-from dbt_common.utils.formatting import lowercase
 
 Primitive = Union[bool, str, float, None]
 PrimitiveDict = Dict[str, Primitive]
-
-CatalogKey = NamedTuple(
-    "CatalogKey", [("database", Optional[str]), ("schema", str), ("name", str)]
-)
-
-
-@dataclass
-class ColumnMetadata(dbtClassMixin):
-    type: str
-    index: int
-    name: str
-    comment: Optional[str] = None
-
-
-ColumnMap = Dict[str, ColumnMetadata]
-
-
-@dataclass
-class CatalogTable(dbtClassMixin):
-    metadata: TableMetadata
-    columns: ColumnMap
-    stats: StatsDict
-    # the same table with two unique IDs will just be listed two times
-    unique_id: Optional[str] = None
-
-    def key(self) -> CatalogKey:
-        return CatalogKey(
-            lowercase(self.metadata.database),
-            self.metadata.schema.lower(),
-            self.metadata.name.lower(),
-        )
 
 
 @dataclass
