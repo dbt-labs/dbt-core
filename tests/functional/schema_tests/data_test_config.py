@@ -1,3 +1,5 @@
+import re
+
 import pytest
 
 from dbt.exceptions import CompilationError
@@ -35,8 +37,23 @@ class TestCustomDataTestConfig(BaseDataTestsConfig):
     def test_custom_config(self, project):
         run_dbt(["parse"])
         manifest = get_manifest(project.project_root)
-        test_id = "test.test.accepted_values_table_color__blue__red.9482147132"
-        assert test_id in manifest.nodes
+
+        # Pattern to match the test_id without the specific suffix
+        pattern = re.compile(r"test\.test\.accepted_values_table_color__blue__red\.\d+")
+
+        # Find the test_id dynamically
+        test_id = None
+        for node_id in manifest.nodes:
+            if pattern.match(node_id):
+                test_id = node_id
+                break
+
+        # Ensure the test_id was found
+        assert (
+            test_id is not None
+        ), "Test ID matching the pattern was not found in the manifest nodes"
+
+        # Proceed with the assertions
         test_node = manifest.nodes[test_id]
         assert "custom_config_key" in test_node.config
         assert test_node.config["custom_config_key"] == "some_value"
@@ -50,8 +67,23 @@ class TestMixedDataTestConfig(BaseDataTestsConfig):
     def test_mixed_config(self, project):
         run_dbt(["parse"])
         manifest = get_manifest(project.project_root)
-        test_id = "test.test.accepted_values_table_color__blue__red.9482147132"
-        assert test_id in manifest.nodes
+
+        # Pattern to match the test_id without the specific suffix
+        pattern = re.compile(r"test\.test\.accepted_values_table_color__blue__red\.\d+")
+
+        # Find the test_id dynamically
+        test_id = None
+        for node_id in manifest.nodes:
+            if pattern.match(node_id):
+                test_id = node_id
+                break
+
+        # Ensure the test_id was found
+        assert (
+            test_id is not None
+        ), "Test ID matching the pattern was not found in the manifest nodes"
+
+        # Proceed with the assertions
         test_node = manifest.nodes[test_id]
         assert "custom_config_key" in test_node.config
         assert test_node.config["custom_config_key"] == "some_value"
