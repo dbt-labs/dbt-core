@@ -170,7 +170,7 @@ class TestBuilder(Generic[Testable]):
 
         return self._render_values(config)
 
-    def _process_config_args(self, config_dict):
+    def _process_config_args(self, config_dict: Dict[str, Any]) -> Dict[str, Any]:
         config = {}
         for key, value in config_dict.items():
             if value is not None:
@@ -178,7 +178,7 @@ class TestBuilder(Generic[Testable]):
 
         return self._render_values(config)
 
-    def _render_values(self, config):
+    def _render_values(self, config: Dict[str, Any]) -> Dict[str, Any]:
         rendered_config = {}
         for key, value in config.items():
             if isinstance(value, str):
