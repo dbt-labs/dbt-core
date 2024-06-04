@@ -226,3 +226,35 @@ class TestCompile:
             summary = json.load(summary_file)
             assert "_invocation_id" in summary
             assert "linked" in summary
+
+
+selectors_yml = """
+    selectors:
+      - name: test_selector
+        description: Exclude everything
+        default: true
+        definition:
+           method: package
+           value: "foo"
+    """
+
+
+class TestCompileInlineWithSelector:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "first_model.sql": first_model_sql,
+            "second_model.sql": second_model_sql,
+            "schema.yml": schema_yml,
+        }
+
+    @pytest.fixture(scope="class")
+    def selectors(self):
+        return selectors_yml
+
+    def test_inline_pass(self, project):
+        (results, log_output) = run_dbt_and_capture(
+            ["compile", "--inline", "select * from {{ ref('first_model') }}"]
+        )
+        assert len(results) == 1
+        assert "Compiled inline node is:" in log_output
