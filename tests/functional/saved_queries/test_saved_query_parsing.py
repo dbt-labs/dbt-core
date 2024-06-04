@@ -1,4 +1,6 @@
 from typing import List
+import os
+import shutil
 
 import pytest
 from dbt_semantic_interfaces.type_enums.export_destination_type import (
@@ -6,7 +8,7 @@ from dbt_semantic_interfaces.type_enums.export_destination_type import (
 )
 
 from dbt.contracts.graph.manifest import Manifest
-from dbt.tests.util import write_file
+from dbt.tests.util import write_file, run_dbt
 from dbt_common.events.base_types import BaseEvent
 from tests.functional.assertions.test_runner import dbtTestRunner
 from tests.functional.saved_queries.fixtures import (
@@ -32,6 +34,11 @@ class TestSavedQueryParsing:
             "docs.md": saved_query_description,
         }
 
+    def copy_state(self):
+        if not os.path.exists("state"):
+            os.makedirs("state")
+        shutil.copyfile("target/manifest.json", "state/manifest.json")
+
     def test_semantic_model_parsing(self, project):
         runner = dbtTestRunner()
         result = runner.invoke(["parse", "--no-partial-parse"])
@@ -51,6 +58,10 @@ class TestSavedQueryParsing:
         assert saved_query.exports[0].config.alias == "my_export_alias"
         assert saved_query.exports[0].config.export_as == ExportDestinationType.TABLE
         assert saved_query.exports[0].config.schema_name == "my_export_schema_name"
+
+        self.copy_state()
+        results = run_dbt(["ls", "--select", "state:modified", "--state", "./state"])
+        assert len(results) == 0
 
     def test_saved_query_error(self, project):
         error_schema_yml = saved_queries_yml.replace("simple_metric", "metric_not_found")
