@@ -289,6 +289,9 @@ class Flags:
             params_assigned_from_default, ["WARN_ERROR", "WARN_ERROR_OPTIONS"]
         )
 
+        if hasattr(self, "SELECT") and hasattr(self, "INLINE"):
+            self._assert_mutually_exclusive(params_assigned_from_default, ["SELECT", "INLINE"])
+
         # Support lower cased access for legacy code.
         params = set(
             x for x in dir(self) if not callable(getattr(self, x)) and not x.startswith("__")

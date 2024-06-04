@@ -109,7 +109,7 @@ class GraphRunnableTask(ConfiguredTask):
     def get_selection_spec(self) -> SelectionSpec:
         default_selector_name = self.config.get_default_selector_name()
         spec: Union[SelectionSpec, bool]
-        if self.args.inline:
+        if hasattr(self.args, "inline") and self.args.inline:
             # We want an empty selection spec.
             spec = parse_difference(None, None)
         elif self.args.selector:
