@@ -45,7 +45,7 @@ def project(selector_config: SelectorConfig) -> Project:
         log_path="path/to/project/logs",
         packages_install_path="dbt_packages",
         packages_specified_path="packages.yml",
-        quoting={"database": True, "schema": True, "identifier": True},
+        quoting={},
         models={},
         on_run_start=[],
         on_run_end=[],

@@ -1,244 +1,118 @@
 import os
+import tempfile
 from argparse import Namespace
+from typing import Any, Dict
 from unittest import mock
+
+import pytest
+from pytest_mock import MockerFixture
 
 import dbt.config
 import dbt.exceptions
 from dbt import tracking
+from dbt.config.profile import Profile
+from dbt.config.project import Project
+from dbt.config.runtime import RuntimeConfig
 from dbt.contracts.project import PackageConfig
+from dbt.events.types import UnusedResourceConfigPath
 from dbt.flags import set_from_args
 from dbt.tests.util import safe_set_invocation_context
-from tests.unit.config import (
-    BaseConfigTest,
-    empty_profile_renderer,
-    project_from_config_norender,
-    temp_cd,
-)
+from dbt_common.events.event_manager_client import add_callback_to_manager
+from tests.unit.config import BaseConfigTest, temp_cd
+from tests.utils import EventCatcher
 
 
-class TestRuntimeConfig(BaseConfigTest):
-    def get_project(self):
-        return project_from_config_norender(
-            self.default_project_data,
-            project_root=self.project_dir,
-            verify_version=self.args.version_check,
+class TestRuntimeConfig:
+    @pytest.fixture
+    def args(self) -> Namespace:
+        return Namespace(
+            profiles_dir=tempfile.mkdtemp(),
+            cli_vars={},
+            version_check=True,
+            project_dir=tempfile.mkdtemp(),
+            target=None,
+            threads=None,
+            profile=None,
         )
 
-    def get_profile(self):
-        renderer = empty_profile_renderer()
-        return dbt.config.Profile.from_raw_profiles(
-            self.default_profile_data, self.default_project_data["profile"], renderer
-        )
+    def test_str(self, profile: Profile, project: Project) -> None:
+        config = dbt.config.RuntimeConfig.from_parts(project, profile, {})
 
-    def from_parts(self, exc=None):
-        with self.assertRaisesOrReturns(exc) as err:
-            project = self.get_project()
-            profile = self.get_profile()
+        # to make sure nothing terrible happens
+        str(config)
 
-            result = dbt.config.RuntimeConfig.from_parts(project, profile, self.args)
+    def test_from_parts(self, args: Namespace, profile: Profile, project: Project):
+        config = dbt.config.RuntimeConfig.from_parts(project, profile, args)
 
-        if exc is None:
-            return result
-        else:
-            return err
-
-    def test_from_parts(self):
-        project = self.get_project()
-        profile = self.get_profile()
-        config = dbt.config.RuntimeConfig.from_parts(project, profile, self.args)
-
-        self.assertEqual(config.cli_vars, {})
-        self.assertEqual(config.to_profile_info(), profile.to_profile_info())
+        assert config.cli_vars == {}
+        assert config.to_profile_info() == profile.to_profile_info()
         # we should have the default quoting set in the full config, but not in
         # the project
         # TODO(jeb): Adapters must assert that quoting is populated?
         expected_project = project.to_project_config()
-        self.assertEqual(expected_project["quoting"], {})
+        assert expected_project["quoting"] == {}
 
         expected_project["quoting"] = {
             "database": True,
             "identifier": True,
             "schema": True,
         }
-        self.assertEqual(config.to_project_config(), expected_project)
+        assert config.to_project_config() == expected_project
 
-    def test_str(self):
-        project = self.get_project()
-        profile = self.get_profile()
-        config = dbt.config.RuntimeConfig.from_parts(project, profile, {})
-
-        # to make sure nothing terrible happens
-        str(config)
-
-    def test_supported_version(self):
-        self.default_project_data["require-dbt-version"] = ">0.0.0"
-        conf = self.from_parts()
-        self.assertEqual(set(x.to_version_string() for x in conf.dbt_version), {">0.0.0"})
-
-    def test_unsupported_version(self):
-        self.default_project_data["require-dbt-version"] = ">99999.0.0"
-        raised = self.from_parts(dbt.exceptions.DbtProjectError)
-        self.assertIn("This version of dbt is not supported", str(raised.exception))
-
-    def test_unsupported_version_no_check(self):
-        self.default_project_data["require-dbt-version"] = ">99999.0.0"
-        self.args.version_check = False
-        set_from_args(self.args, None)
-        conf = self.from_parts()
-        self.assertEqual(set(x.to_version_string() for x in conf.dbt_version), {">99999.0.0"})
-
-    def test_supported_version_range(self):
-        self.default_project_data["require-dbt-version"] = [">0.0.0", "<=99999.0.0"]
-        conf = self.from_parts()
-        self.assertEqual(
-            set(x.to_version_string() for x in conf.dbt_version), {">0.0.0", "<=99999.0.0"}
-        )
-
-    def test_unsupported_version_range(self):
-        self.default_project_data["require-dbt-version"] = [">0.0.0", "<=0.0.1"]
-        raised = self.from_parts(dbt.exceptions.DbtProjectError)
-        self.assertIn("This version of dbt is not supported", str(raised.exception))
-
-    def test_unsupported_version_range_bad_config(self):
-        self.default_project_data["require-dbt-version"] = [">0.0.0", "<=0.0.1"]
-        self.default_project_data["some-extra-field-not-allowed"] = True
-        raised = self.from_parts(dbt.exceptions.DbtProjectError)
-        self.assertIn("This version of dbt is not supported", str(raised.exception))
-
-    def test_unsupported_version_range_no_check(self):
-        self.default_project_data["require-dbt-version"] = [">0.0.0", "<=0.0.1"]
-        self.args.version_check = False
-        set_from_args(self.args, None)
-        conf = self.from_parts()
-        self.assertEqual(
-            set(x.to_version_string() for x in conf.dbt_version), {">0.0.0", "<=0.0.1"}
-        )
-
-    def test_impossible_version_range(self):
-        self.default_project_data["require-dbt-version"] = [">99999.0.0", "<=0.0.1"]
-        raised = self.from_parts(dbt.exceptions.DbtProjectError)
-        self.assertIn(
-            "The package version requirement can never be satisfied", str(raised.exception)
-        )
-
-    def test_unsupported_version_extra_config(self):
-        self.default_project_data["some-extra-field-not-allowed"] = True
-        raised = self.from_parts(dbt.exceptions.DbtProjectError)
-        self.assertIn("Additional properties are not allowed", str(raised.exception))
-
-    def test_archive_not_allowed(self):
-        self.default_project_data["archive"] = [
-            {
-                "source_schema": "a",
-                "target_schema": "b",
-                "tables": [
-                    {
-                        "source_table": "seed",
-                        "target_table": "archive_actual",
-                        "updated_at": "updated_at",
-                        "unique_key": """id || '-' || first_name""",
-                    },
-                ],
-            }
-        ]
-        with self.assertRaises(dbt.exceptions.DbtProjectError):
-            self.get_project()
-
-    def test__warn_for_unused_resource_config_paths_empty(self):
-        project = self.from_parts()
-        dbt.flags.WARN_ERROR = True
-        try:
-            project.warn_for_unused_resource_config_paths(
-                {
-                    "models": frozenset(
-                        (
-                            ("my_test_project", "foo", "bar"),
-                            ("my_test_project", "foo", "baz"),
-                        )
-                    )
-                },
-                [],
-            )
-        finally:
-            dbt.flags.WARN_ERROR = False
-
-    @mock.patch.object(tracking, "active_user")
-    def test_get_metadata(self, mock_user):
-        project = self.get_project()
-        profile = self.get_profile()
-        config = dbt.config.RuntimeConfig.from_parts(project, profile, self.args)
-
+    def test_get_metadata(self, mocker: MockerFixture, runtime_config: RuntimeConfig) -> None:
+        mock_user = mocker.patch.object(tracking, "active_user")
         mock_user.id = "cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf"
         set_from_args(Namespace(SEND_ANONYMOUS_USAGE_STATS=False), None)
 
-        metadata = config.get_metadata()
+        metadata = runtime_config.get_metadata()
         # ensure user_id and send_anonymous_usage_stats are set correctly
-        self.assertEqual(metadata.user_id, mock_user.id)
-        self.assertFalse(metadata.send_anonymous_usage_stats)
+        assert metadata.user_id == mock_user.id
+        assert not metadata.send_anonymous_usage_stats
 
+    @pytest.fixture
+    def used_fqns(self) -> Dict[str, Any]:
+        return {"models": frozenset((("my_test_project", "foo", "bar"),))}
 
-class TestRuntimeConfigWithConfigs(BaseConfigTest):
-    def setUp(self):
-        self.profiles_dir = "/invalid-profiles-path"
-        self.project_dir = "/invalid-root-path"
-        super().setUp()
-        self.default_project_data["project-root"] = self.project_dir
-        self.default_project_data["models"] = {
-            "enabled": True,
+    def test_warn_for_unused_resource_config_paths(
+        self,
+        runtime_config: RuntimeConfig,
+        used_fqns: Dict[str, Any],
+    ):
+        catcher = EventCatcher(event_to_catch=UnusedResourceConfigPath)
+        add_callback_to_manager(catcher.catch)
+
+        runtime_config.models = {
             "my_test_project": {
                 "foo": {
                     "materialized": "view",
                     "bar": {
                         "materialized": "table",
                     },
-                },
-                "baz": {
-                    "materialized": "table",
-                },
-            },
-        }
-        self.used = {
-            "models": frozenset(
-                (
-                    ("my_test_project", "foo", "bar"),
-                    ("my_test_project", "foo", "baz"),
-                )
-            )
+                    "baz": {
+                        "materialized": "table",
+                    },
+                }
+            }
         }
 
-    def get_project(self):
-        return project_from_config_norender(
-            self.default_project_data, project_root=self.project_dir, verify_version=True
-        )
+        runtime_config.warn_for_unused_resource_config_paths(used_fqns, [])
+        len(catcher.caught_events) == 1
+        expected_msg = "models.my_test_project.foo.baz"
+        assert expected_msg in str(catcher.caught_events[0].data)
 
-    def get_profile(self):
-        renderer = empty_profile_renderer()
-        return dbt.config.Profile.from_raw_profiles(
-            self.default_profile_data, self.default_project_data["profile"], renderer
-        )
+    def test_warn_for_unused_resource_config_paths_empty_models(
+        self,
+        runtime_config: RuntimeConfig,
+        used_fqns: Dict[str, Any],
+    ) -> None:
+        catcher = EventCatcher(event_to_catch=UnusedResourceConfigPath)
+        add_callback_to_manager(catcher.catch)
 
-    def from_parts(self, exc=None):
-        with self.assertRaisesOrReturns(exc) as err:
-            project = self.get_project()
-            profile = self.get_profile()
+        # models should already be empty, but lets ensure it
+        runtime_config.models = {}
 
-            result = dbt.config.RuntimeConfig.from_parts(project, profile, self.args)
-
-        if exc is None:
-            return result
-        else:
-            return err
-
-    def test__warn_for_unused_resource_config_paths(self):
-        project = self.from_parts()
-        with mock.patch("dbt.config.runtime.warn_or_error") as warn_or_error_patch:
-            project.warn_for_unused_resource_config_paths(self.used, [])
-            warn_or_error_patch.assert_called_once()
-            event = warn_or_error_patch.call_args[0][0]
-            assert type(event).__name__ == "UnusedResourceConfigPath"
-            msg = event.message()
-            expected_msg = "- models.my_test_project.baz"
-            assert expected_msg in msg
+        runtime_config.warn_for_unused_resource_config_paths(used_fqns, ())
+        assert len(catcher.caught_events) == 0
 
 
 class TestRuntimeConfigFiles(BaseConfigTest):

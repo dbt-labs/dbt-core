@@ -7,6 +7,7 @@ from dbt.artifacts.schemas.base import (
     BaseArtifactMetadata,
     schema_version,
 )
+from dbt_common.contracts.metadata import StatsDict, TableMetadata
 from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_common.utils.formatting import lowercase
 
@@ -19,18 +20,6 @@ CatalogKey = NamedTuple(
 
 
 @dataclass
-class StatsItem(dbtClassMixin):
-    id: str
-    label: str
-    value: Primitive
-    include: bool
-    description: Optional[str] = None
-
-
-StatsDict = Dict[str, StatsItem]
-
-
-@dataclass
 class ColumnMetadata(dbtClassMixin):
     type: str
     index: int
@@ -39,16 +28,6 @@ class ColumnMetadata(dbtClassMixin):
 
 
 ColumnMap = Dict[str, ColumnMetadata]
-
-
-@dataclass
-class TableMetadata(dbtClassMixin):
-    type: str
-    schema: str
-    name: str
-    database: Optional[str] = None
-    comment: Optional[str] = None
-    owner: Optional[str] = None
 
 
 @dataclass

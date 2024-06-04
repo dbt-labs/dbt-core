@@ -2,6 +2,7 @@ import json
 import os
 import unittest
 from copy import deepcopy
+from typing import Any, Dict
 from unittest import mock
 
 import pytest
@@ -10,7 +11,7 @@ import dbt.config
 import dbt.exceptions
 from dbt.adapters.contracts.connection import DEFAULT_QUERY_COMMENT, QueryComment
 from dbt.adapters.factory import load_plugin
-from dbt.config.project import Project
+from dbt.config.project import Project, _get_required_version
 from dbt.constants import DEPENDENCIES_FILE_NAME
 from dbt.contracts.project import GitPackage, LocalPackage, PackageConfig
 from dbt.flags import set_from_args
@@ -42,7 +43,7 @@ class TestProjectMethods:
     def test__str__(self, project: Project):
         assert (
             str(project)
-            == "{'name': 'test_project', 'version': 1.0, 'project-root': 'doesnt/actually/exist', 'profile': 'test_profile', 'model-paths': ['models'], 'macro-paths': ['macros'], 'seed-paths': ['seeds'], 'test-paths': ['tests'], 'analysis-paths': ['analyses'], 'docs-paths': ['docs'], 'asset-paths': ['assets'], 'target-path': 'target', 'snapshot-paths': ['snapshots'], 'clean-targets': ['target'], 'log-path': 'path/to/project/logs', 'quoting': {'database': True, 'schema': True, 'identifier': True}, 'models': {}, 'on-run-start': [], 'on-run-end': [], 'dispatch': [{'macro_namespace': 'dbt_utils', 'search_order': ['test_project', 'dbt_utils']}], 'seeds': {}, 'snapshots': {}, 'sources': {}, 'data_tests': {}, 'unit_tests': {}, 'metrics': {}, 'semantic-models': {}, 'saved-queries': {}, 'exposures': {}, 'vars': {}, 'require-dbt-version': ['=0.0.0'], 'restrict-access': False, 'dbt-cloud': {}, 'query-comment': {'comment': \"\\n{%- set comment_dict = {} -%}\\n{%- do comment_dict.update(\\n    app='dbt',\\n    dbt_version=dbt_version,\\n    profile_name=target.get('profile_name'),\\n    target_name=target.get('target_name'),\\n) -%}\\n{%- if node is not none -%}\\n  {%- do comment_dict.update(\\n    node_id=node.unique_id,\\n  ) -%}\\n{% else %}\\n  {# in the node context, the connection name is the node_id #}\\n  {%- do comment_dict.update(connection_name=connection_name) -%}\\n{%- endif -%}\\n{{ return(tojson(comment_dict)) }}\\n\", 'append': False, 'job-label': False}, 'packages': []}"
+            == "{'name': 'test_project', 'version': 1.0, 'project-root': 'doesnt/actually/exist', 'profile': 'test_profile', 'model-paths': ['models'], 'macro-paths': ['macros'], 'seed-paths': ['seeds'], 'test-paths': ['tests'], 'analysis-paths': ['analyses'], 'docs-paths': ['docs'], 'asset-paths': ['assets'], 'target-path': 'target', 'snapshot-paths': ['snapshots'], 'clean-targets': ['target'], 'log-path': 'path/to/project/logs', 'quoting': {}, 'models': {}, 'on-run-start': [], 'on-run-end': [], 'dispatch': [{'macro_namespace': 'dbt_utils', 'search_order': ['test_project', 'dbt_utils']}], 'seeds': {}, 'snapshots': {}, 'sources': {}, 'data_tests': {}, 'unit_tests': {}, 'metrics': {}, 'semantic-models': {}, 'saved-queries': {}, 'exposures': {}, 'vars': {}, 'require-dbt-version': ['=0.0.0'], 'restrict-access': False, 'dbt-cloud': {}, 'query-comment': {'comment': \"\\n{%- set comment_dict = {} -%}\\n{%- do comment_dict.update(\\n    app='dbt',\\n    dbt_version=dbt_version,\\n    profile_name=target.get('profile_name'),\\n    target_name=target.get('target_name'),\\n) -%}\\n{%- if node is not none -%}\\n  {%- do comment_dict.update(\\n    node_id=node.unique_id,\\n  ) -%}\\n{% else %}\\n  {# in the node context, the connection name is the node_id #}\\n  {%- do comment_dict.update(connection_name=connection_name) -%}\\n{%- endif -%}\\n{{ return(tojson(comment_dict)) }}\\n\", 'append': False, 'job-label': False}, 'packages': []}"
         )
 
     def test_get_selector(self, project: Project):
@@ -534,3 +535,53 @@ class TestMultipleProjectFlags(BaseConfigTest):
     def test_setting_multiple_flags(self):
         with pytest.raises(dbt.exceptions.DbtProjectError):
             set_from_args(self.args, None)
+
+
+class TestGetRequiredVersion:
+    @pytest.fixture
+    def project_dict(self) -> Dict[str, Any]:
+        return {
+            "name": "test_project",
+            "require-dbt-version": ">0.0.0",
+        }
+
+    def test_supported_version(self, project_dict: Dict[str, Any]) -> None:
+        specifiers = _get_required_version(project_dict=project_dict, verify_version=True)
+        assert set(x.to_version_string() for x in specifiers) == {">0.0.0"}
+
+    def test_unsupported_version(self, project_dict: Dict[str, Any]) -> None:
+        project_dict["require-dbt-version"] = ">99999.0.0"
+        with pytest.raises(
+            dbt.exceptions.DbtProjectError, match="This version of dbt is not supported"
+        ):
+            _get_required_version(project_dict=project_dict, verify_version=True)
+
+    def test_unsupported_version_no_check(self, project_dict: Dict[str, Any]) -> None:
+        project_dict["require-dbt-version"] = ">99999.0.0"
+        specifiers = _get_required_version(project_dict=project_dict, verify_version=False)
+        assert set(x.to_version_string() for x in specifiers) == {">99999.0.0"}
+
+    def test_supported_version_range(self, project_dict: Dict[str, Any]) -> None:
+        project_dict["require-dbt-version"] = [">0.0.0", "<=99999.0.0"]
+        specifiers = _get_required_version(project_dict=project_dict, verify_version=True)
+        assert set(x.to_version_string() for x in specifiers) == {">0.0.0", "<=99999.0.0"}
+
+    def test_unsupported_version_range(self, project_dict: Dict[str, Any]) -> None:
+        project_dict["require-dbt-version"] = [">0.0.0", "<=0.0.1"]
+        with pytest.raises(
+            dbt.exceptions.DbtProjectError, match="This version of dbt is not supported"
+        ):
+            _get_required_version(project_dict=project_dict, verify_version=True)
+
+    def test_unsupported_version_range_no_check(self, project_dict: Dict[str, Any]) -> None:
+        project_dict["require-dbt-version"] = [">0.0.0", "<=0.0.1"]
+        specifiers = _get_required_version(project_dict=project_dict, verify_version=False)
+        assert set(x.to_version_string() for x in specifiers) == {">0.0.0", "<=0.0.1"}
+
+    def test_impossible_version_range(self, project_dict: Dict[str, Any]) -> None:
+        project_dict["require-dbt-version"] = [">99999.0.0", "<=0.0.1"]
+        with pytest.raises(
+            dbt.exceptions.DbtProjectError,
+            match="The package version requirement can never be satisfied",
+        ):
+            _get_required_version(project_dict=project_dict, verify_version=True)

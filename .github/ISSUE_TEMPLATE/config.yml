@@ -1,5 +1,8 @@
 blank_issues_enabled: false
 contact_links:
+  - name: Documentation
+    url: https://github.com/dbt-labs/docs.getdbt.com/issues/new/choose
+    about: Problems and issues with dbt documentation
   - name: Ask the community for help
     url: https://github.com/dbt-labs/docs.getdbt.com/discussions
     about: Need help troubleshooting? Check out our guide on how to ask
