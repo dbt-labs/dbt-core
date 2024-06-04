@@ -3,7 +3,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from dbt.flags import get_flags
+from dbt.config.runtime import RuntimeConfig
+from dbt.flags import get_flags, set_from_args
 from dbt.task.run import RunTask
 from dbt.tests.util import safe_set_invocation_context
 
@@ -16,7 +17,9 @@ from dbt.tests.util import safe_set_invocation_context
         (Exception, False),
     ],
 )
-def test_run_task_cancel_connections(exception_to_raise, expected_cancel_connections):
+def test_run_task_cancel_connections(
+    exception_to_raise, expected_cancel_connections, runtime_config: RuntimeConfig
+):
     safe_set_invocation_context()
 
     def mock_run_queue(*args, **kwargs):
@@ -26,16 +29,10 @@ def test_run_task_cancel_connections(exception_to_raise, expected_cancel_connect
         RunTask, "_cancel_connections"
     ) as mock_cancel_connections:
 
-        # TODO clean up this after we have a proper runtime config fixture
-        # https://github.com/dbt-labs/dbt-core/pull/10242
-        flags = get_flags()
-        object.__setattr__(flags, "write_json", False)
+        set_from_args(Namespace(write_json=False), None)
         task = RunTask(
-            flags,
-            Namespace(
-                threads=1,
-                target_name="test",
-            ),
+            get_flags(),
+            runtime_config,
             None,
         )
         with pytest.raises(exception_to_raise):
