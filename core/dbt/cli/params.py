@@ -140,6 +140,14 @@ full_refresh = click.option(
     is_flag=True,
 )
 
+host = click.option(
+    "--host",
+    envvar="DBT_HOST",
+    help="host to serve dbt docs on",
+    type=click.STRING,
+    default="127.0.0.1",
+)
+
 indirect_selection = click.option(
     "--indirect-selection",
     envvar="DBT_INDIRECT_SELECTION",

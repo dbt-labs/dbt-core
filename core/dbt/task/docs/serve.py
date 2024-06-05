@@ -16,11 +16,12 @@ class ServeTask(ConfiguredTask):
         shutil.copyfile(DOCS_INDEX_FILE_PATH, "index.html")
 
         port = self.args.port
+        host = self.args.host
 
         if self.args.browser:
             webbrowser.open_new_tab(f"http://localhost:{port}")
 
-        with socketserver.TCPServer(("127.0.0.1", port), SimpleHTTPRequestHandler) as httpd:
+        with socketserver.TCPServer((host, port), SimpleHTTPRequestHandler) as httpd:
             click.echo(f"Serving docs at {port}")
             click.echo(f"To access from your browser, navigate to: http://localhost:{port}")
             click.echo("\n\n")
