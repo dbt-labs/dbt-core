@@ -131,8 +131,7 @@ class TestBuilder(Generic[Testable]):
 
         # Process config args if present
         if "config" in self.args:
-            self.config.update(self._process_config_args(self.args["config"]))
-            del self.args["config"]
+            self.config.update(self._render_values(self.args.pop("config", {})))
 
         if self.namespace is not None:
             self.package_name = self.namespace
@@ -165,16 +164,7 @@ class TestBuilder(Generic[Testable]):
                 raise SameKeyNestedError()
             if not value and "config" in self.args:
                 value = self.args["config"].pop(key, None)
-            if value is not None:
-                config[key] = value
-
-        return self._render_values(config)
-
-    def _process_config_args(self, config_dict: Dict[str, Any]) -> Dict[str, Any]:
-        config = {}
-        for key, value in config_dict.items():
-            if value is not None:
-                config[key] = value
+            config[key] = value
 
         return self._render_values(config)
 
