@@ -48,10 +48,10 @@ class TestCompileInlineWithSelector:
         assert len(results) == 1
         assert "Compiled inline node is:" in log_output
 
-        # Set all models to disabled, even inline model doesn't run
+        # Set all models to disabled, check that we still get inline result
         write_file(dbt_project_yml_disabled_models, project.project_root, "dbt_project.yml")
         (results, log_output) = run_dbt_and_capture(["compile", "--inline", "select 1 as id"])
-        assert len(results) == 0
+        assert len(results) == 1
 
         # put back non-disabled dbt_project and check for mutually exclusive error message
         # for --select and --inline

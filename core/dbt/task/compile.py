@@ -104,6 +104,12 @@ class CompileTask(GraphRunnableTask):
                 )
                 sql_node = block_parser.parse_remote(self.args.inline, "inline_query")
                 process_node(self.config, self.manifest, sql_node)
+                # Special hack to remove disabled, if it's there. This would only happen
+                # if all models are disabled in dbt_project
+                if sql_node.config.enabled is False:
+                    sql_node.config.enabled = True
+                    self.manifest.disabled.pop(sql_node.unique_id)
+                    self.manifest.nodes[sql_node.unique_id] = sql_node
                 # keep track of the node added to the manifest
                 self._inline_node_id = sql_node.unique_id
             except CompilationError as exc:
