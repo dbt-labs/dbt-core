@@ -289,8 +289,14 @@ class Flags:
             params_assigned_from_default, ["WARN_ERROR", "WARN_ERROR_OPTIONS"]
         )
 
-        if hasattr(self, "SELECT") and hasattr(self, "INLINE"):
-            self._assert_mutually_exclusive(params_assigned_from_default, ["SELECT", "INLINE"])
+        # Handle arguments mutually exclusive with INLINE
+        if hasattr(self, "INLINE"):
+            if hasattr(self, "SELECT"):
+                self._assert_mutually_exclusive(params_assigned_from_default, ["SELECT", "INLINE"])
+            if hasattr(self, "SELECTOR") and self.SELECTOR is not None:
+                self._assert_mutually_exclusive(
+                    params_assigned_from_default, ["SELECTOR", "INLINE"]
+                )
 
         # Support lower cased access for legacy code.
         params = set(
