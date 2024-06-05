@@ -28,7 +28,7 @@ def test_serve_bind_to_all(serve_task):
     serve_task.args.browser = False
     serve_task.args.host = ""
 
-    with patch("dbt.task.docs.serve.socketserver.TCPServer") as patched_TCPServer:
+    with patch("dbt.task.serve.socketserver.TCPServer") as patched_TCPServer:
         patched_TCPServer.return_value = MagicMock()
         serve_task.run()
         patched_TCPServer.assert_called_once_with(("", 8000), SimpleHTTPRequestHandler)
