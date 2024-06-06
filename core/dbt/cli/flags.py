@@ -290,13 +290,8 @@ class Flags:
         )
 
         # Handle arguments mutually exclusive with INLINE
-        if hasattr(self, "INLINE"):
-            if hasattr(self, "SELECT"):
-                self._assert_mutually_exclusive(params_assigned_from_default, ["SELECT", "INLINE"])
-            if hasattr(self, "SELECTOR") and self.SELECTOR is not None:
-                self._assert_mutually_exclusive(
-                    params_assigned_from_default, ["SELECTOR", "INLINE"]
-                )
+        self._assert_mutually_exclusive(params_assigned_from_default, ["SELECT", "INLINE"])
+        self._assert_mutually_exclusive(params_assigned_from_default, ["SELECTOR", "INLINE"])
 
         # Support lower cased access for legacy code.
         params = set(
@@ -324,7 +319,7 @@ class Flags:
         """
         set_flag = None
         for flag in group:
-            flag_set_by_user = flag.lower() not in params_assigned_from_default
+            flag_set_by_user = hasattr(self, flag) and flag.lower() not in params_assigned_from_default
             if flag_set_by_user and set_flag:
                 raise DbtUsageException(
                     f"{flag.lower()}: not allowed with argument {set_flag.lower()}"
