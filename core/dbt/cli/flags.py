@@ -319,7 +319,9 @@ class Flags:
         """
         set_flag = None
         for flag in group:
-            flag_set_by_user = hasattr(self, flag) and flag.lower() not in params_assigned_from_default
+            flag_set_by_user = (
+                hasattr(self, flag) and flag.lower() not in params_assigned_from_default
+            )
             if flag_set_by_user and set_flag:
                 raise DbtUsageException(
                     f"{flag.lower()}: not allowed with argument {set_flag.lower()}"
