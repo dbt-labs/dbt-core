@@ -114,7 +114,8 @@ class TestBuilder(Generic[Testable]):
         self.package_name: str = package_name
         self.target: Testable = target
         self.version: Optional[NodeVersion] = version
-
+        self.render_ctx: Dict[str, Any] = render_ctx
+        self.column_name: Optional[str] = column_name
         self.args["model"] = self.build_model_str()
 
         match = self.TEST_NAME_PATTERN.match(test_name)
@@ -125,39 +126,12 @@ class TestBuilder(Generic[Testable]):
         self.name: str = groups["test_name"]
         self.namespace: str = groups["test_namespace"]
         self.config: Dict[str, Any] = {}
+        # Process legacy args
+        self.config.update(self._process_legacy_args())
 
-        # This code removes keys identified as config args from the test entry
-        # dictionary. The keys remaining in the 'args' dictionary will be
-        # "kwargs", or keyword args that are passed to the test macro.
-        # The "kwargs" are not rendered into strings until compilation time.
-        # The "configs" are rendered here (since they were not rendered back
-        # in the 'get_key_dicts' methods in the schema parsers).
-        for key in self.CONFIG_ARGS:
-            value = self.args.pop(key, None)
-            # 'modifier' config could be either top level arg or in config
-            if value and "config" in self.args and key in self.args["config"]:
-                raise SameKeyNestedError()
-            if not value and "config" in self.args:
-                value = self.args["config"].pop(key, None)
-            if isinstance(value, str):
-
-                try:
-                    value = get_rendered(value, render_ctx, native=True)
-                except UndefinedMacroError as e:
-
-                    raise CustomMacroPopulatingConfigValueError(
-                        target_name=self.target.name,
-                        column_name=column_name,
-                        name=self.name,
-                        key=key,
-                        err_msg=e.msg,
-                    )
-
-            if value is not None:
-                self.config[key] = value
-
+        # Process config args if present
         if "config" in self.args:
-            del self.args["config"]
+            self.config.update(self._render_values(self.args.pop("config", {})))
 
         if self.namespace is not None:
             self.package_name = self.namespace
@@ -181,6 +155,36 @@ class TestBuilder(Generic[Testable]):
             # use hashed name as alias if full name is too long
             if short_name != full_name and "alias" not in self.config:
                 self.config["alias"] = short_name
+
+    def _process_legacy_args(self):
+        config = {}
+        for key in self.CONFIG_ARGS:
+            value = self.args.pop(key, None)
+            if value and "config" in self.args and key in self.args["config"]:
+                raise SameKeyNestedError()
+            if not value and "config" in self.args:
+                value = self.args["config"].pop(key, None)
+            config[key] = value
+
+        return self._render_values(config)
+
+    def _render_values(self, config: Dict[str, Any]) -> Dict[str, Any]:
+        rendered_config = {}
+        for key, value in config.items():
+            if isinstance(value, str):
+                try:
+                    value = get_rendered(value, self.render_ctx, native=True)
+                except UndefinedMacroError as e:
+                    raise CustomMacroPopulatingConfigValueError(
+                        target_name=self.target.name,
+                        column_name=self.column_name,
+                        name=self.name,
+                        key=key,
+                        err_msg=e.msg,
+                    )
+            if value is not None:
+                rendered_config[key] = value
+        return rendered_config
 
     def _bad_type(self) -> TypeError:
         return TypeError('invalid target type "{}"'.format(type(self.target)))
