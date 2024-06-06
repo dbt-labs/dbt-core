@@ -82,7 +82,7 @@ def graph():
 
 
 @pytest.fixture
-def manifest(graph):
+def mock_manifest(graph):
     return _get_manifest(graph)
 
 
@@ -142,8 +142,8 @@ run_specs = [
 
 
 @pytest.mark.parametrize("include,exclude,expected", run_specs, ids=id_macro)
-def test_run_specs(include, exclude, expected, graph, manifest):
-    selector = graph_selector.NodeSelector(graph, manifest)
+def test_run_specs(include, exclude, expected, graph, mock_manifest):
+    selector = graph_selector.NodeSelector(graph, mock_manifest)
     spec = graph_cli.parse_difference(include, exclude)
     selected, _ = selector.select_nodes(spec)
 
