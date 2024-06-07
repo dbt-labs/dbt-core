@@ -1,4 +1,4 @@
-from typing import Dict, List
+from typing import Any, Dict, List
 
 import pytest
 from dbt_semantic_interfaces.type_enums import MetricType
@@ -21,8 +21,10 @@ from dbt.contracts.graph.manifest import Manifest, ManifestMetadata
 from dbt.contracts.graph.nodes import (
     AccessType,
     DependsOn,
+    Documentation,
     Exposure,
     GenericTestNode,
+    GraphMemberNode,
     Group,
     Macro,
     ManifestNode,
@@ -985,6 +987,39 @@ def files() -> Dict[str, AnySourceFile]:
     return {}
 
 
+def make_manifest(
+    disabled: Dict[str, List[GraphMemberNode]] = {},
+    docs: List[Documentation] = [],
+    exposures: List[Exposure] = [],
+    files: Dict[str, AnySourceFile] = {},
+    groups: List[Group] = [],
+    macros: List[Macro] = [],
+    metrics: List[Metric] = [],
+    nodes: List[ModelNode] = [],
+    selectors: Dict[str, Any] = {},
+    semantic_models: List[SemanticModel] = [],
+    sources: List[SourceDefinition] = [],
+    unit_tests: List[UnitTestDefinition] = [],
+) -> Manifest:
+    manifest = Manifest(
+        nodes={n.unique_id: n for n in nodes},
+        sources={s.unique_id: s for s in sources},
+        macros={m.unique_id: m for m in macros},
+        unit_tests={t.unique_id: t for t in unit_tests},
+        semantic_models={s.unique_id: s for s in semantic_models},
+        docs={d.unique_id: d for d in docs},
+        files=files,
+        exposures={e.unique_id: e for e in exposures},
+        metrics={m.unique_id: m for m in metrics},
+        disabled=disabled,
+        selectors=selectors,
+        groups={g.unique_id: g for g in groups},
+        metadata=ManifestMetadata(adapter_type="postgres", project_name="pkg"),
+    )
+    manifest.build_parent_and_child_maps()
+    return manifest
+
+
 @pytest.fixture
 def manifest(
     metric,
@@ -997,20 +1032,12 @@ def manifest(
     semantic_models,
     files,
 ) -> Manifest:
-    manifest = Manifest(
-        nodes={n.unique_id: n for n in nodes},
-        sources={s.unique_id: s for s in sources},
-        macros={m.unique_id: m for m in macros},
-        unit_tests={t.unique_id: t for t in unit_tests},
-        semantic_models={s.unique_id: s for s in semantic_models},
-        docs={},
+    return make_manifest(
+        nodes=nodes,
+        sources=sources,
+        macros=macros,
+        unit_tests=unit_tests,
+        semantic_models=semantic_models,
         files=files,
-        exposures={},
-        metrics={m.unique_id: m for m in metrics},
-        disabled={},
-        selectors={},
-        groups={},
-        metadata=ManifestMetadata(adapter_type="postgres", project_name="pkg"),
+        metrics=metrics,
     )
-    manifest.build_parent_and_child_maps()
-    return manifest
