@@ -1,9 +1,7 @@
-import os
 import string
-import unittest
 from argparse import Namespace
 from queue import Empty
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import networkx as nx
 import pytest
@@ -17,24 +15,10 @@ import dbt.parser
 import dbt.parser.manifest
 import dbt.utils
 import dbt_common.exceptions
-from dbt import tracking
-from dbt.adapters.factory import register_adapter, reset_adapters
-from dbt.adapters.postgres import Plugin as PostgresPlugin
-from dbt.cli.flags import convert_config
 from dbt.config.runtime import RuntimeConfig
-from dbt.contracts.files import FileHash, FilePath, SourceFile
-from dbt.contracts.graph.manifest import MacroManifest, ManifestStateCheck
-from dbt.contracts.project import ProjectFlags
-from dbt.events.logging import setup_event_logger
-from dbt.flags import get_flags, set_from_args
+from dbt.flags import set_from_args
 from dbt.graph import NodeSelector, parse_difference
-from dbt.mp_context import get_mp_context
 from dbt.node_types import NodeType
-from tests.unit.utils import (
-    config_from_parts_or_dicts,
-    generate_name_macros,
-    inject_plugin,
-)
 from tests.unit.utils.manifest import make_manifest, make_model
 
 set_from_args(Namespace(WARN_ERROR=False), None)
@@ -312,157 +296,3 @@ class TestNodeSelector:
                 queue.get(block=False)
             queue.mark_done(got.unique_id)
         assert queue.empty()
-
-
-class GraphTest(unittest.TestCase):
-    def tearDown(self):
-        self.mock_filesystem_search.stop()
-        self.load_state_check.stop()
-        self.load_source_file_patcher.stop()
-        reset_adapters()
-
-    def setUp(self):
-        # create various attributes
-        self.graph_result = None
-        tracking.do_not_track()
-        self.profile = {
-            "outputs": {
-                "test": {
-                    "type": "postgres",
-                    "threads": 4,
-                    "host": "thishostshouldnotexist",
-                    "port": 5432,
-                    "user": "root",
-                    "pass": "password",
-                    "dbname": "dbt",
-                    "schema": "dbt_test",
-                }
-            },
-            "target": "test",
-        }
-        self.macro_manifest = MacroManifest(
-            {n.unique_id: n for n in generate_name_macros("test_models_compile")}
-        )
-        self.mock_models = []  # used by filesystem_searcher
-
-        # Create file filesystem searcher
-        self.filesystem_search = patch("dbt.parser.read_files.filesystem_search")
-
-        def mock_filesystem_search(project, relative_dirs, extension, ignore_spec):
-            if "sql" not in extension:
-                return []
-            if "models" not in relative_dirs:
-                return []
-            return [model.path for model in self.mock_models]
-
-        self.mock_filesystem_search = self.filesystem_search.start()
-        self.mock_filesystem_search.side_effect = mock_filesystem_search
-
-        # Create the Manifest.state_check patcher
-        @patch("dbt.parser.manifest.ManifestLoader.build_manifest_state_check")
-        def _mock_state_check(self):
-            all_projects = self.all_projects
-            return ManifestStateCheck(
-                project_env_vars_hash=FileHash.from_contents(""),
-                profile_env_vars_hash=FileHash.from_contents(""),
-                vars_hash=FileHash.from_contents("vars"),
-                project_hashes={name: FileHash.from_contents(name) for name in all_projects},
-                profile_hash=FileHash.from_contents("profile"),
-            )
-
-        self.load_state_check = patch(
-            "dbt.parser.manifest.ManifestLoader.build_manifest_state_check"
-        )
-        self.mock_state_check = self.load_state_check.start()
-        self.mock_state_check.side_effect = _mock_state_check
-
-        # Create the source file patcher
-        self.load_source_file_patcher = patch("dbt.parser.read_files.load_source_file")
-        self.mock_source_file = self.load_source_file_patcher.start()
-
-        def mock_load_source_file(path, parse_file_type, project_name, saved_files):
-            for sf in self.mock_models:
-                if sf.path == path:
-                    source_file = sf
-            source_file.project_name = project_name
-            source_file.parse_file_type = parse_file_type
-            return source_file
-
-        self.mock_source_file.side_effect = mock_load_source_file
-
-        # Create hookparser source file patcher
-        self.load_source_file_manifest_patcher = patch("dbt.parser.manifest.load_source_file")
-        self.mock_source_file_manifest = self.load_source_file_manifest_patcher.start()
-
-        def mock_load_source_file_manifest(path, parse_file_type, project_name, saved_files):
-            return []
-
-        self.mock_source_file_manifest.side_effect = mock_load_source_file_manifest
-
-    def get_config(self, extra_cfg=None):
-        if extra_cfg is None:
-            extra_cfg = {}
-
-        cfg = {
-            "name": "test_models_compile",
-            "version": "0.1",
-            "profile": "test",
-            "project-root": os.path.abspath("."),
-            "config-version": 2,
-        }
-        cfg.update(extra_cfg)
-
-        config = config_from_parts_or_dicts(project=cfg, profile=self.profile)
-        set_from_args(Namespace(), ProjectFlags())
-        flags = get_flags()
-        setup_event_logger(flags)
-        object.__setattr__(flags, "PARTIAL_PARSE", False)
-        for arg_name, args_param_value in vars(flags).items():
-            args_param_value = convert_config(arg_name, args_param_value)
-            object.__setattr__(config.args, arg_name.upper(), args_param_value)
-            object.__setattr__(config.args, arg_name.lower(), args_param_value)
-
-        return config
-
-    def get_compiler(self, project):
-        return dbt.compilation.Compiler(project)
-
-    def use_models(self, models):
-        for k, v in models.items():
-            path = FilePath(
-                searched_path="models",
-                project_root=os.path.normcase(os.getcwd()),
-                relative_path="{}.sql".format(k),
-                modification_time=0.0,
-            )
-            # FileHash can't be empty or 'search_key' will be None
-            source_file = SourceFile(path=path, checksum=FileHash.from_contents("abc"))
-            source_file.contents = v
-            self.mock_models.append(source_file)
-
-    def load_manifest(self, config):
-        inject_plugin(PostgresPlugin)
-        register_adapter(config, get_mp_context())
-        loader = dbt.parser.manifest.ManifestLoader(config, {config.project_name: config})
-        loader.manifest.macros = self.macro_manifest.macros
-        loader.load()
-        return loader.manifest
-
-    # TODO move / delete: This is testing partial parsing, not the selector nor compiler
-    def test__partial_parse(self):
-        config = self.get_config()
-
-        manifest = self.load_manifest(config)
-
-        # we need a loader to compare the two manifests
-        loader = dbt.parser.manifest.ManifestLoader(config, {config.project_name: config})
-        loader.manifest = manifest.deepcopy()
-
-        is_partial_parsable, _ = loader.is_partial_parsable(manifest)
-        self.assertTrue(is_partial_parsable)
-        manifest.metadata.dbt_version = "0.0.1a1"
-        is_partial_parsable, _ = loader.is_partial_parsable(manifest)
-        self.assertFalse(is_partial_parsable)
-        manifest.metadata.dbt_version = "99999.99.99"
-        is_partial_parsable, _ = loader.is_partial_parsable(manifest)
-        self.assertFalse(is_partial_parsable)
