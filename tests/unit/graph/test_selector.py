@@ -21,6 +21,7 @@ from dbt import tracking
 from dbt.adapters.factory import register_adapter, reset_adapters
 from dbt.adapters.postgres import Plugin as PostgresPlugin
 from dbt.cli.flags import convert_config
+from dbt.config.runtime import RuntimeConfig
 from dbt.contracts.files import FileHash, FilePath, SourceFile
 from dbt.contracts.graph.manifest import MacroManifest, ManifestStateCheck
 from dbt.contracts.project import ProjectFlags
@@ -34,6 +35,7 @@ from tests.unit.utils import (
     generate_name_macros,
     inject_plugin,
 )
+from tests.unit.utils.manifest import make_manifest, make_model
 
 set_from_args(Namespace(WARN_ERROR=False), None)
 
@@ -231,6 +233,87 @@ def test_invalid_specs(invalid):
         graph_selector.SelectionCriteria.from_single_spec(invalid)
 
 
+class TestCompiler:
+    def test_single_model(self, runtime_config: RuntimeConfig):
+        model = make_model(pkg="pkg", name="model_one", code="SELECT * FROM events")
+        manifest = make_manifest(nodes=[model])
+
+        compiler = dbt.compilation.Compiler(config=runtime_config)
+        linker = compiler.compile(manifest)
+
+        assert linker.nodes() == {model.unique_id}
+        assert linker.edges() == set()
+
+    def test_two_models_simple_ref(self, runtime_config: RuntimeConfig):
+        model_one = make_model(pkg="pkg", name="model_one", code="SELECT * FROM events")
+        model_two = make_model(
+            pkg="pkg",
+            name="model_two",
+            code="SELECT * FROM {{ref('model_one')}}",
+            refs=[model_one],
+        )
+        models = [model_one, model_two]
+        manifest = make_manifest(nodes=models)
+
+        compiler = dbt.compilation.Compiler(config=runtime_config)
+        linker = compiler.compile(manifest)
+
+        expected_nodes = [model.unique_id for model in models]
+        assert linker.nodes() == set(expected_nodes)
+        assert list(linker.edges()) == [tuple(expected_nodes)]
+
+
+class TestNodeSelector:
+    def test_dependency_list(self, runtime_config: RuntimeConfig):
+        model_one = make_model(pkg="pkg", name="model_one", code="SELECT * FROM events")
+        model_two = make_model(
+            pkg="pkg",
+            name="model_two",
+            code="SELECT * FROM {{ref('model_one')}}",
+            refs=[model_one],
+        )
+        model_three = make_model(
+            pkg="pkg",
+            name="model_three",
+            code="""
+                SELECT * FROM {{ ref("model_1") }}
+                union all
+                SELECT * FROM {{ ref("model_2") }}
+            """,
+            refs=[model_one, model_two],
+        )
+        model_four = make_model(
+            pkg="pkg",
+            name="model_four",
+            code="SELECT * FROM {{ref('model_three')}}",
+            refs=[model_three],
+        )
+        models = [model_one, model_two, model_three, model_four]
+        manifest = make_manifest(nodes=models)
+
+        # Get the graph
+        compiler = dbt.compilation.Compiler(runtime_config)
+        graph = compiler.compile(manifest)
+
+        # Create the selector and get the queue
+        selector = NodeSelector(graph, manifest)
+        queue = selector.get_graph_queue(
+            parse_difference(
+                None,
+                None,
+            )
+        )
+
+        for model in models:
+            assert not queue.empty()
+            got = queue.get(block=False)
+            assert got.unique_id == model.unique_id
+            with pytest.raises(Empty):
+                queue.get(block=False)
+            queue.mark_done(got.unique_id)
+        assert queue.empty()
+
+
 class GraphTest(unittest.TestCase):
     def tearDown(self):
         self.mock_filesystem_search.stop()
@@ -365,54 +448,7 @@ class GraphTest(unittest.TestCase):
         loader.load()
         return loader.manifest
 
-    def test__single_model(self):
-        self.use_models(
-            {
-                "model_one": "select * from events",
-            }
-        )
-
-        config = self.get_config()
-        manifest = self.load_manifest(config)
-
-        compiler = self.get_compiler(config)
-        linker = compiler.compile(manifest)
-
-        self.assertEqual(list(linker.nodes()), ["model.test_models_compile.model_one"])
-
-        self.assertEqual(list(linker.edges()), [])
-
-    def test__two_models_simple_ref(self):
-        self.use_models(
-            {
-                "model_one": "select * from events",
-                "model_two": "select * from {{ref('model_one')}}",
-            }
-        )
-
-        config = self.get_config()
-        manifest = self.load_manifest(config)
-        compiler = self.get_compiler(config)
-        linker = compiler.compile(manifest)
-
-        self.assertCountEqual(
-            linker.nodes(),
-            [
-                "model.test_models_compile.model_one",
-                "model.test_models_compile.model_two",
-            ],
-        )
-
-        self.assertCountEqual(
-            linker.edges(),
-            [
-                (
-                    "model.test_models_compile.model_one",
-                    "model.test_models_compile.model_two",
-                )
-            ],
-        )
-
+    # TODO move / delete: This is testing ref parsing, not the selector nor compiler
     def test__two_models_package_ref(self):
         self.use_models(
             {
@@ -444,6 +480,7 @@ class GraphTest(unittest.TestCase):
             ],
         )
 
+    # TODO move / delete: This is testing materialization configuration, not the selector nor compiler
     def test__model_materializations(self):
         self.use_models(
             {
@@ -480,6 +517,8 @@ class GraphTest(unittest.TestCase):
             actual = manifest.nodes[key].config.materialized
             self.assertEqual(actual, expected)
 
+    # TODO move / delete: This is testing materialization configuration, not the selector nor compiler
+    # The "compiler" testing that is going on here is no different from test_single_model
     def test__model_incremental(self):
         self.use_models({"model_one": "select * from events"})
 
@@ -503,64 +542,7 @@ class GraphTest(unittest.TestCase):
 
         self.assertEqual(manifest.nodes[node].config.materialized, "incremental")
 
-    def test__dependency_list(self):
-        self.use_models(
-            {
-                "model_1": "select * from events",
-                "model_2": 'select * from {{ ref("model_1") }}',
-                "model_3": """
-                select * from {{ ref("model_1") }}
-                union all
-                select * from {{ ref("model_2") }}
-            """,
-                "model_4": 'select * from {{ ref("model_3") }}',
-            }
-        )
-
-        config = self.get_config()
-        manifest = self.load_manifest(config)
-        compiler = self.get_compiler(config)
-        graph = compiler.compile(manifest)
-
-        models = ("model_1", "model_2", "model_3", "model_4")
-        model_ids = ["model.test_models_compile.{}".format(m) for m in models]
-
-        manifest = MagicMock(
-            nodes={
-                n: MagicMock(
-                    unique_id=n,
-                    name=n.split(".")[-1],
-                    package_name="test_models_compile",
-                    fqn=["test_models_compile", n],
-                    empty=False,
-                    config=MagicMock(enabled=True),
-                )
-                for n in model_ids
-            }
-        )
-        manifest.expect.side_effect = lambda n: MagicMock(unique_id=n)
-        selector = NodeSelector(graph, manifest)
-        # TODO:  The "eager" string below needs to be replaced with programatic access
-        #  to the default value for the indirect selection parameter in
-        # dbt.cli.params.indirect_selection
-        #
-        # Doing that is actually a little tricky, so I'm punting it to a new ticket GH #6397
-        queue = selector.get_graph_queue(
-            parse_difference(
-                None,
-                None,
-            )
-        )
-
-        for model_id in model_ids:
-            self.assertFalse(queue.empty())
-            got = queue.get(block=False)
-            self.assertEqual(got.unique_id, model_id)
-            with self.assertRaises(Empty):
-                queue.get(block=False)
-            queue.mark_done(got.unique_id)
-        self.assertTrue(queue.empty())
-
+    # TODO move / delete: This is testing partial parsing, not the selector nor compiler
     def test__partial_parse(self):
         config = self.get_config()
 
