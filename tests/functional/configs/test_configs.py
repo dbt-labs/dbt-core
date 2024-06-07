@@ -2,7 +2,6 @@ import os
 
 import pytest
 
-from dbt.exceptions import ParsingError
 from dbt.tests.util import (
     check_relations_equal,
     run_dbt,
@@ -120,7 +119,7 @@ class TestInvalidSnapshotsMaterializationProj(object):
         snapshots_dir = os.path.join(project.project_root, "snapshots")
         write_file(simple_snapshot, snapshots_dir, "mysnapshot.sql")
 
-        with pytest.raises(ParsingError):
+        with pytest.raises(ValidationError):
             run_dbt()
 
 
