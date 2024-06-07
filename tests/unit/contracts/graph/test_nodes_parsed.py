@@ -1333,7 +1333,7 @@ def test_invalid_missing_updated_at(basic_timestamp_snapshot_config_dict):
     bad_fields = basic_timestamp_snapshot_config_dict
     del bad_fields["updated_at"]
     bad_fields["check_cols"] = "all"
-    assert_fails_validation(bad_fields, SnapshotConfig)
+    assert_snapshot_config_fails_validation(bad_fields)
 
 
 @pytest.fixture
@@ -1437,7 +1437,7 @@ def test_complex_snapshot_config(
 def test_invalid_check_wrong_strategy(basic_check_snapshot_config_dict):
     wrong_strategy = basic_check_snapshot_config_dict
     wrong_strategy["strategy"] = "timestamp"
-    assert_fails_validation(wrong_strategy, SnapshotConfig)
+    assert_snapshot_config_fails_validation(wrong_strategy)
 
 
 def test_invalid_missing_check_cols(basic_check_snapshot_config_dict):
@@ -1445,6 +1445,8 @@ def test_invalid_missing_check_cols(basic_check_snapshot_config_dict):
     del wrong_fields["check_cols"]
     with pytest.raises(ValidationError, match=r"A snapshot configured with the check strategy"):
         SnapshotConfig.validate(wrong_fields)
+        cfg = SnapshotConfig.from_dict(wrong_fields)
+        cfg.final_validate()
 
 
 def test_missing_snapshot_configs(basic_check_snapshot_config_dict):
@@ -1452,22 +1454,35 @@ def test_missing_snapshot_configs(basic_check_snapshot_config_dict):
     del wrong_fields["strategy"]
     with pytest.raises(ValidationError, match=r"Snapshots must be configured with a 'strategy'"):
         SnapshotConfig.validate(wrong_fields)
+        cfg = SnapshotConfig.from_dict(wrong_fields)
+        cfg.final_validate()
 
     wrong_fields["strategy"] = "timestamp"
     del wrong_fields["unique_key"]
     with pytest.raises(ValidationError, match=r"Snapshots must be configured with a 'strategy'"):
         SnapshotConfig.validate(wrong_fields)
+        cfg = SnapshotConfig.from_dict(wrong_fields)
+        cfg.final_validate()
 
     wrong_fields["unique_key"] = "id"
     del wrong_fields["target_schema"]
     with pytest.raises(ValidationError, match=r"Snapshots must be configured with a 'strategy'"):
         SnapshotConfig.validate(wrong_fields)
+        cfg = SnapshotConfig.from_dict(wrong_fields)
+        cfg.final_validate()
+
+
+def assert_snapshot_config_fails_validation(dct):
+    with pytest.raises(ValidationError):
+        SnapshotConfig.validate(dct)
+        obj = SnapshotConfig.from_dict(dct)
+        obj.final_validate()
 
 
 def test_invalid_check_value(basic_check_snapshot_config_dict):
     invalid_check_type = basic_check_snapshot_config_dict
     invalid_check_type["check_cols"] = "some"
-    assert_fails_validation(invalid_check_type, SnapshotConfig)
+    assert_snapshot_config_fails_validation(invalid_check_type)
 
 
 @pytest.fixture
