@@ -6,7 +6,7 @@ dbt_integration_project__my_macros_sql = """
 {% macro do_something(foo, bar) %}
 
     select
-        '{{ foooooooooooooooooooooo }}'::text as foo,
+        '{{ foo }}'::text as foo,
         '{{ bar }}'::text as bar
 
 {% endmacro %}
