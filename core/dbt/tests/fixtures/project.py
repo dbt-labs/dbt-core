@@ -282,7 +282,6 @@ def adapter(
     project_root,
     profiles_root,
     profiles_yml,
-    dbt_project_yml,
     clean_up_logging,
 ):
     # The profiles.yml and dbt_project.yml should already be written out

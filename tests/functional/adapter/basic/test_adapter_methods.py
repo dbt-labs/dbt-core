@@ -79,6 +79,7 @@ class BaseAdapterMethod:
         project_root,
         tests,
         models,
+        dbt_project_yml,
     ):
         write_project_files(project_root, "tests", tests)
         write_project_files(project_root, "models", models)

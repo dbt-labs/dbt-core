@@ -12,20 +12,6 @@ class TestList:
     def dir(self, value):
         return os.path.normpath(value)
 
-    # @pytest.fixture(scope="class")
-    # def project_config_update(self):
-    #     return {
-    #         "config-version": 2,
-    #         "analysis-paths": [self.dir("analyses")],
-    #         "snapshot-paths": [self.dir("snapshots")],
-    #         "macro-paths": [self.dir("macros")],
-    #         "seed-paths": [self.dir("seeds")],
-    #         "test-paths": [self.dir("tests")],
-    #         "seeds": {
-    #             "quote_columns": False,
-    #         },
-    #     }
-
     def test_packages_install_path_does_not_exist(self, happy_path_project):  # noqa: F811
         run_dbt(["list"])
         packages_install_path = "dbt_packages"
@@ -56,7 +42,7 @@ class TestList:
                 else:
                     assert got == expected
 
-    def expect_snapshot_output(self, project):
+    def expect_snapshot_output(self, happy_path_project):  # noqa: F811
         expectations = {
             "name": "my_snapshot",
             "selector": "test.snapshot.my_snapshot",
@@ -75,8 +61,8 @@ class TestList:
                     "quoting": {},
                     "column_types": {},
                     "persist_docs": {},
-                    "target_database": project.database,
-                    "target_schema": project.test_schema,
+                    "target_database": happy_path_project.database,
+                    "target_schema": happy_path_project.test_schema,
                     "unique_key": "id",
                     "strategy": "timestamp",
                     "updated_at": "updated_at",
@@ -724,12 +710,12 @@ class TestList:
         }
         del os.environ["DBT_EXCLUDE_RESOURCE_TYPES"]
 
-    def expect_selected_keys(self, project):
+    def expect_selected_keys(self, happy_path_project):  # noqa: F811
         """Expect selected fields of the the selected model"""
         expectations = [
             {
-                "database": project.database,
-                "schema": project.test_schema,
+                "database": happy_path_project.database,
+                "schema": happy_path_project.test_schema,
                 "alias": "inner",
             }
         ]
@@ -752,7 +738,9 @@ class TestList:
 
         """Expect selected fields when --output-keys given multiple times
         """
-        expectations = [{"database": project.database, "schema": project.test_schema}]
+        expectations = [
+            {"database": happy_path_project.database, "schema": happy_path_project.test_schema}
+        ]
         results = self.run_dbt_ls(
             [
                 "--model",
