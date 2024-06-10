@@ -117,6 +117,11 @@ def yaml_from_file(source_file: SchemaSourceFile) -> Optional[Dict[str, Any]]:
         if contents is None:
             return contents
 
+        if not isinstance(contents, dict):
+            raise DbtValidationError(
+                f"Contents of file '{source_file.original_file_path}' are not valid. Dictionary expected."
+            )
+
         # When loaded_loaded_at_field is defined as None or null, it shows up in
         # the dict but when it is not defined, it does not show up in the dict
         # We need to capture this to be able to override source level settings later.
