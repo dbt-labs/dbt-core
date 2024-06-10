@@ -1,0 +1,17 @@
+analysis-paths:
+- analyses
+config-version: 2
+flags:
+  send_anonymous_usage_stats: false
+macro-paths:
+- macros
+name: test
+profile: test
+seed-paths:
+- seeds
+seeds:
+  quote_columns: false
+snapshot-paths:
+- snapshots
+test-paths:
+- tests

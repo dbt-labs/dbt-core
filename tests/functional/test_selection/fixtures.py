@@ -91,6 +91,7 @@ def project_files(
     project_root,
     tests,
     models,
+    selectors_yml,
 ):
     write_project_files(project_root, "tests", tests)
     write_project_files(project_root, "models", models)
