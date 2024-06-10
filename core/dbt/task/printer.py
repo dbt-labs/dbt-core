@@ -13,6 +13,7 @@ from dbt.events.types import (
     StatsLine,
 )
 from dbt.node_types import NodeType
+from dbt_common.events.base_types import EventLevel
 from dbt_common.events.format import pluralize
 from dbt_common.events.functions import fire_event
 from dbt_common.events.types import Formatting
@@ -68,14 +69,13 @@ def print_run_status_line(results) -> None:
 
 
 def print_run_result_error(result, newline: bool = True, is_warning: bool = False) -> None:
-    if newline:
-        fire_event(Formatting(""))
-
     # set node_info for logging events
     node_info = None
     if hasattr(result, "node") and result.node:
         node_info = result.node.node_info
     if result.status == NodeStatus.Fail or (is_warning and result.status == NodeStatus.Warn):
+        if newline:
+            fire_event(Formatting(""))
         if is_warning:
             fire_event(
                 RunResultWarning(
@@ -112,8 +112,13 @@ def print_run_result_error(result, newline: bool = True, is_warning: bool = Fals
             fire_event(
                 CheckNodeTestFailure(relation_name=result.node.relation_name, node_info=node_info)
             )
-
+    elif result.status == NodeStatus.Skipped and result.message is not None:
+        if newline:
+            fire_event(Formatting(""), level=EventLevel.DEBUG)
+        fire_event(RunResultError(msg=result.message), level=EventLevel.DEBUG)
     elif result.message is not None:
+        if newline:
+            fire_event(Formatting(""))
         fire_event(RunResultError(msg=result.message, node_info=node_info))
 
 

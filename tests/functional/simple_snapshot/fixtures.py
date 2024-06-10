@@ -86,7 +86,6 @@ macros_custom_snapshot__custom_sql = """
 
 
 models__schema_yml = """
-version: 2
 snapshots:
   - name: snapshot_actual
     data_tests:
@@ -97,7 +96,6 @@ snapshots:
 """
 
 models__schema_with_target_schema_yml = """
-version: 2
 snapshots:
   - name: snapshot_actual
     data_tests:
