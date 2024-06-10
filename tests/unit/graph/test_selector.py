@@ -1,6 +1,7 @@
 import string
 from argparse import Namespace
 from queue import Empty
+from typing import List
 from unittest.mock import MagicMock
 
 import networkx as nx
@@ -242,7 +243,7 @@ class TestCompiler:
         compiler = dbt.compilation.Compiler(config=runtime_config)
         linker = compiler.compile(manifest)
 
-        expected_nodes = [model.unique_id for model in models]
+        expected_nodes: List[str] = [model.unique_id for model in models]
         assert linker.nodes() == set(expected_nodes)
         assert list(linker.edges()) == [tuple(expected_nodes)]
 
