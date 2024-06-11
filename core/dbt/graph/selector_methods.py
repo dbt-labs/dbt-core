@@ -109,7 +109,7 @@ def is_selected_node(fqn: List[str], node_selector: str, is_versioned: bool) -> 
 
 
 SelectorTarget = Union[
-    SourceDefinition, ManifestNode, Exposure, Metric, SemanticModel, UnitTestDefinition
+    SourceDefinition, ManifestNode, Exposure, Metric, SemanticModel, UnitTestDefinition, SavedQuery
 ]
 
 
@@ -202,6 +202,7 @@ class SelectorMethod(metaclass=abc.ABCMeta):
             self.metric_nodes(included_nodes),
             self.unit_tests(included_nodes),
             self.semantic_model_nodes(included_nodes),
+            self.saved_query_nodes(included_nodes),
         )
 
     def configurable_nodes(
@@ -680,7 +681,8 @@ class StateSelectorMethod(SelectorMethod):
         self, old: Optional[SelectorTarget], new: SelectorTarget, adapter_type: str
     ) -> bool:
         if isinstance(
-            new, (SourceDefinition, Exposure, Metric, SemanticModel, UnitTestDefinition)
+            new,
+            (SourceDefinition, Exposure, Metric, SemanticModel, UnitTestDefinition, SavedQuery),
         ):
             # these all overwrite `same_contents`
             different_contents = not new.same_contents(old)  # type: ignore
@@ -775,6 +777,8 @@ class StateSelectorMethod(SelectorMethod):
                 previous_node = SemanticModel.from_resource(manifest.semantic_models[unique_id])
             elif unique_id in manifest.unit_tests:
                 previous_node = UnitTestDefinition.from_resource(manifest.unit_tests[unique_id])
+            elif unique_id in manifest.saved_queries:
+                previous_node = SavedQuery.from_resource(manifest.saved_queries[unique_id])
 
             keyword_args = {}
             if checker.__name__ in [

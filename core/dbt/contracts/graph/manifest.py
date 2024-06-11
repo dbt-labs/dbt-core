@@ -1094,6 +1094,7 @@ class Manifest(MacroMethods, dbtClassMixin):
             metrics=cls._map_resources_to_map_nodes(writable_manifest.metrics),
             groups=cls._map_resources_to_map_nodes(writable_manifest.groups),
             semantic_models=cls._map_resources_to_map_nodes(writable_manifest.semantic_models),
+            saved_queries=cls._map_resources_to_map_nodes(writable_manifest.saved_queries),
             selectors={
                 selector_id: selector
                 for selector_id, selector in writable_manifest.selectors.items()

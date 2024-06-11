@@ -3,8 +3,6 @@ saved_query_description = """
 """
 
 saved_queries_yml = """
-version: 2
-
 saved_queries:
   - name: test_saved_query
     description: "{{ doc('saved_query_description') }}"
@@ -27,8 +25,6 @@ saved_queries:
 """
 
 saved_queries_with_defaults_yml = """
-version: 2
-
 saved_queries:
   - name: test_saved_query
     description: "{{ doc('saved_query_description') }}"
@@ -50,8 +46,6 @@ saved_queries:
 """
 
 saved_queries_with_diff_filters_yml = """
-version: 2
-
 saved_queries:
   - name: test_saved_query_where_list
     description: "{{ doc('saved_query_description') }}"
@@ -83,8 +77,6 @@ saved_queries:
 """
 
 saved_query_with_extra_config_attributes_yml = """
-version: 2
-
 saved_queries:
   - name: test_saved_query
     description: "{{ doc('saved_query_description') }}"
@@ -105,8 +97,6 @@ saved_queries:
 """
 
 saved_query_with_export_configs_defined_at_saved_query_level_yml = """
-version: 2
-
 saved_queries:
   - name: test_saved_query
     description: "{{ doc('saved_query_description') }}"
@@ -131,8 +121,6 @@ saved_queries:
 """
 
 saved_query_without_export_configs_defined_yml = """
-version: 2
-
 saved_queries:
   - name: test_saved_query
     description: "{{ doc('saved_query_description') }}"
