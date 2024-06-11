@@ -597,6 +597,7 @@ def project_setup(
 # fixtures that are necessary to set up a dbt project, and saves some of the information
 # in a TestProjInfo class, which it returns, so that individual test cases do not have
 # to pull in the other fixtures individually to access their information.
+# The order of arguments here determine which steps runs first.
 @pytest.fixture(scope="class")
 def project(
     project_setup: TestProjInfo,

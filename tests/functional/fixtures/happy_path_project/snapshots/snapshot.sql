@@ -1,4 +1,3 @@
-
 {% snapshot my_snapshot %}
     {{
         config(

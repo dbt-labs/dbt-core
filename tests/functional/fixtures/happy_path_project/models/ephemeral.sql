@@ -1,5 +1,3 @@
-
-
 {{ config(materialized='ephemeral') }}
 
 select

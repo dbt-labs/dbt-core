@@ -1,4 +1,3 @@
-
 metrics:
   - name: total_outer
     type: simple

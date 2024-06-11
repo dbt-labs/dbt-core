@@ -1,4 +1,3 @@
-
 semantic_models:
   - name: my_sm
     model: ref('outer')

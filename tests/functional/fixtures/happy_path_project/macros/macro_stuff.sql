@@ -1,4 +1,3 @@
-
 {% macro cool_macro() %}
   wow!
 {% endmacro %}
