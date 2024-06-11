@@ -14,5 +14,5 @@ def happy_path_project_files(project_root):
 
 
 @pytest.fixture(scope="class")
-def happy_path_project(happy_path_project_files, project_setup):
+def happy_path_project(project_setup, happy_path_project_files):
     return project_setup

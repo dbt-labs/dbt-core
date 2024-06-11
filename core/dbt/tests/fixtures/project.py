@@ -283,6 +283,7 @@ def adapter(
     profiles_root,
     profiles_yml,
     clean_up_logging,
+    dbt_project_yml,
 ):
     # The profiles.yml and dbt_project.yml should already be written out
     args = Namespace(
@@ -598,7 +599,7 @@ def project_setup(
 # to pull in the other fixtures individually to access their information.
 @pytest.fixture(scope="class")
 def project(
-    project_files,
     project_setup: TestProjInfo,
+    project_files,
 ):
     return project_setup
