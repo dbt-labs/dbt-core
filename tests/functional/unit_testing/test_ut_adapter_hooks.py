@@ -23,8 +23,8 @@ class BaseUnitTestAdapterHook:
         }
 
 
-class TestUnitTestAdapterHookPasses(BaseUnitTestAdapterHook):
-    def test_unit_test_runs_adapter_pre_hook(self, project):
+class TestUnitTestAdapterPreHook(BaseUnitTestAdapterHook):
+    def test_unit_test_runs_adapter_pre_hook_passes(self, project):
         results = run_dbt(["run"])
         assert len(results) == 3
 
@@ -35,8 +35,6 @@ class TestUnitTestAdapterHookPasses(BaseUnitTestAdapterHook):
             assert len(results) == 1
             mock_pre_model_hook.assert_called_once()
 
-
-class TestUnitTestAdapterHookFails(BaseUnitTestAdapterHook):
     def test_unit_test_runs_adapter_pre_hook_fails(self, project):
         results = run_dbt(["run"])
         assert len(results) == 3
@@ -48,3 +46,30 @@ class TestUnitTestAdapterHookFails(BaseUnitTestAdapterHook):
                 ["test", "--select", "test_name:test_my_model"], expect_pass=False
             )
             assert "exception from adapter.pre_model_hook" in log_output
+
+
+class TestUnitTestAdapterPostHook(BaseUnitTestAdapterHook):
+    def test_unit_test_runs_adapter_post_hook_pass(self, project):
+        results = run_dbt(["run"])
+        assert len(results) == 3
+
+        mock_post_model_hook = mock.Mock()
+        with mock.patch.object(type(project.adapter), "post_model_hook", mock_post_model_hook):
+            results = run_dbt(["test", "--select", "test_name:test_my_model"], expect_pass=True)
+
+            assert len(results) == 1
+            mock_post_model_hook.assert_called_once()
+
+    def test_unit_test_runs_adapter_post_hook_fails(self, project):
+        results = run_dbt(["run"])
+        assert len(results) == 3
+
+        mock_post_model_hook = mock.Mock()
+        mock_post_model_hook.side_effect = CompilationError(
+            "exception from adapter.post_model_hook"
+        )
+        with mock.patch.object(type(project.adapter), "post_model_hook", mock_post_model_hook):
+            (_, log_output) = run_dbt_and_capture(
+                ["test", "--select", "test_name:test_my_model"], expect_pass=False
+            )
+            assert "exception from adapter.post_model_hook" in log_output
