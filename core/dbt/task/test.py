@@ -141,10 +141,9 @@ class TestRunner(CompileRunner):
             raise DbtInternalError(
                 "Invalid materialization context generated, missing config: {}".format(context)
             )
-
+        # generate materialization macro
+        macro_func = MacroGenerator(materialization_macro, context)
         try:
-            # generate materialization macro
-            macro_func = MacroGenerator(materialization_macro, context)
             # execute materialization macro
             macro_func()
         finally:
@@ -219,10 +218,9 @@ class TestRunner(CompileRunner):
             raise DbtInternalError(
                 "Invalid materialization context generated, missing config: {}".format(context)
             )
-
+        # generate materialization macro
+        macro_func = MacroGenerator(materialization_macro, context)
         try:
-            # generate materialization macro
-            macro_func = MacroGenerator(materialization_macro, context)
             # execute materialization macro
             macro_func()
         except DbtBaseException as e:
