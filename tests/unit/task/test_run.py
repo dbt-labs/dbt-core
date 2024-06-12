@@ -6,6 +6,7 @@ import pytest
 from dbt.artifacts.schemas.results import RunStatus
 from dbt.artifacts.schemas.run import RunResult
 from dbt.config.runtime import RuntimeConfig
+from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import ModelNode
 from dbt.events.types import LogModelResult
 from dbt.flags import get_flags, set_from_args
@@ -69,10 +70,14 @@ class TestModelRunner:
         self,
         mock_adapter: MagicMock,
         table_model: ModelNode,
-        mock_project: MagicMock,
+        runtime_config: RuntimeConfig,
     ) -> ModelRunner:
         return ModelRunner(
-            config=mock_project, adapter=mock_adapter, node=table_model, node_index=1, num_nodes=1
+            config=runtime_config,
+            adapter=mock_adapter,
+            node=table_model,
+            node_index=1,
+            num_nodes=1,
         )
 
     @pytest.fixture
@@ -113,3 +118,11 @@ class TestModelRunner:
         assert len(log_model_result_catcher.caught_events) == 1
         assert log_model_result_catcher.caught_events[0].info.level == EventLevel.ERROR
         assert log_model_result_catcher.caught_events[0].data.status == EventLevel.ERROR
+
+    @pytest.mark.skip(
+        reason="The mock_adapter can't be found during `FACTORY.lookup_adapter` causing a runtime error"
+    )
+    def test_execute(
+        self, table_model: ModelNode, manifest: Manifest, model_runner: ModelRunner
+    ) -> None:
+        model_runner.execute(model=table_model, manifest=manifest)
