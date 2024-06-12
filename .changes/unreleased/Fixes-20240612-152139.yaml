@@ -1,0 +1,6 @@
+kind: Fixes
+body: Implement state:modified for saved queries
+time: 2024-06-12T15:21:39.851426-04:00
+custom:
+  Author: gshank
+  Issue: "10294"
