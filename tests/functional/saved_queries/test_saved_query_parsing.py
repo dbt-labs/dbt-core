@@ -12,6 +12,7 @@ from dbt.tests.util import run_dbt, write_file
 from dbt_common.events.base_types import BaseEvent
 from tests.functional.assertions.test_runner import dbtTestRunner
 from tests.functional.saved_queries.fixtures import (
+    saved_queries_with_defaults_yml,
     saved_queries_with_diff_filters_yml,
     saved_queries_yml,
     saved_query_description,
@@ -72,6 +73,14 @@ class TestSavedQueryParsing:
             project.project_root,
             "models",
             "saved_queries.yml",
+        )
+        # State modified finds changed saved_query
+        results = run_dbt(["ls", "--select", "state:modified", "--state", "./state"])
+        assert len(results) == 1
+
+        # change exports
+        write_file(
+            saved_queries_with_defaults_yml, project.project_root, "models", "saved_queries.yml"
         )
         # State modified finds changed saved_query
         results = run_dbt(["ls", "--select", "state:modified", "--state", "./state"])
