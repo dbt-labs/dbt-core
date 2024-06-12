@@ -1562,7 +1562,6 @@ class SavedQuery(NodeInfoMixin, GraphNode, SavedQueryResource):
         return self.group == old.group
 
     def same_exports(self, old: "SavedQuery") -> bool:
-        # TODO: This isn't currently used in `same_contents` (nor called anywhere else)
         if len(self.exports) != len(old.exports):
             return False
 
@@ -1592,6 +1591,7 @@ class SavedQuery(NodeInfoMixin, GraphNode, SavedQueryResource):
             and self.same_label(old)
             and self.same_config(old)
             and self.same_group(old)
+            and self.same_exports(old)
             and True
         )
 
