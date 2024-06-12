@@ -410,7 +410,7 @@ class BaseRunner(metaclass=ABCMeta):
         return self.skip_cause.node.is_ephemeral_model
 
     def on_skip(self):
-        schema_name = self.node.schema
+        schema_name = getattr(self.node, "schema", "")
         node_name = self.node.name
 
         error_message = None
