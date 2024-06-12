@@ -1,20 +1,10 @@
 import json
 import os
 
-import pytest
-
 from dbt.tests.util import run_dbt
-from tests.functional.list.fixtures import (  # noqa: F401
-    analyses,
-    macros,
-    metrics,
-    models,
-    project_files,
-    saved_queries,
-    seeds,
-    semantic_models,
-    snapshots,
-    tests,
+from tests.functional.fixtures.happy_path_fixture import (  # noqa: F401
+    happy_path_project,
+    happy_path_project_files,
 )
 
 
@@ -22,21 +12,7 @@ class TestList:
     def dir(self, value):
         return os.path.normpath(value)
 
-    @pytest.fixture(scope="class")
-    def project_config_update(self):
-        return {
-            "config-version": 2,
-            "analysis-paths": [self.dir("analyses")],
-            "snapshot-paths": [self.dir("snapshots")],
-            "macro-paths": [self.dir("macros")],
-            "seed-paths": [self.dir("seeds")],
-            "test-paths": [self.dir("tests")],
-            "seeds": {
-                "quote_columns": False,
-            },
-        }
-
-    def test_packages_install_path_does_not_exist(self, project):
+    def test_packages_install_path_does_not_exist(self, happy_path_project):  # noqa: F811
         run_dbt(["list"])
         packages_install_path = "dbt_packages"
 
@@ -47,7 +23,6 @@ class TestList:
         full_args = ["ls"]
         if args is not None:
             full_args += args
-
         result = run_dbt(args=full_args, expect_pass=expect_pass)
 
         return result
@@ -67,7 +42,7 @@ class TestList:
                 else:
                     assert got == expected
 
-    def expect_snapshot_output(self, project):
+    def expect_snapshot_output(self, happy_path_project):  # noqa: F811
         expectations = {
             "name": "my_snapshot",
             "selector": "test.snapshot.my_snapshot",
@@ -86,8 +61,8 @@ class TestList:
                     "quoting": {},
                     "column_types": {},
                     "persist_docs": {},
-                    "target_database": project.database,
-                    "target_schema": project.test_schema,
+                    "target_database": happy_path_project.database,
+                    "target_schema": happy_path_project.test_schema,
                     "unique_key": "id",
                     "strategy": "timestamp",
                     "updated_at": "updated_at",
@@ -735,10 +710,14 @@ class TestList:
         }
         del os.environ["DBT_EXCLUDE_RESOURCE_TYPES"]
 
-    def expect_selected_keys(self, project):
+    def expect_selected_keys(self, happy_path_project):  # noqa: F811
         """Expect selected fields of the the selected model"""
         expectations = [
-            {"database": project.database, "schema": project.test_schema, "alias": "inner"}
+            {
+                "database": happy_path_project.database,
+                "schema": happy_path_project.test_schema,
+                "alias": "inner",
+            }
         ]
         results = self.run_dbt_ls(
             [
@@ -759,7 +738,9 @@ class TestList:
 
         """Expect selected fields when --output-keys given multiple times
         """
-        expectations = [{"database": project.database, "schema": project.test_schema}]
+        expectations = [
+            {"database": happy_path_project.database, "schema": happy_path_project.test_schema}
+        ]
         results = self.run_dbt_ls(
             [
                 "--model",
@@ -821,8 +802,8 @@ class TestList:
         for got, expected in zip(results, expectations):
             self.assert_json_equal(got, expected)
 
-    def test_ls(self, project):
-        self.expect_snapshot_output(project)
+    def test_ls(self, happy_path_project):  # noqa: F811
+        self.expect_snapshot_output(happy_path_project)
         self.expect_analyses_output()
         self.expect_model_output()
         self.expect_source_output()
@@ -832,7 +813,7 @@ class TestList:
         self.expect_resource_type_multiple()
         self.expect_resource_type_env_var()
         self.expect_all_output()
-        self.expect_selected_keys(project)
+        self.expect_selected_keys(happy_path_project)
 
 
 def normalize(path):

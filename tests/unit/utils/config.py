@@ -5,6 +5,7 @@ from dbt.config.profile import Profile
 from dbt.config.project import Project
 from dbt.config.renderer import ProfileRenderer
 from dbt.config.runtime import RuntimeConfig
+from dbt.flags import get_flags
 
 
 @pytest.fixture
@@ -42,9 +43,10 @@ def profile() -> Profile:
 
 
 @pytest.fixture
-def runtime_config(project: Project, profile: Profile) -> RuntimeConfig:
+def runtime_config(project: Project, profile: Profile, set_test_flags) -> RuntimeConfig:
+    args = get_flags()
     return RuntimeConfig.from_parts(
         project=project,
         profile=profile,
-        args={},
+        args=args,
     )

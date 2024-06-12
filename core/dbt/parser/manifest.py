@@ -467,6 +467,7 @@ class ManifestLoader:
             self.process_model_inferred_primary_keys()
             self.check_valid_group_config()
             self.check_valid_access_property()
+            self.check_valid_snapshot_config()
 
             semantic_manifest = SemanticManifest(self.manifest)
             if not semantic_manifest.validate():
@@ -1344,6 +1345,16 @@ class ManifestLoader:
                     field_value=node.access,
                     materialization=node.get_materialization(),
                 )
+
+    def check_valid_snapshot_config(self):
+        # Snapshot config can be set in either SQL files or yaml files,
+        # so we need to validate afterward.
+        for node in self.manifest.nodes.values():
+            if node.resource_type != NodeType.Snapshot:
+                continue
+            if node.created_at < self.started_at:
+                continue
+            node.config.final_validate()
 
     def write_perf_info(self, target_path: str):
         path = os.path.join(target_path, PERF_INFO_FILE_NAME)

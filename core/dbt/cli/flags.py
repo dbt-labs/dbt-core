@@ -289,6 +289,10 @@ class Flags:
             params_assigned_from_default, ["WARN_ERROR", "WARN_ERROR_OPTIONS"]
         )
 
+        # Handle arguments mutually exclusive with INLINE
+        self._assert_mutually_exclusive(params_assigned_from_default, ["SELECT", "INLINE"])
+        self._assert_mutually_exclusive(params_assigned_from_default, ["SELECTOR", "INLINE"])
+
         # Support lower cased access for legacy code.
         params = set(
             x for x in dir(self) if not callable(getattr(self, x)) and not x.startswith("__")
@@ -315,7 +319,9 @@ class Flags:
         """
         set_flag = None
         for flag in group:
-            flag_set_by_user = flag.lower() not in params_assigned_from_default
+            flag_set_by_user = (
+                hasattr(self, flag) and flag.lower() not in params_assigned_from_default
+            )
             if flag_set_by_user and set_flag:
                 raise DbtUsageException(
                     f"{flag.lower()}: not allowed with argument {set_flag.lower()}"

@@ -36,6 +36,9 @@ class TestDbtRunner:
         res = dbt.invoke(["deps", "--warn-error", "--warn-error-options", '{"include": "all"}'])
         assert type(res.exception) == DbtUsageException
 
+        res = dbt.invoke(["compile", "--select", "models", "--inline", "select 1 as id"])
+        assert type(res.exception) == DbtUsageException
+
     def test_invalid_command(self, dbt: dbtRunner) -> None:
         res = dbt.invoke(["invalid-command"])
         assert type(res.exception) == DbtUsageException

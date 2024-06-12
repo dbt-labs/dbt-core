@@ -90,7 +90,6 @@ def run_dbt(
         args.extend(["--project-dir", project_dir])
     if profiles_dir and "--profiles-dir" not in args:
         args.extend(["--profiles-dir", profiles_dir])
-
     dbt = dbtRunner()
     res = dbt.invoke(args)
 
