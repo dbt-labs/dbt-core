@@ -121,9 +121,10 @@ class TestModelRunner:
         assert log_model_result_catcher.caught_events[0].data.status == EventLevel.ERROR
 
     @pytest.mark.skip(
-        reason="The materialization table for the table_model can't be found during execution"
+        reason="Default and adapter macros aren't being appropriately populated, leading to a runtime error"
     )
     def test_execute(
         self, table_model: ModelNode, manifest: Manifest, model_runner: ModelRunner
     ) -> None:
         model_runner.execute(model=table_model, manifest=manifest)
+        # TODO: Assert that the model was executed

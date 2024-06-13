@@ -15,6 +15,7 @@ from dbt.artifacts.resources import (
     TestConfig,
     TestMetadata,
 )
+from dbt.artifacts.resources.types import ModelLanguage
 from dbt.artifacts.resources.v1.model import ModelConfig
 from dbt.contracts.files import AnySourceFile, FileHash
 from dbt.contracts.graph.manifest import Manifest, ManifestMetadata
@@ -525,6 +526,13 @@ def macro_test_not_null() -> Macro:
 
 
 @pytest.fixture
+def macro_materialization_table_default() -> Macro:
+    macro = make_macro("dbt", "materialization_table_default", "SELECT 1")
+    macro.supported_languages = [ModelLanguage.sql]
+    return macro
+
+
+@pytest.fixture
 def macro_default_test_not_null() -> Macro:
     return make_macro("dbt", "default__test_not_null", "blabla")
 
@@ -958,12 +966,14 @@ def macros(
     macro_default_test_unique,
     macro_test_not_null,
     macro_default_test_not_null,
+    macro_materialization_table_default,
 ) -> List[Macro]:
     return [
         macro_test_unique,
         macro_default_test_unique,
         macro_test_not_null,
         macro_default_test_not_null,
+        macro_materialization_table_default,
     ]
 
 
