@@ -141,6 +141,7 @@ class TestRunner(CompileRunner):
             raise DbtInternalError(
                 "Invalid materialization context generated, missing config: {}".format(context)
             )
+
         # generate materialization macro
         macro_func = MacroGenerator(materialization_macro, context)
         try:
@@ -148,6 +149,7 @@ class TestRunner(CompileRunner):
             macro_func()
         finally:
             self.adapter.post_model_hook(context, hook_ctx)
+
         # load results from context
         # could eventually be returned directly by materialization
         result = context["load_result"]("main")
@@ -218,6 +220,7 @@ class TestRunner(CompileRunner):
             raise DbtInternalError(
                 "Invalid materialization context generated, missing config: {}".format(context)
             )
+
         # generate materialization macro
         macro_func = MacroGenerator(materialization_macro, context)
         try:
