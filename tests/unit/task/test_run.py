@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from dbt.adapters.postgres import PostgresAdapter
 from dbt.artifacts.schemas.results import RunStatus
 from dbt.artifacts.schemas.run import RunResult
 from dbt.config.runtime import RuntimeConfig
@@ -68,13 +69,13 @@ class TestModelRunner:
     @pytest.fixture
     def model_runner(
         self,
-        mock_adapter: MagicMock,
+        postgres_adapter: PostgresAdapter,
         table_model: ModelNode,
         runtime_config: RuntimeConfig,
     ) -> ModelRunner:
         return ModelRunner(
             config=runtime_config,
-            adapter=mock_adapter,
+            adapter=postgres_adapter,
             node=table_model,
             node_index=1,
             num_nodes=1,
@@ -120,7 +121,7 @@ class TestModelRunner:
         assert log_model_result_catcher.caught_events[0].data.status == EventLevel.ERROR
 
     @pytest.mark.skip(
-        reason="The mock_adapter can't be found during `FACTORY.lookup_adapter` causing a runtime error"
+        reason="The materialization table for the table_model can't be found during execution"
     )
     def test_execute(
         self, table_model: ModelNode, manifest: Manifest, model_runner: ModelRunner
