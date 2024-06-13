@@ -128,6 +128,14 @@ class SuccessfulSourceFreshnessTest(BaseSourcesTest):
             }
         ]
 
+    def _assert_project_hooks_called(self, logs: str):
+        assert "Running 1 on-run-start hook" in logs
+        assert "Running 1 on-run-end hook" in logs
+
+    def _assert_project_hooks_not_called(self, logs: str):
+        assert "Running 1 on-run-start hook" not in logs
+        assert "Running 1 on-run-end hook" not in logs
+
 
 class TestSourceFreshness(SuccessfulSourceFreshnessTest):
     def test_source_freshness(self, project):
@@ -428,11 +436,17 @@ class TestSourceFreshnessProjectHooksNotRun(SuccessfulSourceFreshnessTest):
             },
         }
 
+    @pytest.fixture(scope="class")
+    def global_deprecations(self):
+        deprecations.reset_deprecations()
+        yield
+        deprecations.reset_deprecations()
+
     def test_hooks_do_run_for_source_freshness(
         self,
         project,
+        global_deprecations,
     ):
-        deprecations.reset_deprecations()
         assert deprecations.active_deprecations == set()
         _, log_output = self.run_dbt_and_capture_with_vars(
             project,
@@ -472,8 +486,8 @@ class TestHooksInSourceFreshness(SuccessfulSourceFreshnessTest):
             ],
             expect_pass=False,
         )
-        assert "on-run-start" in log_output
-        assert "on-run-end" in log_output
+
+        self._assert_project_hooks_called(log_output)
 
 
 class TestHooksInSourceFreshnessError:
@@ -526,7 +540,7 @@ class TestHooksInSourceFreshnessDisabled(SuccessfulSourceFreshnessTest):
             },
         }
 
-    def test_hooks_do_run_for_source_freshness(
+    def test_hooks_do_not_run_for_source_freshness(
         self,
         project,
     ):
@@ -538,8 +552,7 @@ class TestHooksInSourceFreshnessDisabled(SuccessfulSourceFreshnessTest):
             ],
             expect_pass=False,
         )
-        assert "on-run-start" not in log_output
-        assert "on-run-end" not in log_output
+        self._assert_project_hooks_not_called(log_output)
 
 
 class TestHooksInSourceFreshnessDefault(SuccessfulSourceFreshnessTest):
@@ -551,7 +564,7 @@ class TestHooksInSourceFreshnessDefault(SuccessfulSourceFreshnessTest):
             "on-run-end": ["{{ log('on-run-end hooks called') }}"],
         }
 
-    def test_hooks_do_run_for_source_freshness(
+    def test_hooks_do_not_run_for_source_freshness(
         self,
         project,
     ):
@@ -564,5 +577,4 @@ class TestHooksInSourceFreshnessDefault(SuccessfulSourceFreshnessTest):
             expect_pass=False,
         )
         # default behaviour - no hooks run in source freshness
-        assert "on-run-start" not in log_output
-        assert "on-run-end" not in log_output
+        self._assert_project_hooks_not_called(log_output)
