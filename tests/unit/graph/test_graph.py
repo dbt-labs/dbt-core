@@ -37,3 +37,18 @@ class TestGraph:
         # check that result excludes nodes that are out of depth
         descendants = graph.descendants(node=model.unique_id, max_depth=1)
         assert descendants == {"model.pkg.table_model", "model.pkg.view_model"}
+
+    def test_ancestors(self, graph: Graph, manifest: Manifest) -> None:
+        model: ModelNode = manifest.nodes["model.pkg.table_model"]
+
+        # check result when not limiting the depth
+        ancestors = graph.ancestors(node=model.unique_id)
+
+        assert ancestors == {
+            "model.pkg.ephemeral_model",
+            "source.pkg.raw.seed",
+        }
+
+        # check that result excludes nodes that are out of depth
+        ancestors = graph.ancestors(node=model.unique_id, max_depth=1)
+        assert ancestors == {"model.pkg.ephemeral_model"}
