@@ -14,7 +14,7 @@ from dbt.flags import get_flags, set_from_args
 from dbt.task.run import ModelRunner, RunTask
 from dbt.tests.util import safe_set_invocation_context
 from dbt_common.events.base_types import EventLevel
-from dbt_common.events.event_manager_client import get_event_manager
+from dbt_common.events.event_manager_client import add_callback_to_manager
 from tests.utils import EventCatcher
 
 
@@ -64,7 +64,9 @@ def test_run_task_preserve_edges():
 class TestModelRunner:
     @pytest.fixture
     def log_model_result_catcher(self) -> EventCatcher:
-        return EventCatcher(event_to_catch=LogModelResult)
+        catcher = EventCatcher(event_to_catch=LogModelResult)
+        add_callback_to_manager(catcher.catch)
+        return catcher
 
     @pytest.fixture
     def model_runner(
@@ -100,10 +102,6 @@ class TestModelRunner:
         model_runner: ModelRunner,
         run_result: RunResult,
     ) -> None:
-        # Setup way to catch events
-        event_manager = get_event_manager()
-        event_manager.callbacks.append(log_model_result_catcher.catch)
-
         # Check `print_result_line` with "successful" RunResult
         model_runner.print_result_line(run_result)
         assert len(log_model_result_catcher.caught_events) == 1
