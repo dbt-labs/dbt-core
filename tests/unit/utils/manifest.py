@@ -33,6 +33,8 @@ from dbt.artifacts.resources import (
     TestConfig,
     TestMetadata,
     RefArgs,
+    WhereFilter,
+    WhereFilterIntersection,
 )
 from dbt.contracts.graph.unparsed import (
     UnitTestInputFixture,
@@ -855,7 +857,11 @@ def saved_query() -> SavedQuery:
         query_params=QueryParams(
             metrics=["my_metric"],
             group_by=[],
-            where=None,
+            where=WhereFilterIntersection(
+                where_filters=[
+                    WhereFilter(where_sql_template="1=1"),
+                ]
+            ),
         ),
         exports=[],
         unique_id=f"saved_query.{pkg}.{name}",
