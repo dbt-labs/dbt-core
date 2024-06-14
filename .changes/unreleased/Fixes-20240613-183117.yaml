@@ -1,0 +1,6 @@
+kind: Fixes
+body: DOn't warn on `unit_test` config paths that are properly used
+time: 2024-06-13T18:31:17.486497-07:00
+custom:
+  Author: QMalcolm
+  Issue: "10311"
