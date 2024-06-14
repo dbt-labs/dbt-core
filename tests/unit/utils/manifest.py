@@ -1,4 +1,5 @@
 from argparse import Namespace
+from typing import List
 import pytest
 
 from dbt.artifacts.resources.v1.model import ModelConfig
@@ -976,13 +977,18 @@ def unit_tests(unit_test_table_model) -> list:
 
 
 @pytest.fixture
-def metrics() -> list:
-    return []
+def metrics(metric: Metric) -> List[Metric]:
+    return [metric]
 
 
 @pytest.fixture
-def semantic_models() -> list:
-    return []
+def semantic_models(semantic_model: SemanticModel) -> List[SemanticModel]:
+    return [semantic_model]
+
+
+@pytest.fixture
+def saved_queries(saved_query: SavedQuery) -> List[SavedQuery]:
+    return [saved_query]
 
 
 @pytest.fixture
@@ -1001,6 +1007,7 @@ def manifest(
     metrics,
     semantic_models,
     files,
+    saved_queries,
 ) -> Manifest:
     manifest = Manifest(
         nodes={n.unique_id: n for n in nodes},
@@ -1012,6 +1019,7 @@ def manifest(
         files=files,
         exposures={},
         metrics={m.unique_id: m for m in metrics},
+        saved_queries={s.unique_id: s for s in saved_queries},
         disabled={},
         selectors={},
         groups={},
