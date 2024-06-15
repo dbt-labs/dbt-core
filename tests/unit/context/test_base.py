@@ -21,3 +21,34 @@ class TestBaseContext:
             BaseContext.log({"fact1": "I like cats"}, info=True)
         except Exception as e:
             assert False, f"Logging while a `DBT_ENV_SECRET` was set raised an exception: {e}"
+
+    def test_flags(self):
+        expected_context_flags = {
+            "use_experimental_parser",
+            "static_parser",
+            "warn_error",
+            "warn_error_options",
+            "write_json",
+            "partial_parse",
+            "use_colors",
+            "profiles_dir",
+            "debug",
+            "log_format",
+            "version_check",
+            "fail_fast",
+            "send_anonymous_usage_stats",
+            "printer_width",
+            "indirect_selection",
+            "log_cache_events",
+            "quiet",
+            "no_print",
+            "cache_selected_only",
+            "introspect",
+            "target_path",
+            "log_path",
+            "invocation_command",
+            "empty",
+        }
+        flags = BaseContext(cli_vars={}).flags
+        for expected_flag in expected_context_flags:
+            assert hasattr(flags, expected_flag.upper())
