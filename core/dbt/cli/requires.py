@@ -136,7 +136,7 @@ def tear_down_record_replay():
         if recorder.mode == RecorderMode.DIFF:
             # write out result of recording to it was be referred to as needed
             recorder.write()
-            recorder.write_diffs(diff_file_name="diffs.json")
+            recorder.write_diffs(diff_file_name="recording_diffs.json")
         elif recorder.mode == RecorderMode.REPLAY:
             recorder.write_diffs("replay_diffs.json")
 
