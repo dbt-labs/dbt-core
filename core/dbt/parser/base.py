@@ -360,8 +360,9 @@ class ConfiguredParser(
         if "contract" in config_dict and config_dict["contract"]:
             contract_dct = config_dict["contract"]
             Contract.validate(contract_dct)
-            assert hasattr(parsed_node, "contract")
-            parsed_node.contract = Contract.from_dict(contract_dct)
+            # Seed node has contract config (from NodeConfig) but no contract in SeedNode
+            if hasattr(parsed_node, "contract"):
+                parsed_node.contract = Contract.from_dict(contract_dct)
 
         # unrendered_config is used to compare the original database/schema/alias
         # values and to handle 'same_config' and 'same_contents' calls
