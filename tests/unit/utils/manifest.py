@@ -1,4 +1,5 @@
 from argparse import Namespace
+from typing import List
 import pytest
 
 from dbt.artifacts.resources.v1.model import ModelConfig
@@ -32,6 +33,8 @@ from dbt.artifacts.resources import (
     TestConfig,
     TestMetadata,
     RefArgs,
+    WhereFilter,
+    WhereFilterIntersection,
 )
 from dbt.contracts.graph.unparsed import (
     UnitTestInputFixture,
@@ -854,7 +857,11 @@ def saved_query() -> SavedQuery:
         query_params=QueryParams(
             metrics=["my_metric"],
             group_by=[],
-            where=None,
+            where=WhereFilterIntersection(
+                where_filters=[
+                    WhereFilter(where_sql_template="1=1"),
+                ]
+            ),
         ),
         exports=[],
         unique_id=f"saved_query.{pkg}.{name}",
@@ -976,13 +983,18 @@ def unit_tests(unit_test_table_model) -> list:
 
 
 @pytest.fixture
-def metrics() -> list:
-    return []
+def metrics(metric: Metric) -> List[Metric]:
+    return [metric]
 
 
 @pytest.fixture
-def semantic_models() -> list:
-    return []
+def semantic_models(semantic_model: SemanticModel) -> List[SemanticModel]:
+    return [semantic_model]
+
+
+@pytest.fixture
+def saved_queries(saved_query: SavedQuery) -> List[SavedQuery]:
+    return [saved_query]
 
 
 @pytest.fixture
@@ -1001,6 +1013,7 @@ def manifest(
     metrics,
     semantic_models,
     files,
+    saved_queries,
 ) -> Manifest:
     manifest = Manifest(
         nodes={n.unique_id: n for n in nodes},
@@ -1012,6 +1025,7 @@ def manifest(
         files=files,
         exposures={},
         metrics={m.unique_id: m for m in metrics},
+        saved_queries={s.unique_id: s for s in saved_queries},
         disabled={},
         selectors={},
         groups={},

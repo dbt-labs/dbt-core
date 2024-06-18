@@ -113,6 +113,7 @@ def test_select_fqn(manifest):
     assert search_manifest_using_method(manifest, method, "*.*.*_model") == {
         "mynamespace.union_model",
         "mynamespace.ephemeral_model",
+        "test_semantic_model",
         "union_model",
         "unit_test_table_model",
     }

@@ -4,9 +4,13 @@ from argparse import Namespace
 
 
 from dbt.contracts.graph.manifest import Manifest
-from dbt.parser.manifest import ManifestLoader
+from dbt.events.types import UnusedResourceConfigPath
+from dbt.parser.manifest import ManifestLoader, _warn_for_unused_resource_config_paths
 from dbt.config import RuntimeConfig
 from dbt.flags import set_from_args
+from dbt_common.events.event_manager_client import add_callback_to_manager
+from tests.functional.utils import EventCatcher
+from tests.unit.utils import config_from_parts_or_dicts
 
 
 @pytest.fixture
@@ -91,3 +95,73 @@ class TestFailedPartialParse:
         assert "full_reparse_reason" in exc_info
         assert "KeyError: 'Whoopsie!'" == exc_info["exception"]
         assert isinstance(exc_info["code"], str) or isinstance(exc_info["code"], type(None))
+
+
+class TestWarnUnusedConfigs:
+    @pytest.fixture
+    def runtime_config(self) -> RuntimeConfig:
+        profile_cfg = {
+            "outputs": {
+                "test": {
+                    "type": "postgres",
+                    "dbname": "postgres",
+                    "user": "test",
+                    "host": "test",
+                    "pass": "test",
+                    "port": 5432,
+                    "schema": "test",
+                },
+            },
+            "target": "test",
+        }
+
+        project_cfg = {
+            "name": "query_headers",
+            "version": "0.1",
+            "profile": "test",
+            "config-version": 2,
+        }
+
+        return config_from_parts_or_dicts(project=project_cfg, profile=profile_cfg)
+
+    @pytest.mark.parametrize(
+        "resource_type,path,expect_used",
+        [
+            ("data_tests", "unused_path", False),
+            ("data_tests", "minimal", True),
+            ("metrics", "unused_path", False),
+            ("metrics", "test", True),
+            ("models", "unused_path", False),
+            ("models", "pkg", True),
+            ("saved_queries", "unused_path", False),
+            ("saved_queries", "test", True),
+            ("seeds", "unused_path", False),
+            ("seeds", "pkg", True),
+            ("semantic_models", "unused_path", False),
+            ("semantic_models", "test", True),
+            ("sources", "unused_path", False),
+            ("sources", "pkg", True),
+            ("unit_tests", "unused_path", False),
+            ("unit_tests", "pkg", True),
+        ],
+    )
+    def test_warn_for_unused_resource_config_paths(
+        self,
+        resource_type: str,
+        path: str,
+        expect_used: bool,
+        manifest: Manifest,
+        runtime_config: RuntimeConfig,
+    ) -> None:
+        catcher = EventCatcher(UnusedResourceConfigPath)
+        add_callback_to_manager(catcher.catch)
+
+        setattr(runtime_config, resource_type, {path: {"+materialized": "table"}})
+
+        _warn_for_unused_resource_config_paths(manifest=manifest, config=runtime_config)
+
+        if expect_used:
+            assert len(catcher.caught_events) == 0
+        else:
+            assert len(catcher.caught_events) == 1
+            assert f"{resource_type}.{path}" in str(catcher.caught_events[0].data)

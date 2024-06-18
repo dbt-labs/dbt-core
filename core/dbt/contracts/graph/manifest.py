@@ -986,6 +986,7 @@ class Manifest(MacroMethods, dbtClassMixin):
             self.metrics.values(),
             self.semantic_models.values(),
             self.saved_queries.values(),
+            self.unit_tests.values(),
         )
         for resource in all_resources:
             resource_type_plural = resource.resource_type.pluralize()
