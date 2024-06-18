@@ -13,6 +13,15 @@ class TestGraph:
         return make_model(pkg="pkg", name="extra_parent_model", code="SELECT 'cats' as interests")
 
     @pytest.fixture
+    def non_shared_child_of_extra(self, extra_parent_model: ModelNode) -> ModelNode:
+        return make_model(
+            pkg="pkg",
+            name="non_shared_child_of_extra",
+            code='SELECT * FROM {{ ref("extra_parent_model") }}',
+            refs=[extra_parent_model],
+        )
+
+    @pytest.fixture
     def model_with_two_direct_parents(
         self, extra_parent_model: ModelNode, ephemeral_model: ModelNode
     ) -> ModelNode:
@@ -28,9 +37,11 @@ class TestGraph:
         self,
         manifest: Manifest,
         model_with_two_direct_parents: ModelNode,
+        non_shared_child_of_extra: ModelNode,
         extra_parent_model: ModelNode,
     ) -> Manifest:
         manifest.add_node_nofile(extra_parent_model)
+        manifest.add_node_nofile(non_shared_child_of_extra)
         manifest.add_node_nofile(model_with_two_direct_parents)
 
     @pytest.fixture
@@ -114,4 +125,22 @@ class TestGraph:
         assert model_with_two_direct_parents.unique_id in childrens_parents
         assert extra_parent_model.unique_id in childrens_parents
         assert ephemeral_model.unique_id in childrens_parents
-        assert len(childrens_parents) == 4
+        assert len(childrens_parents) == 5
+
+    def test_select_children(
+        self,
+        graph: Graph,
+        ephemeral_model: ModelNode,
+        extra_parent_model: ModelNode,
+    ) -> None:
+        ephemerals_children = graph.select_children(selected={ephemeral_model.unique_id})
+        extras_children = graph.select_children(selected={extra_parent_model.unique_id})
+        joint_children = graph.select_children(
+            selected={extra_parent_model.unique_id, ephemeral_model.unique_id}
+        )
+
+        assert joint_children == ephemerals_children.union(extras_children)
+        # These additional assertions are because we intentionally setup the test such that
+        # neither nodes children set is a subset of the other
+        assert not ephemerals_children.issubset(extras_children)
+        assert not extras_children.issubset(ephemerals_children)
