@@ -29,6 +29,7 @@ from dbt.adapters.exceptions import (
     DuplicateMacroInPackageError,
     DuplicateMaterializationNameError,
 )
+from dbt.adapters.factory import get_adapter_package_names
 
 # to preserve import paths
 from dbt.artifacts.resources import BaseResource, DeferRelation, NodeVersion
@@ -720,9 +721,6 @@ class MacroMethods:
         filter: Optional[Callable[[MacroCandidate], bool]] = None,
     ) -> CandidateList:
         """Find macros by their name."""
-        # avoid an import cycle
-        from dbt.adapters.factory import get_adapter_package_names
-
         candidates: CandidateList = CandidateList()
 
         macros_by_name = self.get_macros_by_name()
