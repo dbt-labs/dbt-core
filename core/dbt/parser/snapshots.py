@@ -1,7 +1,7 @@
 import os
 from typing import List
 
-from dbt.contracts.graph.nodes import IntermediateSnapshotNode, SnapshotNode
+from dbt.contracts.graph.nodes import SnapshotNode
 from dbt.exceptions import SnapshopConfigError
 from dbt.node_types import NodeType
 from dbt.parser.base import SQLParser
@@ -10,11 +10,11 @@ from dbt.utils import split_path
 from dbt_common.dataclass_schema import ValidationError
 
 
-class SnapshotParser(SQLParser[IntermediateSnapshotNode, SnapshotNode]):
-    def parse_from_dict(self, dct, validate=True) -> IntermediateSnapshotNode:
+class SnapshotParser(SQLParser[SnapshotNode, SnapshotNode]):
+    def parse_from_dict(self, dct, validate=True) -> SnapshotNode:
         if validate:
-            IntermediateSnapshotNode.validate(dct)
-        return IntermediateSnapshotNode.from_dict(dct)
+            SnapshotNode.validate(dct)
+        return SnapshotNode.from_dict(dct)
 
     @property
     def resource_type(self) -> NodeType:
@@ -54,18 +54,10 @@ class SnapshotParser(SQLParser[IntermediateSnapshotNode, SnapshotNode]):
         fqn.append(name)
         return fqn
 
-    def transform(self, node: IntermediateSnapshotNode) -> SnapshotNode:
+    def transform(self, node: SnapshotNode) -> SnapshotNode:
         try:
-            # The config_call_dict is not serialized, because normally
-            # it is not needed after parsing. But since the snapshot node
-            # does this extra to_dict, save and restore it, to keep
-            # the model config when there is also schema config.
-            config_call_dict = node.config_call_dict
-            dct = node.to_dict(omit_none=True)
-            parsed_node = SnapshotNode.from_dict(dct)
-            parsed_node.config_call_dict = config_call_dict
-            self.set_snapshot_attributes(parsed_node)
-            return parsed_node
+            self.set_snapshot_attributes(node)
+            return node
         except ValidationError as exc:
             raise SnapshopConfigError(exc, node)
 

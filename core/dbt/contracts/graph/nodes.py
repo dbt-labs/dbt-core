@@ -59,7 +59,7 @@ from dbt.artifacts.resources import Snapshot as SnapshotResource
 from dbt.artifacts.resources import SourceDefinition as SourceDefinitionResource
 from dbt.artifacts.resources import SqlOperation as SqlOperationResource
 from dbt.artifacts.resources import UnitTestDefinition as UnitTestDefinitionResource
-from dbt.contracts.graph.model_config import EmptySnapshotConfig, UnitTestNodeConfig
+from dbt.contracts.graph.model_config import UnitTestNodeConfig
 from dbt.contracts.graph.node_args import ModelNodeArgs
 from dbt.contracts.graph.unparsed import (
     HasYamlMetadata,
@@ -1039,19 +1039,6 @@ class UnitTestFileFixture(BaseNode):
 # ====================================
 # Snapshot node
 # ====================================
-
-
-@dataclass
-class IntermediateSnapshotNode(CompiledNode):
-    # at an intermediate stage in parsing, where we've built something better
-    # than an unparsed node for rendering in parse mode, it's pretty possible
-    # that we won't have critical snapshot-related information that is only
-    # defined in config blocks. To fix that, we have an intermediate type that
-    # uses a regular node config, which the snapshot parser will then convert
-    # into a full ParsedSnapshotNode after rendering. Note: it currently does
-    # not work to set snapshot config in schema files because of the validation.
-    resource_type: Literal[NodeType.Snapshot]
-    config: EmptySnapshotConfig = field(default_factory=EmptySnapshotConfig)
 
 
 @dataclass

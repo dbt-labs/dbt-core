@@ -39,12 +39,6 @@ class UnitTestNodeConfig(NodeConfig):
     expected_sql: Optional[str] = None
 
 
-@dataclass
-class EmptySnapshotConfig(NodeConfig):
-    materialized: str = "snapshot"
-    unique_key: Optional[str] = None  # override NodeConfig unique_key definition
-
-
 RESOURCE_TYPES: Dict[NodeType, Type[BaseConfig]] = {
     NodeType.Metric: MetricConfig,
     NodeType.SemanticModel: SemanticModelConfig,
@@ -62,7 +56,6 @@ RESOURCE_TYPES: Dict[NodeType, Type[BaseConfig]] = {
 # base resource types are like resource types, except nothing has mandatory
 # configs.
 BASE_RESOURCE_TYPES: Dict[NodeType, Type[BaseConfig]] = RESOURCE_TYPES.copy()
-BASE_RESOURCE_TYPES.update({NodeType.Snapshot: EmptySnapshotConfig})
 
 
 def get_config_for(resource_type: NodeType, base=False) -> Type[BaseConfig]:

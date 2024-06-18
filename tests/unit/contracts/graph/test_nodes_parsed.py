@@ -30,7 +30,6 @@ from dbt.artifacts.resources import TestMetadata, Time
 from dbt.artifacts.resources.types import TimePeriod
 from dbt.contracts.files import FileHash
 from dbt.contracts.graph.model_config import (
-    EmptySnapshotConfig,
     ModelConfig,
     NodeConfig,
     SeedConfig,
@@ -44,7 +43,6 @@ from dbt.contracts.graph.nodes import (
     Exposure,
     GenericTestNode,
     HookNode,
-    IntermediateSnapshotNode,
     Macro,
     Metric,
     ModelNode,
@@ -1588,51 +1586,6 @@ def basic_timestamp_snapshot_object():
 
 
 @pytest.fixture
-def basic_intermediate_timestamp_snapshot_object():
-    cfg = EmptySnapshotConfig()
-    cfg._extra.update(
-        {
-            "strategy": "timestamp",
-            "unique_key": "id",
-            "updated_at": "last_update",
-            "target_database": "some_snapshot_db",
-            "target_schema": "some_snapshot_schema",
-        }
-    )
-
-    return IntermediateSnapshotNode(
-        package_name="test",
-        path="/root/x/path.sql",
-        original_file_path="/root/path.sql",
-        language="sql",
-        raw_code="select * from wherever",
-        name="foo",
-        resource_type=NodeType.Snapshot,
-        unique_id="model.test.foo",
-        fqn=["test", "models", "foo"],
-        refs=[],
-        sources=[],
-        metrics=[],
-        depends_on=DependsOn(),
-        description="",
-        database="test_db",
-        schema="test_schema",
-        alias="bar",
-        tags=[],
-        config=cfg,
-        checksum=FileHash.from_contents(""),
-        created_at=1,
-        unrendered_config={
-            "strategy": "timestamp",
-            "unique_key": "id",
-            "updated_at": "last_update",
-            "target_database": "some_snapshot_db",
-            "target_schema": "some_snapshot_schema",
-        },
-    )
-
-
-@pytest.fixture
 def basic_check_snapshot_dict():
     return {
         "name": "foo",
@@ -1734,64 +1687,14 @@ def basic_check_snapshot_object():
     )
 
 
-@pytest.fixture
-def basic_intermediate_check_snapshot_object():
-    cfg = EmptySnapshotConfig()
-    cfg._extra.update(
-        {
-            "unique_key": "id",
-            "strategy": "check",
-            "check_cols": "all",
-            "target_database": "some_snapshot_db",
-            "target_schema": "some_snapshot_schema",
-        }
-    )
-
-    return IntermediateSnapshotNode(
-        package_name="test",
-        path="/root/x/path.sql",
-        original_file_path="/root/path.sql",
-        language="sql",
-        raw_code="select * from wherever",
-        name="foo",
-        resource_type=NodeType.Snapshot,
-        unique_id="model.test.foo",
-        fqn=["test", "models", "foo"],
-        refs=[],
-        sources=[],
-        metrics=[],
-        depends_on=DependsOn(),
-        description="",
-        database="test_db",
-        schema="test_schema",
-        alias="bar",
-        tags=[],
-        config=cfg,
-        checksum=FileHash.from_contents(""),
-        created_at=1.0,
-        unrendered_config={
-            "target_database": "some_snapshot_db",
-            "target_schema": "some_snapshot_schema",
-            "unique_key": "id",
-            "strategy": "check",
-            "check_cols": "all",
-        },
-    )
-
-
 def test_timestamp_snapshot_ok(
     basic_timestamp_snapshot_dict,
     basic_timestamp_snapshot_object,
-    basic_intermediate_timestamp_snapshot_object,
 ):
     node_dict = basic_timestamp_snapshot_dict
     node = basic_timestamp_snapshot_object
-    inter = basic_intermediate_timestamp_snapshot_object
 
     assert_symmetric(node, node_dict, SnapshotNode)
-    #   node_from_dict = SnapshotNode.from_dict(inter.to_dict(omit_none=True))
-    #   node_from_dict.created_at = 1
-    assert SnapshotNode.from_dict(inter.to_dict(omit_none=True)) == node
     assert node.is_refable is True
     assert node.is_ephemeral is False
     pickle.loads(pickle.dumps(node))
@@ -1800,14 +1703,11 @@ def test_timestamp_snapshot_ok(
 def test_check_snapshot_ok(
     basic_check_snapshot_dict,
     basic_check_snapshot_object,
-    basic_intermediate_check_snapshot_object,
 ):
     node_dict = basic_check_snapshot_dict
     node = basic_check_snapshot_object
-    inter = basic_intermediate_check_snapshot_object
 
     assert_symmetric(node, node_dict, SnapshotNode)
-    assert SnapshotNode.from_dict(inter.to_dict(omit_none=True)) == node
     assert node.is_refable is True
     assert node.is_ephemeral is False
     pickle.loads(pickle.dumps(node))
