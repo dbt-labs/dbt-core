@@ -144,3 +144,21 @@ class TestGraph:
         # neither nodes children set is a subset of the other
         assert not ephemerals_children.issubset(extras_children)
         assert not extras_children.issubset(ephemerals_children)
+
+    def test_select_parents(
+        self,
+        graph: Graph,
+        non_shared_child_of_extra: ModelNode,
+        table_model: ModelNode,
+    ) -> None:
+        non_shareds_parents = graph.select_parents(selected={non_shared_child_of_extra.unique_id})
+        tables_parents = graph.select_parents(selected={table_model.unique_id})
+        joint_parents = graph.select_parents(
+            selected={table_model.unique_id, non_shared_child_of_extra.unique_id}
+        )
+
+        assert joint_parents == tables_parents.union(non_shareds_parents)
+        # These additional assertions are because we intentionally setup the test such that
+        # neither nodes parents set is a subset of the other
+        assert not non_shareds_parents.issubset(tables_parents)
+        assert not tables_parents.issubset(non_shareds_parents)
