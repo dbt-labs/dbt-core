@@ -32,7 +32,6 @@ from dbt_common.dataclass_schema import ValidationError
 FinalValue = TypeVar("FinalValue", bound=BaseNode)
 IntermediateValue = TypeVar("IntermediateValue", bound=BaseNode)
 
-IntermediateNode = TypeVar("IntermediateNode", bound=Any)
 FinalNode = TypeVar("FinalNode", bound=ManifestNode)
 
 
@@ -118,7 +117,7 @@ class RelationUpdate:
 
 class ConfiguredParser(
     Parser[FinalNode],
-    Generic[ConfiguredBlockType, IntermediateNode, FinalNode],
+    Generic[ConfiguredBlockType, FinalNode],
 ):
     def __init__(
         self,
@@ -144,7 +143,7 @@ class ConfiguredParser(
         pass
 
     @abc.abstractmethod
-    def parse_from_dict(self, dict, validate=True) -> IntermediateNode:
+    def parse_from_dict(self, dict, validate=True) -> FinalNode:
         pass
 
     @abc.abstractproperty
@@ -208,7 +207,7 @@ class ConfiguredParser(
         fqn: List[str],
         name=None,
         **kwargs,
-    ) -> IntermediateNode:
+    ) -> FinalNode:
         """Create the node that will be passed in to the parser context for
         "rendering". Some information may be partial, as it'll be updated by
         config() and any ref()/source() calls discovered during rendering.
@@ -253,10 +252,10 @@ class ConfiguredParser(
             )
             raise DictParseError(exc, node=node)
 
-    def _context_for(self, parsed_node: IntermediateNode, config: ContextConfig) -> Dict[str, Any]:
+    def _context_for(self, parsed_node: FinalNode, config: ContextConfig) -> Dict[str, Any]:
         return generate_parser_model_context(parsed_node, self.root_project, self.manifest, config)
 
-    def render_with_context(self, parsed_node: IntermediateNode, config: ContextConfig):
+    def render_with_context(self, parsed_node: FinalNode, config: ContextConfig):
         # Given the parsed node and a ContextConfig to use during parsing,
         # render the node's sql with macro capture enabled.
         # Note: this mutates the config object when config calls are rendered.
@@ -271,7 +270,7 @@ class ConfiguredParser(
     # updating the config with new config passed in, then re-creating the
     # config from the dict in the node.
     def update_parsed_node_config_dict(
-        self, parsed_node: IntermediateNode, config_dict: Dict[str, Any]
+        self, parsed_node: FinalNode, config_dict: Dict[str, Any]
     ) -> None:
         # Overwrite node config
         final_config_dict = parsed_node.config.to_dict(omit_none=True)
@@ -281,7 +280,7 @@ class ConfiguredParser(
         parsed_node.config = parsed_node.config.from_dict(final_config_dict)
 
     def update_parsed_node_relation_names(
-        self, parsed_node: IntermediateNode, config_dict: Dict[str, Any]
+        self, parsed_node: FinalNode, config_dict: Dict[str, Any]
     ) -> None:
 
         # These call the RelationUpdate callable to go through generate_name macros
@@ -300,7 +299,7 @@ class ConfiguredParser(
 
     def update_parsed_node_config(
         self,
-        parsed_node: IntermediateNode,
+        parsed_node: FinalNode,
         config: ContextConfig,
         context=None,
         patch_config_dict=None,
@@ -334,6 +333,7 @@ class ConfiguredParser(
         # If we have access in the config, copy to node level
         if parsed_node.resource_type == NodeType.Model and config_dict.get("access", None):
             if AccessType.is_valid(config_dict["access"]):
+                assert hasattr(parsed_node, "access")
                 parsed_node.access = AccessType(config_dict["access"])
             else:
                 raise InvalidAccessTypeError(
@@ -360,6 +360,7 @@ class ConfiguredParser(
         if "contract" in config_dict and config_dict["contract"]:
             contract_dct = config_dict["contract"]
             Contract.validate(contract_dct)
+            assert hasattr(parsed_node, "contract")
             parsed_node.contract = Contract.from_dict(contract_dct)
 
         # unrendered_config is used to compare the original database/schema/alias
@@ -382,6 +383,7 @@ class ConfiguredParser(
 
         # at this point, we've collected our hooks. Use the node context to
         # render each hook and collect refs/sources
+        assert hasattr(parsed_node.config, "pre_hook") and hasattr(parsed_node.config, "post_hook")
         hooks = list(itertools.chain(parsed_node.config.pre_hook, parsed_node.config.post_hook))
         # skip context rebuilding if there aren't any hooks
         if not hooks:
@@ -413,7 +415,7 @@ class ConfiguredParser(
         self._mangle_hooks(config_dict)
         return config_dict
 
-    def render_update(self, node: IntermediateNode, config: ContextConfig) -> None:
+    def render_update(self, node: FinalNode, config: ContextConfig) -> None:
         try:
             context = self.render_with_context(node, config)
             self.update_parsed_node_config(node, config, context=context)
@@ -462,25 +464,23 @@ class ConfiguredParser(
         pass
 
     @abc.abstractmethod
-    def transform(self, node: IntermediateNode) -> FinalNode:
+    def transform(self, node: FinalNode) -> FinalNode:
         pass
 
 
 class SimpleParser(
-    ConfiguredParser[ConfiguredBlockType, FinalNode, FinalNode],
+    ConfiguredParser[ConfiguredBlockType, FinalNode],
     Generic[ConfiguredBlockType, FinalNode],
 ):
     def transform(self, node):
         return node
 
 
-class SQLParser(
-    ConfiguredParser[FileBlock, IntermediateNode, FinalNode], Generic[IntermediateNode, FinalNode]
-):
+class SQLParser(ConfiguredParser[FileBlock, FinalNode], Generic[FinalNode]):
     def parse_file(self, file_block: FileBlock) -> None:
         self.parse_node(file_block)
 
 
-class SimpleSQLParser(SQLParser[FinalNode, FinalNode]):
+class SimpleSQLParser(SQLParser[FinalNode]):
     def transform(self, node):
         return node

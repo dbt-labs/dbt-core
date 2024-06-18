@@ -10,7 +10,7 @@ from dbt.utils import split_path
 from dbt_common.dataclass_schema import ValidationError
 
 
-class SnapshotParser(SQLParser[SnapshotNode, SnapshotNode]):
+class SnapshotParser(SQLParser[SnapshotNode]):
     def parse_from_dict(self, dct, validate=True) -> SnapshotNode:
         if validate:
             SnapshotNode.validate(dct)
