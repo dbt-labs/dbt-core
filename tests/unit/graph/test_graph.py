@@ -52,3 +52,12 @@ class TestGraph:
         # check that result excludes nodes that are out of depth
         ancestors = graph.ancestors(node=model.unique_id, max_depth=1)
         assert ancestors == {"model.pkg.ephemeral_model"}
+
+    @pytest.mark.skip(reason="I haven't figured out how to add edge types to nodes")
+    def test_exclude_edge_type(self) -> None:
+        # I though something like the following would produce
+        # linker = Linker()
+        # linker.link_graph(manifest=manifest)
+        # linker.add_test_edges(manifest=manifest)
+        # graph = Graph(graph=linker.graph)
+        pass
