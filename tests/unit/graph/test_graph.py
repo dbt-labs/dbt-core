@@ -9,12 +9,6 @@ from tests.unit.utils.manifest import make_model
 
 class TestGraph:
     @pytest.fixture
-    def graph(self, manifest: Manifest) -> Graph:
-        linker = Linker()
-        linker.link_graph(manifest=manifest)
-        return Graph(graph=linker.graph)
-
-    @pytest.fixture
     def extra_parent_model(self) -> ModelNode:
         return make_model(pkg="pkg", name="extra_parent_model", code="SELECT 'cats' as interests")
 
@@ -28,6 +22,24 @@ class TestGraph:
             code='SELECT * FROM {{ ref("ephemeral_model") }} UNION ALL SELECT * FROM {{ ref("extra_parent_model") }}',
             refs=[extra_parent_model, ephemeral_model],
         )
+
+    @pytest.fixture(autouse=True)
+    def local_manifest_extensions(
+        self,
+        manifest: Manifest,
+        model_with_two_direct_parents: ModelNode,
+        extra_parent_model: ModelNode,
+    ) -> Manifest:
+        manifest.add_node_nofile(extra_parent_model)
+        manifest.add_node_nofile(model_with_two_direct_parents)
+
+    @pytest.fixture
+    def graph(self, manifest: Manifest, local_manifest_extensions) -> Graph:
+        # We include the `local_manifest_extensions` in the arguments to ensure
+        # that fixture adds our extra node sbefore creating the graph
+        linker = Linker()
+        linker.link_graph(manifest=manifest)
+        return Graph(graph=linker.graph)
 
     def test_nodes(self, graph: Graph, manifest: Manifest):
         graph_nodes = graph.nodes()
@@ -45,6 +57,7 @@ class TestGraph:
         # check result when not limiting the depth
         descendants = graph.descendants(node=model.unique_id)
         assert descendants == {
+            "model.pkg.model_with_two_direct_parents",
             "test.pkg.view_test_nothing",
             "model.pkg.view_model",
             "model.pkg.table_model",
@@ -52,7 +65,11 @@ class TestGraph:
 
         # check that result excludes nodes that are out of depth
         descendants = graph.descendants(node=model.unique_id, max_depth=1)
-        assert descendants == {"model.pkg.table_model", "model.pkg.view_model"}
+        assert descendants == {
+            "model.pkg.model_with_two_direct_parents",
+            "model.pkg.table_model",
+            "model.pkg.view_model",
+        }
 
     def test_ancestors(self, graph: Graph, manifest: Manifest) -> None:
         model: ModelNode = manifest.nodes["model.pkg.table_model"]
@@ -80,29 +97,17 @@ class TestGraph:
 
     def test_select_childrens_parents(
         self,
+        graph: Graph,
         model_with_two_direct_parents: ModelNode,
         extra_parent_model: ModelNode,
-        manifest: Manifest,
         ephemeral_model: ModelNode,
     ) -> None:
-        # add extra nodes to manifest
-        manifest.add_node_nofile(extra_parent_model)
-        manifest.add_node_nofile(model_with_two_direct_parents)
-
-        # create graph (we don't use the fixture because we want our extra nodes)
-        linker = Linker()
-        linker.link_graph(manifest=manifest)
-        graph = Graph(graph=linker.graph)
-
-        # the "selected" node we care about
-        model: ModelNode = manifest.nodes["model.pkg.extra_parent_model"]
-
         # `select_childrens_parents` should return
         # * all children of the selected node (without depth limit)
         # * all parents of the children of the selected node (without depth limit)
         childrens_parents = graph.select_childrens_parents(
             selected={
-                model.unique_id,
+                extra_parent_model.unique_id,
             }
         )
 
