@@ -587,6 +587,27 @@ def test_select_saved_query_by_tag(manifest: Manifest) -> None:
     search_manifest_using_method(manifest, method, "any_tag")
 
 
+def test_modified_saved_query(manifest: Manifest) -> None:
+    metric = make_metric("test", "my_metric")
+    saved_query = make_saved_query(
+        "pkg",
+        "test_saved_query",
+        "my_metric",
+    )
+    manifest.metrics[metric.unique_id] = metric
+    manifest.saved_queries[saved_query.unique_id] = saved_query
+    # Create PreviousState with a saved query, this deepcopies manifest
+    previous_state = create_previous_state(manifest)
+    method = statemethod(manifest, previous_state)
+
+    # create another metric and add to saved query
+    alt_metric = make_metric("test", "alt_metric")
+    manifest.metrics[alt_metric.unique_id] = alt_metric
+    saved_query.query_params.metrics.append("alt_metric")
+
+    assert search_manifest_using_method(manifest, method, "modified") == {"test_saved_query"}
+
+
 def test_select_unit_test(manifest: Manifest) -> None:
     test_model = make_model("test", "my_model", "select 1 as id")
     unit_test = make_unit_test("test", "my_unit_test", test_model)
@@ -605,8 +626,7 @@ def test_select_unit_test(manifest: Manifest) -> None:
     }
 
 
-@pytest.fixture
-def previous_state(manifest):
+def create_previous_state(manifest):
     writable = copy.deepcopy(manifest).writable_manifest()
     state = PreviousState(
         state_path=Path("/path/does/not/exist"),
@@ -615,6 +635,11 @@ def previous_state(manifest):
     )
     state.manifest = Manifest.from_writable_manifest(writable)
     return state
+
+
+@pytest.fixture
+def previous_state(manifest):
+    return create_previous_state(manifest)
 
 
 def add_node(manifest, node):
