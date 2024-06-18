@@ -1,0 +1,77 @@
+
+
+# **what?**
+# Checks that a file has been committed under the /tests/unit directory
+# as modification/addition to unit test.
+# This workflow runs on pull_request_target because it requires
+# secrets to post comments.
+
+# **why?**
+# Gentle nudge to think about adding unit tests for new code.
+# It also makes sure that we can filter PRs by tag to find out what type of changes are hard to unittest.
+
+# **when?**
+# This will run for all PRs going into main.  It will
+# run when they are opened, reopened, when any label is added or removed
+# and when new code is pushed to the branch.  The action will then get
+# skipped if the 'Hard to Unit Test' label or the 'Unit Test Not Needed' Label is present.
+
+name: Check Changelog Entry
+
+on:
+  pull_request_target:
+    types: [opened, reopened, labeled, unlabeled, synchronize]
+    branches:
+      - main
+    paths: ['core/dbt']
+
+  workflow_dispatch:
+
+defaults:
+  run:
+    shell: bash
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+    comment: "Thank you for your pull request! We could not find a unittest file for this change. Please consider adding some. If it is hard to unittest, please add the 'Hard to Unit Test' label. If unit tests are not needed, please add the 'Unit Test Not Needed' label."
+
+
+jobs:
+  unittest:
+    name: Check if Unit Test being added.
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'Unit Test Not Needed') && !contains(github.event.pull_request.labels.*.name, 'Hard to Unit Test')}}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check if unittest file was added
+        uses: dorny/paths-filter@v3
+        id: unittest_existence
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          filters: |
+            exists:
+              - added|modified: 'tests/unit/**'
+
+      - name: Check for existing comment
+        if: steps.unittest_existence.outputs.exists == 'false'
+        uses: peter-evans/find-comment@v3
+        id: find_comment
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          comment-author: "github-actions[bot]"
+          body-includes: ${{ env.comment }}
+      - name: Comment if no unittest file was added
+        if: steps.unittest_existence.outputs.exists == 'false' &&
+          steps.find_comment.outputs.exists == 'false'
+        run: |
+          gh issue comment ${{ github.event.pull_request.number }} --repo ${{ github.repository }} --body "${{ env.comment }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Fail job if unittest is missing and required
+        if: steps.unittest_existence.outputs.exists == 'false'
+        uses: actions/github-script@v7
+        with:
+          script: core.setFailed('Unit Test required to merge.')
