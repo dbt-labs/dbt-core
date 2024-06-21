@@ -2,6 +2,17 @@ ignore:
   - ".github"
   - ".changes"
 
+coverage:
+  status:
+    project:
+      default:
+        target: auto
+        threshold: 0.1% # Reduce noise by ignoring rounding errors in coverage drops
+    patch:
+      default:
+        target: auto
+        threshold: 80%
+
 comment:
   layout: "header, diff, flags, components"  # show component info in the PR comment
 
