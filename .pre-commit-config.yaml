@@ -20,10 +20,12 @@ repos:
       - "markdown"
   - id: check-case-conflict
 - repo: https://github.com/pycqa/isort
-  rev: 5.12.0
+  # rev must match what's in dev-requirements.txt
+  rev: 5.13.2
   hooks:
     - id: isort
 - repo: https://github.com/psf/black
+  # rev must match what's in dev-requirements.txt
   rev: 22.3.0
   hooks:
   - id: black
@@ -34,6 +36,7 @@ repos:
     - "--check"
     - "--diff"
 - repo: https://github.com/pycqa/flake8
+  # rev must match what's in dev-requirements.txt
   rev: 4.0.1
   hooks:
   - id: flake8
@@ -41,6 +44,7 @@ repos:
     alias: flake8-check
     stages: [manual]
 - repo: https://github.com/pre-commit/mirrors-mypy
+  # rev must match what's in dev-requirements.txt
   rev: v1.4.1
   hooks:
   - id: mypy
