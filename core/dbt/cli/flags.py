@@ -57,6 +57,7 @@ def convert_config(config_name, config_value):
         ret = WarnErrorOptions(
             include=config_value.get("include", []),
             exclude=config_value.get("exclude", []),
+            silence=config_value.get("silence", []),
             valid_error_names=ALL_EVENT_NAMES,
         )
     return ret
