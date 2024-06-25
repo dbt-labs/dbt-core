@@ -52,9 +52,8 @@ class TestWarnErrorOptionsFromCLI:
         assert_deprecation_warning(result, catcher)
 
         catcher.flush()
-        runner.invoke(
-            ["run", "--warn-error-options", "{'include': 'all', 'silence': ['DeprecatedModel']}"]
-        )
+        result = runner.invoke(["run", "--warn-error-options", "{'silence': ['DeprecatedModel']}"])
+        assert result.success
         assert len(catcher.caught_events) == 0
 
     def test_can_raise_warning_to_error(
@@ -130,13 +129,12 @@ class TestWarnErrorOptionsFromProject:
         result = runner.invoke(["run"])
         assert_deprecation_warning(result, catcher)
 
-        silence_options = {
-            "flags": {"warn_error_options": {"include": "all", "silence": ["DeprecatedModel"]}}
-        }
+        silence_options = {"flags": {"warn_error_options": {"silence": ["DeprecatedModel"]}}}
         update_config_file(silence_options, project_root, "dbt_project.yml")
 
         catcher.flush()
-        runner.invoke(["run"])
+        result = runner.invoke(["run"])
+        assert result.success
         assert len(catcher.caught_events) == 0
 
     def test_can_raise_warning_to_error(
