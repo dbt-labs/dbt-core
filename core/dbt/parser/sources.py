@@ -226,6 +226,8 @@ class SourcePatcher:
         return generic_test_parser
 
     def get_source_tests(self, target: UnpatchedSourceDefinition) -> Iterable[GenericTestNode]:
+        is_root_project = True if self.root_project.project_name == target.package_name else False
+        target.validate_data_tests(is_root_project)
         for data_test, column in target.get_tests():
             yield self.parse_source_test(
                 target=target,
