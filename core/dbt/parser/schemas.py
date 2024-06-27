@@ -544,29 +544,36 @@ class PatchParser(YamlReader, Generic[NonSourceTarget, Parsed]):
     def normalize_access_attribute(self, data, path):
         return self.normalize_attribute(data, path, "access")
 
+    @property
+    def is_root_project(self):
+        if self.root_project == self.project.project_name:
+            return True
+        return False
+
     def validate_data_tests(self, data):
         # Rename 'tests' -> 'data_tests' at both model-level and column-level
         # Raise a validation error if the user has defined both names
-        def validate_and_rename(data):
+        def validate_and_rename(data, is_root_project: bool):
             if data.get("tests"):
                 if "tests" in data and "data_tests" in data:
                     raise ValidationError(
                         "Invalid test config: cannot have both 'tests' and 'data_tests' defined"
                     )
-                deprecations.warn(
-                    "project-test-config",
-                    deprecated_path="tests",
-                    exp_path="data_tests",
-                )
+                if is_root_project:
+                    deprecations.warn(
+                        "project-test-config",
+                        deprecated_path="tests",
+                        exp_path="data_tests",
+                    )
                 data["data_tests"] = data.pop("tests")
 
         # model-level tests
-        validate_and_rename(data)
+        validate_and_rename(data, self.is_root_project)
 
         # column-level tests
         if data.get("columns"):
             for column in data["columns"]:
-                validate_and_rename(column)
+                validate_and_rename(column, self.is_root_project)
 
         # versioned models
         if data.get("versions"):
@@ -574,7 +581,7 @@ class PatchParser(YamlReader, Generic[NonSourceTarget, Parsed]):
                 validate_and_rename(version)
                 if version.get("columns"):
                     for column in version["columns"]:
-                        validate_and_rename(column)
+                        validate_and_rename(column, self.is_root_project)
 
     def patch_node_config(self, node, patch):
         if "access" in patch.config:
