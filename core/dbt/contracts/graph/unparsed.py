@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Literal, Optional, Sequence, Union
 from dbt_semantic_interfaces.type_enums import (
     ConversionCalculationType,
     PeriodAggregation,
+    TimeGranularity,
 )
 
 # trigger the PathEncoder
@@ -564,6 +565,7 @@ class UnparsedMetric(dbtClassMixin):
     description: str = ""
     # Note: `Union` must be the outermost part of the type annotation for serialization to work properly.
     filter: Union[str, List[str], None] = None
+    default_granularity: str = TimeGranularity.DAY.value
     # metadata: Optional[Unparsedetadata] = None # TODO
     meta: Dict[str, Any] = field(default_factory=dict)
     tags: List[str] = field(default_factory=list)
