@@ -546,7 +546,7 @@ class PatchParser(YamlReader, Generic[NonSourceTarget, Parsed]):
 
     @property
     def is_root_project(self):
-        if self.root_project == self.project.project_name:
+        if self.root_project.project_name == self.project.project_name:
             return True
         return False
 
