@@ -578,7 +578,7 @@ class PatchParser(YamlReader, Generic[NonSourceTarget, Parsed]):
         # versioned models
         if data.get("versions"):
             for version in data["versions"]:
-                validate_and_rename(version)
+                validate_and_rename(version, self.is_root_project)
                 if version.get("columns"):
                     for column in version["columns"]:
                         validate_and_rename(column, self.is_root_project)
