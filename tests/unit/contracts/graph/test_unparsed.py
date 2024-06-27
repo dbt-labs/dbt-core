@@ -896,6 +896,7 @@ class TestUnparsedMetric(ContractTestCase):
                 },
             },
             "config": {},
+            "default_granularity": "day",
             "tags": [],
             "meta": {"is_okr": True},
         }

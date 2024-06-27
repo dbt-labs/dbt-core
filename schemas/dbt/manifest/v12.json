@@ -9044,6 +9044,22 @@
             ],
             "default": null
           },
+          "default_granularity": {
+            "enum": [
+              "nanosecond",
+              "microsecond",
+              "millisecond",
+              "second",
+              "minute",
+              "hour",
+              "day",
+              "week",
+              "month",
+              "quarter",
+              "year"
+            ],
+            "default": "day"
+          },
           "meta": {
             "type": "object",
             "propertyNames": {
@@ -18019,6 +18035,22 @@
                         }
                       ],
                       "default": null
+                    },
+                    "default_granularity": {
+                      "enum": [
+                        "nanosecond",
+                        "microsecond",
+                        "millisecond",
+                        "second",
+                        "minute",
+                        "hour",
+                        "day",
+                        "week",
+                        "month",
+                        "quarter",
+                        "year"
+                      ],
+                      "default": "day"
                     },
                     "meta": {
                       "type": "object",
