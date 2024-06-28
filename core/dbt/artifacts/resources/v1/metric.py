@@ -122,7 +122,7 @@ class Metric(GraphResource):
     type_params: MetricTypeParams
     filter: Optional[WhereFilterIntersection] = None
     metadata: Optional[SourceFileMetadata] = None
-    default_granularity: TimeGranularity = TimeGranularity.DAY
+    default_granularity: Optional[TimeGranularity] = None
     resource_type: Literal[NodeType.Metric]
     meta: Dict[str, Any] = field(default_factory=dict, metadata=MergeBehavior.Update.meta())
     tags: List[str] = field(default_factory=list)

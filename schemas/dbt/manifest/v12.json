@@ -9045,20 +9045,27 @@
             "default": null
           },
           "default_granularity": {
-            "enum": [
-              "nanosecond",
-              "microsecond",
-              "millisecond",
-              "second",
-              "minute",
-              "hour",
-              "day",
-              "week",
-              "month",
-              "quarter",
-              "year"
+            "anyOf": [
+              {
+                "enum": [
+                  "nanosecond",
+                  "microsecond",
+                  "millisecond",
+                  "second",
+                  "minute",
+                  "hour",
+                  "day",
+                  "week",
+                  "month",
+                  "quarter",
+                  "year"
+                ]
+              },
+              {
+                "type": "null"
+              }
             ],
-            "default": "day"
+            "default": null
           },
           "meta": {
             "type": "object",
@@ -18037,20 +18044,27 @@
                       "default": null
                     },
                     "default_granularity": {
-                      "enum": [
-                        "nanosecond",
-                        "microsecond",
-                        "millisecond",
-                        "second",
-                        "minute",
-                        "hour",
-                        "day",
-                        "week",
-                        "month",
-                        "quarter",
-                        "year"
+                      "anyOf": [
+                        {
+                          "enum": [
+                            "nanosecond",
+                            "microsecond",
+                            "millisecond",
+                            "second",
+                            "minute",
+                            "hour",
+                            "day",
+                            "week",
+                            "month",
+                            "quarter",
+                            "year"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
                       ],
-                      "default": "day"
+                      "default": null
                     },
                     "meta": {
                       "type": "object",
