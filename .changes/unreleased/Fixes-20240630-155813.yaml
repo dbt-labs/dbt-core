@@ -1,0 +1,6 @@
+kind: Fixes
+body: Add details to Semantic Manifest parsing error message (take PR #10128)
+time: 2024-06-30T15:58:13.909891204+02:00
+custom:
+    Author: Redha-C
+    Issue: "9849"
