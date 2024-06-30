@@ -470,8 +470,7 @@ class ManifestLoader:
             self.check_valid_snapshot_config()
 
             semantic_manifest = SemanticManifest(self.manifest)
-            if not semantic_manifest.validate():
-                raise dbt.exceptions.ParsingError("Semantic Manifest validation failed.")
+            semantic_manifest.validate()
 
             # update tracking data
             self._perf_info.process_manifest_elapsed = time.perf_counter() - start_process
