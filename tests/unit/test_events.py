@@ -442,6 +442,7 @@ sample_values = [
     core_types.SQLCompiledPath(path=""),
     core_types.CheckNodeTestFailure(relation_name=""),
     core_types.EndOfRunSummary(num_errors=0, num_warnings=0, keyboard_interrupt=False),
+    core_types.MarkSkippedChildren(unique_id="", status="skipped"),
     core_types.LogSkipBecauseError(schema="", relation="", index=0, total=0),
     core_types.EnsureGitInstalled(),
     core_types.DepsCreatingLocalSymlink(),
