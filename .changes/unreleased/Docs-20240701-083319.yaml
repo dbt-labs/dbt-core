@@ -1,0 +1,6 @@
+kind: Docs
+body: Point adapters hyperlink in README to correct path
+time: 2024-07-01T08:33:19.756036-06:00
+custom:
+    Author: farmanp
+    Issue: "10384"
