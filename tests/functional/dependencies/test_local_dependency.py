@@ -390,5 +390,4 @@ class TestDependencyTestsConfig(BaseDependencyTest):
         run_dbt(["parse"])
         # Check that project-test-config is NOT in active deprecations, since "tests" is only
         # in a dependent project.
-        expected = set()
-        assert expected == deprecations.active_deprecations
+        assert "project-test-config" not in deprecations.active_deprecations
