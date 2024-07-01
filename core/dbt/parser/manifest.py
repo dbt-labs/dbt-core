@@ -10,8 +10,6 @@ from itertools import chain
 from typing import Any, Callable, Dict, List, Mapping, Optional, Set, Tuple, Type, Union
 
 import msgpack
-from dbt_semantic_interfaces.enum_extension import assert_values_exhausted
-from dbt_semantic_interfaces.type_enums import MetricType
 
 import dbt.deprecations
 import dbt.exceptions
@@ -119,6 +117,8 @@ from dbt_common.events.functions import fire_event, get_invocation_id, warn_or_e
 from dbt_common.events.types import Note
 from dbt_common.exceptions.base import DbtValidationError
 from dbt_common.helper_types import PathSet
+from dbt_semantic_interfaces.enum_extension import assert_values_exhausted
+from dbt_semantic_interfaces.type_enums import MetricType
 
 PERF_INFO_FILE_NAME = "perf_info.json"
 

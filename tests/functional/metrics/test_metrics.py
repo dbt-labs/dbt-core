@@ -1,12 +1,12 @@
 import pytest
-from dbt_semantic_interfaces.type_enums.period_agg import PeriodAggregation
-from dbt_semantic_interfaces.type_enums.time_granularity import TimeGranularity
 
 from dbt.artifacts.resources.v1.metric import CumulativeTypeParams, MetricTimeWindow
 from dbt.cli.main import dbtRunner
 from dbt.contracts.graph.manifest import Manifest
 from dbt.exceptions import ParsingError
 from dbt.tests.util import get_manifest, run_dbt
+from dbt_semantic_interfaces.type_enums.period_agg import PeriodAggregation
+from dbt_semantic_interfaces.type_enums.time_granularity import TimeGranularity
 from tests.functional.metrics.fixtures import (
     basic_metrics_yml,
     conversion_metric_yml,

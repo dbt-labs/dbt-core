@@ -1,11 +1,11 @@
 from typing import List
 
 import pytest
-from dbt_semantic_interfaces.type_enums.time_granularity import TimeGranularity
 
 from dbt.contracts.graph.manifest import Manifest
 from dbt.tests.util import write_file
 from dbt_common.events.base_types import BaseEvent
+from dbt_semantic_interfaces.type_enums.time_granularity import TimeGranularity
 from tests.functional.assertions.test_runner import dbtTestRunner
 from tests.functional.semantic_models.fixtures import (
     fct_revenue_sql,

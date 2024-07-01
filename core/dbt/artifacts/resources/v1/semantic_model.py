@@ -2,6 +2,11 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Sequence
 
+from dbt.artifacts.resources import SourceFileMetadata
+from dbt.artifacts.resources.base import GraphResource
+from dbt.artifacts.resources.v1.components import DependsOn, RefArgs
+from dbt_common.contracts.config.base import BaseConfig, CompareBehavior, MergeBehavior
+from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_semantic_interfaces.references import (
     DimensionReference,
     EntityReference,
@@ -16,12 +21,6 @@ from dbt_semantic_interfaces.type_enums import (
     EntityType,
     TimeGranularity,
 )
-
-from dbt.artifacts.resources import SourceFileMetadata
-from dbt.artifacts.resources.base import GraphResource
-from dbt.artifacts.resources.v1.components import DependsOn, RefArgs
-from dbt_common.contracts.config.base import BaseConfig, CompareBehavior, MergeBehavior
-from dbt_common.dataclass_schema import dbtClassMixin
 
 """
 The classes in this file are dataclasses which are used to construct the Semantic

@@ -4,11 +4,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, Sequence, Union
 
-from dbt_semantic_interfaces.type_enums import (
-    ConversionCalculationType,
-    PeriodAggregation,
-)
-
 # trigger the PathEncoder
 import dbt_common.helper_types  # noqa:F401
 from dbt import deprecations
@@ -42,6 +37,10 @@ from dbt_common.dataclass_schema import (
     dbtClassMixin,
 )
 from dbt_common.exceptions import DbtInternalError
+from dbt_semantic_interfaces.type_enums import (
+    ConversionCalculationType,
+    PeriodAggregation,
+)
 
 
 @dataclass

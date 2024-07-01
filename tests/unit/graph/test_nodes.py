@@ -3,12 +3,6 @@ from datetime import datetime
 from typing import List
 
 import pytest
-from dbt_semantic_interfaces.references import MeasureReference
-from dbt_semantic_interfaces.type_enums import (
-    AggregationType,
-    DimensionType,
-    EntityType,
-)
 from freezegun import freeze_time
 
 from dbt.artifacts.resources import (
@@ -27,6 +21,12 @@ from dbt_common.contracts.constraints import (
     ColumnLevelConstraint,
     ConstraintType,
     ModelLevelConstraint,
+)
+from dbt_semantic_interfaces.references import MeasureReference
+from dbt_semantic_interfaces.type_enums import (
+    AggregationType,
+    DimensionType,
+    EntityType,
 )
 from tests.unit.fixtures import generic_test_node, model_node
 
