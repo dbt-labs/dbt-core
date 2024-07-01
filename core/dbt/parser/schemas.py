@@ -843,7 +843,9 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
                 # update source file.nodes with new unique_id
                 model_source_file = self.manifest.files[versioned_model_node.file_id]
                 assert isinstance(model_source_file, SourceFile)
-                model_source_file.nodes.remove(versioned_model_node_unique_id_old)
+                # because of incomplete test setup, check before removing
+                if versioned_model_node_unique_id_old in model_source_file.nodes:
+                    model_source_file.nodes.remove(versioned_model_node_unique_id_old)
                 model_source_file.nodes.append(versioned_model_node.unique_id)
 
                 # update versioned node fqn
