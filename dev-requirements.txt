@@ -32,7 +32,7 @@ types-docutils
 types-PyYAML
 types-Jinja2
 types-mock
-types-protobuf>=4.0.0,<5.0.0
+types-protobuf>=4.0.0,<6.0.0
 types-pytz
 types-requests
 types-setuptools
