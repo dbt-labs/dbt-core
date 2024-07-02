@@ -54,7 +54,6 @@ from dbt.contracts.graph.nodes import (
     ManifestNode,
     Metric,
     ModelNode,
-    ResultNode,
     SavedQuery,
     SeedNode,
     SemanticModel,
@@ -1586,7 +1585,7 @@ class Manifest(MacroMethods, dbtClassMixin):
         else:
             self.disabled[node.unique_id] = [node]
 
-    def add_disabled(self, source_file: AnySourceFile, node: ResultNode, test_from=None):
+    def add_disabled(self, source_file: AnySourceFile, node: GraphMemberNode, test_from=None):
         self.add_disabled_nofile(node)
         if isinstance(source_file, SchemaSourceFile):
             if isinstance(node, GenericTestNode):
