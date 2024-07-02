@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Additional logging for skipped ephemeral models
+time: 2024-07-01T13:17:50.827788-04:00
+custom:
+  Author: gshank
+  Issue: "10389"

@@ -1856,7 +1856,21 @@ class EndOfRunSummary(InfoLevel):
         return message
 
 
-# Skipped Z031, Z032, Z033
+# Skipped Z031, Z032
+
+
+class MarkSkippedChildren(DebugLevel):
+    def code(self) -> str:
+        return "Z033"
+
+    def message(self) -> str:
+        msg = (
+            f"Marking all children of '{self.unique_id}' to be skipped "
+            f"because of status '{self.status}'. "
+        )
+        if self.run_result.message:
+            msg = msg + f" Reason: {self.run_result.message}."
+        return msg
 
 
 class LogSkipBecauseError(ErrorLevel):
@@ -1864,7 +1878,7 @@ class LogSkipBecauseError(ErrorLevel):
         return "Z034"
 
     def message(self) -> str:
-        msg = f"SKIP relation {self.schema}.{self.relation} due to ephemeral model error"
+        msg = f"SKIP relation {self.schema}.{self.relation} due to ephemeral model status '{self.status}'"
         return format_fancy_output_line(
             msg=msg, status=red("ERROR SKIP"), index=self.index, total=self.total
         )
