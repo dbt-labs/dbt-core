@@ -170,6 +170,7 @@ class TestConfig(NodeAndTestConfig):
     severity: Annotated[Severity, Pattern(SEVERITY_PATTERN)] = Severity("ERROR")
     store_failures: Optional[bool] = None
     store_failures_as: Optional[str] = None
+    sql_header: Optional[str] = None
     where: Optional[str] = None
     limit: Optional[int] = None
     fail_calc: str = "count(*)"
@@ -236,6 +237,7 @@ class TestConfig(NodeAndTestConfig):
             "error_if",
             "store_failures",
             "store_failures_as",
+            "sql_header",
         ]
 
         seen = set()
