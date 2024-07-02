@@ -1,0 +1,6 @@
+kind: Fixes
+body: Update Dockerfile libpq-dev version
+time: 2024-07-02T20:41:57.556342+02:00
+custom:
+  Author: nickagel
+  Issue: 10393
