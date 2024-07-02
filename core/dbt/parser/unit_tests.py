@@ -388,6 +388,18 @@ class UnitTestParser(YamlReader):
                     ut_fixture.fixture, self.project.project_name, unit_test_definition.unique_id
                 )
 
+        # Some databases like redshift will default the type of a column
+        # where the first value is None to a type like VARCHAR(1)
+        if ut_fixture.rows and (
+            ut_fixture.format == UnitTestFormat.Dict or ut_fixture.format == UnitTestFormat.CSV
+        ):
+            ut_fixture.rows.sort(key=lambda item: tuple(value is None for value in item.values()))
+            first_row = ut_fixture.rows[0]
+            if any(value is None for value in first_row.values()):
+                raise ParsingError(
+                    "Unit Test fixtures require at least one row free of Null values to ensure consistent column types."
+                )
+
     def get_fixture_file_rows(self, fixture_name, project_name, utdef_unique_id):
         # find fixture file object and store unit_test_definition unique_id
         fixture = self._get_fixture(fixture_name, project_name)
