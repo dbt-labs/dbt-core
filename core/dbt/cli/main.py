@@ -169,6 +169,7 @@ def cli(ctx, **kwargs):
 @p.export_saved_queries
 @p.full_refresh
 @p.deprecated_include_saved_query
+@p.no_skip_on_failure
 @p.profiles_dir
 @p.project_dir
 @p.resource_type
@@ -536,6 +537,7 @@ def parse(ctx, **kwargs):
 @global_flags
 @p.exclude
 @p.full_refresh
+@p.no_skip_on_failure
 @p.profiles_dir
 @p.project_dir
 @p.empty
@@ -573,6 +575,7 @@ def run(ctx, **kwargs):
 @p.profiles_dir
 @p.vars
 @p.target_path
+@p.no_skip_on_failure
 @p.threads
 @p.full_refresh
 @requires.postflight
@@ -601,6 +604,7 @@ def retry(ctx, **kwargs):
 @global_flags
 @p.exclude
 @p.full_refresh
+@p.no_skip_on_failure
 @p.profiles_dir
 @p.project_dir
 @p.resource_type
@@ -669,6 +673,7 @@ def run_operation(ctx, **kwargs):
 @global_flags
 @p.exclude
 @p.full_refresh
+@p.no_skip_on_failure
 @p.profiles_dir
 @p.project_dir
 @p.select

@@ -436,8 +436,10 @@ class GraphRunnableTask(ConfiguredTask):
     ) -> None:
         if self.graph is None:
             raise DbtInternalError("graph is None in _mark_dependent_errors")
-        for dep_node_id in self.graph.get_dependent_nodes(UniqueId(node_id)):
-            self._skipped_children[dep_node_id] = cause
+        no_skip_on_failure = get_flags().NO_SKIP_ON_FAILURE
+        if not no_skip_on_failure:
+            for dep_node_id in self.graph.get_dependent_nodes(UniqueId(node_id)):
+                self._skipped_children[dep_node_id] = cause
 
     def populate_adapter_cache(
         self, adapter, required_schemas: Optional[Set[BaseRelation]] = None

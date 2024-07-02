@@ -115,6 +115,13 @@ fail_fast = click.option(
     help="Stop execution on first failure.",
 )
 
+no_skip_on_failure = click.option(
+    "--no-skip-on-failure",
+    envvar="DBT_NO_SKIP_ON_FAILURE",
+    help="Proceed with downstream nodes even if an upstream node fails.",
+    is_flag=True,
+)
+
 favor_state = click.option(
     "--favor-state/--no-favor-state",
     envvar="DBT_FAVOR_STATE",
