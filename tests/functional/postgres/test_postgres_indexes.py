@@ -141,7 +141,11 @@ class TestPostgresInvalidIndex:
     def test_invalid_index_configs(self, project):
         results, output = run_dbt_and_capture(expect_pass=False)
         assert len(results) == 4
-        assert re.search(r"columns.*is not of type 'array'", output)
-        assert re.search(r"unique.*is not of type 'boolean'", output)
-        assert re.search(r"'columns' is a required property", output)
+        # Could not parse index config: Invalid value 'column_a, column_b': data.columns must be array
+        assert re.search(r"columns must be array", output)
+        # Could not parse index config: Invalid value 'yes': data.unique must be boolean
+        assert re.search(r"unique must be boolean", output)
+        # Could not parse index config: Invalid value '{'unique': True}': data must contain ['columns'] properties
+        assert re.search(r"data must contain \['columns'\] properties", output)
+        # Database Error in model invalid_type (models/invalid_type.sql) / access method "non_existent_type" does not exist
         assert re.search(r"Database Error in model invalid_type", output)

@@ -172,7 +172,7 @@ class TestInvalidMetric(MetricConfigTests):
     def test_invalid_config_metric(self, project):
         with pytest.raises(ValidationError) as excinfo:
             run_dbt(["parse"])
-        expected_msg = "'True and False' is not of type 'boolean'"
+        expected_msg = "Invalid value 'True and False': data.enabled must be boolean"
         assert expected_msg in str(excinfo.value)
 
 

@@ -38,7 +38,7 @@ class SelectorConfig(Dict[str, Dict[str, Union[SelectionSpec, bool]]]):
             validate_selector_default(selector_file)
             selectors = parse_from_selectors_definition(selector_file)
         except ValidationError as exc:
-            yaml_sel_cfg = yaml.dump(exc.instance)
+            yaml_sel_cfg = yaml.dump(exc.value)
             raise DbtSelectorsError(
                 f"Could not parse selector file data: \n{yaml_sel_cfg}\n"
                 f"Valid root-level selector definitions: "
