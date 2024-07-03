@@ -247,3 +247,24 @@ jobs:
 
     secrets:
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_DEV_CORE_ALERTS }}
+
+  testing-slack-notification:
+    # sends notifications to #slackbot-test
+    name: Testing - Slack Notification
+    if: ${{ failure() && inputs.test_run && !inputs.nightly_release }}
+
+    needs:
+      [
+        bump-version-generate-changelog,
+        build-test-package,
+        github-release,
+        pypi-release,
+        docker-release,
+      ]
+
+    uses: dbt-labs/dbt-release/.github/workflows/slack-post-notification.yml@main
+    with:
+      status: "failure"
+
+    secrets:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_TESTING_WEBHOOK_URL }}
