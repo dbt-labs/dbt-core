@@ -1,0 +1,18 @@
+name: 📄 Code docs
+description: Report an issue for markdown files within this repo, such as README, ARCHITECTURE, etc.
+title: "[Code docs] <title>"
+labels: ["triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this code docs issue!
+  - type: textarea
+    attributes:
+      label: Please describe the issue and your proposals.
+      description: |
+        Links? References? Anything that will give us more context about the issue you are encountering!
+
+        Tip: You can attach images by clicking this area to highlight it and then dragging files in.
+    validations:
+      required: false
