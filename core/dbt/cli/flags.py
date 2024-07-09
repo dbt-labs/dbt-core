@@ -173,13 +173,19 @@ class Flags:
                         old_name=dep_param.envvar,
                         new_name=new_param.envvar,
                     )
+                # end deprecated_params
 
                 # Set the flag value.
                 is_duplicate = hasattr(self, param_name.upper())
                 is_default = ctx.get_parameter_source(param_name) == ParameterSource.DEFAULT
+                is_envvar = ctx.get_parameter_source(param_name) == ParameterSource.ENVIRONMENT
+
                 flag_name = (new_name or param_name).upper()
 
-                if (is_duplicate and not is_default) or not is_duplicate:
+                # envvar flags are always assigned to "parent" command, so if the flag has
+                # already been encountered as a non-parent flag, we don't want to overwrite,
+                # since the commandline flag takes precedence.
+                if (is_duplicate and not (is_default or is_envvar)) or not is_duplicate:
                     object.__setattr__(self, flag_name, param_value)
 
                 # Track default assigned params.
