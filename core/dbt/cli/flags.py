@@ -182,9 +182,10 @@ class Flags:
 
                 flag_name = (new_name or param_name).upper()
 
-                # envvar flags are always assigned to "parent" command, so if the flag has
-                # already been encountered as a non-parent flag, we don't want to overwrite,
-                # since the commandline flag takes precedence.
+                # envvar flags are assigned in either parent or child context if there
+                # isn't an overriding cli command flag.
+                # If the flag has been encountered as a child cli flag, we don't
+                # want to overwrite with parent envvar, since the commandline flag takes precedence.
                 if (is_duplicate and not (is_default or is_envvar)) or not is_duplicate:
                     object.__setattr__(self, flag_name, param_value)
 
