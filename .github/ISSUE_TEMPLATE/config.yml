@@ -24,4 +24,3 @@ contact_links:
   - name: Create an issue for dbt-spark
     url: https://github.com/dbt-labs/dbt-spark/issues/new/choose
     about: Report a bug or request a feature for dbt-spark
-
