@@ -92,6 +92,8 @@ class Flags:
         # Set the default flags.
         for key, value in FLAGS_DEFAULTS.items():
             object.__setattr__(self, key, value)
+        # Use to handle duplicate params in _assign_params
+        flags_defaults_list = list(FLAGS_DEFAULTS.keys())
 
         if ctx is None:
             ctx = get_current_context()
@@ -176,7 +178,16 @@ class Flags:
                 # end deprecated_params
 
                 # Set the flag value.
-                is_duplicate = hasattr(self, param_name.upper())
+                is_duplicate = (
+                    hasattr(self, param_name.upper())
+                    and param_name.upper() not in flags_defaults_list
+                )
+                # First time through, set as though FLAGS_DEFAULTS hasn't been set, so not a duplicate.
+                # Subsequent pass (to process "parent" params) should be treated as duplicates.
+                if param_name.upper() in flags_defaults_list:
+                    flags_defaults_list.remove(param_name.upper())
+                # Note: the following determines whether parameter came from click default,
+                # not from FLAGS_DEFAULTS in __init__.
                 is_default = ctx.get_parameter_source(param_name) == ParameterSource.DEFAULT
                 is_envvar = ctx.get_parameter_source(param_name) == ParameterSource.ENVIRONMENT
 
