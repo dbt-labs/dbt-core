@@ -31,6 +31,7 @@ from dbt.context.providers import (
     generate_parse_exposure,
     generate_parse_semantic_models,
 )
+from dbt.contracts.files import SchemaSourceFile
 from dbt.contracts.graph.nodes import Exposure, Group, Metric, SavedQuery, SemanticModel
 from dbt.contracts.graph.unparsed import (
     UnparsedConversionTypeParams,
@@ -85,7 +86,7 @@ class ExposureParser(YamlReader):
         self.schema_parser = schema_parser
         self.yaml = yaml
 
-    def parse_exposure(self, unparsed: UnparsedExposure):
+    def parse_exposure(self, unparsed: UnparsedExposure) -> None:
         package_name = self.project.project_name
         unique_id = f"{NodeType.Exposure}.{package_name}.{unparsed.name}"
         path = self.yaml.path.relative_path
@@ -143,6 +144,7 @@ class ExposureParser(YamlReader):
         get_rendered(depends_on_jinja, ctx, parsed, capture_macros=True)
         # parsed now has a populated refs/sources/metrics
 
+        assert isinstance(self.yaml.file, SchemaSourceFile)
         if parsed.config.enabled:
             self.manifest.add_exposure(self.yaml.file, parsed)
         else:
@@ -171,7 +173,7 @@ class ExposureParser(YamlReader):
             patch_config_dict=precedence_configs,
         )
 
-    def parse(self):
+    def parse(self) -> None:
         for data in self.get_key_dicts():
             try:
                 UnparsedExposure.validate(data)
@@ -387,7 +389,7 @@ class MetricParser(YamlReader):
             # input_measures=?,
         )
 
-    def parse_metric(self, unparsed: UnparsedMetric, generated: bool = False):
+    def parse_metric(self, unparsed: UnparsedMetric, generated: bool = False) -> None:
         package_name = self.project.project_name
         unique_id = f"{NodeType.Metric}.{package_name}.{unparsed.name}"
         path = self.yaml.path.relative_path
@@ -442,6 +444,7 @@ class MetricParser(YamlReader):
         )
 
         # if the metric is disabled we do not want it included in the manifest, only in the disabled dict
+        assert isinstance(self.yaml.file, SchemaSourceFile)
         if parsed.config.enabled:
             self.manifest.add_metric(self.yaml.file, parsed, generated)
         else:
@@ -471,7 +474,7 @@ class MetricParser(YamlReader):
         )
         return config
 
-    def parse(self):
+    def parse(self) -> None:
         for data in self.get_key_dicts():
             try:
                 UnparsedMetric.validate(data)
@@ -488,7 +491,7 @@ class GroupParser(YamlReader):
         self.schema_parser = schema_parser
         self.yaml = yaml
 
-    def parse_group(self, unparsed: UnparsedGroup):
+    def parse_group(self, unparsed: UnparsedGroup) -> None:
         package_name = self.project.project_name
         unique_id = f"{NodeType.Group}.{package_name}.{unparsed.name}"
         path = self.yaml.path.relative_path
@@ -503,6 +506,7 @@ class GroupParser(YamlReader):
             owner=unparsed.owner,
         )
 
+        assert isinstance(self.yaml.file, SchemaSourceFile)
         self.manifest.add_group(self.yaml.file, parsed)
 
     def parse(self):
@@ -635,7 +639,7 @@ class SemanticModelParser(YamlReader):
 
         return config
 
-    def parse_semantic_model(self, unparsed: UnparsedSemanticModel):
+    def parse_semantic_model(self, unparsed: UnparsedSemanticModel) -> None:
         package_name = self.project.project_name
         unique_id = f"{NodeType.SemanticModel}.{package_name}.{unparsed.name}"
         path = self.yaml.path.relative_path
@@ -695,6 +699,7 @@ class SemanticModelParser(YamlReader):
 
         # if the semantic model is disabled we do not want it included in the manifest,
         # only in the disabled dict
+        assert isinstance(self.yaml.file, SchemaSourceFile)
         if parsed.config.enabled:
             self.manifest.add_semantic_model(self.yaml.file, parsed)
         else:
@@ -705,7 +710,7 @@ class SemanticModelParser(YamlReader):
             if measure.create_metric is True:
                 self._create_metric(measure=measure, enabled=parsed.config.enabled)
 
-    def parse(self):
+    def parse(self) -> None:
         for data in self.get_key_dicts():
             try:
                 UnparsedSemanticModel.validate(data)
@@ -831,6 +836,7 @@ class SavedQueryParser(YamlReader):
             delattr(export, "relation_name")
 
         # Only add thes saved query if it's enabled, otherwise we track it with other diabled nodes
+        assert isinstance(self.yaml.file, SchemaSourceFile)
         if parsed.config.enabled:
             self.manifest.add_saved_query(self.yaml.file, parsed)
         else:

@@ -29,6 +29,10 @@ All existing resources are defined under `dbt/artifacts/resources/v1`.
 
 ## Making changes to dbt/artifacts
 
+### All changes
+
+All changes to any fields will require a manual update to [dbt-jsonschema](https://github.com/dbt-labs/dbt-jsonschema) to ensure live checking continues to work.
+
 ### Non-breaking changes
 
 Freely make incremental, non-breaking changes in-place to the latest major version of any artifact (minor or patch bumps). The only changes that are fully forward and backward compatible are:

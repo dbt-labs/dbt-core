@@ -7,7 +7,7 @@ from dbt import hooks, utils
 from dbt.adapters.factory import get_adapter  # noqa: F401
 from dbt.artifacts.resources import Contract
 from dbt.clients.jinja import MacroGenerator, get_rendered
-from dbt.config import Project, RuntimeConfig
+from dbt.config import RuntimeConfig
 from dbt.context.context_config import ContextConfig
 from dbt.context.providers import (
     generate_generate_name_macro_context,
@@ -39,9 +39,9 @@ ConfiguredBlockType = TypeVar("ConfiguredBlockType", bound=FileBlock)
 
 
 class BaseParser(Generic[FinalValue]):
-    def __init__(self, project: Project, manifest: Manifest) -> None:
-        self.project = project
-        self.manifest = manifest
+    def __init__(self, project: RuntimeConfig, manifest: Manifest) -> None:
+        self.project: RuntimeConfig = project
+        self.manifest: Manifest = manifest
 
     @abc.abstractmethod
     def parse_file(self, block: FileBlock) -> None:
@@ -63,7 +63,7 @@ class BaseParser(Generic[FinalValue]):
 class Parser(BaseParser[FinalValue], Generic[FinalValue]):
     def __init__(
         self,
-        project: Project,
+        project: RuntimeConfig,
         manifest: Manifest,
         root_project: RuntimeConfig,
     ) -> None:
@@ -121,7 +121,7 @@ class ConfiguredParser(
 ):
     def __init__(
         self,
-        project: Project,
+        project: RuntimeConfig,
         manifest: Manifest,
         root_project: RuntimeConfig,
     ) -> None:

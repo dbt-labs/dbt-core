@@ -162,7 +162,7 @@ class BaseParserTest(unittest.TestCase):
         self.parser_patcher.stop()
         self.patcher.stop()
 
-    def file_block_for(self, data: str, filename: str, searched: str):
+    def source_file_for(self, data: str, filename: str, searched: str):
         root_dir = get_abs_os_path("./dbt_packages/snowplow")
         filename = normalize(filename)
         path = FilePath(
@@ -178,6 +178,10 @@ class BaseParserTest(unittest.TestCase):
             project_name="snowplow",
         )
         source_file.contents = data
+        return source_file
+
+    def file_block_for(self, data: str, filename: str, searched: str):
+        source_file = self.source_file_for(data, filename, searched)
         return FileBlock(file=source_file)
 
     def assert_has_manifest_lengths(
@@ -580,9 +584,11 @@ class SchemaParserModelsTest(SchemaParserTest):
             sources=[],
             patch_path=None,
         )
+        source_file = self.source_file_for("", "my_model.sql", "models")
         nodes = {my_model_node.unique_id: my_model_node}
         macros = {m.unique_id: m for m in generate_name_macros("root")}
         self.manifest = Manifest(nodes=nodes, macros=macros)
+        self.manifest.files[source_file.file_id] = source_file
         self.manifest.ref_lookup
         self.parser = SchemaParser(
             project=self.snowplow_project_config,
@@ -702,6 +708,7 @@ class SchemaParserVersionedModels(SchemaParserTest):
             patch_path=None,
             file_id="snowplow://models/arbitrary_file_name.sql",
         )
+        my_model_v1_source_file = self.source_file_for("", "arbitrary_file_name.sql", "models")
         my_model_v2_node = MockNode(
             package="snowplow",
             name="my_model_v2",
@@ -711,12 +718,16 @@ class SchemaParserVersionedModels(SchemaParserTest):
             patch_path=None,
             file_id="snowplow://models/my_model_v2.sql",
         )
+        my_model_v2_source_file = self.source_file_for("", "my_model_v2.sql", "models")
         nodes = {
             my_model_v1_node.unique_id: my_model_v1_node,
             my_model_v2_node.unique_id: my_model_v2_node,
         }
         macros = {m.unique_id: m for m in generate_name_macros("root")}
-        files = {node.file_id: mock.MagicMock(nodes=[node.unique_id]) for node in nodes.values()}
+        files = {
+            my_model_v1_source_file.file_id: my_model_v1_source_file,
+            my_model_v2_source_file.file_id: my_model_v2_source_file,
+        }
         self.manifest = Manifest(nodes=nodes, macros=macros, files=files)
         self.manifest.ref_lookup
         self.parser = SchemaParser(

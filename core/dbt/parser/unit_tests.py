@@ -292,6 +292,7 @@ class UnitTestParser(YamlReader):
 
             # for calculating state:modified
             unit_test_definition.build_unit_test_checksum()
+            assert isinstance(self.yaml.file, SchemaSourceFile)
             self.manifest.add_unit_test(self.yaml.file, unit_test_definition)
 
         return ParseResult()

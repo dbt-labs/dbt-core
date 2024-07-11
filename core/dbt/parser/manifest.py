@@ -222,12 +222,12 @@ class ManifestLoader:
     def __init__(
         self,
         root_project: RuntimeConfig,
-        all_projects: Mapping[str, Project],
+        all_projects: Mapping[str, RuntimeConfig],
         macro_hook: Optional[Callable[[Manifest], Any]] = None,
         file_diff: Optional[FileDiff] = None,
     ) -> None:
         self.root_project: RuntimeConfig = root_project
-        self.all_projects: Mapping[str, Project] = all_projects
+        self.all_projects: Mapping[str, RuntimeConfig] = all_projects
         self.file_diff = file_diff
         self.manifest: Manifest = Manifest()
         self.new_manifest = self.manifest
@@ -669,7 +669,7 @@ class ManifestLoader:
     # 'parser_types'
     def parse_project(
         self,
-        project: Project,
+        project: RuntimeConfig,
         parser_files,
         parser_types: List[Type[Parser]],
     ) -> None:
