@@ -9044,7 +9044,7 @@
             ],
             "default": null
           },
-          "default_granularity": {
+          "time_granularity": {
             "anyOf": [
               {
                 "enum": [
@@ -18043,7 +18043,7 @@
                       ],
                       "default": null
                     },
-                    "default_granularity": {
+                    "time_granularity": {
                       "anyOf": [
                         {
                           "enum": [

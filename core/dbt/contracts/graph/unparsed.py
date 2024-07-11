@@ -564,7 +564,7 @@ class UnparsedMetric(dbtClassMixin):
     description: str = ""
     # Note: `Union` must be the outermost part of the type annotation for serialization to work properly.
     filter: Union[str, List[str], None] = None
-    default_granularity: Optional[str] = None
+    time_granularity: Optional[str] = None
     # metadata: Optional[Unparsedetadata] = None # TODO
     meta: Dict[str, Any] = field(default_factory=dict)
     tags: List[str] = field(default_factory=list)
