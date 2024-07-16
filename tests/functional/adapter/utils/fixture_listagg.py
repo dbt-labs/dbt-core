@@ -97,7 +97,7 @@ calculate as (
 
     select
         group_col,
-        {{ listagg('string_text', "'_|_'", "order by order_col asc") }} as actual,
+        {{ listagg('string_text', "'_|_'", "order by order_col desc") }} as actual,
         'top_ordered' as version
     from data
     group by group_col
@@ -106,7 +106,7 @@ calculate as (
 
     select
         group_col,
-        {{ listagg('string_text', "'_|_'", "order by order_col asc", 2) }} as actual,
+        {{ listagg('string_text', "'_|_'", "order by order_col desc", 2) }} as actual,
         'top_ordered_limited' as version
     from data
     group by group_col
