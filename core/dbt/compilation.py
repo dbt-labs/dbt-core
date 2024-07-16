@@ -294,10 +294,10 @@ class Compiler:
 
         return context
 
-    def add_ephemeral_prefix(self, alias: str):
+    def add_ephemeral_prefix(self, name: str):
         adapter = get_adapter(self.config)
         relation_cls = adapter.Relation
-        return relation_cls.add_ephemeral_prefix(alias)
+        return relation_cls.add_ephemeral_prefix(name)
 
     def _recursively_prepend_ctes(
         self,
@@ -371,7 +371,7 @@ class Compiler:
 
             _extend_prepended_ctes(prepended_ctes, new_prepended_ctes)
 
-            new_cte_name = self.add_ephemeral_prefix(cte_model.alias)
+            new_cte_name = self.add_ephemeral_prefix(cte_model.identifier)
             rendered_sql = cte_model._pre_injected_sql or cte_model.compiled_code
             sql = f" {new_cte_name} as (\n{rendered_sql}\n)"
 
