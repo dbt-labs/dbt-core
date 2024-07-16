@@ -31,6 +31,7 @@ from dbt.events.types import (
     EndRunResult,
     GenericExceptionOnRun,
     LogCancelLine,
+    MarkSkippedChildren,
     NodeFinished,
     NodeStart,
     NothingToDo,
@@ -436,6 +437,13 @@ class GraphRunnableTask(ConfiguredTask):
     ) -> None:
         if self.graph is None:
             raise DbtInternalError("graph is None in _mark_dependent_errors")
+        fire_event(
+            MarkSkippedChildren(
+                unique_id=node_id,
+                status=result.status,
+                run_result=result.to_msg_dict(),
+            )
+        )
         for dep_node_id in self.graph.get_dependent_nodes(UniqueId(node_id)):
             self._skipped_children[dep_node_id] = cause
 

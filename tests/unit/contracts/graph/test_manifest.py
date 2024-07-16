@@ -9,7 +9,6 @@ from unittest import mock
 
 import freezegun
 import pytest
-from dbt_semantic_interfaces.type_enums import MetricType
 
 import dbt.flags
 import dbt.version
@@ -42,6 +41,7 @@ from dbt.exceptions import AmbiguousResourceNameRefError
 from dbt.flags import set_from_args
 from dbt.node_types import NodeType
 from dbt_common.events.functions import reset_metadata_vars
+from dbt_semantic_interfaces.type_enums import MetricType
 from tests.unit.utils import (
     MockDocumentation,
     MockGenerateMacro,

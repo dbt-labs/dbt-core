@@ -3,7 +3,6 @@ from argparse import Namespace
 from dataclasses import replace
 
 import pytest
-from dbt_semantic_interfaces.type_enums import MetricType
 from hypothesis import given
 from hypothesis.strategies import builds, lists
 
@@ -53,6 +52,7 @@ from dbt.contracts.graph.nodes import (
 )
 from dbt.node_types import AccessType, NodeType
 from dbt_common.dataclass_schema import ValidationError
+from dbt_semantic_interfaces.type_enums import MetricType
 from tests.unit.utils import (
     ContractTestCase,
     assert_fails_validation,

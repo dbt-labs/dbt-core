@@ -1,10 +1,10 @@
 import pytest
-from dbt_semantic_interfaces.type_enums.export_destination_type import (
-    ExportDestinationType,
-)
 
 from dbt.contracts.graph.manifest import Manifest
 from dbt.tests.util import update_config_file
+from dbt_semantic_interfaces.type_enums.export_destination_type import (
+    ExportDestinationType,
+)
 from tests.functional.assertions.test_runner import dbtTestRunner
 from tests.functional.configs.fixtures import BaseConfigProject
 from tests.functional.saved_queries.fixtures import (

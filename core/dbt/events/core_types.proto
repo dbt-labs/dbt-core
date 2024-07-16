@@ -1903,7 +1903,19 @@ message EndOfRunSummaryMsg {
     EndOfRunSummary data = 2;
 }
 
-// Skipped Z031, Z032, Z033
+// Skipped Z031, Z032
+
+// Z033
+message MarkSkippedChildren {
+    string unique_id = 1;
+    string status = 2;
+    RunResultMsg run_result = 3;
+}
+
+message MarkSkippedChildrenMsg {
+    CoreEventInfo info = 1;
+    MarkSkippedChildren data = 2;
+}
 
 // Z034
 message LogSkipBecauseError {
@@ -1911,6 +1923,7 @@ message LogSkipBecauseError {
     string relation = 2;
     int32 index = 3;
     int32 total = 4;
+    string status = 5;
 }
 
 message LogSkipBecauseErrorMsg {

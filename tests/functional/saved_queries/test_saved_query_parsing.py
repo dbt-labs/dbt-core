@@ -3,13 +3,13 @@ import shutil
 from typing import List
 
 import pytest
-from dbt_semantic_interfaces.type_enums.export_destination_type import (
-    ExportDestinationType,
-)
 
 from dbt.contracts.graph.manifest import Manifest
 from dbt.tests.util import run_dbt, write_file
 from dbt_common.events.base_types import BaseEvent
+from dbt_semantic_interfaces.type_enums.export_destination_type import (
+    ExportDestinationType,
+)
 from tests.functional.assertions.test_runner import dbtTestRunner
 from tests.functional.saved_queries.fixtures import (
     saved_queries_with_defaults_yml,

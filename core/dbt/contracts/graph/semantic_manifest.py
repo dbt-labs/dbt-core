@@ -1,3 +1,9 @@
+from dbt.constants import TIME_SPINE_MODEL_NAME
+from dbt.events.types import SemanticValidationFailure
+from dbt.exceptions import ParsingError
+from dbt_common.clients.system import write_file
+from dbt_common.events.base_types import EventLevel
+from dbt_common.events.functions import fire_event
 from dbt_semantic_interfaces.implementations.metric import PydanticMetric
 from dbt_semantic_interfaces.implementations.project_configuration import (
     PydanticProjectConfiguration,
@@ -14,13 +20,6 @@ from dbt_semantic_interfaces.type_enums import TimeGranularity
 from dbt_semantic_interfaces.validations.semantic_manifest_validator import (
     SemanticManifestValidator,
 )
-
-from dbt.constants import TIME_SPINE_MODEL_NAME
-from dbt.events.types import SemanticValidationFailure
-from dbt.exceptions import ParsingError
-from dbt_common.clients.system import write_file
-from dbt_common.events.base_types import EventLevel
-from dbt_common.events.functions import fire_event
 
 
 class SemanticManifest:
