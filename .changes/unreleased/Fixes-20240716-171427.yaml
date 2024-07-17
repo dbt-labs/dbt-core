@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix error constructing warn_error_options
+time: 2024-07-16T17:14:27.837171-04:00
+custom:
+  Author: gshank
+  Issue: "10452"

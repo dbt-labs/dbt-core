@@ -16,6 +16,10 @@ import os
 
 from dbt.flags import get_flags
 from dbt import deprecations
+from dbt.adapters.contracts.connection import QueryComment
+from dbt.clients.yaml_helper import load_yaml_text
+from dbt.config.selectors import SelectorDict
+from dbt.config.utils import normalize_warn_error_options
 from dbt.constants import (
     DEPENDENCIES_FILE_NAME,
     PACKAGES_FILE_NAME,
@@ -23,8 +27,6 @@ from dbt.constants import (
     DBT_PROJECT_FILE_NAME,
 )
 from dbt_common.clients.system import path_exists, load_file_contents
-from dbt.clients.yaml_helper import load_yaml_text
-from dbt.adapters.contracts.connection import QueryComment
 from dbt.exceptions import (
     DbtProjectError,
     DbtExclusivePropertyUseError,
@@ -39,8 +41,6 @@ from dbt_common.semver import VersionSpecifier, versions_compatible
 from dbt.version import get_installed_version
 from dbt.utils import MultiDict, md5, coerce_dict_str
 from dbt.node_types import NodeType
-from dbt.config.selectors import SelectorDict
-from dbt.config.utils import exclusive_primary_alt_value_setting
 from dbt.contracts.project import (
     Project as ProjectContract,
     SemverString,
@@ -839,13 +839,8 @@ def read_project_flags(project_dir: str, profiles_dir: str) -> ProjectFlags:
         if project_flags is not None:
             # handle collapsing `include` and `error` as well as collapsing `exclude` and `warn`
             # for warn_error_options
-            warn_error_options = project_flags.get("warn_error_options")
-            exclusive_primary_alt_value_setting(
-                warn_error_options, "include", "error", "warn_error_options"
-            )
-            exclusive_primary_alt_value_setting(
-                warn_error_options, "exclude", "warn", "warn_error_options"
-            )
+            warn_error_options = project_flags.get("warn_error_options", {})
+            normalize_warn_error_options(warn_error_options)
 
             ProjectFlags.validate(project_flags)
             return ProjectFlags.from_dict(project_flags)
