@@ -18,15 +18,7 @@ select * from {{ ref('view_1') }}
 )
 _TABLE_TWO_DOT_MODEL_SCHEMA = "second_schema"
 _TABLE_TWO_DOT_MODEL_NAME = f"{_TABLE_TWO_DOT_MODEL_SCHEMA}.view_2"
-_TABLE_TWO_DOT_MODEL = (
-    """
-{{ config(materialized='ephemeral') }}
-
-select * from {{ ref('"""
-    + _TABLE_ONE_DOT_MODEL_NAME
-    + """') }}
-"""
-)
+_TABLE_TWO_DOT_MODEL = "select * from {{ ref('" + _TABLE_ONE_DOT_MODEL_NAME + "') }}"
 
 _TABLE_THREE_SCHEMA = "test"
 _TABLE_THREE = (

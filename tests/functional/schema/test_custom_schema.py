@@ -17,6 +17,7 @@ from tests.functional.schema.fixtures.sql import (
     _TABLE_TWO,
     _TABLE_TWO_DOT_MODEL,
     _TABLE_TWO_DOT_MODEL_NAME,
+    _TABLE_TWO_DOT_MODEL_SCHEMA,
     _TABLE_TWO_SCHEMA,
     _VALIDATION_SQL,
 )
@@ -201,14 +202,17 @@ class TestCustomSchemaWithCustomMacroFromModelName(BaseTestCustomSchema):
         project.run_sql(_VALIDATION_SQL)
         run_dbt(["seed"])
         results = run_dbt(["run"])
-        # Model 2 is ephemeral, so it should not show up in the results list
-        assert len(results) == 2
+        assert len(results) == 3
         table_results = {r.node.name: r.node.schema for r in results.results}
 
         assert table_results[_TABLE_ONE_DOT_MODEL_NAME] == _TABLE_ONE_DOT_MODEL_SCHEMA
+        assert table_results[_TABLE_TWO_DOT_MODEL_NAME] == _TABLE_TWO_DOT_MODEL_SCHEMA
         assert table_results["table_3"] == f"{project.test_schema}"
         check_relations_equal(
             adapter=project.adapter, relation_names=("seed", _TABLE_ONE_DOT_MODEL_NAME)
+        )
+        check_relations_equal(
+            adapter=project.adapter, relation_names=("seed", _TABLE_TWO_DOT_MODEL_NAME)
         )
         check_relations_equal(
             adapter=project.adapter, relation_names=("agg", f"{project.test_schema}.table_3")
