@@ -1,5 +1,5 @@
 black==22.8.0
-bumpversion~=0.6.0
+bumpversion
 ddtrace==2.1.7
 flake8
 flaky

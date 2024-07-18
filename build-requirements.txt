@@ -1,6 +1,0 @@
-bumpversion~=0.6.0
-check-wheel-contents~=0.6.0
-setuptools~=71.0
-twine~=5.0
-wheel~=0.42
-packaging~=24.0
