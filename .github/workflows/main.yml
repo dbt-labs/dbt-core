@@ -241,6 +241,10 @@ jobs:
         run: |
           dbt --version
 
+      - name: Re-install python build dependencies
+        run: |
+          python -m pip install -r build-requirements.txt
+
       - name: Install source distributions
         # ignore dbt-1.0.0, which intentionally raises an error when installed from source
         run: |
