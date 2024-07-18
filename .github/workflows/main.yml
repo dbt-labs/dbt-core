@@ -216,7 +216,7 @@ jobs:
       - name: Install python dependencies
         run: |
           python -m pip install --user --upgrade pip
-          python -m pip install --upgrade setuptools wheel twine check-wheel-contents
+          python -m pip install -r build-requirements.txt
           python -m pip --version
 
       - name: Build distributions

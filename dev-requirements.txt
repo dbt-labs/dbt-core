@@ -1,5 +1,4 @@
 black==22.8.0
-bumpversion
 ddtrace==2.1.7
 flake8
 flaky
@@ -25,3 +24,5 @@ types-python-dateutil
 types-pytz
 types-requests
 types-setuptools
+
+-r build-requirements.txt
