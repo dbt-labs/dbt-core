@@ -4,7 +4,8 @@ import pytest
 
 from dbt.cli.main import dbtRunner, dbtRunnerResult
 from dbt.events.types import DeprecatedModel
-from dbt.tests.util import update_config_file
+from dbt.flags import get_flags
+from dbt.tests.util import run_dbt, update_config_file
 from dbt_common.events.base_types import EventLevel
 from tests.utils import EventCatcher
 
@@ -202,3 +203,29 @@ class TestWarnErrorOptionsFromProject:
         assert not result.success
         assert result.exception is not None
         assert "Only `warn` or `exclude` can be specified" in str(result.exception)
+
+
+class TestEmptyWarnError:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"my_model.sql": my_model_sql, "schema.yml": schema_yml}
+
+    # This tests for a bug in creating WarnErrorOptions when warn or
+    # error are set to None (in yaml =  warn:)
+    def test_project_flags(self, project):
+        project_flags = {
+            "flags": {
+                "send_anonymous_usage_stats": False,
+                "warn_error_options": {
+                    "warn": None,
+                    "error": None,
+                    "silence": ["TestsConfigDeprecation"],
+                },
+            }
+        }
+        update_config_file(project_flags, project.project_root, "dbt_project.yml")
+        run_dbt(["run"])
+        flags = get_flags()
+        # Note: WarnErrorOptions is not a dataclass, so you won't get "silence"
+        # from to_dict or stringifying.
+        assert flags.warn_error_options.silence == ["TestsConfigDeprecation"]

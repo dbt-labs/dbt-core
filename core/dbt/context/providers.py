@@ -239,8 +239,7 @@ class BaseRefResolver(BaseResolver):
     @abc.abstractmethod
     def resolve(
         self, name: str, package: Optional[str] = None, version: Optional[NodeVersion] = None
-    ) -> RelationProxy:
-        ...
+    ) -> RelationProxy: ...
 
     def _repack_args(
         self, name: str, package: Optional[str], version: Optional[NodeVersion]
@@ -306,8 +305,7 @@ class BaseSourceResolver(BaseResolver):
 
 class BaseMetricResolver(BaseResolver):
     @abc.abstractmethod
-    def resolve(self, name: str, package: Optional[str] = None) -> MetricReference:
-        ...
+    def resolve(self, name: str, package: Optional[str] = None) -> MetricReference: ...
 
     def _repack_args(self, name: str, package: Optional[str]) -> List[str]:
         if package is None:
@@ -341,8 +339,7 @@ class BaseMetricResolver(BaseResolver):
 
 
 class Config(Protocol):
-    def __init__(self, model, context_config: Optional[ContextConfig]):
-        ...
+    def __init__(self, model, context_config: Optional[ContextConfig]): ...
 
 
 # Implementation of "config(..)" calls in models

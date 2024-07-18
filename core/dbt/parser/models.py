@@ -204,7 +204,7 @@ class ModelParser(SimpleSQLParser[ModelNode]):
             dbt_parser = PythonParseVisitor(node)
             dbt_parser.visit(tree)
 
-            for (func, args, kwargs) in dbt_parser.dbt_function_calls:
+            for func, args, kwargs in dbt_parser.dbt_function_calls:
                 if func == "get":
                     num_args = len(args)
                     if num_args == 0:

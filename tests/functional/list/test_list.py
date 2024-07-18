@@ -697,9 +697,9 @@ class TestList:
             "test.unique_outer_id",
         }
         del os.environ["DBT_RESOURCE_TYPES"]
-        os.environ[
-            "DBT_EXCLUDE_RESOURCE_TYPES"
-        ] = "test saved_query metric source semantic_model snapshot seed"
+        os.environ["DBT_EXCLUDE_RESOURCE_TYPES"] = (
+            "test saved_query metric source semantic_model snapshot seed"
+        )
         results = self.run_dbt_ls()
         assert set(results) == {
             "test.ephemeral",

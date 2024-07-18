@@ -636,9 +636,9 @@ class ModelNode(ModelResource, CompiledNode):
         contract_enforced_disabled: bool = False
         columns_removed: List[str] = []
         column_type_changes: List[Dict[str, str]] = []
-        enforced_column_constraint_removed: List[
-            Dict[str, str]
-        ] = []  # column_name, constraint_type
+        enforced_column_constraint_removed: List[Dict[str, str]] = (
+            []
+        )  # column_name, constraint_type
         enforced_model_constraint_removed: List[Dict[str, Any]] = []  # constraint_type, columns
         materialization_changed: List[str] = []
 
@@ -1554,7 +1554,7 @@ class SavedQuery(NodeInfoMixin, GraphNode, SavedQueryResource):
             return False
 
         # exports should be in the same order, so we zip them for easy iteration
-        for (old_export, new_export) in zip(old.exports, self.exports):
+        for old_export, new_export in zip(old.exports, self.exports):
             if not (
                 old_export.name == new_export.name
                 and old_export.config.export_as == new_export.config.export_as

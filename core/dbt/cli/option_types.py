@@ -1,6 +1,6 @@
 from click import Choice, ParamType
 
-from dbt.config.utils import exclusive_primary_alt_value_setting, parse_cli_yaml_string
+from dbt.config.utils import normalize_warn_error_options, parse_cli_yaml_string
 from dbt.events import ALL_EVENT_NAMES
 from dbt.exceptions import OptionNotYamlDictError, ValidationError
 from dbt_common.exceptions import DbtValidationError
@@ -51,12 +51,7 @@ class WarnErrorOptionsType(YAML):
     def convert(self, value, param, ctx):
         # this function is being used by param in click
         include_exclude = super().convert(value, param, ctx)
-        exclusive_primary_alt_value_setting(
-            include_exclude, "include", "error", "warn_error_options"
-        )
-        exclusive_primary_alt_value_setting(
-            include_exclude, "exclude", "warn", "warn_error_options"
-        )
+        normalize_warn_error_options(include_exclude)
 
         return WarnErrorOptions(
             include=include_exclude.get("include", []),
