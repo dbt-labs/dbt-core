@@ -290,9 +290,9 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             project_name=self.project_name,
             project_id=self.hashed_name(),
             user_id=tracking.active_user.id if tracking.active_user else None,
-            send_anonymous_usage_stats=get_flags().SEND_ANONYMOUS_USAGE_STATS
-            if tracking.active_user
-            else None,
+            send_anonymous_usage_stats=(
+                get_flags().SEND_ANONYMOUS_USAGE_STATS if tracking.active_user else None
+            ),
             adapter_type=self.credentials.type,
         )
 

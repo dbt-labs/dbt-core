@@ -83,6 +83,11 @@ class TestSimpleMetrics:
             )
             == 2
         )
+        assert (
+            manifest.metrics["metric.test.number_of_people"].time_granularity
+            == TimeGranularity.MONTH
+        )
+        assert manifest.metrics["metric.test.collective_tenure"].time_granularity is None
 
 
 class TestInvalidRefMetrics:

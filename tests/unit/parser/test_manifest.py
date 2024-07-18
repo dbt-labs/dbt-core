@@ -124,9 +124,9 @@ class TestGetFullManifest:
         mocker.patch("dbt.parser.manifest.get_adapter").return_value = mock_adapter
         mocker.patch("dbt.parser.manifest.ManifestLoader.load").return_value = manifest
         mocker.patch("dbt.parser.manifest._check_manifest").return_value = None
-        mocker.patch(
-            "dbt.parser.manifest.ManifestLoader.save_macros_to_adapter"
-        ).return_value = None
+        mocker.patch("dbt.parser.manifest.ManifestLoader.save_macros_to_adapter").return_value = (
+            None
+        )
         mocker.patch("dbt.tracking.active_user").return_value = User(None)
 
     def test_write_perf_info(

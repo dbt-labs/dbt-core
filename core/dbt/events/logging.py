@@ -74,9 +74,7 @@ def setup_event_logger(flags, callbacks: List[Callable[[EventMsg], None]] = []) 
         log_level = (
             EventLevel.ERROR
             if flags.QUIET
-            else EventLevel.DEBUG
-            if flags.DEBUG
-            else EventLevel(flags.LOG_LEVEL)
+            else EventLevel.DEBUG if flags.DEBUG else EventLevel(flags.LOG_LEVEL)
         )
         console_config = get_stdout_config(
             line_format,

@@ -113,6 +113,7 @@ metrics:
     type: simple
     type_params:
       measure: people
+    time_granularity: month
     config:
       meta:
         my_meta_config: 'config'

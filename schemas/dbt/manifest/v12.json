@@ -9044,6 +9044,29 @@
             ],
             "default": null
           },
+          "time_granularity": {
+            "anyOf": [
+              {
+                "enum": [
+                  "nanosecond",
+                  "microsecond",
+                  "millisecond",
+                  "second",
+                  "minute",
+                  "hour",
+                  "day",
+                  "week",
+                  "month",
+                  "quarter",
+                  "year"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
           "meta": {
             "type": "object",
             "propertyNames": {
@@ -18012,6 +18035,29 @@
                           "required": [
                             "repo_file_path",
                             "file_slice"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
+                    },
+                    "time_granularity": {
+                      "anyOf": [
+                        {
+                          "enum": [
+                            "nanosecond",
+                            "microsecond",
+                            "millisecond",
+                            "second",
+                            "minute",
+                            "hour",
+                            "day",
+                            "week",
+                            "month",
+                            "quarter",
+                            "year"
                           ]
                         },
                         {

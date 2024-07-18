@@ -27,8 +27,7 @@ class ConfigSource:
     def __init__(self, project):
         self.project = project
 
-    def get_config_dict(self, resource_type: NodeType):
-        ...
+    def get_config_dict(self, resource_type: NodeType): ...
 
 
 class UnrenderedConfig(ConfigSource):
@@ -130,12 +129,12 @@ class BaseContextConfigGenerator(Generic[T]):
         return self._project_configs(self._active_project, fqn, resource_type)
 
     @abstractmethod
-    def _update_from_config(self, result: T, partial: Dict[str, Any], validate: bool = False) -> T:
-        ...
+    def _update_from_config(
+        self, result: T, partial: Dict[str, Any], validate: bool = False
+    ) -> T: ...
 
     @abstractmethod
-    def initial_result(self, resource_type: NodeType, base: bool) -> T:
-        ...
+    def initial_result(self, resource_type: NodeType, base: bool) -> T: ...
 
     def calculate_node_config(
         self,
@@ -181,8 +180,7 @@ class BaseContextConfigGenerator(Generic[T]):
         project_name: str,
         base: bool,
         patch_config_dict: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
-        ...
+    ) -> Dict[str, Any]: ...
 
 
 class ContextConfigGenerator(BaseContextConfigGenerator[C]):

@@ -69,7 +69,7 @@ setup(
         # Accept patches but avoid automatically updating past a set minor version range.
         "dbt-extractor>=0.5.0,<=0.6",
         "minimal-snowplow-tracker>=0.0.2,<0.1",
-        "dbt-semantic-interfaces>=0.6.1,<0.7",
+        "dbt-semantic-interfaces>=0.6.8,<0.7",
         # Minor versions for these are expected to be backwards-compatible
         "dbt-common>=1.3.0,<2.0",
         "dbt-adapters>=1.1.1,<2.0",
