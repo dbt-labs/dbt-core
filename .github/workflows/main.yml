@@ -201,19 +201,19 @@ jobs:
       - name: Show distributions
         run: ls -lh dist/
 
-      - name: Install wheel distributions
-        run: |
-          find ./dist/*.whl -maxdepth 1 -type f | xargs python -m pip install --force-reinstall --find-links=dist/
-
-      - name: Check wheel distributions
-        run: |
-          dbt --version
-
       - name: Install source distributions
         # ignore dbt-1.0.0, which intentionally raises an error when installed from source
         run: |
           find ./dist/dbt[-_][a-z]*.gz -maxdepth 1 -type f | xargs python -m pip install --force-reinstall --find-links=dist/
 
       - name: Check source distributions
+        run: |
+          dbt --version
+
+      - name: Install wheel distributions
+        run: |
+          find ./dist/*.whl -maxdepth 1 -type f | xargs python -m pip install --force-reinstall --find-links=dist/
+
+      - name: Check wheel distributions
         run: |
           dbt --version
