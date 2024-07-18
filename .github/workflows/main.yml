@@ -226,6 +226,15 @@ jobs:
         run: |
           twine check dist/*
 
+      - name: Install source distributions
+        # ignore dbt-1.0.0, which intentionally raises an error when installed from source
+        run: |
+          find ./dist/*.gz -maxdepth 1 -type f | xargs python -m pip install --force-reinstall --find-links=dist/
+
+      - name: Check source distributions
+        run: |
+          dbt --version
+
       - name: Check wheel contents
         run: |
           check-wheel-contents dist/*.whl --ignore W007,W008
@@ -235,14 +244,5 @@ jobs:
           find ./dist/*.whl -maxdepth 1 -type f | xargs python -m pip install --force-reinstall --find-links=dist/
 
       - name: Check wheel distributions
-        run: |
-          dbt --version
-
-      - name: Install source distributions
-        # ignore dbt-1.0.0, which intentionally raises an error when installed from source
-        run: |
-          find ./dist/*.gz -maxdepth 1 -type f | xargs python -m pip install --force-reinstall --find-links=dist/
-
-      - name: Check source distributions
         run: |
           dbt --version
