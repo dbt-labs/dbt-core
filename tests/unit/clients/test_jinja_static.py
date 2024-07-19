@@ -1,7 +1,13 @@
 import pytest
 
-from dbt.clients.jinja_static import statically_extract_macro_calls
+from dbt.artifacts.resources import RefArgs
+from dbt.clients.jinja_static import (
+    statically_extract_macro_calls,
+    statically_parse_ref,
+    statically_parse_source,
+)
 from dbt.context.base import generate_base_context
+from dbt.exceptions import ParsingError
 
 
 @pytest.mark.parametrize(
@@ -46,9 +52,40 @@ from dbt.context.base import generate_base_context
         ),
     ],
 )
-def test_extract_macro_calls(self, macro_string, expected_possible_macro_calls):
+def test_extract_macro_calls(macro_string, expected_possible_macro_calls):
     cli_vars = {"local_utils_dispatch_list": ["foo_utils4"]}
     ctx = generate_base_context(cli_vars)
 
     possible_macro_calls = statically_extract_macro_calls(macro_string, ctx)
     assert possible_macro_calls == expected_possible_macro_calls
+
+
+class TestStaticallyParseRef:
+    @pytest.mark.parametrize("invalid_expression", ["invalid", "source('schema', 'table')"])
+    def test_invalid_expression(self, invalid_expression):
+        with pytest.raises(ParsingError):
+            statically_parse_ref(invalid_expression)
+
+    @pytest.mark.parametrize(
+        "ref_expression,expected_ref_args",
+        [
+            ("ref('model')", RefArgs(name="model")),
+            ("ref('package','model')", RefArgs(name="model", package="package")),
+            ("ref('model',v=3)", RefArgs(name="model", version=3)),
+            ("ref('package','model',v=3)", RefArgs(name="model", package="package", version=3)),
+        ],
+    )
+    def test_valid_ref_expression(self, ref_expression, expected_ref_args):
+        ref_args = statically_parse_ref(ref_expression)
+        assert ref_args == expected_ref_args
+
+
+class TestStaticallyParseSource:
+    @pytest.mark.parametrize("invalid_expression", ["invalid", "ref('package', 'model')"])
+    def test_invalid_expression(self, invalid_expression):
+        with pytest.raises(ParsingError):
+            statically_parse_source(invalid_expression)
+
+    def test_valid_ref_expression(self):
+        parsed_source = statically_parse_source("source('schema', 'table')")
+        assert parsed_source == ("schema", "table")
