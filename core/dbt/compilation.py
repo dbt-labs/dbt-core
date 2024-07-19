@@ -29,7 +29,9 @@ from dbt.events.types import FoundStats, WritingInjectedSQLForNode
 from dbt.exceptions import (
     DbtInternalError,
     DbtRuntimeError,
+    ForeignKeyConstraintToSyntaxError,
     GraphDependencyNotFoundError,
+    ParsingError,
 )
 from dbt.flags import get_flags
 from dbt.graph import Graph
@@ -465,7 +467,11 @@ class Compiler:
     def _compile_relation_for_foreign_key_constraint_to(
         self, manifest: Manifest, node: ManifestSQLNode, to_expression: str
     ) -> str:
-        foreign_key_node = manifest.find_node_from_ref_or_source(to_expression)
+        try:
+            foreign_key_node = manifest.find_node_from_ref_or_source(to_expression)
+        except ParsingError:
+            raise ForeignKeyConstraintToSyntaxError(node, to_expression)
+
         if not foreign_key_node:
             raise GraphDependencyNotFoundError(node, to_expression)
         adapter = get_adapter(self.config)

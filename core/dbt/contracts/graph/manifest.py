@@ -70,6 +70,7 @@ from dbt.exceptions import (
     AmbiguousResourceNameRefError,
     CompilationError,
     DuplicateResourceNameError,
+    ParsingError,
 )
 from dbt.flags import get_flags
 from dbt.mp_context import get_mp_context
@@ -1643,17 +1644,15 @@ class Manifest(MacroMethods, dbtClassMixin):
         valid_source = True
         try:
             ref = statically_parse_ref(expression)
-        # TODO: better error handling
-        except Exception:
+        except ParsingError:
             valid_ref = False
             try:
                 source_name, source_table_name = statically_parse_source(expression)
-            # TODO: better error handling
-            except Exception:
+            except ParsingError:
                 valid_source = False
 
         if not valid_ref and not valid_ref:
-            raise CompilationError(f"Invalid ref or source expression: {expression}")
+            raise ParsingError(f"Invalid ref or source syntax: {expression}.")
 
         if valid_ref:
             node = self.ref_lookup.find(ref.name, ref.package, ref.version, self)

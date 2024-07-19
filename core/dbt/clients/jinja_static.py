@@ -173,12 +173,10 @@ def statically_parse_ref(input: str) -> RefArgs:
     try:
         statically_parsed = py_extract_from_source(f"{{{{ {input} }}}}")
     except ExtractionError:
-        # TODO: more precise error
-        raise ParsingError(f"Invalid jinja expression: {input}.")
+        raise ParsingError(f"Invalid jinja expression: {input}")
 
-    if not statically_parsed["refs"]:
-        # TODO: more precise error class
-        raise ParsingError("not a ref")
+    if not statically_parsed.get("refs"):
+        raise ParsingError(f"Invalid ref expression: {input}")
 
     ref = list(statically_parsed["refs"])[0]
     return RefArgs(package=ref.get("package"), name=ref.get("name"), version=ref.get("version"))
@@ -198,12 +196,10 @@ def statically_parse_source(input: str) -> Tuple[str, str]:
     try:
         statically_parsed = py_extract_from_source(f"{{{{ {input} }}}}")
     except ExtractionError:
-        # TODO: more precise error
-        raise ParsingError(f"Invalid jinja expression: {input}.")
+        raise ParsingError(f"Invalid jinja expression: {input}")
 
-    if not statically_parsed["sources"]:
-        # TODO: more precise error class
-        raise ParsingError("not a ref")
+    if not statically_parsed.get("sources"):
+        raise ParsingError(f"Invalid source expression: {input}")
 
     source = list(statically_parsed["sources"])[0]
     source_name, source_table_name = source
