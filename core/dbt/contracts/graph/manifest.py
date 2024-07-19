@@ -1651,9 +1651,10 @@ class Manifest(MacroMethods, dbtClassMixin):
             except ParsingError:
                 valid_source = False
 
-        if not valid_ref and not valid_ref:
+        if not valid_ref and not valid_source:
             raise ParsingError(f"Invalid ref or source syntax: {expression}.")
 
+        node = None
         if valid_ref:
             node = self.ref_lookup.find(ref.name, ref.package, ref.version, self)
         elif valid_source:

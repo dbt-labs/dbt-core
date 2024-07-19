@@ -37,7 +37,7 @@ from dbt.contracts.graph.nodes import (
     SeedNode,
     SourceDefinition,
 )
-from dbt.exceptions import AmbiguousResourceNameRefError
+from dbt.exceptions import AmbiguousResourceNameRefError, ParsingError
 from dbt.flags import set_from_args
 from dbt.node_types import NodeType
 from dbt_common.events.functions import reset_metadata_vars
@@ -1962,3 +1962,53 @@ def test_resolve_doc(docs, package, expected):
         expected_package, expected_name = expected
         assert result.name == expected_name
         assert result.package_name == expected_package
+
+
+class TestManifestFindNodeFromRefOrSource:
+    @pytest.fixture
+    def mock_node(self):
+        return MockNode("my_package", "my_model")
+
+    @pytest.fixture
+    def mock_disabled_node(self):
+        return MockNode("my_package", "disabled_node", config={"enabled": False})
+
+    @pytest.fixture
+    def mock_source(self):
+        return MockSource("root", "my_source", "source_table")
+
+    @pytest.fixture
+    def mock_disabled_source(self):
+        return MockSource("root", "my_source", "disabled_source_table", config={"enabled": False})
+
+    @pytest.fixture
+    def mock_manifest(self, mock_node, mock_source, mock_disabled_node, mock_disabled_source):
+        return make_manifest(
+            nodes=[mock_node, mock_disabled_node], sources=[mock_source, mock_disabled_source]
+        )
+
+    @pytest.mark.parametrize(
+        "expression,expected_node",
+        [
+            ("ref('my_package', 'my_model')", "mock_node"),
+            ("ref('my_package', 'doesnt_exist')", None),
+            ("ref('my_package', 'disabled_node')", "mock_disabled_node"),
+            ("source('my_source', 'source_table')", "mock_source"),
+            ("source('my_source', 'doesnt_exist')", None),
+            ("source('my_source', 'disabled_source_table')", "mock_disabled_source"),
+        ],
+    )
+    def test_find_node_from_ref_or_source(self, expression, expected_node, mock_manifest, request):
+        node = mock_manifest.find_node_from_ref_or_source(expression)
+
+        if expected_node is None:
+            assert node is None
+        else:
+            assert node == request.getfixturevalue(expected_node)
+
+    @pytest.mark.parametrize("invalid_expression", ["invalid", "ref(')"])
+    def test_find_node_from_ref_or_source_invalid_expression(
+        self, invalid_expression, mock_manifest
+    ):
+        with pytest.raises(ParsingError):
+            mock_manifest.find_node_from_ref_or_source(invalid_expression)
