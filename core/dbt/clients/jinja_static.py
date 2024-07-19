@@ -167,8 +167,7 @@ def statically_parse_ref(input: str) -> RefArgs:
         - "ref('my_model_a', version=3)"
         - "ref('package', 'my_model_a', version=3)"
 
-    If input is not a well-formed jinja expression, TODO is raised.
-    If input is not a valid ref expression, TODO is raised.
+    If input is not a well-formed jinja ref expression, a ParsingError is raised.
     """
     try:
         statically_parsed = py_extract_from_source(f"{{{{ {input} }}}}")
@@ -190,8 +189,7 @@ def statically_parse_source(input: str) -> Tuple[str, str]:
         * examples:
         - "source('my_source_schema', 'my_source_name')"
 
-    If input is not a well-formed jinja expression, TODO is raised.
-    If input is not a valid source expression, TODO is raised.
+    If input is not a well-formed jinja source expression, ParsingError is raised.
     """
     try:
         statically_parsed = py_extract_from_source(f"{{{{ {input} }}}}")
