@@ -72,6 +72,7 @@ class Parser(BaseParser[FinalValue], Generic[FinalValue]):
 
 
 class RelationUpdate:
+    # "component" is database, schema or alias
     def __init__(self, config: RuntimeConfig, manifest: Manifest, component: str) -> None:
         default_macro = manifest.find_generate_macro_by_name(
             component=component,
@@ -127,6 +128,7 @@ class ConfiguredParser(
     ) -> None:
         super().__init__(project, manifest, root_project)
 
+        # this sets callables from RelationUpdate
         self._update_node_database = RelationUpdate(
             manifest=manifest, config=root_project, component="database"
         )
@@ -288,7 +290,10 @@ class ConfiguredParser(
         self._update_node_schema(parsed_node, config_dict.get("schema"))
         self._update_node_alias(parsed_node, config_dict.get("alias"))
 
-        # Snapshot nodes use special "target_database" and "target_schema" fields for some reason
+        # Snapshot nodes use special "target_database" and "target_schema" fields
+        # for backward compatibility
+        # We have to do getattr here because saved_query parser calls this method with
+        # Export object instead of a node.
         if getattr(parsed_node, "resource_type", None) == NodeType.Snapshot:
             if "target_database" in config_dict and config_dict["target_database"]:
                 parsed_node.database = config_dict["target_database"]
@@ -443,9 +448,8 @@ class ConfiguredParser(
             fqn=fqn,
         )
         self.render_update(node, config)
-        result = self.transform(node)
-        self.add_result_node(block, result)
-        return result
+        self.add_result_node(block, node)
+        return node
 
     def _update_node_relation_name(self, node: ManifestNode):
         # Seed and Snapshot nodes and Models that are not ephemeral,
@@ -464,17 +468,12 @@ class ConfiguredParser(
     def parse_file(self, file_block: FileBlock) -> None:
         pass
 
-    @abc.abstractmethod
-    def transform(self, node: FinalNode) -> FinalNode:
-        pass
-
 
 class SimpleParser(
     ConfiguredParser[ConfiguredBlockType, FinalNode],
     Generic[ConfiguredBlockType, FinalNode],
 ):
-    def transform(self, node):
-        return node
+    pass
 
 
 class SQLParser(ConfiguredParser[FileBlock, FinalNode], Generic[FinalNode]):
@@ -483,5 +482,4 @@ class SQLParser(ConfiguredParser[FileBlock, FinalNode], Generic[FinalNode]):
 
 
 class SimpleSQLParser(SQLParser[FinalNode]):
-    def transform(self, node):
-        return node
+    pass

@@ -19,10 +19,9 @@ class SnapshotConfig(NodeConfig):
     check_cols: Union[str, List[str], None] = None
 
     def final_validate(self):
-        if not self.strategy or not self.unique_key or not self.target_schema:
+        if not self.strategy or not self.unique_key:
             raise ValidationError(
-                "Snapshots must be configured with a 'strategy', 'unique_key', "
-                "and 'target_schema'."
+                "Snapshots must be configured with a 'strategy' and 'unique_key'."
             )
         if self.strategy == "check":
             if not self.check_cols:
