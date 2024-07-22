@@ -5,8 +5,11 @@ from dbt.contracts.graph.nodes import NodeType, UnitTestDefinition
 from dbt.contracts.graph.unparsed import UnitTestOutputFixture
 from dbt.parser import SchemaParser
 from dbt.parser.unit_tests import UnitTestParser
+from dbt_common.events.event_manager_client import add_callback_to_manager
+from dbt_common.events.types import SystemStdErr
 from tests.unit.parser.test_parser import SchemaParserTest, assertEqualNodes
 from tests.unit.utils import MockNode
+from tests.utils import EventCatcher
 
 UNIT_TEST_MODEL_NOT_FOUND_SOURCE = """
 unit_tests:
@@ -227,7 +230,7 @@ class UnitTestParserTest(SchemaParserTest):
             self.assertEqual(len(unit_test.depends_on.nodes), 1)
             self.assertEqual(unit_test.depends_on.nodes[0], "model.snowplow.my_model")
 
-    def _parametrize_test_promote_non_none_row(
+    def _assert_fixture_yml_reorders_to_expected_rows(
         self, unit_test_fixture_yml, fixture_expected_field_format, expected_rows
     ):
         block = self.yaml_block_for(unit_test_fixture_yml, "test_my_model.yml")
@@ -262,7 +265,7 @@ class UnitTestParserTest(SchemaParserTest):
             {"id": None, "col1": "e"},
             {"id": None, "col1": "d"},
         ]
-        self._parametrize_test_promote_non_none_row(
+        self._assert_fixture_yml_reorders_to_expected_rows(
             UNIT_TEST_NONE_ROWS_SORT, UnitTestFormat.Dict, expected_rows
         )
 
@@ -272,16 +275,21 @@ class UnitTestParserTest(SchemaParserTest):
             {"id": None, "col1": "e"},
             {"id": None, "col1": "d"},
         ]
-        self._parametrize_test_promote_non_none_row(
+        self._assert_fixture_yml_reorders_to_expected_rows(
             UNIT_TEST_NONE_ROWS_SORT_CSV, UnitTestFormat.CSV, expected_rows
         )
 
     def test_expected_promote_non_none_row_sql(self):
         expected_rows = "select null\n" + "select 1"
-        self._parametrize_test_promote_non_none_row(
+        self._assert_fixture_yml_reorders_to_expected_rows(
             UNIT_TEST_NONE_ROWS_SORT_SQL, UnitTestFormat.SQL, expected_rows
         )
 
     def test_no_full_row_does_not_raise_exception(self):
+        catcher = EventCatcher(SystemStdErr)
+        add_callback_to_manager(catcher.catch)
+
         block = self.yaml_block_for(UNIT_TEST_NONE_ROWS_SORT_FAILS, "test_my_model.yml")
         UnitTestParser(self.parser, block).parse()
+
+        assert len(catcher.caught_events) == 1
