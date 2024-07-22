@@ -5,6 +5,8 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Generic, Iterable, List, Optional, Type, TypeVar
 
 from dbt import deprecations
+from dbt.artifacts.resources import RefArgs
+from dbt.clients.jinja_static import statically_parse_ref_or_source
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.config import RuntimeConfig
 from dbt.context.configured import SchemaYamlVars, generate_schema_yml_context
@@ -930,6 +932,26 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
 
         self._validate_pk_constraints(node, constraints)
         node.constraints = [ModelLevelConstraint.from_dict(c) for c in constraints]
+        self._process_constraints_refs_and_sources(node)
+
+    def _process_constraints_refs_and_sources(self, model_node: ModelNode) -> None:
+        """
+        Populate model_node.refs and model_node.sources based on foreign-key constraint references,
+        whether defined at the model-level or column-level.
+        """
+        for constraint in model_node.all_constraints:
+            if constraint.type == ConstraintType.foreign_key and constraint.to:
+                try:
+                    ref_or_source = statically_parse_ref_or_source(constraint.to)
+                except ParsingError:
+                    raise ParsingError(
+                        f"Invalid 'ref' or 'source' syntax on foreign key constraint 'to' on model {model_node.name}: {constraint.to}."
+                    )
+
+                if isinstance(ref_or_source, RefArgs):
+                    model_node.refs.append(ref_or_source)
+                else:
+                    model_node.sources.append(ref_or_source)
 
     def _validate_pk_constraints(
         self, model_node: ModelNode, constraints: List[Dict[str, Any]]

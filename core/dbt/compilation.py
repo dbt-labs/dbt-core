@@ -442,24 +442,10 @@ class Compiler:
 
         # Compile 'ref' and 'source' expressions in foreign key constraints
         if node.resource_type == NodeType.Model:
-            # column-level foreign key constraints
-            for column in node.columns.values():
-                for column_constraint in column.constraints:
-                    if (
-                        column_constraint.type == ConstraintType.foreign_key
-                        and column_constraint.to
-                    ):
-                        column_constraint.to = (
-                            self._compile_relation_for_foreign_key_constraint_to(
-                                manifest, node, column_constraint.to
-                            )
-                        )
-
-            # model-level foreign key constraints
-            for model_constraint in node.constraints:
-                if model_constraint.type == ConstraintType.foreign_key and model_constraint.to:
-                    model_constraint.to = self._compile_relation_for_foreign_key_constraint_to(
-                        manifest, node, model_constraint.to
+            for constraint in node.all_constraints:
+                if constraint.type == ConstraintType.foreign_key and constraint.to:
+                    constraint.to = self._compile_relation_for_foreign_key_constraint_to(
+                        manifest, node, constraint.to
                     )
 
         return node
@@ -474,9 +460,9 @@ class Compiler:
 
         if not foreign_key_node:
             raise GraphDependencyNotFoundError(node, to_expression)
+
         adapter = get_adapter(self.config)
-        relation_cls = adapter.Relation
-        relation_name = str(relation_cls.create_from(self.config, foreign_key_node))
+        relation_name = str(adapter.Relation.create_from(self.config, foreign_key_node))
         return relation_name
 
     # This method doesn't actually "compile" any of the nodes. That is done by the

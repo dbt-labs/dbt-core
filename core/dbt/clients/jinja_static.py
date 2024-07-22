@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Union
 
 import jinja2
 
@@ -181,7 +181,7 @@ def statically_parse_ref(input: str) -> RefArgs:
     return RefArgs(package=ref.get("package"), name=ref.get("name"), version=ref.get("version"))
 
 
-def statically_parse_source(input: str) -> Tuple[str, str]:
+def statically_parse_source(input: str) -> List[str]:
     """
     Returns a RefArgs object corresponding to an input jinja expression.
 
@@ -201,4 +201,24 @@ def statically_parse_source(input: str) -> Tuple[str, str]:
 
     source = list(statically_parsed["sources"])[0]
     source_name, source_table_name = source
-    return source_name, source_table_name
+    return [source_name, source_table_name]
+
+
+def statically_parse_ref_or_source(expression: str) -> Union[RefArgs, List[str]]:
+    ref_or_source: Union[RefArgs, List[str]]
+    valid_ref = True
+    valid_source = True
+
+    try:
+        ref_or_source = statically_parse_ref(expression)
+    except ParsingError:
+        valid_ref = False
+        try:
+            ref_or_source = statically_parse_source(expression)
+        except ParsingError:
+            valid_source = False
+
+    if not valid_ref and not valid_source:
+        raise ParsingError(f"Invalid ref or source syntax: {expression}.")
+
+    return ref_or_source

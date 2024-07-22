@@ -32,10 +32,10 @@ from dbt.adapters.exceptions import (
 from dbt.adapters.factory import get_adapter_package_names
 
 # to preserve import paths
-from dbt.artifacts.resources import BaseResource, DeferRelation, NodeVersion
+from dbt.artifacts.resources import BaseResource, DeferRelation, NodeVersion, RefArgs
 from dbt.artifacts.resources.v1.config import NodeConfig
 from dbt.artifacts.schemas.manifest import ManifestMetadata, UniqueID, WritableManifest
-from dbt.clients.jinja_static import statically_parse_ref, statically_parse_source
+from dbt.clients.jinja_static import statically_parse_ref_or_source
 from dbt.contracts.files import (
     AnySourceFile,
     FileHash,
@@ -70,7 +70,6 @@ from dbt.exceptions import (
     AmbiguousResourceNameRefError,
     CompilationError,
     DuplicateResourceNameError,
-    ParsingError,
 )
 from dbt.flags import get_flags
 from dbt.mp_context import get_mp_context
@@ -1640,24 +1639,15 @@ class Manifest(MacroMethods, dbtClassMixin):
     def find_node_from_ref_or_source(
         self, expression: str
     ) -> Optional[Union[ModelNode, SourceDefinition]]:
-        valid_ref = True
-        valid_source = True
-        try:
-            ref = statically_parse_ref(expression)
-        except ParsingError:
-            valid_ref = False
-            try:
-                source_name, source_table_name = statically_parse_source(expression)
-            except ParsingError:
-                valid_source = False
-
-        if not valid_ref and not valid_source:
-            raise ParsingError(f"Invalid ref or source syntax: {expression}.")
+        ref_or_source = statically_parse_ref_or_source(expression)
 
         node = None
-        if valid_ref:
-            node = self.ref_lookup.find(ref.name, ref.package, ref.version, self)
-        elif valid_source:
+        if isinstance(ref_or_source, RefArgs):
+            node = self.ref_lookup.find(
+                ref_or_source.name, ref_or_source.package, ref_or_source.version, self
+            )
+        else:
+            source_name, source_table_name = ref_or_source[0], ref_or_source[1]
             node = self.source_lookup.find(f"{source_name}.{source_table_name}", None, self)
 
         return node

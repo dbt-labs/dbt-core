@@ -4,6 +4,7 @@ from dbt.artifacts.resources import RefArgs
 from dbt.clients.jinja_static import (
     statically_extract_macro_calls,
     statically_parse_ref,
+    statically_parse_ref_or_source,
     statically_parse_source,
 )
 from dbt.context.base import generate_base_context
@@ -88,4 +89,24 @@ class TestStaticallyParseSource:
 
     def test_valid_ref_expression(self):
         parsed_source = statically_parse_source("source('schema', 'table')")
-        assert parsed_source == ("schema", "table")
+        assert parsed_source == ["schema", "table"]
+
+
+class TestStaticallyParseRefOrSource:
+    def test_invalid_expression(self):
+        with pytest.raises(ParsingError):
+            statically_parse_ref_or_source("invalid")
+
+    @pytest.mark.parametrize(
+        "expression,expected_ref_or_source",
+        [
+            ("ref('model')", RefArgs(name="model")),
+            ("ref('package','model')", RefArgs(name="model", package="package")),
+            ("ref('model',v=3)", RefArgs(name="model", version=3)),
+            ("ref('package','model',v=3)", RefArgs(name="model", package="package", version=3)),
+            ("source('schema', 'table')", ["schema", "table"]),
+        ],
+    )
+    def test_valid_ref_expression(self, expression, expected_ref_or_source):
+        ref_or_source = statically_parse_ref_or_source(expression)
+        assert ref_or_source == expected_ref_or_source

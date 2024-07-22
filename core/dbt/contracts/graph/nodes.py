@@ -85,7 +85,11 @@ from dbt.node_types import (
     NodeType,
 )
 from dbt_common.clients.system import write_file
-from dbt_common.contracts.constraints import ConstraintType
+from dbt_common.contracts.constraints import (
+    ColumnLevelConstraint,
+    ConstraintType,
+    ModelLevelConstraint,
+)
 from dbt_common.events.contextvars import set_log_contextvars
 from dbt_common.events.functions import warn_or_error
 
@@ -488,6 +492,18 @@ class ModelNode(ModelResource, CompiledNode):
     @property
     def materialization_enforces_constraints(self) -> bool:
         return self.config.materialized in ["table", "incremental"]
+
+    @property
+    def all_constraints(self) -> List[Union[ModelLevelConstraint, ColumnLevelConstraint]]:
+        constraints: List[Union[ModelLevelConstraint, ColumnLevelConstraint]] = []
+        for model_level_constraint in self.constraints:
+            constraints.append(model_level_constraint)
+
+        for column in self.columns.values():
+            for column_level_constraint in column.constraints:
+                constraints.append(column_level_constraint)
+
+        return constraints
 
     def infer_primary_key(self, data_tests: List["GenericTestNode"]) -> List[str]:
         """

@@ -68,6 +68,48 @@ class TestModelNode:
 
             assert default_model_node.is_past_deprecation_date is expected_is_past_deprecation_date
 
+    @pytest.mark.parametrize(
+        "model_constraints,columns,expected_all_constraints",
+        [
+            ([], {}, []),
+            (
+                [ModelLevelConstraint(type=ConstraintType.foreign_key)],
+                {},
+                [ModelLevelConstraint(type=ConstraintType.foreign_key)],
+            ),
+            (
+                [],
+                {
+                    "id": ColumnInfo(
+                        name="id",
+                        constraints=[ColumnLevelConstraint(type=ConstraintType.foreign_key)],
+                    )
+                },
+                [ColumnLevelConstraint(type=ConstraintType.foreign_key)],
+            ),
+            (
+                [ModelLevelConstraint(type=ConstraintType.foreign_key)],
+                {
+                    "id": ColumnInfo(
+                        name="id",
+                        constraints=[ColumnLevelConstraint(type=ConstraintType.foreign_key)],
+                    )
+                },
+                [
+                    ModelLevelConstraint(type=ConstraintType.foreign_key),
+                    ColumnLevelConstraint(type=ConstraintType.foreign_key),
+                ],
+            ),
+        ],
+    )
+    def test_all_constraints(
+        self, default_model_node, model_constraints, columns, expected_all_constraints
+    ):
+        default_model_node.constraints = model_constraints
+        default_model_node.columns = columns
+
+        assert default_model_node.all_constraints == expected_all_constraints
+
 
 class TestSemanticModel:
     @pytest.fixture(scope="function")

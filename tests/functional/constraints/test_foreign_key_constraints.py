@@ -1,6 +1,7 @@
 import pytest
 
-from dbt.exceptions import DbtRuntimeError
+from dbt.artifacts.resources import RefArgs
+from dbt.exceptions import CompilationError, ParsingError
 from dbt.tests.util import get_artifact, run_dbt
 from dbt_common.contracts.constraints import (
     ColumnLevelConstraint,
@@ -30,15 +31,20 @@ class TestModelLevelForeignKeyConstraintToRef:
 
     def test_model_level_fk_to(self, project, unique_schema):
         manifest = run_dbt(["parse"])
-        assert len(manifest.nodes["model.test.my_model"].constraints) == 1
+        node_with_fk_constraint = manifest.nodes["model.test.my_model"]
+        assert len(node_with_fk_constraint.constraints) == 1
 
-        parsed_constraint = manifest.nodes["model.test.my_model"].constraints[0]
+        parsed_constraint = node_with_fk_constraint.constraints[0]
         assert parsed_constraint == ModelLevelConstraint(
             type=ConstraintType.foreign_key,
             columns=["id"],
             to="ref('my_model_to')",
             to_columns=["id"],
         )
+        # Assert column-level constraint source included in node.depends_on
+        assert node_with_fk_constraint.refs == [RefArgs("my_model_to")]
+        assert node_with_fk_constraint.depends_on.nodes == ["model.test.my_model_to"]
+        assert node_with_fk_constraint.sources == []
 
         # Assert compilation renders to from 'ref' to relation identifer
         run_dbt(["compile"])
@@ -64,15 +70,20 @@ class TestModelLevelForeignKeyConstraintToSource:
 
     def test_model_level_fk_to(self, project, unique_schema):
         manifest = run_dbt(["parse"])
-        assert len(manifest.nodes["model.test.my_model"].constraints) == 1
+        node_with_fk_constraint = manifest.nodes["model.test.my_model"]
+        assert len(node_with_fk_constraint.constraints) == 1
 
-        parsed_constraint = manifest.nodes["model.test.my_model"].constraints[0]
+        parsed_constraint = node_with_fk_constraint.constraints[0]
         assert parsed_constraint == ModelLevelConstraint(
             type=ConstraintType.foreign_key,
             columns=["id"],
             to="source('test_source', 'test_table')",
             to_columns=["id"],
         )
+        # Assert column-level constraint source included in node.depends_on
+        assert node_with_fk_constraint.refs == []
+        assert node_with_fk_constraint.depends_on.nodes == ["source.test.test_source.test_table"]
+        assert node_with_fk_constraint.sources == [["test_source", "test_table"]]
 
         # Assert compilation renders to from 'ref' to relation identifer
         run_dbt(["compile"])
@@ -97,8 +108,10 @@ class TestModelLevelForeignKeyConstraintRefNotFoundError:
         }
 
     def test_model_level_fk_to_doesnt_exist(self, project):
-        with pytest.raises(DbtRuntimeError, match="not in the graph"):
-            run_dbt(["compile"])
+        with pytest.raises(
+            CompilationError, match="depends on a node named 'doesnt_exist' which was not found"
+        ):
+            run_dbt(["parse"])
 
 
 class TestModelLevelForeignKeyConstraintRefSyntaxError:
@@ -112,10 +125,10 @@ class TestModelLevelForeignKeyConstraintRefSyntaxError:
 
     def test_model_level_fk_to(self, project):
         with pytest.raises(
-            DbtRuntimeError,
-            match="'model.test.my_model' defines a foreign key constraint 'to' expression which is not valid 'ref' or 'source' syntax",
+            ParsingError,
+            match="Invalid 'ref' or 'source' syntax on foreign key constraint 'to' on model my_model: invalid",
         ):
-            run_dbt(["compile"])
+            run_dbt(["parse"])
 
 
 class TestColumnLevelForeignKeyConstraintToRef:
@@ -129,12 +142,18 @@ class TestColumnLevelForeignKeyConstraintToRef:
 
     def test_column_level_fk_to(self, project, unique_schema):
         manifest = run_dbt(["parse"])
-        assert len(manifest.nodes["model.test.my_model"].columns["id"].constraints) == 1
+        node_with_fk_constraint = manifest.nodes["model.test.my_model"]
+        assert len(node_with_fk_constraint.columns["id"].constraints) == 1
 
-        parsed_constraint = manifest.nodes["model.test.my_model"].columns["id"].constraints[0]
+        parsed_constraint = node_with_fk_constraint.columns["id"].constraints[0]
+        # Assert column-level constraint parsed
         assert parsed_constraint == ColumnLevelConstraint(
             type=ConstraintType.foreign_key, to="ref('my_model_to')", to_columns=["id"]
         )
+        # Assert column-level constraint ref included in node.depends_on
+        assert node_with_fk_constraint.refs == [RefArgs(name="my_model_to")]
+        assert node_with_fk_constraint.sources == []
+        assert node_with_fk_constraint.depends_on.nodes == ["model.test.my_model_to"]
 
         # Assert compilation renders to from 'ref' to relation identifer
         run_dbt(["compile"])
@@ -161,14 +180,19 @@ class TestColumnLevelForeignKeyConstraintToSource:
 
     def test_model_level_fk_to(self, project, unique_schema):
         manifest = run_dbt(["parse"])
-        assert len(manifest.nodes["model.test.my_model"].columns["id"].constraints) == 1
+        node_with_fk_constraint = manifest.nodes["model.test.my_model"]
+        assert len(node_with_fk_constraint.columns["id"].constraints) == 1
 
-        parsed_constraint = manifest.nodes["model.test.my_model"].columns["id"].constraints[0]
+        parsed_constraint = node_with_fk_constraint.columns["id"].constraints[0]
         assert parsed_constraint == ColumnLevelConstraint(
             type=ConstraintType.foreign_key,
             to="source('test_source', 'test_table')",
             to_columns=["id"],
         )
+        # Assert column-level constraint source included in node.depends_on
+        assert node_with_fk_constraint.refs == []
+        assert node_with_fk_constraint.depends_on.nodes == ["source.test.test_source.test_table"]
+        assert node_with_fk_constraint.sources == [["test_source", "test_table"]]
 
         # Assert compilation renders to from 'ref' to relation identifer
         run_dbt(["compile"])
@@ -194,8 +218,10 @@ class TestColumnLevelForeignKeyConstraintRefNotFoundError:
         }
 
     def test_model_level_fk_to_doesnt_exist(self, project):
-        with pytest.raises(DbtRuntimeError, match="not in the graph"):
-            run_dbt(["compile"])
+        with pytest.raises(
+            CompilationError, match="depends on a node named 'doesnt_exist' which was not found"
+        ):
+            run_dbt(["parse"])
 
 
 class TestColumnLevelForeignKeyConstraintRefSyntaxError:
@@ -209,7 +235,7 @@ class TestColumnLevelForeignKeyConstraintRefSyntaxError:
 
     def test_model_level_fk_to(self, project):
         with pytest.raises(
-            DbtRuntimeError,
-            match="'model.test.my_model' defines a foreign key constraint 'to' expression which is not valid 'ref' or 'source' syntax",
+            ParsingError,
+            match="Invalid 'ref' or 'source' syntax on foreign key constraint 'to' on model my_model: invalid.",
         ):
-            run_dbt(["compile"])
+            run_dbt(["parse"])
