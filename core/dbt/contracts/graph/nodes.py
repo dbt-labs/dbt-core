@@ -58,6 +58,7 @@ from dbt.artifacts.resources import SingularTest as SingularTestResource
 from dbt.artifacts.resources import Snapshot as SnapshotResource
 from dbt.artifacts.resources import SourceDefinition as SourceDefinitionResource
 from dbt.artifacts.resources import SqlOperation as SqlOperationResource
+from dbt.artifacts.resources import TimeSpine
 from dbt.artifacts.resources import UnitTestDefinition as UnitTestDefinitionResource
 from dbt.contracts.graph.model_config import UnitTestNodeConfig
 from dbt.contracts.graph.node_args import ModelNodeArgs
@@ -465,6 +466,11 @@ class ModelNode(ModelResource, CompiledNode):
             unrendered_config=unrendered_config,
             depends_on=DependsOn(nodes=args.depends_on_nodes),
             config=ModelConfig(enabled=args.enabled),
+            time_spine=(
+                TimeSpine(standard_granularity_column=args.time_spine.standard_granularity_column)
+                if args.time_spine
+                else None
+            ),
         )
 
     @property

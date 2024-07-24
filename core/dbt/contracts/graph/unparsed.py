@@ -116,6 +116,7 @@ class HasColumnAndTestProps(HasColumnProps):
 class UnparsedColumn(HasColumnAndTestProps):
     quote: Optional[bool] = None
     tags: List[str] = field(default_factory=list)
+    granularity: Optional[str] = None  # str is really a TimeGranularity Enum
 
 
 @dataclass
@@ -155,6 +156,7 @@ class UnparsedVersion(dbtClassMixin):
     docs: Docs = field(default_factory=Docs)
     data_tests: Optional[List[TestDef]] = None
     tests: Optional[List[TestDef]] = None  # back compat for previous name of 'data_tests'
+    # here? is this a model? are you my mother?
     columns: Sequence[Union[dbt_common.helper_types.IncludeExclude, UnparsedColumn]] = field(
         default_factory=list
     )
@@ -207,12 +209,18 @@ class UnparsedNodeUpdate(HasConfig, HasColumnTests, HasColumnAndTestProps, HasYa
 
 
 @dataclass
+class UnparsedTimeSpine(dbtClassMixin):
+    standard_granularity_column: str
+
+
+@dataclass
 class UnparsedModelUpdate(UnparsedNodeUpdate):
     quote_columns: Optional[bool] = None
     access: Optional[str] = None
     latest_version: Optional[NodeVersion] = None
     versions: Sequence[UnparsedVersion] = field(default_factory=list)
     deprecation_date: Optional[datetime.datetime] = None
+    time_spine: Optional[UnparsedTimeSpine] = None
 
     def __post_init__(self) -> None:
         if self.latest_version:
@@ -233,6 +241,26 @@ class UnparsedModelUpdate(UnparsedNodeUpdate):
         self._version_map = {version.v: version for version in self.versions}
 
         self.deprecation_date = normalize_date(self.deprecation_date)
+
+        if self.time_spine:
+            columns = (
+                self.get_columns_for_version(self.latest_version)
+                if self.latest_version
+                else self.columns
+            )
+            column_names_to_columns = {column.name: column for column in columns}
+            if self.time_spine.standard_granularity_column not in column_names_to_columns:
+                raise ParsingError(
+                    f"Time spine standard granularity column must be defined on the model. Got invalid "
+                    f"column name '{self.time_spine.standard_granularity_column}'. Valid names"
+                    f"{' for latest version' if self.latest_version else ''}: {list(column_names_to_columns.keys())}."
+                )
+            column = column_names_to_columns[self.time_spine.standard_granularity_column]
+            if not column.granularity:
+                raise ParsingError(
+                    f"Time spine standard granularity column must have a granularity defined. "
+                    f"Please add one for {self.time_spine.standard_granularity_column}"
+                )
 
     def get_columns_for_version(self, version: NodeVersion) -> List[UnparsedColumn]:
         if version not in self._version_map:

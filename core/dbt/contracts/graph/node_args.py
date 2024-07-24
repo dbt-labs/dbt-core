@@ -6,6 +6,12 @@ from dbt.artifacts.resources import NodeVersion
 from dbt.node_types import AccessType, NodeType
 
 
+# TODO: is this necessary?
+@dataclass
+class TimeSpineArgs:
+    standard_granularity_column: str
+
+
 @dataclass
 class ModelNodeArgs:
     name: str
@@ -21,6 +27,7 @@ class ModelNodeArgs:
     generated_at: datetime = field(default_factory=datetime.utcnow)
     depends_on_nodes: List[str] = field(default_factory=list)
     enabled: bool = True
+    time_spine: Optional[TimeSpineArgs] = None
 
     @property
     def unique_id(self) -> str:
