@@ -4609,6 +4609,27 @@
                 "items": {
                   "type": "string"
                 }
+              },
+              "time_spine": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "title": "TimeSpine",
+                    "properties": {
+                      "standard_granularity_column": {
+                        "type": "string"
+                      }
+                    },
+                    "additionalProperties": false,
+                    "required": [
+                      "standard_granularity_column"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
               }
             },
             "additionalProperties": false,
@@ -14203,6 +14224,27 @@
                       "items": {
                         "type": "string"
                       }
+                    },
+                    "time_spine": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "title": "TimeSpine",
+                          "properties": {
+                            "standard_granularity_column": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false,
+                          "required": [
+                            "standard_granularity_column"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
                     }
                   },
                   "additionalProperties": false,
