@@ -1631,6 +1631,7 @@ class ParsedNodePatch(ParsedPatch):
     latest_version: Optional[NodeVersion]
     constraints: List[Dict[str, Any]]
     deprecation_date: Optional[datetime]
+    time_spine: Optional[TimeSpine] = None
 
 
 @dataclass

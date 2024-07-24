@@ -6,6 +6,7 @@ from typing import Any, Callable, Dict, Generic, Iterable, List, Optional, Type,
 
 from dbt import deprecations
 from dbt.artifacts.resources import RefArgs
+from dbt.artifacts.resources.v1.model import TimeSpine
 from dbt.clients.jinja_static import statically_parse_ref_or_source
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.config import RuntimeConfig
@@ -619,9 +620,16 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
         # could possibly skip creating one. Leaving here for now for
         # code consistency.
         deprecation_date: Optional[datetime.datetime] = None
+        time_spine: Optional[TimeSpine] = None
         if isinstance(block.target, UnparsedModelUpdate):
             deprecation_date = block.target.deprecation_date
-
+            time_spine = (
+                TimeSpine(
+                    standard_granularity_column=block.target.time_spine.standard_granularity_column
+                )
+                if block.target.time_spine
+                else None
+            )
         patch = ParsedNodePatch(
             name=block.target.name,
             original_file_path=block.target.original_file_path,
@@ -637,6 +645,7 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
             latest_version=None,
             constraints=block.target.constraints,
             deprecation_date=deprecation_date,
+            time_spine=time_spine,
         )
         assert isinstance(self.yaml.file, SchemaSourceFile)
         source_file: SchemaSourceFile = self.yaml.file
@@ -731,7 +740,9 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
         node.columns = patch.columns
         node.name = patch.name
 
-        if not isinstance(node, ModelNode):
+        if isinstance(node, ModelNode):
+            node.time_spine = patch.time_spine
+        else:
             for attr in ["latest_version", "access", "version", "constraints"]:
                 if getattr(patch, attr):
                     warn_or_error(

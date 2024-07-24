@@ -8,6 +8,16 @@ models:
         data_tests:
           - unique
           - not_null
+  - name: metricflow_time_spine
+    description: Day time spine
+    columns:
+      - name: date_day
+        granularity: day
+  - name: metricflow_time_spine_second
+    description: Second time spine
+    columns:
+      - name: ts_second
+        granularity: second
 
 sources:
   - name: my_source

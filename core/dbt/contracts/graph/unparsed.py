@@ -259,7 +259,7 @@ class UnparsedModelUpdate(UnparsedNodeUpdate):
             if not column.granularity:
                 raise ParsingError(
                     f"Time spine standard granularity column must have a granularity defined. "
-                    f"Please add one for {self.time_spine.standard_granularity_column}"
+                    f"Please add one for '{self.time_spine.standard_granularity_column}'."
                 )
 
     def get_columns_for_version(self, version: NodeVersion) -> List[UnparsedColumn]:
