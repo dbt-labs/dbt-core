@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import List, Optional
 
-from dbt.artifacts.resources import NodeVersion, TimeSpine
+from dbt.artifacts.resources import NodeVersion
 from dbt.node_types import AccessType, NodeType
 
 
@@ -21,7 +21,6 @@ class ModelNodeArgs:
     generated_at: datetime = field(default_factory=datetime.utcnow)
     depends_on_nodes: List[str] = field(default_factory=list)
     enabled: bool = True
-    time_spine: Optional[TimeSpine] = None
 
     @property
     def unique_id(self) -> str:

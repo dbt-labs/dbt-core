@@ -466,7 +466,6 @@ class ModelNode(ModelResource, CompiledNode):
             unrendered_config=unrendered_config,
             depends_on=DependsOn(nodes=args.depends_on_nodes),
             config=ModelConfig(enabled=args.enabled),
-            time_spine=args.time_spine,
         )
 
     @property
