@@ -135,7 +135,7 @@ class SemanticManifest:
                 raise ParsingError(
                     "The semantic layer requires a time spine model in the project, but none was found. "
                     "Guidance on creating this model can be found on our docs site ("
-                    "https://docs.getdbt.com/docs/build/metricflow-time-spine) "  # TODO: update docs link!
+                    "https://docs.getdbt.com/docs/build/metricflow-time-spine) "  # TODO: update docs link when available!
                 )
 
             # For backward compatibility: if legacy time spine exists, include it in the manifest.
