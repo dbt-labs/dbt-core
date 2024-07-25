@@ -41,8 +41,9 @@ metricflow_time_spine_second_sql = """
 SELECT to_datetime('02/20/2023, 'mm/dd/yyyy hh:mm:ss') as ts_second
 """
 
-# TODO: Add examples with versioning??
 valid_time_spines_yml = """
+version: 2
+
 models:
   - name: metricflow_time_spine_second
     time_spine:
