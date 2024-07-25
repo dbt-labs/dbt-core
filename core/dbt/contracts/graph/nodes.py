@@ -466,11 +466,7 @@ class ModelNode(ModelResource, CompiledNode):
             unrendered_config=unrendered_config,
             depends_on=DependsOn(nodes=args.depends_on_nodes),
             config=ModelConfig(enabled=args.enabled),
-            time_spine=(
-                TimeSpine(standard_granularity_column=args.time_spine.standard_granularity_column)
-                if args.time_spine
-                else None
-            ),
+            time_spine=args.time_spine,
         )
 
     @property

@@ -156,7 +156,6 @@ class UnparsedVersion(dbtClassMixin):
     docs: Docs = field(default_factory=Docs)
     data_tests: Optional[List[TestDef]] = None
     tests: Optional[List[TestDef]] = None  # back compat for previous name of 'data_tests'
-    # here? is this a model? are you my mother?
     columns: Sequence[Union[dbt_common.helper_types.IncludeExclude, UnparsedColumn]] = field(
         default_factory=list
     )
