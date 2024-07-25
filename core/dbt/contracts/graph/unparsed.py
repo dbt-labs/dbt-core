@@ -251,14 +251,14 @@ class UnparsedModelUpdate(UnparsedNodeUpdate):
             if self.time_spine.standard_granularity_column not in column_names_to_columns:
                 raise ParsingError(
                     f"Time spine standard granularity column must be defined on the model. Got invalid "
-                    f"column name '{self.time_spine.standard_granularity_column}'. Valid names"
+                    f"column name '{self.time_spine.standard_granularity_column}' for model '{self.name}'. Valid names"
                     f"{' for latest version' if self.latest_version else ''}: {list(column_names_to_columns.keys())}."
                 )
             column = column_names_to_columns[self.time_spine.standard_granularity_column]
             if not column.granularity:
                 raise ParsingError(
-                    f"Time spine standard granularity column must have a granularity defined. "
-                    f"Please add one for '{self.time_spine.standard_granularity_column}'."
+                    f"Time spine standard granularity column must have a granularity defined. Please add one for "
+                    f"column '{self.time_spine.standard_granularity_column}' in model '{self.name}'."
                 )
 
     def get_columns_for_version(self, version: NodeVersion) -> List[UnparsedColumn]:

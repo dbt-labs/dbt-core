@@ -740,9 +740,7 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
         node.columns = patch.columns
         node.name = patch.name
 
-        if isinstance(node, ModelNode):
-            node.time_spine = patch.time_spine
-        else:
+        if not isinstance(node, ModelNode):
             for attr in ["latest_version", "access", "version", "constraints"]:
                 if getattr(patch, attr):
                     warn_or_error(
@@ -926,6 +924,7 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
                 )
         # These two will have to be reapplied after config is built for versioned models
         self.patch_constraints(node, patch.constraints)
+        self.patch_time_spine(node, patch.time_spine)
         node.build_contract_checksum()
 
     def patch_constraints(self, node, constraints: List[Dict[str, Any]]) -> None:
@@ -963,6 +962,9 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
                     model_node.refs.append(ref_or_source)
                 else:
                     model_node.sources.append(ref_or_source)
+
+    def patch_time_spine(self, node, time_spine: Optional[TimeSpine]) -> None:
+        node.time_spine = time_spine
 
     def _validate_pk_constraints(
         self, model_node: ModelNode, constraints: List[Dict[str, Any]]
