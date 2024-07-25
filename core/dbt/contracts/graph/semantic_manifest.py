@@ -91,8 +91,6 @@ class SemanticManifest:
                     "This should have been caught in YAML parsing."
                 )
             pydantic_time_spine = PydanticTimeSpine(
-                # TODO: this feels duplicated now that we're just using the model name, so maybe we should remove it before any manifests actually have it
-                name=node.name,
                 node_relation=PydanticNodeRelation(
                     alias=node.alias,
                     schema_name=node.schema,
