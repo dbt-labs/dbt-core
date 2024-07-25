@@ -765,7 +765,6 @@ class TestablePatchParser(NodePatchParser[UnparsedNodeUpdate]):
         return UnparsedNodeUpdate
 
 
-# TODO: does time spine need to be included in versioned properties?
 class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
     def get_block(self, node: UnparsedModelUpdate) -> VersionedTestBlock:
         return VersionedTestBlock.from_yaml_block(self.yaml, node)
