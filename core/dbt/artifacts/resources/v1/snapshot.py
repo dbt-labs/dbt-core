@@ -17,6 +17,7 @@ class SnapshotConfig(NodeConfig):
     updated_at: Optional[str] = None
     # Not using Optional because of serialization issues with a Union of str and List[str]
     check_cols: Union[str, List[str], None] = None
+    check_exclude_cols: Union[str, List[str], None] = None
 
     def final_validate(self):
         if not self.strategy or not self.unique_key:
@@ -24,15 +25,25 @@ class SnapshotConfig(NodeConfig):
                 "Snapshots must be configured with a 'strategy' and 'unique_key'."
             )
         if self.strategy == "check":
-            if not self.check_cols:
+            if self.check_cols and self.check_exclude_cols:
+                raise ValidationError(
+                    "A snapshot configured with the check strategy cannot "
+                    "specify both check_cols and check_exclude_cols."
+                )
+            if not self.check_cols and not self.check_exclude_cols:
                 raise ValidationError(
                     "A snapshot configured with the check strategy must "
-                    "specify a check_cols configuration."
+                    "specify a check_cols or check_exclude_cols configuration."
                 )
             if isinstance(self.check_cols, str) and self.check_cols != "all":
                 raise ValidationError(
                     f"Invalid value for 'check_cols': {self.check_cols}. "
                     "Expected 'all' or a list of strings."
+                )
+            if isinstance(self.check_exclude_cols, str):
+                raise ValidationError(
+                    f"Invalid value for 'check_exclude_cols': {self.check_exclude_cols}. "
+                    "Expected a list of strings."
                 )
         elif self.strategy == "timestamp":
             if not self.updated_at:
@@ -40,13 +51,18 @@ class SnapshotConfig(NodeConfig):
                     "A snapshot configured with the timestamp strategy "
                     "must specify an updated_at configuration."
                 )
-            if self.check_cols:
-                raise ValidationError("A 'timestamp' snapshot should not have 'check_cols'")
+            if self.check_cols or self.check_exclude_cols:
+                raise ValidationError(
+                    "A 'timestamp' snapshot should not have 'check_cols' or 'check_exclude_cols"
+                )
         # If the strategy is not 'check' or 'timestamp' it's a custom strategy,
         # formerly supported with GenericSnapshotConfig
 
         if self.materialized and self.materialized != "snapshot":
             raise ValidationError("A snapshot must have a materialized value of 'snapshot'")
+        # def r():
+        #     raise Exception()
+        # self.check_exclude_cols = lambda: r()
 
     # Called by "calculate_node_config_dict" in ContextConfigGenerator
     def finalize_and_validate(self):
