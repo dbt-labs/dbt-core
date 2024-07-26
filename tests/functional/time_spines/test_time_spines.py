@@ -147,7 +147,7 @@ class TestMissingTimeSpine:
         result = runner.invoke(["parse"])
         assert isinstance(result.exception, ParsingError)
         assert (
-            "The semantic layer requires a time spine model in the project, but none was found."
+            "The semantic layer requires a time spine model with granularity DAY or smaller"
             in result.exception.msg
         )
 

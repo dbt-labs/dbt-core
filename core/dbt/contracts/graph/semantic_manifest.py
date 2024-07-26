@@ -1,6 +1,10 @@
 from typing import List, Optional
 
-from dbt.constants import LEGACY_TIME_SPINE_MODEL_NAME
+from dbt.constants import (
+    LEGACY_TIME_SPINE_GRANULARITY,
+    LEGACY_TIME_SPINE_MODEL_NAME,
+    MINIMUM_REQUIRED_TIME_SPINE_GRANULARITY,
+)
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import ModelNode
 from dbt.events.types import SemanticValidationFailure
@@ -69,7 +73,7 @@ class SemanticManifest:
 
     def _get_pydantic_semantic_manifest(self) -> PydanticSemanticManifest:
         pydantic_time_spines: List[PydanticTimeSpine] = []
-        daily_time_spine: Optional[PydanticTimeSpine] = None
+        minimum_time_spine_granularity: Optional[TimeGranularity] = None
         for node in self.manifest.nodes.values():
             if not (isinstance(node, ModelNode) and node.time_spine):
                 continue
@@ -103,8 +107,12 @@ class SemanticManifest:
                 ),
             )
             pydantic_time_spines.append(pydantic_time_spine)
-            if standard_granularity_column.granularity == TimeGranularity.DAY:
-                daily_time_spine = pydantic_time_spine
+            if (
+                not minimum_time_spine_granularity
+                or standard_granularity_column.granularity.to_int()
+                < minimum_time_spine_granularity.to_int()
+            ):
+                minimum_time_spine_granularity = standard_granularity_column.granularity
 
         project_config = PydanticProjectConfiguration(
             time_spine_table_configurations=[], time_spines=pydantic_time_spines
@@ -127,15 +135,27 @@ class SemanticManifest:
             )
 
         if self.manifest.semantic_models:
-            # If no time spines have been configured AND legacy time spine model does not exist, error.
             legacy_time_spine_model = self.manifest.ref_lookup.find(
                 LEGACY_TIME_SPINE_MODEL_NAME, None, None, self.manifest
             )
-            if not (daily_time_spine or legacy_time_spine_model):
+            if legacy_time_spine_model:
+                if (
+                    not minimum_time_spine_granularity
+                    or LEGACY_TIME_SPINE_GRANULARITY.to_int()
+                    < minimum_time_spine_granularity.to_int()
+                ):
+                    minimum_time_spine_granularity = LEGACY_TIME_SPINE_GRANULARITY
+
+            # If no time spines have been configured at DAY or smaller AND legacy time spine model does not exist, error.
+            if (
+                not minimum_time_spine_granularity
+                or minimum_time_spine_granularity.to_int()
+                > MINIMUM_REQUIRED_TIME_SPINE_GRANULARITY.to_int()
+            ):
                 raise ParsingError(
-                    "The semantic layer requires a time spine model in the project, but none was found. "
-                    "Guidance on creating this model can be found on our docs site ("
-                    "https://docs.getdbt.com/docs/build/metricflow-time-spine) "  # TODO: update docs link when available!
+                    "The semantic layer requires a time spine model with granularity DAY or smaller in the project, "
+                    "but none was found. Guidance on creating this model can be found on our docs site "
+                    "(https://docs.getdbt.com/docs/build/metricflow-time-spine)."  # TODO: update docs link when available!
                 )
 
             # For backward compatibility: if legacy time spine exists, include it in the manifest.
@@ -143,7 +163,7 @@ class SemanticManifest:
                 legacy_time_spine = LegacyTimeSpine(
                     location=legacy_time_spine_model.relation_name,
                     column_name="date_day",
-                    grain=TimeGranularity.DAY,
+                    grain=LEGACY_TIME_SPINE_GRANULARITY,
                 )
                 pydantic_semantic_manifest.project_configuration.time_spine_table_configurations = [
                     legacy_time_spine

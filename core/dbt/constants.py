@@ -1,3 +1,5 @@
+from dbt_semantic_interfaces.type_enums import TimeGranularity
+
 DEFAULT_ENV_PLACEHOLDER = "DBT_DEFAULT_PLACEHOLDER"
 
 SECRET_PLACEHOLDER = "$$$DBT_SECRET_START$$${}$$$DBT_SECRET_END$$$"
@@ -16,5 +18,7 @@ PACKAGE_LOCK_FILE_NAME = "package-lock.yml"
 MANIFEST_FILE_NAME = "manifest.json"
 SEMANTIC_MANIFEST_FILE_NAME = "semantic_manifest.json"
 LEGACY_TIME_SPINE_MODEL_NAME = "metricflow_time_spine"
+LEGACY_TIME_SPINE_GRANULARITY = TimeGranularity.DAY
+MINIMUM_REQUIRED_TIME_SPINE_GRANULARITY = TimeGranularity.DAY
 PARTIAL_PARSE_FILE_NAME = "partial_parse.msgpack"
 PACKAGE_LOCK_HASH_KEY = "sha1_hash"
