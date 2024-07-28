@@ -1,0 +1,6 @@
+kind: Features
+body: Add `report` exposure type.
+time: 2024-07-28T11:51:52.063187-05:00
+custom:
+  Author: menzenski
+  Issue: "10493"

@@ -16,6 +16,7 @@ class ExposureType(StrEnum):
     Analysis = "analysis"
     ML = "ml"
     Application = "application"
+    Report = "report"
 
 
 class MaturityType(StrEnum):

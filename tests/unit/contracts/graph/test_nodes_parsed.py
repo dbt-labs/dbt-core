@@ -2143,6 +2143,106 @@ def test_complex_parsed_exposure(complex_parsed_exposure_dict, complex_parsed_ex
     assert_symmetric(complex_parsed_exposure_object, complex_parsed_exposure_dict, Exposure)
 
 
+exposure_type_mappings = [
+    ("analysis", ExposureType.Analysis),
+    ("application", ExposureType.Application),
+    ("dashboard", ExposureType.Dashboard),
+    ("ml", ExposureType.ML),
+    ("notebook", ExposureType.Notebook),
+    ("report", ExposureType.Report),
+]
+
+
+@pytest.fixture(params=exposure_type_mappings)
+def basic_parsed_exposure_dict_and_object(request):
+    """Fixture to provide a basic parsed exposure dict and object for each exposure type.
+
+    Accepts a request where request.param is a tuple containing the exposure type string and object, for example,
+    ("analysis", ExposureType.Analysis).
+
+    Returns:
+        Tuple[dict, dict, Exposure]: A throuple (three-tuple) containing minimal parsed exposure dict, basic parsed
+        exposure dict, and basic parsed exposure object, all with matching ExposureType values.
+    """
+    exposure_type_str, exposure_type = request.param
+
+    minimal_parsed_exposure_dict = {
+        "name": "my_exposure",
+        "type": exposure_type_str,
+        "owner": {
+            "email": "test@example.com",
+        },
+        "fqn": ["test", "exposures", "my_exposure"],
+        "unique_id": "exposure.test.my_exposure",
+        "package_name": "test",
+        "meta": {},
+        "tags": [],
+        "path": "models/something.yml",
+        "original_file_path": "models/something.yml",
+        "description": "",
+        "created_at": 1.0,
+        "resource_type": "exposure",
+    }
+
+    basic_parsed_exposure_dict = {
+        "name": "my_exposure",
+        "type": exposure_type_str,
+        "owner": {
+            "email": "test@example.com",
+        },
+        "resource_type": "exposure",
+        "depends_on": {
+            "nodes": [],
+            "macros": [],
+        },
+        "refs": [],
+        "sources": [],
+        "metrics": [],
+        "fqn": ["test", "exposures", "my_exposure"],
+        "unique_id": "exposure.test.my_exposure",
+        "package_name": "test",
+        "path": "models/something.yml",
+        "original_file_path": "models/something.yml",
+        "description": "",
+        "meta": {},
+        "tags": [],
+        "created_at": 1.0,
+        "config": {
+            "enabled": True,
+        },
+        "unrendered_config": {},
+    }
+
+    basic_parsed_exposure_object = Exposure(
+        name="my_exposure",
+        resource_type=NodeType.Exposure,
+        type=exposure_type,
+        fqn=["test", "exposures", "my_exposure"],
+        unique_id="exposure.test.my_exposure",
+        package_name="test",
+        path="models/something.yml",
+        original_file_path="models/something.yml",
+        owner=Owner(email="test@example.com"),
+        description="",
+        meta={},
+        tags=[],
+        config=ExposureConfig(),
+        unrendered_config={},
+    )
+
+    return minimal_parsed_exposure_dict, basic_parsed_exposure_dict, basic_parsed_exposure_object
+
+
+@pytest.mark.parametrize(
+    "basic_parsed_exposure_dict_and_object", exposure_type_mappings, indirect=True
+)
+def test_basic_parsed_exposure_all_exposure_types(basic_parsed_exposure_dict_and_object):
+    minimal_dict, basic_dict, basic_obj = basic_parsed_exposure_dict_and_object
+    assert_symmetric(basic_obj, basic_dict, Exposure)
+    assert_from_dict(basic_obj, minimal_dict, Exposure)
+    pickle.loads(pickle.dumps(basic_obj))
+
+
 unchanged_parsed_exposures = [
     lambda u: (u, u),
 ]
