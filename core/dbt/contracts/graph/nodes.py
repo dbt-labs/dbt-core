@@ -421,6 +421,16 @@ class CompiledNode(CompiledResource, ParsedNode):
     def depends_on_macros(self):
         return self.depends_on.macros
 
+    @property
+    def depends_on_vars(self):
+        return self.depends_on.vars
+
+    def same_depends_on_vars(self, old):
+        return self.depends_on_vars == old.depends_on_vars
+
+    def same_contents(self, old, adapter_type) -> bool:
+        return super().same_contents(old, adapter_type) and self.same_depends_on_vars(old)
+
 
 # ====================================
 # CompiledNode subclasses

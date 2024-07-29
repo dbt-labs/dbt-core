@@ -790,6 +790,18 @@ class ParseVar(ModelConfiguredVar):
         # in the parser, just always return None.
         return None
 
+    def __call__(self, var_name: str, default: Any = ModelConfiguredVar._VAR_NOTSET) -> Any:
+        var_value = super().__call__(var_name, default)
+
+        if (
+            self._node
+            and hasattr(self._node, "depends_on")
+            and hasattr(self._node.depends_on, "add_var")
+        ):
+            self._node.depends_on.add_var(var_name, var_value)
+
+        return var_value
+
 
 class RuntimeVar(ModelConfiguredVar):
     pass

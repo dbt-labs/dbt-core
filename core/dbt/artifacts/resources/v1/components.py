@@ -28,10 +28,14 @@ class MacroDependsOn(dbtClassMixin):
 @dataclass
 class DependsOn(MacroDependsOn):
     nodes: List[str] = field(default_factory=list)
+    vars: Dict[str, Any] = field(default_factory=dict)
 
     def add_node(self, value: str):
         if value not in self.nodes:
             self.nodes.append(value)
+
+    def add_var(self, var_name: str, var_value: Any) -> None:
+        self.vars[var_name] = var_value
 
 
 @dataclass
