@@ -49,7 +49,11 @@ class TestList:
             "json": {
                 "name": "my_snapshot",
                 "package_name": "test",
-                "depends_on": {"nodes": [], "macros": []},
+                "depends_on": {
+                    "nodes": [],
+                    "macros": [],
+                    "vars": {"target_database": happy_path_project.database},
+                },
                 "tags": [],
                 "config": {
                     "enabled": True,
@@ -106,7 +110,7 @@ class TestList:
             "json": {
                 "name": "a",
                 "package_name": "test",
-                "depends_on": {"nodes": [], "macros": []},
+                "depends_on": {"nodes": [], "macros": [], "vars": {}},
                 "tags": [],
                 "config": {
                     "enabled": True,
@@ -170,6 +174,7 @@ class TestList:
                     "depends_on": {
                         "nodes": [],
                         "macros": ["macro.dbt.current_timestamp", "macro.dbt.date_trunc"],
+                        "vars": {},
                     },
                     "tags": [],
                     "config": {
@@ -212,6 +217,7 @@ class TestList:
                     "depends_on": {
                         "nodes": ["seed.test.seed"],
                         "macros": ["macro.dbt.is_incremental"],
+                        "vars": {},
                     },
                     "tags": [],
                     "config": {
@@ -254,6 +260,7 @@ class TestList:
                     "depends_on": {
                         "nodes": ["model.test.outer"],
                         "macros": [],
+                        "vars": {},
                     },
                     "tags": [],
                     "config": {
@@ -296,6 +303,7 @@ class TestList:
                     "depends_on": {
                         "nodes": [],
                         "macros": ["macro.dbt.current_timestamp", "macro.dbt.date_trunc"],
+                        "vars": {},
                     },
                     "tags": [],
                     "config": {
@@ -338,6 +346,7 @@ class TestList:
                     "depends_on": {
                         "nodes": [],
                         "macros": ["macro.dbt.current_timestamp", "macro.dbt.date_trunc"],
+                        "vars": {},
                     },
                     "tags": [],
                     "config": {
@@ -380,6 +389,7 @@ class TestList:
                     "depends_on": {
                         "nodes": ["model.test.ephemeral"],
                         "macros": [],
+                        "vars": {},
                     },
                     "tags": [],
                     "config": {
@@ -437,7 +447,7 @@ class TestList:
                 {
                     "name": "outer",
                     "package_name": "test",
-                    "depends_on": {"nodes": [], "macros": []},
+                    "depends_on": {"nodes": [], "macros": [], "vars": {}},
                     "tags": [],
                     "config": {
                         "enabled": True,
@@ -555,6 +565,7 @@ class TestList:
                     "depends_on": {
                         "nodes": ["model.test.outer"],
                         "macros": ["macro.dbt.test_not_null"],
+                        "vars": {},
                     },
                     "tags": [],
                     "config": {
@@ -583,7 +594,7 @@ class TestList:
                 {
                     "name": "t",
                     "package_name": "test",
-                    "depends_on": {"nodes": [], "macros": []},
+                    "depends_on": {"nodes": [], "macros": [], "vars": {}},
                     "tags": [],
                     "config": {
                         "enabled": True,
@@ -614,6 +625,7 @@ class TestList:
                     "depends_on": {
                         "nodes": ["model.test.outer"],
                         "macros": ["macro.dbt.test_unique"],
+                        "vars": {},
                     },
                     "tags": [],
                     "config": {

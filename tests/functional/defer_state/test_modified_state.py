@@ -1144,3 +1144,33 @@ class TestChangedSemanticModelContents(BaseModifiedState):
         write_file(modified_semantic_model_schema_yml, "models", "schema.yml")
         results = run_dbt(["list", "-s", "state:modified", "--state", "./state"])
         assert len(results) == 1
+
+
+class TestModifiedVars(BaseModifiedState):
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "vars": {"my_var": 1},
+        }
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "view_model.sql": "select {{ var('my_var') }} as id",
+        }
+
+    def test_changed_vars(self, project):
+        self.run_and_save_state()
+
+        # No var change
+        assert not run_dbt(["list", "-s", "state:modified", "--state", "./state"])
+        assert not run_dbt(["list", "-s", "state:modified.vars", "--state", "./state"])
+
+        # Modify var (my_var: 1 -> 2
+        update_config_file({"vars": {"my_var": 2}}, "dbt_project.yml")
+        assert run_dbt(["list", "-s", "state:modified", "--state", "./state"]) == [
+            "test.view_model"
+        ]
+        assert run_dbt(["list", "-s", "state:modified.vars", "--state", "./state"]) == [
+            "test.view_model"
+        ]
