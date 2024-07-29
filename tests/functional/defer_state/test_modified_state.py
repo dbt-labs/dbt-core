@@ -1166,7 +1166,7 @@ class TestModifiedVars(BaseModifiedState):
         assert not run_dbt(["list", "-s", "state:modified", "--state", "./state"])
         assert not run_dbt(["list", "-s", "state:modified.vars", "--state", "./state"])
 
-        # Modify var (my_var: 1 -> 2
+        # Modify var (my_var: 1 -> 2)
         update_config_file({"vars": {"my_var": 2}}, "dbt_project.yml")
         assert run_dbt(["list", "-s", "state:modified", "--state", "./state"]) == [
             "test.view_model"
@@ -1174,3 +1174,14 @@ class TestModifiedVars(BaseModifiedState):
         assert run_dbt(["list", "-s", "state:modified.vars", "--state", "./state"]) == [
             "test.view_model"
         ]
+
+        # Reset dbt_project.yml
+        update_config_file({"vars": {"my_var": 1}}, "dbt_project.yml")
+
+        # Modify var via --var CLI flag
+        assert not run_dbt(
+            ["list", "--vars", '{"my_var": 1}', "-s", "state:modified", "--state", "./state"]
+        )
+        assert run_dbt(
+            ["list", "--vars", '{"my_var": 2}', "-s", "state:modified", "--state", "./state"]
+        ) == ["test.view_model"]
