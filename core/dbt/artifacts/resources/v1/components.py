@@ -28,14 +28,10 @@ class MacroDependsOn(dbtClassMixin):
 @dataclass
 class DependsOn(MacroDependsOn):
     nodes: List[str] = field(default_factory=list)
-    vars: Dict[str, Any] = field(default_factory=dict)
 
     def add_node(self, value: str):
         if value not in self.nodes:
             self.nodes.append(value)
-
-    def add_var(self, var_name: str, var_value: Any) -> None:
-        self.vars[var_name] = var_value
 
 
 @dataclass
@@ -201,6 +197,7 @@ class ParsedResource(ParsedResourceMandatory):
     unrendered_config_call_dict: Dict[str, Any] = field(default_factory=dict)
     relation_name: Optional[str] = None
     raw_code: str = ""
+    vars: Dict[str, Any] = field(default_factory=dict)
 
     def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
         dct = super().__post_serialize__(dct, context)

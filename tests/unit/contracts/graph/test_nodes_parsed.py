@@ -164,7 +164,7 @@ def base_parsed_model_dict():
         "refs": [],
         "sources": [],
         "metrics": [],
-        "depends_on": {"macros": [], "nodes": [], "vars": {}},
+        "depends_on": {"macros": [], "nodes": []},
         "database": "test_db",
         "description": "",
         "primary_key": [],
@@ -200,6 +200,7 @@ def base_parsed_model_dict():
         },
         "unrendered_config": {},
         "unrendered_config_call_dict": {},
+        "vars": {},
         "config_call_dict": {},
         "access": AccessType.Protected.value,
         "constraints": [],
@@ -256,6 +257,7 @@ def minimal_parsed_model_dict():
             "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         },
         "unrendered_config": {},
+        "vars": {},
     }
 
 
@@ -275,7 +277,7 @@ def complex_parsed_model_dict():
         "refs": [],
         "sources": [],
         "metrics": [],
-        "depends_on": {"macros": [], "nodes": ["model.test.bar"], "vars": {}},
+        "depends_on": {"macros": [], "nodes": ["model.test.bar"]},
         "database": "test_db",
         "description": "My parsed node",
         "primary_key": [],
@@ -323,6 +325,7 @@ def complex_parsed_model_dict():
             "post_hook": ['insert into blah(a, b) select "1", 1'],
         },
         "unrendered_config_call_dict": {},
+        "vars": {},
         "config_call_dict": {},
         "access": AccessType.Protected.value,
         "constraints": [],
@@ -533,6 +536,7 @@ def basic_parsed_seed_dict():
         "checksum": {"name": "path", "checksum": "seeds/seed.csv"},
         "unrendered_config": {},
         "unrendered_config_call_dict": {},
+        "vars": {},
         "config_call_dict": {},
     }
 
@@ -639,6 +643,7 @@ def complex_parsed_seed_dict():
             "persist_docs": {"relation": True, "columns": True},
         },
         "unrendered_config_call_dict": {},
+        "vars": {},
         "config_call_dict": {},
     }
 
@@ -805,7 +810,7 @@ def base_parsed_hook_dict():
         "refs": [],
         "sources": [],
         "metrics": [],
-        "depends_on": {"macros": [], "nodes": [], "vars": {}},
+        "depends_on": {"macros": [], "nodes": []},
         "database": "test_db",
         "description": "",
         "schema": "test_schema",
@@ -839,6 +844,7 @@ def base_parsed_hook_dict():
         },
         "unrendered_config": {},
         "unrendered_config_call_dict": {},
+        "vars": {},
         "config_call_dict": {},
     }
 
@@ -887,7 +893,7 @@ def complex_parsed_hook_dict():
         "refs": [],
         "sources": [],
         "metrics": [],
-        "depends_on": {"macros": [], "nodes": ["model.test.bar"], "vars": {}},
+        "depends_on": {"macros": [], "nodes": ["model.test.bar"]},
         "database": "test_db",
         "description": "My parsed node",
         "schema": "test_schema",
@@ -933,6 +939,7 @@ def complex_parsed_hook_dict():
             "materialized": "table",
         },
         "unrendered_config_call_dict": {},
+        "vars": {},
         "config_call_dict": {},
     }
 
@@ -1047,7 +1054,7 @@ def basic_parsed_schema_test_dict():
         "refs": [],
         "sources": [],
         "metrics": [],
-        "depends_on": {"macros": [], "nodes": [], "vars": {}},
+        "depends_on": {"macros": [], "nodes": []},
         "database": "test_db",
         "description": "",
         "schema": "test_schema",
@@ -1078,6 +1085,7 @@ def basic_parsed_schema_test_dict():
         },
         "unrendered_config": {},
         "unrendered_config_call_dict": {},
+        "vars": {},
         "config_call_dict": {},
     }
 
@@ -1126,7 +1134,7 @@ def complex_parsed_schema_test_dict():
         "refs": [],
         "sources": [],
         "metrics": [],
-        "depends_on": {"macros": [], "nodes": ["model.test.bar"], "vars": {}},
+        "depends_on": {"macros": [], "nodes": ["model.test.bar"]},
         "database": "test_db",
         "description": "My parsed node",
         "schema": "test_schema",
@@ -1167,6 +1175,7 @@ def complex_parsed_schema_test_dict():
         },
         "unrendered_config": {"materialized": "table", "severity": "WARN"},
         "unrendered_config_call_dict": {},
+        "vars": {},
         "config_call_dict": {},
     }
 
@@ -1516,7 +1525,7 @@ def basic_timestamp_snapshot_dict():
         "refs": [],
         "sources": [],
         "metrics": [],
-        "depends_on": {"macros": [], "nodes": [], "vars": {}},
+        "depends_on": {"macros": [], "nodes": []},
         "database": "test_db",
         "description": "",
         "schema": "test_schema",
@@ -1562,6 +1571,7 @@ def basic_timestamp_snapshot_dict():
             "target_schema": "some_snapshot_schema",
         },
         "unrendered_config_call_dict": {},
+        "vars": {},
         "config_call_dict": {},
     }
 
@@ -1621,7 +1631,7 @@ def basic_check_snapshot_dict():
         "refs": [],
         "sources": [],
         "metrics": [],
-        "depends_on": {"macros": [], "nodes": [], "vars": {}},
+        "depends_on": {"macros": [], "nodes": []},
         "database": "test_db",
         "description": "",
         "schema": "test_schema",
@@ -1668,6 +1678,7 @@ def basic_check_snapshot_dict():
         },
         "unrendered_config_call_dict": {},
         "config_call_dict": {},
+        "vars": {},
     }
 
 
@@ -1760,6 +1771,7 @@ class TestParsedMacro(ContractTestCase):
             "description": "my macro description",
             "docs": {"show": True},
             "arguments": [],
+            "vars": {},
         }
 
     def test_ok(self):
@@ -1776,6 +1788,7 @@ class TestParsedMacro(ContractTestCase):
             meta={},
             description="my macro description",
             arguments=[],
+            vars={},
         )
         assert_symmetric(macro, macro_dict)
         pickle.loads(pickle.dumps(macro))
@@ -1877,6 +1890,7 @@ def basic_parsed_source_definition_dict():
             "enabled": True,
         },
         "unrendered_config": {},
+        "vars": {},
     }
 
 
@@ -1909,6 +1923,7 @@ def complex_parsed_source_definition_dict():
         "freshness": {"warn_after": {"period": "hour", "count": 1}, "error_after": {}},
         "loaded_at_field": "loaded_at",
         "unrendered_config": {},
+        "vars": {},
     }
 
 
@@ -2063,7 +2078,6 @@ def basic_parsed_exposure_dict():
         "depends_on": {
             "nodes": [],
             "macros": [],
-            "vars": {},
         },
         "refs": [],
         "sources": [],
@@ -2081,6 +2095,7 @@ def basic_parsed_exposure_dict():
             "enabled": True,
         },
         "unrendered_config": {},
+        "vars": {},
     }
 
 
@@ -2123,7 +2138,6 @@ def complex_parsed_exposure_dict():
         "depends_on": {
             "nodes": ["models.test.my_model"],
             "macros": [],
-            "vars": {},
         },
         "refs": [],
         "sources": [],
@@ -2137,6 +2151,7 @@ def complex_parsed_exposure_dict():
             "enabled": True,
         },
         "unrendered_config": {},
+        "vars": {},
     }
 
 
@@ -2249,7 +2264,6 @@ def basic_parsed_metric_dict():
         "depends_on": {
             "nodes": [],
             "macros": [],
-            "vars": {},
         },
     }
 

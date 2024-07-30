@@ -721,6 +721,12 @@
                 "type": "string",
                 "default": ""
               },
+              "vars": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                }
+              },
               "root_path": {
                 "anyOf": [
                   {
@@ -1754,6 +1760,12 @@
                 "type": "string",
                 "default": ""
               },
+              "vars": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                }
+              },
               "language": {
                 "type": "string",
                 "default": "sql"
@@ -1830,12 +1842,6 @@
                   "nodes": {
                     "type": "array",
                     "items": {
-                      "type": "string"
-                    }
-                  },
-                  "vars": {
-                    "type": "object",
-                    "propertyNames": {
                       "type": "string"
                     }
                   }
@@ -2408,6 +2414,12 @@
                 "type": "string",
                 "default": ""
               },
+              "vars": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                }
+              },
               "language": {
                 "type": "string",
                 "default": "sql"
@@ -2484,12 +2496,6 @@
                   "nodes": {
                     "type": "array",
                     "items": {
-                      "type": "string"
-                    }
-                  },
-                  "vars": {
-                    "type": "object",
-                    "propertyNames": {
                       "type": "string"
                     }
                   }
@@ -3199,6 +3205,12 @@
                 "type": "string",
                 "default": ""
               },
+              "vars": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                }
+              },
               "language": {
                 "type": "string",
                 "default": "sql"
@@ -3275,12 +3287,6 @@
                   "nodes": {
                     "type": "array",
                     "items": {
-                      "type": "string"
-                    }
-                  },
-                  "vars": {
-                    "type": "object",
-                    "propertyNames": {
                       "type": "string"
                     }
                   }
@@ -4009,6 +4015,12 @@
                 "type": "string",
                 "default": ""
               },
+              "vars": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                }
+              },
               "language": {
                 "type": "string",
                 "default": "sql"
@@ -4085,12 +4097,6 @@
                   "nodes": {
                     "type": "array",
                     "items": {
-                      "type": "string"
-                    }
-                  },
-                  "vars": {
-                    "type": "object",
-                    "propertyNames": {
                       "type": "string"
                     }
                   }
@@ -5370,6 +5376,12 @@
                 "type": "string",
                 "default": ""
               },
+              "vars": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                }
+              },
               "language": {
                 "type": "string",
                 "default": "sql"
@@ -5446,12 +5458,6 @@
                   "nodes": {
                     "type": "array",
                     "items": {
-                      "type": "string"
-                    }
-                  },
-                  "vars": {
-                    "type": "object",
-                    "propertyNames": {
                       "type": "string"
                     }
                   }
@@ -6024,6 +6030,12 @@
                 "type": "string",
                 "default": ""
               },
+              "vars": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                }
+              },
               "language": {
                 "type": "string",
                 "default": "sql"
@@ -6100,12 +6112,6 @@
                   "nodes": {
                     "type": "array",
                     "items": {
-                      "type": "string"
-                    }
-                  },
-                  "vars": {
-                    "type": "object",
-                    "propertyNames": {
                       "type": "string"
                     }
                   }
@@ -6982,6 +6988,12 @@
                 "type": "string",
                 "default": ""
               },
+              "vars": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                }
+              },
               "language": {
                 "type": "string",
                 "default": "sql"
@@ -7058,12 +7070,6 @@
                   "nodes": {
                     "type": "array",
                     "items": {
-                      "type": "string"
-                    }
-                  },
-                  "vars": {
-                    "type": "object",
-                    "propertyNames": {
                       "type": "string"
                     }
                   }
@@ -8522,12 +8528,6 @@
                 "items": {
                   "type": "string"
                 }
-              },
-              "vars": {
-                "type": "object",
-                "propertyNames": {
-                  "type": "string"
-                }
               }
             },
             "additionalProperties": false
@@ -9778,12 +9778,6 @@
                 "items": {
                   "type": "string"
                 }
-              },
-              "vars": {
-                "type": "object",
-                "propertyNames": {
-                  "type": "string"
-                }
               }
             },
             "additionalProperties": false
@@ -10578,6 +10572,12 @@
                     "raw_code": {
                       "type": "string",
                       "default": ""
+                    },
+                    "vars": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      }
                     },
                     "root_path": {
                       "anyOf": [
@@ -11612,6 +11612,12 @@
                       "type": "string",
                       "default": ""
                     },
+                    "vars": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      }
+                    },
                     "language": {
                       "type": "string",
                       "default": "sql"
@@ -11688,12 +11694,6 @@
                         "nodes": {
                           "type": "array",
                           "items": {
-                            "type": "string"
-                          }
-                        },
-                        "vars": {
-                          "type": "object",
-                          "propertyNames": {
                             "type": "string"
                           }
                         }
@@ -12266,6 +12266,12 @@
                       "type": "string",
                       "default": ""
                     },
+                    "vars": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      }
+                    },
                     "language": {
                       "type": "string",
                       "default": "sql"
@@ -12342,12 +12348,6 @@
                         "nodes": {
                           "type": "array",
                           "items": {
-                            "type": "string"
-                          }
-                        },
-                        "vars": {
-                          "type": "object",
-                          "propertyNames": {
                             "type": "string"
                           }
                         }
@@ -13057,6 +13057,12 @@
                       "type": "string",
                       "default": ""
                     },
+                    "vars": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      }
+                    },
                     "language": {
                       "type": "string",
                       "default": "sql"
@@ -13133,12 +13139,6 @@
                         "nodes": {
                           "type": "array",
                           "items": {
-                            "type": "string"
-                          }
-                        },
-                        "vars": {
-                          "type": "object",
-                          "propertyNames": {
                             "type": "string"
                           }
                         }
@@ -13867,6 +13867,12 @@
                       "type": "string",
                       "default": ""
                     },
+                    "vars": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      }
+                    },
                     "language": {
                       "type": "string",
                       "default": "sql"
@@ -13943,12 +13949,6 @@
                         "nodes": {
                           "type": "array",
                           "items": {
-                            "type": "string"
-                          }
-                        },
-                        "vars": {
-                          "type": "object",
-                          "propertyNames": {
                             "type": "string"
                           }
                         }
@@ -15228,6 +15228,12 @@
                       "type": "string",
                       "default": ""
                     },
+                    "vars": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      }
+                    },
                     "language": {
                       "type": "string",
                       "default": "sql"
@@ -15304,12 +15310,6 @@
                         "nodes": {
                           "type": "array",
                           "items": {
-                            "type": "string"
-                          }
-                        },
-                        "vars": {
-                          "type": "object",
-                          "propertyNames": {
                             "type": "string"
                           }
                         }
@@ -15882,6 +15882,12 @@
                       "type": "string",
                       "default": ""
                     },
+                    "vars": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      }
+                    },
                     "language": {
                       "type": "string",
                       "default": "sql"
@@ -15958,12 +15964,6 @@
                         "nodes": {
                           "type": "array",
                           "items": {
-                            "type": "string"
-                          }
-                        },
-                        "vars": {
-                          "type": "object",
-                          "propertyNames": {
                             "type": "string"
                           }
                         }
@@ -16840,6 +16840,12 @@
                       "type": "string",
                       "default": ""
                     },
+                    "vars": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      }
+                    },
                     "language": {
                       "type": "string",
                       "default": "sql"
@@ -16916,12 +16922,6 @@
                         "nodes": {
                           "type": "array",
                           "items": {
-                            "type": "string"
-                          }
-                        },
-                        "vars": {
-                          "type": "object",
-                          "propertyNames": {
                             "type": "string"
                           }
                         }
@@ -18169,12 +18169,6 @@
                           "items": {
                             "type": "string"
                           }
-                        },
-                        "vars": {
-                          "type": "object",
-                          "propertyNames": {
-                            "type": "string"
-                          }
                         }
                       },
                       "additionalProperties": false
@@ -19418,12 +19412,6 @@
                           "items": {
                             "type": "string"
                           }
-                        },
-                        "vars": {
-                          "type": "object",
-                          "propertyNames": {
-                            "type": "string"
-                          }
                         }
                       },
                       "additionalProperties": false
@@ -19837,12 +19825,6 @@
                         "nodes": {
                           "type": "array",
                           "items": {
-                            "type": "string"
-                          }
-                        },
-                        "vars": {
-                          "type": "object",
-                          "propertyNames": {
                             "type": "string"
                           }
                         }
@@ -20499,12 +20481,6 @@
                           "items": {
                             "type": "string"
                           }
-                        },
-                        "vars": {
-                          "type": "object",
-                          "propertyNames": {
-                            "type": "string"
-                          }
                         }
                       },
                       "additionalProperties": false
@@ -20830,12 +20806,6 @@
                         "nodes": {
                           "type": "array",
                           "items": {
-                            "type": "string"
-                          }
-                        },
-                        "vars": {
-                          "type": "object",
-                          "propertyNames": {
                             "type": "string"
                           }
                         }
@@ -21389,12 +21359,6 @@
               "nodes": {
                 "type": "array",
                 "items": {
-                  "type": "string"
-                }
-              },
-              "vars": {
-                "type": "object",
-                "propertyNames": {
                   "type": "string"
                 }
               }
@@ -22058,12 +22022,6 @@
                 "items": {
                   "type": "string"
                 }
-              },
-              "vars": {
-                "type": "object",
-                "propertyNames": {
-                  "type": "string"
-                }
               }
             },
             "additionalProperties": false
@@ -22396,12 +22354,6 @@
               "nodes": {
                 "type": "array",
                 "items": {
-                  "type": "string"
-                }
-              },
-              "vars": {
-                "type": "object",
-                "propertyNames": {
                   "type": "string"
                 }
               }

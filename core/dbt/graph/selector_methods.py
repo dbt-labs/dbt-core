@@ -623,7 +623,7 @@ class StateSelectorMethod(SelectorMethod):
         for uid, macro in new_macros.items():
             if uid in old_macros:
                 old_macro = old_macros[uid]
-                if macro.macro_sql != old_macro.macro_sql:
+                if macro.macro_sql != old_macro.macro_sql or macro.vars != old_macro.vars:
                     modified.append(uid)
             else:
                 modified.append(uid)
@@ -752,7 +752,7 @@ class StateSelectorMethod(SelectorMethod):
             "modified.relation": self.check_modified_factory("same_database_representation"),
             "modified.macros": self.check_modified_macros,
             "modified.contract": self.check_modified_contract("same_contract", adapter_type),
-            "modified.vars": self.check_modified_factory("same_depends_on_vars"),
+            "modified.vars": self.check_modified_factory("same_vars"),
         }
         if selector in state_checks:
             checker = state_checks[selector]

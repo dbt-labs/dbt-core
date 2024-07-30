@@ -369,6 +369,9 @@ class ParsedNode(ParsedResource, NodeInfoMixin, ParsedNodeMandatory, Serializabl
         # This would only apply to seeds
         return True
 
+    def same_vars(self, old) -> bool:
+        return self.vars == old.vars
+
     def same_contents(self, old, adapter_type) -> bool:
         if old is None:
             return False
@@ -382,6 +385,7 @@ class ParsedNode(ParsedResource, NodeInfoMixin, ParsedNodeMandatory, Serializabl
             and self.same_persisted_description(old)
             and self.same_fqn(old)
             and self.same_database_representation(old)
+            and self.same_vars(old)
             and same_contract
             and True
         )
@@ -421,15 +425,8 @@ class CompiledNode(CompiledResource, ParsedNode):
     def depends_on_macros(self):
         return self.depends_on.macros
 
-    @property
-    def depends_on_vars(self):
-        return self.depends_on.vars
-
-    def same_depends_on_vars(self, old):
-        return self.depends_on_vars == old.depends_on_vars
-
     def same_contents(self, old, adapter_type) -> bool:
-        return super().same_contents(old, adapter_type) and self.same_depends_on_vars(old)
+        return super().same_contents(old, adapter_type)
 
 
 # ====================================

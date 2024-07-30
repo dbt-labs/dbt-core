@@ -1156,7 +1156,7 @@ class TestModifiedVars(BaseModifiedState):
     @pytest.fixture(scope="class")
     def models(self):
         return {
-            "view_model.sql": "select {{ var('my_var') }} as id",
+            "model_with_var.sql": "select {{ var('my_var') }} as id",
         }
 
     def test_changed_vars(self, project):
@@ -1169,10 +1169,10 @@ class TestModifiedVars(BaseModifiedState):
         # Modify var (my_var: 1 -> 2)
         update_config_file({"vars": {"my_var": 2}}, "dbt_project.yml")
         assert run_dbt(["list", "-s", "state:modified", "--state", "./state"]) == [
-            "test.view_model"
+            "test.model_with_var"
         ]
         assert run_dbt(["list", "-s", "state:modified.vars", "--state", "./state"]) == [
-            "test.view_model"
+            "test.model_with_var"
         ]
 
         # Reset dbt_project.yml
@@ -1184,4 +1184,47 @@ class TestModifiedVars(BaseModifiedState):
         )
         assert run_dbt(
             ["list", "--vars", '{"my_var": 2}', "-s", "state:modified", "--state", "./state"]
-        ) == ["test.view_model"]
+        ) == ["test.model_with_var"]
+
+
+macro_with_var_sql = """
+{% macro macro_with_var() %}
+    {{ var('my_var') }}
+{% endmacro %}
+"""
+
+
+class TestModifiedMacroVars(BaseModifiedState):
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "vars": {"my_var": 1},
+        }
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "model_with_macro.sql": "select {{ macro_with_var() }} as id",
+        }
+
+    @pytest.fixture(scope="class")
+    def macros(self):
+        return {
+            "macro_with_var.sql": macro_with_var_sql,
+        }
+
+    def test_changed_vars(self, project):
+        self.run_and_save_state()
+
+        # No var change
+        assert not run_dbt(["list", "-s", "state:modified", "--state", "./state"])
+        assert not run_dbt(["list", "-s", "state:modified.vars", "--state", "./state"])
+
+        # Modify var (my_var: 1 -> 2)
+        update_config_file({"vars": {"my_var": 2}}, "dbt_project.yml")
+        assert run_dbt(["list", "-s", "state:modified", "--state", "./state"]) == [
+            "test.model_with_macro"
+        ]
+        assert run_dbt(["list", "-s", "state:modified.vars", "--state", "./state"]) == [
+            "test.model_with_macro"
+        ]

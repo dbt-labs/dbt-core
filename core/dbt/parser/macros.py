@@ -34,6 +34,10 @@ class MacroParser(BaseParser[Macro]):
         unique_id = self.generate_unique_id(name)
         macro_sql = block.full_block or ""
 
+        # TODO:
+        # statically extract potential "vars" calls
+        # If there are any, create a parse-time macro env + render macro sql to extract vars
+
         return Macro(
             path=base_node.path,
             macro_sql=macro_sql,
