@@ -623,7 +623,7 @@ class StateSelectorMethod(SelectorMethod):
         for uid, macro in new_macros.items():
             if uid in old_macros:
                 old_macro = old_macros[uid]
-                if macro.macro_sql != old_macro.macro_sql or macro.vars != old_macro.vars:
+                if macro.macro_sql != old_macro.macro_sql:
                     modified.append(uid)
             else:
                 modified.append(uid)

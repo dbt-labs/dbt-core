@@ -1228,3 +1228,6 @@ class TestModifiedMacroVars(BaseModifiedState):
         assert run_dbt(["list", "-s", "state:modified.vars", "--state", "./state"]) == [
             "test.model_with_macro"
         ]
+
+        # Macros themselves not captured as modified because the var value depends on a node's context
+        assert not run_dbt(["list", "-s", "state:modified.macros", "--state", "./state"])

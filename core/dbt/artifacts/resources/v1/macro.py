@@ -27,4 +27,3 @@ class Macro(BaseResource):
     arguments: List[MacroArgument] = field(default_factory=list)
     created_at: float = field(default_factory=lambda: time.time())
     supported_languages: Optional[List[ModelLanguage]] = None
-    vars: Dict[str, Any] = field(default_factory=dict)
