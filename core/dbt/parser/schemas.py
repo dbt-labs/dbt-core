@@ -949,6 +949,9 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
         Populate model_node.refs and model_node.sources based on foreign-key constraint references,
         whether defined at the model-level or column-level.
         """
+        if not isinstance(model_node, ModelNode):
+            return
+
         for constraint in model_node.all_constraints:
             if constraint.type == ConstraintType.foreign_key and constraint.to:
                 try:
