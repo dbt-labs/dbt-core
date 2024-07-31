@@ -378,10 +378,6 @@ class ParsedNode(ParsedResource, NodeInfoMixin, ParsedNodeMandatory, Serializabl
     def is_external_node(self):
         return False
 
-    @property
-    def all_constraints(self) -> List[Union[ModelLevelConstraint, ColumnLevelConstraint]]:
-        return []
-
 
 @dataclass
 class CompiledNode(CompiledResource, ParsedNode):

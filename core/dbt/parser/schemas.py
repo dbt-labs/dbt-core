@@ -682,7 +682,7 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
             # Node might be disabled. Following call returns list of matching disabled nodes
             resource_type = schema_file_keys_to_resource_types[patch.yaml_key]
             found_nodes = self.manifest.disabled_lookup.find(
-                patch.name, patch.package_name, [resource_type]
+                patch.name, patch.package_name, resource_types=[resource_type]
             )
             if found_nodes:
                 if len(found_nodes) > 1 and patch.config.get("enabled"):
@@ -816,7 +816,7 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
                 if versioned_model_unique_id is None:
                     # Node might be disabled. Following call returns list of matching disabled nodes
                     found_nodes = self.manifest.disabled_lookup.find(
-                        versioned_model_name, None, [NodeType.Model]
+                        versioned_model_name, None, resource_types=[NodeType.Model]
                     )
                     if found_nodes:
                         if len(found_nodes) > 1 and target.config.get("enabled"):

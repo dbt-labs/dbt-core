@@ -430,8 +430,8 @@ class DisabledLookup(dbtClassMixin):
         self,
         search_name,
         package: Optional[PackageName],
-        resource_types: Optional[List[NodeType]] = None,
         version: Optional[NodeVersion] = None,
+        resource_types: Optional[List[NodeType]] = None,
     ):
         if version:
             search_name = f"{search_name}.v{version}"
@@ -1312,7 +1312,10 @@ class Manifest(MacroMethods, dbtClassMixin):
             # it's possible that the node is disabled
             if disabled is None:
                 disabled = self.disabled_lookup.find(
-                    target_model_name, pkg, REFABLE_NODE_TYPES, target_model_version
+                    target_model_name,
+                    pkg,
+                    version=target_model_version,
+                    resource_types=REFABLE_NODE_TYPES,
                 )
 
         if disabled:
