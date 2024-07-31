@@ -1231,3 +1231,67 @@ class TestModifiedMacroVars(BaseModifiedState):
 
         # Macros themselves not captured as modified because the var value depends on a node's context
         assert not run_dbt(["list", "-s", "state:modified.macros", "--state", "./state"])
+
+
+# TODO: test versioned models, tests
+model_with_var_schema_yml = """
+version: 2
+models:
+  - name: model_with_var
+    config:
+        materialized: "{{ var('my_var') }}"
+
+exposures:
+  - name: exposure_name
+    type: dashboard
+    owner:
+      name: "{{ var('my_var') }}"
+
+sources:
+  - name: jaffle_shop
+    database: "{{ var('my_var') }}"
+    schema: jaffle_shop
+    tables:
+      - name: orders
+      - name: customers
+"""
+
+
+class TestModifiedVarsSchemaYml(BaseModifiedState):
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "vars": {"my_var": "table"},
+        }
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"model_with_var.sql": "select 1 as id", "schema.yml": model_with_var_schema_yml}
+
+    def test_changed_vars(self, project):
+        self.run_and_save_state()
+
+        # No var change
+        assert not run_dbt(["list", "-s", "state:modified", "--state", "./state"])
+        assert not run_dbt(["list", "-s", "state:modified.vars", "--state", "./state"])
+
+        # Modify var (my_var: table -> view)
+        update_config_file({"vars": {"my_var": "view"}}, "dbt_project.yml")
+        assert sorted(run_dbt(["list", "-s", "state:modified", "--state", "./state"])) == sorted(
+            [
+                "test.model_with_var",
+                "exposure:test.exposure_name",
+                "source:test.jaffle_shop.customers",
+                "source:test.jaffle_shop.orders",
+            ]
+        )
+        assert sorted(
+            run_dbt(["list", "-s", "state:modified.vars", "--state", "./state"])
+        ) == sorted(
+            [
+                "test.model_with_var",
+                "exposure:test.exposure_name",
+                "source:test.jaffle_shop.customers",
+                "source:test.jaffle_shop.orders",
+            ]
+        )
