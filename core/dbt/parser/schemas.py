@@ -69,18 +69,20 @@ from dbt_common.events.functions import warn_or_error
 from dbt_common.exceptions import DbtValidationError
 from dbt_common.utils import deep_merge
 
-schema_file_keys = (
-    "models",
-    "seeds",
-    "snapshots",
-    "sources",
-    "macros",
-    "analyses",
-    "exposures",
-    "metrics",
-    "semantic_models",
-    "saved_queries",
-)
+schema_file_keys_to_resource_types = {
+    "models": NodeType.Model,
+    "seeds": NodeType.Seed,
+    "snapshots": NodeType.Snapshot,
+    "sources": NodeType.Source,
+    "macros": NodeType.Macro,
+    "analyses": NodeType.Analysis,
+    "exposures": NodeType.Exposure,
+    "metrics": NodeType.Metric,
+    "semantic_models": NodeType.SemanticModel,
+    "saved_queries": NodeType.SavedQuery,
+}
+
+schema_file_keys = list(schema_file_keys_to_resource_types.keys())
 
 
 # ===============================================================================
@@ -678,8 +680,9 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
         # handle disabled nodes
         if unique_id is None:
             # Node might be disabled. Following call returns list of matching disabled nodes
+            resource_type = schema_file_keys_to_resource_types[patch.yaml_key]
             found_nodes = self.manifest.disabled_lookup.find(
-                patch.name, patch.package_name, [NodeType.Model]
+                patch.name, patch.package_name, [resource_type]
             )
             if found_nodes:
                 if len(found_nodes) > 1 and patch.config.get("enabled"):
