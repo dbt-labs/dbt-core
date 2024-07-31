@@ -413,11 +413,11 @@ class DisabledLookup(dbtClassMixin):
         self.storage: Dict[str, Dict[PackageName, List[Any]]] = {}
         self.populate(manifest)
 
-    def populate(self, manifest):
+    def populate(self, manifest: "Manifest"):
         for node in list(chain.from_iterable(manifest.disabled.values())):
             self.add_node(node)
 
-    def add_node(self, node):
+    def add_node(self, node: GraphMemberNode) -> None:
         if node.search_name not in self.storage:
             self.storage[node.search_name] = {}
         if node.package_name not in self.storage[node.search_name]:
@@ -432,7 +432,7 @@ class DisabledLookup(dbtClassMixin):
         package: Optional[PackageName],
         version: Optional[NodeVersion] = None,
         resource_types: Optional[List[NodeType]] = None,
-    ):
+    ) -> Optional[List[Any]]:
         if version:
             search_name = f"{search_name}.v{version}"
 
@@ -451,6 +451,7 @@ class DisabledLookup(dbtClassMixin):
             nodes = pkg_dct[package]
         else:
             return None
+
         if resource_types is None:
             return nodes
         else:
