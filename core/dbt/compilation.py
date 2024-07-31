@@ -442,7 +442,7 @@ class Compiler:
             node.relation_name = relation_name
 
         # Compile 'ref' and 'source' expressions in foreign key constraints
-        if node.resource_type == NodeType.Model and isinstance(node, ModelNode):
+        if isinstance(node, ModelNode):
             for constraint in node.all_constraints:
                 if constraint.type == ConstraintType.foreign_key and constraint.to:
                     constraint.to = self._compile_relation_for_foreign_key_constraint_to(
