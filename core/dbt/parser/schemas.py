@@ -917,10 +917,12 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
         return UnparsedModelUpdate
 
     def patch_node_properties(self, node, patch: "ParsedNodePatch") -> None:
+        super().patch_node_properties(node, patch)
+
+        # Remaining patch properties are only relevant to ModelNode objects
         if not isinstance(node, ModelNode):
             return
 
-        super().patch_node_properties(node, patch)
         node.version = patch.version
         node.latest_version = patch.latest_version
         node.deprecation_date = patch.deprecation_date
