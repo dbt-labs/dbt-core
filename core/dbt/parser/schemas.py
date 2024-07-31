@@ -917,6 +917,9 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
         return UnparsedModelUpdate
 
     def patch_node_properties(self, node, patch: "ParsedNodePatch") -> None:
+        if not isinstance(node, ModelNode):
+            return
+
         super().patch_node_properties(node, patch)
         node.version = patch.version
         node.latest_version = patch.latest_version
@@ -934,7 +937,7 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
         self.patch_time_spine(node, patch.time_spine)
         node.build_contract_checksum()
 
-    def patch_constraints(self, node, constraints: List[Dict[str, Any]]) -> None:
+    def patch_constraints(self, node: ModelNode, constraints: List[Dict[str, Any]]) -> None:
         contract_config = node.config.get("contract")
         if contract_config.enforced is True:
             self._validate_constraint_prerequisites(node)
@@ -970,7 +973,7 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
                 else:
                     model_node.sources.append(ref_or_source)
 
-    def patch_time_spine(self, node, time_spine: Optional[TimeSpine]) -> None:
+    def patch_time_spine(self, node: ModelNode, time_spine: Optional[TimeSpine]) -> None:
         node.time_spine = time_spine
 
     def _validate_pk_constraints(
