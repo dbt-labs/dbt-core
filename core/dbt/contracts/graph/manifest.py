@@ -451,7 +451,7 @@ class DisabledLookup(dbtClassMixin):
             nodes = pkg_dct[package]
         else:
             return None
-        if not resource_types:
+        if resource_types is None:
             return nodes
         else:
             new_nodes = []
