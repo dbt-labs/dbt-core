@@ -678,7 +678,9 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
         # handle disabled nodes
         if unique_id is None:
             # Node might be disabled. Following call returns list of matching disabled nodes
-            found_nodes = self.manifest.disabled_lookup.find(patch.name, patch.package_name)
+            found_nodes = self.manifest.disabled_lookup.find(
+                patch.name, patch.package_name, [NodeType.Model]
+            )
             if found_nodes:
                 if len(found_nodes) > 1 and patch.config.get("enabled"):
                     # There are multiple disabled nodes for this model and the schema file wants to enable one.
@@ -696,6 +698,8 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
                 # to append with the unique id
                 source_file.append_patch(patch.yaml_key, found_nodes[0].unique_id)
                 for node in found_nodes:
+                    # if patch.yaml_key == "models" and node.resource_type != NodeType.Model:
+                    #    continue
                     node.patch_path = source_file.file_id
                     # re-calculate the node config with the patch config.  Always do this
                     # for the case when no config is set to ensure the default of true gets captured
@@ -810,7 +814,9 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
 
                 if versioned_model_unique_id is None:
                     # Node might be disabled. Following call returns list of matching disabled nodes
-                    found_nodes = self.manifest.disabled_lookup.find(versioned_model_name, None)
+                    found_nodes = self.manifest.disabled_lookup.find(
+                        versioned_model_name, None, [NodeType.Model]
+                    )
                     if found_nodes:
                         if len(found_nodes) > 1 and target.config.get("enabled"):
                             # There are multiple disabled nodes for this model and the schema file wants to enable one.
@@ -949,9 +955,6 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
         Populate model_node.refs and model_node.sources based on foreign-key constraint references,
         whether defined at the model-level or column-level.
         """
-        if not isinstance(model_node, ModelNode):
-            return
-
         for constraint in model_node.all_constraints:
             if constraint.type == ConstraintType.foreign_key and constraint.to:
                 try:
