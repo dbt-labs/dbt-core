@@ -821,8 +821,8 @@ def read_project_flags(project_dir: str, profiles_dir: str) -> ProjectFlags:
 
         if profile_project_flags:
             # This can't use WARN_ERROR or WARN_ERROR_OPTIONS because they're in
-            # the config that we're loading. Uses special "warn" method.
-            deprecations.warn("project-flags-moved")
+            # the config that we're loading. Uses special "buffer" method and fired after flags are initialized in preflight.
+            deprecations.buffer("project-flags-moved")
             project_flags = profile_project_flags
 
         if project_flags is not None:
