@@ -59,6 +59,7 @@ setup(
         "networkx>=2.3,<4.0",
         "protobuf>=4.0.0,<5",
         "requests<3.0.0",  # should match dbt-common
+        "snowplow-tracker>=1.0.2,<2.0",
         # ----
         # These packages are major-version-0. Keep upper bounds on upcoming minor versions (which could have breaking changes)
         # and check compatibility / bump in each new minor version of dbt-core.
@@ -68,7 +69,6 @@ setup(
         # These are major-version-0 packages also maintained by dbt-labs.
         # Accept patches but avoid automatically updating past a set minor version range.
         "dbt-extractor>=0.5.0,<=0.6",
-        "minimal-snowplow-tracker>=0.0.2,<0.1",
         "dbt-semantic-interfaces>=0.6.11,<0.7",
         # Minor versions for these are expected to be backwards-compatible
         "dbt-common>=1.6.0,<2.0",
