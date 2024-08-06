@@ -103,10 +103,28 @@ def test_invalid_event_value(project, logs_dir):
     assert str(excinfo.value) == "[InvalidOptionYAML]: Unable to parse dict {'option_name': 1}"
 
 
+groups_yml = """
+groups:
+  - name: my_group
+    owner:
+      name: my_name
+      email: my.email@gmail.com
+      slack: my_slack
+
+models:
+  - name: my_model
+    group: my_group
+    access: public
+"""
+
+
 class TestNodeInfo:
     @pytest.fixture(scope="class")
     def models(self):
-        return {"my_model.sql": "select not_found as id"}
+        return {
+            "my_model.sql": "select not_found as id",
+            "groups.yml": groups_yml,
+        }
 
     def test_node_info_on_results(self, project, logs_dir):
         results = run_dbt(["--log-format=json", "run"], expect_pass=False)
