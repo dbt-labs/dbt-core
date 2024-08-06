@@ -5,12 +5,19 @@ import pytest
 from dbt.artifacts.resources.types import NodeType
 from dbt.cli.main import dbtRunner
 from dbt.cli.types import Command
-from dbt.contracts.graph.nodes import BaseNode
 from dbt.events.types import NoNodesSelected
 from dbt.tests.util import run_dbt
 from tests.utils import EventCatcher
 
-# These are commands we're skipping as they don't make sense/work with the
+"""
+Testing different commands against the happy path fixture
+
+The general flow
+1. Declare the commands to be tested
+2. Write a paramaterized test ensure a given command reaches causes and associated desired state.
+"""
+
+# These are commands we're skipping as they don't make sense or don't work with the
 # happy path fixture currently
 commands_to_skip = {
     "clone",
@@ -52,38 +59,11 @@ class TestRunCommands:
 
 
 """
-Idea 2:
-Compose all of the nodes being executed in the command before and test that all node type are covered?
-Need to figure out what all nodes are
-"""
+Testing command interactions with specific node types
 
-
-def find_end_classes(cls):
-    end_classes = []
-    subclasses = cls.__subclasses__()
-    if not subclasses:  # If no subclasses, it's an end class
-        return [cls]
-    for subclass in subclasses:
-        end_classes.extend(find_end_classes(subclass))  # Recursively find end classes
-    return end_classes
-
-
-# List all end classes that are subclasses of BaseNode
-end_classes = find_end_classes(BaseNode)
-for cls in end_classes:
-    print(cls)
-
-"""
-Idea 3:
-select resource type: make sure new nodes are selectable
-check the resource type defined in params, make sure we can select all of them, and also that list plus the resource type that are not selectable defined in
-a list here are echo to all of the resource types
-
-we fine end classes from here, but do not include all of the nodes we can select resource type from
-
----
-select modified: find all node types, define ways to modify each one of them in the happy path project, modify one of them,
-run select state:modified and make sure the modified node is selected
+The general flow
+1. Declare resource (node) types to be tested
+2. Write a parameterized test that ensures commands interact successfully with each resource type
 """
 
 # TODO: Figure out which of these are just missing from the happy path fixture vs which ones aren't selectable
