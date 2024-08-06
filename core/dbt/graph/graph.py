@@ -59,9 +59,36 @@ class Graph:
     def select_children(
         self, selected: Set[UniqueId], max_depth: Optional[int] = None
     ) -> Set[UniqueId]:
-        descendants: Set[UniqueId] = set()
-        for node in selected:
-            descendants.update(self.descendants(node, max_depth))
+        """Return all descendants of the selected nodes, up to max_depth levels deep"""
+        related_nodes = selected
+        current_layer = selected
+        current_depth = 0
+
+        # this process steps through the graph, layer by layer, until max_depth or no new nodes are found.
+        # going 1 step at a time allows for pruning of the graph since many selected nodes may overlap in descendants
+
+        if max_depth is None:
+            max_depth = 999999999
+        depth_exceeded = False
+
+        while not depth_exceeded and current_layer:
+            # get descendents of the current layer at 1 depth.
+            current_layer_new_descendants: Set[UniqueId] = set()
+
+            for node in current_layer:
+                current_layer_new_descendants.update(self.descendants(node, 1))
+
+            # remove any nodes that have already been found.
+            current_layer_new_descendants = current_layer_new_descendants - related_nodes
+
+            # add the current layer descendents to the set of related nodes and increment.
+            related_nodes.update(current_layer_new_descendants)
+            current_layer = current_layer_new_descendants
+            current_depth += 1
+            depth_exceeded = current_depth >= max_depth
+
+        # we only want to return the nodes that are direct children of the selected nodes.
+        descendants = related_nodes
         return descendants
 
     def select_parents(
