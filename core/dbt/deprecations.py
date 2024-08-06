@@ -146,9 +146,9 @@ def warn(name, *args, **kwargs):
     deprecations[name].show(*args, **kwargs)
 
 
-def buffer(name):
+def buffer(name: str, *args, **kwargs):
     def show_callback():
-        deprecations[name].show()
+        deprecations[name].show(*args, **kwargs)
 
     buffered_deprecations.append(show_callback)
 
