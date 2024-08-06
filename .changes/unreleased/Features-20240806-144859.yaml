@@ -1,0 +1,6 @@
+kind: Features
+body: Add `order_by` and `limit` fields to saved queries.
+time: 2024-08-06T14:48:59.035914-07:00
+custom:
+  Author: plypaul
+  Issue: "10531"
