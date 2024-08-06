@@ -1,0 +1,6 @@
+kind: Features
+body: Add time_granularity to metric spec.
+time: 2024-06-27T16:29:53.500917-07:00
+custom:
+  Author: courtneyholcomb
+  Issue: "10376"

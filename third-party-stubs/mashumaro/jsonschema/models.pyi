@@ -106,6 +106,7 @@ class JSONSchema(DataClassJSONMixin):
         serialize_by_alias: bool
         aliases: Incomplete
         serialization_strategy: Incomplete
+
     def __pre_serialize__(self, context: Optional[Dict]) -> JSONSchema: ...
     def __post_serialize__(self, d: Dict[Any, Any], context: Optional[Dict]) -> Dict[Any, Any]: ...
     def __init__(

@@ -58,6 +58,7 @@ from dbt.artifacts.resources import SingularTest as SingularTestResource
 from dbt.artifacts.resources import Snapshot as SnapshotResource
 from dbt.artifacts.resources import SourceDefinition as SourceDefinitionResource
 from dbt.artifacts.resources import SqlOperation as SqlOperationResource
+from dbt.artifacts.resources import TimeSpine
 from dbt.artifacts.resources import UnitTestDefinition as UnitTestDefinitionResource
 from dbt.contracts.graph.model_config import UnitTestNodeConfig
 from dbt.contracts.graph.node_args import ModelNodeArgs
@@ -85,7 +86,11 @@ from dbt.node_types import (
     NodeType,
 )
 from dbt_common.clients.system import write_file
-from dbt_common.contracts.constraints import ConstraintType
+from dbt_common.contracts.constraints import (
+    ColumnLevelConstraint,
+    ConstraintType,
+    ModelLevelConstraint,
+)
 from dbt_common.events.contextvars import set_log_contextvars
 from dbt_common.events.functions import warn_or_error
 
@@ -489,6 +494,18 @@ class ModelNode(ModelResource, CompiledNode):
     def materialization_enforces_constraints(self) -> bool:
         return self.config.materialized in ["table", "incremental"]
 
+    @property
+    def all_constraints(self) -> List[Union[ModelLevelConstraint, ColumnLevelConstraint]]:
+        constraints: List[Union[ModelLevelConstraint, ColumnLevelConstraint]] = []
+        for model_level_constraint in self.constraints:
+            constraints.append(model_level_constraint)
+
+        for column in self.columns.values():
+            for column_level_constraint in column.constraints:
+                constraints.append(column_level_constraint)
+
+        return constraints
+
     def infer_primary_key(self, data_tests: List["GenericTestNode"]) -> List[str]:
         """
         Infers the columns that can be used as primary key of a model in the following order:
@@ -636,9 +653,9 @@ class ModelNode(ModelResource, CompiledNode):
         contract_enforced_disabled: bool = False
         columns_removed: List[str] = []
         column_type_changes: List[Dict[str, str]] = []
-        enforced_column_constraint_removed: List[
-            Dict[str, str]
-        ] = []  # column_name, constraint_type
+        enforced_column_constraint_removed: List[Dict[str, str]] = (
+            []
+        )  # column_name, constraint_type
         enforced_model_constraint_removed: List[Dict[str, Any]] = []  # constraint_type, columns
         materialization_changed: List[str] = []
 
@@ -1554,7 +1571,7 @@ class SavedQuery(NodeInfoMixin, GraphNode, SavedQueryResource):
             return False
 
         # exports should be in the same order, so we zip them for easy iteration
-        for (old_export, new_export) in zip(old.exports, self.exports):
+        for old_export, new_export in zip(old.exports, self.exports):
             if not (
                 old_export.name == new_export.name
                 and old_export.config.export_as == new_export.config.export_as
@@ -1609,6 +1626,7 @@ class ParsedNodePatch(ParsedPatch):
     latest_version: Optional[NodeVersion]
     constraints: List[Dict[str, Any]]
     deprecation_date: Optional[datetime]
+    time_spine: Optional[TimeSpine] = None
 
 
 @dataclass

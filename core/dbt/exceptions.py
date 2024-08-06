@@ -136,6 +136,18 @@ class GraphDependencyNotFoundError(CompilationError):
         return msg
 
 
+class ForeignKeyConstraintToSyntaxError(CompilationError):
+    def __init__(self, node, expression: str) -> None:
+        self.expression = expression
+        self.node = node
+        super().__init__(msg=self.get_message())
+
+    def get_message(self) -> str:
+        msg = f"'{self.node.unique_id}' defines a foreign key constraint 'to' expression which is not valid 'ref' or 'source' syntax: {self.expression}."
+
+        return msg
+
+
 # client level exceptions
 
 

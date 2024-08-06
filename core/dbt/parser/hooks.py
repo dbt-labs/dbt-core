@@ -66,8 +66,6 @@ class HookSearcher(Iterable[HookBlock]):
 
 
 class HookParser(SimpleParser[HookBlock, HookNode]):
-    def transform(self, node):
-        return node
 
     # Hooks are only in the dbt_project.yml file for the project
     def get_path(self) -> FilePath:

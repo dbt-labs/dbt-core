@@ -21,6 +21,7 @@ from dbt.contracts.graph.nodes import (
     InjectedCTE,
     ManifestNode,
     ManifestSQLNode,
+    ModelNode,
     SeedNode,
     UnitTestDefinition,
     UnitTestNode,
@@ -29,12 +30,15 @@ from dbt.events.types import FoundStats, WritingInjectedSQLForNode
 from dbt.exceptions import (
     DbtInternalError,
     DbtRuntimeError,
+    ForeignKeyConstraintToSyntaxError,
     GraphDependencyNotFoundError,
+    ParsingError,
 )
 from dbt.flags import get_flags
 from dbt.graph import Graph
 from dbt.node_types import ModelLanguage, NodeType
 from dbt_common.clients.system import make_directory
+from dbt_common.contracts.constraints import ConstraintType
 from dbt_common.events.contextvars import get_node_info
 from dbt_common.events.format import pluralize
 from dbt_common.events.functions import fire_event
@@ -437,7 +441,30 @@ class Compiler:
             relation_name = str(relation_cls.create_from(self.config, node))
             node.relation_name = relation_name
 
+        # Compile 'ref' and 'source' expressions in foreign key constraints
+        if isinstance(node, ModelNode):
+            for constraint in node.all_constraints:
+                if constraint.type == ConstraintType.foreign_key and constraint.to:
+                    constraint.to = self._compile_relation_for_foreign_key_constraint_to(
+                        manifest, node, constraint.to
+                    )
+
         return node
+
+    def _compile_relation_for_foreign_key_constraint_to(
+        self, manifest: Manifest, node: ManifestSQLNode, to_expression: str
+    ) -> str:
+        try:
+            foreign_key_node = manifest.find_node_from_ref_or_source(to_expression)
+        except ParsingError:
+            raise ForeignKeyConstraintToSyntaxError(node, to_expression)
+
+        if not foreign_key_node:
+            raise GraphDependencyNotFoundError(node, to_expression)
+
+        adapter = get_adapter(self.config)
+        relation_name = str(adapter.Relation.create_from(self.config, foreign_key_node))
+        return relation_name
 
     # This method doesn't actually "compile" any of the nodes. That is done by the
     # "compile_node" method. This creates a Linker and builds the networkx graph,

@@ -35,6 +35,8 @@ from dbt.parser.schemas import (
     YamlReader,
 )
 from dbt.utils import get_pseudo_test_path
+from dbt_common.events.functions import fire_event
+from dbt_common.events.types import SystemStdErr
 from dbt_extractor import ExtractionError, py_extract_from_source  # type: ignore
 
 
@@ -292,6 +294,7 @@ class UnitTestParser(YamlReader):
 
             # for calculating state:modified
             unit_test_definition.build_unit_test_checksum()
+            assert isinstance(self.yaml.file, SchemaSourceFile)
             self.manifest.add_unit_test(self.yaml.file, unit_test_definition)
 
         return ParseResult()
@@ -387,6 +390,44 @@ class UnitTestParser(YamlReader):
                 ut_fixture.rows = self.get_fixture_file_rows(
                     ut_fixture.fixture, self.project.project_name, unit_test_definition.unique_id
                 )
+
+        # sanitize order of input
+        if ut_fixture.rows and (
+            ut_fixture.format == UnitTestFormat.Dict or ut_fixture.format == UnitTestFormat.CSV
+        ):
+            self._promote_first_non_none_row(ut_fixture)
+
+    def _promote_first_non_none_row(self, ut_fixture):
+        """
+        Promote the first row with no None values to the top of the ut_fixture.rows list.
+
+        This function modifies the ut_fixture object in place.
+
+        Needed for databases like Redshift which uses the first value in a column to determine
+        the column type. If the first value is None, the type is assumed to be VARCHAR(1).
+        This leads to obscure type mismatch errors centered on a unit test fixture's `expect`.
+        See https://github.com/dbt-labs/dbt-redshift/issues/821 for more info.
+        """
+        non_none_row_index = None
+
+        # Iterate through each row and its index
+        for index, row in enumerate(ut_fixture.rows):
+            # Check if all values in the row are not None
+            if all(value is not None for value in row.values()):
+                non_none_row_index = index
+                break
+
+        if non_none_row_index is None:
+            fire_event(
+                SystemStdErr(
+                    bmsg="Unit Test fixtures benefit from having at least one row free of Null values to ensure consistent column types. Failure to meet this recommendation can result in type mismatch errors between unit test source models and `expected` fixtures."
+                )
+            )
+        else:
+            ut_fixture.rows[0], ut_fixture.rows[non_none_row_index] = (
+                ut_fixture.rows[non_none_row_index],
+                ut_fixture.rows[0],
+            )
 
     def get_fixture_file_rows(self, fixture_name, project_name, utdef_unique_id):
         # find fixture file object and store unit_test_definition unique_id

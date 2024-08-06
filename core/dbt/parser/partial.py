@@ -968,13 +968,17 @@ class PartialParsing:
             elif unique_id in self.saved_manifest.disabled:
                 self.delete_disabled(unique_id, schema_file.file_id)
 
-        metrics = schema_file.generated_metrics.copy()
-        for unique_id in metrics:
-            if unique_id in self.saved_manifest.metrics:
-                self.saved_manifest.metrics.pop(unique_id)
-                schema_file.generated_metrics.remove(unique_id)
-            elif unique_id in self.saved_manifest.disabled:
-                self.delete_disabled(unique_id, schema_file.file_id)
+        if schema_file.generated_metrics:
+            # If this partial parse file has an old "generated_metrics" list,
+            # call code to fix it up before processing.
+            schema_file.fix_metrics_from_measures()
+        if semantic_model_name in schema_file.metrics_from_measures:
+            for unique_id in schema_file.metrics_from_measures[semantic_model_name]:
+                if unique_id in self.saved_manifest.metrics:
+                    self.saved_manifest.metrics.pop(unique_id)
+                elif unique_id in self.saved_manifest.disabled:
+                    self.delete_disabled(unique_id, schema_file.file_id)
+            del schema_file.metrics_from_measures[semantic_model_name]
 
     def delete_schema_unit_test(self, schema_file, unit_test_dict):
         unit_test_name = unit_test_dict["name"]

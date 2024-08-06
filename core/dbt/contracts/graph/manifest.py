@@ -32,9 +32,10 @@ from dbt.adapters.exceptions import (
 from dbt.adapters.factory import get_adapter_package_names
 
 # to preserve import paths
-from dbt.artifacts.resources import BaseResource, DeferRelation, NodeVersion
+from dbt.artifacts.resources import BaseResource, DeferRelation, NodeVersion, RefArgs
 from dbt.artifacts.resources.v1.config import NodeConfig
 from dbt.artifacts.schemas.manifest import ManifestMetadata, UniqueID, WritableManifest
+from dbt.clients.jinja_static import statically_parse_ref_or_source
 from dbt.contracts.files import (
     AnySourceFile,
     FileHash,
@@ -54,7 +55,6 @@ from dbt.contracts.graph.nodes import (
     ManifestNode,
     Metric,
     ModelNode,
-    ResultNode,
     SavedQuery,
     SeedNode,
     SemanticModel,
@@ -413,11 +413,11 @@ class DisabledLookup(dbtClassMixin):
         self.storage: Dict[str, Dict[PackageName, List[Any]]] = {}
         self.populate(manifest)
 
-    def populate(self, manifest):
+    def populate(self, manifest: "Manifest"):
         for node in list(chain.from_iterable(manifest.disabled.values())):
             self.add_node(node)
 
-    def add_node(self, node):
+    def add_node(self, node: GraphMemberNode) -> None:
         if node.search_name not in self.storage:
             self.storage[node.search_name] = {}
         if node.package_name not in self.storage[node.search_name]:
@@ -427,8 +427,12 @@ class DisabledLookup(dbtClassMixin):
     # This should return a list of disabled nodes. It's different from
     # the other Lookup functions in that it returns full nodes, not just unique_ids
     def find(
-        self, search_name, package: Optional[PackageName], version: Optional[NodeVersion] = None
-    ):
+        self,
+        search_name,
+        package: Optional[PackageName],
+        version: Optional[NodeVersion] = None,
+        resource_types: Optional[List[NodeType]] = None,
+    ) -> Optional[List[Any]]:
         if version:
             search_name = f"{search_name}.v{version}"
 
@@ -437,15 +441,28 @@ class DisabledLookup(dbtClassMixin):
 
         pkg_dct: Mapping[PackageName, List[Any]] = self.storage[search_name]
 
+        nodes = []
         if package is None:
             if not pkg_dct:
                 return None
             else:
-                return next(iter(pkg_dct.values()))
+                nodes = next(iter(pkg_dct.values()))
         elif package in pkg_dct:
-            return pkg_dct[package]
+            nodes = pkg_dct[package]
         else:
             return None
+
+        if resource_types is None:
+            return nodes
+        else:
+            new_nodes = []
+            for node in nodes:
+                if node.resource_type in resource_types:
+                    new_nodes.append(node)
+            if not new_nodes:
+                return None
+            else:
+                return new_nodes
 
 
 class AnalysisLookup(RefableLookup):
@@ -1295,7 +1312,12 @@ class Manifest(MacroMethods, dbtClassMixin):
 
             # it's possible that the node is disabled
             if disabled is None:
-                disabled = self.disabled_lookup.find(target_model_name, pkg, target_model_version)
+                disabled = self.disabled_lookup.find(
+                    target_model_name,
+                    pkg,
+                    version=target_model_version,
+                    resource_types=REFABLE_NODE_TYPES,
+                )
 
         if disabled:
             return Disabled(disabled[0])
@@ -1566,13 +1588,15 @@ class Manifest(MacroMethods, dbtClassMixin):
         self.exposures[exposure.unique_id] = exposure
         source_file.exposures.append(exposure.unique_id)
 
-    def add_metric(self, source_file: SchemaSourceFile, metric: Metric, generated: bool = False):
+    def add_metric(
+        self, source_file: SchemaSourceFile, metric: Metric, generated_from: Optional[str] = None
+    ):
         _check_duplicates(metric, self.metrics)
         self.metrics[metric.unique_id] = metric
-        if not generated:
+        if not generated_from:
             source_file.metrics.append(metric.unique_id)
         else:
-            source_file.generated_metrics.append(metric.unique_id)
+            source_file.add_metrics_from_measures(generated_from, metric.unique_id)
 
     def add_group(self, source_file: SchemaSourceFile, group: Group):
         _check_duplicates(group, self.groups)
@@ -1586,7 +1610,7 @@ class Manifest(MacroMethods, dbtClassMixin):
         else:
             self.disabled[node.unique_id] = [node]
 
-    def add_disabled(self, source_file: AnySourceFile, node: ResultNode, test_from=None):
+    def add_disabled(self, source_file: AnySourceFile, node: GraphMemberNode, test_from=None):
         self.add_disabled_nofile(node)
         if isinstance(source_file, SchemaSourceFile):
             if isinstance(node, GenericTestNode):
@@ -1634,6 +1658,22 @@ class Manifest(MacroMethods, dbtClassMixin):
 
     # end of methods formerly in ParseResult
 
+    def find_node_from_ref_or_source(
+        self, expression: str
+    ) -> Optional[Union[ModelNode, SourceDefinition]]:
+        ref_or_source = statically_parse_ref_or_source(expression)
+
+        node = None
+        if isinstance(ref_or_source, RefArgs):
+            node = self.ref_lookup.find(
+                ref_or_source.name, ref_or_source.package, ref_or_source.version, self
+            )
+        else:
+            source_name, source_table_name = ref_or_source[0], ref_or_source[1]
+            node = self.source_lookup.find(f"{source_name}.{source_table_name}", None, self)
+
+        return node
+
     # Provide support for copy.deepcopy() - we just need to avoid the lock!
     # pickle and deepcopy use this. It returns a callable object used to
     # create the initial version of the object and a tuple of arguments
@@ -1677,9 +1717,9 @@ class MacroManifest(MacroMethods):
         self.macros = macros
         self.metadata = ManifestMetadata(
             user_id=tracking.active_user.id if tracking.active_user else None,
-            send_anonymous_usage_stats=get_flags().SEND_ANONYMOUS_USAGE_STATS
-            if tracking.active_user
-            else None,
+            send_anonymous_usage_stats=(
+                get_flags().SEND_ANONYMOUS_USAGE_STATS if tracking.active_user else None
+            ),
         )
         # This is returned by the 'graph' context property
         # in the ProviderContext class.

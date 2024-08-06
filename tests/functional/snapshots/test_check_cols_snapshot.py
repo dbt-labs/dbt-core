@@ -100,7 +100,7 @@ def tests():
     return {"my_test.sql": snapshot_test_sql}
 
 
-def test_simple_snapshot(project):
+def test_snapshots(project):
 
     results = run_dbt(["snapshot", "--vars", "version: 1"])
     assert len(results) == 1

@@ -74,7 +74,7 @@ def project_config_update():
     }
 
 
-def test_simple_snapshot(project):
+def test_snapshots(project):
     """
     Test that the `dbt_updated_at` column reflects the `updated_at` timestamp expression in the config.
 

@@ -85,7 +85,7 @@ class TestLinker:
     def test_linker_add_dependency(self, linker: Linker) -> None:
         actual_deps = [("A", "B"), ("A", "C"), ("B", "C")]
 
-        for (l, r) in actual_deps:
+        for l, r in actual_deps:
             linker.dependency(l, r)
 
         queue = self._get_graph_queue(_mock_manifest("ABC"), linker)
@@ -119,7 +119,7 @@ class TestLinker:
         actual_deps = [("A", "B")]
         additional_node = "Z"
 
-        for (l, r) in actual_deps:
+        for l, r in actual_deps:
             linker.dependency(l, r)
         linker.add_node(additional_node)
 
@@ -150,7 +150,7 @@ class TestLinker:
     def test_linker_dependencies_limited_to_some_nodes(self, linker: Linker) -> None:
         actual_deps = [("A", "B"), ("B", "C"), ("C", "D")]
 
-        for (l, r) in actual_deps:
+        for l, r in actual_deps:
             linker.dependency(l, r)
 
         queue = self._get_graph_queue(_mock_manifest("ABCD"), linker, ["B"])
@@ -181,7 +181,7 @@ class TestLinker:
     def test__find_cycles__cycles(self, linker: Linker) -> None:
         actual_deps = [("A", "B"), ("B", "C"), ("C", "A")]
 
-        for (l, r) in actual_deps:
+        for l, r in actual_deps:
             linker.dependency(l, r)
 
         assert linker.find_cycles() is not None
@@ -189,7 +189,7 @@ class TestLinker:
     def test__find_cycles__no_cycles(self, linker: Linker) -> None:
         actual_deps = [("A", "B"), ("B", "C"), ("C", "D")]
 
-        for (l, r) in actual_deps:
+        for l, r in actual_deps:
             linker.dependency(l, r)
 
         assert linker.find_cycles() is None

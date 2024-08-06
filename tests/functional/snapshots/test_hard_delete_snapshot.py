@@ -5,7 +5,7 @@ import pytest
 import pytz
 
 from dbt.tests.util import check_relations_equal, run_dbt
-from tests.functional.simple_snapshot.fixtures import (
+from tests.functional.snapshots.fixtures import (
     macros__test_no_overlaps_sql,
     models__ref_snapshot_sql,
     models__schema_yml,

@@ -1462,13 +1462,6 @@ def test_missing_snapshot_configs(basic_check_snapshot_config_dict):
         cfg = SnapshotConfig.from_dict(wrong_fields)
         cfg.final_validate()
 
-    wrong_fields["unique_key"] = "id"
-    del wrong_fields["target_schema"]
-    with pytest.raises(ValidationError, match=r"Snapshots must be configured with a 'strategy'"):
-        SnapshotConfig.validate(wrong_fields)
-        cfg = SnapshotConfig.from_dict(wrong_fields)
-        cfg.final_validate()
-
 
 def assert_snapshot_config_fails_validation(dct):
     with pytest.raises(ValidationError):

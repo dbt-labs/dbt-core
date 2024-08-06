@@ -77,8 +77,11 @@ class BaseArtifactMetadata(dbtClassMixin):
 #   remote-compile-result
 #   remote-execution-result
 #   remote-run-result
+S = TypeVar("S", bound="VersionedSchema")
+
+
 def schema_version(name: str, version: int):
-    def inner(cls: Type[VersionedSchema]):
+    def inner(cls: Type[S]):
         cls.dbt_schema_version = SchemaVersion(
             name=name,
             version=version,

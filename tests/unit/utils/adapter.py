@@ -42,9 +42,9 @@ def postgres_adapter(
     adapter = get_adapter(runtime_config)
     assert isinstance(adapter, PostgresAdapter)
 
-    mocker.patch(
-        "dbt.parser.manifest.ManifestLoader.build_manifest_state_check"
-    ).return_value = ManifestStateCheck()
+    mocker.patch("dbt.parser.manifest.ManifestLoader.build_manifest_state_check").return_value = (
+        ManifestStateCheck()
+    )
     manifest = ManifestLoader.load_macros(
         runtime_config,
         adapter.connections.set_query_header,

@@ -193,9 +193,9 @@ class TestFileDiff:
     def partial_parsing(self, manifest, files):
         safe_set_invocation_context()
         saved_files = deepcopy(files)
-        saved_files[
-            "my_test://models/python_model_untouched.py"
-        ].checksum = FileHash.from_contents("something new")
+        saved_files["my_test://models/python_model_untouched.py"].checksum = (
+            FileHash.from_contents("something new")
+        )
         return PartialParsing(manifest, saved_files)
 
     def test_build_file_diff_basic(self, partial_parsing):

@@ -7,6 +7,7 @@ ignore =
     W503 # makes Flake8 work like black
     W504
     E203 # makes Flake8 work like black
+    E704 # makes Flake8 work like black
     E741
     E501 # long line checking is done in black
 exclude = test/

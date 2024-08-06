@@ -1,11 +1,13 @@
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, Union
 
 import jinja2
 
-from dbt.exceptions import MacroNamespaceNotStringError
+from dbt.artifacts.resources import RefArgs
+from dbt.exceptions import MacroNamespaceNotStringError, ParsingError
 from dbt_common.clients.jinja import get_environment
 from dbt_common.exceptions.macros import MacroNameNotStringError
 from dbt_common.tests import test_caching_enabled
+from dbt_extractor import ExtractionError, py_extract_from_source  # type: ignore
 
 _TESTING_MACRO_CACHE: Optional[Dict[str, Any]] = {}
 
@@ -153,3 +155,39 @@ def statically_parse_adapter_dispatch(func_call, ctx, db_wrapper):
             possible_macro_calls.append(f"{package_name}.{func_name}")
 
     return possible_macro_calls
+
+
+def statically_parse_ref_or_source(expression: str) -> Union[RefArgs, List[str]]:
+    """
+    Returns a RefArgs or List[str] object, corresponding to ref or source respectively, given an input jinja expression.
+
+    input: str representing how input node is referenced in tested model sql
+        * examples:
+        - "ref('my_model_a')"
+        - "ref('my_model_a', version=3)"
+        - "ref('package', 'my_model_a', version=3)"
+        - "source('my_source_schema', 'my_source_name')"
+
+    If input is not a well-formed jinja ref or source expression, a ParsingError is raised.
+    """
+    ref_or_source: Union[RefArgs, List[str]]
+
+    try:
+        statically_parsed = py_extract_from_source(f"{{{{ {expression} }}}}")
+    except ExtractionError:
+        raise ParsingError(f"Invalid jinja expression: {expression}")
+
+    if statically_parsed.get("refs"):
+        raw_ref = list(statically_parsed["refs"])[0]
+        ref_or_source = RefArgs(
+            package=raw_ref.get("package"),
+            name=raw_ref.get("name"),
+            version=raw_ref.get("version"),
+        )
+    elif statically_parsed.get("sources"):
+        source_name, source_table_name = list(statically_parsed["sources"])[0]
+        ref_or_source = [source_name, source_table_name]
+    else:
+        raise ParsingError(f"Invalid ref or source expression: {expression}")
+
+    return ref_or_source

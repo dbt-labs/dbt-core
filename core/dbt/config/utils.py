@@ -49,5 +49,18 @@ def exclusive_primary_alt_value_setting(
             f"Only `{alt}` or `{primary}` can be specified{where}, not both"
         )
 
-    if alt_options:
-        dictionary[primary] = alt_options
+    if alt in dictionary:
+        alt_value = dictionary.pop(alt)
+        dictionary[primary] = alt_value
+
+
+def normalize_warn_error_options(warn_error_options: Dict[str, Any]) -> None:
+    exclusive_primary_alt_value_setting(
+        warn_error_options, "include", "error", "warn_error_options"
+    )
+    exclusive_primary_alt_value_setting(
+        warn_error_options, "exclude", "warn", "warn_error_options"
+    )
+    for key in ("include", "exclude", "silence"):
+        if key in warn_error_options and warn_error_options[key] is None:
+            warn_error_options[key] = []

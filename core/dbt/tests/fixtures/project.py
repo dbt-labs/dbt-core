@@ -341,6 +341,7 @@ def write_project_files_recursively(path, file_dict):
 # Provide a dictionary of file names to contents. Nested directories
 # are handle by nested dictionaries.
 
+
 # models directory
 @pytest.fixture(scope="class")
 def models():

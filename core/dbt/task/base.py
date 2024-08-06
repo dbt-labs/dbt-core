@@ -274,9 +274,11 @@ class BaseRunner(metaclass=ABCMeta):
 
     def compile_and_execute(self, manifest, ctx):
         result = None
-        with self.adapter.connection_named(
-            self.node.unique_id, self.node
-        ) if get_flags().INTROSPECT else nullcontext():
+        with (
+            self.adapter.connection_named(self.node.unique_id, self.node)
+            if get_flags().INTROSPECT
+            else nullcontext()
+        ):
             ctx.node.update_event_status(node_status=RunningStatus.Compiling)
             fire_event(
                 NodeCompiling(

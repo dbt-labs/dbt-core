@@ -158,7 +158,8 @@ class RunResultsArtifact(ExecutionResult, ArtifactMixin):
     @classmethod
     def upgrade_schema_version(cls, data):
         """This overrides the "upgrade_schema_version" call in VersionedSchema (via
-        ArtifactMixin) to modify the dictionary passed in from earlier versions of the run_results."""
+        ArtifactMixin) to modify the dictionary passed in from earlier versions of the run_results.
+        """
         run_results_schema_version = get_artifact_schema_version(data)
         # If less than the current version (v5), preprocess contents to match latest schema version
         if run_results_schema_version <= 5:

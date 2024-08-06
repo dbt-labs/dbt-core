@@ -104,7 +104,7 @@ class BaseConstraintsColumnsEqual:
     def test__constraints_wrong_column_data_types(
         self, project, string_type, int_type, schema_string_type, schema_int_type, data_types
     ):
-        for (sql_column_value, schema_data_type, error_data_type) in data_types:
+        for sql_column_value, schema_data_type, error_data_type in data_types:
             # Write parametrized data_type to sql file
             write_file(
                 my_model_data_type_sql.format(sql_value=sql_column_value),
@@ -146,7 +146,7 @@ class BaseConstraintsColumnsEqual:
             assert all([(exp in log_output or exp.upper() in log_output) for exp in expected])
 
     def test__constraints_correct_column_data_types(self, project, data_types):
-        for (sql_column_value, schema_data_type, _) in data_types:
+        for sql_column_value, schema_data_type, _ in data_types:
             # Write parametrized data_type to sql file
             write_file(
                 my_model_data_type_sql.format(sql_value=sql_column_value),

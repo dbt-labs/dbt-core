@@ -10,6 +10,7 @@ from dbt_common.contracts.config.properties import AdditionalPropertiesMixin
 from dbt_common.contracts.constraints import ColumnLevelConstraint
 from dbt_common.contracts.util import Mergeable
 from dbt_common.dataclass_schema import ExtensibleDbtClassMixin, dbtClassMixin
+from dbt_semantic_interfaces.type_enums import TimeGranularity
 
 NodeVersion = Union[str, float]
 
@@ -66,6 +67,7 @@ class ColumnInfo(AdditionalPropertiesMixin, ExtensibleDbtClassMixin):
     quote: Optional[bool] = None
     tags: List[str] = field(default_factory=list)
     _extra: Dict[str, Any] = field(default_factory=dict)
+    granularity: Optional[TimeGranularity] = None
 
 
 @dataclass

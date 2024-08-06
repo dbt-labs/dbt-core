@@ -15,6 +15,7 @@ repos:
     args: [--unsafe]
   - id: check-json
   - id: end-of-file-fixer
+    exclude: schemas/dbt/manifest/
   - id: trailing-whitespace
     exclude_types:
       - "markdown"
@@ -26,7 +27,7 @@ repos:
     - id: isort
 - repo: https://github.com/psf/black
   # rev must match what's in dev-requirements.txt
-  rev: 22.3.0
+  rev: 24.3.0
   hooks:
   - id: black
   - id: black
