@@ -37,7 +37,9 @@ class TestRunCommands:
         may have more to do with our fixture setup than the source code though.
 
         Note: that the `happy_path_fixture_files` are a _class_ based fixture. Thus although this fixture _modifies_ the
-        files available to the happy path project, it doesn't affect that fixture for tests in other test classes."""
+        files available to the happy path project, it doesn't affect that fixture for tests in other test classes.
+        """
+
         shutil.rmtree(f"{project_root}/snapshots")
 
     @pytest.mark.parametrize("dbt_command", [(command,) for command in commands])
