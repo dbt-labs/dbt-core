@@ -1,9 +1,10 @@
 import abc
-from typing import Optional, Set, List, Dict, ClassVar
+from typing import Callable, ClassVar, Dict, List, Optional, Set
 
 import dbt.exceptions
 
 import dbt.tracking
+from dbt.events.functions import warn_or_error
 
 
 class DBTDeprecation:
@@ -36,7 +37,7 @@ class DBTDeprecation:
     def show(self, *args, **kwargs) -> None:
         if self.name not in active_deprecations:
             event = self.event(**kwargs)
-            dbt.events.functions.warn_or_error(event)
+            warn_or_error(event)
             self.track_deprecation_warn()
             active_deprecations.add(self.name)
 
@@ -100,15 +101,6 @@ class ProjectFlagsMovedDeprecation(DBTDeprecation):
     _name = "project-flags-moved"
     _event = "ProjectFlagsMovedDeprecation"
 
-    def show(self, *args, **kwargs) -> None:
-        if self.name not in active_deprecations:
-            event = self.event(**kwargs)
-            # We can't do warn_or_error because the ProjectFlags
-            # is where that is set up and we're just reading it.
-            dbt.events.functions.fire_event(event)
-            self.track_deprecation_warn()
-            active_deprecations.add(self.name)
-
 
 class PackageMaterializationOverrideDeprecation(DBTDeprecation):
     _name = "package-materialization-override"
@@ -138,6 +130,13 @@ def warn(name, *args, **kwargs):
     deprecations[name].show(*args, **kwargs)
 
 
+def buffer(name: str, *args, **kwargs):
+    def show_callback():
+        deprecations[name].show(*args, **kwargs)
+
+    buffered_deprecations.append(show_callback)
+
+
 # these are globally available
 # since modules are only imported once, active_deprecations is a singleton
 
@@ -159,6 +158,13 @@ deprecations_list: List[DBTDeprecation] = [
 
 deprecations: Dict[str, DBTDeprecation] = {d.name: d for d in deprecations_list}
 
+buffered_deprecations: List[Callable] = []
+
 
 def reset_deprecations():
     active_deprecations.clear()
+
+
+def fire_buffered_deprecations():
+    [dep_fn() for dep_fn in buffered_deprecations]
+    buffered_deprecations.clear()
