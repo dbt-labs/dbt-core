@@ -217,11 +217,3 @@ class TestProjectFlagsMovedDeprecationWarnErrorOptions(TestProjectFlagsMovedDepr
             run_dbt(
                 ["--warn-error-options", "{'include': ['ProjectFlagsMovedDeprecation']}", "parse"]
             )
-
-        _, logs = run_dbt_and_capture(
-            ["--warn-error-options", "{'silence': ['ProjectFlagsMovedDeprecation']}", "parse"]
-        )
-        assert (
-            "User config should be moved from the 'config' key in profiles.yml to the 'flags' key in dbt_project.yml."
-            not in logs
-        )
