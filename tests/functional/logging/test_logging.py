@@ -277,7 +277,3 @@ class TestRunResultWarningGroup:
                 run_result_warning_count += 1
 
         assert run_result_warning_count == 1
-
-
-class TestRunResultSkipGroup:
-    pass
