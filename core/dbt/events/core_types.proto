@@ -1809,6 +1809,16 @@ message ServingDocsExitInfoMsg {
     ServingDocsExitInfo data = 2;
 }
 
+message Group {
+    string name = 1;
+    string resource_type = 2;
+    string package_name = 3;
+    string path = 4;
+    string original_file_path = 5;
+    string unique_id = 6;
+    map<string, string> owner = 7;
+}
+
 // Z021
 message RunResultWarning {
     string resource_type = 1;
@@ -1828,6 +1838,7 @@ message RunResultFailure {
     string node_name = 2;
     string path = 3;
     NodeInfo node_info = 4;
+    Group group = 5;
 }
 
 message RunResultFailureMsg {
@@ -1843,16 +1854,6 @@ message StatsLine {
 message StatsLineMsg {
     CoreEventInfo info = 1;
     StatsLine data = 2;
-}
-
-message Group {
-    string name = 1;
-    string resource_type = 2;
-    string package_name = 3;
-    string path = 4;
-    string original_file_path = 5;
-    string unique_id = 6;
-    map<string, string> owner = 7;
 }
 
 // Z024

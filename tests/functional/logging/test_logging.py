@@ -147,6 +147,16 @@ class TestRunResultErrorNodeInfo:
                 assert "Database Error" in log_json["data"]["msg"]
 
 
+def assert_group_data(group_data):
+    assert group_data["name"] == "my_group"
+    assert group_data["owner"] == {
+        "name": "my_name",
+        "email": "my.email@gmail.com",
+        "slack": "my_slack",
+        "other_property": "something_else",
+    }
+
+
 class TestRunResultErrorGroup:
     @pytest.fixture(scope="class")
     def models(self):
@@ -160,6 +170,7 @@ class TestRunResultErrorGroup:
         assert len(results) == 1
 
         log_file = read_file(logs_dir, "dbt.log")
+        run_result_error_count = 0
 
         for log_line in log_file.split("\n"):
             if not log_line:
@@ -171,10 +182,55 @@ class TestRunResultErrorGroup:
 
             if log_json["info"]["name"] == "RunResultError":
                 assert "group" in log_json["data"]
-                assert log_json["data"]["group"]["name"] == "my_group"
-                assert log_json["data"]["group"]["owner"] == {
-                    "name": "my_name",
-                    "email": "my.email@gmail.com",
-                    "slack": "my_slack",
-                    "other_property": "something_else",
-                }
+                assert_group_data(log_json["data"]["group"])
+                run_result_error_count += 1
+
+        assert run_result_error_count == 1
+
+
+class TestRunResultFailureGroup:
+    @pytest.fixture(scope="class")
+    def models(self):
+        schema_yml = (
+            groups_yml
+            + """
+    columns:
+      - name: my_column
+        tests:
+         - not_null
+"""
+        )
+        print(schema_yml)
+        return {
+            "my_model.sql": "select 1 as id, null as my_column",
+            "groups.yml": schema_yml,
+        }
+
+    def test_node_info_on_results(self, project, logs_dir):
+        results = run_dbt(["--log-format=json", "build"], expect_pass=False)
+        assert len(results) == 2
+
+        log_file = read_file(logs_dir, "dbt.log")
+        run_result_error_count = 0
+        run_result_failure_count = 0
+
+        for log_line in log_file.split("\n"):
+            if not log_line:
+                continue
+
+            log_json = json.loads(log_line)
+            if log_json["info"]["level"] == EventLevel.DEBUG:
+                continue
+
+            if log_json["info"]["name"] == "RunResultError":
+                assert "group" in log_json["data"]
+                assert_group_data(log_json["data"]["group"])
+                run_result_error_count += 1
+
+            if log_json["info"]["name"] == "RunResultFailure":
+                assert "group" in log_json["data"]
+                assert_group_data(log_json["data"]["group"])
+                run_result_failure_count += 1
+
+        assert run_result_error_count == 1
+        assert run_result_failure_count == 1

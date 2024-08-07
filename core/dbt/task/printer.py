@@ -89,12 +89,14 @@ def print_run_result_error(
                 )
             )
         else:
+            group_dict = group.to_dict() if group else None
             fire_event(
                 RunResultFailure(
                     resource_type=result.node.resource_type,
                     node_name=result.node.name,
                     path=result.node.original_file_path,
                     node_info=node_info,
+                    group=group_dict,
                 )
             )
 
@@ -102,7 +104,10 @@ def print_run_result_error(
             if is_warning:
                 fire_event(RunResultWarningMessage(msg=result.message, node_info=node_info))
             else:
-                fire_event(RunResultError(msg=result.message, node_info=node_info))
+                group_dict = group.to_dict() if group else None
+                fire_event(
+                    RunResultError(msg=result.message, node_info=node_info, group=group_dict)
+                )
         else:
             fire_event(RunResultErrorNoMessage(status=result.status, node_info=node_info))
 
