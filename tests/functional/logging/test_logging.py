@@ -234,3 +234,50 @@ class TestRunResultFailureGroup:
 
         assert run_result_error_count == 1
         assert run_result_failure_count == 1
+
+
+class TestRunResultWarningGroup:
+    @pytest.fixture(scope="class")
+    def models(self):
+        schema_yml = (
+            groups_yml
+            + """
+    columns:
+      - name: my_column
+        tests:
+         - not_null:
+             config:
+               severity: warn
+"""
+        )
+        print(schema_yml)
+        return {
+            "my_model.sql": "select 1 as id, null as my_column",
+            "groups.yml": schema_yml,
+        }
+
+    def test_node_info_on_results(self, project, logs_dir):
+        results = run_dbt(["--log-format=json", "build"])
+        assert len(results) == 2
+
+        log_file = read_file(logs_dir, "dbt.log")
+        run_result_warning_count = 0
+
+        for log_line in log_file.split("\n"):
+            if not log_line:
+                continue
+
+            log_json = json.loads(log_line)
+            if log_json["info"]["level"] == EventLevel.DEBUG:
+                continue
+
+            if log_json["info"]["name"] == "RunResultWarning":
+                assert "group" in log_json["data"]
+                assert_group_data(log_json["data"]["group"])
+                run_result_warning_count += 1
+
+        assert run_result_warning_count == 1
+
+
+class TestRunResultSkipGroup:
+    pass

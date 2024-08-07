@@ -1825,6 +1825,7 @@ message RunResultWarning {
     string node_name = 2;
     string path = 3;
     NodeInfo node_info = 4;
+    Group group = 5;
 }
 
 message RunResultWarningMsg {

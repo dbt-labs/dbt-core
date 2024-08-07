@@ -80,12 +80,14 @@ def print_run_result_error(
         if newline:
             fire_event(Formatting(""))
         if is_warning:
+            group_dict = group.to_dict() if group else None
             fire_event(
                 RunResultWarning(
                     resource_type=result.node.resource_type,
                     node_name=result.node.name,
                     path=result.node.original_file_path,
                     node_info=node_info,
+                    group=group_dict,
                 )
             )
         else:
