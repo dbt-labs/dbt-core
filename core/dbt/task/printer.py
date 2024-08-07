@@ -155,11 +155,11 @@ def print_run_end_messages(
     )
 
     for error in errors:
-        group = groups.get(error.node.unique_id) if groups else None
+        group = groups.get(error.node.unique_id) if groups and hasattr(error, "node") else None
         print_run_result_error(error, is_warning=False, group=group)
 
     for warning in warnings:
-        group = groups.get(warning.node.unique_id) if groups else None
+        group = groups.get(warning.node.unique_id) if groups and hasattr(warning, "node") else None
         print_run_result_error(warning, is_warning=True, group=group)
 
     print_run_status_line(results)

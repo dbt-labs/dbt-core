@@ -485,7 +485,7 @@ class RunTask(CompileTask):
         }
 
     def task_end_messages(self, results) -> None:
-        groups = self.get_groups_for_nodes([r.node for r in results])
+        groups = self.get_groups_for_nodes([r.node for r in results if hasattr(r, "node")])
 
         if results:
             print_run_end_messages(results, groups=groups)
