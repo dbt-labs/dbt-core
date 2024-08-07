@@ -480,7 +480,7 @@ class RunTask(CompileTask):
         group_name_to_group_map = {v.name: v for v in self.manifest.groups.values()}
 
         return {
-            node.unique_id: group_name_to_group_map[node_to_group_name_map[node.unique_id]]
+            node.unique_id: group_name_to_group_map.get(node_to_group_name_map.get(node.unique_id))
             for node in nodes
         }
 

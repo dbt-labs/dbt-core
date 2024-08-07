@@ -5,6 +5,7 @@ import pytest
 
 from dbt.events.types import InvalidOptionYAML
 from dbt.tests.util import get_manifest, read_file, run_dbt
+from dbt_common.events import EventLevel
 from dbt_common.events.functions import fire_event
 
 my_model_sql = """
@@ -110,6 +111,7 @@ groups:
       name: my_name
       email: my.email@gmail.com
       slack: my_slack
+      other_property: something_else
 
 models:
   - name: my_model
@@ -118,7 +120,34 @@ models:
 """
 
 
-class TestNodeInfo:
+class TestRunResultErrorNodeInfo:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_model.sql": "select not_found as id",
+        }
+
+    def test_node_info_on_results(self, project, logs_dir):
+        results = run_dbt(["--log-format=json", "run"], expect_pass=False)
+        assert len(results) == 1
+
+        log_file = read_file(logs_dir, "dbt.log")
+
+        for log_line in log_file.split("\n"):
+            if not log_line:
+                continue
+
+            log_json = json.loads(log_line)
+            if log_json["info"]["level"] == EventLevel.DEBUG:
+                continue
+
+            if log_json["info"]["name"] == "RunResultError":
+                assert "node_info" in log_json["data"]
+                assert log_json["data"]["node_info"]["unique_id"] == "model.test.my_model"
+                assert "Database Error" in log_json["data"]["msg"]
+
+
+class TestRunResultErrorGroup:
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -129,29 +158,23 @@ class TestNodeInfo:
     def test_node_info_on_results(self, project, logs_dir):
         results = run_dbt(["--log-format=json", "run"], expect_pass=False)
         assert len(results) == 1
-        # get log file
+
         log_file = read_file(logs_dir, "dbt.log")
-        task_printer_events = [
-            "RunResultWarning",
-            "RunResultFailure",
-            "RunResultWarningMessage",
-            "RunResultError",
-            "RunResultErrorNoMessage",
-            "SQLCompiledPath",
-            "CheckNodeTestFailure",
-        ]
-        count = 0
+
         for log_line in log_file.split("\n"):
-            # skip empty lines
-            if len(log_line) == 0:
+            if not log_line:
                 continue
-            # The adapter logging also shows up, so skip non-json lines
-            if "[debug]" in log_line:
+
+            log_json = json.loads(log_line)
+            if log_json["info"]["level"] == EventLevel.DEBUG:
                 continue
-            log_dct = json.loads(log_line)
-            log_data = log_dct["data"]
-            log_event = log_dct["info"]["name"]
-            if log_event in task_printer_events:
-                assert "node_info" in log_data
-                count += 1
-        assert count > 0
+
+            if log_json["info"]["name"] == "RunResultError":
+                assert "group" in log_json["data"]
+                assert log_json["data"]["group"]["name"] == "my_group"
+                assert log_json["data"]["group"]["owner"] == {
+                    "name": "my_name",
+                    "email": "my.email@gmail.com",
+                    "slack": "my_slack",
+                    "other_property": "something_else",
+                }
