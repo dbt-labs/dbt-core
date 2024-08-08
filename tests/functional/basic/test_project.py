@@ -64,9 +64,7 @@ class TestProjectYamlVersionInvalid:
         update_config_file({"version": "invalid"}, "dbt_project.yml")
         with pytest.raises(ProjectContractError) as excinfo:
             run_dbt()
-        assert "at path ['version']: 'invalid' is not valid under any of the given schemas" in str(
-            excinfo.value
-        )
+        assert "Invalid value 'invalid'" in str(excinfo.value)
 
 
 class TestProjectDbtCloudConfig:
@@ -113,9 +111,7 @@ class TestProjectDbtCloudConfigString:
         run_dbt()
         config = {"name": "test", "profile": "test", "dbt-cloud": "Some string"}
         update_config_file(config, "dbt_project.yml")
-        expected_err = (
-            "at path ['dbt-cloud']: 'Some string' is not valid under any of the given schemas"
-        )
+        expected_err = "Invalid value 'Some string'"
         with pytest.raises(ProjectContractError) as excinfo:
             run_dbt()
         assert expected_err in str(excinfo.value)

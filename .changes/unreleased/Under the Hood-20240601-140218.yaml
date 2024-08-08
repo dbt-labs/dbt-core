@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Replace jsonschema validation with fastjsonschema
+time: 2024-06-01T14:02:18.612839-04:00
+custom:
+  Author: gshank
+  Issue: "10248"
