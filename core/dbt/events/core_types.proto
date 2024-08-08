@@ -1589,6 +1589,7 @@ message ShowNode {
     bool is_inline = 3;
     string output_format = 4;
     string unique_id = 5;
+    bool quiet = 6;
 }
 
 message ShowNodeMsg {
@@ -1603,6 +1604,7 @@ message CompiledNode {
     bool is_inline = 3;
     string output_format = 4;
     string unique_id = 5;
+    bool quiet = 6;
 }
 
 message CompiledNodeMsg {

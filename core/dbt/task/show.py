@@ -6,11 +6,12 @@ from dbt.artifacts.schemas.run import RunResult, RunStatus
 from dbt.context.providers import generate_runtime_model_context
 from dbt.contracts.graph.nodes import SeedNode
 from dbt.events.types import ShowNode
+from dbt.flags import get_flags
 from dbt.task.compile import CompileRunner, CompileTask
 from dbt.task.seed import SeedRunner
 from dbt_common.events.base_types import EventLevel
 from dbt_common.events.functions import fire_event
-from dbt_common.events.types import Note
+from dbt_common.events.types import Note, PrintEvent
 from dbt_common.exceptions import DbtRuntimeError
 
 
@@ -98,15 +99,20 @@ class ShowTask(CompileTask):
             if hasattr(result.node, "version") and result.node.version:
                 node_name += f".v{result.node.version}"
 
-            fire_event(
-                ShowNode(
-                    node_name=node_name,
-                    preview=output.getvalue(),
-                    is_inline=is_inline,
-                    output_format=self.args.output,
-                    unique_id=result.node.unique_id,
-                )
+            show_node_event = ShowNode(
+                node_name=node_name,
+                preview=output.getvalue(),
+                is_inline=is_inline,
+                output_format=self.args.output,
+                unique_id=result.node.unique_id,
+                quiet=get_flags().QUIET,
             )
+
+            if get_flags().LOG_FORMAT == "json":
+                fire_event(show_node_event)
+            else:
+                # No formatting, still get to stdout when --quiet is used
+                fire_event(PrintEvent(msg=show_node_event.message()))
 
     def _handle_result(self, result):
         super()._handle_result(result)

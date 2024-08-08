@@ -2,6 +2,7 @@ import threading
 
 from dbt.artifacts.schemas.run import RunResult, RunStatus
 from dbt.events.types import CompiledNode, ParseInlineNodeError
+from dbt.flags import get_flags
 from dbt.graph import ResourceTypeSelector
 from dbt.node_types import EXECUTABLE_NODE_TYPES, NodeType
 from dbt.parser.manifest import process_node
@@ -10,7 +11,7 @@ from dbt.task.base import BaseRunner
 from dbt.task.runnable import GraphRunnableTask
 from dbt_common.events.base_types import EventLevel
 from dbt_common.events.functions import fire_event
-from dbt_common.events.types import Note
+from dbt_common.events.types import Note, PrintEvent
 from dbt_common.exceptions import CompilationError
 from dbt_common.exceptions import DbtBaseException as DbtException
 from dbt_common.exceptions import DbtInternalError
@@ -86,15 +87,21 @@ class CompileTask(GraphRunnableTask):
             matched_results = []
 
         for result in matched_results:
-            fire_event(
-                CompiledNode(
-                    node_name=result.node.name,
-                    compiled=result.node.compiled_code,
-                    is_inline=is_inline,
-                    output_format=output_format,
-                    unique_id=result.node.unique_id,
-                )
+
+            compiled_node_event = CompiledNode(
+                node_name=result.node.name,
+                compiled=result.node.compiled_code,
+                is_inline=is_inline,
+                output_format=output_format,
+                unique_id=result.node.unique_id,
+                quiet=get_flags().QUIET,
             )
+
+            if get_flags().LOG_FORMAT == "json":
+                fire_event(compiled_node_event)
+            else:
+                # No formatting, still get to stdout when --quiet is used
+                fire_event(PrintEvent(msg=compiled_node_event.message()))
 
     def _runtime_initialize(self):
         if getattr(self.args, "inline", None):
