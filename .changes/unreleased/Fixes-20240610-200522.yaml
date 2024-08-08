@@ -1,0 +1,6 @@
+kind: Fixes
+body: Use model alias for the CTE identifier generated during ephemeral materialization
+time: 2024-06-10T20:05:22.510814008Z
+custom:
+    Author: jeancochrane
+    Issue: "5273"
