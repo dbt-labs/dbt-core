@@ -5,6 +5,7 @@ import dbt.deprecations as deprecations
 
 @pytest.fixture(scope="function")
 def active_deprecations():
+    deprecations.reset_deprecations()
     assert not deprecations.active_deprecations
 
     yield deprecations.active_deprecations
@@ -14,6 +15,7 @@ def active_deprecations():
 
 @pytest.fixture(scope="function")
 def buffered_deprecations():
+    deprecations.buffered_deprecations.clear()
     assert not deprecations.buffered_deprecations
 
     yield deprecations.buffered_deprecations
