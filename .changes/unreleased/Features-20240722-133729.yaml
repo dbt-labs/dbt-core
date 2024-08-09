@@ -1,0 +1,6 @@
+kind: Features
+body: Support passing `args` as keyword argument for `run-operation` in programmatic invocations
+time: 2024-07-22T13:37:29.285621-06:00
+custom:
+  Author: dbeatty10
+  Issue: "10473"

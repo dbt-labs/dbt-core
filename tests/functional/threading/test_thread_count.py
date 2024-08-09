@@ -42,5 +42,5 @@ class TestThreadCount:
         return {"threads": 2}
 
     def test_threading_8x(self, project):
-        results = run_dbt(args=["run", "--threads", "16"])
+        results = run_dbt(["run", "--threads", "16"])
         assert len(results), 20

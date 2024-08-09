@@ -75,6 +75,12 @@ class TestOperations:
         self.run_operation("table_name_args", table_name="my_fancy_table")
         check_table_does_exist(project.adapter, "my_fancy_table")
 
+    def test_args_as_keyword(self, project):
+        results, log_output = run_dbt_and_capture(
+            ["run-operation", "print_something"], args={"message": "Morning coffee"}
+        )
+        assert "Morning coffee" in log_output
+
     def test_macro_exception(self, project):
         self.run_operation("syntax_error", False)
 

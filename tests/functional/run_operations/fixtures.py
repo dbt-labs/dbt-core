@@ -52,8 +52,8 @@ happy_macros_sql = """
 {% endmacro %}
 
 
-{% macro print_something() %}
-  {{ print("You're doing awesome!") }}
+{% macro print_something(message="You're doing awesome!") %}
+  {{ print(message) }}
 {% endmacro %}
 """
 
