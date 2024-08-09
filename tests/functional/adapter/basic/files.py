@@ -140,6 +140,17 @@ cc_name_snapshot_sql = """
 {% endsnapshot %}
 """.strip()
 
+
+cc_exclude_snapshot_sql = """
+{% snapshot cc_exclude_snapshot %}
+    {{ config(
+        check_exclude_cols=['some_date'], unique_key='id', strategy='check',
+        target_database=database, target_schema=schema
+    ) }}
+    select * from {{ ref(var('seed_name', 'base')) }}
+{% endsnapshot %}
+""".strip()
+
 cc_date_snapshot_sql = """
 {% snapshot cc_date_snapshot %}
     {{ config(

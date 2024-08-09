@@ -1476,6 +1476,36 @@ def test_invalid_check_value(basic_check_snapshot_config_dict):
     assert_snapshot_config_fails_validation(invalid_check_type)
 
 
+def test_snapshot_config_check_exclude_cols(
+    basic_check_snapshot_config_dict, basic_check_snapshot_config_object
+):
+    """option `check_exclude_cols` should be accepted if no `check_cols` are provided."""
+    cfg_dict = basic_check_snapshot_config_dict
+    cfg_dict["check_exclude_cols"] = ["a", "b"]
+    del cfg_dict["check_cols"]
+    # delete attr from object
+    cfg = basic_check_snapshot_config_object
+    del cfg.check_cols
+    cfg.check_exclude_cols = ["a", "b"]
+    assert_symmetric(cfg, cfg_dict, SnapshotConfig)
+    pickle.loads(pickle.dumps(cfg))
+
+
+def test_snapshot_config_check_exclude_fails_both(basic_check_snapshot_config_dict):
+    """Fail validation if both `check_cols` and `check_exclude_cols` are provided."""
+    cfg_dict = basic_check_snapshot_config_dict
+    cfg_dict["check_exclude_cols"] = ["a", "b"]
+    assert_snapshot_config_fails_validation(cfg_dict)
+
+
+def test_snapshot_config_check_exclude_fails_not_list(basic_check_snapshot_config_dict):
+    """Fail validation if `check_exclude_cols` is not a list."""
+    cfg_dict = basic_check_snapshot_config_dict
+    del cfg_dict["check_cols"]
+    cfg_dict["check_exclude_cols"] = "a"
+    assert_snapshot_config_fails_validation(cfg_dict)
+
+
 @pytest.fixture
 def basic_timestamp_snapshot_dict():
     return {

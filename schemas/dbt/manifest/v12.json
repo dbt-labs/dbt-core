@@ -6511,6 +6511,23 @@
                       }
                     ],
                     "default": null
+                  },
+                  "check_exclude_cols": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
                   }
                 },
                 "additionalProperties": true
@@ -16111,6 +16128,23 @@
                           "default": null
                         },
                         "check_cols": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null
+                        },
+                        "check_exclude_cols": {
                           "anyOf": [
                             {
                               "type": "string"

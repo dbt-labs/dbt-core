@@ -1,0 +1,6 @@
+kind: Features
+body: Adding check exclude cols option for snapshots
+time: 2024-07-26T13:44:48.494062+01:00
+custom:
+    Author: willmaclean
+    Issue: "10438"

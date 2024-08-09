@@ -4,6 +4,7 @@ from dbt.tests.util import relation_from_name, run_dbt, update_rows
 from tests.functional.adapter.basic.files import (
     cc_all_snapshot_sql,
     cc_date_snapshot_sql,
+    cc_exclude_snapshot_sql,
     cc_name_snapshot_sql,
     seeds_added_csv,
     seeds_base_csv,
@@ -34,6 +35,7 @@ class BaseSnapshotCheckCols:
             "cc_all_snapshot.sql": cc_all_snapshot_sql,
             "cc_date_snapshot.sql": cc_date_snapshot_sql,
             "cc_name_snapshot.sql": cc_name_snapshot_sql,
+            "cc_exclude_snapshot.sql": cc_exclude_snapshot_sql,
         }
 
     @pytest.fixture(autouse=True)
@@ -118,6 +120,52 @@ class BaseSnapshotCheckCols:
         check_relation_rows(project, "cc_name_snapshot", 30)
         # does not see name updates
         check_relation_rows(project, "cc_date_snapshot", 30)
+
+    def test_snapshot_check_exclude_cols(self, project):
+        """When check_exclude_cols is set, the snapshot should only check
+        the columns that are not excluded. In this case, the snapshot should
+        only check the name column and not the some_date column.
+        """
+        results = run_dbt(["seed"])
+        assert len(results) == 2
+
+        # snapshot command
+        results = run_dbt(["snapshot"])
+        for result in results:
+            assert result.status == "success"
+
+        # check rowcounts for exclude cols snapshot
+        check_relation_rows(project, "cc_exclude_snapshot", 10)
+
+        # point at the "added" seed so the snapshot sees 10 new rows
+        results = run_dbt(["--no-partial-parse", "snapshot", "--vars", "seed_name: added"])
+        for result in results:
+            assert result.status == "success"
+
+        # there should be no change in the row count because we have excluded
+        # the some_date column and therefore are only checking the name column
+        check_relation_rows(project, "cc_exclude_snapshot", 10)
+
+        # Update the name column
+        # for all rows with id < 11, add "_updated" to the name column
+        update_rows_config = {
+            "name": "added",
+            "dst_col": "name",
+            "clause": {
+                "src_col": "name",
+                "type": "add_string",
+                "value": "_updated",
+            },
+            "where": "id < 11",
+        }
+        update_rows(project.adapter, update_rows_config)
+
+        # re-run snapshots, using "added'
+        results = run_dbt(["snapshot", "--vars", "seed_name: added"])
+        for result in results:
+            assert result.status == "success"
+
+        check_relation_rows(project, "cc_exclude_snapshot", 20)
 
 
 class TestSnapshotCheckCols(BaseSnapshotCheckCols):
