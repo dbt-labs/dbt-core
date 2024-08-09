@@ -56,14 +56,6 @@ class Graph:
         ancestors_for = self.select_children(selected) | selected
         return self.select_parents(ancestors_for) | ancestors_for
 
-    def select_relative(
-        self, selected: Set[UniqueId], method: str, max_depth: Optional[int] = None
-    ):
-        if method not in ("children", "parents", "childrens_parents"):
-            raise ValueError(
-                f"Invalid method: {method}. Must be one of 'children', 'parents', or 'childrens_parents'."
-            )
-
     def select_children(
         self, selected: Set[UniqueId], max_depth: Optional[int] = None
     ) -> Set[UniqueId]:
