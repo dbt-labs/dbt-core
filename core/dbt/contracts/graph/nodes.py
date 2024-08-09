@@ -1314,10 +1314,6 @@ class SourceDefinition(
     def search_name(self):
         return f"{self.source_name}.{self.name}"
 
-    @property
-    def group(self):
-        return None
-
 
 # ====================================
 # Exposure node
@@ -1383,10 +1379,6 @@ class Exposure(GraphNode, ExposureResource):
             and self.same_config(old)
             and True
         )
-
-    @property
-    def group(self):
-        return None
 
 
 # ====================================

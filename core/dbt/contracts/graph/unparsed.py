@@ -329,6 +329,8 @@ class UnparsedSourceDefinition(dbtClassMixin):
     tables: List[UnparsedSourceTableDefinition] = field(default_factory=list)
     tags: List[str] = field(default_factory=list)
     config: Dict[str, Any] = field(default_factory=dict)
+    group: Optional[str] = None
+    access: Optional[str] = None
 
     @classmethod
     def validate(cls, data):
@@ -489,6 +491,7 @@ class UnparsedExposure(dbtClassMixin):
     url: Optional[str] = None
     depends_on: List[str] = field(default_factory=list)
     config: Dict[str, Any] = field(default_factory=dict)
+    group: Optional[str] = None
 
     @classmethod
     def validate(cls, data):

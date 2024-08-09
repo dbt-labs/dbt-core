@@ -1817,6 +1817,8 @@ def minimum_parsed_source_definition_dict():
         "identifier": "my_source_table",
         "resource_type": str(NodeType.Source),
         "unique_id": "test.source.my_source.my_source_table",
+        "group": "",
+        "access": AccessType.Protected.value,
     }
 
 
@@ -1847,6 +1849,8 @@ def basic_parsed_source_definition_dict():
             "enabled": True,
         },
         "unrendered_config": {},
+        "group": "",
+        "access": AccessType.Protected.value,
     }
 
 
@@ -1879,6 +1883,8 @@ def complex_parsed_source_definition_dict():
         "freshness": {"warn_after": {"period": "hour", "count": 1}, "error_after": {}},
         "loaded_at_field": "loaded_at",
         "unrendered_config": {},
+        "group": "",
+        "access": AccessType.Protected.value,
     }
 
 
@@ -1905,6 +1911,8 @@ def complex_parsed_source_definition_object():
         config=SourceConfig(),
         freshness=FreshnessThreshold(warn_after=Time(period=TimePeriod.hour, count=1)),
         loaded_at_field="loaded_at",
+        group="",
+        access=AccessType.Protected,
     )
 
 
@@ -2018,6 +2026,8 @@ def minimal_parsed_exposure_dict():
         "description": "",
         "created_at": 1.0,
         "resource_type": "exposure",
+        "group": "",
+        "access": AccessType.Public.value,
     }
 
 
@@ -2050,6 +2060,8 @@ def basic_parsed_exposure_dict():
             "enabled": True,
         },
         "unrendered_config": {},
+        "access": AccessType.Public.value,
+        "group": "",
     }
 
 
@@ -2070,6 +2082,8 @@ def basic_parsed_exposure_object():
         tags=[],
         config=ExposureConfig(),
         unrendered_config={},
+        group="",
+        access=AccessType.Public,
     )
 
 
@@ -2105,6 +2119,8 @@ def complex_parsed_exposure_dict():
             "enabled": True,
         },
         "unrendered_config": {},
+        "group": "",
+        "access": AccessType.Public.value,
     }
 
 
@@ -2128,6 +2144,8 @@ def complex_parsed_exposure_object():
         original_file_path="models/something.yml",
         config=ExposureConfig(),
         unrendered_config={},
+        group="",
+        access=AccessType.Public,
     )
 
 
