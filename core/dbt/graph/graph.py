@@ -56,48 +56,51 @@ class Graph:
         ancestors_for = self.select_children(selected) | selected
         return self.select_parents(ancestors_for) | ancestors_for
 
+    def select_relative(
+        self, selected: Set[UniqueId], method: str, max_depth: Optional[int] = None
+    ):
+        if method not in ("children", "parents", "childrens_parents"):
+            raise ValueError(
+                f"Invalid method: {method}. Must be one of 'children', 'parents', or 'childrens_parents'."
+            )
+
     def select_children(
         self, selected: Set[UniqueId], max_depth: Optional[int] = None
     ) -> Set[UniqueId]:
-        """Return all descendants of the selected nodes, up to max_depth levels deep"""
-        related_nodes = selected
-        current_layer = selected
-        current_depth = 0
+        """Returns all nodes which are descendants of the 'selected' set.
+        Nodes in the 'selected' set are counted as children only if
+        they are descendants of other nodes in the 'selected' set."""
+        children: Set[UniqueId] = set()
+        i = 0
+        while len(selected) > 0 and (max_depth is None or i < max_depth):
+            next_layer: Set[UniqueId] = set()
+            for node in selected:
+                next_layer.update(self.graph.successors(node))
+            next_layer = next_layer - children  # Avoid re-searching
+            children.update(next_layer)
+            selected = next_layer
+            i += 1
 
-        # this process steps through the graph, layer by layer, until max_depth or no new nodes are found.
-        # going 1 step at a time allows for pruning of the graph since many selected nodes may overlap in descendants
-
-        if max_depth is None:
-            max_depth = 999999999
-        depth_exceeded = False
-
-        while not depth_exceeded and current_layer:
-            # get descendents of the current layer at 1 depth.
-            current_layer_new_descendants: Set[UniqueId] = set()
-
-            for node in current_layer:
-                current_layer_new_descendants.update(self.descendants(node, 1))
-
-            # remove any nodes that have already been found.
-            current_layer_new_descendants = current_layer_new_descendants - related_nodes
-
-            # add the current layer descendents to the set of related nodes and increment.
-            related_nodes.update(current_layer_new_descendants)
-            current_layer = current_layer_new_descendants
-            current_depth += 1
-            depth_exceeded = current_depth >= max_depth
-
-        # we only want to return the nodes that are direct children of the selected nodes.
-        descendants = related_nodes
-        return descendants
+        return children
 
     def select_parents(
         self, selected: Set[UniqueId], max_depth: Optional[int] = None
     ) -> Set[UniqueId]:
-        ancestors: Set[UniqueId] = set()
-        for node in selected:
-            ancestors.update(self.ancestors(node, max_depth))
-        return ancestors
+        """Returns all nodes which are ancestors of the 'selected' set.
+        Nodes in the 'selected' set are counted as parents only if
+        they are ancestors of other nodes in the 'selected' set."""
+        parents: Set[UniqueId] = set()
+        i = 0
+        while len(selected) > 0 and (max_depth is None or i < max_depth):
+            next_layer: Set[UniqueId] = set()
+            for node in selected:
+                next_layer.update(self.graph.predecessors(node))
+            next_layer = next_layer - parents  # Avoid re-searching
+            parents.update(next_layer)
+            selected = next_layer
+            i += 1
+
+        return parents
 
     def select_successors(self, selected: Set[UniqueId]) -> Set[UniqueId]:
         successors: Set[UniqueId] = set()
