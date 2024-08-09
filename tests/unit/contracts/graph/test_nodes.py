@@ -197,6 +197,7 @@ def basic_compiled_dict():
             "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         },
         "unrendered_config": {},
+        "vars": {},
         "config_call_dict": {},
         "access": "protected",
         "constraints": [],
@@ -515,6 +516,7 @@ def basic_compiled_schema_test_dict():
         "unrendered_config": {
             "severity": "warn",
         },
+        "vars": {},
         "config_call_dict": {},
     }
 

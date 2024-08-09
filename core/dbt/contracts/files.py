@@ -212,6 +212,7 @@ class SchemaSourceFile(BaseSourceFile):
     # created too, but those are in 'sources'
     sop: List[SourceKey] = field(default_factory=list)
     env_vars: Dict[str, Any] = field(default_factory=dict)
+    vars: Dict[str, Any] = field(default_factory=dict)
     pp_dict: Optional[Dict[str, Any]] = None
     pp_test_index: Optional[Dict[str, Any]] = None
 
@@ -316,6 +317,22 @@ class SchemaSourceFile(BaseSourceFile):
             for name in self.data_tests[key]:
                 test_ids.extend(self.data_tests[key][name])
         return test_ids
+
+    def add_vars(self, vars: Dict[str, Any], yaml_key: str, name: str) -> None:
+        if yaml_key not in self.vars:
+            self.vars[yaml_key] = {}
+
+        if name not in self.vars[yaml_key]:
+            self.vars[yaml_key][name] = vars
+
+    def get_vars(self, yaml_key: str, name: str) -> Dict[str, Any]:
+        if yaml_key not in self.vars:
+            return {}
+
+        if name not in self.vars[yaml_key]:
+            return {}
+
+        return self.vars[yaml_key][name]
 
     def add_env_var(self, var, yaml_key, name):
         if yaml_key not in self.env_vars:
