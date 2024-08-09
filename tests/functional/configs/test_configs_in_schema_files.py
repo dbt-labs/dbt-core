@@ -221,7 +221,7 @@ class TestSchemaFileConfigs:
         assert model_node.config.materialized == "view"
         model_unrendered_config = {
             "materialized": "view",
-            "meta": {"my_attr": "TESTING", "owner": "Julie Smith"},
+            "meta": {"my_attr": "{{ var('my_var') }}", "owner": "Julie Smith"},
             "tags": ["tag_1_in_model", "tag_2_in_model"],
         }
         assert model_node.unrendered_config == model_unrendered_config

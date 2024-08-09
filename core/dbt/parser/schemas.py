@@ -342,13 +342,34 @@ class YamlReader(metaclass=ABCMeta):
             if "name" not in entry and "model" not in entry:
                 raise ParsingError("Entry did not contain a name")
 
+            unrendered_config = {}
+            if "config" in entry:
+                unrendered_config = entry["config"]
+
+            unrendered_version_configs = {}
+            if "versions" in entry:
+                for version in entry["versions"]:
+                    if "v" in version:
+                        unrendered_version_configs[version["v"]] = version.get("config", {})
+
             # Render the data (except for tests, data_tests and descriptions).
             # See the SchemaYamlRenderer
             entry = self.render_entry(entry)
+
+            # TODO: consider not storing if rendered config == unrendered_config
+            schema_file = self.yaml.file
+            assert isinstance(schema_file, SchemaSourceFile)
+
+            if unrendered_config:
+                schema_file.add_unrendered_config(unrendered_config, self.key, entry["name"])
+
+            for version, unrendered_version_config in unrendered_version_configs.items():
+                schema_file.add_unrendered_config(
+                    unrendered_version_config, self.key, entry["name"], version
+                )
+
             if self.schema_yaml_vars.env_vars:
                 self.schema_parser.manifest.env_vars.update(self.schema_yaml_vars.env_vars)
-                schema_file = self.yaml.file
-                assert isinstance(schema_file, SchemaSourceFile)
                 for var in self.schema_yaml_vars.env_vars.keys():
                     schema_file.add_env_var(var, self.key, entry["name"])
                 self.schema_yaml_vars.env_vars = {}
@@ -406,6 +427,8 @@ class SourceParser(YamlReader):
                 self.manifest.source_patches[key] = patch
                 source_file.source_patches.append(key)
             else:
+                # TODO: add unrendered_database from manifest.unrendered_source_patch
+                # self.yaml.path.original_file_path
                 source = self._target_from_dict(UnparsedSourceDefinition, data)
                 self.add_source_definitions(source)
         return ParseResult()
@@ -611,7 +634,12 @@ class PatchParser(YamlReader, Generic[NonSourceTarget, Parsed]):
         )
         # We need to re-apply the config_call_dict after the patch config
         config._config_call_dict = node.config_call_dict
-        self.schema_parser.update_parsed_node_config(node, config, patch_config_dict=patch.config)
+        self.schema_parser.update_parsed_node_config(
+            node,
+            config,
+            patch_config_dict=patch.config,
+            patch_file_id=patch.file_id,
+        )
 
 
 # Subclasses of NodePatchParser: TestablePatchParser, ModelPatchParser, AnalysisPatchParser,

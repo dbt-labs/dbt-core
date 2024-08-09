@@ -212,6 +212,7 @@ class SchemaSourceFile(BaseSourceFile):
     # created too, but those are in 'sources'
     sop: List[SourceKey] = field(default_factory=list)
     env_vars: Dict[str, Any] = field(default_factory=dict)
+    unrendered_configs: Dict[str, Any] = field(default_factory=dict)
     pp_dict: Optional[Dict[str, Any]] = None
     pp_test_index: Optional[Dict[str, Any]] = None
 
@@ -316,6 +317,26 @@ class SchemaSourceFile(BaseSourceFile):
             for name in self.data_tests[key]:
                 test_ids.extend(self.data_tests[key][name])
         return test_ids
+
+    def add_unrendered_config(self, unrendered_config, yaml_key, name, version=None):
+        if yaml_key not in self.unrendered_configs:
+            self.unrendered_configs[yaml_key] = {}
+
+        if name not in self.unrendered_configs[yaml_key]:
+            self.unrendered_configs[yaml_key][name] = {}
+
+        if version not in self.unrendered_configs[yaml_key][name]:
+            self.unrendered_configs[yaml_key][name][version] = unrendered_config
+
+    def get_unrendered_config(self, yaml_key, name, version=None) -> Optional[Dict[str, Any]]:
+        if yaml_key not in self.unrendered_configs:
+            return None
+        if name not in self.unrendered_configs[yaml_key]:
+            return None
+
+        unrendered_config = self.unrendered_configs[yaml_key][name].get(version)
+
+        return unrendered_config
 
     def add_env_var(self, var, yaml_key, name):
         if yaml_key not in self.env_vars:

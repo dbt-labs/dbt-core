@@ -540,3 +540,30 @@ models:
 metricflow_time_spine_sql = """
 SELECT to_date('02/20/2023', 'mm/dd/yyyy') as date_day
 """
+
+
+model_with_env_var_in_config_sql = """
+{{ config(materialized=env_var('DBT_TEST_STATE_MODIFIED')) }}
+select 1 as id
+"""
+
+model_with_no_in_config_sql = """
+select 1 as id
+"""
+
+
+schema_model_with_env_var_in_config_yml = """
+models:
+  - name: model
+    config:
+      materialized: "{{ env_var('DBT_TEST_STATE_MODIFIED') }}"
+
+"""
+
+schema_source_with_env_var_as_property_yml = """
+sources:
+  - name: jaffle_shop
+    database: "{{ env_var('DBT_TEST_STATE_MODIFIED') }}"
+    tables:
+      - name: customers
+"""

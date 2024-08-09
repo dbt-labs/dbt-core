@@ -371,6 +371,9 @@ class ParseConfigObject(Config):
         # not call it!
         if self.context_config is None:
             raise DbtRuntimeError("At parse time, did not receive a context config")
+
+        # TODO: consider skipping this for sql state:modified configs. args rendered so this will produced a rendered config unless
+        # statically extracted
         self.context_config.add_config_call(opts)
         return ""
 
