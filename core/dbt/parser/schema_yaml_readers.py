@@ -612,7 +612,7 @@ class SemanticModelParser(YamlReader):
     ) -> None:
         unparsed_metric = UnparsedMetric(
             name=measure.name,
-            label=measure.name,
+            label=measure.label or measure.name,
             type="simple",
             type_params=UnparsedMetricTypeParams(measure=measure.name, expr=measure.name),
             description=measure.description or f"Metric created from measure {measure.name}",
