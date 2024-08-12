@@ -319,24 +319,23 @@ class SchemaSourceFile(BaseSourceFile):
         return test_ids
 
     def add_unrendered_config(self, unrendered_config, yaml_key, name, version=None):
+        versioned_name = f"{name}_v{version}" if version is not None else name
+
         if yaml_key not in self.unrendered_configs:
             self.unrendered_configs[yaml_key] = {}
 
-        if name not in self.unrendered_configs[yaml_key]:
-            self.unrendered_configs[yaml_key][name] = {}
-
-        if version not in self.unrendered_configs[yaml_key][name]:
-            self.unrendered_configs[yaml_key][name][version] = unrendered_config
+        if versioned_name not in self.unrendered_configs[yaml_key]:
+            self.unrendered_configs[yaml_key][versioned_name] = unrendered_config
 
     def get_unrendered_config(self, yaml_key, name, version=None) -> Optional[Dict[str, Any]]:
+        versioned_name = f"{name}_v{version}" if version is not None else name
+
         if yaml_key not in self.unrendered_configs:
             return None
-        if name not in self.unrendered_configs[yaml_key]:
+        if versioned_name not in self.unrendered_configs[yaml_key]:
             return None
 
-        unrendered_config = self.unrendered_configs[yaml_key][name].get(version)
-
-        return unrendered_config
+        return self.unrendered_configs[yaml_key][versioned_name]
 
     def add_env_var(self, var, yaml_key, name):
         if yaml_key not in self.env_vars:
