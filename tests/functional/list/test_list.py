@@ -133,12 +133,20 @@ class TestList:
 
     def expect_model_output(self):
         expectations = {
-            "name": ("ephemeral", "incremental", "inner", "metricflow_time_spine", "outer"),
+            "name": (
+                "ephemeral",
+                "incremental",
+                "inner",
+                "metricflow_time_spine",
+                "metricflow_time_spine_second",
+                "outer",
+            ),
             "selector": (
                 "test.ephemeral",
                 "test.incremental",
                 "test.sub.inner",
                 "test.metricflow_time_spine",
+                "test.metricflow_time_spine_second",
                 "test.outer",
             ),
             "json": (
@@ -295,6 +303,44 @@ class TestList:
                     "resource_type": "model",
                 },
                 {
+                    "name": "metricflow_time_spine_second",
+                    "package_name": "test",
+                    "depends_on": {
+                        "nodes": [],
+                        "macros": ["macro.dbt.current_timestamp", "macro.dbt.date_trunc"],
+                    },
+                    "tags": [],
+                    "config": {
+                        "enabled": True,
+                        "group": None,
+                        "materialized": "view",
+                        "post-hook": [],
+                        "tags": [],
+                        "pre-hook": [],
+                        "quoting": {},
+                        "column_types": {},
+                        "persist_docs": {},
+                        "full_refresh": None,
+                        "unique_key": None,
+                        "on_schema_change": "ignore",
+                        "on_configuration_change": "apply",
+                        "database": None,
+                        "schema": None,
+                        "alias": None,
+                        "meta": {},
+                        "grants": {},
+                        "packages": [],
+                        "incremental_strategy": None,
+                        "docs": {"node_color": None, "show": True},
+                        "contract": {"enforced": False, "alias_types": True},
+                        "access": "protected",
+                    },
+                    "original_file_path": normalize("models/metricflow_time_spine_second.sql"),
+                    "unique_id": "model.test.metricflow_time_spine_second",
+                    "alias": "metricflow_time_spine_second",
+                    "resource_type": "model",
+                },
+                {
                     "name": "outer",
                     "package_name": "test",
                     "depends_on": {
@@ -338,6 +384,7 @@ class TestList:
                 self.dir("models/incremental.sql"),
                 self.dir("models/sub/inner.sql"),
                 self.dir("models/metricflow_time_spine.sql"),
+                self.dir("models/metricflow_time_spine_second.sql"),
                 self.dir("models/outer.sql"),
             ),
         }
@@ -573,6 +620,7 @@ class TestList:
             "test.not_null_outer_id",
             "test.unique_outer_id",
             "test.metricflow_time_spine",
+            "test.metricflow_time_spine_second",
             "test.t",
             "semantic_model:test.my_sm",
             "metric:test.total_outer",
@@ -618,6 +666,7 @@ class TestList:
             "test.ephemeral",
             "test.outer",
             "test.metricflow_time_spine",
+            "test.metricflow_time_spine_second",
             "test.incremental",
         }
 
@@ -638,6 +687,7 @@ class TestList:
             "test.outer",
             "test.sub.inner",
             "test.metricflow_time_spine",
+            "test.metricflow_time_spine_second",
             "test.t",
             "test.unique_outer_id",
         }
@@ -658,6 +708,7 @@ class TestList:
             "test.not_null_outer_id",
             "test.outer",
             "test.metricflow_time_spine",
+            "test.metricflow_time_spine_second",
             "test.sub.inner",
             "test.t",
         }
@@ -693,6 +744,7 @@ class TestList:
             "test.outer",
             "test.sub.inner",
             "test.metricflow_time_spine",
+            "test.metricflow_time_spine_second",
             "test.t",
             "test.unique_outer_id",
         }
@@ -707,6 +759,7 @@ class TestList:
             "test.outer",
             "test.sub.inner",
             "test.metricflow_time_spine",
+            "test.metricflow_time_spine_second",
         }
         del os.environ["DBT_EXCLUDE_RESOURCE_TYPES"]
 

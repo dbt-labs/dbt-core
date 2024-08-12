@@ -18,6 +18,7 @@ from dbt.exceptions import ParsingError
 from dbt.parser.search import FileBlock
 from dbt_common.contracts.constraints import ColumnLevelConstraint, ConstraintType
 from dbt_common.exceptions import DbtInternalError
+from dbt_semantic_interfaces.type_enums import TimeGranularity
 
 
 def trimmed(inp: str) -> str:
@@ -185,13 +186,12 @@ class ParserRef:
         self.column_info: Dict[str, ColumnInfo] = {}
 
     def _add(self, column: HasColumnProps) -> None:
-        tags: List[str] = []
-        tags.extend(getattr(column, "tags", ()))
-        quote: Optional[bool]
+        tags: List[str] = getattr(column, "tags", [])
+        quote: Optional[bool] = None
+        granularity: Optional[TimeGranularity] = None
         if isinstance(column, UnparsedColumn):
             quote = column.quote
-        else:
-            quote = None
+            granularity = TimeGranularity(column.granularity) if column.granularity else None
 
         if any(
             c
@@ -209,6 +209,7 @@ class ParserRef:
             tags=tags,
             quote=quote,
             _extra=column.extra,
+            granularity=granularity,
         )
 
     @classmethod

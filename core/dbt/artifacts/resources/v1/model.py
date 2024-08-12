@@ -11,6 +11,7 @@ from dbt.artifacts.resources.v1.components import (
 from dbt.artifacts.resources.v1.config import NodeConfig
 from dbt_common.contracts.config.base import MergeBehavior
 from dbt_common.contracts.constraints import ModelLevelConstraint
+from dbt_common.dataclass_schema import dbtClassMixin
 
 
 @dataclass
@@ -19,6 +20,11 @@ class ModelConfig(NodeConfig):
         default=AccessType.Protected,
         metadata=MergeBehavior.Clobber.meta(),
     )
+
+
+@dataclass
+class TimeSpine(dbtClassMixin):
+    standard_granularity_column: str
 
 
 @dataclass
@@ -32,6 +38,7 @@ class Model(CompiledResource):
     deprecation_date: Optional[datetime] = None
     defer_relation: Optional[DeferRelation] = None
     primary_key: List[str] = field(default_factory=list)
+    time_spine: Optional[TimeSpine] = None
 
     def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
         dct = super().__post_serialize__(dct, context)

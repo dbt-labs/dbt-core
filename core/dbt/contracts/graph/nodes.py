@@ -58,6 +58,7 @@ from dbt.artifacts.resources import SingularTest as SingularTestResource
 from dbt.artifacts.resources import Snapshot as SnapshotResource
 from dbt.artifacts.resources import SourceDefinition as SourceDefinitionResource
 from dbt.artifacts.resources import SqlOperation as SqlOperationResource
+from dbt.artifacts.resources import TimeSpine
 from dbt.artifacts.resources import UnitTestDefinition as UnitTestDefinitionResource
 from dbt.contracts.graph.model_config import UnitTestNodeConfig
 from dbt.contracts.graph.node_args import ModelNodeArgs
@@ -1625,6 +1626,7 @@ class ParsedNodePatch(ParsedPatch):
     latest_version: Optional[NodeVersion]
     constraints: List[Dict[str, Any]]
     deprecation_date: Optional[datetime]
+    time_spine: Optional[TimeSpine] = None
 
 
 @dataclass

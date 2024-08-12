@@ -15,6 +15,7 @@ repos:
     args: [--unsafe]
   - id: check-json
   - id: end-of-file-fixer
+    exclude: schemas/dbt/manifest/
   - id: trailing-whitespace
     exclude_types:
       - "markdown"

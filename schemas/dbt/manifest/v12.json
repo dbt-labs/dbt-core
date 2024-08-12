@@ -537,6 +537,23 @@
                           "warn_unsupported": {
                             "type": "boolean",
                             "default": true
+                          },
+                          "to": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
+                          },
+                          "to_columns": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
                           }
                         },
                         "additionalProperties": false,
@@ -567,6 +584,29 @@
                       "propertyNames": {
                         "type": "string"
                       }
+                    },
+                    "granularity": {
+                      "anyOf": [
+                        {
+                          "enum": [
+                            "nanosecond",
+                            "microsecond",
+                            "millisecond",
+                            "second",
+                            "minute",
+                            "hour",
+                            "day",
+                            "week",
+                            "month",
+                            "quarter",
+                            "year"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
                     }
                   },
                   "additionalProperties": true,
@@ -1506,6 +1546,23 @@
                           "warn_unsupported": {
                             "type": "boolean",
                             "default": true
+                          },
+                          "to": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
+                          },
+                          "to_columns": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
                           }
                         },
                         "additionalProperties": false,
@@ -1536,6 +1593,29 @@
                       "propertyNames": {
                         "type": "string"
                       }
+                    },
+                    "granularity": {
+                      "anyOf": [
+                        {
+                          "enum": [
+                            "nanosecond",
+                            "microsecond",
+                            "millisecond",
+                            "second",
+                            "minute",
+                            "hour",
+                            "day",
+                            "week",
+                            "month",
+                            "quarter",
+                            "year"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
                     }
                   },
                   "additionalProperties": true,
@@ -2114,6 +2194,23 @@
                           "warn_unsupported": {
                             "type": "boolean",
                             "default": true
+                          },
+                          "to": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
+                          },
+                          "to_columns": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
                           }
                         },
                         "additionalProperties": false,
@@ -2144,6 +2241,29 @@
                       "propertyNames": {
                         "type": "string"
                       }
+                    },
+                    "granularity": {
+                      "anyOf": [
+                        {
+                          "enum": [
+                            "nanosecond",
+                            "microsecond",
+                            "millisecond",
+                            "second",
+                            "minute",
+                            "hour",
+                            "day",
+                            "week",
+                            "month",
+                            "quarter",
+                            "year"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
                     }
                   },
                   "additionalProperties": true,
@@ -2847,6 +2967,23 @@
                           "warn_unsupported": {
                             "type": "boolean",
                             "default": true
+                          },
+                          "to": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
+                          },
+                          "to_columns": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
                           }
                         },
                         "additionalProperties": false,
@@ -2877,6 +3014,29 @@
                       "propertyNames": {
                         "type": "string"
                       }
+                    },
+                    "granularity": {
+                      "anyOf": [
+                        {
+                          "enum": [
+                            "nanosecond",
+                            "microsecond",
+                            "millisecond",
+                            "second",
+                            "minute",
+                            "hour",
+                            "day",
+                            "week",
+                            "month",
+                            "quarter",
+                            "year"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
                     }
                   },
                   "additionalProperties": true,
@@ -3599,6 +3759,23 @@
                           "warn_unsupported": {
                             "type": "boolean",
                             "default": true
+                          },
+                          "to": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
+                          },
+                          "to_columns": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
                           }
                         },
                         "additionalProperties": false,
@@ -3629,6 +3806,29 @@
                       "propertyNames": {
                         "type": "string"
                       }
+                    },
+                    "granularity": {
+                      "anyOf": [
+                        {
+                          "enum": [
+                            "nanosecond",
+                            "microsecond",
+                            "millisecond",
+                            "second",
+                            "minute",
+                            "hour",
+                            "day",
+                            "week",
+                            "month",
+                            "quarter",
+                            "year"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
                     }
                   },
                   "additionalProperties": true,
@@ -3953,6 +4153,23 @@
                     "warn_unsupported": {
                       "type": "boolean",
                       "default": true
+                    },
+                    "to": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
+                    },
+                    "to_columns": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
                     },
                     "columns": {
                       "type": "array",
@@ -4392,6 +4609,27 @@
                 "items": {
                   "type": "string"
                 }
+              },
+              "time_spine": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "title": "TimeSpine",
+                    "properties": {
+                      "standard_granularity_column": {
+                        "type": "string"
+                      }
+                    },
+                    "additionalProperties": false,
+                    "required": [
+                      "standard_granularity_column"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
               }
             },
             "additionalProperties": false,
@@ -4825,6 +5063,23 @@
                           "warn_unsupported": {
                             "type": "boolean",
                             "default": true
+                          },
+                          "to": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
+                          },
+                          "to_columns": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
                           }
                         },
                         "additionalProperties": false,
@@ -4855,6 +5110,29 @@
                       "propertyNames": {
                         "type": "string"
                       }
+                    },
+                    "granularity": {
+                      "anyOf": [
+                        {
+                          "enum": [
+                            "nanosecond",
+                            "microsecond",
+                            "millisecond",
+                            "second",
+                            "minute",
+                            "hour",
+                            "day",
+                            "week",
+                            "month",
+                            "quarter",
+                            "year"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
                     }
                   },
                   "additionalProperties": true,
@@ -5433,6 +5711,23 @@
                           "warn_unsupported": {
                             "type": "boolean",
                             "default": true
+                          },
+                          "to": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
+                          },
+                          "to_columns": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
                           }
                         },
                         "additionalProperties": false,
@@ -5463,6 +5758,29 @@
                       "propertyNames": {
                         "type": "string"
                       }
+                    },
+                    "granularity": {
+                      "anyOf": [
+                        {
+                          "enum": [
+                            "nanosecond",
+                            "microsecond",
+                            "millisecond",
+                            "second",
+                            "minute",
+                            "hour",
+                            "day",
+                            "week",
+                            "month",
+                            "quarter",
+                            "year"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
                     }
                   },
                   "additionalProperties": true,
@@ -6282,6 +6600,23 @@
                           "warn_unsupported": {
                             "type": "boolean",
                             "default": true
+                          },
+                          "to": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
+                          },
+                          "to_columns": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
                           }
                         },
                         "additionalProperties": false,
@@ -6312,6 +6647,29 @@
                       "propertyNames": {
                         "type": "string"
                       }
+                    },
+                    "granularity": {
+                      "anyOf": [
+                        {
+                          "enum": [
+                            "nanosecond",
+                            "microsecond",
+                            "millisecond",
+                            "second",
+                            "minute",
+                            "hour",
+                            "day",
+                            "week",
+                            "month",
+                            "quarter",
+                            "year"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
                     }
                   },
                   "additionalProperties": true,
@@ -7403,6 +7761,23 @@
                       "warn_unsupported": {
                         "type": "boolean",
                         "default": true
+                      },
+                      "to": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null
+                      },
+                      "to_columns": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
                       }
                     },
                     "additionalProperties": false,
@@ -7433,6 +7808,29 @@
                   "propertyNames": {
                     "type": "string"
                   }
+                },
+                "granularity": {
+                  "anyOf": [
+                    {
+                      "enum": [
+                        "nanosecond",
+                        "microsecond",
+                        "millisecond",
+                        "second",
+                        "minute",
+                        "hour",
+                        "day",
+                        "week",
+                        "month",
+                        "quarter",
+                        "year"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
                 }
               },
               "additionalProperties": true,
@@ -9754,6 +10152,23 @@
                                 "warn_unsupported": {
                                   "type": "boolean",
                                   "default": true
+                                },
+                                "to": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ],
+                                  "default": null
+                                },
+                                "to_columns": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
                                 }
                               },
                               "additionalProperties": false,
@@ -9784,6 +10199,29 @@
                             "propertyNames": {
                               "type": "string"
                             }
+                          },
+                          "granularity": {
+                            "anyOf": [
+                              {
+                                "enum": [
+                                  "nanosecond",
+                                  "microsecond",
+                                  "millisecond",
+                                  "second",
+                                  "minute",
+                                  "hour",
+                                  "day",
+                                  "week",
+                                  "month",
+                                  "quarter",
+                                  "year"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
                           }
                         },
                         "additionalProperties": true,
@@ -10723,6 +11161,23 @@
                                 "warn_unsupported": {
                                   "type": "boolean",
                                   "default": true
+                                },
+                                "to": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ],
+                                  "default": null
+                                },
+                                "to_columns": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
                                 }
                               },
                               "additionalProperties": false,
@@ -10753,6 +11208,29 @@
                             "propertyNames": {
                               "type": "string"
                             }
+                          },
+                          "granularity": {
+                            "anyOf": [
+                              {
+                                "enum": [
+                                  "nanosecond",
+                                  "microsecond",
+                                  "millisecond",
+                                  "second",
+                                  "minute",
+                                  "hour",
+                                  "day",
+                                  "week",
+                                  "month",
+                                  "quarter",
+                                  "year"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
                           }
                         },
                         "additionalProperties": true,
@@ -11331,6 +11809,23 @@
                                 "warn_unsupported": {
                                   "type": "boolean",
                                   "default": true
+                                },
+                                "to": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ],
+                                  "default": null
+                                },
+                                "to_columns": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
                                 }
                               },
                               "additionalProperties": false,
@@ -11361,6 +11856,29 @@
                             "propertyNames": {
                               "type": "string"
                             }
+                          },
+                          "granularity": {
+                            "anyOf": [
+                              {
+                                "enum": [
+                                  "nanosecond",
+                                  "microsecond",
+                                  "millisecond",
+                                  "second",
+                                  "minute",
+                                  "hour",
+                                  "day",
+                                  "week",
+                                  "month",
+                                  "quarter",
+                                  "year"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
                           }
                         },
                         "additionalProperties": true,
@@ -12064,6 +12582,23 @@
                                 "warn_unsupported": {
                                   "type": "boolean",
                                   "default": true
+                                },
+                                "to": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ],
+                                  "default": null
+                                },
+                                "to_columns": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
                                 }
                               },
                               "additionalProperties": false,
@@ -12094,6 +12629,29 @@
                             "propertyNames": {
                               "type": "string"
                             }
+                          },
+                          "granularity": {
+                            "anyOf": [
+                              {
+                                "enum": [
+                                  "nanosecond",
+                                  "microsecond",
+                                  "millisecond",
+                                  "second",
+                                  "minute",
+                                  "hour",
+                                  "day",
+                                  "week",
+                                  "month",
+                                  "quarter",
+                                  "year"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
                           }
                         },
                         "additionalProperties": true,
@@ -12816,6 +13374,23 @@
                                 "warn_unsupported": {
                                   "type": "boolean",
                                   "default": true
+                                },
+                                "to": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ],
+                                  "default": null
+                                },
+                                "to_columns": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
                                 }
                               },
                               "additionalProperties": false,
@@ -12846,6 +13421,29 @@
                             "propertyNames": {
                               "type": "string"
                             }
+                          },
+                          "granularity": {
+                            "anyOf": [
+                              {
+                                "enum": [
+                                  "nanosecond",
+                                  "microsecond",
+                                  "millisecond",
+                                  "second",
+                                  "minute",
+                                  "hour",
+                                  "day",
+                                  "week",
+                                  "month",
+                                  "quarter",
+                                  "year"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
                           }
                         },
                         "additionalProperties": true,
@@ -13170,6 +13768,23 @@
                           "warn_unsupported": {
                             "type": "boolean",
                             "default": true
+                          },
+                          "to": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
+                          },
+                          "to_columns": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
                           },
                           "columns": {
                             "type": "array",
@@ -13609,6 +14224,27 @@
                       "items": {
                         "type": "string"
                       }
+                    },
+                    "time_spine": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "title": "TimeSpine",
+                          "properties": {
+                            "standard_granularity_column": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false,
+                          "required": [
+                            "standard_granularity_column"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
                     }
                   },
                   "additionalProperties": false,
@@ -14042,6 +14678,23 @@
                                 "warn_unsupported": {
                                   "type": "boolean",
                                   "default": true
+                                },
+                                "to": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ],
+                                  "default": null
+                                },
+                                "to_columns": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
                                 }
                               },
                               "additionalProperties": false,
@@ -14072,6 +14725,29 @@
                             "propertyNames": {
                               "type": "string"
                             }
+                          },
+                          "granularity": {
+                            "anyOf": [
+                              {
+                                "enum": [
+                                  "nanosecond",
+                                  "microsecond",
+                                  "millisecond",
+                                  "second",
+                                  "minute",
+                                  "hour",
+                                  "day",
+                                  "week",
+                                  "month",
+                                  "quarter",
+                                  "year"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
                           }
                         },
                         "additionalProperties": true,
@@ -14650,6 +15326,23 @@
                                 "warn_unsupported": {
                                   "type": "boolean",
                                   "default": true
+                                },
+                                "to": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ],
+                                  "default": null
+                                },
+                                "to_columns": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
                                 }
                               },
                               "additionalProperties": false,
@@ -14680,6 +15373,29 @@
                             "propertyNames": {
                               "type": "string"
                             }
+                          },
+                          "granularity": {
+                            "anyOf": [
+                              {
+                                "enum": [
+                                  "nanosecond",
+                                  "microsecond",
+                                  "millisecond",
+                                  "second",
+                                  "minute",
+                                  "hour",
+                                  "day",
+                                  "week",
+                                  "month",
+                                  "quarter",
+                                  "year"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
                           }
                         },
                         "additionalProperties": true,
@@ -15499,6 +16215,23 @@
                                 "warn_unsupported": {
                                   "type": "boolean",
                                   "default": true
+                                },
+                                "to": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ],
+                                  "default": null
+                                },
+                                "to_columns": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
                                 }
                               },
                               "additionalProperties": false,
@@ -15529,6 +16262,29 @@
                             "propertyNames": {
                               "type": "string"
                             }
+                          },
+                          "granularity": {
+                            "anyOf": [
+                              {
+                                "enum": [
+                                  "nanosecond",
+                                  "microsecond",
+                                  "millisecond",
+                                  "second",
+                                  "minute",
+                                  "hour",
+                                  "day",
+                                  "week",
+                                  "month",
+                                  "quarter",
+                                  "year"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
                           }
                         },
                         "additionalProperties": true,
@@ -16611,6 +17367,23 @@
                                 "warn_unsupported": {
                                   "type": "boolean",
                                   "default": true
+                                },
+                                "to": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ],
+                                  "default": null
+                                },
+                                "to_columns": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
                                 }
                               },
                               "additionalProperties": false,
@@ -16641,6 +17414,29 @@
                             "propertyNames": {
                               "type": "string"
                             }
+                          },
+                          "granularity": {
+                            "anyOf": [
+                              {
+                                "enum": [
+                                  "nanosecond",
+                                  "microsecond",
+                                  "millisecond",
+                                  "second",
+                                  "minute",
+                                  "hour",
+                                  "day",
+                                  "week",
+                                  "month",
+                                  "quarter",
+                                  "year"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
                           }
                         },
                         "additionalProperties": true,

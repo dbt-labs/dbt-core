@@ -413,11 +413,11 @@ class DisabledLookup(dbtClassMixin):
         self.storage: Dict[str, Dict[PackageName, List[Any]]] = {}
         self.populate(manifest)
 
-    def populate(self, manifest):
+    def populate(self, manifest: "Manifest"):
         for node in list(chain.from_iterable(manifest.disabled.values())):
             self.add_node(node)
 
-    def add_node(self, node):
+    def add_node(self, node: GraphMemberNode) -> None:
         if node.search_name not in self.storage:
             self.storage[node.search_name] = {}
         if node.package_name not in self.storage[node.search_name]:
@@ -427,8 +427,12 @@ class DisabledLookup(dbtClassMixin):
     # This should return a list of disabled nodes. It's different from
     # the other Lookup functions in that it returns full nodes, not just unique_ids
     def find(
-        self, search_name, package: Optional[PackageName], version: Optional[NodeVersion] = None
-    ):
+        self,
+        search_name,
+        package: Optional[PackageName],
+        version: Optional[NodeVersion] = None,
+        resource_types: Optional[List[NodeType]] = None,
+    ) -> Optional[List[Any]]:
         if version:
             search_name = f"{search_name}.v{version}"
 
@@ -437,15 +441,28 @@ class DisabledLookup(dbtClassMixin):
 
         pkg_dct: Mapping[PackageName, List[Any]] = self.storage[search_name]
 
+        nodes = []
         if package is None:
             if not pkg_dct:
                 return None
             else:
-                return next(iter(pkg_dct.values()))
+                nodes = next(iter(pkg_dct.values()))
         elif package in pkg_dct:
-            return pkg_dct[package]
+            nodes = pkg_dct[package]
         else:
             return None
+
+        if resource_types is None:
+            return nodes
+        else:
+            new_nodes = []
+            for node in nodes:
+                if node.resource_type in resource_types:
+                    new_nodes.append(node)
+            if not new_nodes:
+                return None
+            else:
+                return new_nodes
 
 
 class AnalysisLookup(RefableLookup):
@@ -1295,7 +1312,12 @@ class Manifest(MacroMethods, dbtClassMixin):
 
             # it's possible that the node is disabled
             if disabled is None:
-                disabled = self.disabled_lookup.find(target_model_name, pkg, target_model_version)
+                disabled = self.disabled_lookup.find(
+                    target_model_name,
+                    pkg,
+                    version=target_model_version,
+                    resource_types=REFABLE_NODE_TYPES,
+                )
 
         if disabled:
             return Disabled(disabled[0])

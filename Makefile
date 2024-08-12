@@ -144,3 +144,7 @@ help: ## Show this help message.
 	@echo
 	@echo 'options:'
 	@echo 'use USE_DOCKER=true to run target in a docker container'
+
+.PHONY: json_schema
+json_schema: ## Update generated JSON schema using code changes.
+	scripts/collect-artifact-schema.py --path schemas

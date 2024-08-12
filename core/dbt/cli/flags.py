@@ -15,7 +15,7 @@ from dbt.cli.resolvers import default_log_path, default_project_dir
 from dbt.cli.types import Command as CliCommand
 from dbt.config.project import read_project_flags
 from dbt.contracts.project import ProjectFlags
-from dbt.deprecations import renamed_env_var
+from dbt.deprecations import fire_buffered_deprecations, renamed_env_var
 from dbt.events import ALL_EVENT_NAMES
 from dbt_common import ui
 from dbt_common.clients import jinja
@@ -354,6 +354,8 @@ class Flags:
         # It is necessary to remove this attr from the class so it does
         # not get pickled when written to disk as json.
         object.__delattr__(self, "deprecated_env_var_warnings")
+
+        fire_buffered_deprecations()
 
     @classmethod
     def from_dict(cls, command: CliCommand, args_dict: Dict[str, Any]) -> "Flags":
