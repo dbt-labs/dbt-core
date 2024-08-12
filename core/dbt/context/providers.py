@@ -34,6 +34,7 @@ from dbt.clients.jinja import (
     UnitTestMacroGenerator,
     get_rendered,
 )
+from dbt.clients.jinja_static import statically_parse_unrendered_config
 from dbt.config import IsFQNResource, Project, RuntimeConfig
 from dbt.constants import DEFAULT_ENV_PLACEHOLDER
 from dbt.context.base import Var, contextmember, contextproperty
@@ -372,8 +373,12 @@ class ParseConfigObject(Config):
         if self.context_config is None:
             raise DbtRuntimeError("At parse time, did not receive a context config")
 
-        # TODO: consider skipping this for sql state:modified configs. args rendered so this will produced a rendered config unless
-        # statically extracted
+        # Track unrendered opts to build parsed node unrendered_config later on
+        unrendered_config = statically_parse_unrendered_config(self.model.raw_code)
+        if unrendered_config:
+            self.context_config.add_unrendered_config_call(unrendered_config)
+
+        # Use rendered opts to populate context_config
         self.context_config.add_config_call(opts)
         return ""
 

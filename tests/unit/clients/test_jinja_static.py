@@ -4,6 +4,7 @@ from dbt.artifacts.resources import RefArgs
 from dbt.clients.jinja_static import (
     statically_extract_macro_calls,
     statically_parse_ref_or_source,
+    statically_parse_unrendered_config,
 )
 from dbt.context.base import generate_base_context
 from dbt.exceptions import ParsingError
@@ -77,3 +78,28 @@ class TestStaticallyParseRefOrSource:
     def test_valid_ref_expression(self, expression, expected_ref_or_source):
         ref_or_source = statically_parse_ref_or_source(expression)
         assert ref_or_source == expected_ref_or_source
+
+
+class TestStaticallyParseUnrenderedConfig:
+    @pytest.mark.parametrize(
+        "expression,expected_unrendered_config",
+        [
+            ("{{ config(materialized='view') }}", {"materialized": "view"}),
+            (
+                "{{ config(materialized='view', enabled=True) }}",
+                {"materialized": "view", "enabled": True},
+            ),
+            ("{{ config(materialized=env_var('test')) }}", {"materialized": "env_var('test')"}),
+            (
+                "{{ config(materialized=env_var('test', default='default')) }}",
+                {"materialized": "env_var('test', default='default')"},
+            ),
+            (
+                "{{ config(materialized=env_var('test', default=env_var('default'))) }}",
+                {"materialized": "env_var('test', default=env_var('default'))"},
+            ),
+        ],
+    )
+    def test_statically_parse_unrendered_config(self, expression, expected_unrendered_config):
+        unrendered_config = statically_parse_unrendered_config(expression)
+        assert unrendered_config == expected_unrendered_config

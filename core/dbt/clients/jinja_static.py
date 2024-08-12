@@ -191,3 +191,90 @@ def statically_parse_ref_or_source(expression: str) -> Union[RefArgs, List[str]]
         raise ParsingError(f"Invalid ref or source expression: {expression}")
 
     return ref_or_source
+
+
+def statically_parse_unrendered_config(string: str) -> Optional[Dict[str, Any]]:
+    """
+    Given a string with jinja, extract an unrendered config call.
+    If no config call is present, returns None.
+
+    For example, given:
+    "{{ config(materialized=env_var('DBT_TEST_STATE_MODIFIED')) }}\nselect 1 as id"
+    returns: {"materialized" : "env_var('DBT_TEST_STATE_MODIFIED')"}
+
+    No config call:
+    "select 1 as id"
+    returns: None
+    """
+    # set 'capture_macros' to capture undefined
+    env = get_environment(None, capture_macros=True)
+
+    global _TESTING_MACRO_CACHE
+    if test_caching_enabled() and _TESTING_MACRO_CACHE and string in _TESTING_MACRO_CACHE:
+        parsed = _TESTING_MACRO_CACHE.get(string, None)
+        func_calls = getattr(parsed, "_dbt_cached_calls")
+    else:
+        parsed = env.parse(string)
+        func_calls = tuple(parsed.find_all(jinja2.nodes.Call))
+
+    config_func_calls = list(
+        filter(
+            lambda f: hasattr(f, "node") and hasattr(f.node, "name") and f.node.name == "config",
+            func_calls,
+        )
+    )
+    # There should only be one {{ config(...) }} call per input
+    config_func_call = config_func_calls[0] if config_func_calls else None
+
+    if not config_func_call:
+        return None
+
+    unrendered_config = {}
+    for kwarg in config_func_call.kwargs:
+        unrendered_config[kwarg.key] = construct_static_kwarg_value(kwarg)
+
+    return unrendered_config
+
+
+def construct_static_kwarg_value(kwarg):
+    static_kwarg_value = _construct_static_kwarg_value(kwarg)
+    if isinstance(static_kwarg_value, str):
+        return static_kwarg_value.strip("'")
+    else:
+        return static_kwarg_value
+
+
+def _construct_static_kwarg_value(kwarg) -> str:
+    kwarg_type = type(kwarg.value).__name__
+    if kwarg_type == "Const":
+        return (
+            f"'{kwarg.value.value}'" if isinstance(kwarg.value.value, str) else kwarg.value.value
+        )
+
+    elif kwarg_type == "Call":
+        unrendered_args = []
+        for arg in kwarg.value.args:
+            arg_type = type(arg).__name__
+            if arg_type == "Const":
+                unrendered_args.append(
+                    f"'{arg.value}'" if isinstance(arg.value, str) else arg.value
+                )
+
+        unrendered_kwargs = {}
+        for call_kwarg in kwarg.value.kwargs:
+            kwarg_value = _construct_static_kwarg_value(call_kwarg)
+
+            unrendered_kwargs[call_kwarg.key] = kwarg_value
+
+        formatted_unrendered_kwargs = [
+            f"{key}={value}" for key, value in unrendered_kwargs.items()
+        ]
+
+        formatted_all_args = ", ".join(
+            str(x) for x in (unrendered_args + formatted_unrendered_kwargs)
+        )
+
+        return f"{kwarg.value.node.name}({formatted_all_args})"
+
+    else:
+        return ""

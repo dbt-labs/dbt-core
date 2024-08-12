@@ -3,18 +3,15 @@ import os
 import pytest
 
 from dbt.tests.util import run_dbt
-from tests.functional.defer_state.fixtures import (  # model_with_env_var_in_config_sql,;; schema_source_with_env_var_as_property_yml,
+from tests.functional.defer_state.fixtures import (  # schema_source_with_env_var_as_property_yml
+    model_with_env_var_in_config_sql,
     model_with_no_in_config_sql,
     schema_model_with_env_var_in_config_yml,
 )
 from tests.functional.defer_state.test_modified_state import BaseModifiedState
 
 
-class BaseNodeWithEnvVarConfig(BaseModifiedState):
-    @pytest.fixture(scope="class")
-    def seeds(self):
-        return {}
-
+class BaseTestStateSelectionEnvVarConfig(BaseModifiedState):
     @pytest.fixture(scope="class", autouse=True)
     def setup(self):
         os.environ["DBT_TEST_STATE_MODIFIED"] = "table"
@@ -30,22 +27,22 @@ class BaseNodeWithEnvVarConfig(BaseModifiedState):
         results = run_dbt(["list", "-s", "state:modified", "--state", "./state"])
         assert len(results) == 0
 
-        # Change environment variable and assert no
+        # Change environment variable and assert no false positive
         # Environment variables do not have an effect on state:modified
         os.environ["DBT_TEST_STATE_MODIFIED"] = "view"
         results = run_dbt(["list", "-s", "state:modified", "--state", "./state"])
         assert len(results) == 0
 
 
-# class TestModelNodeWithEnvVarConfigInSqlFile(BaseNodeWithEnvVarConfig):
-#     @pytest.fixture(scope="class")
-#     def models(self):
-#         return {
-#             "model.sql": model_with_env_var_in_config_sql,
-#         }
+class TestModelNodeWithEnvVarConfigInSqlFile(BaseTestStateSelectionEnvVarConfig):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "model.sql": model_with_env_var_in_config_sql,
+        }
 
 
-class TestModelNodeWithEnvVarConfigInSchemaYml(BaseNodeWithEnvVarConfig):
+class TestModelNodeWithEnvVarConfigInSchemaYml(BaseTestStateSelectionEnvVarConfig):
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -54,7 +51,7 @@ class TestModelNodeWithEnvVarConfigInSchemaYml(BaseNodeWithEnvVarConfig):
         }
 
 
-class TestModelNodeWithEnvVarConfigInProjectYml(BaseNodeWithEnvVarConfig):
+class TestModelNodeWithEnvVarConfigInProjectYml(BaseTestStateSelectionEnvVarConfig):
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -72,7 +69,7 @@ class TestModelNodeWithEnvVarConfigInProjectYml(BaseNodeWithEnvVarConfig):
         }
 
 
-class TestModelNodeWithEnvVarConfigInProjectYmlAndSchemaYml(BaseNodeWithEnvVarConfig):
+class TestModelNodeWithEnvVarConfigInProjectYmlAndSchemaYml(BaseTestStateSelectionEnvVarConfig):
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -91,16 +88,16 @@ class TestModelNodeWithEnvVarConfigInProjectYmlAndSchemaYml(BaseNodeWithEnvVarCo
         }
 
 
-# class TestModelNodeWithEnvVarConfigInSqlAndSchemaYml(BaseNodeWithEnvVarConfig):
-#     @pytest.fixture(scope="class")
-#     def models(self):
-#         return {
-#             "model.sql": model_with_env_var_in_config_sql,
-#             "schema.yml": schema_model_with_env_var_in_config_yml
-#         }
+class TestModelNodeWithEnvVarConfigInSqlAndSchemaYml(BaseTestStateSelectionEnvVarConfig):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "model.sql": model_with_env_var_in_config_sql,
+            "schema.yml": schema_model_with_env_var_in_config_yml,
+        }
 
 
-# class TestSourceNodeWithEnvVarConfigInSchema(BaseNodeWithEnvVarConfig):
+# class TestSourceNodeWithEnvVarConfigInSchema(BaseTestStateSelectionEnvVarConfig):
 #     @pytest.fixture(scope="class")
 #     def models(self):
 #         return {

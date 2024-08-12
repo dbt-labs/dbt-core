@@ -286,6 +286,7 @@ class ContextConfig:
         project_name: str,
     ) -> None:
         self._config_call_dict: Dict[str, Any] = {}
+        self._unrendered_config_call_dict: Dict[str, Any] = {}
         self._active_project = active_project
         self._fqn = fqn
         self._resource_type = resource_type
@@ -294,6 +295,10 @@ class ContextConfig:
     def add_config_call(self, opts: Dict[str, Any]) -> None:
         dct = self._config_call_dict
         self._add_config_call(dct, opts)
+
+    def add_unrendered_config_call(self, opts: Dict[str, Any]) -> None:
+        # Cannot perform complex merge behaviours on unrendered configs as they may not be appropriate types.
+        self._unrendered_config_call_dict.update(opts)
 
     @classmethod
     def _add_config_call(cls, config_call_dict, opts: Dict[str, Any]) -> None:
@@ -353,12 +358,16 @@ class ContextConfig:
         if rendered:
             # TODO CT-211
             src = ContextConfigGenerator(self._active_project)  # type: ignore[var-annotated]
+            config_call_dict = self._config_call_dict
         else:
             # TODO CT-211
             src = UnrenderedConfigGenerator(self._active_project)  # type: ignore[assignment]
+            # TODO: behaviour flag can route behaviour here.
+            # TODO: consider using self._config_call_dict for python models as _unrendered_config_call_dict is unreliable
+            config_call_dict = self._unrendered_config_call_dict
 
         return src.calculate_node_config_dict(
-            config_call_dict=self._config_call_dict,
+            config_call_dict=config_call_dict,
             fqn=self._fqn,
             resource_type=self._resource_type,
             project_name=self._project_name,
