@@ -468,7 +468,7 @@ select_attrs = {
 inline = click.option(
     "--inline",
     envvar=None,
-    help="Pass SQL inline to dbt compile and show",
+    help="Pass SQL inline to 'dbt compile' and 'dbt show'",
 )
 
 # `--select` and `--models` are analogous for most commands except `dbt list` for legacy reasons.
