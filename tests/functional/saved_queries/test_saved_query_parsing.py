@@ -1,5 +1,6 @@
 import os
 import shutil
+from copy import deepcopy
 from typing import List
 
 import pytest
@@ -36,6 +37,17 @@ class TestSavedQueryParsing:
             "docs.md": saved_query_description,
         }
 
+    @pytest.fixture(scope="class")
+    def other_schema(self, unique_schema):
+        return unique_schema + "_other"
+
+    @pytest.fixture(scope="class")
+    def profiles_config_update(self, dbt_profile_target, unique_schema, other_schema):
+        outputs = {"default": dbt_profile_target, "prod": deepcopy(dbt_profile_target)}
+        outputs["default"]["schema"] = unique_schema
+        outputs["prod"]["schema"] = other_schema
+        return {"test": {"outputs": outputs, "target": "default"}}
+
     def copy_state(self):
         if not os.path.exists("state"):
             os.makedirs("state")
@@ -60,6 +72,11 @@ class TestSavedQueryParsing:
         assert saved_query.exports[0].config.alias == "my_export_alias"
         assert saved_query.exports[0].config.export_as == ExportDestinationType.TABLE
         assert saved_query.exports[0].config.schema_name == "my_export_schema_name"
+        assert saved_query.exports[0].unrendered_config == {
+            "alias": "my_export_alias",
+            "export_as": "table",
+            "schema": "my_export_schema_name",
+        }
 
         # Save state
         self.copy_state()
@@ -85,6 +102,86 @@ class TestSavedQueryParsing:
         # State modified finds changed saved_query
         results = run_dbt(["ls", "--select", "state:modified", "--state", "./state"])
         assert len(results) == 1
+
+    def test_semantic_model_parsing_change_export(self, project, other_schema):
+        runner = dbtTestRunner()
+        result = runner.invoke(["parse", "--no-partial-parse"])
+        assert result.success
+        assert isinstance(result.result, Manifest)
+        manifest = result.result
+        assert len(manifest.saved_queries) == 1
+        saved_query = manifest.saved_queries["saved_query.test.test_saved_query"]
+        assert saved_query.name == "test_saved_query"
+        assert saved_query.exports[0].name == "my_export"
+
+        # Save state
+        self.copy_state()
+        # Nothing has changed, so no state:modified results
+        results = run_dbt(["ls", "--select", "state:modified", "--state", "./state"])
+        assert len(results) == 0
+
+        # Change export name
+        write_file(
+            saved_queries_yml.replace("name: my_export", "name: my_expor2"),
+            project.project_root,
+            "models",
+            "saved_queries.yml",
+        )
+        # State modified finds changed saved_query
+        results = run_dbt(["ls", "--select", "state:modified", "--state", "./state"])
+        assert len(results) == 1
+
+        # Change export schema
+        write_file(
+            saved_queries_yml.replace(
+                "schema: my_export_schema_name", "schema: my_export_schema_name2"
+            ),
+            project.project_root,
+            "models",
+            "saved_queries.yml",
+        )
+        # State modified finds changed saved_query
+        results = run_dbt(["ls", "--select", "state:modified", "--state", "./state"])
+        assert len(results) == 1
+
+    def test_semantic_model_parsing_with_default_schema(self, project, other_schema):
+        write_file(
+            saved_queries_with_defaults_yml, project.project_root, "models", "saved_queries.yml"
+        )
+        runner = dbtTestRunner()
+        result = runner.invoke(["parse", "--no-partial-parse", "--target", "prod"])
+        assert result.success
+        assert isinstance(result.result, Manifest)
+        manifest = result.result
+        assert len(manifest.saved_queries) == 1
+        saved_query = manifest.saved_queries["saved_query.test.test_saved_query"]
+        assert saved_query.name == "test_saved_query"
+        assert len(saved_query.query_params.metrics) == 1
+        assert len(saved_query.query_params.group_by) == 1
+        assert len(saved_query.query_params.where.where_filters) == 3
+        assert len(saved_query.depends_on.nodes) == 1
+        assert saved_query.description == "My SavedQuery Description"
+        assert len(saved_query.exports) == 1
+        assert saved_query.exports[0].name == "my_export"
+        assert saved_query.exports[0].config.alias == "my_export_alias"
+        assert saved_query.exports[0].config.export_as == ExportDestinationType.TABLE
+        assert saved_query.exports[0].config.schema_name == other_schema
+        assert saved_query.exports[0].unrendered_config == {
+            "alias": "my_export_alias",
+            "export_as": "table",
+        }
+
+        # Save state
+        self.copy_state()
+        # Nothing has changed, so no state:modified results
+        results = run_dbt(
+            ["ls", "--select", "state:modified", "--state", "./state", "--target", "prod"]
+        )
+        assert len(results) == 0
+
+        # There should also be no state:modified results when using the default schema
+        results = run_dbt(["ls", "--select", "state:modified", "--state", "./state"])
+        assert len(results) == 0
 
     def test_saved_query_error(self, project):
         error_schema_yml = saved_queries_yml.replace("simple_metric", "metric_not_found")

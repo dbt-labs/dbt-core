@@ -1579,13 +1579,12 @@ class SavedQuery(NodeInfoMixin, GraphNode, SavedQueryResource):
 
         # exports should be in the same order, so we zip them for easy iteration
         for old_export, new_export in zip(old.exports, self.exports):
-            if not (
-                old_export.name == new_export.name
-                and old_export.config.export_as == new_export.config.export_as
-                and old_export.config.schema_name == new_export.config.schema_name
-                and old_export.config.alias == new_export.config.alias
-            ):
+            if not (old_export.name == new_export.name):
                 return False
+            keys = ["export_as", "schema", "alias"]
+            for key in keys:
+                if old_export.unrendered_config.get(key) != new_export.unrendered_config.get(key):
+                    return False
 
         return True
 
