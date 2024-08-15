@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: Remove usage of dbt.include.global_project in dbt/adapters
-time: 2023-10-26T18:49:53.36449-04:00
-custom:
-  Author: michelleark
-  Issue: "8925"

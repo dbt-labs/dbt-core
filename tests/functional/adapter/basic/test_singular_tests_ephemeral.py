@@ -1,12 +1,12 @@
 import pytest
 
-from dbt.tests.util import run_dbt, check_result_nodes_by_name
+from dbt.tests.util import check_result_nodes_by_name, run_dbt
 from tests.functional.adapter.basic.files import (
-    seeds_base_csv,
     ephemeral_with_cte_sql,
-    test_ephemeral_passing_sql,
-    test_ephemeral_failing_sql,
     schema_base_yml,
+    seeds_base_csv,
+    test_ephemeral_failing_sql,
+    test_ephemeral_passing_sql,
 )
 
 

@@ -1,42 +1,44 @@
-from distutils.util import strtobool
-
-import agate
-import daff
 import io
 import json
 import re
-from dataclasses import dataclass
-from dbt.utils import _coerce_decimal
-from dbt_common.events.format import pluralize
-from dbt_common.dataclass_schema import dbtClassMixin
 import threading
-from typing import Dict, Any, Optional, Union, List
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
+
+import daff
+
+from dbt.adapters.exceptions import MissingMaterializationError
+from dbt.artifacts.schemas.catalog import PrimitiveDict
+from dbt.artifacts.schemas.results import TestStatus
+from dbt.artifacts.schemas.run import RunResult
+from dbt.clients.jinja import MacroGenerator
+from dbt.context.providers import generate_runtime_model_context
+from dbt.contracts.graph.manifest import Manifest
+from dbt.contracts.graph.nodes import (
+    GenericTestNode,
+    SingularTestNode,
+    TestNode,
+    UnitTestDefinition,
+    UnitTestNode,
+)
+from dbt.events.types import LogStartLine, LogTestResult
+from dbt.exceptions import BooleanError, DbtInternalError
+from dbt.flags import get_flags
+from dbt.graph import ResourceTypeSelector
+from dbt.node_types import NodeType
+from dbt.parser.unit_tests import UnitTestManifestLoader
+from dbt.utils import _coerce_decimal, strtobool
+from dbt_common.dataclass_schema import dbtClassMixin
+from dbt_common.events.format import pluralize
+from dbt_common.events.functions import fire_event
+from dbt_common.exceptions import DbtBaseException, DbtRuntimeError
+from dbt_common.ui import green, red
 
 from .compile import CompileRunner
 from .run import RunTask
 
-from dbt.contracts.graph.nodes import TestNode, UnitTestDefinition, UnitTestNode
-from dbt.contracts.graph.manifest import Manifest
-from dbt.artifacts.schemas.results import TestStatus
-from dbt.artifacts.schemas.run import RunResult
-from dbt.artifacts.schemas.catalog import PrimitiveDict
-from dbt.context.providers import generate_runtime_model_context
-from dbt.clients.jinja import MacroGenerator
-from dbt_common.events.functions import fire_event
-from dbt.events.types import (
-    LogTestResult,
-    LogStartLine,
-)
-from dbt.exceptions import DbtInternalError, BooleanError
-from dbt_common.exceptions import DbtBaseException, DbtRuntimeError
-from dbt.adapters.exceptions import MissingMaterializationError
-from dbt.graph import (
-    ResourceTypeSelector,
-)
-from dbt.node_types import NodeType
-from dbt.parser.unit_tests import UnitTestManifestLoader
-from dbt.flags import get_flags
-from dbt_common.ui import green, red
+if TYPE_CHECKING:
+    import agate
 
 
 @dataclass
@@ -80,6 +82,7 @@ class UnitTestResultData(dbtClassMixin):
 
 class TestRunner(CompileRunner):
     _ANSI_ESCAPE = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+    _LOG_TEST_RESULT_EVENTS = LogTestResult
 
     def describe_node_name(self):
         if self.node.resource_type == NodeType.Unit:
@@ -95,7 +98,7 @@ class TestRunner(CompileRunner):
         model = result.node
 
         fire_event(
-            LogTestResult(
+            self._LOG_TEST_RESULT_EVENTS(
                 name=self.describe_node_name(),
                 status=str(result.status),
                 index=self.node_index,
@@ -123,6 +126,8 @@ class TestRunner(CompileRunner):
     def execute_data_test(self, data_test: TestNode, manifest: Manifest) -> TestResultData:
         context = generate_runtime_model_context(data_test, self.config, manifest)
 
+        hook_ctx = self.adapter.pre_model_hook(context)
+
         materialization_macro = manifest.find_materialization_macro_by_name(
             self.config.project_name, data_test.get_materialization(), self.adapter.type()
         )
@@ -139,8 +144,12 @@ class TestRunner(CompileRunner):
 
         # generate materialization macro
         macro_func = MacroGenerator(materialization_macro, context)
-        # execute materialization macro
-        macro_func()
+        try:
+            # execute materialization macro
+            macro_func()
+        finally:
+            self.adapter.post_model_hook(context, hook_ctx)
+
         # load results from context
         # could eventually be returned directly by materialization
         result = context["load_result"]("main")
@@ -179,7 +188,7 @@ class TestRunner(CompileRunner):
 
     def execute_unit_test(
         self, unit_test_def: UnitTestDefinition, manifest: Manifest
-    ) -> UnitTestResultData:
+    ) -> Tuple[UnitTestNode, UnitTestResultData]:
 
         unit_test_manifest = self.build_unit_test_manifest_from_test(unit_test_def, manifest)
 
@@ -189,10 +198,13 @@ class TestRunner(CompileRunner):
 
         # Compile the node
         unit_test_node = self.compiler.compile_node(unit_test_node, unit_test_manifest, {})
+        assert isinstance(unit_test_node, UnitTestNode)
 
         # generate_runtime_unit_test_context not strictly needed - this is to run the 'unit'
         # materialization, not compile the node.compiled_code
         context = generate_runtime_model_context(unit_test_node, self.config, unit_test_manifest)
+
+        hook_ctx = self.adapter.pre_model_hook(context)
 
         materialization_macro = unit_test_manifest.find_materialization_macro_by_name(
             self.config.project_name, unit_test_node.get_materialization(), self.adapter.type()
@@ -211,14 +223,16 @@ class TestRunner(CompileRunner):
 
         # generate materialization macro
         macro_func = MacroGenerator(materialization_macro, context)
-        # execute materialization macro
         try:
+            # execute materialization macro
             macro_func()
         except DbtBaseException as e:
             raise DbtRuntimeError(
                 f"An error occurred during execution of unit test '{unit_test_def.name}'. "
                 f"There may be an error in the unit test definition: check the data types.\n {e}"
             )
+        finally:
+            self.adapter.post_model_hook(context, hook_ctx)
 
         # load results from context
         # could eventually be returned directly by materialization
@@ -242,18 +256,21 @@ class TestRunner(CompileRunner):
                 rendered=rendered,
             )
 
-        return UnitTestResultData(
+        unit_test_result_data = UnitTestResultData(
             diff=diff,
             should_error=should_error,
             adapter_response=adapter_response,
         )
 
-    def execute(self, test: Union[TestNode, UnitTestDefinition], manifest: Manifest):
+        return unit_test_node, unit_test_result_data
+
+    def execute(self, test: Union[TestNode, UnitTestNode], manifest: Manifest):
         if isinstance(test, UnitTestDefinition):
-            unit_test_result = self.execute_unit_test(test, manifest)
-            return self.build_unit_test_run_result(test, unit_test_result)
+            unit_test_node, unit_test_result = self.execute_unit_test(test, manifest)
+            return self.build_unit_test_run_result(unit_test_node, unit_test_result)
         else:
             # Note: manifest here is a normal manifest
+            assert isinstance(test, (SingularTestNode, GenericTestNode))
             test_result = self.execute_data_test(test, manifest)
             return self.build_test_run_result(test, test_result)
 
@@ -269,7 +286,9 @@ class TestRunner(CompileRunner):
             message = f"Got {num_errors}, configured to fail if {test.config.error_if}"
             failures = result.failures
         elif result.should_warn:
-            if get_flags().WARN_ERROR:
+            if get_flags().WARN_ERROR or get_flags().WARN_ERROR_OPTIONS.includes(
+                self._LOG_TEST_RESULT_EVENTS.__name__
+            ):
                 status = TestStatus.Fail
                 message = f"Got {num_errors}, configured to fail if {test.config.warn_if}"
             else:
@@ -292,7 +311,7 @@ class TestRunner(CompileRunner):
         return run_result
 
     def build_unit_test_run_result(
-        self, test: UnitTestDefinition, result: UnitTestResultData
+        self, test: UnitTestNode, result: UnitTestResultData
     ) -> RunResult:
         thread_id = threading.current_thread().name
 
@@ -305,7 +324,7 @@ class TestRunner(CompileRunner):
             failures = 1
 
         return RunResult(
-            node=test,  # type: ignore
+            node=test,
             status=status,
             timing=[],
             thread_id=thread_id,
@@ -327,17 +346,18 @@ class TestRunner(CompileRunner):
         return unit_test_table.select(columns)
 
     def _get_daff_diff(
-        self, expected: agate.Table, actual: agate.Table, ordered: bool = False
+        self, expected: "agate.Table", actual: "agate.Table", ordered: bool = False
     ) -> daff.TableDiff:
-
-        expected_daff_table = daff.PythonTableView(list_rows_from_table(expected))
-        actual_daff_table = daff.PythonTableView(list_rows_from_table(actual))
-
-        alignment = daff.Coopy.compareTables(expected_daff_table, actual_daff_table).align()
-        result = daff.PythonTableView([])
+        # Sort expected and actual inputs prior to creating daff diff to ensure order insensitivity
+        # https://github.com/paulfitz/daff/issues/200
+        expected_daff_table = daff.PythonTableView(list_rows_from_table(expected, sort=True))
+        actual_daff_table = daff.PythonTableView(list_rows_from_table(actual, sort=True))
 
         flags = daff.CompareFlags()
         flags.ordered = ordered
+
+        alignment = daff.Coopy.compareTables(expected_daff_table, actual_daff_table, flags).align()
+        result = daff.PythonTableView([])
 
         diff = daff.TableDiff(alignment, flags)
         diff.hilite(result)
@@ -390,7 +410,7 @@ class TestTask(RunTask):
 
 
 # This was originally in agate_helper, but that was moved out into dbt_common
-def json_rows_from_table(table: agate.Table) -> List[Dict[str, Any]]:
+def json_rows_from_table(table: "agate.Table") -> List[Dict[str, Any]]:
     "Convert a table to a list of row dict objects"
     output = io.StringIO()
     table.to_json(path=output)  # type: ignore
@@ -399,10 +419,25 @@ def json_rows_from_table(table: agate.Table) -> List[Dict[str, Any]]:
 
 
 # This was originally in agate_helper, but that was moved out into dbt_common
-def list_rows_from_table(table: agate.Table) -> List[Any]:
-    "Convert a table to a list of lists, where the first element represents the header"
-    rows = [[col.name for col in table.columns]]
+def list_rows_from_table(table: "agate.Table", sort: bool = False) -> List[Any]:
+    """
+    Convert given table to a list of lists, where the first element represents the header
+
+    By default, sort is False and no sort order is applied to the non-header rows of the given table.
+
+    If sort is True, sort the non-header rows hierarchically, treating None values as lower in order.
+    Examples:
+        * [['a','b','c'],[4,5,6],[1,2,3]] -> [['a','b','c'],[1,2,3],[4,5,6]]
+        * [['a','b','c'],[4,5,6],[1,null,3]] -> [['a','b','c'],[1,null,3],[4,5,6]]
+        * [['a','b','c'],[4,5,6],[null,2,3]] -> [['a','b','c'],[4,5,6],[null,2,3]]
+    """
+    header = [col.name for col in table.columns]
+
+    rows = []
     for row in table.rows:
         rows.append(list(row.values()))
 
-    return rows
+    if sort:
+        rows = sorted(rows, key=lambda x: [(elem is None, elem) for elem in x])
+
+    return [header] + rows

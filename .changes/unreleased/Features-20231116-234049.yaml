@@ -1,6 +1,0 @@
-kind: Features
-body: Support --empty flag for schema-only dry runs
-time: 2023-11-16T23:40:49.96651-05:00
-custom:
-  Author: michelleark
-  Issue: "8971"

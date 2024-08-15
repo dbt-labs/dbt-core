@@ -1,19 +1,18 @@
 import pytest
+
 from dbt.artifacts.resources import MetricConfig
-from dbt_common.dataclass_schema import ValidationError
 from dbt.exceptions import CompilationError, ParsingError
-from dbt.tests.util import run_dbt, update_config_file, get_manifest
-
-
+from dbt.tests.util import get_manifest, run_dbt, update_config_file
+from dbt_common.dataclass_schema import ValidationError
 from tests.functional.metrics.fixtures import (
-    models_people_sql,
-    models_people_metrics_yml,
-    models_people_metrics_meta_top_yml,
-    metricflow_time_spine_sql,
     disabled_metric_level_schema_yml,
     enabled_metric_level_schema_yml,
-    models_people_metrics_sql,
     invalid_config_metric_yml,
+    metricflow_time_spine_sql,
+    models_people_metrics_meta_top_yml,
+    models_people_metrics_sql,
+    models_people_metrics_yml,
+    models_people_sql,
     semantic_model_people_yml,
 )
 

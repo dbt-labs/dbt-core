@@ -1,5 +1,8 @@
 import pytest
-from tests.functional.adapter.utils.data_types.base_data_type_macro import BaseDataTypeMacro
+
+from tests.functional.adapter.utils.data_types.base_data_type_macro import (
+    BaseDataTypeMacro,
+)
 
 models__expected_sql = """
 select 9223372036854775800 as bigint_col

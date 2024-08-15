@@ -1,9 +1,10 @@
-import pytest
 import os
 
-from dbt.constants import SECRET_ENV_PREFIX, DEFAULT_ENV_PLACEHOLDER
-from dbt.tests.util import run_dbt, get_manifest, run_dbt_and_capture
+import pytest
 
+from dbt.constants import DEFAULT_ENV_PLACEHOLDER
+from dbt.tests.util import get_manifest, run_dbt, run_dbt_and_capture
+from dbt_common.constants import SECRET_ENV_PREFIX
 
 context_sql = """
 
@@ -55,13 +56,13 @@ class TestEnvVars:
         os.environ["DBT_TEST_ENV_VAR"] = "1"
         os.environ["DBT_TEST_USER"] = "root"
         os.environ["DBT_TEST_PASS"] = "password"
-        os.environ[SECRET_ENV_PREFIX + "SECRET"] = "secret_variable"
+        os.environ[SECRET_ENV_PREFIX + "_SECRET"] = "secret_variable"
         os.environ["DBT_TEST_NOT_SECRET"] = "regular_variable"
         os.environ["DBT_TEST_IGNORE_DEFAULT"] = "ignored_default"
         yield
         del os.environ["DBT_TEST_ENV_VAR"]
         del os.environ["DBT_TEST_USER"]
-        del os.environ[SECRET_ENV_PREFIX + "SECRET"]
+        del os.environ[SECRET_ENV_PREFIX + "_SECRET"]
         del os.environ["DBT_TEST_NOT_SECRET"]
         del os.environ["DBT_TEST_IGNORE_DEFAULT"]
 
@@ -191,3 +192,4 @@ class TestEnvVars:
 
         assert not ("secret_variable" in log_output)
         assert "regular_variable" in log_output
+        del os.environ["DBT_DEBUG"]

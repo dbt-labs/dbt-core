@@ -1,0 +1,6 @@
+kind: Fixes
+body: Add resource type to saved_query
+time: 2024-05-16T22:35:10.287514-07:00
+custom:
+  Author: ChenyuLInx
+  Issue: "10168"

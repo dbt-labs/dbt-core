@@ -4,7 +4,7 @@
 ## Artifacts
 
 ### Generating JSON schemas
-A helper script, `sripts/collect-artifact-schema.py` is available to generate json schemas corresponding to versioned artifacts (`ArtifactMixin`s).
+A helper script, `scripts/collect-artifact-schema.py` is available to generate json schemas corresponding to versioned artifacts (`ArtifactMixin`s).
 
 This script is necessary to run when a new artifact schema version is created, or when changes are made to existing artifact versions, and writes json schema to `schema/dbt/<artifact>/v<version>.json`.
 

@@ -2,17 +2,16 @@ from typing import List
 
 import pytest
 
-from dbt_semantic_interfaces.type_enums.time_granularity import TimeGranularity
-
 from dbt.contracts.graph.manifest import Manifest
+from dbt.tests.util import run_dbt, write_file
 from dbt_common.events.base_types import BaseEvent
-from dbt.tests.util import write_file
+from dbt_semantic_interfaces.type_enums.time_granularity import TimeGranularity
 from tests.functional.assertions.test_runner import dbtTestRunner
-
 from tests.functional.semantic_models.fixtures import (
-    schema_without_semantic_model_yml,
     fct_revenue_sql,
     metricflow_time_spine_sql,
+    multi_sm_schema_yml,
+    schema_without_semantic_model_yml,
     schema_yml,
 )
 
@@ -39,11 +38,14 @@ class TestSemanticModelParsing:
             semantic_model.node_relation.relation_name
             == f'"dbt"."{project.test_schema}"."fct_revenue"'
         )
-        assert len(semantic_model.measures) == 6
-        # manifest should have one metric (that was created from a measure)
-        assert len(manifest.metrics) == 2
+        assert len(semantic_model.measures) == 7
+        # manifest should have two metrics created from measures
+        assert len(manifest.metrics) == 3
         metric = manifest.metrics["metric.test.txn_revenue"]
         assert metric.name == "txn_revenue"
+        metric_with_label = manifest.metrics["metric.test.txn_revenue_with_label"]
+        assert metric_with_label.name == "txn_revenue_with_label"
+        assert metric_with_label.label == "Transaction Revenue with label"
 
     def test_semantic_model_error(self, project):
         # Next, modify the default schema.yml to remove the semantic model.
@@ -108,6 +110,7 @@ class TestSemanticModelPartialParsing:
 
     def test_semantic_model_flipping_create_metric_partial_parsing(self, project):
         generated_metric = "metric.test.txn_revenue"
+        generated_metric_with_label = "metric.test.txn_revenue_with_label"
         # First, use the default schema.yml to define our semantic model, and
         # run the dbt parse command
         write_file(schema_yml, project.project_root, "models", "schema.yml")
@@ -118,6 +121,11 @@ class TestSemanticModelPartialParsing:
         # Verify the metric created by `create_metric: true` exists
         metric = result.result.metrics[generated_metric]
         assert metric.name == "txn_revenue"
+        assert metric.label == "txn_revenue"
+
+        metric_with_label = result.result.metrics[generated_metric_with_label]
+        assert metric_with_label.name == "txn_revenue_with_label"
+        assert metric_with_label.label == "Transaction Revenue with label"
 
         # --- Next, modify the default schema.yml to have no `create_metric: true` ---
         no_create_metric_schema_yml = schema_yml.replace(
@@ -148,3 +156,28 @@ class TestSemanticModelPartialParsing:
         # Verify the metric originally created by `create_metric: true` was removed
         metric = result.result.metrics[generated_metric]
         assert metric.name == "txn_revenue"
+
+
+class TestSemanticModelPartialParsingGeneratedMetrics:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": multi_sm_schema_yml,
+            "fct_revenue.sql": fct_revenue_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+        }
+
+    def test_generated_metrics(self, project):
+        manifest = run_dbt(["parse"])
+        expected = {
+            "metric.test.simple_metric",
+            "metric.test.txn_revenue",
+            "metric.test.alt_txn_revenue",
+        }
+        assert set(manifest.metrics.keys()) == expected
+
+        # change description of 'revenue' semantic model
+        modified_schema_yml = multi_sm_schema_yml.replace("first", "FIRST")
+        write_file(modified_schema_yml, project.project_root, "models", "schema.yml")
+        manifest = run_dbt(["parse"])
+        assert set(manifest.metrics.keys()) == expected

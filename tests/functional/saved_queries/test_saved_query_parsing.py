@@ -1,13 +1,23 @@
+import os
+import shutil
 from typing import List
 
 import pytest
 
 from dbt.contracts.graph.manifest import Manifest
+from dbt.tests.util import run_dbt, write_file
 from dbt_common.events.base_types import BaseEvent
-from dbt.tests.util import write_file
-from dbt_semantic_interfaces.type_enums.export_destination_type import ExportDestinationType
+from dbt_semantic_interfaces.type_enums.export_destination_type import (
+    ExportDestinationType,
+)
 from tests.functional.assertions.test_runner import dbtTestRunner
-from tests.functional.saved_queries.fixtures import saved_queries_yml, saved_query_description
+from tests.functional.saved_queries.fixtures import (
+    saved_queries_with_defaults_yml,
+    saved_queries_with_diff_filters_yml,
+    saved_queries_yml,
+    saved_query_description,
+    saved_query_with_cache_configs_defined_yml,
+)
 from tests.functional.semantic_models.fixtures import (
     fct_revenue_sql,
     metricflow_time_spine_sql,
@@ -26,6 +36,11 @@ class TestSavedQueryParsing:
             "docs.md": saved_query_description,
         }
 
+    def copy_state(self):
+        if not os.path.exists("state"):
+            os.makedirs("state")
+        shutil.copyfile("target/manifest.json", "state/manifest.json")
+
     def test_semantic_model_parsing(self, project):
         runner = dbtTestRunner()
         result = runner.invoke(["parse", "--no-partial-parse"])
@@ -37,7 +52,7 @@ class TestSavedQueryParsing:
         assert saved_query.name == "test_saved_query"
         assert len(saved_query.query_params.metrics) == 1
         assert len(saved_query.query_params.group_by) == 1
-        assert len(saved_query.query_params.where.where_filters) == 2
+        assert len(saved_query.query_params.where.where_filters) == 3
         assert len(saved_query.depends_on.nodes) == 1
         assert saved_query.description == "My SavedQuery Description"
         assert len(saved_query.exports) == 1
@@ -45,6 +60,31 @@ class TestSavedQueryParsing:
         assert saved_query.exports[0].config.alias == "my_export_alias"
         assert saved_query.exports[0].config.export_as == ExportDestinationType.TABLE
         assert saved_query.exports[0].config.schema_name == "my_export_schema_name"
+
+        # Save state
+        self.copy_state()
+        # Nothing has changed, so no state:modified results
+        results = run_dbt(["ls", "--select", "state:modified", "--state", "./state"])
+        assert len(results) == 0
+
+        # Change saved_query
+        write_file(
+            saved_query_with_cache_configs_defined_yml,
+            project.project_root,
+            "models",
+            "saved_queries.yml",
+        )
+        # State modified finds changed saved_query
+        results = run_dbt(["ls", "--select", "state:modified", "--state", "./state"])
+        assert len(results) == 1
+
+        # change exports
+        write_file(
+            saved_queries_with_defaults_yml, project.project_root, "models", "saved_queries.yml"
+        )
+        # State modified finds changed saved_query
+        results = run_dbt(["ls", "--select", "state:modified", "--state", "./state"])
+        assert len(results) == 1
 
     def test_saved_query_error(self, project):
         error_schema_yml = saved_queries_yml.replace("simple_metric", "metric_not_found")
@@ -63,11 +103,37 @@ class TestSavedQueryPartialParsing:
     def models(self):
         return {
             "saved_queries.yml": saved_queries_yml,
+            "saved_queries_with_diff_filters.yml": saved_queries_with_diff_filters_yml,
             "schema.yml": schema_yml,
             "fct_revenue.sql": fct_revenue_sql,
             "metricflow_time_spine.sql": metricflow_time_spine_sql,
             "docs.md": saved_query_description,
         }
+
+    def test_saved_query_filter_types(self, project):
+        runner = dbtTestRunner()
+        result = runner.invoke(["parse"])
+        assert result.success
+
+        manifest = result.result
+        saved_query1 = manifest.saved_queries["saved_query.test.test_saved_query_where_list"]
+        saved_query2 = manifest.saved_queries["saved_query.test.test_saved_query_where_str"]
+
+        # List filter
+        assert len(saved_query1.query_params.where.where_filters) == 2
+        assert {
+            where_filter.where_sql_template
+            for where_filter in saved_query1.query_params.where.where_filters
+        } == {
+            "{{ Dimension('user__ds', 'DAY') }} <= now()",
+            "{{ Dimension('user__ds', 'DAY') }} >= '2023-01-01'",
+        }
+        # String filter
+        assert len(saved_query2.query_params.where.where_filters) == 1
+        assert (
+            saved_query2.query_params.where.where_filters[0].where_sql_template
+            == "{{ Dimension('user__ds', 'DAY') }} <= now()"
+        )
 
     def test_saved_query_metrics_changed(self, project):
         # First, use the default saved_queries.yml to define our saved_queries, and

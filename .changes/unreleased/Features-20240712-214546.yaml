@@ -1,0 +1,6 @@
+kind: Features
+body: Support standard schema/database fields for snapshots
+time: 2024-07-12T21:45:46.06011-04:00
+custom:
+  Author: gshank
+  Issue: "10301"

@@ -1,17 +1,13 @@
 import logging
 import re
-from argparse import Namespace
 from typing import TypeVar
 
 import pytest
 
 from dbt.adapters.events import types as adapter_types
-from dbt_common.events.event_manager_client import ctx_set_event_manager
-from dbt.artifacts.schemas.results import TimingInfo, RunStatus
-from dbt.artifacts.schemas.run import RunResult
-from dbt_common.events import types
 from dbt.adapters.events.logging import AdapterLogger
-from dbt_common.events.base_types import msg_from_base_event
+from dbt.artifacts.schemas.results import RunStatus, TimingInfo
+from dbt.artifacts.schemas.run import RunResult
 from dbt.events import types as core_types
 from dbt.events.base_types import (
     CoreBaseEvent,
@@ -22,14 +18,14 @@ from dbt.events.base_types import (
     TestLevel,
     WarnLevel,
 )
-from dbt_common.events.event_manager import TestEventManager, EventManager
+from dbt.events.types import RunResultError
+from dbt.task.printer import print_run_result_error
+from dbt_common.events import types
+from dbt_common.events.base_types import msg_from_base_event
+from dbt_common.events.event_manager import EventManager, TestEventManager
+from dbt_common.events.event_manager_client import ctx_set_event_manager
 from dbt_common.events.functions import msg_to_dict, msg_to_json
 from dbt_common.events.helpers import get_json_string_utcnow
-from dbt.events.types import RunResultError
-from dbt.flags import set_from_args
-from dbt.task.printer import print_run_result_error
-
-set_from_args(Namespace(WARN_ERROR=False), None)
 
 
 # takes in a class and finds any subclasses for it
@@ -124,7 +120,6 @@ sample_values = [
     core_types.MainReportVersion(version=""),
     core_types.MainReportArgs(args={}),
     core_types.MainTrackingUserState(user_state=""),
-    core_types.MergedFromState(num_merged=0, sample=[]),
     core_types.MissingProfileTarget(profile_name="", target_name=""),
     core_types.InvalidOptionYAML(option_name="vars"),
     core_types.LogDbtProjectError(),
@@ -154,6 +149,14 @@ sample_values = [
     adapter_types.CollectFreshnessReturnSignature(),
     core_types.TestsConfigDeprecation(deprecated_path="", exp_path=""),
     core_types.ProjectFlagsMovedDeprecation(),
+    core_types.SpacesInResourceNameDeprecation(unique_id="", level=""),
+    core_types.ResourceNamesWithSpacesDeprecation(
+        count_invalid_names=1, show_debug_hint=True, level=""
+    ),
+    core_types.PackageMaterializationOverrideDeprecation(
+        package_name="my_package", materialization_name="view"
+    ),
+    core_types.SourceFreshnessProjectHooksNotRun(),
     # E - DB Adapter ======================
     adapter_types.AdapterEventDebug(),
     adapter_types.AdapterEventInfo(),
@@ -360,6 +363,13 @@ sample_values = [
         total=0,
         execution_time=0,
     ),
+    core_types.LogNodeNoOpResult(
+        description="",
+        status="",
+        index=0,
+        total=0,
+        execution_time=0,
+    ),
     core_types.LogCancelLine(conn_name=""),
     core_types.DefaultSelector(name=""),
     core_types.NodeStart(),
@@ -432,6 +442,7 @@ sample_values = [
     core_types.SQLCompiledPath(path=""),
     core_types.CheckNodeTestFailure(relation_name=""),
     core_types.EndOfRunSummary(num_errors=0, num_warnings=0, keyboard_interrupt=False),
+    core_types.MarkSkippedChildren(unique_id="", status="skipped"),
     core_types.LogSkipBecauseError(schema="", relation="", index=0, total=0),
     core_types.EnsureGitInstalled(),
     core_types.DepsCreatingLocalSymlink(),

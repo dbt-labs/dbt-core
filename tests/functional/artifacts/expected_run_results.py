@@ -1,4 +1,5 @@
 from unittest.mock import ANY
+
 from dbt.tests.util import AnyFloat
 
 

@@ -1,6 +1,0 @@
-kind: Features
-body: Use daff to render diff displayed in stdout when unit test fails
-time: 2023-11-14T10:15:55.689307-05:00
-custom:
-  Author: michelleark
-  Issue: "8558"

@@ -1,6 +1,6 @@
 import pytest
-from dbt.tests.util import run_dbt
 
+from dbt.tests.util import run_dbt
 
 models__do_nothing__sql = """
 with x as (select pg_sleep(1)) select 1

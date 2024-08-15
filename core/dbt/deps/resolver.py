@@ -1,29 +1,27 @@
 from dataclasses import dataclass, field
-from typing import Dict, List, NoReturn, Union, Type, Iterator, Set, Any
-
-from dbt.exceptions import (
-    DuplicateDependencyToRootError,
-    DuplicateProjectDependencyError,
-    MismatchedDependencyTypeError,
-    DbtInternalError,
-)
+from typing import Any, Dict, Iterator, List, NoReturn, Set, Type
 
 from dbt.config import Project
 from dbt.config.renderer import PackageRenderer
-from dbt.deps.base import BasePackage, PinnedPackage, UnpinnedPackage
-from dbt.deps.local import LocalUnpinnedPackage
-from dbt.deps.tarball import TarballUnpinnedPackage
-from dbt.deps.git import GitUnpinnedPackage
-from dbt.deps.registry import RegistryUnpinnedPackage
-
 from dbt.contracts.project import (
-    LocalPackage,
-    TarballPackage,
     GitPackage,
+    LocalPackage,
+    PackageSpec,
+    PrivatePackage,
     RegistryPackage,
+    TarballPackage,
 )
-
-PackageContract = Union[LocalPackage, TarballPackage, GitPackage, RegistryPackage]
+from dbt.deps.base import BasePackage, PinnedPackage, UnpinnedPackage
+from dbt.deps.git import GitUnpinnedPackage
+from dbt.deps.local import LocalUnpinnedPackage
+from dbt.deps.registry import RegistryUnpinnedPackage
+from dbt.deps.tarball import TarballUnpinnedPackage
+from dbt.exceptions import (
+    DependencyError,
+    DuplicateDependencyToRootError,
+    DuplicateProjectDependencyError,
+    MismatchedDependencyTypeError,
+)
 
 
 @dataclass
@@ -68,7 +66,7 @@ class PackageListing:
         else:
             self.packages[key] = package
 
-    def update_from(self, src: List[PackageContract]) -> None:
+    def update_from(self, src: List[PackageSpec]) -> None:
         pkg: UnpinnedPackage
         for contract in src:
             if isinstance(contract, LocalPackage):
@@ -77,16 +75,18 @@ class PackageListing:
                 pkg = TarballUnpinnedPackage.from_contract(contract)
             elif isinstance(contract, GitPackage):
                 pkg = GitUnpinnedPackage.from_contract(contract)
+            elif isinstance(contract, PrivatePackage):
+                raise DependencyError(
+                    f'Cannot resolve private package {contract.private} because git provider integration is missing. Please use a "git" package instead.'
+                )
             elif isinstance(contract, RegistryPackage):
                 pkg = RegistryUnpinnedPackage.from_contract(contract)
             else:
-                raise DbtInternalError("Invalid package type {}".format(type(contract)))
+                raise DependencyError("Invalid package type {}".format(type(contract)))
             self.incorporate(pkg)
 
     @classmethod
-    def from_contracts(
-        cls: Type["PackageListing"], src: List[PackageContract]
-    ) -> "PackageListing":
+    def from_contracts(cls: Type["PackageListing"], src: List[PackageSpec]) -> "PackageListing":
         self = cls({})
         self.update_from(src)
         return self
@@ -114,7 +114,7 @@ def _check_for_duplicate_project_names(
 
 
 def resolve_packages(
-    packages: List[PackageContract],
+    packages: List[PackageSpec],
     project: Project,
     cli_vars: Dict[str, Any],
 ) -> List[PinnedPackage]:
@@ -137,7 +137,7 @@ def resolve_packages(
     return resolved
 
 
-def resolve_lock_packages(packages: List[PackageContract]) -> List[PinnedPackage]:
+def resolve_lock_packages(packages: List[PackageSpec]) -> List[PinnedPackage]:
     lock_packages = PackageListing.from_contracts(packages)
     final = PackageListing()
 

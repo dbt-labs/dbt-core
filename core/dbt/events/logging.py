@@ -1,21 +1,21 @@
 import os
 from functools import partial
-from typing import List, Callable
+from typing import Callable, List
 
-from dbt_common.events.base_types import EventMsg, EventLevel
+from dbt_common.events.base_types import EventLevel, EventMsg
 from dbt_common.events.event_manager_client import (
+    add_logger_to_manager,
     cleanup_event_logger,
     get_event_manager,
-    add_logger_to_manager,
 )
 from dbt_common.events.functions import (
-    make_log_dir_if_missing,
     env_scrubber,
-    get_stdout_config,
     get_capture_stream,
+    get_stdout_config,
+    make_log_dir_if_missing,
 )
-from dbt_common.invocation import get_invocation_id
 from dbt_common.events.logger import LineFormat, LoggerConfig
+from dbt_common.invocation import get_invocation_id
 
 # These are the logging events issued by the "clean" command,
 # where we can't count on having a log directory. We've removed
@@ -74,9 +74,7 @@ def setup_event_logger(flags, callbacks: List[Callable[[EventMsg], None]] = []) 
         log_level = (
             EventLevel.ERROR
             if flags.QUIET
-            else EventLevel.DEBUG
-            if flags.DEBUG
-            else EventLevel(flags.LOG_LEVEL)
+            else EventLevel.DEBUG if flags.DEBUG else EventLevel(flags.LOG_LEVEL)
         )
         console_config = get_stdout_config(
             line_format,

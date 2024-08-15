@@ -1,6 +1,0 @@
-kind: Features
-body: migrate utils to common and adapters folders
-time: 2023-10-26T11:08:21.458709-07:00
-custom:
-  Author: colin-rogers-dbt
-  Issue: "8924"

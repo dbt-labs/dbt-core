@@ -1,15 +1,11 @@
-from dataclasses import replace
 import itertools
+from dataclasses import replace
 from pathlib import Path
-from typing import Iterable, Dict, Optional, Set, Any, List
+from typing import Any, Dict, Iterable, List, Optional, Set
 
 from dbt.adapters.capability import Capability
 from dbt.adapters.factory import get_adapter
-from dbt.artifacts.resources import (
-    FreshnessThreshold,
-    SourceConfig,
-    Time,
-)
+from dbt.artifacts.resources import FreshnessThreshold, SourceConfig, Time
 from dbt.config import RuntimeConfig
 from dbt.context.context_config import (
     BaseContextConfigGenerator,
@@ -18,25 +14,23 @@ from dbt.context.context_config import (
 )
 from dbt.contracts.graph.manifest import Manifest, SourceKey
 from dbt.contracts.graph.nodes import (
-    UnpatchedSourceDefinition,
-    SourceDefinition,
     GenericTestNode,
+    SourceDefinition,
+    UnpatchedSourceDefinition,
 )
 from dbt.contracts.graph.unparsed import (
-    UnparsedSourceDefinition,
     SourcePatch,
     SourceTablePatch,
-    UnparsedSourceTableDefinition,
     UnparsedColumn,
+    UnparsedSourceDefinition,
+    UnparsedSourceTableDefinition,
 )
-from dbt_common.events.functions import warn_or_error, fire_event
-from dbt.events.types import UnusedTables, FreshnessConfigProblem
-
-from dbt_common.exceptions import DbtInternalError
+from dbt.events.types import FreshnessConfigProblem, UnusedTables
 from dbt.node_types import NodeType
-
 from dbt.parser.common import ParserRef
 from dbt.parser.schema_generic_tests import SchemaGenericTestParser
+from dbt_common.events.functions import fire_event, warn_or_error
+from dbt_common.exceptions import DbtInternalError
 
 
 # An UnparsedSourceDefinition is taken directly from the yaml
@@ -132,14 +126,22 @@ class SourcePatcher:
         refs = ParserRef.from_target(table)
         unique_id = target.unique_id
         description = table.description or ""
-        meta = table.meta or {}
         source_description = source.description or ""
-        loaded_at_field = table.loaded_at_field or source.loaded_at_field
+
+        # We need to be able to tell the difference between explicitly setting the loaded_at_field to None/null
+        # and when it's simply not set.  This allows a user to override the source level loaded_at_field so that
+        # specific table can default to metadata-based freshness.
+        if table.loaded_at_field_present or table.loaded_at_field is not None:
+            loaded_at_field = table.loaded_at_field
+        else:
+            loaded_at_field = source.loaded_at_field  # may be None, that's okay
 
         freshness = merge_freshness(source.freshness, table.freshness)
         quoting = source.quoting.merged(table.quoting)
         # path = block.path.original_file_path
+        table_meta = table.meta or {}
         source_meta = source.meta or {}
+        meta = {**source_meta, **table_meta}
 
         # make sure we don't do duplicate tags from source + table
         tags = sorted(set(itertools.chain(source.tags, table.tags)))
@@ -201,7 +203,7 @@ class SourcePatcher:
             # runtime.
             fire_event(
                 FreshnessConfigProblem(
-                    msg=f"The configured adapter does not support metadata-based freshness. A loaded_at_field must be specified for source '{source.name}'."
+                    msg=f"The configured adapter does not support metadata-based freshness. A loaded_at_field must be specified for source '{source.name}.{table.name}'."
                 )
             )
 
@@ -224,6 +226,8 @@ class SourcePatcher:
         return generic_test_parser
 
     def get_source_tests(self, target: UnpatchedSourceDefinition) -> Iterable[GenericTestNode]:
+        is_root_project = True if self.root_project.project_name == target.package_name else False
+        target.validate_data_tests(is_root_project)
         for data_test, column in target.get_tests():
             yield self.parse_source_test(
                 target=target,

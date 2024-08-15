@@ -1,0 +1,6 @@
+kind: Features
+body: serialize inferred primary key
+time: 2024-05-06T17:56:42.757673-05:00
+custom:
+  Author: dave-connors-3
+  Issue: "9824"

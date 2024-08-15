@@ -1,7 +1,0 @@
-kind: Fixes
-body: Update run_results.json from previous versions of dbt to support deferral and
-  rerun from failure
-time: 2023-11-06T15:59:33.677915-05:00
-custom:
-  Author: jtcohen6 peterallenwebb
-  Issue: "9010"

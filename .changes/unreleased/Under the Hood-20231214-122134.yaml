@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: have dbt-postgres use RelationConfig protocol for materialized views'
-time: 2023-12-14T12:21:34.756973-08:00
-custom:
-  Author: colin-rogers-dbt
-  Issue: "9292"

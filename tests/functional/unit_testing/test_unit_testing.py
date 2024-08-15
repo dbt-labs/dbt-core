@@ -1,31 +1,41 @@
-import pytest
+import os
 from unittest import mock
-from dbt.tests.util import (
-    run_dbt,
-    write_file,
-    get_manifest,
-)
-from dbt.contracts.results import NodeStatus
-from dbt.exceptions import DuplicateResourceNameError, ParsingError
-from dbt.plugins.manifest import PluginNodes, ModelNodeArgs
-from dbt.tests.fixtures.project import write_project_files
+
+import pytest
 from fixtures import (  # noqa: F401
-    my_model_sql,
-    my_model_vars_sql,
+    datetime_test,
+    event_sql,
+    external_package,
+    external_package__accounts_seed_csv,
+    my_incremental_model_sql,
     my_model_a_sql,
     my_model_b_sql,
+    my_model_sql,
+    my_model_vars_sql,
+    test_my_model_incremental_yml_basic,
+    test_my_model_incremental_yml_no_override,
+    test_my_model_incremental_yml_no_this_input,
+    test_my_model_incremental_yml_wrong_override,
     test_my_model_yml,
-    datetime_test,
-    my_incremental_model_sql,
-    event_sql,
-    test_my_model_incremental_yml,
     test_my_model_yml_invalid,
     test_my_model_yml_invalid_ref,
-    valid_emails_sql,
     top_level_domains_sql,
-    external_package__accounts_seed_csv,
-    external_package,
+    valid_emails_sql,
 )
+
+from dbt.contracts.results import NodeStatus
+from dbt.exceptions import DuplicateResourceNameError, ParsingError
+from dbt.plugins.manifest import ModelNodeArgs, PluginNodes
+from dbt.tests.fixtures.project import write_project_files
+from dbt.tests.util import (
+    file_exists,
+    get_manifest,
+    read_file,
+    run_dbt,
+    run_dbt_and_capture,
+    write_file,
+)
+from tests.unit.utils import normalize
 
 
 class TestUnitTests:
@@ -50,11 +60,28 @@ class TestUnitTests:
         results = run_dbt(["test", "--select", "my_model"], expect_pass=False)
         assert len(results) == 5
 
-        results = run_dbt(["build", "--select", "my_model"], expect_pass=False)
+        results = run_dbt(
+            ["build", "--select", "my_model", "--resource-types", "model unit_test"],
+            expect_pass=False,
+        )
         assert len(results) == 6
         for result in results:
             if result.node.unique_id == "model.test.my_model":
                 result.status == NodeStatus.Skipped
+
+        # Run build command but specify no unit tests
+        results = run_dbt(
+            ["build", "--select", "my_model", "--exclude-resource-types", "unit_test"],
+            expect_pass=True,
+        )
+        assert len(results) == 1
+
+        # Exclude unit tests with environment variable
+        os.environ["DBT_EXCLUDE_RESOURCE_TYPES"] = "unit_test"
+        results = run_dbt(["build", "--select", "my_model"], expect_pass=True)
+        assert len(results) == 1
+
+        del os.environ["DBT_EXCLUDE_RESOURCE_TYPES"]
 
         # Test select by test name
         results = run_dbt(["test", "--select", "test_name:test_my_model_string_concat"])
@@ -99,13 +126,13 @@ class TestUnitTests:
             run_dbt(["run", "--no-partial-parse", "--select", "my_model"])
 
 
-class TestUnitTestIncrementalModel:
+class TestUnitTestIncrementalModelBasic:
     @pytest.fixture(scope="class")
     def models(self):
         return {
             "my_incremental_model.sql": my_incremental_model_sql,
             "events.sql": event_sql,
-            "test_my_incremental_model.yml": test_my_model_incremental_yml,
+            "schema.yml": test_my_model_incremental_yml_basic,
         }
 
     def test_basic(self, project):
@@ -115,6 +142,57 @@ class TestUnitTestIncrementalModel:
         # Select by model name
         results = run_dbt(["test", "--select", "my_incremental_model"], expect_pass=True)
         assert len(results) == 2
+
+
+class TestUnitTestIncrementalModelNoOverride:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_incremental_model.sql": my_incremental_model_sql,
+            "events.sql": event_sql,
+            "schema.yml": test_my_model_incremental_yml_no_override,
+        }
+
+    def test_no_override(self, project):
+        with pytest.raises(
+            ParsingError,
+            match="Boolean override for 'is_incremental' must be provided for unit test 'incremental_false' in model 'my_incremental_model'",
+        ):
+            run_dbt(["parse"])
+
+
+class TestUnitTestIncrementalModelWrongOverride:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_incremental_model.sql": my_incremental_model_sql,
+            "events.sql": event_sql,
+            "schema.yml": test_my_model_incremental_yml_wrong_override,
+        }
+
+    def test_str_override(self, project):
+        with pytest.raises(
+            ParsingError,
+            match="Boolean override for 'is_incremental' must be provided for unit test 'incremental_false' in model 'my_incremental_model'",
+        ):
+            run_dbt(["parse"])
+
+
+class TestUnitTestIncrementalModelNoThisInput:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_incremental_model.sql": my_incremental_model_sql,
+            "events.sql": event_sql,
+            "schema.yml": test_my_model_incremental_yml_no_this_input,
+        }
+
+    def test_no_this_input(self, project):
+        with pytest.raises(
+            ParsingError,
+            match="Unit test 'incremental_true' for incremental model 'my_incremental_model' must have a 'this' input",
+        ):
+            run_dbt(["parse"])
 
 
 my_new_model = """
@@ -370,3 +448,60 @@ class TestUnitTestExternalProjectNode:
         run_dbt(["run"], expect_pass=True)
         results = run_dbt(["test", "--select", "valid_emails"], expect_pass=True)
         assert len(results) == 1
+
+
+subfolder_model_a_sql = """select 1 as id, 'blue' as color"""
+
+subfolder_model_b_sql = """
+select
+    id,
+    color
+from {{ ref('model_a') }}
+"""
+
+subfolder_my_model_yml = """
+unit_tests:
+  - name: my_unit_test
+    model: model_b
+    given:
+      - input: ref('model_a')
+        rows:
+          - { id: 1, color: 'blue' }
+    expect:
+      rows:
+        - { id: 1, color: 'red' }
+"""
+
+
+class TestUnitTestSubfolderPath:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "subfolder": {
+                "model_a.sql": subfolder_model_a_sql,
+                "model_b.sql": subfolder_model_b_sql,
+                "my_model.yml": subfolder_my_model_yml,
+            }
+        }
+
+    def test_subfolder_unit_test(self, project):
+        results, output = run_dbt_and_capture(["build"], expect_pass=False)
+
+        # Test that input fixture doesn't overwrite the original model
+        assert (
+            read_file("target/compiled/test/models/subfolder/model_a.sql").strip()
+            == subfolder_model_a_sql.strip()
+        )
+
+        # Test that correct path is written in logs
+        assert (
+            normalize(
+                "target/compiled/test/models/subfolder/my_model.yml/models/subfolder/my_unit_test.sql"
+            )
+            in output
+        )
+        assert file_exists(
+            normalize(
+                "target/compiled/test/models/subfolder/my_model.yml/models/subfolder/my_unit_test.sql"
+            )
+        )

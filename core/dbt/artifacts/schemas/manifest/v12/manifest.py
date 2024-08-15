@@ -1,37 +1,55 @@
 from dataclasses import dataclass, field
-from typing import Mapping, Iterable, Tuple, Optional, Dict, List, Any
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple, Union
 from uuid import UUID
 
-from dbt.artifacts.schemas.base import (
-    BaseArtifactMetadata,
-    ArtifactMixin,
-    schema_version,
-    get_artifact_schema_version,
-)
-from dbt.artifacts.schemas.upgrades import upgrade_manifest_json
 from dbt.artifacts.resources import (
+    Analysis,
     Documentation,
     Exposure,
+    GenericTest,
     Group,
+    HookNode,
     Macro,
     Metric,
+    Model,
     SavedQuery,
+    Seed,
     SemanticModel,
-)
-
-# TODO: remove usage of dbt modules other than dbt.artifacts
-from dbt import tracking
-from dbt.flags import get_flags
-from dbt.contracts.graph.nodes import (
-    GraphMemberNode,
-    ManifestNode,
+    SingularTest,
+    Snapshot,
     SourceDefinition,
+    SqlOperation,
     UnitTestDefinition,
 )
-
+from dbt.artifacts.schemas.base import (
+    ArtifactMixin,
+    BaseArtifactMetadata,
+    get_artifact_schema_version,
+    schema_version,
+)
+from dbt.artifacts.schemas.upgrades import upgrade_manifest_json
 
 NodeEdgeMap = Dict[str, List[str]]
 UniqueID = str
+ManifestResource = Union[
+    Seed,
+    Analysis,
+    SingularTest,
+    HookNode,
+    Model,
+    SqlOperation,
+    GenericTest,
+    Snapshot,
+]
+DisabledManifestResource = Union[
+    ManifestResource,
+    SourceDefinition,
+    Exposure,
+    Metric,
+    SavedQuery,
+    SemanticModel,
+    UnitTestDefinition,
+]
 
 
 @dataclass
@@ -70,16 +88,6 @@ class ManifestMetadata(BaseArtifactMetadata):
         metadata=dict(description="The type name of the adapter"),
     )
 
-    def __post_init__(self):
-        if tracking.active_user is None:
-            return
-
-        if self.user_id is None:
-            self.user_id = tracking.active_user.id
-
-        if self.send_anonymous_usage_stats is None:
-            self.send_anonymous_usage_stats = get_flags().SEND_ANONYMOUS_USAGE_STATS
-
     @classmethod
     def default(cls):
         return cls(
@@ -90,7 +98,7 @@ class ManifestMetadata(BaseArtifactMetadata):
 @dataclass
 @schema_version("manifest", 12)
 class WritableManifest(ArtifactMixin):
-    nodes: Mapping[UniqueID, ManifestNode] = field(
+    nodes: Mapping[UniqueID, ManifestResource] = field(
         metadata=dict(description=("The nodes defined in the dbt project and its dependencies"))
     )
     sources: Mapping[UniqueID, SourceDefinition] = field(
@@ -116,7 +124,7 @@ class WritableManifest(ArtifactMixin):
     selectors: Mapping[UniqueID, Any] = field(
         metadata=dict(description=("The selectors defined in selectors.yml"))
     )
-    disabled: Optional[Mapping[UniqueID, List[GraphMemberNode]]] = field(
+    disabled: Optional[Mapping[UniqueID, List[DisabledManifestResource]]] = field(
         metadata=dict(description="A mapping of the disabled nodes in the target")
     )
     parent_map: Optional[NodeEdgeMap] = field(
@@ -172,11 +180,3 @@ class WritableManifest(ArtifactMixin):
         if manifest_schema_version < cls.dbt_schema_version.version:
             data = upgrade_manifest_json(data, manifest_schema_version)
         return cls.from_dict(data)
-
-    def __post_serialize__(self, dct):
-        for unique_id, node in dct["nodes"].items():
-            if "config_call_dict" in node:
-                del node["config_call_dict"]
-            if "defer_relation" in node:
-                del node["defer_relation"]
-        return dct

@@ -1,23 +1,23 @@
 import pytest
-from dbt.tests.util import run_dbt, get_unique_ids_in_results, write_file
-from dbt.exceptions import YamlParseDictError, ParsingError
 
+from dbt.exceptions import ParsingError, YamlParseDictError
+from dbt.tests.util import get_unique_ids_in_results, run_dbt, write_file
 from tests.functional.unit_testing.fixtures import (
-    my_model_versioned_yml,
-    my_model_versioned_no_2_yml,
-    test_my_model_all_versions_yml,
-    test_my_model_exclude_versions_yml,
-    test_my_model_include_versions_yml,
-    test_my_model_include_exclude_versions_yml,
-    test_my_model_include_unversioned_yml,
-    test_my_model_version_ref_yml,
-    my_model_v1_sql,
-    my_model_v2_sql,
-    my_model_v3_sql,
     my_model_a_sql,
     my_model_b_sql,
     my_model_sql,
+    my_model_v1_sql,
+    my_model_v2_sql,
+    my_model_v3_sql,
     my_model_version_ref_sql,
+    my_model_versioned_no_2_yml,
+    my_model_versioned_yml,
+    test_my_model_all_versions_yml,
+    test_my_model_exclude_versions_yml,
+    test_my_model_include_exclude_versions_yml,
+    test_my_model_include_unversioned_yml,
+    test_my_model_include_versions_yml,
+    test_my_model_version_ref_yml,
 )
 
 

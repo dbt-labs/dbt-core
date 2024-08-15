@@ -1,33 +1,8 @@
-from dbt.parser.schemas import YamlReader, SchemaParser, ParseResult
-from dbt.parser.common import YamlBlock
-from dbt.node_types import NodeType
-from dbt.contracts.graph.unparsed import (
-    UnparsedDimension,
-    UnparsedDimensionTypeParams,
-    UnparsedEntity,
-    UnparsedExport,
-    UnparsedExposure,
-    UnparsedGroup,
-    UnparsedMeasure,
-    UnparsedMetric,
-    UnparsedMetricInput,
-    UnparsedMetricInputMeasure,
-    UnparsedMetricTypeParams,
-    UnparsedNonAdditiveDimension,
-    UnparsedQueryParams,
-    UnparsedSavedQuery,
-    UnparsedSemanticModel,
-    UnparsedConversionTypeParams,
-)
-from dbt.contracts.graph.nodes import (
-    Exposure,
-    Group,
-    Metric,
-    SemanticModel,
-    SavedQuery,
-)
+from typing import Any, Dict, List, Optional, Union
+
 from dbt.artifacts.resources import (
     ConversionTypeParams,
+    CumulativeTypeParams,
     Dimension,
     DimensionTypeParams,
     Entity,
@@ -46,26 +21,52 @@ from dbt.artifacts.resources import (
     WhereFilter,
     WhereFilterIntersection,
 )
-from dbt_common.exceptions import DbtInternalError
-from dbt.exceptions import YamlParseDictError, JSONValidationError
-from dbt.context.providers import generate_parse_exposure, generate_parse_semantic_models
-
+from dbt.clients.jinja import get_rendered
 from dbt.context.context_config import (
     BaseContextConfigGenerator,
     ContextConfigGenerator,
     UnrenderedConfigGenerator,
 )
-from dbt.clients.jinja import get_rendered
+from dbt.context.providers import (
+    generate_parse_exposure,
+    generate_parse_semantic_models,
+)
+from dbt.contracts.files import SchemaSourceFile
+from dbt.contracts.graph.nodes import Exposure, Group, Metric, SavedQuery, SemanticModel
+from dbt.contracts.graph.unparsed import (
+    UnparsedConversionTypeParams,
+    UnparsedCumulativeTypeParams,
+    UnparsedDimension,
+    UnparsedDimensionTypeParams,
+    UnparsedEntity,
+    UnparsedExport,
+    UnparsedExposure,
+    UnparsedGroup,
+    UnparsedMeasure,
+    UnparsedMetric,
+    UnparsedMetricInput,
+    UnparsedMetricInputMeasure,
+    UnparsedMetricTypeParams,
+    UnparsedNonAdditiveDimension,
+    UnparsedQueryParams,
+    UnparsedSavedQuery,
+    UnparsedSemanticModel,
+)
+from dbt.exceptions import JSONValidationError, YamlParseDictError
+from dbt.node_types import NodeType
+from dbt.parser.common import YamlBlock
+from dbt.parser.schemas import ParseResult, SchemaParser, YamlReader
 from dbt_common.dataclass_schema import ValidationError
+from dbt_common.exceptions import DbtInternalError
 from dbt_semantic_interfaces.type_enums import (
     AggregationType,
     ConversionCalculationType,
     DimensionType,
     EntityType,
     MetricType,
+    PeriodAggregation,
     TimeGranularity,
 )
-from typing import Any, Dict, List, Optional, Union
 
 
 def parse_where_filter(
@@ -85,7 +86,7 @@ class ExposureParser(YamlReader):
         self.schema_parser = schema_parser
         self.yaml = yaml
 
-    def parse_exposure(self, unparsed: UnparsedExposure):
+    def parse_exposure(self, unparsed: UnparsedExposure) -> None:
         package_name = self.project.project_name
         unique_id = f"{NodeType.Exposure}.{package_name}.{unparsed.name}"
         path = self.yaml.path.relative_path
@@ -143,6 +144,7 @@ class ExposureParser(YamlReader):
         get_rendered(depends_on_jinja, ctx, parsed, capture_macros=True)
         # parsed now has a populated refs/sources/metrics
 
+        assert isinstance(self.yaml.file, SchemaSourceFile)
         if parsed.config.enabled:
             self.manifest.add_exposure(self.yaml.file, parsed)
         else:
@@ -171,7 +173,7 @@ class ExposureParser(YamlReader):
             patch_config_dict=precedence_configs,
         )
 
-    def parse(self):
+    def parse(self) -> None:
         for data in self.get_key_dicts():
             try:
                 UnparsedExposure.validate(data)
@@ -223,9 +225,19 @@ class MetricParser(YamlReader):
 
         return input_measures
 
-    def _get_time_window(
-        self,
-        unparsed_window: Optional[str],
+    def _get_period_agg(self, unparsed_period_agg: str) -> PeriodAggregation:
+        return PeriodAggregation(unparsed_period_agg)
+
+    def _get_optional_grain_to_date(
+        self, unparsed_grain_to_date: Optional[str]
+    ) -> Optional[TimeGranularity]:
+        if not unparsed_grain_to_date:
+            return None
+
+        return TimeGranularity(unparsed_grain_to_date)
+
+    def _get_optional_time_window(
+        self, unparsed_window: Optional[str]
     ) -> Optional[MetricTimeWindow]:
         if unparsed_window is not None:
             parts = unparsed_window.split(" ")
@@ -279,7 +291,7 @@ class MetricParser(YamlReader):
                 name=unparsed.name,
                 filter=parse_where_filter(unparsed.filter),
                 alias=unparsed.alias,
-                offset_window=self._get_time_window(unparsed.offset_window),
+                offset_window=self._get_optional_time_window(unparsed.offset_window),
                 offset_to_grain=offset_to_grain,
             )
 
@@ -313,11 +325,48 @@ class MetricParser(YamlReader):
             conversion_measure=self._get_input_measure(unparsed.conversion_measure),
             entity=unparsed.entity,
             calculation=ConversionCalculationType(unparsed.calculation),
-            window=self._get_time_window(unparsed.window),
+            window=self._get_optional_time_window(unparsed.window),
             constant_properties=unparsed.constant_properties,
         )
 
-    def _get_metric_type_params(self, type_params: UnparsedMetricTypeParams) -> MetricTypeParams:
+    def _get_optional_cumulative_type_params(
+        self, unparsed_metric: UnparsedMetric
+    ) -> Optional[CumulativeTypeParams]:
+        unparsed_type_params = unparsed_metric.type_params
+        if unparsed_metric.type.lower() == MetricType.CUMULATIVE.value:
+            if not unparsed_type_params.cumulative_type_params:
+                unparsed_type_params.cumulative_type_params = UnparsedCumulativeTypeParams()
+
+            if (
+                unparsed_type_params.window
+                and not unparsed_type_params.cumulative_type_params.window
+            ):
+                unparsed_type_params.cumulative_type_params.window = unparsed_type_params.window
+            if (
+                unparsed_type_params.grain_to_date
+                and not unparsed_type_params.cumulative_type_params.grain_to_date
+            ):
+                unparsed_type_params.cumulative_type_params.grain_to_date = (
+                    unparsed_type_params.grain_to_date
+                )
+
+            return CumulativeTypeParams(
+                window=self._get_optional_time_window(
+                    unparsed_type_params.cumulative_type_params.window
+                ),
+                grain_to_date=self._get_optional_grain_to_date(
+                    unparsed_type_params.cumulative_type_params.grain_to_date
+                ),
+                period_agg=self._get_period_agg(
+                    unparsed_type_params.cumulative_type_params.period_agg
+                ),
+            )
+
+        return None
+
+    def _get_metric_type_params(self, unparsed_metric: UnparsedMetric) -> MetricTypeParams:
+        type_params = unparsed_metric.type_params
+
         grain_to_date: Optional[TimeGranularity] = None
         if type_params.grain_to_date is not None:
             grain_to_date = TimeGranularity(type_params.grain_to_date)
@@ -327,17 +376,20 @@ class MetricParser(YamlReader):
             numerator=self._get_optional_metric_input(type_params.numerator),
             denominator=self._get_optional_metric_input(type_params.denominator),
             expr=str(type_params.expr) if type_params.expr is not None else None,
-            window=self._get_time_window(type_params.window),
+            window=self._get_optional_time_window(type_params.window),
             grain_to_date=grain_to_date,
             metrics=self._get_metric_inputs(type_params.metrics),
             conversion_type_params=self._get_optional_conversion_type_params(
                 type_params.conversion_type_params
-            )
+            ),
+            cumulative_type_params=self._get_optional_cumulative_type_params(
+                unparsed_metric=unparsed_metric,
+            ),
             # input measures are calculated via metric processing post parsing
             # input_measures=?,
         )
 
-    def parse_metric(self, unparsed: UnparsedMetric, generated: bool = False):
+    def parse_metric(self, unparsed: UnparsedMetric, generated_from: Optional[str] = None) -> None:
         package_name = self.project.project_name
         unique_id = f"{NodeType.Metric}.{package_name}.{unparsed.name}"
         path = self.yaml.path.relative_path
@@ -382,7 +434,10 @@ class MetricParser(YamlReader):
             description=unparsed.description,
             label=unparsed.label,
             type=MetricType(unparsed.type),
-            type_params=self._get_metric_type_params(unparsed.type_params),
+            type_params=self._get_metric_type_params(unparsed),
+            time_granularity=(
+                TimeGranularity(unparsed.time_granularity) if unparsed.time_granularity else None
+            ),
             filter=parse_where_filter(unparsed.filter),
             meta=unparsed.meta,
             tags=unparsed.tags,
@@ -392,8 +447,9 @@ class MetricParser(YamlReader):
         )
 
         # if the metric is disabled we do not want it included in the manifest, only in the disabled dict
+        assert isinstance(self.yaml.file, SchemaSourceFile)
         if parsed.config.enabled:
-            self.manifest.add_metric(self.yaml.file, parsed, generated)
+            self.manifest.add_metric(self.yaml.file, parsed, generated_from)
         else:
             self.manifest.add_disabled(self.yaml.file, parsed)
 
@@ -421,7 +477,7 @@ class MetricParser(YamlReader):
         )
         return config
 
-    def parse(self):
+    def parse(self) -> None:
         for data in self.get_key_dicts():
             try:
                 UnparsedMetric.validate(data)
@@ -438,7 +494,7 @@ class GroupParser(YamlReader):
         self.schema_parser = schema_parser
         self.yaml = yaml
 
-    def parse_group(self, unparsed: UnparsedGroup):
+    def parse_group(self, unparsed: UnparsedGroup) -> None:
         package_name = self.project.project_name
         unique_id = f"{NodeType.Group}.{package_name}.{unparsed.name}"
         path = self.yaml.path.relative_path
@@ -453,6 +509,7 @@ class GroupParser(YamlReader):
             owner=unparsed.owner,
         )
 
+        assert isinstance(self.yaml.file, SchemaSourceFile)
         self.manifest.add_group(self.yaml.file, parsed)
 
     def parse(self):
@@ -547,10 +604,15 @@ class SemanticModelParser(YamlReader):
             )
         return measures
 
-    def _create_metric(self, measure: UnparsedMeasure, enabled: bool) -> None:
+    def _create_metric(
+        self,
+        measure: UnparsedMeasure,
+        enabled: bool,
+        semantic_model_name: str,
+    ) -> None:
         unparsed_metric = UnparsedMetric(
             name=measure.name,
-            label=measure.name,
+            label=measure.label or measure.name,
             type="simple",
             type_params=UnparsedMetricTypeParams(measure=measure.name, expr=measure.name),
             description=measure.description or f"Metric created from measure {measure.name}",
@@ -558,7 +620,7 @@ class SemanticModelParser(YamlReader):
         )
 
         parser = MetricParser(self.schema_parser, yaml=self.yaml)
-        parser.parse_metric(unparsed=unparsed_metric, generated=True)
+        parser.parse_metric(unparsed=unparsed_metric, generated_from=semantic_model_name)
 
     def _generate_semantic_model_config(
         self, target: UnparsedSemanticModel, fqn: List[str], package_name: str, rendered: bool
@@ -585,7 +647,7 @@ class SemanticModelParser(YamlReader):
 
         return config
 
-    def parse_semantic_model(self, unparsed: UnparsedSemanticModel):
+    def parse_semantic_model(self, unparsed: UnparsedSemanticModel) -> None:
         package_name = self.project.project_name
         unique_id = f"{NodeType.SemanticModel}.{package_name}.{unparsed.name}"
         path = self.yaml.path.relative_path
@@ -645,6 +707,7 @@ class SemanticModelParser(YamlReader):
 
         # if the semantic model is disabled we do not want it included in the manifest,
         # only in the disabled dict
+        assert isinstance(self.yaml.file, SchemaSourceFile)
         if parsed.config.enabled:
             self.manifest.add_semantic_model(self.yaml.file, parsed)
         else:
@@ -653,9 +716,11 @@ class SemanticModelParser(YamlReader):
         # Create a metric for each measure with `create_metric = True`
         for measure in unparsed.measures:
             if measure.create_metric is True:
-                self._create_metric(measure=measure, enabled=parsed.config.enabled)
+                self._create_metric(
+                    measure=measure, enabled=parsed.config.enabled, semantic_model_name=parsed.name
+                )
 
-    def parse(self):
+    def parse(self) -> None:
         for data in self.get_key_dicts():
             try:
                 UnparsedSemanticModel.validate(data)
@@ -764,7 +829,24 @@ class SavedQueryParser(YamlReader):
             group=config.group,
         )
 
+        for export in parsed.exports:
+            self.schema_parser.update_parsed_node_relation_names(export, export.config.to_dict())  # type: ignore
+
+            if not export.config.schema_name:
+                export.config.schema_name = getattr(export, "schema", None)
+            delattr(export, "schema")
+
+            export.config.database = getattr(export, "database", None) or export.config.database
+            delattr(export, "database")
+
+            if not export.config.alias:
+                export.config.alias = getattr(export, "alias", None)
+            delattr(export, "alias")
+
+            delattr(export, "relation_name")
+
         # Only add thes saved query if it's enabled, otherwise we track it with other diabled nodes
+        assert isinstance(self.yaml.file, SchemaSourceFile)
         if parsed.config.enabled:
             self.manifest.add_saved_query(self.yaml.file, parsed)
         else:

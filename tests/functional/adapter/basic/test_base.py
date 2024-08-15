@@ -1,17 +1,18 @@
 import pytest
+
 from dbt.tests.util import (
-    run_dbt,
-    check_result_nodes_by_name,
-    relation_from_name,
     check_relation_types,
     check_relations_equal,
+    check_result_nodes_by_name,
+    relation_from_name,
+    run_dbt,
 )
 from tests.functional.adapter.basic.files import (
-    seeds_base_csv,
-    base_view_sql,
-    base_table_sql,
     base_materialized_var_sql,
+    base_table_sql,
+    base_view_sql,
     schema_base_yml,
+    seeds_base_csv,
 )
 
 

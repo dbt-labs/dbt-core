@@ -1,6 +1,6 @@
 import pytest
-from dbt.tests.util import run_dbt
 
+from dbt.tests.util import run_dbt
 
 schema_yml = """
 version: 2

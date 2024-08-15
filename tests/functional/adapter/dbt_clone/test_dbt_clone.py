@@ -6,20 +6,20 @@ from copy import deepcopy
 import pytest
 
 from dbt.exceptions import DbtRuntimeError
+from dbt.tests.util import run_dbt, run_dbt_and_capture
 from tests.functional.adapter.dbt_clone.fixtures import (
-    seed_csv,
-    table_model_sql,
-    view_model_sql,
+    custom_can_clone_tables_false_macros_sql,
     ephemeral_model_sql,
     exposures_yml,
-    schema_yml,
-    snapshot_sql,
     get_schema_name_sql,
-    macros_sql,
     infinite_macros_sql,
-    custom_can_clone_tables_false_macros_sql,
+    macros_sql,
+    schema_yml,
+    seed_csv,
+    snapshot_sql,
+    table_model_sql,
+    view_model_sql,
 )
-from dbt.tests.util import run_dbt, run_dbt_and_capture
 
 
 class BaseClone:
@@ -85,17 +85,14 @@ class BaseClone:
     def run_and_save_state(self, project_root, with_snapshot=False):
         results = run_dbt(["seed"])
         assert len(results) == 1
-        assert not any(r.node.deferred for r in results)
         results = run_dbt(["run"])
         assert len(results) == 2
-        assert not any(r.node.deferred for r in results)
         results = run_dbt(["test"])
         assert len(results) == 2
 
         if with_snapshot:
             results = run_dbt(["snapshot"])
             assert len(results) == 1
-            assert not any(r.node.deferred for r in results)
 
         # copy files
         self.copy_state(project_root)
@@ -226,6 +223,7 @@ class TestCloneSameTargetAndState(BaseClone):
 
         clone_args = [
             "clone",
+            "--defer",
             "--state",
             "target",
         ]

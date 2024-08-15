@@ -1,22 +1,19 @@
 import threading
 
-from dbt.artifacts.schemas.run import RunStatus, RunResult
-from dbt_common.events.base_types import EventLevel
-from dbt_common.events.functions import fire_event
-from dbt_common.events.types import Note
-from dbt.events.types import ParseInlineNodeError, CompiledNode
-from dbt_common.exceptions import (
-    CompilationError,
-    DbtInternalError,
-    DbtBaseException as DbtException,
-)
-
+from dbt.artifacts.schemas.run import RunResult, RunStatus
+from dbt.events.types import CompiledNode, ParseInlineNodeError
 from dbt.graph import ResourceTypeSelector
-from dbt.node_types import NodeType, EXECUTABLE_NODE_TYPES
+from dbt.node_types import EXECUTABLE_NODE_TYPES, NodeType
 from dbt.parser.manifest import process_node
 from dbt.parser.sql import SqlBlockParser
 from dbt.task.base import BaseRunner
 from dbt.task.runnable import GraphRunnableTask
+from dbt_common.events.base_types import EventLevel
+from dbt_common.events.functions import fire_event
+from dbt_common.events.types import Note
+from dbt_common.exceptions import CompilationError
+from dbt_common.exceptions import DbtBaseException as DbtException
+from dbt_common.exceptions import DbtInternalError
 
 
 class CompileRunner(BaseRunner):
@@ -107,6 +104,12 @@ class CompileTask(GraphRunnableTask):
                 )
                 sql_node = block_parser.parse_remote(self.args.inline, "inline_query")
                 process_node(self.config, self.manifest, sql_node)
+                # Special hack to remove disabled, if it's there. This would only happen
+                # if all models are disabled in dbt_project
+                if sql_node.config.enabled is False:
+                    sql_node.config.enabled = True
+                    self.manifest.disabled.pop(sql_node.unique_id)
+                    self.manifest.nodes[sql_node.unique_id] = sql_node
                 # keep track of the node added to the manifest
                 self._inline_node_id = sql_node.unique_id
             except CompilationError as exc:

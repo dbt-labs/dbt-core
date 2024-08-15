@@ -1,30 +1,30 @@
-from copy import deepcopy
-from dbt.artifacts.resources import RefArgs
-from dbt.context.context_config import ContextConfig
-from dbt.contracts.graph.nodes import ModelNode
-from dbt.flags import get_flags
-from dbt.node_types import NodeType, ModelLanguage
-from dbt.parser.base import SimpleSQLParser
-from dbt.parser.search import FileBlock
-from dbt.clients.jinja import get_rendered
-import dbt.tracking as tracking
-from dbt import utils
-from dbt_extractor import ExtractionError, py_extract_from_source  # type: ignore
-from functools import reduce
-from itertools import chain
-import random
-from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
-
 # New for Python models :p
 import ast
-from dbt_common.dataclass_schema import ValidationError
+import random
+from copy import deepcopy
+from functools import reduce
+from itertools import chain
+from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
+
+import dbt.tracking as tracking
+from dbt import utils
+from dbt.artifacts.resources import RefArgs
+from dbt.clients.jinja import get_rendered
+from dbt.context.context_config import ContextConfig
+from dbt.contracts.graph.nodes import ModelNode
 from dbt.exceptions import (
     ModelConfigError,
     ParsingError,
     PythonLiteralEvalError,
     PythonParsingError,
 )
+from dbt.flags import get_flags
+from dbt.node_types import ModelLanguage, NodeType
+from dbt.parser.base import SimpleSQLParser
+from dbt.parser.search import FileBlock
+from dbt_common.dataclass_schema import ValidationError
 from dbt_common.exceptions.macros import UndefinedMacroError
+from dbt_extractor import ExtractionError, py_extract_from_source  # type: ignore
 
 dbt_function_key_words = set(["ref", "source", "config", "get"])
 dbt_function_full_names = set(["dbt.ref", "dbt.source", "dbt.config", "dbt.config.get"])
@@ -204,7 +204,7 @@ class ModelParser(SimpleSQLParser[ModelNode]):
             dbt_parser = PythonParseVisitor(node)
             dbt_parser.visit(tree)
 
-            for (func, args, kwargs) in dbt_parser.dbt_function_calls:
+            for func, args, kwargs in dbt_parser.dbt_function_calls:
                 if func == "get":
                     num_args = len(args)
                     if num_args == 0:

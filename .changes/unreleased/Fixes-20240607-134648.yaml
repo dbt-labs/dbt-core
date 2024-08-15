@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix snapshot config to work in yaml files
+time: 2024-06-07T13:46:48.383215-04:00
+custom:
+  Author: gshank
+  Issue: "4000"

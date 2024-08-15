@@ -1,16 +1,11 @@
 import os
-import pytest
 import tempfile
-
 from pathlib import Path
 
-from dbt.exceptions import DbtProjectError
-from dbt.tests.util import (
-    check_relations_equal,
-    run_dbt,
-    write_config_file,
-)
+import pytest
 
+from dbt.exceptions import DbtProjectError
+from dbt.tests.util import check_relations_equal, run_dbt, write_config_file
 
 models__disabled_one = """
 {{config(enabled=False)}}
@@ -241,12 +236,12 @@ class TestSimpleDependencyWithSubdirs(object):
         run_dbt(["deps"])
         assert os.path.exists("package-lock.yml")
         expected = """packages:
-- git: https://github.com/dbt-labs/dbt-multipe-packages.git
-  revision: 53782f3ede8fdf307ee1d8e418aa65733a4b72fa
-  subdirectory: dbt-utils-main
-- git: https://github.com/dbt-labs/dbt-multipe-packages.git
-  revision: 53782f3ede8fdf307ee1d8e418aa65733a4b72fa
-  subdirectory: dbt-date-main
+  - git: https://github.com/dbt-labs/dbt-multipe-packages.git
+    revision: 53782f3ede8fdf307ee1d8e418aa65733a4b72fa
+    subdirectory: dbt-utils-main
+  - git: https://github.com/dbt-labs/dbt-multipe-packages.git
+    revision: 53782f3ede8fdf307ee1d8e418aa65733a4b72fa
+    subdirectory: dbt-date-main
 sha1_hash: b9c8042f29446c55a33f9f211737f445a640c7a1
 """
         with open("package-lock.yml") as fp:
@@ -434,3 +429,44 @@ class TestBadTarballDependency(object):
         ) as e:
             run_dbt(["deps"])
             assert e is not None
+
+
+class TestEmptyDependency:
+    def test_empty_package(self, project):
+        # We have to specify the bad formatted package here because if we do it
+        # in a `packages` fixture, the test will blow up in the setup phase, meaning
+        # we can't appropriately catch it with a `pytest.raises`
+        empty_hub_package = {
+            "packages": [
+                {
+                    "package": "",
+                    "version": "1.0.0",
+                }
+            ]
+        }
+        write_config_file(empty_hub_package, "packages.yml")
+        with pytest.raises(DbtProjectError, match="A hub package is missing the value"):
+            run_dbt(["deps"])
+
+        empty_git_package = {
+            "packages": [
+                {
+                    "git": "",
+                    "revision": "1.0.0",
+                }
+            ]
+        }
+        write_config_file(empty_git_package, "packages.yml")
+        with pytest.raises(DbtProjectError, match="A git package is missing the value"):
+            run_dbt(["deps"])
+
+        empty_local_package = {
+            "packages": [
+                {
+                    "local": "",
+                }
+            ]
+        }
+        write_config_file(empty_local_package, "packages.yml")
+        with pytest.raises(DbtProjectError, match="A local package is missing the value"):
+            run_dbt(["deps"])

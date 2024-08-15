@@ -1,7 +1,10 @@
 import pytest
 
 from dbt.tests.util import run_dbt
-from tests.functional.saved_queries.fixtures import saved_queries_yml, saved_query_description
+from tests.functional.saved_queries.fixtures import (
+    saved_queries_yml,
+    saved_query_description,
+)
 from tests.functional.semantic_models.fixtures import (
     fct_revenue_sql,
     metricflow_time_spine_sql,
@@ -28,11 +31,8 @@ packages:
     version: 1.1.1
 """
 
-    def test_semantic_model_parsing(self, project):
+    def test_build_saved_queries(self, project):
         run_dbt(["deps"])
         result = run_dbt(["build"])
-        assert len(result.results) == 2
-        assert "test_saved_query" not in [r.node.name for r in result.results]
-        result = run_dbt(["build", "--include-saved-query"])
         assert len(result.results) == 3
-        assert "test_saved_query" in [r.node.name for r in result.results]
+        assert "NO-OP" in [r.message for r in result.results]

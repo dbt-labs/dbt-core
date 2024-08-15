@@ -1,6 +1,0 @@
-kind: Fixes
-body: 'deps: Lock git packages to commit SHA during resolution'
-time: 2023-11-27T15:43:10.122069+01:00
-custom:
-  Author: jtcohen6
-  Issue: "9050"

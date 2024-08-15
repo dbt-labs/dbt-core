@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix setting `silence` of `warn_error_options` via `dbt_project.yaml` flags
+time: 2024-06-24T17:17:29.464865-07:00
+custom:
+  Author: QMalcolm
+  Issue: "10160"

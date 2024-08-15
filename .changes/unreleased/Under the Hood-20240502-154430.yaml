@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Clear error message for Private package in dbt-core
+time: 2024-05-02T15:44:30.713097-07:00
+custom:
+  Author: ChenyuLInx
+  Issue: "10083"

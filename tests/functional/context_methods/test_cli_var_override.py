@@ -2,7 +2,6 @@ import pytest
 
 from dbt.tests.util import run_dbt
 
-
 models_override__schema_yml = """
 version: 2
 models:

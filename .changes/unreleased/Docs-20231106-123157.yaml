@@ -1,6 +1,0 @@
-kind: Docs
-body: fix get_custom_database docstring
-time: 2023-11-06T12:31:57.525711Z
-custom:
-  Author: LeoTheGriff
-  Issue: "9003"

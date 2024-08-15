@@ -1,4 +1,5 @@
 import pytest
+
 from tests.functional.adapter.utils.base_utils import BaseUtils
 from tests.functional.adapter.utils.fixture_string_literal import (
     models__test_string_literal_sql,

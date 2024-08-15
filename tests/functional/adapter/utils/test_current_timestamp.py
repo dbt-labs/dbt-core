@@ -1,12 +1,8 @@
+from datetime import datetime, timedelta, timezone
+
 import pytest
 
-from datetime import datetime
-from datetime import timezone
-from datetime import timedelta
-
-from dbt.tests.util import run_dbt
-from dbt.tests.util import relation_from_name
-
+from dbt.tests.util import relation_from_name, run_dbt
 
 models__current_ts_sql = """
 select {{ dbt.current_timestamp() }} as current_ts_column

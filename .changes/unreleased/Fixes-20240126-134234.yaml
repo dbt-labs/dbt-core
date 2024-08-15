@@ -1,6 +1,0 @@
-kind: Fixes
-body: Fix node type plurals in FoundStats log message
-time: 2024-01-26T13:42:34.651033+01:00
-custom:
-  Author: jtcohen6
-  Issue: "9464"

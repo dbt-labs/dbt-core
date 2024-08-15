@@ -1,4 +1,4 @@
-from typing import Dict, Any
+from typing import Any, Dict
 
 from dbt.config.renderer import BaseRenderer, Keypath
 
@@ -74,12 +74,13 @@ class SchemaYamlRenderer(BaseRenderer):
             elif self._is_norender_key(keypath[0:]):
                 return False
         elif self.key == "metrics":
-            # This ensures all key paths that end in 'filter' for a metric are skipped
-            if keypath[-1] == "filter":
+            # This ensures that metric filters are skipped
+            if keypath[-1] == "filter" or len(keypath) > 1 and keypath[-2] == "filter":
                 return False
             elif self._is_norender_key(keypath[0:]):
                 return False
         elif self.key == "saved_queries":
+            # This ensures that saved query filters are skipped
             if keypath[0] == "query_params" and len(keypath) > 1 and keypath[1] == "where":
                 return False
             elif self._is_norender_key(keypath[0:]):

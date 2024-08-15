@@ -1,10 +1,11 @@
 import pytest
+
 from tests.functional.adapter.utils.base_utils import BaseUtils
 from tests.functional.adapter.utils.fixture_listagg import (
-    seeds__data_listagg_csv,
-    seeds__data_listagg_output_csv,
     models__test_listagg_sql,
     models__test_listagg_yml,
+    seeds__data_listagg_csv,
+    seeds__data_listagg_output_csv,
 )
 
 

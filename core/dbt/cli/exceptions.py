@@ -1,6 +1,7 @@
-from typing import Optional, IO
+from typing import IO, Optional
 
 from click.exceptions import ClickException
+
 from dbt.utils import ExitCodes
 
 

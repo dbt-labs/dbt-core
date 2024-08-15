@@ -1,27 +1,22 @@
 from typing import Dict
-from dbt.logger import (
-    DbtStatusMessage,
-    TextOnly,
-)
-from dbt_common.events.functions import fire_event
-from dbt_common.events.types import Formatting
-from dbt.events.types import (
-    RunResultWarning,
-    RunResultWarningMessage,
-    RunResultFailure,
-    StatsLine,
-    RunResultError,
-    RunResultErrorNoMessage,
-    SQLCompiledPath,
-    CheckNodeTestFailure,
-    EndOfRunSummary,
-)
-
-from dbt.tracking import InvocationProcessor
-from dbt_common.events.format import pluralize
 
 from dbt.artifacts.schemas.results import NodeStatus
+from dbt.events.types import (
+    CheckNodeTestFailure,
+    EndOfRunSummary,
+    RunResultError,
+    RunResultErrorNoMessage,
+    RunResultFailure,
+    RunResultWarning,
+    RunResultWarningMessage,
+    SQLCompiledPath,
+    StatsLine,
+)
 from dbt.node_types import NodeType
+from dbt_common.events.base_types import EventLevel
+from dbt_common.events.format import pluralize
+from dbt_common.events.functions import fire_event
+from dbt_common.events.types import Formatting
 
 
 def get_counts(flat_nodes) -> str:
@@ -33,11 +28,11 @@ def get_counts(flat_nodes) -> str:
         if node.resource_type == NodeType.Model:
             t = "{} {}".format(node.get_materialization(), t)
         elif node.resource_type == NodeType.Operation:
-            t = "hook"
+            t = "project hook"
 
         counts[t] = counts.get(t, 0) + 1
 
-    stat_line = ", ".join([pluralize(v, k) for k, v in counts.items()])
+    stat_line = ", ".join([pluralize(v, k).replace("_", " ") for k, v in counts.items()])
 
     return stat_line
 
@@ -69,23 +64,25 @@ def print_run_status_line(results) -> None:
         stats[result_type] += 1
         stats["total"] += 1
 
-    with TextOnly():
-        fire_event(Formatting(""))
+    fire_event(Formatting(""))
     fire_event(StatsLine(stats=stats))
 
 
 def print_run_result_error(result, newline: bool = True, is_warning: bool = False) -> None:
-    if newline:
-        with TextOnly():
-            fire_event(Formatting(""))
-
+    # set node_info for logging events
+    node_info = None
+    if hasattr(result, "node") and result.node:
+        node_info = result.node.node_info
     if result.status == NodeStatus.Fail or (is_warning and result.status == NodeStatus.Warn):
+        if newline:
+            fire_event(Formatting(""))
         if is_warning:
             fire_event(
                 RunResultWarning(
                     resource_type=result.node.resource_type,
                     node_name=result.node.name,
                     path=result.node.original_file_path,
+                    node_info=node_info,
                 )
             )
         else:
@@ -94,29 +91,35 @@ def print_run_result_error(result, newline: bool = True, is_warning: bool = Fals
                     resource_type=result.node.resource_type,
                     node_name=result.node.name,
                     path=result.node.original_file_path,
+                    node_info=node_info,
                 )
             )
 
         if result.message:
             if is_warning:
-                fire_event(RunResultWarningMessage(msg=result.message))
+                fire_event(RunResultWarningMessage(msg=result.message, node_info=node_info))
             else:
-                fire_event(RunResultError(msg=result.message))
+                fire_event(RunResultError(msg=result.message, node_info=node_info))
         else:
-            fire_event(RunResultErrorNoMessage(status=result.status))
+            fire_event(RunResultErrorNoMessage(status=result.status, node_info=node_info))
 
-        if result.node.build_path is not None:
-            with TextOnly():
-                fire_event(Formatting(""))
-            fire_event(SQLCompiledPath(path=result.node.compiled_path))
+        if result.node.compiled_path is not None:
+            fire_event(Formatting(""))
+            fire_event(SQLCompiledPath(path=result.node.compiled_path, node_info=node_info))
 
         if result.node.should_store_failures:
-            with TextOnly():
-                fire_event(Formatting(""))
-            fire_event(CheckNodeTestFailure(relation_name=result.node.relation_name))
-
+            fire_event(Formatting(""))
+            fire_event(
+                CheckNodeTestFailure(relation_name=result.node.relation_name, node_info=node_info)
+            )
+    elif result.status == NodeStatus.Skipped and result.message is not None:
+        if newline:
+            fire_event(Formatting(""), level=EventLevel.DEBUG)
+        fire_event(RunResultError(msg=result.message), level=EventLevel.DEBUG)
     elif result.message is not None:
-        fire_event(RunResultError(msg=result.message))
+        if newline:
+            fire_event(Formatting(""))
+        fire_event(RunResultError(msg=result.message, node_info=node_info))
 
 
 def print_run_end_messages(results, keyboard_interrupt: bool = False) -> None:
@@ -131,21 +134,19 @@ def print_run_end_messages(results, keyboard_interrupt: bool = False) -> None:
         elif r.status == NodeStatus.Warn:
             warnings.append(r)
 
-    with DbtStatusMessage(), InvocationProcessor():
-        with TextOnly():
-            fire_event(Formatting(""))
-        fire_event(
-            EndOfRunSummary(
-                num_errors=len(errors),
-                num_warnings=len(warnings),
-                keyboard_interrupt=keyboard_interrupt,
-            )
+    fire_event(Formatting(""))
+    fire_event(
+        EndOfRunSummary(
+            num_errors=len(errors),
+            num_warnings=len(warnings),
+            keyboard_interrupt=keyboard_interrupt,
         )
+    )
 
-        for error in errors:
-            print_run_result_error(error, is_warning=False)
+    for error in errors:
+        print_run_result_error(error, is_warning=False)
 
-        for warning in warnings:
-            print_run_result_error(warning, is_warning=True)
+    for warning in warnings:
+        print_run_result_error(warning, is_warning=True)
 
-        print_run_status_line(results)
+    print_run_status_line(results)

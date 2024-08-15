@@ -1,5 +1,7 @@
-import pytest
 import re
+
+import pytest
+
 from dbt.tests.util import check_relation_has_expected_schema, run_dbt
 
 _MODEL_CURRENT_TIMESTAMP = """

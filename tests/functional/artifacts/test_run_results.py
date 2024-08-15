@@ -1,7 +1,9 @@
+import json
 from multiprocessing import Process
 from pathlib import Path
-import json
+
 import pytest
+
 from dbt.tests.util import run_dbt
 
 good_model_sql = """
@@ -38,6 +40,22 @@ class TestRunResultsTimingFailure:
         results = run_dbt(["run"], expect_pass=False)
         assert len(results.results) == 1
         assert len(results.results[0].timing) > 0
+
+
+class TestRunResultsSerializableInContext:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"model.sql": good_model_sql}
+
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "on-run-end": ["{% for result in results %}{{ log(result.to_dict()) }}{% endfor %}"]
+        }
+
+    def test_results_serializable(self, project):
+        results = run_dbt(["run"])
+        assert len(results.results) == 1
 
 
 # This test is failing due to the faulty assumptions that run_results.json would

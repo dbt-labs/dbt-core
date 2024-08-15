@@ -1,5 +1,6 @@
 import os
 import shutil
+
 import pytest
 
 from dbt.tests.util import run_dbt
@@ -35,10 +36,10 @@ class TestDepsOptions(object):
         assert (
             contents
             == """packages:
-- package: fivetran/fivetran_utils
-  version: 0.4.7
-- package: dbt-labs/dbt_utils
-  version: 1.1.1
+  - package: fivetran/fivetran_utils
+    version: 0.4.7
+  - package: dbt-labs/dbt_utils
+    version: 1.2.0
 sha1_hash: 71304bca2138cf8004070b3573a1e17183c0c1a8
 """
         )
@@ -52,10 +53,10 @@ sha1_hash: 71304bca2138cf8004070b3573a1e17183c0c1a8
         assert (
             contents
             == """packages:
-- package: fivetran/fivetran_utils
-  version: 0.4.7
-- package: dbt-labs/dbt_utils
-  version: 1.1.1
+  - package: fivetran/fivetran_utils
+    version: 0.4.7
+  - package: dbt-labs/dbt_utils
+    version: 1.2.0
 sha1_hash: 71304bca2138cf8004070b3573a1e17183c0c1a8
 """
         )

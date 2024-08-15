@@ -31,43 +31,7 @@ kinds:
       - {{.Body}} ({{ range $index, $element := $IssueList }}{{if $index}}, {{end}}{{$element}}{{end}})
   - label: Under the Hood
   - label: Dependencies
-    changeFormat: |-
-      {{- $PRList := list }}
-      {{- $changes := splitList " " $.Custom.PR }}
-      {{- range $pullrequest := $changes }}
-        {{- $changeLink := "[#nbr](https://github.com/dbt-labs/dbt-core/pull/nbr)" | replace "nbr" $pullrequest }}
-        {{- $PRList = append $PRList $changeLink  }}
-      {{- end -}}
-      - {{.Body}} ({{ range $index, $element := $PRList }}{{if $index}}, {{end}}{{$element}}{{end}})
-    skipGlobalChoices: true
-    additionalChoices:
-      - key: Author
-        label: GitHub Username(s) (separated by a single space if multiple)
-        type: string
-        minLength: 3
-      - key: PR
-        label: GitHub Pull Request Number (separated by a single space if multiple)
-        type: string
-        minLength: 1
   - label: Security
-    changeFormat: |-
-      {{- $PRList := list }}
-      {{- $changes := splitList " " $.Custom.PR }}
-      {{- range $pullrequest := $changes }}
-        {{- $changeLink := "[#nbr](https://github.com/dbt-labs/dbt-core/pull/nbr)" | replace "nbr" $pullrequest }}
-        {{- $PRList = append $PRList $changeLink  }}
-      {{- end -}}
-      - {{.Body}} ({{ range $index, $element := $PRList }}{{if $index}}, {{end}}{{$element}}{{end}})
-    skipGlobalChoices: true
-    additionalChoices:
-      - key: Author
-        label: GitHub Username(s) (separated by a single space if multiple)
-        type: string
-        minLength: 3
-      - key: PR
-        label: GitHub Pull Request Number (separated by a single space if multiple)
-        type: string
-        minLength: 1
 
 newlines:
   afterChangelogHeader: 1
@@ -106,18 +70,10 @@ footerFormat: |
         {{- $changeList := splitList " " $change.Custom.Author }}
           {{- $IssueList := list }}
           {{- $changeLink := $change.Kind }}
-          {{- if or (eq $change.Kind "Dependencies") (eq $change.Kind "Security") }}
-            {{- $changes := splitList " " $change.Custom.PR }}
-            {{- range $issueNbr := $changes }}
-              {{- $changeLink := "[#nbr](https://github.com/dbt-labs/dbt-core/pull/nbr)" | replace "nbr" $issueNbr }}
-              {{- $IssueList = append $IssueList $changeLink  }}
-            {{- end -}}
-          {{- else }}
-            {{- $changes := splitList " " $change.Custom.Issue }}
-            {{- range $issueNbr := $changes }}
-              {{- $changeLink := "[#nbr](https://github.com/dbt-labs/dbt-core/issues/nbr)" | replace "nbr" $issueNbr }}
-              {{- $IssueList = append $IssueList $changeLink  }}
-            {{- end -}}
+          {{- $changes := splitList " " $change.Custom.Issue }}
+          {{- range $issueNbr := $changes }}
+            {{- $changeLink := "[#nbr](https://github.com/dbt-labs/dbt-core/issues/nbr)" | replace "nbr" $issueNbr }}
+            {{- $IssueList = append $IssueList $changeLink  }}
           {{- end }}
           {{- /* check if this contributor has other changes associated with them already */}}
           {{- if hasKey $contributorDict $author }}

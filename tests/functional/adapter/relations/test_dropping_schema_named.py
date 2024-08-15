@@ -1,6 +1,6 @@
 import pytest
 
-from dbt.tests.util import run_dbt, get_connection
+from dbt.tests.util import get_connection, run_dbt
 
 
 class BaseDropSchemaNamed:

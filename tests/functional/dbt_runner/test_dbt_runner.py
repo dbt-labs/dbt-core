@@ -2,12 +2,13 @@ from unittest import mock
 
 import pytest
 
+from dbt.adapters.factory import FACTORY, reset_adapters
 from dbt.cli.exceptions import DbtUsageException
 from dbt.cli.main import dbtRunner
 from dbt.exceptions import DbtProjectError
-from dbt.adapters.factory import reset_adapters, FACTORY
 from dbt.tests.util import read_file, write_file
 from dbt.version import __version__ as dbt_version
+from dbt_common.events.contextvars import get_node_info
 
 
 class TestDbtRunner:
@@ -33,6 +34,9 @@ class TestDbtRunner:
         res = dbt.invoke(["--warn-error", "--warn-error-options", '{"include": "all"}', "deps"])
         assert type(res.exception) == DbtUsageException
         res = dbt.invoke(["deps", "--warn-error", "--warn-error-options", '{"include": "all"}'])
+        assert type(res.exception) == DbtUsageException
+
+        res = dbt.invoke(["compile", "--select", "models", "--inline", "select 1 as id"])
         assert type(res.exception) == DbtUsageException
 
     def test_invalid_command(self, dbt: dbtRunner) -> None:
@@ -93,6 +97,12 @@ class TestDbtRunner:
         assert result.success
         assert len(FACTORY.adapters) == 1
 
+    def test_pass_in_args_variable(self, dbt):
+        args = ["--log-format", "text"]
+        args_before = args.copy()
+        dbt.invoke(args)
+        assert args == args_before
+
 
 class TestDbtRunnerQueryComments:
     @pytest.fixture(scope="class")
@@ -120,3 +130,20 @@ class TestDbtRunnerQueryComments:
         dbt.invoke(["build", "--select", "models"])
         log_file = read_file(logs_dir, "dbt.log")
         assert f"comment: {dbt_version}" in log_file
+
+
+class TestDbtRunnerHooks:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "models.sql": "select 1 as id",
+        }
+
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {"on-run-end": ["select 1;"]}
+
+    def test_node_info_non_persistence(self, project):
+        dbt = dbtRunner()
+        dbt.invoke(["run", "--select", "models"])
+        assert get_node_info() == {}

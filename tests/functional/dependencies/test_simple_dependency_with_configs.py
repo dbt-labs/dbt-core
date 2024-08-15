@@ -1,12 +1,8 @@
-import pytest
-
 from pathlib import Path
 
-from dbt.tests.util import (
-    check_relations_equal,
-    run_dbt,
-)
+import pytest
 
+from dbt.tests.util import check_relations_equal, run_dbt
 
 models__view_summary = """
 {{

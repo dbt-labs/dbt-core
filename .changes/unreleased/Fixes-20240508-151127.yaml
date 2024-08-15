@@ -1,0 +1,7 @@
+kind: Fixes
+body: 'Restore previous behavior for --favor-state: only favor defer_relation if not
+  selected in current command"'
+time: 2024-05-08T15:11:27.510912+02:00
+custom:
+  Author: jtcohen6
+  Issue: "10107"

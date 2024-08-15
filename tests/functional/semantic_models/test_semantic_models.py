@@ -2,16 +2,15 @@ import pytest
 
 from dbt.contracts.graph.manifest import Manifest
 from dbt.exceptions import CompilationError
-from dbt.tests.util import run_dbt
-from dbt.tests.util import write_file
+from dbt.tests.util import run_dbt, write_file
 from tests.functional.semantic_models.fixtures import (
-    models_people_sql,
-    simple_metricflow_time_spine_sql,
-    semantic_model_people_yml,
     models_people_metrics_yml,
-    semantic_model_people_diff_name_yml,
-    semantic_model_people_yml_with_docs,
+    models_people_sql,
     semantic_model_descriptions,
+    semantic_model_people_diff_name_yml,
+    semantic_model_people_yml,
+    semantic_model_people_yml_with_docs,
+    simple_metricflow_time_spine_sql,
 )
 
 

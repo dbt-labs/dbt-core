@@ -1,9 +1,8 @@
 import pytest
 
-from dbt.exceptions import CompilationError, AmbiguousAliasError
+from dbt.exceptions import AmbiguousAliasError, CompilationError
 from dbt.tests.fixtures.project import write_project_files
-from dbt.tests.util import run_dbt, get_manifest
-
+from dbt.tests.util import get_manifest, run_dbt
 
 disabled_model_sql = """
 {{

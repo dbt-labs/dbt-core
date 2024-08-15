@@ -4,11 +4,11 @@ import shutil
 
 import pytest
 
+from dbt.artifacts.exceptions import IncompatibleSchemaError
 from dbt.artifacts.schemas.base import get_artifact_schema_version
-from dbt.contracts.graph.manifest import WritableManifest
 from dbt.artifacts.schemas.run import RunResultsArtifact
-from dbt.exceptions import IncompatibleSchemaError
-from dbt.tests.util import run_dbt, get_manifest
+from dbt.contracts.graph.manifest import WritableManifest
+from dbt.tests.util import get_manifest, run_dbt
 
 # This project must have one of each kind of node type, plus disabled versions, for
 # test coverage to be complete.

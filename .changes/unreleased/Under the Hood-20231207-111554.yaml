@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: Add MacroResolverProtocol, remove lazy loading of manifest in adapter.execute_macro
-time: 2023-12-07T11:15:54.427818+09:00
-custom:
-  Author: michelleark
-  Issue: "9244"

@@ -1,19 +1,23 @@
 from dataclasses import dataclass, field
-from typing import Dict, Any, Sequence, List, Union, Optional
 from datetime import datetime
+from typing import Any, Dict, List, Optional, Sequence, Union
 
 from dbt.artifacts.resources import FreshnessThreshold
-from dbt.artifacts.schemas.results import ExecutionResult, FreshnessStatus, NodeResult, TimingInfo
 from dbt.artifacts.schemas.base import (
     ArtifactMixin,
+    BaseArtifactMetadata,
     VersionedSchema,
     schema_version,
-    BaseArtifactMetadata,
 )
-from dbt_common.dataclass_schema import dbtClassMixin, StrEnum
-from dbt_common.exceptions import DbtInternalError
-
+from dbt.artifacts.schemas.results import (
+    ExecutionResult,
+    FreshnessStatus,
+    NodeResult,
+    TimingInfo,
+)
 from dbt.contracts.graph.nodes import SourceDefinition
+from dbt_common.dataclass_schema import StrEnum, dbtClassMixin
+from dbt_common.exceptions import DbtInternalError
 
 
 @dataclass
@@ -107,7 +111,11 @@ class FreshnessExecutionResultArtifact(
 
     @classmethod
     def from_result(cls, base: FreshnessResult):
-        processed = [process_freshness_result(r) for r in base.results]
+        processed = [
+            process_freshness_result(r)
+            for r in base.results
+            if isinstance(r, SourceFreshnessResult)
+        ]
         return cls(
             metadata=base.metadata,
             results=processed,

@@ -1,6 +1,7 @@
-import pytest
 import os
 import re
+
+import pytest
 import yaml
 
 from dbt.cli.exceptions import DbtUsageException

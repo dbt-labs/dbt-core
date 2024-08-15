@@ -1,23 +1,16 @@
 import random
 
-from .run import ModelRunner, RunTask
-from .printer import (
-    print_run_end_messages,
-)
-
-from dbt.artifacts.schemas.results import RunStatus, NodeStatus
-from dbt_common.exceptions import DbtInternalError
+from dbt.artifacts.schemas.results import NodeStatus, RunStatus
+from dbt.events.types import LogSeedResult, LogStartLine, SeedHeader
 from dbt.graph import ResourceTypeSelector
-from dbt.logger import TextOnly
+from dbt.node_types import NodeType
+from dbt_common.events.base_types import EventLevel
 from dbt_common.events.functions import fire_event
 from dbt_common.events.types import Formatting
-from dbt_common.events.base_types import EventLevel
-from dbt.events.types import (
-    SeedHeader,
-    LogSeedResult,
-    LogStartLine,
-)
-from dbt.node_types import NodeType
+from dbt_common.exceptions import DbtInternalError
+
+from .printer import print_run_end_messages
+from .run import ModelRunner, RunTask
 
 
 class SeedRunner(ModelRunner):
@@ -92,14 +85,12 @@ class SeedTask(RunTask):
         alias = result.node.alias
 
         header = "Random sample of table: {}.{}".format(schema, alias)
-        with TextOnly():
-            fire_event(Formatting(""))
+        fire_event(Formatting(""))
         fire_event(SeedHeader(header=header))
         fire_event(Formatting("-" * len(header)))
 
         rand_table.print_table(max_rows=10, max_columns=None)
-        with TextOnly():
-            fire_event(Formatting(""))
+        fire_event(Formatting(""))
 
     def show_tables(self, results):
         for result in results:

@@ -1,24 +1,26 @@
 import json
 
+from dbt.cli.flags import Flags
+from dbt.config.runtime import RuntimeConfig
+from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import (
     Exposure,
-    SourceDefinition,
     Metric,
+    SavedQuery,
     SemanticModel,
+    SourceDefinition,
     UnitTestDefinition,
 )
-from dbt.flags import get_flags
+from dbt.events.types import NoNodesSelected
 from dbt.graph import ResourceTypeSelector
+from dbt.node_types import NodeType
+from dbt.task.base import resource_types_from_args
 from dbt.task.runnable import GraphRunnableTask
 from dbt.task.test import TestSelector
-from dbt.node_types import NodeType
-from dbt_common.events.functions import (
-    fire_event,
-    warn_or_error,
-)
-from dbt.events.types import NoNodesSelected, ListCmdOut
-from dbt_common.exceptions import DbtRuntimeError, DbtInternalError
 from dbt_common.events.contextvars import task_contextvars
+from dbt_common.events.functions import fire_event, warn_or_error
+from dbt_common.events.types import PrintEvent
+from dbt_common.exceptions import DbtInternalError, DbtRuntimeError
 
 
 class ListTask(GraphRunnableTask):
@@ -31,6 +33,7 @@ class ListTask(GraphRunnableTask):
             NodeType.Source,
             NodeType.Exposure,
             NodeType.Metric,
+            NodeType.SavedQuery,
             NodeType.SemanticModel,
             NodeType.Unit,
         )
@@ -51,7 +54,7 @@ class ListTask(GraphRunnableTask):
         )
     )
 
-    def __init__(self, args, config, manifest) -> None:
+    def __init__(self, args: Flags, config: RuntimeConfig, manifest: Manifest) -> None:
         super().__init__(args, config, manifest)
         if self.args.models:
             if self.args.select:
@@ -83,10 +86,12 @@ class ListTask(GraphRunnableTask):
                 yield self.manifest.semantic_models[unique_id]
             elif unique_id in self.manifest.unit_tests:
                 yield self.manifest.unit_tests[unique_id]
+            elif unique_id in self.manifest.saved_queries:
+                yield self.manifest.saved_queries[unique_id]
             else:
                 raise DbtRuntimeError(
                     f'Got an unexpected result from node selection: "{unique_id}"'
-                    f"Expected a source or a node!"
+                    f"Listing this node type is not yet supported!"
                 )
 
     def generate_selectors(self):
@@ -106,6 +111,10 @@ class ListTask(GraphRunnableTask):
                 # metrics are searched for by pkg.metric_name
                 metric_selector = ".".join([node.package_name, node.name])
                 yield f"metric:{metric_selector}"
+            elif node.resource_type == NodeType.SavedQuery:
+                assert isinstance(node, SavedQuery)
+                saved_query_selector = ".".join([node.package_name, node.name])
+                yield f"saved_query:{saved_query_selector}"
             elif node.resource_type == NodeType.SemanticModel:
                 assert isinstance(node, SemanticModel)
                 semantic_model_selector = ".".join([node.package_name, node.name])
@@ -163,11 +172,8 @@ class ListTask(GraphRunnableTask):
         """Log, or output a plain, newline-delimited, and ready-to-pipe list of nodes found."""
         for result in results:
             self.node_results.append(result)
-            if get_flags().LOG_FORMAT == "json":
-                fire_event(ListCmdOut(msg=result))
-            else:
-                # Cleaner to leave as print than to mutate the logger not to print timestamps.
-                print(result)
+            # No formatting, still get to stdout when --quiet is used
+            fire_event(PrintEvent(msg=result))
         return self.node_results
 
     @property
@@ -175,17 +181,11 @@ class ListTask(GraphRunnableTask):
         if self.args.models:
             return [NodeType.Model]
 
-        if not self.args.resource_types:
-            return list(self.DEFAULT_RESOURCE_VALUES)
+        resource_types = resource_types_from_args(
+            self.args, set(self.ALL_RESOURCE_VALUES), set(self.DEFAULT_RESOURCE_VALUES)
+        )
 
-        values = set(self.args.resource_types)
-        if "default" in values:
-            values.remove("default")
-            values.update(self.DEFAULT_RESOURCE_VALUES)
-        if "all" in values:
-            values.remove("all")
-            values.update(self.ALL_RESOURCE_VALUES)
-        return list(values)
+        return list(resource_types)
 
     @property
     def selection_arg(self):

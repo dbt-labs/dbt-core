@@ -1,6 +1,7 @@
 import pytest
-from dbt.tests.util import run_dbt, write_file
+
 from dbt.contracts.results import RunStatus, TestStatus
+from dbt.tests.util import run_dbt, write_file
 
 raw_customers_csv = """id,first_name,last_name,email
 1,Michael,Perez,mperez0@chronoengine.com
@@ -98,6 +99,6 @@ class TestUnitTestSourceInput:
         for result in results:
             if result.node.unique_id == "model.test.customers":
                 assert result.status == RunStatus.Skipped
-            elif result.node.unique_id == "model.test.customers":
+            elif result.node.unique_id == "unit_test.test.customers.fail_test_customers":
                 assert result.status == TestStatus.Fail
         assert len(results) == 6

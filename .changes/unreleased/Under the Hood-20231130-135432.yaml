@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: Move lowercase utils method to common
-time: 2023-11-30T13:54:32.561673-08:00
-custom:
-  Author: colin-rogers-dbt
-  Issue: "9180"

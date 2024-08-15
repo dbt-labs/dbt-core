@@ -1,18 +1,19 @@
-import networkx as nx  # type: ignore
 import threading
-
 from queue import PriorityQueue
-from typing import Dict, Set, List, Generator, Optional
+from typing import Dict, Generator, List, Optional, Set
+
+import networkx as nx  # type: ignore
+
+from dbt.contracts.graph.manifest import Manifest
+from dbt.contracts.graph.nodes import (
+    Exposure,
+    GraphMemberNode,
+    Metric,
+    SourceDefinition,
+)
+from dbt.node_types import NodeType
 
 from .graph import UniqueId
-from dbt.contracts.graph.nodes import (
-    SourceDefinition,
-    Exposure,
-    Metric,
-    GraphMemberNode,
-)
-from dbt.contracts.graph.manifest import Manifest
-from dbt.node_types import NodeType
 
 
 class GraphQueue:
@@ -24,8 +25,15 @@ class GraphQueue:
     the same time, as there is an unlocked race!
     """
 
-    def __init__(self, graph: nx.DiGraph, manifest: Manifest, selected: Set[UniqueId]) -> None:
-        self.graph = graph
+    def __init__(
+        self,
+        graph: nx.DiGraph,
+        manifest: Manifest,
+        selected: Set[UniqueId],
+        preserve_edges: bool = True,
+    ) -> None:
+        # 'create_empty_copy' returns a copy of the graph G with all of the edges removed, and leaves nodes intact.
+        self.graph = graph if preserve_edges else nx.classes.function.create_empty_copy(graph)
         self.manifest = manifest
         self._selected = selected
         # store the queue as a priority queue.

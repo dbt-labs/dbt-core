@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: pass mp_context to adapter factory as argument instead of import
-time: 2023-12-12T15:48:42.866175-08:00
-custom:
-  Author: colin-rogers-dbt
-  Issue: "9025"

@@ -1,37 +1,36 @@
 import functools
 from typing import NoReturn
 
-from dbt_common.events.functions import warn_or_error
-from dbt.events.types import JinjaLogWarning
-
-from dbt_common.exceptions import (
-    DbtRuntimeError,
-    NotImplementedError,
-    DbtDatabaseError,
-    DataclassNotDictError,
-)
 from dbt.adapters.exceptions import (
-    MissingConfigError,
     ColumnTypeMissingError,
+    MissingConfigError,
     MissingMaterializationError,
     RelationWrongTypeError,
 )
+from dbt.adapters.exceptions.cache import CacheInconsistencyError
+from dbt.events.types import JinjaLogWarning
 from dbt.exceptions import (
-    MissingRelationError,
     AmbiguousAliasError,
     AmbiguousCatalogMatchError,
     CompilationError,
-    DependencyNotFoundError,
+    ContractError,
     DependencyError,
+    DependencyNotFoundError,
     DuplicatePatchPathError,
     DuplicateResourceNameError,
-    PropertyYMLError,
-    ContractError,
     FailFastError,
-    scrub_secrets,
+    MissingRelationError,
+    PropertyYMLError,
     env_secrets,
+    scrub_secrets,
 )
-from dbt.adapters.exceptions.cache import CacheInconsistencyError
+from dbt_common.events.functions import warn_or_error
+from dbt_common.exceptions import (
+    DataclassNotDictError,
+    DbtDatabaseError,
+    DbtRuntimeError,
+    NotImplementedError,
+)
 
 
 def warn(msg, node=None):

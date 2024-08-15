@@ -1,24 +1,20 @@
 import os
 from copy import deepcopy
-from typing import MutableMapping, Dict, List, Callable
+from typing import Callable, Dict, List, MutableMapping
 
-from dbt.contracts.graph.manifest import Manifest
+from dbt.constants import DEFAULT_ENV_PLACEHOLDER
 from dbt.contracts.files import (
     AnySourceFile,
     ParseFileType,
-    parse_file_type_to_parser,
     SchemaSourceFile,
+    parse_file_type_to_parser,
 )
-from dbt_common.context import get_invocation_context
-from dbt_common.events.functions import fire_event
-from dbt_common.events.base_types import EventLevel
-from dbt.events.types import (
-    PartialParsingEnabled,
-    PartialParsingFile,
-)
-from dbt.constants import DEFAULT_ENV_PLACEHOLDER
+from dbt.contracts.graph.manifest import Manifest
+from dbt.events.types import PartialParsingEnabled, PartialParsingFile
 from dbt.node_types import NodeType
-
+from dbt_common.context import get_invocation_context
+from dbt_common.events.base_types import EventLevel
+from dbt_common.events.functions import fire_event
 
 mssat_files = (
     ParseFileType.Model,
@@ -211,6 +207,7 @@ class PartialParsing:
         if (
             file_id not in self.project_parser_files[project_name][parser_name]
             and file_id not in self.file_diff["deleted"]
+            and file_id not in self.file_diff["deleted_schema_files"]
         ):
             self.project_parser_files[project_name][parser_name].append(file_id)
 
@@ -467,7 +464,11 @@ class PartialParsing:
 
     def _schedule_for_parsing(self, dict_key: str, element, name, delete: Callable) -> None:
         file_id = element.file_id
-        if file_id in self.saved_files and file_id not in self.file_diff["deleted"]:
+        if (
+            file_id in self.saved_files
+            and file_id not in self.file_diff["deleted"]
+            and file_id not in self.file_diff["deleted_schema_files"]
+        ):
             schema_file = self.saved_files[file_id]
             elements = []
             assert isinstance(schema_file, SchemaSourceFile)
@@ -967,13 +968,17 @@ class PartialParsing:
             elif unique_id in self.saved_manifest.disabled:
                 self.delete_disabled(unique_id, schema_file.file_id)
 
-        metrics = schema_file.generated_metrics.copy()
-        for unique_id in metrics:
-            if unique_id in self.saved_manifest.metrics:
-                self.saved_manifest.metrics.pop(unique_id)
-                schema_file.generated_metrics.remove(unique_id)
-            elif unique_id in self.saved_manifest.disabled:
-                self.delete_disabled(unique_id, schema_file.file_id)
+        if schema_file.generated_metrics:
+            # If this partial parse file has an old "generated_metrics" list,
+            # call code to fix it up before processing.
+            schema_file.fix_metrics_from_measures()
+        if semantic_model_name in schema_file.metrics_from_measures:
+            for unique_id in schema_file.metrics_from_measures[semantic_model_name]:
+                if unique_id in self.saved_manifest.metrics:
+                    self.saved_manifest.metrics.pop(unique_id)
+                elif unique_id in self.saved_manifest.disabled:
+                    self.delete_disabled(unique_id, schema_file.file_id)
+            del schema_file.metrics_from_measures[semantic_model_name]
 
     def delete_schema_unit_test(self, schema_file, unit_test_dict):
         unit_test_name = unit_test_dict["name"]

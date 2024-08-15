@@ -1,7 +1,7 @@
+from contextlib import contextmanager
 from unittest import mock
 
 from dbt.adapters.base import BaseAdapter
-from contextlib import contextmanager
 
 
 def adapter_factory():
@@ -32,6 +32,9 @@ def adapter_factory():
 
         def get_columns_in_relation(self, *args, **kwargs):
             return self.responder.get_columns_in_relation(*args, **kwargs)
+
+        def get_catalog_for_single_relation(self, *args, **kwargs):
+            return self.responder.get_catalog_for_single_relation(*args, **kwargs)
 
         def expand_column_types(self, *args, **kwargs):
             return self.responder.expand_column_types(*args, **kwargs)

@@ -1,4 +1,5 @@
 from pathlib import Path
+
 from dbt.config.project import PartialProject
 from dbt.exceptions import DbtProjectError
 

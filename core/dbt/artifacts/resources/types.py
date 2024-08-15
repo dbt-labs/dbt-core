@@ -56,6 +56,11 @@ class ModelLanguage(StrEnum):
     sql = "sql"
 
 
+class ModelHookType(StrEnum):
+    PreHook = "pre-hook"
+    PostHook = "post-hook"
+
+
 class TimePeriod(StrEnum):
     minute = "minute"
     hour = "hour"

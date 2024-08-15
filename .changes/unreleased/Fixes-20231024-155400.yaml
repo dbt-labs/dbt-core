@@ -1,6 +1,0 @@
-kind: Fixes
-body: Rework get_catalog implementation to retain previous adapter interface semantics
-time: 2023-10-24T15:54:00.628086-04:00
-custom:
-  Author: peterallenwebb
-  Issue: "8846"

@@ -1,6 +1,8 @@
-import pytest
 import os
+
+import pytest
 import yaml
+
 from dbt.tests.util import run_dbt
 
 basic_sql = """

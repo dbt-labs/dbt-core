@@ -240,6 +240,12 @@ semantic_models:
         agg: sum
         agg_time_dimension: ds
         create_metric: true
+      - name: txn_revenue_with_label
+        label: "Transaction Revenue with label"
+        expr: revenue
+        agg: sum
+        agg_time_dimension: ds
+        create_metric: true
       - name: sum_of_things
         expr: 2
         agg: sum
@@ -318,4 +324,82 @@ final as (
 
 select *
 from final
+"""
+
+multi_sm_schema_yml = """
+models:
+  - name: fct_revenue
+    description: This is the model fct_revenue.
+
+semantic_models:
+  - name: revenue
+    description: This is the first semantic model.
+    model: ref('fct_revenue')
+
+    defaults:
+      agg_time_dimension: ds
+
+    measures:
+      - name: txn_revenue
+        expr: revenue
+        agg: sum
+        agg_time_dimension: ds
+        create_metric: true
+      - name: sum_of_things
+        expr: 2
+        agg: sum
+        agg_time_dimension: ds
+
+    dimensions:
+      - name: ds
+        type: time
+        expr: created_at
+        type_params:
+          time_granularity: day
+
+    entities:
+      - name: user
+        type: foreign
+        expr: user_id
+      - name: id
+        type: primary
+
+  - name: alt_revenue
+    description: This is the second revenue semantic model.
+    model: ref('fct_revenue')
+
+    defaults:
+      agg_time_dimension: ads
+
+    measures:
+      - name: alt_txn_revenue
+        expr: revenue
+        agg: sum
+        agg_time_dimension: ads
+        create_metric: true
+      - name: alt_sum_of_things
+        expr: 2
+        agg: sum
+        agg_time_dimension: ads
+
+    dimensions:
+      - name: ads
+        type: time
+        expr: created_at
+        type_params:
+          time_granularity: day
+
+    entities:
+      - name: user
+        type: foreign
+        expr: user_id
+      - name: id
+        type: primary
+
+metrics:
+  - name: simple_metric
+    label: Simple Metric
+    type: simple
+    type_params:
+      measure: sum_of_things
 """

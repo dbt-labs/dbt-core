@@ -1,20 +1,19 @@
 import pytest
 
 from dbt.artifacts.resources import ExposureConfig
+from dbt.tests.util import get_manifest, run_dbt, update_config_file
 from dbt_common.dataclass_schema import ValidationError
-
-from dbt.tests.util import run_dbt, update_config_file, get_manifest
 from tests.functional.exposures.fixtures import (
-    models_sql,
-    second_model_sql,
-    simple_exposure_yml,
     disabled_models_exposure_yml,
     enabled_yaml_level_exposure_yml,
     invalid_config_exposure_yml,
-    source_schema_yml,
     metricflow_time_spine_sql,
-    semantic_models_schema_yml,
     metrics_schema_yml,
+    models_sql,
+    second_model_sql,
+    semantic_models_schema_yml,
+    simple_exposure_yml,
+    source_schema_yml,
 )
 
 

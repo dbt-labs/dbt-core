@@ -1,8 +1,7 @@
 import pytest
 
-from dbt.tests.util import run_dbt
 import dbt_common.exceptions
-
+from dbt.tests.util import run_dbt
 
 invalid_doc_ref_model_sql = "select 1 as id, 'joe' as first_name"
 

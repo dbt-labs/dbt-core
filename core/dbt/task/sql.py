@@ -1,20 +1,19 @@
+import traceback
 from abc import abstractmethod
 from datetime import datetime
 from typing import Generic, TypeVar
-import traceback
 
-import dbt_common.exceptions.base
 import dbt.exceptions
+import dbt_common.exceptions.base
 from dbt.contracts.sql import (
     RemoteCompileResult,
     RemoteCompileResultMixin,
     RemoteRunResult,
     ResultTable,
 )
-from dbt_common.events.functions import fire_event
 from dbt.events.types import SQLRunnerException
 from dbt.task.compile import CompileRunner
-
+from dbt_common.events.functions import fire_event
 
 SQLResult = TypeVar("SQLResult", bound=RemoteCompileResultMixin)
 
@@ -67,7 +66,6 @@ class SqlCompileRunner(GenericSqlRunner[RemoteCompileResult]):
             compiled_code=compiled_node.compiled_code,
             node=compiled_node,
             timing=[],  # this will get added later
-            logs=[],
             generated_at=datetime.utcnow(),
         )
 
@@ -77,7 +75,6 @@ class SqlCompileRunner(GenericSqlRunner[RemoteCompileResult]):
             compiled_code=result.compiled_code,
             node=result.node,
             timing=timing_info,
-            logs=[],
             generated_at=datetime.utcnow(),
         )
 
@@ -97,7 +94,6 @@ class SqlExecuteRunner(GenericSqlRunner[RemoteRunResult]):
             node=compiled_node,
             table=table,
             timing=[],
-            logs=[],
             generated_at=datetime.utcnow(),
         )
 
@@ -108,6 +104,5 @@ class SqlExecuteRunner(GenericSqlRunner[RemoteRunResult]):
             node=result.node,
             table=result.table,
             timing=timing_info,
-            logs=[],
             generated_at=datetime.utcnow(),
         )

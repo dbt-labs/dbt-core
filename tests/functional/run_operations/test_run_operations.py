@@ -3,17 +3,21 @@ import os
 import pytest
 import yaml
 
-from dbt_common.exceptions import DbtInternalError
 from dbt.tests.util import (
     check_table_does_exist,
-    run_dbt,
-    write_file,
     mkdir,
-    run_dbt_and_capture,
     rm_dir,
     rm_file,
+    run_dbt,
+    run_dbt_and_capture,
+    write_file,
 )
-from tests.functional.run_operations.fixtures import happy_macros_sql, sad_macros_sql, model_sql
+from dbt_common.exceptions import DbtInternalError
+from tests.functional.run_operations.fixtures import (
+    happy_macros_sql,
+    model_sql,
+    sad_macros_sql,
+)
 
 
 class TestOperations:

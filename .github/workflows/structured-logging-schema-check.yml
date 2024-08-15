@@ -94,7 +94,11 @@ jobs:
       # integration tests generate a ton of logs in different files. the next step will find them all.
       # we actually care if these pass, because the normal test run doesn't usually include many json log outputs
       - name: Run integration tests
-        run: tox -e integration -- -nauto
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 30
+          max_attempts: 3
+          command: tox -e integration -- -nauto
         env:
           PYTEST_ADDOPTS: ${{ format('--splits {0} --group {1}', env.PYTHON_INTEGRATION_TEST_WORKERS, matrix.split-group) }}
 

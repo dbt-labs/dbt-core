@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: move system.py to common as dbt-bigquery relies on it to call gcloud
-time: 2023-12-14T16:41:07.539814-08:00
-custom:
-  Author: colin-rogers-dbt
-  Issue: "9293"

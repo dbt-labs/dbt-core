@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Accept valid_error_names in WarnErrorOptions constructor, remove global usage
-  of event modules
-time: 2024-01-04T16:52:48.173716-05:00
-custom:
-  Author: michelleark
-  Issue: "9337"

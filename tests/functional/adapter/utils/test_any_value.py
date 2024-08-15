@@ -1,10 +1,11 @@
 import pytest
+
 from tests.functional.adapter.utils.base_utils import BaseUtils
 from tests.functional.adapter.utils.fixture_any_value import (
-    seeds__data_any_value_csv,
-    seeds__data_any_value_expected_csv,
     models__test_any_value_sql,
     models__test_any_value_yml,
+    seeds__data_any_value_csv,
+    seeds__data_any_value_expected_csv,
 )
 
 

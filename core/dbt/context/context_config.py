@@ -1,15 +1,15 @@
 from abc import abstractmethod
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import List, Iterator, Dict, Any, TypeVar, Generic, Optional
+from typing import Any, Dict, Generic, Iterator, List, Optional, TypeVar
 
 from dbt.adapters.factory import get_config_class_by_name
-from dbt.config import RuntimeConfig, Project, IsFQNResource
+from dbt.config import IsFQNResource, Project, RuntimeConfig
 from dbt.contracts.graph.model_config import get_config_for
-from dbt_common.contracts.config.base import BaseConfig, _listify
-from dbt_common.exceptions import DbtInternalError
 from dbt.node_types import NodeType
 from dbt.utils import fqn_search
+from dbt_common.contracts.config.base import BaseConfig, _listify
+from dbt_common.exceptions import DbtInternalError
 
 
 @dataclass
@@ -27,8 +27,7 @@ class ConfigSource:
     def __init__(self, project):
         self.project = project
 
-    def get_config_dict(self, resource_type: NodeType):
-        ...
+    def get_config_dict(self, resource_type: NodeType): ...
 
 
 class UnrenderedConfig(ConfigSource):
@@ -130,12 +129,12 @@ class BaseContextConfigGenerator(Generic[T]):
         return self._project_configs(self._active_project, fqn, resource_type)
 
     @abstractmethod
-    def _update_from_config(self, result: T, partial: Dict[str, Any], validate: bool = False) -> T:
-        ...
+    def _update_from_config(
+        self, result: T, partial: Dict[str, Any], validate: bool = False
+    ) -> T: ...
 
     @abstractmethod
-    def initial_result(self, resource_type: NodeType, base: bool) -> T:
-        ...
+    def initial_result(self, resource_type: NodeType, base: bool) -> T: ...
 
     def calculate_node_config(
         self,
@@ -181,8 +180,7 @@ class BaseContextConfigGenerator(Generic[T]):
         project_name: str,
         base: bool,
         patch_config_dict: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
-        ...
+    ) -> Dict[str, Any]: ...
 
 
 class ContextConfigGenerator(BaseContextConfigGenerator[C]):

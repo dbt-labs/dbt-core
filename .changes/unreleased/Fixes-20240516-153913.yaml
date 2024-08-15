@@ -1,0 +1,7 @@
+kind: Fixes
+body: Fix json format log and --quiet for ls and jinja print by converting print call
+  to fire events
+time: 2024-05-16T15:39:13.896723-07:00
+custom:
+  Author: ChenyuLInx
+  Issue: "8756"

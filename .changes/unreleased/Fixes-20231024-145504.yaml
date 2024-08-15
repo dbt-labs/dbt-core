@@ -1,6 +1,0 @@
-kind: Fixes
-body: Add back contract enforcement for temporary tables on postgres
-time: 2023-10-24T14:55:04.051683-05:00
-custom:
-  Author: emmyoop
-  Issue: "8857"

@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: 'Remove usage of dbt.flags.LOG_CACHE_EVENTS in dbt/adapters'
-time: 2023-11-01T17:31:24.974093-04:00
-custom:
-  Author: michelleark
-  Issue: "8969"

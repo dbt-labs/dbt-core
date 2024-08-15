@@ -1,15 +1,20 @@
 import json
 
 from dbt.constants import MAXIMUM_SEED_SIZE_NAME, PIN_PACKAGE_URL
-from dbt_common.ui import warning_tag, line_wrap_message, green, yellow, red
+from dbt.events.base_types import (
+    DebugLevel,
+    DynamicLevel,
+    ErrorLevel,
+    InfoLevel,
+    WarnLevel,
+)
 from dbt_common.events.base_types import EventLevel
 from dbt_common.events.format import (
     format_fancy_output_line,
-    timestamp_to_datetime_string,
     pluralize,
+    timestamp_to_datetime_string,
 )
-from dbt.events.base_types import WarnLevel, InfoLevel, DebugLevel, ErrorLevel, DynamicLevel
-
+from dbt_common.ui import error_tag, green, line_wrap_message, red, warning_tag, yellow
 
 # Event codes have prefixes which follow this table
 #
@@ -57,12 +62,7 @@ class MainTrackingUserState(DebugLevel):
         return f"Tracking: {self.user_state}"
 
 
-class MergedFromState(DebugLevel):
-    def code(self) -> str:
-        return "A004"
-
-    def message(self) -> str:
-        return f"Merged {self.num_merged} items from state (sample: {self.sample})"
+# Removed A004: MergedFromState
 
 
 class MissingProfileTarget(InfoLevel):
@@ -395,7 +395,7 @@ class TestsConfigDeprecation(WarnLevel):
     def message(self) -> str:
         description = (
             f"The `{self.deprecated_path}` config has been renamed to `{self.exp_path}`. "
-            "Please update your `dbt_project.yml` configuration to reflect this change."
+            "Please see https://docs.getdbt.com/docs/build/data-tests#new-data_tests-syntax for more information."
         )
         return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
 
@@ -411,6 +411,56 @@ class ProjectFlagsMovedDeprecation(WarnLevel):
         )
         # Can't use line_wrap_message here because flags.printer_width isn't available yet
         return warning_tag(f"Deprecated functionality\n\n{description}")
+
+
+class SpacesInResourceNameDeprecation(DynamicLevel):
+    def code(self) -> str:
+        return "D014"
+
+    def message(self) -> str:
+        description = f"Found spaces in the name of `{self.unique_id}`"
+
+        if self.level == EventLevel.ERROR.value:
+            description = error_tag(description)
+        elif self.level == EventLevel.WARN.value:
+            description = warning_tag(description)
+
+        return line_wrap_message(description)
+
+
+class ResourceNamesWithSpacesDeprecation(WarnLevel):
+    def code(self) -> str:
+        return "D015"
+
+    def message(self) -> str:
+        description = f"Spaces found in {self.count_invalid_names} resource name(s). This is deprecated, and may lead to errors when using dbt."
+
+        if self.show_debug_hint:
+            description += " Run again with `--debug` to see them all."
+
+        description += " For more information: https://docs.getdbt.com/reference/global-configs/legacy-behaviors"
+
+        return line_wrap_message(warning_tag(description))
+
+
+class PackageMaterializationOverrideDeprecation(WarnLevel):
+    def code(self) -> str:
+        return "D016"
+
+    def message(self) -> str:
+        description = f"Installed package '{self.package_name}' is overriding the built-in materialization '{self.materialization_name}'. Overrides of built-in materializations from installed packages will be deprecated in future versions of dbt. For more information: https://docs.getdbt.com/reference/global-configs/legacy-behaviors"
+
+        return line_wrap_message(warning_tag(description))
+
+
+class SourceFreshnessProjectHooksNotRun(WarnLevel):
+    def code(self) -> str:
+        return "D017"
+
+    def message(self) -> str:
+        description = "In a future version of dbt, the `source freshness` command will start running `on-run-start` and `on-run-end` hooks by default. For more information: https://docs.getdbt.com/reference/global-configs/legacy-behaviors"
+
+        return line_wrap_message(warning_tag(description))
 
 
 # =======================================================
@@ -1099,7 +1149,7 @@ class NoNodesForSelectionCriteria(WarnLevel):
         return "M030"
 
     def message(self) -> str:
-        return f"The selection criterion '{self.spec_raw}' does not match any nodes"
+        return f"The selection criterion '{self.spec_raw}' does not match any enabled nodes"
 
 
 class DepsLockUpdating(InfoLevel):
@@ -1348,7 +1398,22 @@ class LogFreshnessResult(DynamicLevel):
             return EventLevel.INFO
 
 
-# Skipped Q019, Q020, Q021
+class LogNodeNoOpResult(InfoLevel):
+    def code(self) -> str:
+        return "Q019"
+
+    def message(self) -> str:
+        msg = f"NO-OP {self.description}"
+        return format_fancy_output_line(
+            msg=msg,
+            status=yellow("NO-OP"),
+            index=self.index,
+            total=self.total,
+            execution_time=self.execution_time,
+        )
+
+
+# Skipped Q020, Q021
 
 
 class LogCancelLine(ErrorLevel):
@@ -1757,7 +1822,7 @@ class SQLCompiledPath(InfoLevel):
         return "Z026"
 
     def message(self) -> str:
-        return f"  compiled Code at {self.path}"
+        return f"  compiled code at {self.path}"
 
 
 class CheckNodeTestFailure(InfoLevel):
@@ -1791,7 +1856,21 @@ class EndOfRunSummary(InfoLevel):
         return message
 
 
-# Skipped Z031, Z032, Z033
+# Skipped Z031, Z032
+
+
+class MarkSkippedChildren(DebugLevel):
+    def code(self) -> str:
+        return "Z033"
+
+    def message(self) -> str:
+        msg = (
+            f"Marking all children of '{self.unique_id}' to be skipped "
+            f"because of status '{self.status}'. "
+        )
+        if self.run_result.message:
+            msg = msg + f" Reason: {self.run_result.message}."
+        return msg
 
 
 class LogSkipBecauseError(ErrorLevel):
@@ -1799,7 +1878,7 @@ class LogSkipBecauseError(ErrorLevel):
         return "Z034"
 
     def message(self) -> str:
-        msg = f"SKIP relation {self.schema}.{self.relation} due to ephemeral model error"
+        msg = f"SKIP relation {self.schema}.{self.relation} due to ephemeral model status '{self.status}'"
         return format_fancy_output_line(
             msg=msg, status=red("ERROR SKIP"), index=self.index, total=self.total
         )
@@ -1917,6 +1996,7 @@ class DebugCmdResult(InfoLevel):
 
 
 class ListCmdOut(InfoLevel):
+    # No longer in use, switching to Z051 PrintEvent in dbt-common
     def code(self) -> str:
         return "Z049"
 

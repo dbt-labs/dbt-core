@@ -1,6 +1,6 @@
 import pytest
-from dbt.tests.fixtures.project import write_project_files
 
+from dbt.tests.fixtures.project import write_project_files
 
 snapshots__snapshot_sql = """
 {% snapshot my_snapshot %}
@@ -145,6 +145,24 @@ metrics:
 """
 
 
+saved_queries__sq_yml = """
+saved_queries:
+  - name: my_saved_query
+    label: My Saved Query
+    query_params:
+        metrics:
+            - total_outer
+        group_by:
+            - "Dimension('my_entity__created_at')"
+    exports:
+        - name: my_export
+          config:
+            alias: my_export_alias
+            export_as: table
+            schema: my_export_schema_name
+"""
+
+
 @pytest.fixture(scope="class")
 def snapshots():
     return {"snapshot.sql": snapshots__snapshot_sql}
@@ -164,6 +182,7 @@ def models():
         "docs.md": models__docs_md,
         "outer.sql": models__outer_sql,
         "metricflow_time_spine.sql": models__metric_flow,
+        "sq.yml": saved_queries__sq_yml,
         "sm.yml": semantic_models__sm_yml,
         "m.yml": metrics__m_yml,
         "sub": {"inner.sql": models__sub__inner_sql},
@@ -193,6 +212,11 @@ def semantic_models():
 @pytest.fixture(scope="class")
 def metrics():
     return {"m.yml": metrics__m_yml}
+
+
+@pytest.fixture(scope="class")
+def saved_queries():
+    return {"sq.yml": saved_queries__sq_yml}
 
 
 @pytest.fixture(scope="class")
