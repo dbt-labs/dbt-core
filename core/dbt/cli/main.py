@@ -458,7 +458,7 @@ def init(ctx, **kwargs):
     """Initialize a new dbt project."""
     from dbt.task.init import InitTask
 
-    with InitTask(ctx.obj["flags"], None) as task:
+    with InitTask(ctx.obj["flags"]) as task:
         results = task.run()
         success = task.interpret_results(results)
     return results, success

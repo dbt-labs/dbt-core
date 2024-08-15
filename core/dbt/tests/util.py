@@ -91,7 +91,12 @@ def run_dbt(
     if profiles_dir and "--profiles-dir" not in args:
         args.extend(["--profiles-dir", profiles_dir])
     dbt = dbtRunner()
+
+    before_dir = os.getcwd()
     res = dbt.invoke(args)
+    after_dir = os.getcwd()
+    # The directory has not been changed after running dbt command.
+    assert before_dir == after_dir
 
     # the exception is immediately raised to be caught in tests
     # using a pattern like `with pytest.raises(SomeException):`
@@ -148,7 +153,7 @@ def get_manifest(project_root) -> Optional[Manifest]:
     if os.path.exists(path):
         with open(path, "rb") as fp:
             manifest_mp = fp.read()
-        manifest: Manifest = Manifest.from_msgpack(manifest_mp)
+        manifest: Manifest = Manifest.from_msgpack(manifest_mp)  # type: ignore[attr-defined]
         return manifest
     else:
         return None
