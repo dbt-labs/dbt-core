@@ -1,0 +1,6 @@
+kind: Fixes
+body: Filter out empty nodes after graph selection to support consistent selection of nodes that depend on upstream public models
+time: 2024-08-16T14:08:07.426235-07:00
+custom:
+  Author: jtcohen6
+  Issue: "8987"
