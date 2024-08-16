@@ -319,3 +319,7 @@ class TestNodeSelector:
         selector = NodeSelector(graph, manifest)
         spec = graph_selector.SelectionCriteria.from_single_spec("model_one+")
         assert selector.get_selected(spec) == {"model.pkg.model_two"}
+
+        # Ensure that --indirect-selection empty returns the same result
+        spec.indirect_selection = graph_selector.IndirectSelection.Empty
+        assert selector.get_selected(spec) == {"model.pkg.model_two"}
