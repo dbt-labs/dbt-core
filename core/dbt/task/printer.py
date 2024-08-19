@@ -80,7 +80,7 @@ def print_run_result_error(
         if newline:
             fire_event(Formatting(""))
         if is_warning:
-            group_dict = group.to_dict() if group else None
+            group_dict = group.to_logging_dict() if group else None
             fire_event(
                 RunResultWarning(
                     resource_type=result.node.resource_type,
@@ -91,7 +91,7 @@ def print_run_result_error(
                 )
             )
         else:
-            group_dict = group.to_dict() if group else None
+            group_dict = group.to_logging_dict() if group else None
             fire_event(
                 RunResultFailure(
                     resource_type=result.node.resource_type,
@@ -106,7 +106,7 @@ def print_run_result_error(
             if is_warning:
                 fire_event(RunResultWarningMessage(msg=result.message, node_info=node_info))
             else:
-                group_dict = group.to_dict() if group else None
+                group_dict = group.to_logging_dict() if group else None
                 fire_event(
                     RunResultError(msg=result.message, node_info=node_info, group=group_dict)
                 )
@@ -129,7 +129,7 @@ def print_run_result_error(
     elif result.message is not None:
         if newline:
             fire_event(Formatting(""))
-        group_dict = group.to_dict() if group else None
+        group_dict = group.to_logging_dict() if group else None
         fire_event(RunResultError(msg=result.message, node_info=node_info, group=group_dict))
 
 
