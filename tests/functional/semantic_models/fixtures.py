@@ -240,6 +240,12 @@ semantic_models:
         agg: sum
         agg_time_dimension: ds
         create_metric: true
+      - name: txn_revenue_with_label
+        label: "Transaction Revenue with label"
+        expr: revenue
+        agg: sum
+        agg_time_dimension: ds
+        create_metric: true
       - name: sum_of_things
         expr: 2
         agg: sum
