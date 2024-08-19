@@ -363,8 +363,12 @@ class ContextConfig:
             # TODO CT-211
             src = UnrenderedConfigGenerator(self._active_project)  # type: ignore[assignment]
             # TODO: behaviour flag can route behaviour here.
-            # TODO: consider using self._config_call_dict for python models as _unrendered_config_call_dict is unreliable
-            config_call_dict = self._unrendered_config_call_dict
+            # Prefer _config_call_dict if it is available and _unrendered_config_call_dict is not,
+            # as _unrendered_config_call_dict is unreliable for non-sql nodes (e.g. no jinja config block rendered for python models, test nodes, etc)
+            if self._config_call_dict and not self._unrendered_config_call_dict:
+                config_call_dict = self._config_call_dict
+            else:
+                config_call_dict = self._unrendered_config_call_dict
 
         return src.calculate_node_config_dict(
             config_call_dict=config_call_dict,
