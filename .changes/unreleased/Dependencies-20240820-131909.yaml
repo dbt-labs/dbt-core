@@ -1,0 +1,7 @@
+kind: Dependencies
+body: Increase supported version range for dbt-semantic-interfaces. Needed to support
+  custom calendar features.
+time: 2024-08-20T13:19:09.015225-07:00
+custom:
+  Author: courtneyholcomb
+  Issue: "9265"
