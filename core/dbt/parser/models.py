@@ -301,6 +301,7 @@ class ModelParser(SimpleSQLParser[ModelNode]):
             statically_parsed = self.run_experimental_parser(node)
         # run the stable static parser unless it is explicitly turned off
         else:
+            # TODO: consider running new parser here?
             statically_parsed = self.run_static_parser(node)
 
         # if the static parser succeeded, extract some data in easy-to-compare formats

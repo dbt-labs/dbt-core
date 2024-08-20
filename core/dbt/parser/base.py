@@ -390,6 +390,7 @@ class ConfiguredParser(
         )
 
         parsed_node.config_call_dict = config._config_call_dict
+        parsed_node.unrendered_config_call_dict = config._unrendered_config_call_dict
 
         # do this once before we parse the node database/schema/alias, so
         # parsed_node.config is what it would be if they did nothing

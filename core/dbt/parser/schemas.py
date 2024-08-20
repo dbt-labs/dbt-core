@@ -634,7 +634,7 @@ class PatchParser(YamlReader, Generic[NonSourceTarget, Parsed]):
         )
         # We need to re-apply the config_call_dict after the patch config
         config._config_call_dict = node.config_call_dict
-        config._unrendered_config_call_dict = node.unrendered_config
+        config._unrendered_config_call_dict = node.unrendered_config_call_dict
         self.schema_parser.update_parsed_node_config(
             node,
             config,
