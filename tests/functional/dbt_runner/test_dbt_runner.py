@@ -104,7 +104,7 @@ class TestDbtRunner:
         dbt.invoke(args)
         assert args == args_before
 
-    def test_directory_does_not_change(self, dbt: dbtRunner) -> None:
+    def test_directory_does_not_change(self, project, dbt: dbtRunner) -> None:
         project_dir = os.getcwd()  # The directory where dbt_project.yml exists.
         os.chdir("../")
         cmd_execution_dir = os.getcwd()  # The directory where dbt command will be run
