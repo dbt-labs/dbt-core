@@ -109,10 +109,14 @@ class TestDbtRunner:
         os.chdir("../")
         cmd_execution_dir = os.getcwd()  # The directory where dbt command will be run
 
-        commands = ["deps", "clean", "init"]
+        commands = ["init", "deps", "clean"]
         for command in commands:
-            dbt.invoke([command, "--project-dir", project_dir])
+            args = [command, "--project-dir", project_dir]
+            if command == "init":
+                args.append("--skip-profile-setup")
+            res = dbt.invoke(args)
             after_dir = os.getcwd()
+            assert res.success is True
             assert cmd_execution_dir == after_dir
 
 
