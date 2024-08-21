@@ -92,11 +92,7 @@ def run_dbt(
         args.extend(["--profiles-dir", profiles_dir])
     dbt = dbtRunner()
 
-    before_dir = os.getcwd()
     res = dbt.invoke(args)
-    after_dir = os.getcwd()
-    # The directory has not been changed after running dbt command.
-    assert before_dir == after_dir
 
     # the exception is immediately raised to be caught in tests
     # using a pattern like `with pytest.raises(SomeException):`
