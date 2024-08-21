@@ -1,6 +1,0 @@
-kind: Features
-body: Warn on incompatible snapshot timestamps
-time: 2024-06-21T16:44:00.023992-04:00
-custom:
-  Author: gshank
-  Issue: "10234"
