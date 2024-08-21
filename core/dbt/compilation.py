@@ -21,6 +21,7 @@ from dbt.contracts.graph.nodes import (
     InjectedCTE,
     ManifestNode,
     ManifestSQLNode,
+    ModelNode,
     SeedNode,
     UnitTestDefinition,
     UnitTestNode,
@@ -374,7 +375,7 @@ class Compiler:
 
             _extend_prepended_ctes(prepended_ctes, new_prepended_ctes)
 
-            new_cte_name = self.add_ephemeral_prefix(cte_model.name)
+            new_cte_name = self.add_ephemeral_prefix(cte_model.identifier)
             rendered_sql = cte_model._pre_injected_sql or cte_model.compiled_code
             sql = f" {new_cte_name} as (\n{rendered_sql}\n)"
 
@@ -441,7 +442,7 @@ class Compiler:
             node.relation_name = relation_name
 
         # Compile 'ref' and 'source' expressions in foreign key constraints
-        if node.resource_type == NodeType.Model:
+        if isinstance(node, ModelNode):
             for constraint in node.all_constraints:
                 if constraint.type == ConstraintType.foreign_key and constraint.to:
                     constraint.to = self._compile_relation_for_foreign_key_constraint_to(

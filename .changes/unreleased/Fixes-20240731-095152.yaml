@@ -1,0 +1,6 @@
+kind: Fixes
+body: fix all_constraints access, disabled node parsing of non-uniquely named resources
+time: 2024-07-31T09:51:52.751135-04:00
+custom:
+  Author: michelleark gshank
+  Issue: "10509"

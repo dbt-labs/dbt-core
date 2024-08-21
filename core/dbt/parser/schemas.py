@@ -69,18 +69,20 @@ from dbt_common.events.functions import warn_or_error
 from dbt_common.exceptions import DbtValidationError
 from dbt_common.utils import deep_merge
 
-schema_file_keys = (
-    "models",
-    "seeds",
-    "snapshots",
-    "sources",
-    "macros",
-    "analyses",
-    "exposures",
-    "metrics",
-    "semantic_models",
-    "saved_queries",
-)
+schema_file_keys_to_resource_types = {
+    "models": NodeType.Model,
+    "seeds": NodeType.Seed,
+    "snapshots": NodeType.Snapshot,
+    "sources": NodeType.Source,
+    "macros": NodeType.Macro,
+    "analyses": NodeType.Analysis,
+    "exposures": NodeType.Exposure,
+    "metrics": NodeType.Metric,
+    "semantic_models": NodeType.SemanticModel,
+    "saved_queries": NodeType.SavedQuery,
+}
+
+schema_file_keys = list(schema_file_keys_to_resource_types.keys())
 
 
 # ===============================================================================
@@ -678,7 +680,10 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
         # handle disabled nodes
         if unique_id is None:
             # Node might be disabled. Following call returns list of matching disabled nodes
-            found_nodes = self.manifest.disabled_lookup.find(patch.name, patch.package_name)
+            resource_type = schema_file_keys_to_resource_types[patch.yaml_key]
+            found_nodes = self.manifest.disabled_lookup.find(
+                patch.name, patch.package_name, resource_types=[resource_type]
+            )
             if found_nodes:
                 if len(found_nodes) > 1 and patch.config.get("enabled"):
                     # There are multiple disabled nodes for this model and the schema file wants to enable one.
@@ -810,7 +815,9 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
 
                 if versioned_model_unique_id is None:
                     # Node might be disabled. Following call returns list of matching disabled nodes
-                    found_nodes = self.manifest.disabled_lookup.find(versioned_model_name, None)
+                    found_nodes = self.manifest.disabled_lookup.find(
+                        versioned_model_name, None, resource_types=[NodeType.Model]
+                    )
                     if found_nodes:
                         if len(found_nodes) > 1 and target.config.get("enabled"):
                             # There are multiple disabled nodes for this model and the schema file wants to enable one.
@@ -911,6 +918,11 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
 
     def patch_node_properties(self, node, patch: "ParsedNodePatch") -> None:
         super().patch_node_properties(node, patch)
+
+        # Remaining patch properties are only relevant to ModelNode objects
+        if not isinstance(node, ModelNode):
+            return
+
         node.version = patch.version
         node.latest_version = patch.latest_version
         node.deprecation_date = patch.deprecation_date
@@ -927,7 +939,7 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
         self.patch_time_spine(node, patch.time_spine)
         node.build_contract_checksum()
 
-    def patch_constraints(self, node, constraints: List[Dict[str, Any]]) -> None:
+    def patch_constraints(self, node: ModelNode, constraints: List[Dict[str, Any]]) -> None:
         contract_config = node.config.get("contract")
         if contract_config.enforced is True:
             self._validate_constraint_prerequisites(node)
@@ -963,7 +975,7 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
                 else:
                     model_node.sources.append(ref_or_source)
 
-    def patch_time_spine(self, node, time_spine: Optional[TimeSpine]) -> None:
+    def patch_time_spine(self, node: ModelNode, time_spine: Optional[TimeSpine]) -> None:
         node.time_spine = time_spine
 
     def _validate_pk_constraints(

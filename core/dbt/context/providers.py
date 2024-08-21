@@ -974,7 +974,8 @@ class ProviderContext(ManifestContext):
             table = agate_helper.from_csv(path, text_columns=column_types, delimiter=delimiter)
         except ValueError as e:
             raise LoadAgateTableValueError(e, node=self.model)
-        table.original_abspath = os.path.abspath(path)
+        # this is used by some adapters
+        table.original_abspath = os.path.abspath(path)  # type: ignore
         return table
 
     @contextproperty()

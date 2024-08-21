@@ -475,6 +475,17 @@ class RunTask(CompileTask):
     def get_runner_type(self, _):
         return ModelRunner
 
+    def get_groups_for_nodes(self, nodes):
+        node_to_group_name_map = {i: k for k, v in self.manifest.group_map.items() for i in v}
+        group_name_to_group_map = {v.name: v for v in self.manifest.groups.values()}
+
+        return {
+            node.unique_id: group_name_to_group_map.get(node_to_group_name_map.get(node.unique_id))
+            for node in nodes
+        }
+
     def task_end_messages(self, results) -> None:
+        groups = self.get_groups_for_nodes([r.node for r in results if hasattr(r, "node")])
+
         if results:
-            print_run_end_messages(results)
+            print_run_end_messages(results, groups=groups)

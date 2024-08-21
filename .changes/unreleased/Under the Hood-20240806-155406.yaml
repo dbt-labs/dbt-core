@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Move from minimal-snowplow-tracker fork back to snowplow-tracker
+time: 2024-08-06T15:54:06.422444-04:00
+custom:
+  Author: peterallenwebb
+  Issue: "8409"
