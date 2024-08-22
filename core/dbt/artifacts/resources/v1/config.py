@@ -122,6 +122,8 @@ class NodeConfig(NodeAndTestConfig):
         default_factory=ContractConfig,
         metadata=MergeBehavior.Update.meta(),
     )
+    # TODO: does this need to be Any?
+    event_time: Optional[str] = None
 
     def __post_init__(self):
         # we validate that node_color has a suitable value to prevent dbt-docs from crashing

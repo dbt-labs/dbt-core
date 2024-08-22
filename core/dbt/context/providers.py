@@ -1,6 +1,7 @@
 import abc
 import os
 from copy import deepcopy
+from datetime import datetime
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -20,6 +21,7 @@ from typing_extensions import Protocol
 
 from dbt import selected_resources
 from dbt.adapters.base.column import Column
+from dbt.adapters.base.relation import EventTimeFilter
 from dbt.adapters.contracts.connection import AdapterResponse
 from dbt.adapters.exceptions import MissingConfigError
 from dbt.adapters.factory import (
@@ -27,7 +29,7 @@ from dbt.adapters.factory import (
     get_adapter_package_names,
     get_adapter_type_names,
 )
-from dbt.artifacts.resources import NodeVersion, RefArgs
+from dbt.artifacts.resources import NodeConfig, NodeVersion, RefArgs
 from dbt.clients.jinja import (
     MacroGenerator,
     MacroStack,
@@ -229,6 +231,29 @@ class BaseResolver(metaclass=abc.ABCMeta):
     @property
     def resolve_limit(self) -> Optional[int]:
         return 0 if getattr(self.config.args, "EMPTY", False) else None
+
+    def resolve_event_time_filter(self, target: ManifestNode) -> Optional[EventTimeFilter]:
+        event_time_filter = None
+        if (
+            isinstance(target.config, NodeConfig)
+            and target.config.event_time
+            and self.model.config.materialized == "incremental"
+            and self.model.config.get("strategy") == "microbatch"
+        ):
+            start = getattr(self.config.args, "EVENT_TIME_START", None)
+            start = datetime.strptime(start, "%Y-%m-%d") if start else None
+
+            end = getattr(self.config.args, "EVENT_TIME_END", None)
+            end = datetime.strptime(end, "%Y-%m-%d") if end else None
+
+            if start is not None or end is not None:
+                event_time_filter = EventTimeFilter(
+                    field_name=target.config.event_time,
+                    start=start,
+                    end=end,
+                )
+
+        return event_time_filter
 
     @abc.abstractmethod
     def __call__(self, *args: str) -> Union[str, RelationProxy, MetricReference]:
@@ -545,7 +570,11 @@ class RuntimeRefResolver(BaseRefResolver):
     def create_relation(self, target_model: ManifestNode) -> RelationProxy:
         if target_model.is_ephemeral_model:
             self.model.set_cte(target_model.unique_id, None)
-            return self.Relation.create_ephemeral_from(target_model, limit=self.resolve_limit)
+            return self.Relation.create_ephemeral_from(
+                target_model,
+                limit=self.resolve_limit,
+                event_time_filter=self.resolve_event_time_filter(target_model),
+            )
         elif (
             hasattr(target_model, "defer_relation")
             and target_model.defer_relation
@@ -563,10 +592,18 @@ class RuntimeRefResolver(BaseRefResolver):
             )
         ):
             return self.Relation.create_from(
-                self.config, target_model.defer_relation, limit=self.resolve_limit
+                self.config,
+                target_model.defer_relation,
+                limit=self.resolve_limit,
+                event_time_filter=self.resolve_event_time_filter(target_model),
             )
         else:
-            return self.Relation.create_from(self.config, target_model, limit=self.resolve_limit)
+            return self.Relation.create_from(
+                self.config,
+                target_model,
+                limit=self.resolve_limit,
+                event_time_filter=self.resolve_event_time_filter(target_model),
+            )
 
     def validate(
         self,
@@ -633,7 +670,12 @@ class RuntimeSourceResolver(BaseSourceResolver):
                 target_kind="source",
                 disabled=(isinstance(target_source, Disabled)),
             )
-        return self.Relation.create_from(self.config, target_source, limit=self.resolve_limit)
+        return self.Relation.create_from(
+            self.config,
+            target_source,
+            limit=self.resolve_limit,
+            event_time_filter=self.resolve_event_time_filter(target_source),
+        )
 
 
 class RuntimeUnitTestSourceResolver(BaseSourceResolver):

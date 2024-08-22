@@ -539,6 +539,8 @@ def parse(ctx, **kwargs):
 @p.profiles_dir
 @p.project_dir
 @p.empty
+@p.event_time_start
+@p.event_time_end
 @p.select
 @p.selector
 @p.target_path
@@ -790,6 +792,8 @@ cli.commands["source"].add_command(snapshot_freshness, "snapshot-freshness")  # 
 @p.store_failures
 @p.target_path
 @p.threads
+# @p.event_time_start
+# @p.event_time_end
 @p.vars
 @requires.postflight
 @requires.preflight

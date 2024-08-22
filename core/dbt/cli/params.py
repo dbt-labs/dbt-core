@@ -91,6 +91,24 @@ empty = click.option(
     is_flag=True,
 )
 
+event_time_end = click.option(
+    "--event-time-end",
+    envvar="DBT_EVENT_TIME_END",
+    # TODO: improve help text
+    help="upper bound to filter refs on",
+    type=click.STRING,
+    default=None,
+)
+
+event_time_start = click.option(
+    "--event-time-start",
+    envvar="DBT_EVENT_TIME_START",
+    # TODO: improve help text
+    help="lower bound to filter refs on",
+    type=click.STRING,
+    default=None,
+)
+
 exclude = click.option(
     "--exclude",
     envvar=None,
