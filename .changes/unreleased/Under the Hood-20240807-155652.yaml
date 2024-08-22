@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Add group info to RunResultError, RunResultFailure, RunResultWarning log lines
+time: 2024-08-07T15:56:52.171199-05:00
+custom:
+  Author: aranke
+  Issue: ""
+  JiraID: "364"

@@ -1467,6 +1467,13 @@ class Group(GroupResource, BaseNode):
     def resource_class(cls) -> Type[GroupResource]:
         return GroupResource
 
+    def to_logging_dict(self) -> Dict[str, Union[str, Dict[str, str]]]:
+        return {
+            "name": self.name,
+            "package_name": self.package_name,
+            "owner": self.owner.to_dict(),
+        }
+
 
 # ====================================
 # SemanticModel node
