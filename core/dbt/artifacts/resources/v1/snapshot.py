@@ -17,6 +17,10 @@ class SnapshotConfig(NodeConfig):
     updated_at: Optional[str] = None
     # Not using Optional because of serialization issues with a Union of str and List[str]
     check_cols: Union[str, List[str], None] = None
+    dbt_valid_from_column_name: Optional[str] = None
+    dbt_valid_to_column_name: Optional[str] = None
+    dbt_scd_id_column_name: Optional[str] = None
+    dbt_updated_at_column_name: Optional[str] = None
 
     def final_validate(self):
         if not self.strategy or not self.unique_key:
