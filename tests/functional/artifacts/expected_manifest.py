@@ -88,6 +88,10 @@ def get_unrendered_seed_config(**updates):
 def get_rendered_snapshot_config(**updates):
     result = {
         "database": None,
+        "dbt_scd_id_column_name": None,
+        "dbt_updated_at_column_name": None,
+        "dbt_valid_from_column_name": None,
+        "dbt_valid_to_column_name": None,
         "schema": None,
         "alias": None,
         "enabled": True,
