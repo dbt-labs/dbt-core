@@ -67,7 +67,7 @@ class ShowTask(CompileTask):
         else:
             return ShowRunner
 
-    def task_end_messages(self, results):
+    def task_end_messages(self, results) -> None:
         is_inline = bool(getattr(self.args, "inline", None))
 
         if is_inline:
@@ -108,7 +108,7 @@ class ShowTask(CompileTask):
                 )
             )
 
-    def _handle_result(self, result):
+    def _handle_result(self, result) -> None:
         super()._handle_result(result)
 
         if (

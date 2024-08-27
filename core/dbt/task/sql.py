@@ -33,10 +33,10 @@ class GenericSqlRunner(CompileRunner, Generic[SQLResult]):
                 e.add_node(ctx.node)
             return e
 
-    def before_execute(self):
+    def before_execute(self) -> None:
         pass
 
-    def after_execute(self, result):
+    def after_execute(self, result) -> None:
         pass
 
     def compile(self, manifest):

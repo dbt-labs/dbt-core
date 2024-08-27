@@ -1,4 +1,5 @@
 import json
+from typing import List
 
 from dbt.cli.flags import Flags
 from dbt.config.runtime import RuntimeConfig
@@ -177,7 +178,7 @@ class ListTask(GraphRunnableTask):
         return self.node_results
 
     @property
-    def resource_types(self):
+    def resource_types(self) -> List[NodeType]:
         if self.args.models:
             return [NodeType.Model]
 
