@@ -1,0 +1,6 @@
+kind: Features
+body: Enable configuration of snapshot table column names
+time: 2024-08-27T16:44:44.819687-04:00
+custom:
+  Author: gshank
+  Issue: "10185"
