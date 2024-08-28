@@ -28,6 +28,7 @@ class GenericSqlRunner(CompileRunner, Generic[SQLResult]):
                 exc=str(e), exc_info=traceback.format_exc(), node_info=self.node.node_info
             )
         )
+        # REVIEW: This code is invalid and will always throw.
         if isinstance(e, dbt.exceptions.Exception):
             if isinstance(e, dbt_common.exceptions.DbtRuntimeError):
                 e.add_node(ctx.node)
