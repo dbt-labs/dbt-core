@@ -1,9 +1,12 @@
 import random
+from typing import Optional, Type
 
 from dbt.artifacts.schemas.results import NodeStatus, RunStatus
+from dbt.contracts.graph.manifest import Manifest
 from dbt.events.types import LogSeedResult, LogStartLine, SeedHeader
 from dbt.graph import ResourceTypeSelector
 from dbt.node_types import NodeType
+from dbt.task.base import BaseRunner
 from dbt_common.events.base_types import EventLevel
 from dbt_common.events.functions import fire_event
 from dbt_common.events.types import Formatting
@@ -14,10 +17,10 @@ from .run import ModelRunner, RunTask
 
 
 class SeedRunner(ModelRunner):
-    def describe_node(self):
+    def describe_node(self) -> str:
         return "seed file {}".format(self.get_node_representation())
 
-    def before_execute(self):
+    def before_execute(self) -> None:
         fire_event(
             LogStartLine(
                 description=self.describe_node(),
@@ -33,7 +36,7 @@ class SeedRunner(ModelRunner):
         result.agate_table = agate_result.table
         return result
 
-    def compile(self, manifest):
+    def compile(self, manifest: Manifest):
         return self.node
 
     def print_result_line(self, result):
@@ -55,7 +58,7 @@ class SeedRunner(ModelRunner):
 
 
 class SeedTask(RunTask):
-    def raise_on_first_error(self):
+    def raise_on_first_error(self) -> bool:
         return False
 
     def get_node_selector(self):
@@ -68,10 +71,10 @@ class SeedTask(RunTask):
             resource_types=[NodeType.Seed],
         )
 
-    def get_runner_type(self, _):
+    def get_runner_type(self, _) -> Optional[Type[BaseRunner]]:
         return SeedRunner
 
-    def task_end_messages(self, results):
+    def task_end_messages(self, results) -> None:
         if self.args.show:
             self.show_tables(results)
 

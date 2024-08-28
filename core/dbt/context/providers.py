@@ -975,7 +975,7 @@ class ProviderContext(ManifestContext):
         except ValueError as e:
             raise LoadAgateTableValueError(e, node=self.model)
         # this is used by some adapters
-        table.original_abspath = os.path.abspath(path)
+        table.original_abspath = os.path.abspath(path)  # type: ignore
         return table
 
     @contextproperty()

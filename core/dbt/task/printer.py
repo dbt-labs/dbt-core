@@ -1,6 +1,7 @@
-from typing import Dict
+from typing import Dict, Optional
 
 from dbt.artifacts.schemas.results import NodeStatus
+from dbt.contracts.graph.nodes import Group
 from dbt.events.types import (
     CheckNodeTestFailure,
     EndOfRunSummary,
@@ -68,7 +69,9 @@ def print_run_status_line(results) -> None:
     fire_event(StatsLine(stats=stats))
 
 
-def print_run_result_error(result, newline: bool = True, is_warning: bool = False) -> None:
+def print_run_result_error(
+    result, newline: bool = True, is_warning: bool = False, group: Optional[Group] = None
+) -> None:
     # set node_info for logging events
     node_info = None
     if hasattr(result, "node") and result.node:
@@ -77,21 +80,25 @@ def print_run_result_error(result, newline: bool = True, is_warning: bool = Fals
         if newline:
             fire_event(Formatting(""))
         if is_warning:
+            group_dict = group.to_logging_dict() if group else None
             fire_event(
                 RunResultWarning(
                     resource_type=result.node.resource_type,
                     node_name=result.node.name,
                     path=result.node.original_file_path,
                     node_info=node_info,
+                    group=group_dict,
                 )
             )
         else:
+            group_dict = group.to_logging_dict() if group else None
             fire_event(
                 RunResultFailure(
                     resource_type=result.node.resource_type,
                     node_name=result.node.name,
                     path=result.node.original_file_path,
                     node_info=node_info,
+                    group=group_dict,
                 )
             )
 
@@ -99,7 +106,10 @@ def print_run_result_error(result, newline: bool = True, is_warning: bool = Fals
             if is_warning:
                 fire_event(RunResultWarningMessage(msg=result.message, node_info=node_info))
             else:
-                fire_event(RunResultError(msg=result.message, node_info=node_info))
+                group_dict = group.to_logging_dict() if group else None
+                fire_event(
+                    RunResultError(msg=result.message, node_info=node_info, group=group_dict)
+                )
         else:
             fire_event(RunResultErrorNoMessage(status=result.status, node_info=node_info))
 
@@ -119,10 +129,13 @@ def print_run_result_error(result, newline: bool = True, is_warning: bool = Fals
     elif result.message is not None:
         if newline:
             fire_event(Formatting(""))
-        fire_event(RunResultError(msg=result.message, node_info=node_info))
+        group_dict = group.to_logging_dict() if group else None
+        fire_event(RunResultError(msg=result.message, node_info=node_info, group=group_dict))
 
 
-def print_run_end_messages(results, keyboard_interrupt: bool = False) -> None:
+def print_run_end_messages(
+    results, keyboard_interrupt: bool = False, groups: Optional[Dict[str, Group]] = None
+) -> None:
     errors, warnings = [], []
     for r in results:
         if r.status in (NodeStatus.RuntimeErr, NodeStatus.Error, NodeStatus.Fail):
@@ -144,9 +157,11 @@ def print_run_end_messages(results, keyboard_interrupt: bool = False) -> None:
     )
 
     for error in errors:
-        print_run_result_error(error, is_warning=False)
+        group = groups.get(error.node.unique_id) if groups and hasattr(error, "node") else None
+        print_run_result_error(error, is_warning=False, group=group)
 
     for warning in warnings:
-        print_run_result_error(warning, is_warning=True)
+        group = groups.get(warning.node.unique_id) if groups and hasattr(warning, "node") else None
+        print_run_result_error(warning, is_warning=True, group=group)
 
     print_run_status_line(results)

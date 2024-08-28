@@ -1809,12 +1809,19 @@ message ServingDocsExitInfoMsg {
     ServingDocsExitInfo data = 2;
 }
 
+message Group {
+    string name = 1;
+    string package_name = 3;
+    map<string, string> owner = 7;
+}
+
 // Z021
 message RunResultWarning {
     string resource_type = 1;
     string node_name = 2;
     string path = 3;
     NodeInfo node_info = 4;
+    Group group = 5;
 }
 
 message RunResultWarningMsg {
@@ -1828,6 +1835,7 @@ message RunResultFailure {
     string node_name = 2;
     string path = 3;
     NodeInfo node_info = 4;
+    Group group = 5;
 }
 
 message RunResultFailureMsg {
@@ -1849,6 +1857,7 @@ message StatsLineMsg {
 message RunResultError {
     string msg = 1;
     NodeInfo node_info = 2;
+    Group group = 3;
 }
 
 message RunResultErrorMsg {
