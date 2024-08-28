@@ -30,7 +30,7 @@ class SavedQueryRunner(BaseRunner):
     def before_execute(self) -> None:
         pass
 
-    def compile(self, manifest):
+    def compile(self, manifest: Manifest):
         return self.node
 
     def after_execute(self, result) -> None:

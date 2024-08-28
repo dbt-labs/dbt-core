@@ -5,6 +5,7 @@ from typing import Generic, TypeVar
 
 import dbt.exceptions
 import dbt_common.exceptions.base
+from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.sql import (
     RemoteCompileResult,
     RemoteCompileResultMixin,
@@ -40,7 +41,7 @@ class GenericSqlRunner(CompileRunner, Generic[SQLResult]):
     def after_execute(self, result) -> None:
         pass
 
-    def compile(self, manifest):
+    def compile(self, manifest: Manifest):
         return self.compiler.compile_node(self.node, manifest, {}, write=False)
 
     @abstractmethod

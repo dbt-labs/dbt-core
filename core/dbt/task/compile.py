@@ -2,6 +2,7 @@ import threading
 from typing import Optional, Type
 
 from dbt.artifacts.schemas.run import RunResult, RunStatus
+from dbt.contracts.graph.manifest import Manifest
 from dbt.events.types import CompiledNode, ParseInlineNodeError
 from dbt.graph import ResourceTypeSelector
 from dbt.node_types import EXECUTABLE_NODE_TYPES, NodeType
@@ -36,7 +37,7 @@ class CompileRunner(BaseRunner):
             failures=None,
         )
 
-    def compile(self, manifest):
+    def compile(self, manifest: Manifest):
         return self.compiler.compile_node(self.node, manifest, {})
 
 

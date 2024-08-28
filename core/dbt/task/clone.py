@@ -45,7 +45,7 @@ class CloneRunner(BaseRunner):
             failures=None,
         )
 
-    def compile(self, manifest):
+    def compile(self, manifest: Manifest):
         # no-op
         return self.node
 

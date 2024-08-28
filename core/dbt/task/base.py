@@ -267,7 +267,7 @@ class BaseRunner(metaclass=ABCMeta):
             failures=result.failures,
         )
 
-    def compile_and_execute(self, manifest, ctx):
+    def compile_and_execute(self, manifest: Manifest, ctx: ExecutionContext):
         result = None
         with (
             self.adapter.connection_named(self.node.unique_id, self.node)
@@ -341,7 +341,7 @@ class BaseRunner(metaclass=ABCMeta):
             error = self._handle_generic_exception(e, ctx)
         return error
 
-    def safe_run(self, manifest):
+    def safe_run(self, manifest: Manifest):
         started = time.time()
         ctx = ExecutionContext(self.node)
         error = None

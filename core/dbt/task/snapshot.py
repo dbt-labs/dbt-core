@@ -14,7 +14,7 @@ from .run import ModelRunner, RunTask
 
 
 class SnapshotRunner(ModelRunner):
-    def describe_node(self):
+    def describe_node(self) -> str:
         return "snapshot {}".format(self.get_node_representation())
 
     def print_result_line(self, result):

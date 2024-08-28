@@ -2,6 +2,7 @@ import random
 from typing import Optional, Type
 
 from dbt.artifacts.schemas.results import NodeStatus, RunStatus
+from dbt.contracts.graph.manifest import Manifest
 from dbt.events.types import LogSeedResult, LogStartLine, SeedHeader
 from dbt.graph import ResourceTypeSelector
 from dbt.node_types import NodeType
@@ -16,7 +17,7 @@ from .run import ModelRunner, RunTask
 
 
 class SeedRunner(ModelRunner):
-    def describe_node(self):
+    def describe_node(self) -> str:
         return "seed file {}".format(self.get_node_representation())
 
     def before_execute(self) -> None:
@@ -35,7 +36,7 @@ class SeedRunner(ModelRunner):
         result.agate_table = agate_result.table
         return result
 
-    def compile(self, manifest):
+    def compile(self, manifest: Manifest):
         return self.node
 
     def print_result_line(self, result):

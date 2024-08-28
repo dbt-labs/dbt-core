@@ -180,7 +180,7 @@ class ModelRunner(CompileRunner):
             relation = relation.include(database=False)
         return str(relation)
 
-    def describe_node(self):
+    def describe_node(self) -> str:
         # TODO CL 'language' will be moved to node level when we change representation
         return f"{self.node.language} {self.node.get_materialization()} model {self.get_node_representation()}"
 

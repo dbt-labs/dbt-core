@@ -85,14 +85,14 @@ class TestRunner(CompileRunner):
     _ANSI_ESCAPE = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
     _LOG_TEST_RESULT_EVENTS = LogTestResult
 
-    def describe_node_name(self):
+    def describe_node_name(self) -> str:
         if self.node.resource_type == NodeType.Unit:
             name = f"{self.node.model}::{self.node.versioned_name}"
             return name
         else:
             return self.node.name
 
-    def describe_node(self):
+    def describe_node(self) -> str:
         return f"{self.node.resource_type} {self.describe_node_name()}"
 
     def print_result_line(self, result):

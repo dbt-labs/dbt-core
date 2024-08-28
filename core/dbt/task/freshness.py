@@ -14,6 +14,7 @@ from dbt.artifacts.schemas.freshness import (
     PartialSourceFreshnessResult,
     SourceFreshnessResult,
 )
+from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import HookNode, SourceDefinition
 from dbt.contracts.results import RunStatus
 from dbt.events.types import FreshnessCheckComplete, LogFreshnessResult, LogStartLine
@@ -162,7 +163,7 @@ class FreshnessRunner(BaseRunner):
             **freshness,
         )
 
-    def compile(self, manifest):
+    def compile(self, manifest: Manifest):
         if self.node.resource_type != NodeType.Source:
             # should be unreachable...
             raise DbtRuntimeError("freshness runner: got a non-Source")
