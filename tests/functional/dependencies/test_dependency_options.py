@@ -33,7 +33,7 @@ class TestDepsOptions(object):
         with open("package-lock.yml") as fp:
             contents = fp.read()
 
-        fivetran_package = "- package: fivetran/fivetran_utils\n    version: 0.4.7"
+        fivetran_package = "- package: fivetran/fivetran_utils\n  version: 0.4.7"
         # dbt-utils is a dep in fivetran so we can't check for a specific version or this test fails everytime a new dbt-utils version comes out
         dbt_labs_package = "- package: dbt-labs/dbt_utils"
         package_sha = "sha1_hash: 71304bca2138cf8004070b3573a1e17183c0c1a8"
@@ -47,7 +47,7 @@ class TestDepsOptions(object):
         assert os.path.exists("package-lock.yml")
         with open("package-lock.yml") as fp:
             contents = fp.read()
-        fivetran_package = "- package: fivetran/fivetran_utils\n    version: 0.4.7"
+        fivetran_package = "- package: fivetran/fivetran_utils\n  version: 0.4.7"
         # dbt-utils is a dep in fivetran so we can't check for a specific version or this test fails everytime a new dbt-utils version comes out
         dbt_labs_package = "- package: dbt-labs/dbt_utils"
         package_sha = "sha1_hash: 71304bca2138cf8004070b3573a1e17183c0c1a8"
