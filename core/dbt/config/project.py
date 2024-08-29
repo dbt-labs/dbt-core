@@ -480,7 +480,7 @@ class PartialProject(RenderComponents):
                 rendered.selectors_dict["selectors"]
             )
         dbt_cloud = cfg.dbt_cloud
-        flags: Dict[str, Any] = rendered.project_dict["flags"]
+        flags: Dict[str, Any] = cfg.flags
 
         project = Project(
             project_name=name,
@@ -722,6 +722,7 @@ class Project:
                 "require-dbt-version": [v.to_version_string() for v in self.dbt_version],
                 "restrict-access": self.restrict_access,
                 "dbt-cloud": self.dbt_cloud,
+                "flags": self.flags,
             }
         )
         if self.query_comment:
