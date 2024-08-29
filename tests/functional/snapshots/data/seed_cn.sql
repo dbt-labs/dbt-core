@@ -80,4 +80,3 @@ select
     updated_at as test_updated_at,
     md5(id || '-' || first_name || '|' || updated_at::text) as test_scd_id
 from {database}.{schema}.seed;
-

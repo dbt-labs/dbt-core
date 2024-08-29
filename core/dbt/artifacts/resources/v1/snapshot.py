@@ -22,6 +22,15 @@ class SnapshotConfig(NodeConfig):
     dbt_scd_id_column_name: Optional[str] = None
     dbt_updated_at_column_name: Optional[str] = None
 
+    @property
+    def snapshot_table_column_names(self):
+        return {
+            "dbt_valid_from": self.dbt_valid_from_column_name or "dbt_valid_from",
+            "dbt_valid_to": self.dbt_valid_to_column_name or "dbt_valid_to",
+            "dbt_scd_id": self.dbt_scd_id_column_name or "dbt_scd_id",
+            "dbt_updated_at": self.dbt_updated_at_column_name or "dbt_updated_at",
+        }
+
     def final_validate(self):
         if not self.strategy or not self.unique_key:
             raise ValidationError(
