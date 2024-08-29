@@ -481,7 +481,7 @@ class DebugTask(BaseTask):
         return status
 
     @classmethod
-    def validate_connection(cls, target_dict):
+    def validate_connection(cls, target_dict) -> None:
         """Validate a connection dictionary. On error, raises a DbtConfigError."""
         target_name = "test"
         # make a fake profile that we can parse

@@ -1,7 +1,8 @@
 import threading
-from typing import AbstractSet, Any, Iterable, List, Optional, Set
+from typing import AbstractSet, Any, Collection, Iterable, List, Optional, Set, Type
 
 from dbt.adapters.base import BaseRelation
+from dbt.artifacts.resources.types import NodeType
 from dbt.artifacts.schemas.run import RunResult, RunStatus
 from dbt.clients.jinja import MacroGenerator
 from dbt.context.providers import generate_runtime_model_context
@@ -16,10 +17,10 @@ from dbt_common.exceptions import CompilationError, DbtInternalError
 
 
 class CloneRunner(BaseRunner):
-    def before_execute(self):
+    def before_execute(self) -> None:
         pass
 
-    def after_execute(self, result):
+    def after_execute(self, result) -> None:
         pass
 
     def _build_run_model_result(self, model, context):
@@ -44,7 +45,7 @@ class CloneRunner(BaseRunner):
             failures=None,
         )
 
-    def compile(self, manifest):
+    def compile(self, manifest: Manifest):
         # no-op
         return self.node
 
@@ -91,7 +92,7 @@ class CloneRunner(BaseRunner):
 
 
 class CloneTask(GraphRunnableTask):
-    def raise_on_first_error(self):
+    def raise_on_first_error(self) -> bool:
         return False
 
     def get_run_mode(self) -> GraphRunnableMode:
@@ -133,8 +134,8 @@ class CloneTask(GraphRunnableTask):
             self.populate_adapter_cache(adapter, schemas_to_cache)
 
     @property
-    def resource_types(self):
-        resource_types = resource_types_from_args(
+    def resource_types(self) -> List[NodeType]:
+        resource_types: Collection[NodeType] = resource_types_from_args(
             self.args, set(REFABLE_NODE_TYPES), set(REFABLE_NODE_TYPES)
         )
 
@@ -154,5 +155,5 @@ class CloneTask(GraphRunnableTask):
             resource_types=resource_types,
         )
 
-    def get_runner_type(self, _):
+    def get_runner_type(self, _) -> Optional[Type[BaseRunner]]:
         return CloneRunner

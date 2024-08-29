@@ -16,7 +16,7 @@ class CleanTask(BaseTask):
         self.config = config
         self.project = config
 
-    def run(self):
+    def run(self) -> None:
         """
         This function takes all the paths in the target file
         and cleans the project paths that are not protected.
