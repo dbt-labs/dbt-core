@@ -70,28 +70,25 @@ from dbt_common.events.types import Note
 #   run_dbt(["run", "--vars", "seed_name: base"])
 # If the command is expected to fail, pass in "expect_pass=False"):
 #   run_dbt(["test"], expect_pass=False)
-def run_dbt(
-    args: Optional[List[str]] = None,
-    expect_pass: bool = True,
-):
+def run_dbt(invocation_args: Optional[List[str]] = None, /, expect_pass: bool = True, **kwargs):
     # reset global vars
     reset_metadata_vars()
 
-    if args is None:
-        args = ["run"]
+    if invocation_args is None:
+        invocation_args = ["run"]
 
-    print("\n\nInvoking dbt with {}".format(args))
+    print("\n\nInvoking dbt with {}".format(invocation_args))
     from dbt.flags import get_flags
 
     flags = get_flags()
     project_dir = getattr(flags, "PROJECT_DIR", None)
     profiles_dir = getattr(flags, "PROFILES_DIR", None)
-    if project_dir and "--project-dir" not in args:
-        args.extend(["--project-dir", project_dir])
-    if profiles_dir and "--profiles-dir" not in args:
-        args.extend(["--profiles-dir", profiles_dir])
+    if project_dir and "--project-dir" not in invocation_args:
+        invocation_args.extend(["--project-dir", project_dir])
+    if profiles_dir and "--profiles-dir" not in invocation_args:
+        invocation_args.extend(["--profiles-dir", profiles_dir])
     dbt = dbtRunner()
-    res = dbt.invoke(args)
+    res = dbt.invoke(invocation_args, **kwargs)
 
     # the exception is immediately raised to be caught in tests
     # using a pattern like `with pytest.raises(SomeException):`
@@ -109,13 +106,12 @@ def run_dbt(
 # start with the "--debug" flag. The structured schema log CI test
 # will turn the logs into json, so you have to be prepared for that.
 def run_dbt_and_capture(
-    args: Optional[List[str]] = None,
-    expect_pass: bool = True,
+    invocation_args: Optional[List[str]] = None, /, expect_pass: bool = True, **kwargs
 ):
     try:
         stringbuf = StringIO()
         capture_stdout_logs(stringbuf)
-        res = run_dbt(args, expect_pass=expect_pass)
+        res = run_dbt(invocation_args, expect_pass=expect_pass, **kwargs)
         stdout = stringbuf.getvalue()
 
     finally:

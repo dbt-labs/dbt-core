@@ -23,7 +23,7 @@ class TestList:
         full_args = ["ls"]
         if args is not None:
             full_args += args
-        result = run_dbt(args=full_args, expect_pass=expect_pass)
+        result = run_dbt(full_args, expect_pass=expect_pass)
 
         return result
 

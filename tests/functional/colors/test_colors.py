@@ -34,7 +34,7 @@ class TestColors:
         )
 
     def assert_colors_used(self, flag, expect_colors):
-        _, stdout = run_dbt_and_capture(args=[flag, "run"], expect_pass=False)
+        _, stdout = run_dbt_and_capture([flag, "run"], expect_pass=False)
         # pattern to match formatted log output
         pattern = re.compile(r"\[31m.*|\[33m.*")
         stdout_contains_formatting_characters = bool(pattern.search(stdout))
