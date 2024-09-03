@@ -40,8 +40,8 @@ def get_rendered_model_config(**updates):
         "contract": {"enforced": False, "alias_types": True},
         "access": "protected",
         "event_time": None,
-        "partition_lookback": 0,
-        "partition_grain": None,
+        "lookback": 0,
+        "batch_size": None,
     }
     result.update(updates)
     return result
@@ -78,8 +78,8 @@ def get_rendered_seed_config(**updates):
         "docs": {"node_color": None, "show": True},
         "contract": {"enforced": False, "alias_types": True},
         "event_time": None,
-        "partition_lookback": 0,
-        "partition_grain": None,
+        "lookback": 0,
+        "batch_size": None,
     }
     result.update(updates)
     return result
@@ -121,8 +121,8 @@ def get_rendered_snapshot_config(**updates):
         "docs": {"node_color": None, "show": True},
         "contract": {"enforced": False, "alias_types": True},
         "event_time": None,
-        "partition_lookback": 0,
-        "partition_grain": None,
+        "lookback": 0,
+        "batch_size": None,
     }
     result.update(updates)
     return result

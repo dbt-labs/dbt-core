@@ -247,12 +247,12 @@ class BaseResolver(metaclass=abc.ABCMeta):
             return None
 
         assert isinstance(self.model.config, NodeConfig)
-        grain = self.model.config.partition_grain
+        grain = self.model.config.batch_size
         if grain is None:
             # TODO: Better error message
             raise DbtRuntimeError("Partition grain not specified")
 
-        lookback = self.model.config.partition_lookback
+        lookback = self.model.config.lookback
         if grain == PartitionGrain.hour:
             start = datetime(
                 checkpoint.year,

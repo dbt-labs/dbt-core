@@ -80,8 +80,8 @@ class NodeConfig(NodeAndTestConfig):
     # 'mergebehavior' dictionary
     materialized: str = "view"
     incremental_strategy: Optional[str] = None
-    partition_grain: Optional[PartitionGrain] = None
-    partition_lookback: int = 0
+    batch_size: Optional[PartitionGrain] = None
+    lookback: int = 0
     persist_docs: Dict[str, Any] = field(default_factory=dict)
     post_hook: List[Hook] = field(
         default_factory=list,
