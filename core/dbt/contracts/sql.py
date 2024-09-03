@@ -29,7 +29,8 @@ class RemoteCompileResult(RemoteCompileResultMixin):
     generated_at: datetime = field(default_factory=datetime.utcnow)
 
     @property
-    def error(self):
+    def error(self) -> None:
+        # TODO: Can we delete this? It's never set anywhere else and never accessed
         return None
 
 
@@ -40,7 +41,7 @@ class RemoteExecutionResult(ExecutionResult):
     args: Dict[str, Any] = field(default_factory=dict)
     generated_at: datetime = field(default_factory=datetime.utcnow)
 
-    def write(self, path: str):
+    def write(self, path: str) -> None:
         writable = RunResultsArtifact.from_execution_results(
             generated_at=self.generated_at,
             results=self.results,

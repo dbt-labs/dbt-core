@@ -49,7 +49,10 @@ def get_latest_version(
     return semver.VersionSpecifier.from_version_string(version_string)
 
 
-def _get_core_msg_lines(installed, latest) -> Tuple[List[List[str]], str]:
+def _get_core_msg_lines(
+    installed: semver.VersionSpecifier,
+    latest: Optional[semver.VersionSpecifier],
+) -> Tuple[List[List[str]], str]:
     installed_s = installed.to_version_string(skip_matcher=True)
     installed_line = ["installed", installed_s, ""]
     update_info = ""
@@ -208,7 +211,7 @@ def _get_dbt_plugins_info() -> Iterator[Tuple[str, str]]:
         except ImportError:
             # not an adapter
             continue
-        yield plugin_name, mod.version  # type: ignore
+        yield plugin_name, mod.version
 
 
 def _get_adapter_plugin_names() -> Iterator[str]:

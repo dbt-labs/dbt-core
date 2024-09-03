@@ -2,7 +2,7 @@ import functools
 import threading
 import time
 from datetime import datetime
-from typing import AbstractSet, Any, Dict, Iterable, List, Optional, Set, Tuple
+from typing import AbstractSet, Any, Dict, Iterable, List, Optional, Set, Tuple, Type
 
 from dbt import tracking, utils
 from dbt.adapters.base import BaseRelation
@@ -36,6 +36,7 @@ from dbt.exceptions import CompilationError, DbtInternalError, DbtRuntimeError
 from dbt.graph import ResourceTypeSelector
 from dbt.hooks import get_hook_dict
 from dbt.node_types import NodeType, RunHookType
+from dbt.task.base import BaseRunner
 from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_common.events.base_types import EventLevel
 from dbt_common.events.contextvars import log_contextvars
@@ -179,7 +180,7 @@ class ModelRunner(CompileRunner):
             relation = relation.include(database=False)
         return str(relation)
 
-    def describe_node(self):
+    def describe_node(self) -> str:
         # TODO CL 'language' will be moved to node level when we change representation
         return f"{self.node.language} {self.node.get_materialization()} model {self.get_node_representation()}"
 
@@ -213,10 +214,10 @@ class ModelRunner(CompileRunner):
             level=level,
         )
 
-    def before_execute(self):
+    def before_execute(self) -> None:
         self.print_start_line()
 
-    def after_execute(self, result):
+    def after_execute(self, result) -> None:
         track_model_run(self.node_index, self.num_nodes, result)
         self.print_result_line(result)
 
@@ -472,7 +473,7 @@ class RunTask(CompileTask):
             resource_types=[NodeType.Model],
         )
 
-    def get_runner_type(self, _):
+    def get_runner_type(self, _) -> Optional[Type[BaseRunner]]:
         return ModelRunner
 
     def get_groups_for_nodes(self, nodes):

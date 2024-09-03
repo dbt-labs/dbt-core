@@ -17,5 +17,5 @@ class PluginNodes:
     def add_model(self, model_args: ModelNodeArgs) -> None:
         self.models[model_args.unique_id] = model_args
 
-    def update(self, other: "PluginNodes"):
+    def update(self, other: "PluginNodes") -> None:
         self.models.update(other.models)

@@ -5,6 +5,7 @@ from typing import Generic, TypeVar
 
 import dbt.exceptions
 import dbt_common.exceptions.base
+from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.sql import (
     RemoteCompileResult,
     RemoteCompileResultMixin,
@@ -28,18 +29,19 @@ class GenericSqlRunner(CompileRunner, Generic[SQLResult]):
                 exc=str(e), exc_info=traceback.format_exc(), node_info=self.node.node_info
             )
         )
+        # REVIEW: This code is invalid and will always throw.
         if isinstance(e, dbt.exceptions.Exception):
             if isinstance(e, dbt_common.exceptions.DbtRuntimeError):
                 e.add_node(ctx.node)
             return e
 
-    def before_execute(self):
+    def before_execute(self) -> None:
         pass
 
-    def after_execute(self, result):
+    def after_execute(self, result) -> None:
         pass
 
-    def compile(self, manifest):
+    def compile(self, manifest: Manifest):
         return self.compiler.compile_node(self.node, manifest, {}, write=False)
 
     @abstractmethod

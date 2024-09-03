@@ -138,7 +138,7 @@ def renamed_env_var(old_name: str, new_name: str):
     return cb
 
 
-def warn(name, *args, **kwargs):
+def warn(name: str, *args, **kwargs) -> None:
     if name not in deprecations:
         # this should (hopefully) never happen
         raise RuntimeError("Error showing deprecation warning: {}".format(name))

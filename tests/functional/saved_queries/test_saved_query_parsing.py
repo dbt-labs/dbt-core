@@ -222,14 +222,14 @@ class TestSavedQueryPartialParsing:
             where_filter.where_sql_template
             for where_filter in saved_query1.query_params.where.where_filters
         } == {
-            "{{ Dimension('user__ds', 'DAY') }} <= now()",
-            "{{ Dimension('user__ds', 'DAY') }} >= '2023-01-01'",
+            "{{ TimeDimension('id__ds', 'DAY') }} <= now()",
+            "{{ TimeDimension('id__ds', 'DAY') }} >= '2023-01-01'",
         }
         # String filter
         assert len(saved_query2.query_params.where.where_filters) == 1
         assert (
             saved_query2.query_params.where.where_filters[0].where_sql_template
-            == "{{ Dimension('user__ds', 'DAY') }} <= now()"
+            == "{{ TimeDimension('id__ds', 'DAY') }} <= now()"
         )
 
     def test_saved_query_metrics_changed(self, project):
