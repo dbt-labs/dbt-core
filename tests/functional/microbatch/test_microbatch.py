@@ -1,40 +1,30 @@
 import pytest
+from freezegun import freeze_time
 
 from dbt.tests.util import relation_from_name, run_dbt
 
 input_model_sql = """
 {{ config(event_time='event_time') }}
 
-select 1 as id, DATE '2020-01-01' as event_time, 'invalid' as status
+select 1 as id, DATE '2020-01-01' as event_time
 union all
-select 2 as id, DATE '2020-01-02' as event_time, 'success' as status
+select 2 as id, DATE '2020-01-02' as event_time
 union all
-select 3 as id, DATE '2020-01-03' as event_time, 'failed' as status
+select 3 as id, DATE '2020-01-03' as event_time
 """
 
 microbatch_model_sql = """
-{{ config(materialized='incremental', strategy='microbatch', event_time='event_time') }}
+{{ config(materialized='incremental', event_time='event_time', partition_grain='day') }}
 select * from {{ ref('input_model') }}
 """
 
-microbatch_model_yml = """
-models:
-  - name: microbatch_model
-    columns:
-      - name: status
-        tests:
-          - accepted_values:
-              values: ['success', 'failed']
-"""
 
-
-class TestMicrobatch:
+class TestMicrobatchCLI:
     @pytest.fixture(scope="class")
     def models(self):
         return {
             "input_model.sql": input_model_sql,
             "microbatch_model.sql": microbatch_model_sql,
-            "microbatch.yml": microbatch_model_yml,
         }
 
     def assert_row_count(self, project, relation_name: str, expected_row_count: int):
@@ -72,5 +62,37 @@ class TestMicrobatch:
             ]
         )
         self.assert_row_count(project, "microbatch_model", 1)
+
+        # results = run_dbt(["test", "--select", "microbatch_model", "--event-time-start", "2020-05-01", "--event-time-end", "2020-05-03"])
+
+
+class TestMicroBatchBoundsDefault:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "input_model.sql": input_model_sql,
+            "microbatch_model.sql": microbatch_model_sql,
+        }
+
+    def assert_row_count(self, project, relation_name: str, expected_row_count: int):
+        relation = relation_from_name(project.adapter, relation_name)
+        result = project.run_sql(f"select count(*) as num_rows from {relation}", fetch="one")
+
+        if result[0] != expected_row_count:
+            # running show for debugging
+            run_dbt(["show", "--inline", f"select * from {relation}"])
+
+            assert result[0] == expected_row_count
+
+    def test_run_with_event_time(self, project):
+        # initial run
+        with freeze_time("2020-01-01 13:57:00"):
+            run_dbt(["run"])
+        self.assert_row_count(project, "microbatch_model", 1)
+
+        # our partition grain is "day" so running the same day without new data should produce the same results
+        with freeze_time("2020-01-03 14:57:00"):
+            run_dbt(["run"])
+        self.assert_row_count(project, "microbatch_model", 3)
 
         # results = run_dbt(["test", "--select", "microbatch_model", "--event-time-start", "2020-05-01", "--event-time-end", "2020-05-03"])

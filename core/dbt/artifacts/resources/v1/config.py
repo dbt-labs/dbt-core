@@ -7,7 +7,7 @@ from typing_extensions import Annotated
 
 from dbt import hooks
 from dbt.artifacts.resources.base import Docs
-from dbt.artifacts.resources.types import ModelHookType
+from dbt.artifacts.resources.types import ModelHookType, PartitionGrain
 from dbt.artifacts.utils.validation import validate_color
 from dbt_common.contracts.config.base import BaseConfig, CompareBehavior, MergeBehavior
 from dbt_common.contracts.config.materialization import OnConfigurationChangeOption
@@ -80,6 +80,8 @@ class NodeConfig(NodeAndTestConfig):
     # 'mergebehavior' dictionary
     materialized: str = "view"
     incremental_strategy: Optional[str] = None
+    partition_grain: Optional[PartitionGrain] = None
+    partition_lookback: int = 0
     persist_docs: Dict[str, Any] = field(default_factory=dict)
     post_hook: List[Hook] = field(
         default_factory=list,

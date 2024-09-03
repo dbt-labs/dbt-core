@@ -3,10 +3,11 @@
 - [p0*] It is possible to configure a top-level event_time key as a top-level property of a model
   - TODO: consider backward compatability; perhaps call it an Any and do more aggressive validation + skipping if not str
 
-- [p0*] It is possible to hard-core a lower and upper bound time window to apply to all microbatch  runs within an invocation via CLI flags (--event-start-time, --event-end-time)
+- [p0*] It is possible to hard-code a lower and upper bound time window to apply to all microbatch  runs within an invocation via CLI flags (--event-start-time, --event-end-time)
     - default: open on the left, closed on the right
         - 1 < x <= 2 is open on the left, closed on the right
         - so t=1, t=5 → update [2,3,4,5]
+        - TODO: consider a custom click type for parsing datetimes from the command line similar to run error options
 
 - It is possible to *automatically* read (via `ref` and `source`) just the “new” data for inputs with `event_time` defined in the context of a microbatch model
     - [p0*] “New” data is defined by dynamic checkpoints: current_timestamp as upper bound, lower bound as a partition-aware offset of that

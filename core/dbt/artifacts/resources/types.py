@@ -68,3 +68,10 @@ class TimePeriod(StrEnum):
 
     def plural(self) -> str:
         return str(self) + "s"
+
+
+class PartitionGrain(StrEnum):
+    hour = "hour"
+    day = "day"
+    month = "month"
+    year = "year"
