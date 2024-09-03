@@ -1,6 +1,8 @@
 import os
+
 import pytest
-from dbt.tests.util import run_dbt, check_relations_equal
+
+from dbt.tests.util import check_relations_equal, run_dbt
 
 snapshot_actual_sql = """
 {% snapshot snapshot_actual %}
@@ -109,4 +111,3 @@ class TestSnapshotColumnNames:
 
         # run_dbt(["test"])
         check_relations_equal(project.adapter, ["snapshot_actual", "snapshot_expected"])
-
