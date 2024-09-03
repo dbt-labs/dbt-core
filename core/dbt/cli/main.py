@@ -165,6 +165,8 @@ def cli(ctx, **kwargs):
 @click.pass_context
 @global_flags
 @p.empty
+@p.event_time_start
+@p.event_time_end
 @p.exclude
 @p.export_saved_queries
 @p.full_refresh
@@ -792,8 +794,6 @@ cli.commands["source"].add_command(snapshot_freshness, "snapshot-freshness")  # 
 @p.store_failures
 @p.target_path
 @p.threads
-# @p.event_time_start
-# @p.event_time_end
 @p.vars
 @requires.postflight
 @requires.preflight
