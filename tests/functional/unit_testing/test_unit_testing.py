@@ -76,10 +76,14 @@ class TestUnitTests:
         )
         assert len(results) == 1
 
-        # Exclude unit tests with environment variable
+        # Exclude unit tests with environment variable for build command
         os.environ["DBT_EXCLUDE_RESOURCE_TYPES"] = "unit_test"
         results = run_dbt(["build", "--select", "my_model"], expect_pass=True)
         assert len(results) == 1
+
+        # Exclude unit tests with environment variable for test command
+        results = run_dbt(["test", "--select", "my_model"], expect_pass=True)
+        assert len(results) == 0
 
         del os.environ["DBT_EXCLUDE_RESOURCE_TYPES"]
 

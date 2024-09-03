@@ -376,12 +376,19 @@ class TestRunner(CompileRunner):
 
 
 class TestSelector(ResourceTypeSelector):
-    def __init__(self, graph, manifest, previous_state) -> None:
+    def __init__(self, graph, manifest, previous_state, excluded_resource_types=None) -> None:
+        # Filter out NodeType.Unit if "unit_test" is specified in excluded_resource_types
+        if excluded_resource_types and "unit_test" in excluded_resource_types:
+            resource_types = [NodeType.Test]
+        else:
+            # Default case where no exclusions affect the resource types
+            resource_types = [NodeType.Test, NodeType.Unit]
+
         super().__init__(
             graph=graph,
             manifest=manifest,
             previous_state=previous_state,
-            resource_types=[NodeType.Test, NodeType.Unit],
+            resource_types=resource_types,
         )
 
 
@@ -400,10 +407,15 @@ class TestTask(RunTask):
     def get_node_selector(self) -> TestSelector:
         if self.manifest is None or self.graph is None:
             raise DbtInternalError("manifest and graph must be set to get perform node selection")
+
+        # Fetch excluded resource types from command line arguments or configuration
+        excluded_resource_types = self.config.args.exclude_resource_types
+
         return TestSelector(
             graph=self.graph,
             manifest=self.manifest,
             previous_state=self.previous_state,
+            excluded_resource_types=excluded_resource_types,
         )
 
     def get_runner_type(self, _) -> Optional[Type[BaseRunner]]:
