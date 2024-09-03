@@ -1,7 +1,7 @@
 git+https://github.com/dbt-labs/dbt-adapters.git@snapshot_column_names
 git+https://github.com/dbt-labs/dbt-adapters.git@snapshot_column_names#subdirectory=dbt-tests-adapter
 git+https://github.com/dbt-labs/dbt-common.git@main
-git+https://github.com/dbt-labs/dbt-postgres.git@main
+git+https://github.com/dbt-labs/dbt-postgres.git@snapshot_column_names
 # black must match what's in .pre-commit-config.yaml to be sure local env matches CI
 black==24.3.0
 bumpversion
