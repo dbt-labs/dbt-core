@@ -1,7 +1,10 @@
-from typing import IO, Optional
+from typing import IO, List, Optional, Union
 
 from click.exceptions import ClickException
 
+from dbt.artifacts.schemas.catalog import CatalogArtifact
+from dbt.contracts.graph.manifest import Manifest
+from dbt.contracts.results import RunExecutionResult
 from dbt.utils import ExitCodes
 
 
@@ -23,7 +26,7 @@ class CliException(ClickException):
 
     # the typing of _file is to satisfy the signature of ClickException.show
     # overriding this method prevents click from printing any exceptions to stdout
-    def show(self, _file: Optional[IO] = None) -> None:
+    def show(self, _file: Optional[IO] = None) -> None:  # type: ignore[type-arg]
         pass
 
 
@@ -31,7 +34,17 @@ class ResultExit(CliException):
     """This class wraps any exception that contains results while invoking dbt, or the
     results of an invocation that did not succeed but did not throw any exceptions."""
 
-    def __init__(self, result) -> None:
+    def __init__(
+        self,
+        result: Union[
+            bool,  # debug
+            CatalogArtifact,  # docs generate
+            List[str],  # list/ls
+            Manifest,  # parse
+            None,  # clean, deps, init, source
+            RunExecutionResult,  # build, compile, run, seed, snapshot, test, run-operation
+        ] = None,
+    ) -> None:
         super().__init__(ExitCodes.ModelError)
         self.result = result
 

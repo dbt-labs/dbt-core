@@ -547,6 +547,8 @@ class Compiler:
         the node's raw_code into compiled_code, and then calls the
         recursive method to "prepend" the ctes.
         """
+        # REVIEW: UnitTestDefinition shouldn't be possible here because of the
+        # type of node, and it is likewise an invalid return type.
         if isinstance(node, UnitTestDefinition):
             return node
 

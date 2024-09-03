@@ -87,12 +87,15 @@ class NodeSelector(MethodManager):
             )
             return set(), set()
 
+        neighbors = self.collect_specified_neighbors(spec, collected)
+        selected = collected | neighbors
+
+        # if --indirect-selection EMPTY, do not expand to adjacent tests
         if spec.indirect_selection == IndirectSelection.Empty:
-            return collected, set()
+            return selected, set()
         else:
-            neighbors = self.collect_specified_neighbors(spec, collected)
             direct_nodes, indirect_nodes = self.expand_selection(
-                selected=(collected | neighbors), indirect_selection=spec.indirect_selection
+                selected=selected, indirect_selection=spec.indirect_selection
             )
             return direct_nodes, indirect_nodes
 
@@ -177,10 +180,14 @@ class NodeSelector(MethodManager):
 
         node = self.manifest.nodes[unique_id]
 
-        if self.include_empty_nodes:
-            return node.config.enabled
+        return node.config.enabled
+
+    def _is_empty_node(self, unique_id: UniqueId) -> bool:
+        if unique_id in self.manifest.nodes:
+            node = self.manifest.nodes[unique_id]
+            return node.empty
         else:
-            return not node.empty and node.config.enabled
+            return False
 
     def node_is_match(self, node: GraphMemberNode) -> bool:
         """Determine if a node is a match for the selector. Non-match nodes
@@ -212,7 +219,12 @@ class NodeSelector(MethodManager):
         """Return the subset of selected nodes that is a match for this
         selector.
         """
-        return {unique_id for unique_id in selected if self._is_match(unique_id)}
+        return {
+            unique_id
+            for unique_id in selected
+            if self._is_match(unique_id)
+            and (self.include_empty_nodes or not self._is_empty_node(unique_id))
+        }
 
     def expand_selection(
         self,

@@ -1028,12 +1028,11 @@ class ManifestLoader:
         return state_check
 
     def save_macros_to_adapter(self, adapter):
-        macro_manifest = MacroManifest(self.manifest.macros)
-        adapter.set_macro_resolver(macro_manifest)
+        adapter.set_macro_resolver(self.manifest)
         # This executes the callable macro_hook and sets the
         # query headers
         # This executes the callable macro_hook and sets the query headers
-        query_header_context = generate_query_header_context(adapter.config, macro_manifest)
+        query_header_context = generate_query_header_context(adapter.config, self.manifest)
         self.macro_hook(query_header_context)
 
     # This creates a MacroManifest which contains the macros in

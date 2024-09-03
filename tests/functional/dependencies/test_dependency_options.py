@@ -33,16 +33,14 @@ class TestDepsOptions(object):
         assert os.path.exists("package-lock.yml")
         with open("package-lock.yml") as fp:
             contents = fp.read()
-        assert (
-            contents
-            == """packages:
-  - package: fivetran/fivetran_utils
-    version: 0.4.7
-  - package: dbt-labs/dbt_utils
-    version: 1.2.0
-sha1_hash: 71304bca2138cf8004070b3573a1e17183c0c1a8
-"""
-        )
+
+        fivetran_package = "- package: fivetran/fivetran_utils\n    version: 0.4.7"
+        # dbt-utils is a dep in fivetran so we can't check for a specific version or this test fails everytime a new dbt-utils version comes out
+        dbt_labs_package = "- package: dbt-labs/dbt_utils"
+        package_sha = "sha1_hash: 71304bca2138cf8004070b3573a1e17183c0c1a8"
+        assert fivetran_package in contents
+        assert dbt_labs_package in contents
+        assert package_sha in contents
 
     def test_deps_default(self, clean_start):
         run_dbt(["deps"])
@@ -50,16 +48,13 @@ sha1_hash: 71304bca2138cf8004070b3573a1e17183c0c1a8
         assert os.path.exists("package-lock.yml")
         with open("package-lock.yml") as fp:
             contents = fp.read()
-        assert (
-            contents
-            == """packages:
-  - package: fivetran/fivetran_utils
-    version: 0.4.7
-  - package: dbt-labs/dbt_utils
-    version: 1.2.0
-sha1_hash: 71304bca2138cf8004070b3573a1e17183c0c1a8
-"""
-        )
+        fivetran_package = "- package: fivetran/fivetran_utils\n    version: 0.4.7"
+        # dbt-utils is a dep in fivetran so we can't check for a specific version or this test fails everytime a new dbt-utils version comes out
+        dbt_labs_package = "- package: dbt-labs/dbt_utils"
+        package_sha = "sha1_hash: 71304bca2138cf8004070b3573a1e17183c0c1a8"
+        assert fivetran_package in contents
+        assert dbt_labs_package in contents
+        assert package_sha in contents
 
     def test_deps_add(self, clean_start):
         run_dbt(["deps", "--add-package", "dbt-labs/audit_helper@0.9.0"])

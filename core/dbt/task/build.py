@@ -1,5 +1,5 @@
 import threading
-from typing import Dict, List, Set
+from typing import Dict, List, Optional, Set, Type
 
 from dbt.artifacts.schemas.results import NodeStatus, RunStatus
 from dbt.artifacts.schemas.run import RunResult
@@ -24,16 +24,16 @@ from .test import TestRunner as test_runner
 class SavedQueryRunner(BaseRunner):
     # Stub. No-op Runner for Saved Queries, which require MetricFlow for execution.
     @property
-    def description(self):
+    def description(self) -> str:
         return f"saved query {self.node.name}"
 
-    def before_execute(self):
+    def before_execute(self) -> None:
         pass
 
-    def compile(self, manifest):
+    def compile(self, manifest: Manifest):
         return self.node
 
-    def after_execute(self, result):
+    def after_execute(self, result) -> None:
         fire_event(
             LogNodeNoOpResult(
                 description=self.description,
@@ -83,7 +83,7 @@ class BuildTask(RunTask):
         self.selected_unit_tests: Set = set()
         self.model_to_unit_test_map: Dict[str, List] = {}
 
-    def resource_types(self, no_unit_tests=False):
+    def resource_types(self, no_unit_tests: bool = False) -> List[NodeType]:
         resource_types = resource_types_from_args(
             self.args, set(self.ALL_RESOURCE_VALUES), set(self.ALL_RESOURCE_VALUES)
         )
@@ -210,7 +210,7 @@ class BuildTask(RunTask):
             resource_types=resource_types,
         )
 
-    def get_runner_type(self, node):
+    def get_runner_type(self, node) -> Optional[Type[BaseRunner]]:
         return self.RUNNER_MAP.get(node.resource_type)
 
     # Special build compile_manifest method to pass add_test_edges to the compiler

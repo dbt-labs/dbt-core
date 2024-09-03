@@ -297,3 +297,29 @@ class TestNodeSelector:
                 queue.get(block=False)
             queue.mark_done(got.unique_id)
         assert queue.empty()
+
+    def test_select_downstream_of_empty_model(self, runtime_config: RuntimeConfig):
+        # empty model
+        model_one = make_model(pkg="other", name="model_one", code="")
+        # non-empty model
+        model_two = make_model(
+            pkg="pkg",
+            name="model_two",
+            code="""select * from {{ref('model_one')}}""",
+            refs=[model_one],
+        )
+        models = [model_one, model_two]
+        manifest = make_manifest(nodes=models)
+
+        # Get the graph
+        compiler = dbt.compilation.Compiler(runtime_config)
+        graph = compiler.compile(manifest)
+
+        # Ensure that model_two is selected as downstream of model_one
+        selector = NodeSelector(graph, manifest)
+        spec = graph_selector.SelectionCriteria.from_single_spec("model_one+")
+        assert selector.get_selected(spec) == {"model.pkg.model_two"}
+
+        # Ensure that --indirect-selection empty returns the same result
+        spec.indirect_selection = graph_selector.IndirectSelection.Empty
+        assert selector.get_selected(spec) == {"model.pkg.model_two"}
