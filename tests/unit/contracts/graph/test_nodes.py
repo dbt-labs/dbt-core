@@ -183,6 +183,7 @@ def basic_compiled_dict():
             "contract": {"enforced": False, "alias_types": True},
             "docs": {"show": True},
             "access": "protected",
+            "partition_lookback": 0,
         },
         "docs": {"show": True},
         "columns": {},

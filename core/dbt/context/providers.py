@@ -325,10 +325,13 @@ class BaseResolver(metaclass=abc.ABCMeta):
                     start=start,
                     end=end,
                 )
-        if event_time_filter is not None:
-            print(event_time_filter.render())
-        else:
-            print("No filter present! Oh no!")
+
+        # Microbatch debugging
+        # if event_time_filter is not None:
+        #     print(event_time_filter.render())
+        # else:
+        #     print("No filter present! Oh no!")
+
         return event_time_filter
 
     @abc.abstractmethod
