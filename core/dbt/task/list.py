@@ -1,4 +1,5 @@
 import json
+from typing import Iterator, List
 
 from dbt.cli.flags import Flags
 from dbt.config.runtime import RuntimeConfig
@@ -145,7 +146,7 @@ class ListTask(GraphRunnableTask):
                 }
             )
 
-    def generate_paths(self):
+    def generate_paths(self) -> Iterator[str]:
         for node in self._iterate_selected_nodes():
             yield node.original_file_path
 
@@ -177,7 +178,7 @@ class ListTask(GraphRunnableTask):
         return self.node_results
 
     @property
-    def resource_types(self):
+    def resource_types(self) -> List[NodeType]:
         if self.args.models:
             return [NodeType.Model]
 

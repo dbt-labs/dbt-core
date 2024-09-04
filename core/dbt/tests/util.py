@@ -91,6 +91,7 @@ def run_dbt(
     if profiles_dir and "--profiles-dir" not in args:
         args.extend(["--profiles-dir", profiles_dir])
     dbt = dbtRunner()
+
     res = dbt.invoke(args)
 
     # the exception is immediately raised to be caught in tests
@@ -148,7 +149,7 @@ def get_manifest(project_root) -> Optional[Manifest]:
     if os.path.exists(path):
         with open(path, "rb") as fp:
             manifest_mp = fp.read()
-        manifest: Manifest = Manifest.from_msgpack(manifest_mp)
+        manifest: Manifest = Manifest.from_msgpack(manifest_mp)  # type: ignore[attr-defined]
         return manifest
     else:
         return None

@@ -6,6 +6,7 @@ from dbt.exceptions import ParsingError
 from dbt.tests.util import run_dbt, write_file
 from dbt_common.exceptions import CompilationError
 from tests.functional.adapter.hooks.fixtures import (
+    macros__before_and_after,
     models__hooked,
     models__hooks,
     models__hooks_configured,
@@ -13,6 +14,8 @@ from tests.functional.adapter.hooks.fixtures import (
     models__hooks_kwargs,
     models__post,
     models__pre,
+    properties__model_hooks,
+    properties__model_hooks_list,
     properties__seed_models,
     properties__test_snapshot_models,
     seeds__example_seed_csv,
@@ -255,6 +258,27 @@ class TestPrePostModelHooksOnSeeds(object):
         assert len(res) == 1, "Expected exactly one item"
         res = run_dbt(["test"])
         assert len(res) == 1, "Expected exactly one item"
+
+
+class TestPrePostModelHooksWithMacros(BaseTestPrePost):
+    @pytest.fixture(scope="class")
+    def macros(self):
+        return {"before-and-after.sql": macros__before_and_after}
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"schema.yml": properties__model_hooks, "hooks.sql": models__hooks}
+
+    def test_pre_and_post_run_hooks(self, project, dbt_profile_target):
+        run_dbt()
+        self.check_hooks("start", project, dbt_profile_target.get("host", None))
+        self.check_hooks("end", project, dbt_profile_target.get("host", None))
+
+
+class TestPrePostModelHooksListWithMacros(TestPrePostModelHooksWithMacros):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"schema.yml": properties__model_hooks_list, "hooks.sql": models__hooks}
 
 
 class TestHooksRefsOnSeeds:
