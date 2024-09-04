@@ -1,4 +1,4 @@
-git+https://github.com/dbt-labs/dbt-adapters.git@snapshot_time_data_type
+git+https://github.com/dbt-labs/dbt-adapters.git@main
 git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-tests-adapter
 git+https://github.com/dbt-labs/dbt-common.git@main
 git+https://github.com/dbt-labs/dbt-postgres.git@main
