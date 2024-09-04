@@ -23,6 +23,7 @@ from dbt.exceptions import (
     DictParseError,
     InvalidAccessTypeError,
 )
+from dbt.flags import get_flags
 from dbt.node_types import AccessType, ModelLanguage, NodeType
 from dbt.parser.search import FileBlock
 from dbt_common.dataclass_schema import ValidationError
@@ -372,19 +373,20 @@ class ConfiguredParser(
             if hasattr(parsed_node, "contract"):
                 parsed_node.contract = Contract.from_dict(contract_dct)
 
-        # unrendered_config is used to compare the original database/schema/alias
-        # values and to handle 'same_config' and 'same_contents' calls
-        # TODO: Behaviour flag can route here
-        if patch_file_id:
-            # Use the patch_file.unrendered_configs if available, as provided patch_config_dict may actuallly already be rendered
-            if patch_file := self.manifest.files.get(patch_file_id, None):
-                if isinstance(patch_file, SchemaSourceFile):
+        if get_flags().require_config_jinja_insensitivity_for_state_modified:
+            # Use the patch_file.unrendered_configs if available to update patch_dict_config,
+            # as provided patch_config_dict may actuallly already be rendered and thus sensitive to jinja evaluations
+            if patch_file_id:
+                patch_file = self.manifest.files.get(patch_file_id, None)
+                if patch_file and isinstance(patch_file, SchemaSourceFile):
                     # TODO: do not hardcode "models"
                     if unrendered_patch_config := patch_file.get_unrendered_config(
                         "models", parsed_node.name, getattr(parsed_node, "version", None)
                     ):
                         patch_config_dict = deep_merge(patch_config_dict, unrendered_patch_config)
 
+        # unrendered_config is used to compare the original database/schema/alias
+        # values and to handle 'same_config' and 'same_contents' calls
         parsed_node.unrendered_config = config.build_config_dict(
             rendered=False, patch_config_dict=patch_config_dict
         )

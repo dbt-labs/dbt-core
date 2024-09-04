@@ -6,6 +6,7 @@ from typing import Any, Dict, Generic, Iterator, List, Optional, TypeVar
 from dbt.adapters.factory import get_config_class_by_name
 from dbt.config import IsFQNResource, Project, RuntimeConfig
 from dbt.contracts.graph.model_config import get_config_for
+from dbt.flags import get_flags
 from dbt.node_types import NodeType
 from dbt.utils import fqn_search
 from dbt_common.contracts.config.base import BaseConfig, _listify
@@ -362,13 +363,17 @@ class ContextConfig:
         else:
             # TODO CT-211
             src = UnrenderedConfigGenerator(self._active_project)  # type: ignore[assignment]
-            # TODO: behaviour flag can route behaviour here.
-            # Prefer _config_call_dict if it is available and _unrendered_config_call_dict is not,
-            # as _unrendered_config_call_dict is unreliable for non-sql nodes (e.g. no jinja config block rendered for python models, test nodes, etc)
-            if self._config_call_dict and not self._unrendered_config_call_dict:
+
+            # preserve legacy behaviour - using unreliable (potentially rendered) _config_call_dict
+            if get_flags().require_config_jinja_insensitivity_for_state_modified is False:
                 config_call_dict = self._config_call_dict
             else:
-                config_call_dict = self._unrendered_config_call_dict
+                # Prefer _config_call_dict if it is available and _unrendered_config_call_dict is not,
+                # as _unrendered_config_call_dict is unreliable for non-sql nodes (e.g. no jinja config block rendered for python models, etc)
+                if self._config_call_dict and not self._unrendered_config_call_dict:
+                    config_call_dict = self._config_call_dict
+                else:
+                    config_call_dict = self._unrendered_config_call_dict
 
         return src.calculate_node_config_dict(
             config_call_dict=config_call_dict,

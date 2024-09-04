@@ -18,6 +18,14 @@ class BaseTestStateSelectionEnvVarConfig(BaseModifiedState):
         yield
         del os.environ["DBT_TEST_STATE_MODIFIED"]
 
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "flags": {
+                "require_config_jinja_insensitivity_for_state_modified": True,
+            }
+        }
+
     def test_change_env_var(self, project):
         # Generate ./state without changing environment variable value
         run_dbt(["run"])
@@ -80,11 +88,14 @@ class TestModelNodeWithEnvVarConfigInProjectYmlAndSchemaYml(BaseTestStateSelecti
     @pytest.fixture(scope="class")
     def project_config_update(self):
         return {
+            "flags": {
+                "require_config_jinja_insensitivity_for_state_modified": True,
+            },
             "models": {
                 "test": {
                     "+materialized": "{{ env_var('DBT_TEST_STATE_MODIFIED') }}",
                 }
-            }
+            },
         }
 
 

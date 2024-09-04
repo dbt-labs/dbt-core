@@ -341,7 +341,8 @@ class ProjectFlags(ExtensibleDbtClassMixin):
     warn_error_options: Optional[Dict[str, Union[str, List[str]]]] = None
     write_json: Optional[bool] = None
 
-    # legacy behaviors
+    # legacy behaviors - https://github.com/dbt-labs/dbt-core/blob/main/docs/guides/behavior-change-flags.md
+    require_config_jinja_insensitivity_for_state_modified: bool = False
     require_explicit_package_overrides_for_builtin_materializations: bool = True
     require_resource_names_without_spaces: bool = False
     source_freshness_run_project_hooks: bool = False
@@ -349,6 +350,7 @@ class ProjectFlags(ExtensibleDbtClassMixin):
     @property
     def project_only_flags(self) -> Dict[str, Any]:
         return {
+            "require_config_jinja_insensitivity_for_state_modified": self.require_config_jinja_insensitivity_for_state_modified,
             "require_explicit_package_overrides_for_builtin_materializations": self.require_explicit_package_overrides_for_builtin_materializations,
             "require_resource_names_without_spaces": self.require_resource_names_without_spaces,
             "source_freshness_run_project_hooks": self.source_freshness_run_project_hooks,

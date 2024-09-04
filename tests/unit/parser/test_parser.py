@@ -6,8 +6,6 @@ from unittest import mock
 
 import yaml
 
-import dbt.flags
-import dbt.parser
 from dbt import tracking
 from dbt.artifacts.resources import ModelConfig, RefArgs
 from dbt.context.context_config import ContextConfig
@@ -60,7 +58,9 @@ from tests.unit.utils import (
     normalize,
 )
 
-set_from_args(Namespace(WARN_ERROR=False), None)
+set_from_args(
+    Namespace(warn_error=False, require_config_jinja_insensitivity_for_state_modified=False), None
+)
 
 
 def get_abs_os_path(unix_path):
@@ -94,7 +94,12 @@ class BaseParserTest(unittest.TestCase):
             yield pm
 
     def setUp(self):
-        dbt.flags.WARN_ERROR = True
+        set_from_args(
+            Namespace(
+                warn_error=True, require_config_jinja_insensitivity_for_state_modified=False
+            ),
+            None,
+        )
         # HACK: this is needed since tracking events can
         # be sent when using the model parser
         tracking.do_not_track()

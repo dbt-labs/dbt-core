@@ -84,6 +84,7 @@ REQUIRED_PARSED_NODE_KEYS = frozenset(
         "docs",
         "checksum",
         "unrendered_config",
+        "unrendered_config_call_dict",
         "created_at",
         "config_call_dict",
         "relation_name",
