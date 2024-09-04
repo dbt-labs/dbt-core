@@ -1,3 +1,4 @@
+import os
 from unittest import mock
 
 import pytest
@@ -102,6 +103,21 @@ class TestDbtRunner:
         args_before = args.copy()
         dbt.invoke(args)
         assert args == args_before
+
+    def test_directory_does_not_change(self, project, dbt: dbtRunner) -> None:
+        project_dir = os.getcwd()  # The directory where dbt_project.yml exists.
+        os.chdir("../")
+        cmd_execution_dir = os.getcwd()  # The directory where dbt command will be run
+
+        commands = ["init", "deps", "clean"]
+        for command in commands:
+            args = [command, "--project-dir", project_dir]
+            if command == "init":
+                args.append("--skip-profile-setup")
+            res = dbt.invoke(args)
+            after_dir = os.getcwd()
+            assert res.success is True
+            assert cmd_execution_dir == after_dir
 
 
 class TestDbtRunnerQueryComments:

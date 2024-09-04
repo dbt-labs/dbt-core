@@ -778,7 +778,9 @@ class SavedQueryParser(YamlReader):
         self, unparsed: UnparsedExport, saved_query_config: SavedQueryConfig
     ) -> Export:
         return Export(
-            name=unparsed.name, config=self._get_export_config(unparsed.config, saved_query_config)
+            name=unparsed.name,
+            config=self._get_export_config(unparsed.config, saved_query_config),
+            unrendered_config=unparsed.config,
         )
 
     def _get_query_params(self, unparsed: UnparsedQueryParams) -> QueryParams:

@@ -3,7 +3,7 @@ import json
 import re
 import threading
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Type, Union
 
 import daff
 
@@ -27,6 +27,7 @@ from dbt.flags import get_flags
 from dbt.graph import ResourceTypeSelector
 from dbt.node_types import NodeType
 from dbt.parser.unit_tests import UnitTestManifestLoader
+from dbt.task.base import BaseRunner
 from dbt.utils import _coerce_decimal, strtobool
 from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_common.events.format import pluralize
@@ -84,14 +85,14 @@ class TestRunner(CompileRunner):
     _ANSI_ESCAPE = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
     _LOG_TEST_RESULT_EVENTS = LogTestResult
 
-    def describe_node_name(self):
+    def describe_node_name(self) -> str:
         if self.node.resource_type == NodeType.Unit:
             name = f"{self.node.model}::{self.node.versioned_name}"
             return name
         else:
             return self.node.name
 
-    def describe_node(self):
+    def describe_node(self) -> str:
         return f"{self.node.resource_type} {self.describe_node_name()}"
 
     def print_result_line(self, result):
@@ -120,7 +121,7 @@ class TestRunner(CompileRunner):
             )
         )
 
-    def before_execute(self):
+    def before_execute(self) -> None:
         self.print_start_line()
 
     def execute_data_test(self, data_test: TestNode, manifest: Manifest) -> TestResultData:
@@ -334,7 +335,7 @@ class TestRunner(CompileRunner):
             failures=failures,
         )
 
-    def after_execute(self, result):
+    def after_execute(self, result) -> None:
         self.print_result_line(result)
 
     def _get_unit_test_agate_table(self, result_table, actual_or_expected: str):
@@ -393,7 +394,7 @@ class TestTask(RunTask):
 
     __test__ = False
 
-    def raise_on_first_error(self):
+    def raise_on_first_error(self) -> bool:
         return False
 
     def get_node_selector(self) -> TestSelector:
@@ -405,7 +406,7 @@ class TestTask(RunTask):
             previous_state=self.previous_state,
         )
 
-    def get_runner_type(self, _):
+    def get_runner_type(self, _) -> Optional[Type[BaseRunner]]:
         return TestRunner
 
 

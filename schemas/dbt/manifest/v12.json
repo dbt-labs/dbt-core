@@ -19164,6 +19164,15 @@
                             "required": [
                               "export_as"
                             ]
+                          },
+                          "unrendered_config": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            },
+                            "propertyNames": {
+                              "type": "string"
+                            }
                           }
                         },
                         "additionalProperties": false,
@@ -20689,6 +20698,15 @@
                   "required": [
                     "export_as"
                   ]
+                },
+                "unrendered_config": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "propertyNames": {
+                    "type": "string"
+                  }
                 }
               },
               "additionalProperties": false,

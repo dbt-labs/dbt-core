@@ -34,6 +34,7 @@ class Export(dbtClassMixin):
 
     name: str
     config: ExportConfig
+    unrendered_config: Dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
