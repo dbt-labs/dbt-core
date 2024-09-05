@@ -43,16 +43,18 @@ class TestBaseResolver:
 
     @freeze_time("2024-09-05 08:56:00")
     @pytest.mark.parametrize(
-        "is_incremental,materialized,incremental_strategy,event_time_end,event_time_start,expected_filter",
+        "is_incremental,materialized,incremental_strategy,event_time_end,event_time_start,batch_size,lookback,expected_filter",
         [
-            (True, "table", "microbatch", None, None, None),
-            (True, "incremental", "merge", None, None, None),
+            (True, "table", "microbatch", None, None, PartitionGrain.day, 0, None),
+            (True, "incremental", "merge", None, None, PartitionGrain.day, 0, None),
             (
                 True,
                 "incremental",
                 "microbatch",
                 None,
                 None,
+                PartitionGrain.day,
+                0,
                 EventTimeFilter(
                     field_name="created_at",
                     end=datetime(2024, 9, 5, 8, 56, 0, 0, pytz.UTC),
@@ -65,6 +67,8 @@ class TestBaseResolver:
                 "microbatch",
                 "2024-08-01 08:11:00",
                 None,
+                PartitionGrain.day,
+                0,
                 EventTimeFilter(
                     field_name="created_at",
                     end=datetime(2024, 8, 1, 8, 11, 0, 0, pytz.UTC),
@@ -77,6 +81,8 @@ class TestBaseResolver:
                 "microbatch",
                 None,
                 "2024-08-01 00:00:00",
+                PartitionGrain.day,
+                0,
                 EventTimeFilter(
                     field_name="created_at",
                     end=datetime(2024, 9, 5, 8, 56, 0, 0, pytz.UTC),
@@ -89,19 +95,23 @@ class TestBaseResolver:
                 "microbatch",
                 "2024-09-01 00:00:00",
                 "2024-08-01 00:00:00",
+                PartitionGrain.day,
+                0,
                 EventTimeFilter(
                     field_name="created_at",
                     end=datetime(2024, 9, 1, 0, 0, 0, 0, pytz.UTC),
                     start=datetime(2024, 8, 1, 0, 0, 0, 0, pytz.UTC),
                 ),
             ),
-            (False, "incremental", "microbatch", None, None, None),
+            (False, "incremental", "microbatch", None, None, PartitionGrain.day, 0, None),
             (
                 False,
                 "incremental",
                 "microbatch",
                 "2024-08-01 08:11:00",
                 None,
+                PartitionGrain.day,
+                0,
                 EventTimeFilter(
                     field_name="created_at",
                     end=datetime(2024, 8, 1, 8, 11, 0, 0, pytz.UTC),
@@ -114,6 +124,8 @@ class TestBaseResolver:
                 "microbatch",
                 None,
                 "2024-08-01 00:00:00",
+                PartitionGrain.day,
+                0,
                 EventTimeFilter(
                     field_name="created_at",
                     end=None,
@@ -126,10 +138,68 @@ class TestBaseResolver:
                 "microbatch",
                 "2024-09-01 00:00:00",
                 "2024-08-01 00:00:00",
+                PartitionGrain.day,
+                0,
                 EventTimeFilter(
                     field_name="created_at",
                     end=datetime(2024, 9, 1, 0, 0, 0, 0, pytz.UTC),
                     start=datetime(2024, 8, 1, 0, 0, 0, 0, pytz.UTC),
+                ),
+            ),
+            (
+                True,
+                "incremental",
+                "microbatch",
+                "2024-09-01 00:49:00",
+                None,
+                PartitionGrain.hour,
+                1,
+                EventTimeFilter(
+                    field_name="created_at",
+                    end=datetime(2024, 9, 1, 0, 49, 0, 0, pytz.UTC),
+                    start=datetime(2024, 8, 31, 23, 0, 0, 0, pytz.UTC),
+                ),
+            ),
+            (
+                True,
+                "incremental",
+                "microbatch",
+                "2024-09-01 13:31:00",
+                None,
+                PartitionGrain.day,
+                1,
+                EventTimeFilter(
+                    field_name="created_at",
+                    end=datetime(2024, 9, 1, 13, 31, 0, 0, pytz.UTC),
+                    start=datetime(2024, 8, 31, 0, 0, 0, 0, pytz.UTC),
+                ),
+            ),
+            (
+                True,
+                "incremental",
+                "microbatch",
+                "2024-01-23 12:30:00",
+                None,
+                PartitionGrain.month,
+                1,
+                EventTimeFilter(
+                    field_name="created_at",
+                    end=datetime(2024, 1, 23, 12, 30, 0, 0, pytz.UTC),
+                    start=datetime(2023, 12, 1, 0, 0, 0, 0, pytz.utc),
+                ),
+            ),
+            (
+                True,
+                "incremental",
+                "microbatch",
+                "2024-01-23 12:30:00",
+                None,
+                PartitionGrain.year,
+                1,
+                EventTimeFilter(
+                    field_name="created_at",
+                    end=datetime(2024, 1, 23, 12, 30, 0, 0, pytz.UTC),
+                    start=datetime(2023, 1, 1, 0, 0, 0, 0, pytz.utc),
                 ),
             ),
         ],
@@ -143,6 +213,8 @@ class TestBaseResolver:
         incremental_strategy: str,
         event_time_end: Optional[str],
         event_time_start: Optional[str],
+        batch_size: PartitionGrain,
+        lookback: int,
         expected_filter: Optional[EventTimeFilter],
     ) -> None:
         mocker.patch("dbt.context.providers.BaseResolver._is_incremental").return_value = (
@@ -154,8 +226,8 @@ class TestBaseResolver:
         resolver.model.config = mock.MagicMock(NodeConfig)
         resolver.model.config.materialized = materialized
         resolver.model.config.incremental_strategy = incremental_strategy
-        resolver.model.config.batch_size = PartitionGrain.day
-        resolver.model.config.lookback = 0
+        resolver.model.config.batch_size = batch_size
+        resolver.model.config.lookback = lookback
         resolver.config.args.EVENT_TIME_END = event_time_end
         resolver.config.args.EVENT_TIME_START = event_time_start
         event_time_filter = resolver.resolve_event_time_filter(target=target)
