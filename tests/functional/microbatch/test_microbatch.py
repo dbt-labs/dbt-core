@@ -1,3 +1,6 @@
+import os
+from unittest import mock
+
 import pytest
 from freezegun import freeze_time
 
@@ -37,6 +40,7 @@ class TestMicrobatchCLI:
 
             assert result[0] == expected_row_count
 
+    @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
     def test_run_with_event_time(self, project):
         # run without --event-time-start or --event-time-end - 3 expected rows in output
         run_dbt(["run"])
@@ -82,6 +86,7 @@ class TestMicroBatchBoundsDefault:
 
             assert result[0] == expected_row_count
 
+    @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
     def test_run_with_event_time(self, project):
         # initial run -- backfills all data
         with freeze_time("2020-01-01 13:57:00"):

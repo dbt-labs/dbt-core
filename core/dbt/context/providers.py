@@ -298,7 +298,8 @@ class BaseResolver(metaclass=abc.ABCMeta):
     def resolve_event_time_filter(self, target: ManifestNode) -> Optional[EventTimeFilter]:
         event_time_filter = None
         if (
-            isinstance(target.config, NodeConfig)
+            os.environ.get("DBT_EXPERIMENTAL_MICROBATCH")
+            and isinstance(target.config, NodeConfig)
             and target.config.event_time
             and self.model.config.materialized == "incremental"
             and self.model.config.incremental_strategy == "microbatch"

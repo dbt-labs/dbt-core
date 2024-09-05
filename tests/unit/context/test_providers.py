@@ -1,3 +1,4 @@
+import os
 from datetime import datetime
 from typing import Optional
 from unittest import mock
@@ -42,6 +43,7 @@ class TestBaseResolver:
         assert resolver.resolve_limit == expected_resolve_limit
 
     @freeze_time("2024-09-05 08:56:00")
+    @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
     @pytest.mark.parametrize(
         "is_incremental,materialized,incremental_strategy,event_time_end,event_time_start,batch_size,lookback,expected_filter",
         [
