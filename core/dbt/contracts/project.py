@@ -5,7 +5,6 @@ from mashumaro.jsonschema.annotations import Pattern
 from mashumaro.types import SerializableType
 from typing_extensions import Annotated
 
-from dbt import deprecations
 from dbt.adapters.contracts.connection import QueryComment
 from dbt.contracts.util import Identifier, list_str
 from dbt_common.contracts.util import Mergeable
@@ -311,10 +310,6 @@ class Project(dbtClassMixin):
         if data.get("tests", None) and data.get("data_tests", None):
             raise ValidationError(
                 "Invalid project config: cannot have both 'tests' and 'data_tests' defined"
-            )
-        if "tests" in data:
-            deprecations.warn(
-                "project-test-config", deprecated_path="tests", exp_path="data_tests"
             )
 
 

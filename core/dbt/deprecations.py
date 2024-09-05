@@ -98,11 +98,6 @@ class CollectFreshnessReturnSignature(DBTDeprecation):
     _event = "CollectFreshnessReturnSignature"
 
 
-class TestsConfigDeprecation(DBTDeprecation):
-    _name = "project-test-config"
-    _event = "TestsConfigDeprecation"
-
-
 class ProjectFlagsMovedDeprecation(DBTDeprecation):
     _name = "project-flags-moved"
     _event = "ProjectFlagsMovedDeprecation"
@@ -167,7 +162,6 @@ deprecations_list: List[DBTDeprecation] = [
     ConfigLogPathDeprecation(),
     ConfigTargetPathDeprecation(),
     CollectFreshnessReturnSignature(),
-    TestsConfigDeprecation(),
     ProjectFlagsMovedDeprecation(),
     PackageMaterializationOverrideDeprecation(),
     ResourceNamesWithSpacesDeprecation(),

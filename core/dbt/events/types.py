@@ -388,6 +388,9 @@ class ConfigTargetPathDeprecation(WarnLevel):
         return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
 
 
+# Note: this deprecation has been removed, but we are leaving
+# the event class here, because users may have specified it in
+# warn_error_options.
 class TestsConfigDeprecation(WarnLevel):
     def code(self) -> str:
         return "D012"
