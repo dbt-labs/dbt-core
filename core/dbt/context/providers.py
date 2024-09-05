@@ -304,7 +304,6 @@ class BaseResolver(metaclass=abc.ABCMeta):
             and self.model.config.incremental_strategy == "microbatch"
         ):
             is_incremental = self._is_incremental()
-            print(f"####------#### is_incremental: {is_incremental}")
             end = getattr(self.config.args, "EVENT_TIME_END", None)
             end = (
                 datetime.strptime(end, "%Y-%m-%d %H:%M:%S").replace(tzinfo=pytz.UTC)
@@ -325,12 +324,6 @@ class BaseResolver(metaclass=abc.ABCMeta):
                     start=start,
                     end=end,
                 )
-
-        # Microbatch debugging
-        # if event_time_filter is not None:
-        #     print(event_time_filter.render())
-        # else:
-        #     print("No filter present! Oh no!")
 
         return event_time_filter
 
