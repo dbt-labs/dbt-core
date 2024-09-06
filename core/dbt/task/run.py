@@ -297,6 +297,19 @@ class ModelRunner(CompileRunner):
                 failures=failures,
             )
 
+    def _build_failed_run_batch_result(self, model):
+        return RunResult(
+            node=model,
+            status=RunStatus.Error,
+            timing=[],
+            thread_id=threading.current_thread().name,
+            # TODO -- why isn't this getting propagated to logs?
+            execution_time=None,
+            message="ERROR",
+            adapter_response={},
+            failures=1,
+        )
+
     def _materialization_relations(self, result: Any, model) -> List[BaseRelation]:
         if isinstance(result, str):
             msg = (
@@ -394,27 +407,37 @@ class ModelRunner(CompileRunner):
                     model.config["event_time_start"] = batch[0]
                     model.config["event_time_end"] = batch[1]
 
-                    # Recompile node to re-resolve refs with event time filters rendered
-                    self.compiler.compile_node(model, manifest, {})
-                    context["model"] = model
-                    context["sql"] = model.compiled_code
-
                     self.print_batch_start_line(batch_description, batch_idx + 1, len(batches))
 
-                    result = MacroGenerator(
-                        materialization_macro, context, stack=context["context_macro_stack"]
-                    )()
-                    batch_run_result = self._build_run_model_result(model, context)
+                    exception = None
+                    try:
+                        # Recompile node to re-resolve refs with event time filters rendered
+                        self.compiler.compile_node(model, manifest, {})
+                        context["model"] = model
+                        context["sql"] = model.compiled_code
+
+                        result = MacroGenerator(
+                            materialization_macro, context, stack=context["context_macro_stack"]
+                        )()
+                        for relation in self._materialization_relations(result, model):
+                            self.adapter.cache_added(relation.incorporate(dbt_created=True))
+
+                        batch_run_result = self._build_run_model_result(model, context)
+
+                        context["is_incremental"] = lambda: True
+                        context["should_full_refresh"] = lambda: False
+                    except Exception as e:
+                        exception = e
+                        batch_run_result = self._build_failed_run_batch_result(model)
+
                     self.print_batch_result_line(
                         batch_run_result, batch_description, batch_idx + 1, len(batches)
                     )
+                    if exception:
+                        print(exception)
+
                     batch_results.append(batch_run_result)
 
-                    # TODO: these should only be set once initial run is successful
-                    context["is_incremental"] = lambda: True
-                    context["should_full_refresh"] = lambda: False
-                    for relation in self._materialization_relations(result, model):
-                        self.adapter.cache_added(relation.incorporate(dbt_created=True))
             else:
                 result = MacroGenerator(
                     materialization_macro, context, stack=context["context_macro_stack"]
