@@ -307,16 +307,16 @@ class BaseResolver(metaclass=abc.ABCMeta):
             and self.model.config.incremental_strategy == "microbatch"
         ):
             is_incremental = self._is_incremental()
-            end = getattr(self.config.args, "EVENT_TIME_END", None)
+            end: Optional[datetime] = getattr(self.config.args, "EVENT_TIME_END", None)
             end = (
-                datetime.strptime(end, "%Y-%m-%d %H:%M:%S").replace(tzinfo=pytz.UTC)
+                end.replace(tzinfo=pytz.UTC)
                 if end
                 else self._build_end_time(is_incremental=is_incremental)
             )
 
-            start = getattr(self.config.args, "EVENT_TIME_START", None)
+            start: Optional[datetime] = getattr(self.config.args, "EVENT_TIME_START", None)
             start = (
-                datetime.strptime(start, "%Y-%m-%d %H:%M:%S").replace(tzinfo=pytz.UTC)
+                start.replace(tzinfo=pytz.UTC)
                 if start
                 else self._build_start_time(checkpoint=end, is_incremental=is_incremental)
             )

@@ -96,7 +96,7 @@ event_time_end = click.option(
     envvar="DBT_EVENT_TIME_END",
     # TODO: improve help text
     help="upper bound to filter refs on",
-    type=click.STRING,
+    type=click.DateTime(),
     default=None,
 )
 
@@ -105,7 +105,7 @@ event_time_start = click.option(
     envvar="DBT_EVENT_TIME_START",
     # TODO: improve help text
     help="lower bound to filter refs on",
-    type=click.STRING,
+    type=click.DateTime(),
     default=None,
 )
 
