@@ -354,89 +354,16 @@ class ModelRunner(CompileRunner):
             )
 
         hook_ctx = self.adapter.pre_model_hook(context_config)
-        batch_results = []
+        batch_results = None
         try:
             if (
                 os.environ.get("DBT_EXPERIMENTAL_MICROBATCH")
                 and model.config.materialized == "incremental"
                 and model.config.incremental_strategy == "microbatch"
             ):
-                # get the overall start/end bounds
-                is_incremental = self._is_incremental(model)
-                end: Optional[datetime] = getattr(self.config.args, "EVENT_TIME_END", None)
-                end = end.replace(tzinfo=pytz.UTC) if end else self._build_end_time()
-
-                start: Optional[datetime] = getattr(self.config.args, "EVENT_TIME_START", None)
-                start = (
-                    start.replace(tzinfo=pytz.UTC)
-                    if start
-                    else self._build_start_time(
-                        model, checkpoint=end, is_incremental=is_incremental
-                    )
+                batch_results = self._execute_microbatch_materialization(
+                    model, manifest, context, materialization_macro
                 )
-                # split by batch_size
-                #   * if full-refresh / first run (is_incremental: False), will need to get a start_time
-                #   * option 1: cheap - have user provide start_time (implemented)
-                #   * option 2: no start_time, only send one query, no filters (implemented)
-                #       * option 2a: min of the min, query each input that has event_time
-                if not start:
-                    batches = [(start, end)]
-                else:
-                    batch_size = model.config.batch_size
-
-                    curr_batch_start: datetime = start
-                    curr_batch_end: datetime = self._offset_timestamp(
-                        curr_batch_start, batch_size, 1
-                    )
-
-                    batches: List[Tuple[datetime, datetime]] = [(curr_batch_start, curr_batch_end)]
-                    while curr_batch_end <= end:
-                        curr_batch_start = curr_batch_end
-                        curr_batch_end = self._offset_timestamp(curr_batch_start, batch_size, 1)
-                        batches.append((curr_batch_start, curr_batch_end))
-
-                    # use exact end value as stop
-                    batches[-1] = (batches[-1][0], end)
-
-                # iterate over each batch, calling materialization_macro to get a batch-level run result
-                for batch_idx, batch in enumerate(batches):
-                    batch_description = self.describe_batch(batch[0], batch[1])
-                    # TODO: consider setting timestamps on 'ref' and passing to extra_context
-                    # or at least naming configs with more unique names + popping after execution (e.g. _dbt_microbatch_event_time_start)
-                    model.config["event_time_start"] = batch[0]
-                    model.config["event_time_end"] = batch[1]
-
-                    self.print_batch_start_line(batch_description, batch_idx + 1, len(batches))
-
-                    exception = None
-                    try:
-                        # Recompile node to re-resolve refs with event time filters rendered
-                        self.compiler.compile_node(model, manifest, {})
-                        context["model"] = model
-                        context["sql"] = model.compiled_code
-
-                        result = MacroGenerator(
-                            materialization_macro, context, stack=context["context_macro_stack"]
-                        )()
-                        for relation in self._materialization_relations(result, model):
-                            self.adapter.cache_added(relation.incorporate(dbt_created=True))
-
-                        batch_run_result = self._build_run_model_result(model, context)
-
-                        context["is_incremental"] = lambda: True
-                        context["should_full_refresh"] = lambda: False
-                    except Exception as e:
-                        exception = e
-                        batch_run_result = self._build_failed_run_batch_result(model)
-
-                    self.print_batch_result_line(
-                        batch_run_result, batch_description, batch_idx + 1, len(batches)
-                    )
-                    if exception:
-                        print(exception)
-
-                    batch_results.append(batch_run_result)
-
             else:
                 result = MacroGenerator(
                     materialization_macro, context, stack=context["context_macro_stack"]
@@ -450,6 +377,82 @@ class ModelRunner(CompileRunner):
             return self._build_run_microbatch_model_result(model, batch_results)
 
         return self._build_run_model_result(model, context)
+
+    def _execute_microbatch_materialization(self, model, manifest, context, materialization_macro):
+        batch_results = []
+        # get the overall start/end bounds
+        is_incremental = self._is_incremental(model)
+        end: Optional[datetime] = getattr(self.config.args, "EVENT_TIME_END", None)
+        end = end.replace(tzinfo=pytz.UTC) if end else self._build_end_time()
+
+        start: Optional[datetime] = getattr(self.config.args, "EVENT_TIME_START", None)
+        start = (
+            start.replace(tzinfo=pytz.UTC)
+            if start
+            else self._build_start_time(model, checkpoint=end, is_incremental=is_incremental)
+        )
+        # split by batch_size
+        #   * if full-refresh / first run (is_incremental: False), will need to get a start_time
+        #   * option 1: cheap - have user provide start_time (implemented)
+        #   * option 2: no start_time, only send one query, no filters (implemented)
+        #       * option 2a: min of the min, query each input that has event_time
+        if not start:
+            batches = [(start, end)]
+        else:
+            batch_size = model.config.batch_size
+
+            curr_batch_start: datetime = start
+            curr_batch_end: datetime = self._offset_timestamp(curr_batch_start, batch_size, 1)
+
+            batches: List[Tuple[datetime, datetime]] = [(curr_batch_start, curr_batch_end)]
+            while curr_batch_end <= end:
+                curr_batch_start = curr_batch_end
+                curr_batch_end = self._offset_timestamp(curr_batch_start, batch_size, 1)
+                batches.append((curr_batch_start, curr_batch_end))
+
+            # use exact end value as stop
+            batches[-1] = (batches[-1][0], end)
+
+        # iterate over each batch, calling materialization_macro to get a batch-level run result
+        for batch_idx, batch in enumerate(batches):
+            batch_description = self.describe_batch(batch[0], batch[1])
+            # TODO: consider setting timestamps on 'ref' and passing to extra_context
+            # or at least naming configs with more unique names + popping after execution (e.g. _dbt_microbatch_event_time_start)
+            model.config["event_time_start"] = batch[0]
+            model.config["event_time_end"] = batch[1]
+
+            self.print_batch_start_line(batch_description, batch_idx + 1, len(batches))
+
+            exception = None
+            try:
+                # Recompile node to re-resolve refs with event time filters rendered
+                self.compiler.compile_node(model, manifest, {})
+                context["model"] = model
+                context["sql"] = model.compiled_code
+
+                result = MacroGenerator(
+                    materialization_macro, context, stack=context["context_macro_stack"]
+                )()
+                for relation in self._materialization_relations(result, model):
+                    self.adapter.cache_added(relation.incorporate(dbt_created=True))
+
+                batch_run_result = self._build_run_model_result(model, context)
+
+                context["is_incremental"] = lambda: True
+                context["should_full_refresh"] = lambda: False
+            except Exception as e:
+                exception = e
+                batch_run_result = self._build_failed_run_batch_result(model)
+
+            self.print_batch_result_line(
+                batch_run_result, batch_description, batch_idx + 1, len(batches)
+            )
+            if exception:
+                print(exception)
+
+            batch_results.append(batch_run_result)
+
+        return batch_results
 
     def _build_end_time(self) -> Optional[datetime]:
         return datetime.now(tz=pytz.utc)
