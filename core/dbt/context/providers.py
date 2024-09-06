@@ -282,6 +282,8 @@ class BaseResolver(metaclass=abc.ABCMeta):
         return start
 
     def _is_incremental(self) -> bool:
+        # TODO: Remove. This is a temporary method. We're working with adapters on
+        # a strategy to ensure we can access the `is_incremental` logic without drift
         relation_info = self.Relation.create_from(self.config, self.model)
         relation = self.db_wrapper.get_relation(
             relation_info.database, relation_info.schema, relation_info.name
