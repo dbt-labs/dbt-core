@@ -567,3 +567,9 @@ sources:
     tables:
       - name: customers
 """
+
+
+model_with_var_in_config_sql = """
+{{ config(materialized=var('DBT_TEST_STATE_MODIFIED')) }}
+select 1 as id
+"""
