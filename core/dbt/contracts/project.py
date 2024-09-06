@@ -248,6 +248,7 @@ class Project(dbtClassMixin):
     query_comment: Optional[Union[QueryComment, NoValue, str]] = field(default_factory=NoValue)
     restrict_access: bool = False
     dbt_cloud: Optional[Dict[str, Any]] = None
+    flags: Dict[str, Any] = field(default_factory=dict)
 
     class Config(dbtMashConfig):
         # These tell mashumaro to use aliases for jsonschema and for "from_dict"
