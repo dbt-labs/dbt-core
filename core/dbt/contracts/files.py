@@ -213,6 +213,7 @@ class SchemaSourceFile(BaseSourceFile):
     sop: List[SourceKey] = field(default_factory=list)
     env_vars: Dict[str, Any] = field(default_factory=dict)
     unrendered_configs: Dict[str, Any] = field(default_factory=dict)
+    unrendered_databases: Dict[str, Any] = field(default_factory=dict)
     pp_dict: Optional[Dict[str, Any]] = None
     pp_test_index: Optional[Dict[str, Any]] = None
 

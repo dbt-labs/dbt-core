@@ -3,10 +3,11 @@ import os
 import pytest
 
 from dbt.tests.util import run_dbt
-from tests.functional.defer_state.fixtures import (  # schema_source_with_env_var_as_property_yml
+from tests.functional.defer_state.fixtures import (
     model_with_env_var_in_config_sql,
     model_with_no_in_config_sql,
     schema_model_with_env_var_in_config_yml,
+    schema_source_with_env_var_as_property_yml,
 )
 from tests.functional.defer_state.test_modified_state import BaseModifiedState
 
@@ -108,10 +109,9 @@ class TestModelNodeWithEnvVarConfigInSqlAndSchemaYml(BaseTestStateSelectionEnvVa
         }
 
 
-# class TestSourceNodeWithEnvVarConfigInSchema(BaseTestStateSelectionEnvVarConfig):
-#     @pytest.fixture(scope="class")
-#     def models(self):
-#         return {
-#             "schema.yml": schema_source_with_env_var_as_property_yml,
-#             # "model.sql": "select * from {{ source('jaffle_shop', 'customers') }}"
-#         }
+class TestSourceNodeWithEnvVarConfigInSchema(BaseTestStateSelectionEnvVarConfig):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": schema_source_with_env_var_as_property_yml,
+        }

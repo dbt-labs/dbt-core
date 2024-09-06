@@ -329,6 +329,7 @@ class UnparsedSourceDefinition(dbtClassMixin):
     tables: List[UnparsedSourceTableDefinition] = field(default_factory=list)
     tags: List[str] = field(default_factory=list)
     config: Dict[str, Any] = field(default_factory=dict)
+    unrendered_database: Optional[str] = None
 
     @classmethod
     def validate(cls, data):

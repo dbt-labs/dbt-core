@@ -1223,8 +1223,15 @@ class SourceDefinition(
         return SourceDefinitionResource
 
     def same_database_representation(self, other: "SourceDefinition") -> bool:
+
+        # preserve legacy behaviour -- use potentially rendered database
+        if get_flags().require_config_jinja_insensitivity_for_state_modified is False:
+            same_database = self.database == other.database
+        else:
+            same_database = self.unrendered_database == other.unrendered_database
+
         return (
-            self.database == other.database
+            same_database
             and self.schema == other.schema
             and self.identifier == other.identifier
             and True

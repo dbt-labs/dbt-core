@@ -352,6 +352,9 @@ class YamlReader(metaclass=ABCMeta):
                     if "v" in version:
                         unrendered_version_configs[version["v"]] = version.get("config", {})
 
+            # For sources
+            unrendered_database = entry.get("database", None)
+
             # Render the data (except for tests, data_tests and descriptions).
             # See the SchemaYamlRenderer
             entry = self.render_entry(entry)
@@ -366,6 +369,14 @@ class YamlReader(metaclass=ABCMeta):
                 schema_file.add_unrendered_config(
                     unrendered_version_config, self.key, entry["name"], version
                 )
+
+            if unrendered_database:
+                schema_file.unrendered_databases[self.key] = (
+                    {}
+                    if self.key not in schema_file.unrendered_databases
+                    else schema_file.unrendered_databases[self.key]
+                )
+                schema_file.unrendered_databases[self.key][entry["name"]] = unrendered_database
 
             if self.schema_yaml_vars.env_vars:
                 self.schema_parser.manifest.env_vars.update(self.schema_yaml_vars.env_vars)
@@ -426,9 +437,13 @@ class SourceParser(YamlReader):
                 self.manifest.source_patches[key] = patch
                 source_file.source_patches.append(key)
             else:
-                # TODO: add unrendered_database from manifest.unrendered_source_patch
-                # self.yaml.path.original_file_path
                 source = self._target_from_dict(UnparsedSourceDefinition, data)
+                # Store unrendered_database for state:modified comparisons
+                if isinstance(self.yaml.file, SchemaSourceFile):
+                    unrendered_database = self.yaml.file.unrendered_databases.get(
+                        "sources", {}
+                    ).get(source.name)
+                    source.unrendered_database = unrendered_database
                 self.add_source_definitions(source)
         return ParseResult()
 
