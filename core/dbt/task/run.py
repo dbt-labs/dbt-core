@@ -1,8 +1,11 @@
 import functools
+import os
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import AbstractSet, Any, Dict, Iterable, List, Optional, Set, Tuple, Type
+
+import pytz
 
 from dbt import tracking, utils
 from dbt.adapters.base import BaseRelation
@@ -12,7 +15,8 @@ from dbt.adapters.events.types import (
     HooksRunning,
 )
 from dbt.adapters.exceptions import MissingMaterializationError
-from dbt.artifacts.resources import Hook
+from dbt.artifacts.resources import Hook, NodeConfig
+from dbt.artifacts.resources.types import PartitionGrain
 from dbt.artifacts.schemas.results import (
     BaseResult,
     NodeStatus,
@@ -182,7 +186,16 @@ class ModelRunner(CompileRunner):
 
     def describe_node(self) -> str:
         # TODO CL 'language' will be moved to node level when we change representation
-        return f"{self.node.language} {self.node.get_materialization()} model {self.get_node_representation()}"
+        materialization_strategy = self.node.config.get("incremental_strategy")
+        materialization = (
+            "microbatch"
+            if materialization_strategy == "microbatch"
+            else self.node.get_materialization()
+        )
+        return f"{self.node.language} {materialization} model {self.get_node_representation()}"
+
+    def describe_batch(self, batch_start, batch_end) -> str:
+        return f"batch {self.get_node_representation()} from {batch_start} to {batch_end}"
 
     def print_start_line(self):
         fire_event(
@@ -214,6 +227,35 @@ class ModelRunner(CompileRunner):
             level=level,
         )
 
+    def print_batch_result_line(self, result, description, batch_idx, batch_total):
+        if result.status == NodeStatus.Error:
+            status = result.status
+            level = EventLevel.ERROR
+        else:
+            status = result.message
+            level = EventLevel.INFO
+        fire_event(
+            LogModelResult(
+                description=description,
+                status=status,
+                index=batch_idx,
+                total=batch_total,
+                execution_time=result.execution_time,
+                node_info=self.node.node_info,
+            ),
+            level=level,
+        )
+
+    def print_batch_start_line(self, description, batch_idx, batch_total):
+        fire_event(
+            LogStartLine(
+                description=description,
+                index=batch_idx,
+                total=batch_total,
+                node_info=self.node.node_info,
+            )
+        )
+
     def before_execute(self) -> None:
         self.print_start_line()
 
@@ -221,23 +263,39 @@ class ModelRunner(CompileRunner):
         track_model_run(self.node_index, self.num_nodes, result)
         self.print_result_line(result)
 
-    def _build_run_model_result(self, model, context):
-        result = context["load_result"]("main")
-        if not result:
-            raise DbtRuntimeError("main is not being called during running model")
-        adapter_response = {}
-        if isinstance(result.response, dbtClassMixin):
-            adapter_response = result.response.to_dict(omit_none=True)
-        return RunResult(
-            node=model,
-            status=RunStatus.Success,
-            timing=[],
-            thread_id=threading.current_thread().name,
-            execution_time=0,
-            message=str(result.response),
-            adapter_response=adapter_response,
-            failures=result.get("failures"),
-        )
+    def _build_run_model_result(self, model, context, batch_run_results=None):
+        if not batch_run_results:
+            result = context["load_result"]("main")
+            if not result:
+                raise DbtRuntimeError("main is not being called during running model")
+            adapter_response = {}
+            if isinstance(result.response, dbtClassMixin):
+                adapter_response = result.response.to_dict(omit_none=True)
+            return RunResult(
+                node=model,
+                status=RunStatus.Success,
+                timing=[],
+                thread_id=threading.current_thread().name,
+                execution_time=0,
+                message=str(result.response),
+                adapter_response=adapter_response,
+                failures=result.get("failures"),
+            )
+        else:
+            # Microbatch run result
+            failures = sum([result.failures for result in batch_run_results if result.failures])
+
+            return RunResult(
+                node=model,
+                status=RunStatus.Success,
+                timing=[],
+                thread_id=threading.current_thread().name,
+                # TODO -- why isn't this getting propagated to logs?
+                execution_time=None,
+                message="SUCCESS",
+                adapter_response={},
+                failures=failures,
+            )
 
     def _materialization_relations(self, result: Any, model) -> List[BaseRelation]:
         if isinstance(result, str):
@@ -284,17 +342,151 @@ class ModelRunner(CompileRunner):
             )
 
         hook_ctx = self.adapter.pre_model_hook(context_config)
+        batch_results = []
         try:
-            result = MacroGenerator(
-                materialization_macro, context, stack=context["context_macro_stack"]
-            )()
+            if (
+                os.environ.get("DBT_EXPERIMENTAL_MICROBATCH")
+                and model.config.materialized == "incremental"
+                and model.config.incremental_strategy == "microbatch"
+            ):
+                # get the overall start/end bounds
+                is_incremental = self._is_incremental(model)
+                end: Optional[datetime] = getattr(self.config.args, "EVENT_TIME_END", None)
+                end = end.replace(tzinfo=pytz.UTC) if end else self._build_end_time()
+
+                start: Optional[datetime] = getattr(self.config.args, "EVENT_TIME_START", None)
+                start = (
+                    start.replace(tzinfo=pytz.UTC)
+                    if start
+                    else self._build_start_time(
+                        model, checkpoint=end, is_incremental=is_incremental
+                    )
+                )
+                # split by batch_size
+                #   * if full-refresh / first run (is_incremental: False), will need to get a start_time
+                #   * option 1: cheap - have user provide start_time (implemented)
+                #   * option 2: no start_time, only send one query, no filters (implemented)
+                #       * option 2a: min of the min, query each input that has event_time
+                if not start:
+                    batches = [(start, end)]
+                else:
+                    batch_size = model.config.batch_size
+
+                    curr_batch_start: datetime = start
+                    curr_batch_end: datetime = self._offset_timestamp(
+                        curr_batch_start, batch_size, 1
+                    )
+
+                    batches: List[Tuple[datetime, datetime]] = [(curr_batch_start, curr_batch_end)]
+                    while curr_batch_end <= end:
+                        curr_batch_start = curr_batch_end
+                        curr_batch_end = self._offset_timestamp(curr_batch_start, batch_size, 1)
+                        batches.append((curr_batch_start, curr_batch_end))
+
+                    # use exact end value as stop
+                    batches[-1] = (batches[-1][0], end)
+
+                # iterate over each batch, calling materialization_macro to get a batch-level run result
+                for batch_idx, batch in enumerate(batches):
+                    batch_description = self.describe_batch(batch[0], batch[1])
+                    # TODO: consider setting timestamps on 'ref' and passing to extra_context
+                    # or at least naming configs with more unique names + popping after execution (e.g. _dbt_microbatch_event_time_start)
+                    model.config["event_time_start"] = batch[0]
+                    model.config["event_time_end"] = batch[1]
+
+                    # Recompile node to re-resolve refs with event time filters rendered
+                    self.compiler.compile_node(model, manifest, {})
+                    context["model"] = model
+                    context["sql"] = model.compiled_code
+
+                    self.print_batch_start_line(batch_description, batch_idx + 1, len(batches))
+
+                    result = MacroGenerator(
+                        materialization_macro, context, stack=context["context_macro_stack"]
+                    )()
+                    batch_run_result = self._build_run_model_result(model, context)
+                    self.print_batch_result_line(
+                        batch_run_result, batch_description, batch_idx + 1, len(batches)
+                    )
+                    batch_results.append(batch_run_result)
+
+                    # TODO: these should only be set once initial run is successful
+                    context["is_incremental"] = lambda: True
+                    context["should_full_refresh"] = lambda: False
+                    for relation in self._materialization_relations(result, model):
+                        self.adapter.cache_added(relation.incorporate(dbt_created=True))
+            else:
+                result = MacroGenerator(
+                    materialization_macro, context, stack=context["context_macro_stack"]
+                )()
+                for relation in self._materialization_relations(result, model):
+                    self.adapter.cache_added(relation.incorporate(dbt_created=True))
         finally:
             self.adapter.post_model_hook(context_config, hook_ctx)
 
-        for relation in self._materialization_relations(result, model):
-            self.adapter.cache_added(relation.incorporate(dbt_created=True))
+        return self._build_run_model_result(model, context, batch_results)
 
-        return self._build_run_model_result(model, context)
+    def _build_end_time(self) -> Optional[datetime]:
+        return datetime.now(tz=pytz.utc)
+
+    def _build_start_time(
+        self, model, checkpoint: Optional[datetime], is_incremental: bool
+    ) -> Optional[datetime]:
+        if not is_incremental or checkpoint is None:
+            return None
+
+        assert isinstance(model.config, NodeConfig)
+        grain = model.config.batch_size
+        if grain is None:
+            # TODO: Better error message
+            raise DbtRuntimeError("Partition grain not specified")
+
+        lookback = model.config.lookback
+        start = self._offset_timestamp(checkpoint, grain, -1 * lookback)
+
+        return start
+
+    def _is_incremental(self, model) -> bool:
+        # TODO: Remove. This is a temporary method. We're working with adapters on
+        # a strategy to ensure we can access the `is_incremental` logic without drift
+        relation_info = self.adapter.Relation.create_from(self.config, model)
+        relation = self.adapter.get_relation(
+            relation_info.database, relation_info.schema, relation_info.name
+        )
+        return (
+            relation is not None
+            and relation.type == "table"
+            and model.config.materialized == "incremental"
+            and not (getattr(self.config.args, "FULL_REFRESH", False) or model.config.full_refresh)
+        )
+
+    def _offset_timestamp(
+        self, timestamp: datetime, grain: PartitionGrain, offset: int
+    ) -> datetime:
+        if grain == PartitionGrain.hour:
+            offset_timestamp = datetime(
+                timestamp.year,
+                timestamp.month,
+                timestamp.day,
+                timestamp.hour,
+                0,
+                0,
+                0,
+                pytz.utc,
+            ) + timedelta(hours=offset)
+        elif grain == PartitionGrain.day:
+            offset_timestamp = datetime(
+                timestamp.year, timestamp.month, timestamp.day, 0, 0, 0, 0, pytz.utc
+            ) + timedelta(days=offset)
+        elif grain == PartitionGrain.month:
+            offset_timestamp = datetime(timestamp.year, timestamp.month, 1, 0, 0, 0, 0, pytz.utc)
+            for _ in range(offset):
+                start = timestamp + timedelta(days=1)
+                start = datetime(start.year, start.month, 1, 0, 0, 0, 0, pytz.utc)
+        elif grain == PartitionGrain.year:
+            offset_timestamp = datetime(timestamp.year + offset, 1, 1, 0, 0, 0, 0, pytz.utc)
+
+        return offset_timestamp
 
 
 class RunTask(CompileTask):

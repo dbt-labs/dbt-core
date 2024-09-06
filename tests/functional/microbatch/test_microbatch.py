@@ -43,11 +43,13 @@ class TestMicrobatchCLI:
     @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
     def test_run_with_event_time(self, project):
         # run without --event-time-start or --event-time-end - 3 expected rows in output
-        run_dbt(["run"])
+        with freeze_time("2020-01-03 13:57:00", tick=True):
+            run_dbt(["run"])
         self.assert_row_count(project, "microbatch_model", 3)
 
         # build model >= 2020-01-02
-        run_dbt(["run", "--event-time-start", "2020-01-02", "--full-refresh"])
+        with freeze_time("2020-01-03 13:57:00", tick=True):
+            run_dbt(["run", "--event-time-start", "2020-01-02", "--full-refresh"])
         self.assert_row_count(project, "microbatch_model", 2)
 
         # build model < 2020-01-03
@@ -88,15 +90,15 @@ class TestMicroBatchBoundsDefault:
 
     @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
     def test_run_with_event_time(self, project):
-        # initial run -- backfills all data
+        # initial run -- backfills up to current time
         with freeze_time("2020-01-01 13:57:00"):
             run_dbt(["run"])
-        self.assert_row_count(project, "microbatch_model", 3)
+        self.assert_row_count(project, "microbatch_model", 1)
 
         # our partition grain is "day" so running the same day without new data should produce the same results
-        with freeze_time("2020-01-03 14:57:00"):
+        with freeze_time("2020-01-01 14:57:00"):
             run_dbt(["run"])
-        self.assert_row_count(project, "microbatch_model", 3)
+        self.assert_row_count(project, "microbatch_model", 1)
 
         # add next two days of data
         test_schema_relation = project.adapter.Relation.create(
@@ -108,16 +110,16 @@ class TestMicroBatchBoundsDefault:
         self.assert_row_count(project, "input_model", 5)
 
         # re-run without changing current time => no insert
+        with freeze_time("2020-01-01 14:57:00"):
+            run_dbt(["run", "--select", "microbatch_model"])
+        self.assert_row_count(project, "microbatch_model", 1)
+
+        # re-run by advancing time by one day changing current time => insert 1 row
+        with freeze_time("2020-01-02 14:57:00"):
+            run_dbt(["run", "--select", "microbatch_model"])
+        self.assert_row_count(project, "microbatch_model", 2)
+
+        # re-run by advancing time by one more day changing current time => insert 1 more row
         with freeze_time("2020-01-03 14:57:00"):
             run_dbt(["run", "--select", "microbatch_model"])
         self.assert_row_count(project, "microbatch_model", 3)
-
-        # re-run by advancing time by one day changing current time => insert 1 row
-        with freeze_time("2020-01-04 14:57:00"):
-            run_dbt(["run", "--select", "microbatch_model"])
-        self.assert_row_count(project, "microbatch_model", 4)
-
-        # re-run by advancing time by one more day changing current time => insert 1 more row
-        with freeze_time("2020-01-05 14:57:00"):
-            run_dbt(["run", "--select", "microbatch_model"])
-        self.assert_row_count(project, "microbatch_model", 5)
