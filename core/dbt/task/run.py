@@ -263,39 +263,38 @@ class ModelRunner(CompileRunner):
         track_model_run(self.node_index, self.num_nodes, result)
         self.print_result_line(result)
 
-    def _build_run_model_result(self, model, context, batch_run_results=None):
-        if not batch_run_results:
-            result = context["load_result"]("main")
-            if not result:
-                raise DbtRuntimeError("main is not being called during running model")
-            adapter_response = {}
-            if isinstance(result.response, dbtClassMixin):
-                adapter_response = result.response.to_dict(omit_none=True)
-            return RunResult(
-                node=model,
-                status=RunStatus.Success,
-                timing=[],
-                thread_id=threading.current_thread().name,
-                execution_time=0,
-                message=str(result.response),
-                adapter_response=adapter_response,
-                failures=result.get("failures"),
-            )
-        else:
-            # Microbatch run result
-            failures = sum([result.failures for result in batch_run_results if result.failures])
+    def _build_run_model_result(self, model, context):
+        result = context["load_result"]("main")
+        if not result:
+            raise DbtRuntimeError("main is not being called during running model")
+        adapter_response = {}
+        if isinstance(result.response, dbtClassMixin):
+            adapter_response = result.response.to_dict(omit_none=True)
+        return RunResult(
+            node=model,
+            status=RunStatus.Success,
+            timing=[],
+            thread_id=threading.current_thread().name,
+            execution_time=0,
+            message=str(result.response),
+            adapter_response=adapter_response,
+            failures=result.get("failures"),
+        )
 
-            return RunResult(
-                node=model,
-                status=RunStatus.Success,
-                timing=[],
-                thread_id=threading.current_thread().name,
-                # TODO -- why isn't this getting propagated to logs?
-                execution_time=None,
-                message="SUCCESS",
-                adapter_response={},
-                failures=failures,
-            )
+    def _build_run_microbatch_model_result(self, model, batch_run_results):
+        failures = sum([result.failures for result in batch_run_results if result.failures])
+
+        return RunResult(
+            node=model,
+            status=RunStatus.Success,
+            timing=[],
+            thread_id=threading.current_thread().name,
+            # TODO -- why isn't this getting propagated to logs?
+            execution_time=None,
+            message="SUCCESS",
+            adapter_response={},
+            failures=failures,
+        )
 
     def _build_failed_run_batch_result(self, model):
         return RunResult(
@@ -447,7 +446,10 @@ class ModelRunner(CompileRunner):
         finally:
             self.adapter.post_model_hook(context_config, hook_ctx)
 
-        return self._build_run_model_result(model, context, batch_results)
+        if batch_results:
+            return self._build_run_microbatch_model_result(model, batch_results)
+
+        return self._build_run_model_result(model, context)
 
     def _build_end_time(self) -> Optional[datetime]:
         return datetime.now(tz=pytz.utc)
