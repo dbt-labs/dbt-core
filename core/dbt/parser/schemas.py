@@ -356,7 +356,6 @@ class YamlReader(metaclass=ABCMeta):
             # See the SchemaYamlRenderer
             entry = self.render_entry(entry)
 
-            # TODO: consider not storing if rendered config == unrendered_config
             schema_file = self.yaml.file
             assert isinstance(schema_file, SchemaSourceFile)
 
