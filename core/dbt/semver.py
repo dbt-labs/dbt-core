@@ -2,7 +2,7 @@ from dataclasses import dataclass
 import re
 from typing import List
 
-from dbt.exceptions import VersionsNotCompatibleError
+from dbt.exceptions import VersionsNotCompatibleException
 import dbt.utils
 
 from dbt.dataclass_schema import dbtClassMixin, StrEnum
