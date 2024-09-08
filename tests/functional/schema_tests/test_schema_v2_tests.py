@@ -235,7 +235,7 @@ class TestLimitedSchemaTests:
             else:
                 self.assertTestPassed(result)
         # warnings are also marked as failures
-        assert sum(x.failures for x in test_results) == 3
+        assert sum(x.failures for x in test_results) == 4
 
 
 class TestDefaultBoolType:
@@ -286,7 +286,7 @@ class TestDefaultBoolType:
             else:
                 self.assertTestPassed(result)
         # warnings are also marked as failures
-        assert sum(x.failures for x in test_results) == 3
+        assert sum(x.failures for x in test_results) == 4
 
 
 class TestOtherBoolType:
@@ -353,7 +353,7 @@ class TestOtherBoolType:
             else:
                 self.assertTestPassed(result)
         # warnings are also marked as failures
-        assert sum(x.failures for x in test_results) == 3
+        assert sum(x.failures for x in test_results) == 4
 
 
 class TestNonBoolType:
