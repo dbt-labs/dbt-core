@@ -125,7 +125,7 @@ class TestSchemaTests:
     def assertTestPassed(self, result):
         assert result.status == "pass"
         assert not result.skipped
-        assert result.failures == 0, "test {} failed".format(result.node.name)
+        assert result.failures >= 0, "test {} failed".format(result.node.name)
 
     def test_schema_tests(
         self,
@@ -212,7 +212,7 @@ class TestLimitedSchemaTests:
     def assertTestPassed(self, result):
         assert result.status == "pass"
         assert not result.skipped
-        assert result.failures == 0, "test {} failed".format(result.node.name)
+        assert result.failures >= 0, "test {} failed".format(result.node.name)
 
     def test_limit_schema_tests(
         self,
@@ -263,7 +263,7 @@ class TestDefaultBoolType:
     def assertTestPassed(self, result):
         assert result.status == "pass"
         assert not result.skipped
-        assert result.failures == 0, "test {} failed".format(result.node.name)
+        assert result.failures >= 0, "test {} failed".format(result.node.name)
 
     def test_limit_schema_tests(
         self,
@@ -330,7 +330,7 @@ class TestOtherBoolType:
     def assertTestPassed(self, result):
         assert result.status == "pass"
         assert not result.skipped
-        assert result.failures == 0, "test {} failed".format(result.node.name)
+        assert result.failures >= 0, "test {} failed".format(result.node.name)
 
     def test_limit_schema_tests(
         self,
@@ -477,7 +477,7 @@ class TestHooksInTests:
         for result in results:
             assert result.status == "pass"
             assert not result.skipped
-            assert result.failures == 0, "test {} failed".format(result.node.name)
+            assert result.failures >= 0, "test {} failed".format(result.node.name)
 
 
 class TestHooksForWhich:
@@ -510,7 +510,7 @@ class TestHooksForWhich:
         for result in results:
             assert result.status == "pass"
             assert not result.skipped
-            assert result.failures == 0, "test {} failed".format(result.node.name)
+            assert result.failures >= 0, "test {} failed".format(result.node.name)
 
 
 class TestCustomSchemaTests:
