@@ -1,8 +1,9 @@
 from datetime import datetime, timedelta
+
 import pytest
 
-from dbt.tests.util import run_dbt, update_config_file, check_relations_equal
 from dbt.tests.fixtures.project import write_project_files
+from dbt.tests.util import check_relations_equal, run_dbt, update_config_file
 from tests.functional.source_overrides.fixtures import (  # noqa: F401
     local_dependency,
     models__schema_yml,

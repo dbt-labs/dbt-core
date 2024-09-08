@@ -1,9 +1,10 @@
 import pytest
+
 from tests.functional.adapter.utils.base_utils import BaseUtils
 from tests.functional.adapter.utils.fixture_split_part import (
-    seeds__data_split_part_csv,
     models__test_split_part_sql,
     models__test_split_part_yml,
+    seeds__data_split_part_csv,
 )
 
 

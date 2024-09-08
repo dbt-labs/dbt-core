@@ -1,17 +1,20 @@
-from .run import ModelRunner, RunTask
+from typing import Optional, Type
 
-from dbt_common.exceptions import DbtInternalError
-from dbt_common.events.functions import fire_event
-from dbt_common.events.base_types import EventLevel
+from dbt.artifacts.schemas.results import NodeStatus
 from dbt.events.types import LogSnapshotResult
 from dbt.graph import ResourceTypeSelector
 from dbt.node_types import NodeType
-from dbt.artifacts.schemas.results import NodeStatus
+from dbt.task.base import BaseRunner
+from dbt_common.events.base_types import EventLevel
+from dbt_common.events.functions import fire_event
+from dbt_common.exceptions import DbtInternalError
 from dbt_common.utils import cast_dict_to_dict_of_strings
+
+from .run import ModelRunner, RunTask
 
 
 class SnapshotRunner(ModelRunner):
-    def describe_node(self):
+    def describe_node(self) -> str:
         return "snapshot {}".format(self.get_node_representation())
 
     def print_result_line(self, result):
@@ -34,7 +37,7 @@ class SnapshotRunner(ModelRunner):
 
 
 class SnapshotTask(RunTask):
-    def raise_on_first_error(self):
+    def raise_on_first_error(self) -> bool:
         return False
 
     def get_node_selector(self):
@@ -47,5 +50,5 @@ class SnapshotTask(RunTask):
             resource_types=[NodeType.Snapshot],
         )
 
-    def get_runner_type(self, _):
+    def get_runner_type(self, _) -> Optional[Type[BaseRunner]]:
         return SnapshotRunner

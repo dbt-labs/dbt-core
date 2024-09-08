@@ -3,8 +3,8 @@ from typing import Callable, List, Optional
 
 from dbt.cli.main import dbtRunner, dbtRunnerResult
 from dbt.contracts.graph.manifest import Manifest
-from dbt_common.events.base_types import EventMsg
 from dbt.tests.util import get_run_results
+from dbt_common.events.base_types import EventMsg
 
 
 def assert_run_results_have_compiled_node_attributes(

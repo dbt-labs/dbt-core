@@ -1,24 +1,6 @@
 # Do not import the os package because we expose this package in jinja
-from os import getenv as os_getenv
 from argparse import Namespace
-from typing import Optional
 from pathlib import Path
-
-
-# for setting up logger for legacy logger
-def env_set_truthy(key: str) -> Optional[str]:
-    """Return the value if it was set to a "truthy" string value or None
-    otherwise.
-    """
-    value = os_getenv(key)
-    if not value or value.lower() in ("0", "false", "f"):
-        return None
-    return value
-
-
-# for setting up logger for legacy logger
-ENABLE_LEGACY_LOGGER = env_set_truthy("DBT_ENABLE_LEGACY_LOGGER")
-
 
 # this roughly follows the patten of EVENT_MANAGER in dbt/common/events/functions.py
 # During de-globlization, we'll need to handle both similarly
@@ -37,8 +19,8 @@ def get_flags():
 
 def set_from_args(args: Namespace, project_flags):
     global GLOBAL_FLAGS
-    from dbt.cli.main import cli
     from dbt.cli.flags import Flags, convert_config
+    from dbt.cli.main import cli
 
     # we set attributes of args after initialize the flags, but project_flags
     # is being read in the Flags constructor, so we need to read it here and pass in
@@ -86,6 +68,7 @@ def get_flag_dict():
         "target_path",
         "log_path",
         "invocation_command",
+        "empty",
     }
     return {key: getattr(GLOBAL_FLAGS, key.upper(), None) for key in flag_attr}
 

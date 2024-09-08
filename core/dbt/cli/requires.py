@@ -1,49 +1,54 @@
-import os
-
-import dbt.tracking
-from dbt_common.context import set_invocation_context
-from dbt_common.invocation import reset_invocation_id
-
-from dbt.version import installed as installed_version
-from dbt.adapters.factory import adapter_management, register_adapter, get_adapter
-from dbt.context.providers import generate_runtime_macro_context
-from dbt.flags import set_flags, get_flag_dict
-from dbt.cli.exceptions import (
-    ExceptionExit,
-    ResultExit,
-)
-from dbt.cli.flags import Flags
-from dbt.config import RuntimeConfig
-from dbt.config.runtime import load_project, load_profile, UnsetProfile
-from dbt.context.manifest import generate_query_header_context
-
-from dbt_common.events.base_types import EventLevel
-from dbt_common.events.functions import (
-    fire_event,
-    LOG_VERSION,
-)
-from dbt.events.logging import setup_event_logger
-from dbt.events.types import (
-    MainReportVersion,
-    MainReportArgs,
-    MainTrackingUserState,
-)
-from dbt_common.events.helpers import get_json_string_utcnow
-from dbt.events.types import CommandCompleted, MainEncounteredError, MainStackTrace, ResourceReport
-from dbt_common.exceptions import DbtBaseException as DbtException
-from dbt.exceptions import DbtProjectError, FailFastError
-from dbt.parser.manifest import parse_manifest
-from dbt.profiler import profiler
-from dbt.tracking import active_user, initialize_from_flags, track_run
-from dbt_common.utils import cast_dict_to_dict_of_strings
-from dbt.plugins import set_up_plugin_manager
-from dbt.mp_context import get_mp_context
-
-from click import Context
-from functools import update_wrapper
 import importlib.util
+import os
 import time
 import traceback
+from functools import update_wrapper
+from typing import Optional
+
+from click import Context
+
+import dbt.tracking
+from dbt.adapters.factory import adapter_management, get_adapter, register_adapter
+from dbt.cli.exceptions import ExceptionExit, ResultExit
+from dbt.cli.flags import Flags
+from dbt.config import RuntimeConfig
+from dbt.config.runtime import UnsetProfile, load_profile, load_project
+from dbt.context.providers import generate_runtime_macro_context
+from dbt.context.query_header import generate_query_header_context
+from dbt.events.logging import setup_event_logger
+from dbt.events.types import (
+    CommandCompleted,
+    MainEncounteredError,
+    MainReportArgs,
+    MainReportVersion,
+    MainStackTrace,
+    MainTrackingUserState,
+    ResourceReport,
+)
+from dbt.exceptions import DbtProjectError, FailFastError
+from dbt.flags import get_flag_dict, set_flags
+from dbt.mp_context import get_mp_context
+from dbt.parser.manifest import parse_manifest
+from dbt.plugins import set_up_plugin_manager
+from dbt.profiler import profiler
+from dbt.tracking import active_user, initialize_from_flags, track_run
+from dbt.utils import try_get_max_rss_kb
+from dbt.version import installed as installed_version
+from dbt_common.clients.system import get_env
+from dbt_common.context import get_invocation_context, set_invocation_context
+from dbt_common.events.base_types import EventLevel
+from dbt_common.events.functions import LOG_VERSION, fire_event
+from dbt_common.events.helpers import get_json_string_utcnow
+from dbt_common.exceptions import DbtBaseException as DbtException
+from dbt_common.invocation import reset_invocation_id
+from dbt_common.record import (
+    Recorder,
+    RecorderMode,
+    get_record_mode_from_env,
+    get_record_types_from_dict,
+    get_record_types_from_env,
+)
+from dbt_common.utils import cast_dict_to_dict_of_strings
 
 
 def preflight(func):
@@ -52,7 +57,14 @@ def preflight(func):
         assert isinstance(ctx, Context)
         ctx.obj = ctx.obj or {}
 
-        set_invocation_context(os.environ)
+        set_invocation_context({})
+
+        # Record/Replay
+        setup_record_replay()
+
+        # Must be set after record/replay is set up so that the env can be
+        # recorded or replayed if needed.
+        get_invocation_context()._env = get_env()
 
         # Flags
         flags = Flags(ctx)
@@ -93,6 +105,41 @@ def preflight(func):
     return update_wrapper(wrapper, func)
 
 
+def setup_record_replay():
+    rec_mode = get_record_mode_from_env()
+    rec_types = get_record_types_from_env()
+
+    recorder: Optional[Recorder] = None
+    if rec_mode == RecorderMode.REPLAY:
+        previous_recording_path = os.environ.get("DBT_RECORDER_FILE_PATH")
+        recorder = Recorder(
+            RecorderMode.REPLAY, types=rec_types, previous_recording_path=previous_recording_path
+        )
+    elif rec_mode == RecorderMode.DIFF:
+        previous_recording_path = os.environ.get("DBT_RECORDER_FILE_PATH")
+        # ensure types match the previous recording
+        types = get_record_types_from_dict(previous_recording_path)
+        recorder = Recorder(
+            RecorderMode.DIFF, types=types, previous_recording_path=previous_recording_path
+        )
+    elif rec_mode == RecorderMode.RECORD:
+        recorder = Recorder(RecorderMode.RECORD, types=rec_types)
+
+    get_invocation_context().recorder = recorder
+
+
+def tear_down_record_replay():
+    recorder = get_invocation_context().recorder
+    if recorder is not None:
+        if recorder.mode == RecorderMode.RECORD:
+            recorder.write()
+        if recorder.mode == RecorderMode.DIFF:
+            recorder.write()
+            recorder.write_diffs(diff_file_name="recording_diffs.json")
+        elif recorder.mode == RecorderMode.REPLAY:
+            recorder.write_diffs("replay_diffs.json")
+
+
 def postflight(func):
     """The decorator that handles all exception handling for the click commands.
     This decorator must be used before any other decorators that may throw an exception."""
@@ -128,13 +175,15 @@ def postflight(func):
                         command_wall_clock_time=time.perf_counter() - start_func,
                         process_user_time=rusage.ru_utime,
                         process_kernel_time=rusage.ru_stime,
-                        process_mem_max_rss=rusage.ru_maxrss,
+                        process_mem_max_rss=try_get_max_rss_kb() or rusage.ru_maxrss,
                         process_in_blocks=rusage.ru_inblock,
                         process_out_blocks=rusage.ru_oublock,
                     ),
-                    EventLevel.INFO
-                    if "flags" in ctx.obj and ctx.obj["flags"].SHOW_RESOURCE_REPORT
-                    else None,
+                    (
+                        EventLevel.INFO
+                        if "flags" in ctx.obj and ctx.obj["flags"].SHOW_RESOURCE_REPORT
+                        else None
+                    ),
                 )
 
             fire_event(
@@ -145,6 +194,8 @@ def postflight(func):
                     elapsed=time.perf_counter() - start_func,
                 )
             )
+
+            tear_down_record_replay()
 
         if not success:
             raise ResultExit(result)
@@ -281,7 +332,7 @@ def manifest(*args0, write=True, write_perf_info=False):
 
             runtime_config = ctx.obj["runtime_config"]
 
-            # a manifest has already been set on the context, so don't overwrite it
+            # if a manifest has already been set on the context, don't overwrite it
             if ctx.obj.get("manifest") is None:
                 ctx.obj["manifest"] = parse_manifest(
                     runtime_config, write_perf_info, write, ctx.obj["flags"].write_json

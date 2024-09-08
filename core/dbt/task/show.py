@@ -2,16 +2,16 @@ import io
 import threading
 import time
 
+from dbt.artifacts.schemas.run import RunResult, RunStatus
 from dbt.context.providers import generate_runtime_model_context
 from dbt.contracts.graph.nodes import SeedNode
-from dbt.artifacts.schemas.run import RunResult, RunStatus
+from dbt.events.types import ShowNode
+from dbt.task.compile import CompileRunner, CompileTask
+from dbt.task.seed import SeedRunner
 from dbt_common.events.base_types import EventLevel
 from dbt_common.events.functions import fire_event
 from dbt_common.events.types import Note
-from dbt.events.types import ShowNode
 from dbt_common.exceptions import DbtRuntimeError
-from dbt.task.compile import CompileTask, CompileRunner
-from dbt.task.seed import SeedRunner
 
 
 class ShowRunner(CompileRunner):
@@ -67,7 +67,7 @@ class ShowTask(CompileTask):
         else:
             return ShowRunner
 
-    def task_end_messages(self, results):
+    def task_end_messages(self, results) -> None:
         is_inline = bool(getattr(self.args, "inline", None))
 
         if is_inline:
@@ -108,7 +108,7 @@ class ShowTask(CompileTask):
                 )
             )
 
-    def _handle_result(self, result):
+    def _handle_result(self, result) -> None:
         super()._handle_result(result)
 
         if (

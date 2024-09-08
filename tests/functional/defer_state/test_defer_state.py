@@ -1,4 +1,3 @@
-import json
 import os
 import shutil
 from copy import deepcopy
@@ -7,21 +6,21 @@ import pytest
 
 from dbt.contracts.results import RunStatus
 from dbt.exceptions import DbtRuntimeError
-from dbt.tests.util import run_dbt, write_file, rm_file
+from dbt.tests.util import rm_file, run_dbt, write_file
 from tests.functional.defer_state.fixtures import (
-    seed_csv,
-    table_model_sql,
+    changed_ephemeral_model_sql,
     changed_table_model_sql,
-    view_model_sql,
     changed_view_model_sql,
     ephemeral_model_sql,
-    changed_ephemeral_model_sql,
-    schema_yml,
     exposures_yml,
-    macros_sql,
     infinite_macros_sql,
+    macros_sql,
+    schema_yml,
+    seed_csv,
     snapshot_sql,
+    table_model_sql,
     view_model_now_table_sql,
+    view_model_sql,
 )
 
 
@@ -87,17 +86,14 @@ class BaseDeferState:
     def run_and_save_state(self, project_root, with_snapshot=False):
         results = run_dbt(["seed"])
         assert len(results) == 1
-        assert not any(r.node.deferred for r in results)
         results = run_dbt(["run"])
         assert len(results) == 2
-        assert not any(r.node.deferred for r in results)
         results = run_dbt(["test"])
         assert len(results) == 2
 
         if with_snapshot:
             results = run_dbt(["snapshot"])
             assert len(results) == 1
-            assert not any(r.node.deferred for r in results)
 
         # copy files
         self.copy_state(project_root)
@@ -181,10 +177,6 @@ class TestRunDeferState(BaseDeferState):
         assert other_schema not in results[0].node.compiled_code
         assert unique_schema in results[0].node.compiled_code
 
-        with open("target/manifest.json") as fp:
-            data = json.load(fp)
-        assert data["nodes"]["seed.test.seed"]["deferred"]
-
         assert len(results) == 1
 
 
@@ -237,6 +229,26 @@ class TestRunDeferStateIFFNotExists(BaseDeferState):
         )
         assert len(results) == 2
         assert other_schema not in results[0].node.compiled_code
+
+        # again with --favor-state, but this time select both the seed and the view
+        # because the seed is also selected, the view should select from the seed in our schema ('other_schema')
+        results = run_dbt(
+            [
+                "build",
+                "--state",
+                "state",
+                "--select",
+                "seed view_model",
+                "--resource-type",
+                "seed model",
+                "--defer",
+                "--favor-state",
+                "--target",
+                "otherschema",
+            ]
+        )
+        assert len(results) == 2
+        assert other_schema in results[1].node.compiled_code
 
 
 class TestDeferStateDeletedUpstream(BaseDeferState):
@@ -304,6 +316,9 @@ class TestDeferStateFlag(BaseDeferState):
             ],
             expect_pass=False,
         )
+
+        # Test that retry of a defer command works
+        run_dbt(["retry"], expect_pass=False)
 
         # this will fail because we haven't passed in --state
         with pytest.raises(

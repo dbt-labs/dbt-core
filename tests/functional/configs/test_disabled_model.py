@@ -1,22 +1,21 @@
 import pytest
-from dbt_common.dataclass_schema import ValidationError
-from dbt.tests.util import run_dbt, get_manifest
 
 from dbt.exceptions import CompilationError, ParsingError
-
+from dbt.tests.util import get_manifest, run_dbt
+from dbt_common.dataclass_schema import ValidationError
 from tests.functional.configs.fixtures import (
-    schema_all_disabled_yml,
-    schema_partial_enabled_yml,
-    schema_partial_disabled_yml,
-    schema_explicit_enabled_yml,
-    schema_invalid_enabled_yml,
     my_model,
     my_model_2,
-    my_model_2_enabled,
     my_model_2_disabled,
+    my_model_2_enabled,
     my_model_3,
     my_model_3_disabled,
     my_model_3_enabled,
+    schema_all_disabled_yml,
+    schema_explicit_enabled_yml,
+    schema_invalid_enabled_yml,
+    schema_partial_disabled_yml,
+    schema_partial_enabled_yml,
 )
 
 

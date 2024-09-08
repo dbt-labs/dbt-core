@@ -3,7 +3,6 @@ import pytest
 from dbt.exceptions import CompilationError
 from dbt.tests.util import run_dbt
 
-
 metric_dupes_schema_yml = """
 version: 2
 

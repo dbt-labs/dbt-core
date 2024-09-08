@@ -1,5 +1,8 @@
 import pytest
-from tests.functional.adapter.utils.data_types.base_data_type_macro import BaseDataTypeMacro
+
+from tests.functional.adapter.utils.data_types.base_data_type_macro import (
+    BaseDataTypeMacro,
+)
 
 seeds__expected_csv = """float_col
 1.2345

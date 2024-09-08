@@ -1,51 +1,86 @@
 import abc
-from copy import deepcopy
 import os
+from copy import deepcopy
 from typing import (
-    Callable,
+    TYPE_CHECKING,
     Any,
+    Callable,
     Dict,
-    Optional,
-    Union,
-    List,
-    TypeVar,
-    Type,
     Iterable,
+    List,
     Mapping,
+    Optional,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
 )
 
 from typing_extensions import Protocol
 
+from dbt import selected_resources
 from dbt.adapters.base.column import Column
+from dbt.adapters.contracts.connection import AdapterResponse
+from dbt.adapters.exceptions import MissingConfigError
+from dbt.adapters.factory import (
+    get_adapter,
+    get_adapter_package_names,
+    get_adapter_type_names,
+)
 from dbt.artifacts.resources import NodeVersion, RefArgs
-from dbt_common.clients.jinja import MacroProtocol
-from dbt_common.context import get_invocation_context
-from dbt.adapters.factory import get_adapter, get_adapter_package_names, get_adapter_type_names
-from dbt_common.clients import agate_helper
-from dbt.clients.jinja import get_rendered, MacroGenerator, MacroStack, UnitTestMacroGenerator
-from dbt.config import RuntimeConfig, Project
-from dbt.constants import SECRET_ENV_PREFIX, DEFAULT_ENV_PLACEHOLDER
-from dbt.context.base import contextmember, contextproperty, Var
+from dbt.clients.jinja import (
+    MacroGenerator,
+    MacroStack,
+    UnitTestMacroGenerator,
+    get_rendered,
+)
+from dbt.config import IsFQNResource, Project, RuntimeConfig
+from dbt.constants import DEFAULT_ENV_PLACEHOLDER
+from dbt.context.base import Var, contextmember, contextproperty
 from dbt.context.configured import FQNLookup
 from dbt.context.context_config import ContextConfig
 from dbt.context.exceptions_jinja import wrapped_exports
 from dbt.context.macro_resolver import MacroResolver, TestMacroNamespace
-from dbt.context.macros import MacroNamespaceBuilder, MacroNamespace
+from dbt.context.macros import MacroNamespace, MacroNamespaceBuilder
 from dbt.context.manifest import ManifestContext
-from dbt.adapters.contracts.connection import AdapterResponse
-from dbt.contracts.graph.manifest import Manifest, Disabled
+from dbt.contracts.graph.manifest import Disabled, Manifest
+from dbt.contracts.graph.metrics import MetricReference, ResolvedMetricReference
 from dbt.contracts.graph.nodes import (
-    Macro,
-    Exposure,
-    SeedNode,
-    SourceDefinition,
-    Resource,
-    ManifestNode,
     AccessType,
+    Exposure,
+    Macro,
+    ManifestNode,
+    Resource,
+    SeedNode,
     SemanticModel,
+    SourceDefinition,
     UnitTestNode,
 )
-from dbt.contracts.graph.metrics import MetricReference, ResolvedMetricReference
+from dbt.exceptions import (
+    CompilationError,
+    ConflictingConfigKeysError,
+    DbtReferenceError,
+    EnvVarMissingError,
+    InlineModelConfigError,
+    LoadAgateTableNotSeedError,
+    LoadAgateTableValueError,
+    MacroDispatchArgError,
+    MacroResultAlreadyLoadedError,
+    MetricArgsError,
+    NumberSourceArgsError,
+    OperationsCannotRefEphemeralNodesError,
+    ParsingError,
+    PersistDocsValueTypeError,
+    RefArgsError,
+    RefBadContextError,
+    SecretEnvVarLocationError,
+    TargetNotFoundError,
+)
+from dbt.node_types import ModelLanguage, NodeType
+from dbt.utils import MultiDict, args_to_dict
+from dbt_common.clients.jinja import MacroProtocol
+from dbt_common.constants import SECRET_ENV_PREFIX
+from dbt_common.context import get_invocation_context
 from dbt_common.events.functions import get_metadata_vars
 from dbt_common.exceptions import (
     DbtInternalError,
@@ -53,35 +88,10 @@ from dbt_common.exceptions import (
     DbtValidationError,
     MacrosSourcesUnWriteableError,
 )
-from dbt.adapters.exceptions import MissingConfigError
-from dbt.exceptions import (
-    CompilationError,
-    ConflictingConfigKeysError,
-    SecretEnvVarLocationError,
-    EnvVarMissingError,
-    InlineModelConfigError,
-    NumberSourceArgsError,
-    PersistDocsValueTypeError,
-    LoadAgateTableNotSeedError,
-    LoadAgateTableValueError,
-    MacroDispatchArgError,
-    MacroResultAlreadyLoadedError,
-    MetricArgsError,
-    OperationsCannotRefEphemeralNodesError,
-    ParsingError,
-    RefBadContextError,
-    RefArgsError,
-    TargetNotFoundError,
-    DbtReferenceError,
-)
-from dbt.config import IsFQNResource
-from dbt.node_types import NodeType, ModelLanguage
+from dbt_common.utils import AttrDict, cast_to_str, merge
 
-from dbt.utils import MultiDict, args_to_dict
-from dbt_common.utils import merge, AttrDict, cast_to_str
-from dbt import selected_resources
-
-import agate
+if TYPE_CHECKING:
+    import agate
 
 
 _MISSING = object()
@@ -229,8 +239,7 @@ class BaseRefResolver(BaseResolver):
     @abc.abstractmethod
     def resolve(
         self, name: str, package: Optional[str] = None, version: Optional[NodeVersion] = None
-    ) -> RelationProxy:
-        ...
+    ) -> RelationProxy: ...
 
     def _repack_args(
         self, name: str, package: Optional[str], version: Optional[NodeVersion]
@@ -296,8 +305,7 @@ class BaseSourceResolver(BaseResolver):
 
 class BaseMetricResolver(BaseResolver):
     @abc.abstractmethod
-    def resolve(self, name: str, package: Optional[str] = None) -> MetricReference:
-        ...
+    def resolve(self, name: str, package: Optional[str] = None) -> MetricReference: ...
 
     def _repack_args(self, name: str, package: Optional[str]) -> List[str]:
         if package is None:
@@ -331,8 +339,7 @@ class BaseMetricResolver(BaseResolver):
 
 
 class Config(Protocol):
-    def __init__(self, model, context_config: Optional[ContextConfig]):
-        ...
+    def __init__(self, model, context_config: Optional[ContextConfig]): ...
 
 
 # Implementation of "config(..)" calls in models
@@ -501,6 +508,7 @@ class RuntimeRefResolver(BaseRefResolver):
             self.model.package_name,
         )
 
+        # Raise an error if the reference target is missing
         if target_model is None or isinstance(target_model, Disabled):
             raise TargetNotFoundError(
                 node=self.model,
@@ -510,6 +518,8 @@ class RuntimeRefResolver(BaseRefResolver):
                 target_version=target_version,
                 disabled=isinstance(target_model, Disabled),
             )
+
+        # Raise error if trying to reference a 'private' resource outside its 'group'
         elif self.manifest.is_invalid_private_ref(
             self.model, target_model, self.config.dependencies
         ):
@@ -519,6 +529,7 @@ class RuntimeRefResolver(BaseRefResolver):
                 access=AccessType.Private,
                 scope=cast_to_str(target_model.group),
             )
+        # Or a 'protected' resource outside its project/package namespace
         elif self.manifest.is_invalid_protected_ref(
             self.model, target_model, self.config.dependencies
         ):
@@ -528,7 +539,6 @@ class RuntimeRefResolver(BaseRefResolver):
                 access=AccessType.Protected,
                 scope=target_model.package_name,
             )
-
         self.validate(target_model, target_name, target_package, target_version)
         return self.create_relation(target_model)
 
@@ -536,6 +546,25 @@ class RuntimeRefResolver(BaseRefResolver):
         if target_model.is_ephemeral_model:
             self.model.set_cte(target_model.unique_id, None)
             return self.Relation.create_ephemeral_from(target_model, limit=self.resolve_limit)
+        elif (
+            hasattr(target_model, "defer_relation")
+            and target_model.defer_relation
+            and self.config.args.defer
+            and (
+                # User has explicitly opted to prefer defer_relation for unselected resources
+                (
+                    self.config.args.favor_state
+                    and target_model.unique_id not in selected_resources.SELECTED_RESOURCES
+                )
+                # Or, this node's relation does not exist in the expected target location (cache lookup)
+                or not get_adapter(self.config).get_relation(
+                    target_model.database, target_model.schema, target_model.identifier
+                )
+            )
+        ):
+            return self.Relation.create_from(
+                self.config, target_model.defer_relation, limit=self.resolve_limit
+            )
         else:
             return self.Relation.create_from(self.config, target_model, limit=self.resolve_limit)
 
@@ -850,8 +879,10 @@ class ProviderContext(ManifestContext):
 
     @contextmember()
     def store_result(
-        self, name: str, response: Any, agate_table: Optional[agate.Table] = None
+        self, name: str, response: Any, agate_table: Optional["agate.Table"] = None
     ) -> str:
+        from dbt_common.clients import agate_helper
+
         if agate_table is None:
             agate_table = agate_helper.empty_table()
 
@@ -871,7 +902,7 @@ class ProviderContext(ManifestContext):
         message=Optional[str],
         code=Optional[str],
         rows_affected=Optional[str],
-        agate_table: Optional[agate.Table] = None,
+        agate_table: Optional["agate.Table"] = None,
     ) -> str:
         response = AdapterResponse(_message=message, code=code, rows_affected=rows_affected)
         return self.store_result(name, response, agate_table)
@@ -920,7 +951,9 @@ class ProviderContext(ManifestContext):
             raise CompilationError(message_if_exception, self.model)
 
     @contextmember()
-    def load_agate_table(self) -> agate.Table:
+    def load_agate_table(self) -> "agate.Table":
+        from dbt_common.clients import agate_helper
+
         if not isinstance(self.model, SeedNode):
             raise LoadAgateTableNotSeedError(self.model.resource_type, node=self.model)
 
@@ -941,7 +974,8 @@ class ProviderContext(ManifestContext):
             table = agate_helper.from_csv(path, text_columns=column_types, delimiter=delimiter)
         except ValueError as e:
             raise LoadAgateTableValueError(e, node=self.model)
-        table.original_abspath = os.path.abspath(path)
+        # this is used by some adapters
+        table.original_abspath = os.path.abspath(path)  # type: ignore
         return table
 
     @contextproperty()
@@ -1620,12 +1654,47 @@ def generate_runtime_unit_test_context(
     ctx_dict = ctx.to_dict()
 
     if unit_test.overrides and unit_test.overrides.macros:
+        global_macro_overrides: Dict[str, Any] = {}
+        package_macro_overrides: Dict[Tuple[str, str], Any] = {}
+
+        # split macro overrides into global and package-namespaced collections
         for macro_name, macro_value in unit_test.overrides.macros.items():
-            context_value = ctx_dict.get(macro_name)
-            if isinstance(context_value, MacroGenerator):
-                ctx_dict[macro_name] = UnitTestMacroGenerator(context_value, macro_value)
-            else:
+            macro_name_split = macro_name.split(".")
+            macro_package = macro_name_split[0] if len(macro_name_split) == 2 else None
+            macro_name = macro_name_split[-1]
+
+            # macro overrides of global macros
+            if macro_package is None and macro_name in ctx_dict:
+                original_context_value = ctx_dict[macro_name]
+                if isinstance(original_context_value, MacroGenerator):
+                    macro_value = UnitTestMacroGenerator(original_context_value, macro_value)
+                global_macro_overrides[macro_name] = macro_value
+
+            # macro overrides of package-namespaced macros
+            elif (
+                macro_package
+                and macro_package in ctx_dict
+                and macro_name in ctx_dict[macro_package]
+            ):
+                original_context_value = ctx_dict[macro_package][macro_name]
+                if isinstance(original_context_value, MacroGenerator):
+                    macro_value = UnitTestMacroGenerator(original_context_value, macro_value)
+                package_macro_overrides[(macro_package, macro_name)] = macro_value
+
+        # macro overrides of package-namespaced macros
+        for (macro_package, macro_name), macro_override_value in package_macro_overrides.items():
+            ctx_dict[macro_package][macro_name] = macro_override_value
+            # propgate override of namespaced dbt macro to global namespace
+            if macro_package == "dbt":
                 ctx_dict[macro_name] = macro_value
+
+        # macro overrides of global macros, which should take precedence over equivalent package-namespaced overrides
+        for macro_name, macro_override_value in global_macro_overrides.items():
+            ctx_dict[macro_name] = macro_override_value
+            # propgate override of global dbt macro to dbt namespace
+            if ctx_dict["dbt"].get(macro_name):
+                ctx_dict["dbt"][macro_name] = macro_override_value
+
     return ctx_dict
 
 

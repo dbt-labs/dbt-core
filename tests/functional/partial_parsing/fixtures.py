@@ -452,6 +452,60 @@ semantic_models:
       agg_time_dimension: created_at
 """
 
+people_sl_yml = """
+version: 2
+
+semantic_models:
+  - name: semantic_people
+    model: ref('people')
+    dimensions:
+      - name: favorite_color
+        type: categorical
+      - name: created_at
+        type: TIME
+        type_params:
+          time_granularity: day
+    measures:
+      - name: years_tenure
+        agg: SUM
+        expr: tenure
+      - name: people
+        agg: count
+        expr: id
+    entities:
+      - name: id
+        type: primary
+    defaults:
+      agg_time_dimension: created_at
+
+metrics:
+
+  - name: number_of_people
+    description: Total count of people
+    label: "Number of people"
+    type: simple
+    type_params:
+      measure: people
+    meta:
+        my_meta: 'testing'
+
+  - name: collective_tenure
+    description: Total number of years of team experience
+    label: "Collective tenure"
+    type: simple
+    type_params:
+      measure:
+        name: years_tenure
+        filter: "{{ Dimension('id__loves_dbt') }} is true"
+
+  - name: average_tenure
+    label: Average Tenure
+    type: ratio
+    type_params:
+      numerator: collective_tenure
+      denominator: number_of_people
+"""
+
 env_var_metrics_yml = """
 
 metrics:
@@ -704,6 +758,14 @@ models:
 model_two_sql = """
 select 1 as notfun
 
+"""
+
+model_two_disabled_sql = """
+{{ config(
+  enabled=false
+) }}
+
+select 1 as notfun
 """
 
 generic_test_schema_yml = """

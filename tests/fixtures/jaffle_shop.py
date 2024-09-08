@@ -1,5 +1,7 @@
-import pytest
 import os
+
+import pytest
+
 from dbt.tests.util import read_file
 
 # models/customers.sql

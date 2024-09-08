@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: remove dbt.flags.MP_CONTEXT usage in dbt/adapters
-time: 2023-11-01T10:27:58.790153-04:00
-custom:
-  Author: michelleark
-  Issue: "8967"

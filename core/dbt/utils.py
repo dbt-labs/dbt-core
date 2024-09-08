@@ -3,33 +3,33 @@ import datetime
 import decimal
 import functools
 import itertools
-import jinja2
 import json
 import os
-from pathlib import PosixPath, WindowsPath
-
-from dbt_common.utils import md5
-from dbt_common.exceptions import (
-    RecursionError,
-)
-from dbt.exceptions import DuplicateAliasError
-from dbt_common.helper_types import WarnErrorOptions
-from dbt import flags
+import sys
 from enum import Enum
+from pathlib import PosixPath, WindowsPath
 from typing import (
+    AbstractSet,
+    Any,
+    Dict,
+    Iterable,
+    Iterator,
+    List,
+    Mapping,
+    Optional,
+    Sequence,
+    Set,
     Tuple,
     Type,
-    Any,
-    Optional,
-    Dict,
-    List,
-    Iterator,
-    Mapping,
-    Iterable,
-    AbstractSet,
-    Set,
-    Sequence,
 )
+
+import jinja2
+
+from dbt import flags
+from dbt.exceptions import DuplicateAliasError
+from dbt_common.exceptions import RecursionError
+from dbt_common.helper_types import WarnErrorOptions
+from dbt_common.utils import md5
 
 DECIMALS: Tuple[Type[Any], ...]
 try:
@@ -369,3 +369,40 @@ def args_to_dict(args):
 
         dict_args[key] = var_args[key]
     return dict_args
+
+
+# Taken from https://github.com/python/cpython/blob/3.11/Lib/distutils/util.py
+# This is a copy of the function from distutils.util, which was removed in Python 3.12.
+def strtobool(val: str) -> bool:
+    """Convert a string representation of truth to True or False.
+
+    True values are 'y', 'yes', 't', 'true', 'on', and '1'; false values
+    are 'n', 'no', 'f', 'false', 'off', and '0'.  Raises ValueError if
+    'val' is anything else.
+    """
+    val = val.lower()
+    if val in ("y", "yes", "t", "true", "on", "1"):
+        return True
+    elif val in ("n", "no", "f", "false", "off", "0"):
+        return False
+    else:
+        raise ValueError("invalid truth value %r" % (val,))
+
+
+def try_get_max_rss_kb() -> Optional[int]:
+    """Attempts to get the high water mark for this process's memory use via
+    the most reliable and accurate mechanism available through the host OS.
+    Currently only implemented for Linux."""
+    if sys.platform == "linux" and os.path.isfile("/proc/self/status"):
+        try:
+            # On Linux, the most reliable documented mechanism for getting the RSS
+            # high-water-mark comes from the line confusingly labeled VmHWM in the
+            # /proc/self/status virtual file.
+            with open("/proc/self/status") as f:
+                for line in f:
+                    if line.startswith("VmHWM:"):
+                        return int(str.split(line)[1])
+        except Exception:
+            pass
+
+    return None

@@ -3,8 +3,6 @@ saved_query_description = """
 """
 
 saved_queries_yml = """
-version: 2
-
 saved_queries:
   - name: test_saved_query
     description: "{{ doc('saved_query_description') }}"
@@ -13,10 +11,11 @@ saved_queries:
         metrics:
             - simple_metric
         group_by:
-            - "Dimension('user__ds')"
+            - "Dimension('id__ds')"
         where:
-            - "{{ Dimension('user__ds', 'DAY') }} <= now()"
-            - "{{ Dimension('user__ds', 'DAY') }} >= '2023-01-01'"
+            - "{{ TimeDimension('id__ds', 'DAY') }} <= now()"
+            - "{{ TimeDimension('id__ds', 'DAY') }} >= '2023-01-01'"
+            - "{{ Metric('txn_revenue', ['id']) }} > 1"
     exports:
         - name: my_export
           config:
@@ -25,9 +24,28 @@ saved_queries:
             schema: my_export_schema_name
 """
 
-saved_queries_with_diff_filters_yml = """
-version: 2
+saved_queries_with_defaults_yml = """
+saved_queries:
+  - name: test_saved_query
+    description: "{{ doc('saved_query_description') }}"
+    label: Test Saved Query
+    query_params:
+        metrics:
+            - simple_metric
+        group_by:
+            - "Dimension('id__ds')"
+        where:
+            - "{{ TimeDimension('id__ds', 'DAY') }} <= now()"
+            - "{{ TimeDimension('id__ds', 'DAY') }} >= '2023-01-01'"
+            - "{{ Metric('txn_revenue', ['id']) }} > 1"
+    exports:
+        - name: my_export
+          config:
+            alias: my_export_alias
+            export_as: table
+"""
 
+saved_queries_with_diff_filters_yml = """
 saved_queries:
   - name: test_saved_query_where_list
     description: "{{ doc('saved_query_description') }}"
@@ -36,10 +54,10 @@ saved_queries:
         metrics:
             - simple_metric
         group_by:
-            - "Dimension('user__ds')"
+            - "Dimension('id__ds')"
         where:
-            - "{{ Dimension('user__ds', 'DAY') }} <= now()"
-            - "{{ Dimension('user__ds', 'DAY') }} >= '2023-01-01'"
+            - "{{ TimeDimension('id__ds', 'DAY') }} <= now()"
+            - "{{ TimeDimension('id__ds', 'DAY') }} >= '2023-01-01'"
     exports:
         - name: my_export
           config:
@@ -54,13 +72,11 @@ saved_queries:
       metrics:
         - simple_metric
       group_by:
-        - "Dimension('user__ds')"
-      where: "{{ Dimension('user__ds', 'DAY') }} <= now()"
+        - "Dimension('id__ds')"
+      where: "{{ TimeDimension('id__ds', 'DAY') }} <= now()"
 """
 
 saved_query_with_extra_config_attributes_yml = """
-version: 2
-
 saved_queries:
   - name: test_saved_query
     description: "{{ doc('saved_query_description') }}"
@@ -69,10 +85,10 @@ saved_queries:
         metrics:
             - simple_metric
         group_by:
-            - "Dimension('user__ds')"
+            - "Dimension('id__ds')"
         where:
-            - "{{ Dimension('user__ds', 'DAY') }} <= now()"
-            - "{{ Dimension('user__ds', 'DAY') }} >= '2023-01-01'"
+            - "{{ TimeDimension('id__ds', 'DAY') }} <= now()"
+            - "{{ TimeDimension('id__ds', 'DAY') }} >= '2023-01-01'"
     exports:
         - name: my_export
           config:
@@ -81,8 +97,6 @@ saved_queries:
 """
 
 saved_query_with_export_configs_defined_at_saved_query_level_yml = """
-version: 2
-
 saved_queries:
   - name: test_saved_query
     description: "{{ doc('saved_query_description') }}"
@@ -94,10 +108,10 @@ saved_queries:
         metrics:
             - simple_metric
         group_by:
-            - "Dimension('user__ds')"
+            - "Dimension('id__ds')"
         where:
-            - "{{ Dimension('user__ds', 'DAY') }} <= now()"
-            - "{{ Dimension('user__ds', 'DAY') }} >= '2023-01-01'"
+            - "{{ TimeDimension('id__ds', 'DAY') }} <= now()"
+            - "{{ TimeDimension('id__ds', 'DAY') }} >= '2023-01-01'"
     exports:
         - name: my_export
           config:
@@ -107,8 +121,6 @@ saved_queries:
 """
 
 saved_query_without_export_configs_defined_yml = """
-version: 2
-
 saved_queries:
   - name: test_saved_query
     description: "{{ doc('saved_query_description') }}"
@@ -117,10 +129,10 @@ saved_queries:
         metrics:
             - simple_metric
         group_by:
-            - "Dimension('user__ds')"
+            - "Dimension('id__ds')"
         where:
-            - "{{ Dimension('user__ds', 'DAY') }} <= now()"
-            - "{{ Dimension('user__ds', 'DAY') }} >= '2023-01-01'"
+            - "{{ TimeDimension('id__ds', 'DAY') }} <= now()"
+            - "{{ TimeDimension('id__ds', 'DAY') }} >= '2023-01-01'"
     exports:
         - name: my_export
 """
@@ -137,10 +149,10 @@ saved_queries:
         metrics:
             - simple_metric
         group_by:
-            - "Dimension('user__ds')"
+            - "Dimension('id__ds')"
         where:
-            - "{{ Dimension('user__ds', 'DAY') }} <= now()"
-            - "{{ Dimension('user__ds', 'DAY') }} >= '2023-01-01'"
+            - "{{ TimeDimension('id__ds', 'DAY') }} <= now()"
+            - "{{ TimeDimension('id__ds', 'DAY') }} >= '2023-01-01'"
     exports:
         - name: my_export
           config:

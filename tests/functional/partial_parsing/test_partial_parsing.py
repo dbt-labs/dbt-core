@@ -1,84 +1,85 @@
+import os
+import re
 from argparse import Namespace
-import pytest
 from unittest import mock
 
+import pytest
+import yaml
+
 import dbt.flags as flags
-from dbt.tests.util import (
-    run_dbt,
-    get_manifest,
-    write_file,
-    rm_file,
-    run_dbt_and_capture,
-    rename_dir,
-)
-from tests.functional.utils import up_one
+from dbt.contracts.files import ParseFileType
+from dbt.contracts.results import TestStatus
+from dbt.exceptions import CompilationError
+from dbt.plugins.manifest import ModelNodeArgs, PluginNodes
 from dbt.tests.fixtures.project import write_project_files
+from dbt.tests.util import (
+    get_manifest,
+    rename_dir,
+    rm_file,
+    run_dbt,
+    run_dbt_and_capture,
+    write_file,
+)
 from tests.functional.partial_parsing.fixtures import (
+    custom_schema_tests1_sql,
+    custom_schema_tests2_sql,
+    customers1_md,
+    customers2_md,
+    customers_sql,
+    empty_schema_with_version_yml,
+    empty_schema_yml,
+    generic_schema_yml,
+    generic_test_edited_sql,
+    generic_test_schema_yml,
+    generic_test_sql,
+    gsm_override2_sql,
+    gsm_override_sql,
+    local_dependency__dbt_project_yml,
+    local_dependency__macros__dep_macro_sql,
+    local_dependency__models__model_to_import_sql,
+    local_dependency__models__schema_yml,
+    local_dependency__seeds__seed_csv,
+    macros_schema_yml,
+    macros_yml,
+    model_a_sql,
+    model_b_sql,
+    model_four1_sql,
+    model_four2_sql,
     model_one_sql,
+    model_three_disabled2_sql,
+    model_three_disabled_sql,
+    model_three_modified_sql,
+    model_three_sql,
+    model_two_disabled_sql,
     model_two_sql,
     models_schema1_yml,
     models_schema2_yml,
     models_schema2b_yml,
-    model_three_sql,
-    model_three_modified_sql,
-    model_four1_sql,
-    model_four2_sql,
+    models_schema3_yml,
     models_schema4_yml,
     models_schema4b_yml,
-    models_schema3_yml,
-    my_macro_sql,
+    my_analysis_sql,
     my_macro2_sql,
-    macros_yml,
-    empty_schema_yml,
-    empty_schema_with_version_yml,
-    model_three_disabled_sql,
-    model_three_disabled2_sql,
+    my_macro_sql,
+    my_test_sql,
+    orders_sql,
     raw_customers_csv,
-    customers_sql,
-    sources_tests1_sql,
+    ref_override2_sql,
+    ref_override_sql,
+    schema_models_c_yml,
     schema_sources1_yml,
     schema_sources2_yml,
     schema_sources3_yml,
     schema_sources4_yml,
     schema_sources5_yml,
-    customers1_md,
-    customers2_md,
-    test_macro_sql,
-    my_test_sql,
-    test_macro2_sql,
-    my_analysis_sql,
-    sources_tests2_sql,
-    local_dependency__dbt_project_yml,
-    local_dependency__models__schema_yml,
-    local_dependency__models__model_to_import_sql,
-    local_dependency__macros__dep_macro_sql,
-    local_dependency__seeds__seed_csv,
-    schema_models_c_yml,
-    model_a_sql,
-    model_b_sql,
-    macros_schema_yml,
-    custom_schema_tests1_sql,
-    custom_schema_tests2_sql,
-    ref_override_sql,
-    ref_override2_sql,
-    gsm_override_sql,
-    gsm_override2_sql,
-    orders_sql,
-    snapshot_sql,
     snapshot2_sql,
-    generic_schema_yml,
-    generic_test_sql,
-    generic_test_schema_yml,
-    generic_test_edited_sql,
+    snapshot_sql,
+    sources_tests1_sql,
+    sources_tests2_sql,
+    test_macro2_sql,
+    test_macro_sql,
 )
-
-from dbt.exceptions import CompilationError
-from dbt.contracts.files import ParseFileType
-from dbt.contracts.results import TestStatus
-from dbt.plugins.manifest import PluginNodes, ModelNodeArgs
-
-import re
-import os
+from tests.functional.utils import up_one
 
 os.environ["DBT_PP_TEST"] = "true"
 
@@ -696,6 +697,15 @@ class TestExternalModels:
         )
 
     @pytest.fixture(scope="class")
+    def external_model_node_merge(self):
+        return ModelNodeArgs(
+            name="model_two",
+            package_name="test",
+            identifier="test_identifier",
+            schema="test_schema",
+        )
+
+    @pytest.fixture(scope="class")
     def models(self):
         return {"model_one.sql": model_one_sql}
 
@@ -708,6 +718,7 @@ class TestExternalModels:
         external_model_node_versioned,
         external_model_node_depends_on,
         external_model_node_depends_on_parent,
+        external_model_node_merge,
     ):
         # initial plugin - one external model
         external_nodes = PluginNodes()
@@ -724,12 +735,30 @@ class TestExternalModels:
         assert len(manifest.external_node_unique_ids) == 1
         assert manifest.external_node_unique_ids == ["model.external.external_model"]
 
-        # add a model file
+        # add a model file - test.model_two
         write_file(model_two_sql, project.project_root, "models", "model_two.sql")
         manifest = run_dbt(["--partial-parse", "parse"])
         assert len(manifest.nodes) == 3
 
-        # add an external model
+        # add an external model that is already in project - test.model_two
+        # project model should be preferred to external model
+        external_nodes.add_model(external_model_node_merge)
+        manifest = run_dbt(["--partial-parse", "parse"])
+        assert len(manifest.nodes) == 3
+        assert len(manifest.external_node_unique_ids) == 1
+
+        # disable test.model_two in project
+        # project models should still be preferred to external model
+        write_file(model_two_disabled_sql, project.project_root, "models", "model_two.sql")
+        manifest = run_dbt(["--partial-parse", "parse"])
+        assert len(manifest.nodes) == 2
+        assert len(manifest.disabled) == 1
+        assert len(manifest.external_node_unique_ids) == 1
+
+        # re-enable model_2.sql
+        write_file(model_two_sql, project.project_root, "models", "model_two.sql")
+
+        # add a new external model
         external_nodes.add_model(external_model_node_versioned)
         manifest = run_dbt(["--partial-parse", "parse"])
         assert len(manifest.nodes) == 4
@@ -824,3 +853,31 @@ class TestPortablePartialParsing:
         run_dbt(["deps"])
         len(run_dbt(["--partial-parse", "seed"])) == 1
         len(run_dbt(["--partial-parse", "run"])) == 3
+
+
+class TestProfileChanges:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "model.sql": "select 1 as id",
+        }
+
+    def test_profile_change(self, project, dbt_profile_data):
+        # Fist run not partial parsing
+        _, stdout = run_dbt_and_capture(["parse"])
+        assert "Unable to do partial parsing because saved manifest not found" in stdout
+
+        _, stdout = run_dbt_and_capture(["parse"])
+        assert "Unable to do partial parsing" not in stdout
+
+        # change dbname which is included in the connection_info
+        dbt_profile_data["test"]["outputs"]["default"]["dbname"] = "dbt2"
+        write_file(yaml.safe_dump(dbt_profile_data), project.profiles_dir, "profiles.yml")
+        _, stdout = run_dbt_and_capture(["parse"])
+        assert "Unable to do partial parsing because profile has changed" in stdout
+
+        # Change the password which is not included in the connection_info
+        dbt_profile_data["test"]["outputs"]["default"]["pass"] = "another_password"
+        write_file(yaml.safe_dump(dbt_profile_data), project.profiles_dir, "profiles.yml")
+        _, stdout = run_dbt_and_capture(["parse"])
+        assert "Unable to do partial parsing" not in stdout

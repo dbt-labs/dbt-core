@@ -1,8 +1,8 @@
-import pytest
 import os
 
-from dbt.tests.util import read_file, run_dbt
+import pytest
 
+from dbt.tests.util import read_file, run_dbt
 
 model_one_sql = """
     select 1 as fun

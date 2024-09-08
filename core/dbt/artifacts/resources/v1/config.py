@@ -1,19 +1,18 @@
-from dbt_common.dataclass_schema import dbtClassMixin, ValidationError
-from typing import Optional, List, Any, Dict, Union
-from typing_extensions import Annotated
+import re
 from dataclasses import dataclass, field
-from dbt_common.contracts.config.base import (
-    BaseConfig,
-    CompareBehavior,
-    MergeBehavior,
-)
-from dbt_common.contracts.config.metadata import Metadata, ShowBehavior
-from dbt_common.contracts.config.materialization import OnConfigurationChangeOption
+from typing import Any, Dict, List, Optional, Union
+
+from mashumaro.jsonschema.annotations import Pattern
+from typing_extensions import Annotated
+
+from dbt import hooks
 from dbt.artifacts.resources.base import Docs
 from dbt.artifacts.resources.types import ModelHookType
-from dbt.contracts.graph.utils import validate_color
-from dbt import hooks
-from mashumaro.jsonschema.annotations import Pattern
+from dbt.artifacts.utils.validation import validate_color
+from dbt_common.contracts.config.base import BaseConfig, CompareBehavior, MergeBehavior
+from dbt_common.contracts.config.materialization import OnConfigurationChangeOption
+from dbt_common.contracts.config.metadata import Metadata, ShowBehavior
+from dbt_common.dataclass_schema import ValidationError, dbtClassMixin
 
 
 def list_str() -> List[str]:
@@ -250,6 +249,12 @@ class TestConfig(NodeAndTestConfig):
 
     @classmethod
     def validate(cls, data):
+        if data.get("severity") and not re.match(SEVERITY_PATTERN, data.get("severity")):
+            raise ValidationError(
+                f"Severity must be either 'warn' or 'error'. Got '{data.get('severity')}'"
+            )
+
         super().validate(data)
+
         if data.get("materialized") and data.get("materialized") != "test":
             raise ValidationError("A test must have a materialized value of 'test'")

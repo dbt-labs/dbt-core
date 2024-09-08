@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Remove usage of dbt.deprecations in dbt/adapters, enable core & adapter-specific
-  event types and protos
-time: 2023-11-16T17:42:51.005023-05:00
-custom:
-  Author: michelleark
-  Issue: 8927 8918

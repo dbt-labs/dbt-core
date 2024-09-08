@@ -1,12 +1,12 @@
 import os
 from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional, Union
 
 from mashumaro.types import SerializableType
-from typing import List, Optional, Union, Dict, Any
 
-from dbt.constants import MAXIMUM_SEED_SIZE
-from dbt_common.dataclass_schema import dbtClassMixin, StrEnum
 from dbt.artifacts.resources.base import FileHash
+from dbt.constants import MAXIMUM_SEED_SIZE
+from dbt_common.dataclass_schema import StrEnum, dbtClassMixin
 
 from .util import SourceKey
 
@@ -139,8 +139,8 @@ class BaseSourceFile(dbtClassMixin, SerializableType):
             sf = SourceFile.from_dict(dct)
         return sf
 
-    def __post_serialize__(self, dct):
-        dct = super().__post_serialize__(dct)
+    def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
+        dct = super().__post_serialize__(dct, context)
         # remove empty lists to save space
         dct_keys = list(dct.keys())
         for key in dct_keys:
@@ -192,8 +192,13 @@ class SchemaSourceFile(BaseSourceFile):
     sources: List[str] = field(default_factory=list)
     exposures: List[str] = field(default_factory=list)
     metrics: List[str] = field(default_factory=list)
-    # metrics generated from semantic_model measures
+    # The following field will no longer be used. Leaving
+    # here to avoid breaking existing projects. To be removed
+    # later if possible.
     generated_metrics: List[str] = field(default_factory=list)
+    # metrics generated from semantic_model measures. The key is
+    # the name of the semantic_model, so that we can find it later.
+    metrics_from_measures: Dict[str, Any] = field(default_factory=dict)
     groups: List[str] = field(default_factory=list)
     # node patches contain models, seeds, snapshots, analyses
     ndp: List[str] = field(default_factory=list)
@@ -226,8 +231,8 @@ class SchemaSourceFile(BaseSourceFile):
     def source_patches(self):
         return self.sop
 
-    def __post_serialize__(self, dct):
-        dct = super().__post_serialize__(dct)
+    def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
+        dct = super().__post_serialize__(dct, context)
         # Remove partial parsing specific data
         for key in ("pp_test_index", "pp_dict"):
             if key in dct:
@@ -258,6 +263,40 @@ class SchemaSourceFile(BaseSourceFile):
             if name in self.data_tests[yaml_key]:
                 return self.data_tests[yaml_key][name]
         return []
+
+    def add_metrics_from_measures(self, semantic_model_name: str, metric_unique_id: str):
+        if self.generated_metrics:
+            # Probably not needed, but for safety sake, convert the
+            # old generated_metrics to metrics_from_measures.
+            self.fix_metrics_from_measures()
+        if semantic_model_name not in self.metrics_from_measures:
+            self.metrics_from_measures[semantic_model_name] = []
+        self.metrics_from_measures[semantic_model_name].append(metric_unique_id)
+
+    def fix_metrics_from_measures(self):
+        # Temporary method to fix up existing projects with a partial parse file.
+        # This should only be called if SchemaSourceFile in a msgpack
+        # pack manifest has an existing "generated_metrics" list, to turn it
+        # it into a "metrics_from_measures" dictionary, so that we can
+        # correctly partially parse.
+        # This code can be removed when "generated_metrics" is removed.
+        generated_metrics = self.generated_metrics
+        self.generated_metrics = []  # Should never be needed again
+        # For each metric_unique_id we loop through the semantic models
+        # looking for the name of the "measure" which generated the metric.
+        # When it's found, add it to "metrics_from_measures", with a key
+        # of the semantic_model name, and a list of metrics.
+        for metric_unique_id in generated_metrics:
+            parts = metric_unique_id.split(".")
+            # get the metric_name
+            metric_name = parts[-1]
+            if "semantic_models" in self.dict_from_yaml:
+                for sem_model in self.dict_from_yaml["semantic_models"]:
+                    if "measures" in sem_model:
+                        for measure in sem_model["measures"]:
+                            if measure["name"] == metric_name:
+                                self.add_metrics_from_measures(sem_model["name"], metric_unique_id)
+                                break
 
     def get_key_and_name_for_test(self, test_unique_id):
         yaml_key = None

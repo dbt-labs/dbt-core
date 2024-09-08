@@ -1,8 +1,6 @@
 import pytest
 
-from dbt.tests.util import run_dbt, check_relations_equal
-from dbt.tests.fixtures.project import write_project_files
-
+from dbt.tests.util import check_relations_equal, run_dbt
 
 tests__get_columns_in_relation_sql = """
 {% set columns = adapter.get_columns_in_relation(ref('model')) %}
@@ -73,16 +71,6 @@ class BaseAdapterMethod:
             "expected.sql": models__expected_sql,
             "model.sql": models__model_sql,
         }
-
-    @pytest.fixture(scope="class")
-    def project_files(
-        self,
-        project_root,
-        tests,
-        models,
-    ):
-        write_project_files(project_root, "tests", tests)
-        write_project_files(project_root, "models", models)
 
     @pytest.fixture(scope="class")
     def project_config_update(self):

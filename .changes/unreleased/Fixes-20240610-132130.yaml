@@ -1,0 +1,6 @@
+kind: Fixes
+body: Improve handling of error when loading schema file list
+time: 2024-06-10T13:21:30.963371-04:00
+custom:
+  Author: gshank
+  Issue: "10284"

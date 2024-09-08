@@ -1,0 +1,7 @@
+kind: Features
+body: Maximally parallelize dbt clone
+  in clone command"
+time: 2024-05-22T00:03:09.765977-04:00
+custom:
+  Author: michelleark
+  Issue: "7914"

@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: Move data portion of `SemanticModel` to dbt/artifacts
-time: 2024-01-29T16:38:00.245253-08:00
-custom:
-  Author: QMalcolm
-  Issue: "9387"

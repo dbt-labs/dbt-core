@@ -1,7 +1,7 @@
 from typing import Dict, List
 
-from dbt.tests.util import relation_from_name
 from dbt.tests.fixtures.project import TestProjInfo
+from dbt.tests.util import relation_from_name
 
 
 def get_records(

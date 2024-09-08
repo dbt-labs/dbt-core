@@ -6,55 +6,48 @@ from abc import ABCMeta, abstractmethod
 from contextlib import nullcontext
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Type, Union
+from typing import Any, Dict, List, Optional, Set
 
-from dbt.compilation import Compiler
-import dbt_common.exceptions.base
 import dbt.exceptions
+import dbt_common.exceptions.base
 from dbt import tracking
-from dbt.config import RuntimeConfig, Project
+from dbt.artifacts.resources.types import NodeType
+from dbt.artifacts.schemas.results import (
+    NodeStatus,
+    RunningStatus,
+    RunStatus,
+    TimingInfo,
+    collect_timing_info,
+)
+from dbt.artifacts.schemas.run import RunResult
+from dbt.cli.flags import Flags
+from dbt.compilation import Compiler
+from dbt.config import RuntimeConfig
 from dbt.config.profile import read_profile
 from dbt.constants import DBT_PROJECT_FILE_NAME
 from dbt.contracts.graph.manifest import Manifest
-from dbt.artifacts.schemas.results import TimingInfo, collect_timing_info
-from dbt.artifacts.schemas.results import NodeStatus, RunningStatus, RunStatus
-from dbt.artifacts.schemas.run import RunResult
-from dbt_common.events.contextvars import get_node_info
-from dbt_common.events.functions import fire_event
 from dbt.events.types import (
-    SkippingDetails,
-    NodeCompiling,
-    NodeExecuting,
     CatchableExceptionOnRun,
-    InternalErrorOnRun,
     GenericExceptionOnRun,
-    NodeConnectionReleaseError,
+    InternalErrorOnRun,
+    LogDbtProfileError,
+    LogDbtProjectError,
     LogDebugStackTrace,
     LogSkipBecauseError,
-)
-from dbt_common.exceptions import (
-    DbtRuntimeError,
-    DbtInternalError,
-    CompilationError,
-    NotImplementedError,
-)
-from dbt.events.types import (
-    LogDbtProjectError,
-    LogDbtProfileError,
+    NodeCompiling,
+    NodeConnectionReleaseError,
+    NodeExecuting,
+    SkippingDetails,
 )
 from dbt.flags import get_flags
 from dbt.graph import Graph
-from dbt.logger import log_manager
 from dbt.task.printer import print_run_result_error
+from dbt_common.events.contextvars import get_node_info
+from dbt_common.events.functions import fire_event
+from dbt_common.exceptions import DbtInternalError, DbtRuntimeError, NotImplementedError
 
 
-class NoneConfig:
-    @classmethod
-    def from_args(cls, args):
-        return None
-
-
-def read_profiles(profiles_dir=None):
+def read_profiles(profiles_dir: Optional[str] = None) -> Dict[str, Any]:
     """This is only used for some error handling"""
     if profiles_dir is None:
         profiles_dir = get_flags().PROFILES_DIR
@@ -70,44 +63,15 @@ def read_profiles(profiles_dir=None):
 
 
 class BaseTask(metaclass=ABCMeta):
-    ConfigType: Union[Type[NoneConfig], Type[Project]] = NoneConfig
-
-    def __init__(self, args, config, project=None) -> None:
+    def __init__(self, args: Flags) -> None:
         self.args = args
-        self.config = config
-        self.project = config if isinstance(config, Project) else project
 
-    @classmethod
-    def pre_init_hook(cls, args):
-        """A hook called before the task is initialized."""
-        if args.log_format == "json":
-            log_manager.format_json()
-        else:
-            log_manager.format_text()
+    def __enter__(self):
+        self.orig_dir = os.getcwd()
+        return self
 
-    @classmethod
-    def set_log_format(cls):
-        if get_flags().LOG_FORMAT == "json":
-            log_manager.format_json()
-        else:
-            log_manager.format_text()
-
-    @classmethod
-    def from_args(cls, args, *pargs, **kwargs):
-        try:
-            # This is usually RuntimeConfig
-            config = cls.ConfigType.from_args(args)
-        except dbt.exceptions.DbtProjectError as exc:
-            fire_event(LogDbtProjectError(exc=str(exc)))
-
-            tracking.track_invalid_invocation(args=args, result_type=exc.result_type)
-            raise dbt_common.exceptions.DbtRuntimeError("Could not run dbt") from exc
-        except dbt.exceptions.DbtProfileError as exc:
-            all_profile_names = list(read_profiles(get_flags().PROFILES_DIR).keys())
-            fire_event(LogDbtProfileError(exc=str(exc), profiles=all_profile_names))
-            tracking.track_invalid_invocation(args=args, result_type=exc.result_type)
-            raise dbt_common.exceptions.DbtRuntimeError("Could not run dbt") from exc
-        return cls(args, config, *pargs, **kwargs)
+    def __exit__(self, exc_type, exc_value, traceback):
+        os.chdir(self.orig_dir)
 
     @abstractmethod
     def run(self):
@@ -152,15 +116,16 @@ def move_to_nearest_project_dir(project_dir: Optional[str]) -> Path:
 # produce the same behavior. currently this class only contains manifest compilation,
 # holding a manifest, and moving direcories.
 class ConfiguredTask(BaseTask):
-    ConfigType = RuntimeConfig
-
-    def __init__(self, args, config, manifest: Optional[Manifest] = None) -> None:
-        super().__init__(args, config)
+    def __init__(
+        self, args: Flags, config: RuntimeConfig, manifest: Optional[Manifest] = None
+    ) -> None:
+        super().__init__(args)
+        self.config = config
         self.graph: Optional[Graph] = None
         self.manifest = manifest
         self.compiler = Compiler(self.config)
 
-    def compile_manifest(self):
+    def compile_manifest(self) -> None:
         if self.manifest is None:
             raise DbtInternalError("compile_manifest called before manifest was loaded")
 
@@ -173,9 +138,22 @@ class ConfiguredTask(BaseTask):
             dbt.tracking.track_runnable_timing({"graph_compilation_elapsed": compile_time})
 
     @classmethod
-    def from_args(cls, args, *pargs, **kwargs):
+    def from_args(cls, args: Flags, *pargs, **kwargs):
         move_to_nearest_project_dir(args.project_dir)
-        return super().from_args(args, *pargs, **kwargs)
+        try:
+            # This is usually RuntimeConfig
+            config = RuntimeConfig.from_args(args)
+        except dbt.exceptions.DbtProjectError as exc:
+            fire_event(LogDbtProjectError(exc=str(exc)))
+
+            tracking.track_invalid_invocation(args=args, result_type=exc.result_type)
+            raise dbt_common.exceptions.DbtRuntimeError("Could not run dbt") from exc
+        except dbt.exceptions.DbtProfileError as exc:
+            all_profile_names = list(read_profiles(get_flags().PROFILES_DIR).keys())
+            fire_event(LogDbtProfileError(exc=str(exc), profiles=all_profile_names))
+            tracking.track_invalid_invocation(args=args, result_type=exc.result_type)
+            raise dbt_common.exceptions.DbtRuntimeError("Could not run dbt") from exc
+        return cls(args, config, *pargs, **kwargs)
 
 
 class ExecutionContext:
@@ -189,7 +167,7 @@ class ExecutionContext:
 
 
 class BaseRunner(metaclass=ABCMeta):
-    def __init__(self, config, adapter, node, node_index, num_nodes) -> None:
+    def __init__(self, config, adapter, node, node_index: int, num_nodes: int) -> None:
         self.config = config
         self.compiler = Compiler(config)
         self.adapter = adapter
@@ -205,6 +183,9 @@ class BaseRunner(metaclass=ABCMeta):
     @abstractmethod
     def compile(self, manifest: Manifest) -> Any:
         pass
+
+    def _node_build_path(self) -> Optional[str]:
+        return self.node.build_path if hasattr(self.node, "build_path") else None
 
     def get_result_status(self, result) -> Dict[str, str]:
         if result.status == NodeStatus.Error:
@@ -293,11 +274,13 @@ class BaseRunner(metaclass=ABCMeta):
             failures=result.failures,
         )
 
-    def compile_and_execute(self, manifest, ctx):
+    def compile_and_execute(self, manifest: Manifest, ctx: ExecutionContext):
         result = None
-        with self.adapter.connection_named(
-            self.node.unique_id, self.node
-        ) if get_flags().INTROSPECT else nullcontext():
+        with (
+            self.adapter.connection_named(self.node.unique_id, self.node)
+            if get_flags().INTROSPECT
+            else nullcontext()
+        ):
             ctx.node.update_event_status(node_status=RunningStatus.Compiling)
             fire_event(
                 NodeCompiling(
@@ -324,7 +307,7 @@ class BaseRunner(metaclass=ABCMeta):
 
         return result
 
-    def _handle_catchable_exception(self, e, ctx):
+    def _handle_catchable_exception(self, e: DbtRuntimeError, ctx: ExecutionContext) -> str:
         if e.node is None:
             e.add_node(ctx.node)
 
@@ -335,18 +318,18 @@ class BaseRunner(metaclass=ABCMeta):
         )
         return str(e)
 
-    def _handle_internal_exception(self, e, ctx):
+    def _handle_internal_exception(self, e: DbtInternalError, ctx: ExecutionContext) -> str:
         fire_event(
             InternalErrorOnRun(
-                build_path=self.node.build_path, exc=str(e), node_info=get_node_info()
+                build_path=self._node_build_path(), exc=str(e), node_info=get_node_info()
             )
         )
         return str(e)
 
-    def _handle_generic_exception(self, e, ctx):
+    def _handle_generic_exception(self, e: Exception, ctx: ExecutionContext) -> str:
         fire_event(
             GenericExceptionOnRun(
-                build_path=self.node.build_path,
+                build_path=self._node_build_path(),
                 unique_id=self.node.unique_id,
                 exc=str(e),
                 node_info=get_node_info(),
@@ -356,9 +339,8 @@ class BaseRunner(metaclass=ABCMeta):
 
         return str(e)
 
-    def handle_exception(self, e, ctx):
-        catchable_errors = (CompilationError, DbtRuntimeError)
-        if isinstance(e, catchable_errors):
+    def handle_exception(self, e: Exception, ctx: ExecutionContext) -> str:
+        if isinstance(e, DbtRuntimeError):
             error = self._handle_catchable_exception(e, ctx)
         elif isinstance(e, DbtInternalError):
             error = self._handle_internal_exception(e, ctx)
@@ -366,7 +348,7 @@ class BaseRunner(metaclass=ABCMeta):
             error = self._handle_generic_exception(e, ctx)
         return error
 
-    def safe_run(self, manifest):
+    def safe_run(self, manifest: Manifest):
         started = time.time()
         ctx = ExecutionContext(self.node)
         error = None
@@ -413,31 +395,32 @@ class BaseRunner(metaclass=ABCMeta):
 
         return None
 
-    def before_execute(self):
-        raise NotImplementedError()
+    def before_execute(self) -> None:
+        raise NotImplementedError("before_execute is not implemented")
 
     def execute(self, compiled_node, manifest):
-        raise NotImplementedError()
+        raise NotImplementedError("execute is not implemented")
 
     def run(self, compiled_node, manifest):
         return self.execute(compiled_node, manifest)
 
-    def after_execute(self, result):
-        raise NotImplementedError()
+    def after_execute(self, result) -> None:
+        raise NotImplementedError("after_execute is not implemented")
 
-    def _skip_caused_by_ephemeral_failure(self):
+    def _skip_caused_by_ephemeral_failure(self) -> bool:
         if self.skip_cause is None or self.skip_cause.node is None:
             return False
         return self.skip_cause.node.is_ephemeral_model
 
     def on_skip(self):
-        schema_name = self.node.schema
+        schema_name = getattr(self.node, "schema", "")
         node_name = self.node.name
 
         error_message = None
         if not self.node.is_ephemeral_model:
             # if this model was skipped due to an upstream ephemeral model
             # failure, print a special 'error skip' message.
+            # Include skip_cause NodeStatus
             if self._skip_caused_by_ephemeral_failure():
                 fire_event(
                     LogSkipBecauseError(
@@ -445,8 +428,10 @@ class BaseRunner(metaclass=ABCMeta):
                         relation=node_name,
                         index=self.node_index,
                         total=self.num_nodes,
+                        status=self.skip_cause.status,
                     )
                 )
+                # skip_cause here should be the run_result from the ephemeral model
                 print_run_result_error(result=self.skip_cause, newline=False)
                 if self.skip_cause is None:  # mypy appeasement
                     raise DbtInternalError(
@@ -477,6 +462,33 @@ class BaseRunner(metaclass=ABCMeta):
         node_result = RunResult.from_node(self.node, RunStatus.Skipped, error_message)
         return node_result
 
-    def do_skip(self, cause=None):
+    def do_skip(self, cause=None) -> None:
         self.skip = True
         self.skip_cause = cause
+
+
+def resource_types_from_args(
+    args: Flags, all_resource_values: Set[NodeType], default_resource_values: Set[NodeType]
+) -> Set[NodeType]:
+
+    if not args.resource_types:
+        resource_types = default_resource_values
+    else:
+        # This is a list of strings, not NodeTypes
+        arg_resource_types = set(args.resource_types)
+
+        if "all" in arg_resource_types:
+            arg_resource_types.remove("all")
+            arg_resource_types.update(all_resource_values)
+        if "default" in arg_resource_types:
+            arg_resource_types.remove("default")
+            arg_resource_types.update(default_resource_values)
+        # Convert to a set of NodeTypes now that the non-NodeType strings are gone
+        resource_types = set([NodeType(rt) for rt in list(arg_resource_types)])
+
+    if args.exclude_resource_types:
+        # Convert from a list of strings to a set of NodeTypes
+        exclude_resource_types = set([NodeType(rt) for rt in args.exclude_resource_types])
+        resource_types = resource_types - exclude_resource_types
+
+    return resource_types

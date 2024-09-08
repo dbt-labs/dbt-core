@@ -1,17 +1,18 @@
 import pytest
-from dbt.tests.util import run_dbt, check_relations_equal
+
+from dbt.tests.util import check_relations_equal, run_dbt
 from tests.functional.adapter.utils.base_utils import BaseUtils
 from tests.functional.adapter.utils.fixture_intersect import (
-    seeds__data_intersect_a_csv,
-    seeds__data_intersect_b_csv,
-    seeds__data_intersect_a_overlap_b_csv,
     models__data_intersect_empty_sql,
-    models__test_intersect_a_overlap_b_sql,
-    models__test_intersect_b_overlap_a_sql,
     models__test_intersect_a_overlap_a_sql,
+    models__test_intersect_a_overlap_b_sql,
     models__test_intersect_a_overlap_empty_sql,
+    models__test_intersect_b_overlap_a_sql,
     models__test_intersect_empty_overlap_a_sql,
     models__test_intersect_empty_overlap_empty_sql,
+    seeds__data_intersect_a_csv,
+    seeds__data_intersect_a_overlap_b_csv,
+    seeds__data_intersect_b_csv,
 )
 
 

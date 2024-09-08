@@ -1,5 +1,8 @@
 import pytest
-from tests.functional.adapter.utils.data_types.base_data_type_macro import BaseDataTypeMacro
+
+from tests.functional.adapter.utils.data_types.base_data_type_macro import (
+    BaseDataTypeMacro,
+)
 
 seeds__expected_csv = """string_col
 "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum."

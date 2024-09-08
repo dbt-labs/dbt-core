@@ -1,6 +1,5 @@
 # Unit test README
 
-## test_contracts_graph_parsed.py
 
 ### The Why
 We need to ensure that we can go from objects to dictionaries and back without any
@@ -16,3 +15,7 @@ versions of the object we're interested in testing, and run the different genera
 of the object through the test. This gives us confidence that for any allowable configuration
 of an object, state is not changed when moving back and forth betweeen the python object
 version and the seralized version.
+
+### The What
+
+- We test concrete classes in the codebase and do not test abstract classes as they are implementation details. [reference](https://enterprisecraftsmanship.com/posts/how-to-unit-test-an-abstract-class/)

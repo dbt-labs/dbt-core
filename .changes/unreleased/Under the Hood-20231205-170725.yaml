@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: Introduce RelationConfig Protocol, consolidate Relation.create_from
-time: 2023-12-05T17:07:25.33861+09:00
-custom:
-  Author: michelleark
-  Issue: "9215"

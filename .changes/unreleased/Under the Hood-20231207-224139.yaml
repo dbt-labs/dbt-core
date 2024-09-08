@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: pass query header context to MacroQueryStringSetter
-time: 2023-12-07T22:41:39.498024+09:00
-custom:
-  Author: michelleark
-  Issue: 9249 9250

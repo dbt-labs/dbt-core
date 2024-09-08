@@ -1,57 +1,46 @@
 import threading
-from typing import Dict, List, Set
-
-from .run import RunTask, ModelRunner as run_model_runner
-from .snapshot import SnapshotRunner as snapshot_model_runner
-from .seed import SeedRunner as seed_runner
-from .test import TestRunner as test_runner
+from typing import Dict, List, Optional, Set, Type
 
 from dbt.artifacts.schemas.results import NodeStatus, RunStatus
 from dbt.artifacts.schemas.run import RunResult
-from dbt.graph import ResourceTypeSelector, GraphQueue, Graph
-from dbt.node_types import NodeType
-from dbt.task.test import TestSelector
-from dbt.task.base import BaseRunner
-from dbt_common.events.functions import fire_event
-from dbt.events.types import LogStartLine, LogModelResult
-from dbt_common.events.base_types import EventLevel
+from dbt.cli.flags import Flags
+from dbt.config.runtime import RuntimeConfig
+from dbt.contracts.graph.manifest import Manifest
+from dbt.events.types import LogNodeNoOpResult
 from dbt.exceptions import DbtInternalError
+from dbt.graph import Graph, GraphQueue, ResourceTypeSelector
+from dbt.node_types import NodeType
+from dbt.task.base import BaseRunner, resource_types_from_args
+from dbt.task.test import TestSelector
+from dbt_common.events.functions import fire_event
+
+from .run import ModelRunner as run_model_runner
+from .run import RunTask
+from .seed import SeedRunner as seed_runner
+from .snapshot import SnapshotRunner as snapshot_model_runner
+from .test import TestRunner as test_runner
 
 
 class SavedQueryRunner(BaseRunner):
-    # A no-op Runner for Saved Queries
+    # Stub. No-op Runner for Saved Queries, which require MetricFlow for execution.
     @property
-    def description(self):
-        return "Saved Query {}".format(self.node.unique_id)
+    def description(self) -> str:
+        return f"saved query {self.node.name}"
 
-    def before_execute(self):
+    def before_execute(self) -> None:
+        pass
+
+    def compile(self, manifest: Manifest):
+        return self.node
+
+    def after_execute(self, result) -> None:
         fire_event(
-            LogStartLine(
+            LogNodeNoOpResult(
                 description=self.description,
                 index=self.node_index,
                 total=self.num_nodes,
                 node_info=self.node.node_info,
             )
-        )
-
-    def compile(self, manifest):
-        return self.node
-
-    def after_execute(self, result):
-        if result.status == NodeStatus.Error:
-            level = EventLevel.ERROR
-        else:
-            level = EventLevel.INFO
-        fire_event(
-            LogModelResult(
-                description=self.description,
-                status=result.status,
-                index=self.node_index,
-                total=self.num_nodes,
-                execution_time=result.execution_time,
-                node_info=self.node.node_info,
-            ),
-            level=level,
         )
 
     def execute(self, compiled_node, manifest):
@@ -61,8 +50,8 @@ class SavedQueryRunner(BaseRunner):
             status=RunStatus.Success,
             timing=[],
             thread_id=threading.current_thread().name,
-            execution_time=0.1,
-            message="done",
+            execution_time=0,
+            message="NO-OP",
             adapter_response={},
             failures=0,
             agate_table=None,
@@ -85,27 +74,19 @@ class BuildTask(RunTask):
         NodeType.Seed: seed_runner,
         NodeType.Test: test_runner,
         NodeType.Unit: test_runner,
+        NodeType.SavedQuery: SavedQueryRunner,
     }
     ALL_RESOURCE_VALUES = frozenset({x for x in RUNNER_MAP.keys()})
 
-    def __init__(self, args, config, manifest) -> None:
+    def __init__(self, args: Flags, config: RuntimeConfig, manifest: Manifest) -> None:
         super().__init__(args, config, manifest)
         self.selected_unit_tests: Set = set()
         self.model_to_unit_test_map: Dict[str, List] = {}
 
-    def resource_types(self, no_unit_tests=False):
-        if self.args.include_saved_query:
-            self.RUNNER_MAP[NodeType.SavedQuery] = SavedQueryRunner
-            self.ALL_RESOURCE_VALUES = self.ALL_RESOURCE_VALUES.union({NodeType.SavedQuery})
-
-        if not self.args.resource_types:
-            resource_types = list(self.ALL_RESOURCE_VALUES)
-        else:
-            resource_types = set(self.args.resource_types)
-
-            if "all" in resource_types:
-                resource_types.remove("all")
-                resource_types.update(self.ALL_RESOURCE_VALUES)
+    def resource_types(self, no_unit_tests: bool = False) -> List[NodeType]:
+        resource_types = resource_types_from_args(
+            self.args, set(self.ALL_RESOURCE_VALUES), set(self.ALL_RESOURCE_VALUES)
+        )
 
         # First we get selected_nodes including unit tests, then without,
         # and do a set difference.
@@ -229,7 +210,7 @@ class BuildTask(RunTask):
             resource_types=resource_types,
         )
 
-    def get_runner_type(self, node):
+    def get_runner_type(self, node) -> Optional[Type[BaseRunner]]:
         return self.RUNNER_MAP.get(node.resource_type)
 
     # Special build compile_manifest method to pass add_test_edges to the compiler

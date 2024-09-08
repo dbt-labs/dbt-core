@@ -1,38 +1,46 @@
 import datetime
 import re
-
-from dbt import deprecations
-from dbt.artifacts.resources import ConstantPropertyInput, Quoting
-from dbt_common.contracts.config.properties import AdditionalPropertiesMixin
-from dbt_common.contracts.util import Mergeable
-from dbt_common.exceptions import DbtInternalError
-from dbt_common.dataclass_schema import (
-    dbtClassMixin,
-    StrEnum,
-    ExtensibleDbtClassMixin,
-    ValidationError,
-)
-from dbt.node_types import NodeType
-from dbt.artifacts.resources import (
-    Defaults,
-    DimensionValidityParams,
-    ExposureType,
-    ExternalTable,
-    FreshnessThreshold,
-    MaturityType,
-    MeasureAggregationParameters,
-)
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Dict, List, Literal, Optional, Sequence, Union
 
 # trigger the PathEncoder
 import dbt_common.helper_types  # noqa:F401
+from dbt import deprecations
+from dbt.artifacts.resources import (
+    ConstantPropertyInput,
+    Defaults,
+    DimensionValidityParams,
+    Docs,
+    ExposureType,
+    ExternalTable,
+    FreshnessThreshold,
+    MacroArgument,
+    MaturityType,
+    MeasureAggregationParameters,
+    NodeVersion,
+    Owner,
+    Quoting,
+    UnitTestInputFixture,
+    UnitTestNodeVersions,
+    UnitTestOutputFixture,
+    UnitTestOverrides,
+)
 from dbt.exceptions import ParsingError
-
-from dbt_semantic_interfaces.type_enums import ConversionCalculationType
-from dbt.artifacts.resources import Docs, MacroArgument, NodeVersion, Owner
-
-from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Optional, List, Union, Dict, Any, Sequence, Literal
+from dbt.node_types import NodeType
+from dbt_common.contracts.config.properties import AdditionalPropertiesMixin
+from dbt_common.contracts.util import Mergeable
+from dbt_common.dataclass_schema import (
+    ExtensibleDbtClassMixin,
+    StrEnum,
+    ValidationError,
+    dbtClassMixin,
+)
+from dbt_common.exceptions import DbtInternalError
+from dbt_semantic_interfaces.type_enums import (
+    ConversionCalculationType,
+    PeriodAggregation,
+)
 
 
 @dataclass
@@ -108,6 +116,7 @@ class HasColumnAndTestProps(HasColumnProps):
 class UnparsedColumn(HasColumnAndTestProps):
     quote: Optional[bool] = None
     tags: List[str] = field(default_factory=list)
+    granularity: Optional[str] = None  # str is really a TimeGranularity Enum
 
 
 @dataclass
@@ -199,12 +208,18 @@ class UnparsedNodeUpdate(HasConfig, HasColumnTests, HasColumnAndTestProps, HasYa
 
 
 @dataclass
+class UnparsedTimeSpine(dbtClassMixin):
+    standard_granularity_column: str
+
+
+@dataclass
 class UnparsedModelUpdate(UnparsedNodeUpdate):
     quote_columns: Optional[bool] = None
     access: Optional[str] = None
     latest_version: Optional[NodeVersion] = None
     versions: Sequence[UnparsedVersion] = field(default_factory=list)
     deprecation_date: Optional[datetime.datetime] = None
+    time_spine: Optional[UnparsedTimeSpine] = None
 
     def __post_init__(self) -> None:
         if self.latest_version:
@@ -225,6 +240,26 @@ class UnparsedModelUpdate(UnparsedNodeUpdate):
         self._version_map = {version.v: version for version in self.versions}
 
         self.deprecation_date = normalize_date(self.deprecation_date)
+
+        if self.time_spine:
+            columns = (
+                self.get_columns_for_version(self.latest_version)
+                if self.latest_version
+                else self.columns
+            )
+            column_names_to_columns = {column.name: column for column in columns}
+            if self.time_spine.standard_granularity_column not in column_names_to_columns:
+                raise ParsingError(
+                    f"Time spine standard granularity column must be defined on the model. Got invalid "
+                    f"column name '{self.time_spine.standard_granularity_column}' for model '{self.name}'. Valid names"
+                    f"{' for latest version' if self.latest_version else ''}: {list(column_names_to_columns.keys())}."
+                )
+            column = column_names_to_columns[self.time_spine.standard_granularity_column]
+            if not column.granularity:
+                raise ParsingError(
+                    f"Time spine standard granularity column must have a granularity defined. Please add one for "
+                    f"column '{self.time_spine.standard_granularity_column}' in model '{self.name}'."
+                )
 
     def get_columns_for_version(self, version: NodeVersion) -> List[UnparsedColumn]:
         if version not in self._version_map:
@@ -265,14 +300,15 @@ class UnparsedMacroUpdate(HasConfig, HasColumnProps, HasYamlMetadata):
 class UnparsedSourceTableDefinition(HasColumnTests, HasColumnAndTestProps):
     config: Dict[str, Any] = field(default_factory=dict)
     loaded_at_field: Optional[str] = None
+    loaded_at_field_present: Optional[bool] = None
     identifier: Optional[str] = None
     quoting: Quoting = field(default_factory=Quoting)
     freshness: Optional[FreshnessThreshold] = field(default_factory=FreshnessThreshold)
     external: Optional[ExternalTable] = None
     tags: List[str] = field(default_factory=list)
 
-    def __post_serialize__(self, dct):
-        dct = super().__post_serialize__(dct)
+    def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
+        dct = super().__post_serialize__(dct, context)
         if "freshness" not in dct and self.freshness is None:
             dct["freshness"] = None
         return dct
@@ -289,16 +325,28 @@ class UnparsedSourceDefinition(dbtClassMixin):
     quoting: Quoting = field(default_factory=Quoting)
     freshness: Optional[FreshnessThreshold] = field(default_factory=FreshnessThreshold)
     loaded_at_field: Optional[str] = None
+    loaded_at_field_present: Optional[bool] = None
     tables: List[UnparsedSourceTableDefinition] = field(default_factory=list)
     tags: List[str] = field(default_factory=list)
     config: Dict[str, Any] = field(default_factory=dict)
+
+    @classmethod
+    def validate(cls, data):
+        super(UnparsedSourceDefinition, cls).validate(data)
+
+        if data.get("loaded_at_field", None) == "":
+            raise ValidationError("loaded_at_field cannot be an empty string.")
+        if "tables" in data:
+            for table in data["tables"]:
+                if table.get("loaded_at_field", None) == "":
+                    raise ValidationError("loaded_at_field cannot be an empty string.")
 
     @property
     def yaml_key(self) -> "str":
         return "sources"
 
-    def __post_serialize__(self, dct):
-        dct = super().__post_serialize__(dct)
+    def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
+        dct = super().__post_serialize__(dct, context)
         if "freshness" not in dct and self.freshness is None:
             dct["freshness"] = None
         return dct
@@ -312,6 +360,7 @@ class SourceTablePatch(dbtClassMixin):
     data_type: Optional[str] = None
     docs: Optional[Docs] = None
     loaded_at_field: Optional[str] = None
+    loaded_at_field_present: Optional[bool] = None
     identifier: Optional[str] = None
     quoting: Quoting = field(default_factory=Quoting)
     freshness: Optional[FreshnessThreshold] = field(default_factory=FreshnessThreshold)
@@ -354,6 +403,7 @@ class SourcePatch(dbtClassMixin):
     quoting: Optional[Quoting] = None
     freshness: Optional[Optional[FreshnessThreshold]] = field(default_factory=FreshnessThreshold)
     loaded_at_field: Optional[str] = None
+    loaded_at_field_present: Optional[bool] = None
     tables: Optional[List[SourceTablePatch]] = None
     tags: Optional[List[str]] = None
 
@@ -512,6 +562,13 @@ class UnparsedConversionTypeParams(dbtClassMixin):
 
 
 @dataclass
+class UnparsedCumulativeTypeParams(dbtClassMixin):
+    window: Optional[str] = None
+    grain_to_date: Optional[str] = None
+    period_agg: str = PeriodAggregation.FIRST.value
+
+
+@dataclass
 class UnparsedMetricTypeParams(dbtClassMixin):
     measure: Optional[Union[UnparsedMetricInputMeasure, str]] = None
     numerator: Optional[Union[UnparsedMetricInput, str]] = None
@@ -521,6 +578,7 @@ class UnparsedMetricTypeParams(dbtClassMixin):
     grain_to_date: Optional[str] = None  # str is really a TimeGranularity Enum
     metrics: Optional[List[Union[UnparsedMetricInput, str]]] = None
     conversion_type_params: Optional[UnparsedConversionTypeParams] = None
+    cumulative_type_params: Optional[UnparsedCumulativeTypeParams] = None
 
 
 @dataclass
@@ -532,6 +590,7 @@ class UnparsedMetric(dbtClassMixin):
     description: str = ""
     # Note: `Union` must be the outermost part of the type annotation for serialization to work properly.
     filter: Union[str, List[str], None] = None
+    time_granularity: Optional[str] = None
     # metadata: Optional[Unparsedetadata] = None # TODO
     meta: Dict[str, Any] = field(default_factory=dict)
     tags: List[str] = field(default_factory=list)
@@ -676,39 +735,6 @@ def normalize_date(d: Optional[datetime.date]) -> Optional[datetime.datetime]:
         dt = dt.astimezone()
 
     return dt
-
-
-class UnitTestFormat(StrEnum):
-    CSV = "csv"
-    Dict = "dict"
-
-
-@dataclass
-class UnitTestInputFixture(dbtClassMixin):
-    input: str
-    rows: Optional[Union[str, List[Dict[str, Any]]]] = None
-    format: UnitTestFormat = UnitTestFormat.Dict
-    fixture: Optional[str] = None
-
-
-@dataclass
-class UnitTestOutputFixture(dbtClassMixin):
-    rows: Optional[Union[str, List[Dict[str, Any]]]] = None
-    format: UnitTestFormat = UnitTestFormat.Dict
-    fixture: Optional[str] = None
-
-
-@dataclass
-class UnitTestOverrides(dbtClassMixin):
-    macros: Dict[str, Any] = field(default_factory=dict)
-    vars: Dict[str, Any] = field(default_factory=dict)
-    env_vars: Dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass
-class UnitTestNodeVersions(dbtClassMixin):
-    include: Optional[List[NodeVersion]] = None
-    exclude: Optional[List[NodeVersion]] = None
 
 
 @dataclass

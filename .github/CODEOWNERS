@@ -13,31 +13,6 @@
 # the core team as a whole will be assigned
 *       @dbt-labs/core-team
 
-### ADAPTERS
-
-# Adapter interface ("base" + "sql" adapter defaults, cache)
-/core/dbt/adapters              @dbt-labs/core-adapters
-
-# Global project (default macros + materializations), starter project
-/core/dbt/include               @dbt-labs/core-adapters
-
-# Postgres plugin
-/plugins/                       @dbt-labs/core-adapters
-/plugins/postgres/setup.py      @dbt-labs/core-adapters
-
-# Functional tests for adapter plugins
-/tests/adapter                  @dbt-labs/core-adapters
-
-### TESTS
-
-# Overlapping ownership for vast majority of unit + functional tests
-
-# Perf regression testing framework
-# This excludes the test project files itself since those aren't specific
-# framework changes (excluded by not setting an owner next to it- no owner)
-/performance                    @nathaniel-may
-/performance/projects
-
 ### ARTIFACTS
 
 /schemas/dbt                    @dbt-labs/cloud-artifacts

@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Add test for sources tables with quotes
+time: 2024-08-21T09:55:16.038101-04:00
+custom:
+  Author: gshank
+  Issue: "10582"

@@ -1,8 +1,7 @@
 import pytest
 
-from dbt.tests.util import run_dbt, get_manifest, check_relations_equal, write_file
-
 from dbt.exceptions import CompilationError, ParsingError
+from dbt.tests.util import check_relations_equal, get_manifest, run_dbt, write_file
 
 models_alt__schema_yml = """
 version: 2
@@ -250,3 +249,23 @@ class TestSchemaFileConfigs:
         write_file(extra_alt__untagged2_yml, project.project_root, "models", "untagged.yml")
         with pytest.raises(CompilationError):
             run_dbt(["run"])
+
+
+list_schema_yml = """
+- name: my_name
+- name: alt_name
+"""
+
+
+class TestListSchemaFile:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_model.sql": "select 1 as id",
+            "schema.yml": list_schema_yml,
+        }
+
+    def test_list_schema(self, project):
+        with pytest.raises(ParsingError) as excinfo:
+            run_dbt(["run"])
+        assert "Dictionary expected" in str(excinfo.value)

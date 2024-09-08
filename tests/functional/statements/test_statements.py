@@ -1,7 +1,8 @@
 import pathlib
+
 import pytest
 
-from dbt.tests.util import run_dbt, check_relations_equal, write_file
+from dbt.tests.util import check_relations_equal, run_dbt, write_file
 from tests.functional.statements.fixtures import (
     models__statement_actual,
     models__statement_duplicated_load,

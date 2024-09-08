@@ -1,11 +1,17 @@
 from dataclasses import dataclass, field
-from typing import Literal, Optional, List
 from datetime import datetime
+from typing import Dict, List, Literal, Optional
+
+from dbt.artifacts.resources.types import AccessType, NodeType
+from dbt.artifacts.resources.v1.components import (
+    CompiledResource,
+    DeferRelation,
+    NodeVersion,
+)
+from dbt.artifacts.resources.v1.config import NodeConfig
 from dbt_common.contracts.config.base import MergeBehavior
 from dbt_common.contracts.constraints import ModelLevelConstraint
-from dbt.artifacts.resources.v1.config import NodeConfig
-from dbt.artifacts.resources.types import AccessType, NodeType
-from dbt.artifacts.resources.v1.components import DeferRelation, NodeVersion, CompiledResource
+from dbt_common.dataclass_schema import dbtClassMixin
 
 
 @dataclass
@@ -14,6 +20,11 @@ class ModelConfig(NodeConfig):
         default=AccessType.Protected,
         metadata=MergeBehavior.Clobber.meta(),
     )
+
+
+@dataclass
+class TimeSpine(dbtClassMixin):
+    standard_granularity_column: str
 
 
 @dataclass
@@ -26,3 +37,11 @@ class Model(CompiledResource):
     latest_version: Optional[NodeVersion] = None
     deprecation_date: Optional[datetime] = None
     defer_relation: Optional[DeferRelation] = None
+    primary_key: List[str] = field(default_factory=list)
+    time_spine: Optional[TimeSpine] = None
+
+    def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
+        dct = super().__post_serialize__(dct, context)
+        if context and context.get("artifact") and "defer_relation" in dct:
+            del dct["defer_relation"]
+        return dct

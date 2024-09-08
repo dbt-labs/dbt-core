@@ -1,21 +1,27 @@
-import os
-import pytest
 import json
+import os
 import shutil
-import yaml
-
-# todo: make self.unique_schema to fixture
-
 from pathlib import Path
 from unittest import mock
 
-import dbt_common.semver as semver
-import dbt_common.exceptions
+import pytest
+import yaml
+
 import dbt.config
 import dbt.exceptions
-
-from dbt.tests.util import check_relations_equal, run_dbt, run_dbt_and_capture
+import dbt_common.exceptions
+import dbt_common.semver as semver
+from dbt import deprecations
+from dbt.tests.util import (
+    check_relations_equal,
+    run_dbt,
+    run_dbt_and_capture,
+    write_file,
+)
 from tests.functional.utils import up_one
+
+# todo: make self.unique_schema to fixture
+
 
 models__dep_source = """
 {# If our dependency source didn't exist, this would be an errror #}
@@ -353,3 +359,35 @@ class TestSimpleDependencyDuplicateName(BaseDependencyTest):
 
         # needed to avoid compilation errors from duplicate package names in test autocleanup
         run_dbt(["clean"])
+
+
+source_with_tests = """
+sources:
+  - name: my_source
+    schema: invalid_schema
+    tables:
+      - name: my_table
+  - name: seed_source
+    schema: "{{ var('schema_override', target.schema) }}"
+    tables:
+      - name: "seed"
+        identifier: "seed_subpackage_generate_alias_name"
+        columns:
+          - name: id
+            tests:
+              - unique
+              - not_null
+"""
+
+
+class TestDependencyTestsConfig(BaseDependencyTest):
+    def test_dependency_tests_config(self, project):
+        run_dbt(["deps"])
+        # Write a file to local_dependency with a "tests" config
+        write_file(
+            source_with_tests, project.project_root, "local_dependency", "models", "schema.yml"
+        )
+        run_dbt(["parse"])
+        # Check that project-test-config is NOT in active deprecations, since "tests" is only
+        # in a dependent project.
+        assert "project-test-config" not in deprecations.active_deprecations

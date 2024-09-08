@@ -1,11 +1,11 @@
-import pytest
 import os
 
-from dbt.constants import SECRET_ENV_PREFIX
-from dbt.exceptions import ParsingError, DbtInternalError
-from tests.functional.context_methods.first_dependency import FirstDependencyProject
-from dbt.tests.util import run_dbt, run_dbt_and_capture, read_file
+import pytest
 
+from dbt.exceptions import DbtInternalError, ParsingError
+from dbt.tests.util import read_file, run_dbt, run_dbt_and_capture
+from dbt_common.constants import SECRET_ENV_PREFIX
+from tests.functional.context_methods.first_dependency import FirstDependencyProject
 
 secret_bad__context_sql = """
 
@@ -73,15 +73,15 @@ select
 class TestAllowSecretProfilePackage(FirstDependencyProject):
     @pytest.fixture(scope="class", autouse=True)
     def setup(self):
-        os.environ[SECRET_ENV_PREFIX + "USER"] = "root"
-        os.environ[SECRET_ENV_PREFIX + "PASS"] = "password"
-        os.environ[SECRET_ENV_PREFIX + "PACKAGE"] = "first_dependency"
-        os.environ[SECRET_ENV_PREFIX + "GIT_TOKEN"] = "abc123"
+        os.environ[SECRET_ENV_PREFIX + "_USER"] = "root"
+        os.environ[SECRET_ENV_PREFIX + "_PASS"] = "password"
+        os.environ[SECRET_ENV_PREFIX + "_PACKAGE"] = "first_dependency"
+        os.environ[SECRET_ENV_PREFIX + "_GIT_TOKEN"] = "abc123"
         yield
-        del os.environ[SECRET_ENV_PREFIX + "USER"]
-        del os.environ[SECRET_ENV_PREFIX + "PASS"]
-        del os.environ[SECRET_ENV_PREFIX + "PACKAGE"]
-        del os.environ[SECRET_ENV_PREFIX + "GIT_TOKEN"]
+        del os.environ[SECRET_ENV_PREFIX + "_USER"]
+        del os.environ[SECRET_ENV_PREFIX + "_PASS"]
+        del os.environ[SECRET_ENV_PREFIX + "_PACKAGE"]
+        del os.environ[SECRET_ENV_PREFIX + "_GIT_TOKEN"]
 
     @pytest.fixture(scope="class")
     def models(self):
@@ -137,7 +137,7 @@ class TestAllowSecretProfilePackage(FirstDependencyProject):
 class TestCloneFailSecretScrubbed:
     @pytest.fixture(scope="class", autouse=True)
     def setup(self):
-        os.environ[SECRET_ENV_PREFIX + "GIT_TOKEN"] = "abc123"
+        os.environ[SECRET_ENV_PREFIX + "_GIT_TOKEN"] = "abc123"
 
     @pytest.fixture(scope="class")
     def models(self):

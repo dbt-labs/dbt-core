@@ -1,33 +1,28 @@
-import pytest
 import shutil
-
-import dbt_common.exceptions
-
 from pathlib import Path
 
-from dbt.tests.util import (
-    run_dbt,
-    check_relations_equal,
-)
+import pytest
 
+import dbt_common.exceptions
 from dbt.tests.fixtures.project import write_project_files
+from dbt.tests.util import check_relations_equal, run_dbt
 from tests.functional.macros.fixtures import (
     dbt_project__incorrect_dispatch,
-    models__dep_macro,
-    models__with_undefined_macro,
-    models__local_macro,
-    models__ref_macro,
-    models__override_get_columns_macros,
-    models__deprecated_adapter_macro_model,
-    models__incorrect_dispatch,
-    models__materialization_macro,
+    macros__deprecated_adapter_macro,
+    macros__incorrect_dispatch,
     macros__my_macros,
+    macros__named_materialization,
     macros__no_default_macros,
     macros__override_get_columns_macros,
     macros__package_override_get_columns_macros,
-    macros__deprecated_adapter_macro,
-    macros__incorrect_dispatch,
-    macros__named_materialization,
+    models__dep_macro,
+    models__deprecated_adapter_macro_model,
+    models__incorrect_dispatch,
+    models__local_macro,
+    models__materialization_macro,
+    models__override_get_columns_macros,
+    models__ref_macro,
+    models__with_undefined_macro,
 )
 
 

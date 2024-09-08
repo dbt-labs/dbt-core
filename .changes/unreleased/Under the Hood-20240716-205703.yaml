@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: generate protos with protoc version 5.26.1
+time: 2024-07-16T20:57:03.332448-04:00
+custom:
+  Author: michelleark
+  Issue: "10457"

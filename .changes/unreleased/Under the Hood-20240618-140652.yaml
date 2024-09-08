@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Remove IntermediateSnapshotNode
+time: 2024-06-18T14:06:52.618602-04:00
+custom:
+  Author: gshank
+  Issue: "10326"

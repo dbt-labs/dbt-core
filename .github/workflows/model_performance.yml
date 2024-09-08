@@ -195,7 +195,7 @@ jobs:
       - name: '[DEBUG] ls baseline directory after run'
         run: ls -R performance/baselines/
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: baseline
           path: performance/baselines/${{ needs.set-variables.outputs.release_id }}/

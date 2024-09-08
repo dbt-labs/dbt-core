@@ -1,10 +1,10 @@
 import pytest
 
-from dbt.tests.fixtures.project import write_project_files
-from tests.fixtures.dbt_integration_project import dbt_integration_project  # noqa: F401
-from dbt.tests.util import run_dbt, get_manifest, write_file, rm_file
+from dbt.exceptions import DbtReferenceError, InvalidAccessTypeError
 from dbt.node_types import AccessType
-from dbt.exceptions import InvalidAccessTypeError, DbtReferenceError
+from dbt.tests.fixtures.project import write_project_files
+from dbt.tests.util import get_manifest, rm_file, run_dbt, write_file
+from tests.fixtures.dbt_integration_project import dbt_integration_project  # noqa: F401
 
 my_model_sql = "select 1 as fun"
 

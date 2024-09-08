@@ -3,13 +3,13 @@ import os
 from pathlib import Path
 from typing import Dict
 
-from dbt_common.clients import system
 from dbt.config.project import PartialProject
 from dbt.contracts.project import TarballPackage
 from dbt.deps.base import PinnedPackage, UnpinnedPackage, get_downloads_path
-from dbt.exceptions import DependencyError, scrub_secrets, env_secrets
-from dbt_common.events.functions import warn_or_error
 from dbt.events.types import DepsScrubbedPackageName
+from dbt.exceptions import DependencyError, env_secrets, scrub_secrets
+from dbt_common.clients import system
+from dbt_common.events.functions import warn_or_error
 from dbt_common.utils.connection import connection_exception_retry
 
 

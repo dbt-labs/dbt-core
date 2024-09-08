@@ -1,6 +1,0 @@
-kind: Fixes
-body: Fix seed and source selection in `dbt docs generate`
-time: 2024-01-25T15:56:41.557934-05:00
-custom:
-  Author: michelleark
-  Issue: "9161"

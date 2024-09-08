@@ -1,37 +1,36 @@
 import functools
 from typing import NoReturn
 
-from dbt_common.events.functions import warn_or_error
-from dbt.events.types import JinjaLogWarning
-
-from dbt_common.exceptions import (
-    DbtRuntimeError,
-    NotImplementedError,
-    DbtDatabaseError,
-    DataclassNotDictError,
-)
 from dbt.adapters.exceptions import (
-    MissingConfigError,
     ColumnTypeMissingError,
+    MissingConfigError,
     MissingMaterializationError,
     RelationWrongTypeError,
 )
+from dbt.adapters.exceptions.cache import CacheInconsistencyError
+from dbt.events.types import JinjaLogWarning, SnapshotTimestampWarning
 from dbt.exceptions import (
-    MissingRelationError,
     AmbiguousAliasError,
     AmbiguousCatalogMatchError,
     CompilationError,
-    DependencyNotFoundError,
+    ContractError,
     DependencyError,
+    DependencyNotFoundError,
     DuplicatePatchPathError,
     DuplicateResourceNameError,
-    PropertyYMLError,
-    ContractError,
     FailFastError,
-    scrub_secrets,
+    MissingRelationError,
+    PropertyYMLError,
     env_secrets,
+    scrub_secrets,
 )
-from dbt.adapters.exceptions.cache import CacheInconsistencyError
+from dbt_common.events.functions import warn_or_error
+from dbt_common.exceptions import (
+    DataclassNotDictError,
+    DbtDatabaseError,
+    DbtRuntimeError,
+    NotImplementedError,
+)
 
 
 def warn(msg, node=None):
@@ -117,6 +116,17 @@ def raise_fail_fast_error(msg, node=None) -> NoReturn:
     raise FailFastError(msg, node=node)
 
 
+def warn_snapshot_timestamp_data_types(
+    snapshot_time_data_type: str, updated_at_data_type: str
+) -> None:
+    warn_or_error(
+        SnapshotTimestampWarning(
+            snapshot_time_data_type=snapshot_time_data_type,
+            updated_at_data_type=updated_at_data_type,
+        )
+    )
+
+
 # Update this when a new function should be added to the
 # dbt context's `exceptions` key!
 CONTEXT_EXPORTS = {
@@ -142,6 +152,7 @@ CONTEXT_EXPORTS = {
         raise_contract_error,
         column_type_missing,
         raise_fail_fast_error,
+        warn_snapshot_timestamp_data_types,
     ]
 }
 

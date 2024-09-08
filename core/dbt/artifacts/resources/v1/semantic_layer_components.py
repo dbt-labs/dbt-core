@@ -1,8 +1,11 @@
 from dataclasses import dataclass
+from typing import List, Sequence, Tuple
+
 from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_semantic_interfaces.call_parameter_sets import FilterCallParameterSets
-from dbt_semantic_interfaces.parsing.where_filter.where_filter_parser import WhereFilterParser
-from typing import List, Sequence, Tuple
+from dbt_semantic_interfaces.parsing.where_filter.where_filter_parser import (
+    WhereFilterParser,
+)
 
 
 @dataclass

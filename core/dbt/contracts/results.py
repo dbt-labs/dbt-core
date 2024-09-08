@@ -9,50 +9,45 @@ from dbt.artifacts.schemas.base import (
     VersionedSchema,
     schema_version,
 )
-
-from dbt.artifacts.schemas.results import (
-    NodeStatus,
-    RunStatus,
-    TestStatus,
-    FreshnessStatus,
-    RunningStatus,
-    TimingInfo,
-    collect_timing_info,
-    BaseResult,
-    NodeResult,
-    ExecutionResult,
-)
-
-from dbt.artifacts.schemas.run import (
-    RunResult,
-    RunResultsMetadata,
-    RunExecutionResult,
-    RunResultsArtifact,
-    process_run_result,
-)
-
-from dbt.artifacts.schemas.freshness import (
-    FreshnessErrorEnum,
-    FreshnessMetadata,
-    FreshnessResult,
-    FreshnessExecutionResultArtifact,
-    FreshnessNodeResult,
-    FreshnessNodeOutput,
-    process_freshness_result,
-    SourceFreshnessResult,
-    SourceFreshnessRuntimeError,
-    SourceFreshnessOutput,
-    PartialSourceFreshnessResult,
-)
-
 from dbt.artifacts.schemas.catalog import (
-    CatalogResults,
+    CatalogArtifact,
     CatalogKey,
-    StatsItem,
-    ColumnMetadata,
-    TableMetadata,
-    CatalogTable,
     CatalogMetadata,
     CatalogResults,
-    CatalogArtifact,
+    CatalogTable,
+    ColumnMetadata,
+    StatsItem,
+    TableMetadata,
+)
+from dbt.artifacts.schemas.freshness import (
+    FreshnessErrorEnum,
+    FreshnessExecutionResultArtifact,
+    FreshnessMetadata,
+    FreshnessNodeOutput,
+    FreshnessNodeResult,
+    FreshnessResult,
+    PartialSourceFreshnessResult,
+    SourceFreshnessOutput,
+    SourceFreshnessResult,
+    SourceFreshnessRuntimeError,
+    process_freshness_result,
+)
+from dbt.artifacts.schemas.results import (
+    BaseResult,
+    ExecutionResult,
+    FreshnessStatus,
+    NodeResult,
+    NodeStatus,
+    RunningStatus,
+    RunStatus,
+    TestStatus,
+    TimingInfo,
+    collect_timing_info,
+)
+from dbt.artifacts.schemas.run import (
+    RunExecutionResult,
+    RunResult,
+    RunResultsArtifact,
+    RunResultsMetadata,
+    process_run_result,
 )

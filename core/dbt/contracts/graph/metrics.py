@@ -1,8 +1,7 @@
-from dbt.contracts.graph.manifest import Manifest, Metric
-from dbt_semantic_interfaces.type_enums import MetricType
-
 from typing import Any, Dict, Iterator, List
 
+from dbt.contracts.graph.manifest import Manifest, Metric
+from dbt_semantic_interfaces.type_enums import MetricType
 
 DERIVED_METRICS = [MetricType.DERIVED, MetricType.RATIO]
 BASE_METRICS = [MetricType.SIMPLE, MetricType.CUMULATIVE, MetricType.CONVERSION]

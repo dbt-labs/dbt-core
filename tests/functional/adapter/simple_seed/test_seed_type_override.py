@@ -1,15 +1,13 @@
 import pytest
 
 from dbt.tests.util import run_dbt
-
 from tests.functional.adapter.simple_seed.fixtures import (
     macros__schema_test,
     properties__schema_yml,
 )
-
 from tests.functional.adapter.simple_seed.seeds import (
-    seeds__enabled_in_config_csv,
     seeds__disabled_in_config_csv,
+    seeds__enabled_in_config_csv,
     seeds__tricky_csv,
 )
 

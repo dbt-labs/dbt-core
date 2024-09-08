@@ -16,24 +16,29 @@ from typing import (
 )
 
 from dbt import tracking
-from dbt.adapters.factory import get_include_paths, get_relation_class_by_name
-from dbt.adapters.contracts.connection import AdapterRequiredConfig, Credentials, HasCredentials
+from dbt.adapters.contracts.connection import (
+    AdapterRequiredConfig,
+    Credentials,
+    HasCredentials,
+)
 from dbt.adapters.contracts.relation import ComponentName
-from dbt.flags import get_flags
+from dbt.adapters.factory import get_include_paths, get_relation_class_by_name
 from dbt.config.project import load_raw_project
 from dbt.contracts.graph.manifest import ManifestMetadata
 from dbt.contracts.project import Configuration
-from dbt_common.dataclass_schema import ValidationError
-from dbt_common.events.functions import warn_or_error
 from dbt.events.types import UnusedResourceConfigPath
 from dbt.exceptions import (
     ConfigContractBrokenError,
     DbtProjectError,
-    NonUniquePackageNameError,
     DbtRuntimeError,
+    NonUniquePackageNameError,
     UninstalledPackagesFoundError,
 )
+from dbt.flags import get_flags
+from dbt_common.dataclass_schema import ValidationError
+from dbt_common.events.functions import warn_or_error
 from dbt_common.helper_types import DictDefaultEmptyStr, FQNPath, PathSet
+
 from .profile import Profile
 from .project import Project
 from .renderer import DbtProjectYamlRenderer, ProfileRenderer
@@ -188,6 +193,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             log_cache_events=log_cache_events,
             dependencies=dependencies,
             dbt_cloud=project.dbt_cloud,
+            flags=project.flags,
         )
 
     # Called by 'load_projects' in this class
@@ -285,9 +291,9 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             project_name=self.project_name,
             project_id=self.hashed_name(),
             user_id=tracking.active_user.id if tracking.active_user else None,
-            send_anonymous_usage_stats=get_flags().SEND_ANONYMOUS_USAGE_STATS
-            if tracking.active_user
-            else None,
+            send_anonymous_usage_stats=(
+                get_flags().SEND_ANONYMOUS_USAGE_STATS if tracking.active_user else None
+            ),
             adapter_type=self.credentials.type,
         )
 

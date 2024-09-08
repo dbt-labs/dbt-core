@@ -2,21 +2,21 @@ from pathlib import Path
 from shutil import rmtree
 
 from dbt import deprecations
+from dbt.cli.flags import Flags
+from dbt.config.project import Project
+from dbt.events.types import CheckCleanPath, ConfirmCleanPath, FinishedCleanPaths
+from dbt.task.base import BaseTask, move_to_nearest_project_dir
 from dbt_common.events.functions import fire_event
-from dbt.events.types import (
-    CheckCleanPath,
-    ConfirmCleanPath,
-    FinishedCleanPaths,
-)
 from dbt_common.exceptions import DbtRuntimeError
-from dbt.task.base import (
-    BaseTask,
-    move_to_nearest_project_dir,
-)
 
 
 class CleanTask(BaseTask):
-    def run(self):
+    def __init__(self, args: Flags, config: Project):
+        super().__init__(args)
+        self.config = config
+        self.project = config
+
+    def run(self) -> None:
         """
         This function takes all the paths in the target file
         and cleans the project paths that are not protected.

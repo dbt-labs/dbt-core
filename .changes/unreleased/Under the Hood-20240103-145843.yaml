@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Reorganizing event definitions to define core events in dbt/events rather than
-  dbt/common
-time: 2024-01-03T14:58:43.607499-05:00
-custom:
-  Author: michelleark
-  Issue: "9152"

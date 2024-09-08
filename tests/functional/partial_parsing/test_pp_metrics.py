@@ -1,17 +1,19 @@
 import pytest
 
-from dbt.tests.util import run_dbt, write_file, get_manifest
-from tests.functional.partial_parsing.fixtures import (
-    people_sql,
-    metricflow_time_spine_sql,
-    people_semantic_models_yml,
-    people_metrics_yml,
-    people_metrics2_yml,
-    metric_model_a_sql,
-    people_metrics3_yml,
-)
-
+from dbt.cli.main import dbtRunner
+from dbt.contracts.graph.manifest import Manifest
 from dbt.exceptions import CompilationError
+from dbt.tests.util import get_manifest, rm_file, run_dbt, write_file
+from tests.functional.partial_parsing.fixtures import (
+    metric_model_a_sql,
+    metricflow_time_spine_sql,
+    people_metrics2_yml,
+    people_metrics3_yml,
+    people_metrics_yml,
+    people_semantic_models_yml,
+    people_sl_yml,
+    people_sql,
+)
 
 
 class TestMetrics:
@@ -84,3 +86,29 @@ class TestMetrics:
             # We use "parse" here and not "run" because we're checking that the CompilationError
             # occurs at parse time, not compilation
             results = run_dbt(["parse"])
+
+
+class TestDeleteFileWithMetricsAndSemanticModels:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "people.sql": people_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+            "people_sl.yml": people_sl_yml,
+        }
+
+    def test_metrics(self, project):
+        # Initial parsing
+        runner = dbtRunner()
+        result = runner.invoke(["parse"])
+        assert result.success
+        manifest = result.result
+        assert isinstance(manifest, Manifest)
+        assert len(manifest.metrics) == 3
+
+        # Remove metric file
+        rm_file(project.project_root, "models", "people_sl.yml")
+
+        # Rerun parse, shouldn't fail
+        result = runner.invoke(["parse"])
+        assert result.exception is None, result.exception

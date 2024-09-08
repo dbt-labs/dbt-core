@@ -1,43 +1,43 @@
-import pytest
 import re
 
+import pytest
+
 from dbt.tests.util import (
-    run_dbt,
     get_manifest,
-    run_dbt_and_capture,
-    write_file,
     read_file,
     relation_from_name,
+    run_dbt,
+    run_dbt_and_capture,
+    write_file,
 )
-
 from tests.functional.adapter.constraints.fixtures import (
-    my_model_sql,
-    my_incremental_model_sql,
-    my_model_wrong_order_sql,
-    my_model_wrong_name_sql,
-    my_model_data_type_sql,
-    model_data_type_schema_yml,
-    my_model_view_wrong_order_sql,
-    my_model_view_wrong_name_sql,
-    my_model_incremental_wrong_order_sql,
-    my_model_incremental_wrong_name_sql,
-    my_model_with_nulls_sql,
-    my_model_incremental_with_nulls_sql,
-    my_model_with_quoted_column_name_sql,
-    model_schema_yml,
-    model_fk_constraint_schema_yml,
     constrained_model_schema_yml,
-    model_quoted_column_schema_yml,
-    foreign_key_model_sql,
-    my_model_wrong_order_depends_on_fk_sql,
-    my_model_incremental_wrong_order_depends_on_fk_sql,
-    my_model_contract_sql_header_sql,
-    my_model_incremental_contract_sql_header_sql,
-    model_contract_header_schema_yml,
     create_table_macro_sql,
-    incremental_foreign_key_schema_yml,
+    foreign_key_model_sql,
     incremental_foreign_key_model_raw_numbers_sql,
     incremental_foreign_key_model_stg_numbers_sql,
+    incremental_foreign_key_schema_yml,
+    model_contract_header_schema_yml,
+    model_data_type_schema_yml,
+    model_fk_constraint_schema_yml,
+    model_quoted_column_schema_yml,
+    model_schema_yml,
+    my_incremental_model_sql,
+    my_model_contract_sql_header_sql,
+    my_model_data_type_sql,
+    my_model_incremental_contract_sql_header_sql,
+    my_model_incremental_with_nulls_sql,
+    my_model_incremental_wrong_name_sql,
+    my_model_incremental_wrong_order_depends_on_fk_sql,
+    my_model_incremental_wrong_order_sql,
+    my_model_sql,
+    my_model_view_wrong_name_sql,
+    my_model_view_wrong_order_sql,
+    my_model_with_nulls_sql,
+    my_model_with_quoted_column_name_sql,
+    my_model_wrong_name_sql,
+    my_model_wrong_order_depends_on_fk_sql,
+    my_model_wrong_order_sql,
 )
 
 
@@ -104,7 +104,7 @@ class BaseConstraintsColumnsEqual:
     def test__constraints_wrong_column_data_types(
         self, project, string_type, int_type, schema_string_type, schema_int_type, data_types
     ):
-        for (sql_column_value, schema_data_type, error_data_type) in data_types:
+        for sql_column_value, schema_data_type, error_data_type in data_types:
             # Write parametrized data_type to sql file
             write_file(
                 my_model_data_type_sql.format(sql_value=sql_column_value),
@@ -146,7 +146,7 @@ class BaseConstraintsColumnsEqual:
             assert all([(exp in log_output or exp.upper() in log_output) for exp in expected])
 
     def test__constraints_correct_column_data_types(self, project, data_types):
-        for (sql_column_value, schema_data_type, _) in data_types:
+        for sql_column_value, schema_data_type, _ in data_types:
             # Write parametrized data_type to sql file
             write_file(
                 my_model_data_type_sql.format(sql_value=sql_column_value),

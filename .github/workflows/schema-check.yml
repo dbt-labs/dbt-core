@@ -13,20 +13,18 @@
 name: Artifact Schema Check
 
 on:
+  pull_request:
+    types: [ opened, reopened, labeled, unlabeled, synchronize ]
+    paths-ignore: [ '.changes/**', '.github/**', 'tests/**', '**.md', '**.yml' ]
+
   workflow_dispatch:
-  pull_request: #TODO: remove before merging
-  push:
-    branches:
-      - "develop"
-      - "*.latest"
-      - "releases/*"
 
 # no special access is needed
 permissions: read-all
 
 env:
   LATEST_SCHEMA_PATH: ${{ github.workspace }}/new_schemas
-  SCHEMA_DIFF_ARTIFACT: ${{ github.workspace }}/schema_schanges.txt
+  SCHEMA_DIFF_ARTIFACT: ${{ github.workspace }}/schema_changes.txt
   DBT_REPO_DIRECTORY: ${{ github.workspace }}/dbt
   SCHEMA_REPO_DIRECTORY: ${{ github.workspace }}/schemas.getdbt.com
 
@@ -46,15 +44,32 @@ jobs:
         with:
             path: ${{ env.DBT_REPO_DIRECTORY }}
 
+      - name: Check for changes in core/dbt/artifacts
+        # https://github.com/marketplace/actions/paths-changes-filter
+        uses: dorny/paths-filter@v3
+        id: check_artifact_changes
+        with:
+          filters: |
+            artifacts_changed:
+              - 'core/dbt/artifacts/**'
+          list-files: shell
+          working-directory: ${{ env.DBT_REPO_DIRECTORY }}
+
+      - name: Succeed if no artifacts have changed
+        if: steps.check_artifact_changes.outputs.artifacts_changed == 'false'
+        run: |
+          echo "No artifact changes found in core/dbt/artifacts. CI check passed."
+
       - name: Checkout schemas.getdbt.com repo
+        if: steps.check_artifact_changes.outputs.artifacts_changed == 'true'
         uses: actions/checkout@v4
         with:
           repository: dbt-labs/schemas.getdbt.com
           ref: 'main'
-          ssh-key: ${{ secrets.SCHEMA_SSH_PRIVATE_KEY }}
           path: ${{ env.SCHEMA_REPO_DIRECTORY }}
 
       - name: Generate current schema
+        if: steps.check_artifact_changes.outputs.artifacts_changed == 'true'
         run: |
           cd ${{ env.DBT_REPO_DIRECTORY }}
           python3 -m venv env
@@ -65,26 +80,17 @@ jobs:
 
       # Copy generated schema files into the schemas.getdbt.com repo
       # Do a git diff to find any changes
-      # Ignore any date or version changes though
+      # Ignore any lines with date-like (yyyy-mm-dd) or version-like (x.y.z) changes
       - name: Compare schemas
+        if: steps.check_artifact_changes.outputs.artifacts_changed == 'true'
         run: |
           cp -r ${{ env.LATEST_SCHEMA_PATH }}/dbt ${{ env.SCHEMA_REPO_DIRECTORY }}
           cd ${{ env.SCHEMA_REPO_DIRECTORY }}
-          diff_results=$(git diff -I='*[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[1-2][0-9]|3[0-1])T' \
-          -I='*[0-9]{1}.[0-9]{2}.[0-9]{1}(rc[0-9]|b[0-9]| )' --compact-summary)
-          if [[ $(echo diff_results) ]]; then
-            echo $diff_results
-            echo "Schema changes detected!"
-            git diff -I='*[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[1-2][0-9]|3[0-1])T' \
-              -I='*[0-9]{1}.[0-9]{2}.[0-9]{1}(rc[0-9]|b[0-9]| )' > ${{ env.SCHEMA_DIFF_ARTIFACT }}
-            exit 1
-          else
-            echo "No schema changes detected"
-          fi
+          git diff -I='*[0-9]{4}-[0-9]{2}-[0-9]{2}' -I='*[0-9]+\.[0-9]+\.[0-9]+' --exit-code > ${{ env.SCHEMA_DIFF_ARTIFACT }}
 
       - name: Upload schema diff
-        uses: actions/upload-artifact@v3
-        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        if: ${{ failure() && steps.check_artifact_changes.outputs.artifacts_changed == 'true' }}
         with:
-          name: 'schema_schanges.txt'
+          name: 'schema_changes.txt'
           path: '${{ env.SCHEMA_DIFF_ARTIFACT }}'

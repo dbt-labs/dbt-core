@@ -36,7 +36,7 @@ on:
         type: choice
         options:
           - 'ubuntu-latest'
-          - 'macos-latest'
+          - 'macos-12'
           - 'windows-latest'
       num_runs_per_batch:
         description: 'Max number of times to run the test per batch.  We always run 10 batches.'
@@ -101,7 +101,7 @@ jobs:
 
         # mac and windows don't use make due to limitations with docker with those runners in GitHub
       - name: "Set up postgres (macos)"
-        if: inputs.os == 'macos-latest'
+        if: inputs.os == 'macos-12'
         uses: ./.github/actions/setup-postgres-macos
 
       - name: "Set up postgres (windows)"

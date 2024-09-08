@@ -403,6 +403,48 @@ message ProjectFlagsMovedDeprecationMsg {
     ProjectFlagsMovedDeprecation data = 2;
 }
 
+// D014
+message SpacesInResourceNameDeprecation {
+    string unique_id = 1;
+    string level = 2;
+}
+
+message SpacesInResourceNameDeprecationMsg {
+    CoreEventInfo info = 1;
+    SpacesInResourceNameDeprecation data = 2;
+}
+
+// D015
+message ResourceNamesWithSpacesDeprecation {
+    int32 count_invalid_names = 1;
+    bool show_debug_hint = 2;
+    string level = 3;
+}
+
+message ResourceNamesWithSpacesDeprecationMsg {
+    CoreEventInfo info = 1;
+    ResourceNamesWithSpacesDeprecation data = 2;
+}
+
+// D016
+message PackageMaterializationOverrideDeprecation {
+    string package_name = 1;
+    string materialization_name = 2;
+}
+
+message PackageMaterializationOverrideDeprecationMsg {
+    CoreEventInfo info = 1;
+    PackageMaterializationOverrideDeprecation data = 2;
+}
+
+// D017
+message SourceFreshnessProjectHooksNotRun {}
+
+message SourceFreshnessProjectHooksNotRunMsg {
+    CoreEventInfo info = 1;
+    SourceFreshnessProjectHooksNotRun data = 2;
+}
+
 // I065
 message DeprecatedModel {
     string model_name = 1;
@@ -1331,8 +1373,23 @@ message LogFreshnessResultMsg {
     LogFreshnessResult data = 2;
 }
 
+// Q018
+message LogNodeNoOpResult {
+    NodeInfo node_info = 1;
+    string description = 2;
+    string status = 3;
+    int32 index = 4;
+    int32 total = 5;
+    float execution_time = 6;
+}
 
-// Skipped Q019, Q020, Q021
+message LogNodeNoOpResultMsg {
+    CoreEventInfo info = 1;
+    LogNodeNoOpResult data = 2;
+}
+
+
+// Skipped Q020, Q021
 
 
 // Q022
@@ -1553,6 +1610,17 @@ message CompiledNodeMsg {
     CompiledNode data = 2;
 }
 
+// Q043
+message SnapshotTimestampWarning {
+    string snapshot_time_data_type = 1;
+    string updated_at_data_type = 2;
+}
+
+message SnapshotTimestampWarningMsg {
+    CoreEventInfo info = 1;
+    SnapshotTimestampWarning data = 2;
+}
+
 // W - Node testing
 
 // Skipped W001
@@ -1752,11 +1820,19 @@ message ServingDocsExitInfoMsg {
     ServingDocsExitInfo data = 2;
 }
 
+message Group {
+    string name = 1;
+    string package_name = 3;
+    map<string, string> owner = 7;
+}
+
 // Z021
 message RunResultWarning {
     string resource_type = 1;
     string node_name = 2;
     string path = 3;
+    NodeInfo node_info = 4;
+    Group group = 5;
 }
 
 message RunResultWarningMsg {
@@ -1769,6 +1845,8 @@ message RunResultFailure {
     string resource_type = 1;
     string node_name = 2;
     string path = 3;
+    NodeInfo node_info = 4;
+    Group group = 5;
 }
 
 message RunResultFailureMsg {
@@ -1789,6 +1867,8 @@ message StatsLineMsg {
 // Z024
 message RunResultError {
     string msg = 1;
+    NodeInfo node_info = 2;
+    Group group = 3;
 }
 
 message RunResultErrorMsg {
@@ -1799,6 +1879,7 @@ message RunResultErrorMsg {
 // Z025
 message RunResultErrorNoMessage {
     string status = 1;
+    NodeInfo node_info = 2;
 }
 
 message RunResultErrorNoMessageMsg {
@@ -1809,6 +1890,7 @@ message RunResultErrorNoMessageMsg {
 // Z026
 message SQLCompiledPath {
     string path = 1;
+    NodeInfo node_info = 2;
 }
 
 message SQLCompiledPathMsg {
@@ -1819,6 +1901,7 @@ message SQLCompiledPathMsg {
 // Z027
 message CheckNodeTestFailure {
     string relation_name = 1;
+    NodeInfo node_info = 2;
 }
 
 message CheckNodeTestFailureMsg {
@@ -1840,7 +1923,19 @@ message EndOfRunSummaryMsg {
     EndOfRunSummary data = 2;
 }
 
-// Skipped Z031, Z032, Z033
+// Skipped Z031, Z032
+
+// Z033
+message MarkSkippedChildren {
+    string unique_id = 1;
+    string status = 2;
+    RunResultMsg run_result = 3;
+}
+
+message MarkSkippedChildrenMsg {
+    CoreEventInfo info = 1;
+    MarkSkippedChildren data = 2;
+}
 
 // Z034
 message LogSkipBecauseError {
@@ -1848,6 +1943,7 @@ message LogSkipBecauseError {
     string relation = 2;
     int32 index = 3;
     int32 total = 4;
+    string status = 5;
 }
 
 message LogSkipBecauseErrorMsg {
@@ -1943,6 +2039,7 @@ message TrackingInitializeFailureMsg {
 // Z046
 message RunResultWarningMessage {
     string msg = 1;
+    NodeInfo node_info = 2;
 }
 
 message RunResultWarningMessageMsg {

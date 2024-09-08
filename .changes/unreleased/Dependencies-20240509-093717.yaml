@@ -1,0 +1,6 @@
+kind: Dependencies
+body: Remove logbook dependency
+time: 2024-05-09T09:37:17.745129-05:00
+custom:
+  Author: emmyoop
+  Issue: "8027"

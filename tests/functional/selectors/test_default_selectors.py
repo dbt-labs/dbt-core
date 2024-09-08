@@ -1,4 +1,5 @@
 import pytest
+
 from dbt.tests.util import run_dbt
 
 models__schema_yml = """

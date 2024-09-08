@@ -1,15 +1,16 @@
 from pathlib import Path
+
 from click import get_current_context
 from click.core import ParameterSource
 
+from dbt.artifacts.schemas.results import NodeStatus
 from dbt.cli.flags import Flags
-from dbt.flags import set_flags, get_flags
 from dbt.cli.types import Command as CliCommand
 from dbt.config import RuntimeConfig
-from dbt.artifacts.schemas.results import NodeStatus
 from dbt.contracts.state import load_result_state
-from dbt_common.exceptions import DbtRuntimeError
+from dbt.flags import get_flags, set_flags
 from dbt.graph import GraphQueue
+from dbt.parser.manifest import parse_manifest
 from dbt.task.base import ConfiguredTask
 from dbt.task.build import BuildTask
 from dbt.task.clone import CloneTask
@@ -20,7 +21,7 @@ from dbt.task.run_operation import RunOperationTask
 from dbt.task.seed import SeedTask
 from dbt.task.snapshot import SnapshotTask
 from dbt.task.test import TestTask
-from dbt.parser.manifest import parse_manifest
+from dbt_common.exceptions import DbtRuntimeError
 
 RETRYABLE_STATUSES = {NodeStatus.Error, NodeStatus.Fail, NodeStatus.Skipped, NodeStatus.RuntimeErr}
 IGNORE_PARENT_FLAGS = {
@@ -63,7 +64,7 @@ CMD_DICT = {
 
 
 class RetryTask(ConfiguredTask):
-    def __init__(self, args, config) -> None:
+    def __init__(self, args: Flags, config: RuntimeConfig) -> None:
         # load previous run results
         state_path = args.state or config.target_path
         self.previous_results = load_result_state(

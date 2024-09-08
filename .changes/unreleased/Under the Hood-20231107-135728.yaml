@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: Remove use of dbt/core exceptions in dbt/adapter
-time: 2023-11-07T13:57:28.683727-08:00
-custom:
-  Author: colin-rogers-dbt MichelleArk
-  Issue: "8920"

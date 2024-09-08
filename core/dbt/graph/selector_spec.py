@@ -2,14 +2,15 @@ import os
 import re
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
-from dbt_common.dataclass_schema import StrEnum, dbtClassMixin
+from typing import Any, Dict, Iterable, Iterator, List, Optional, Set, Tuple, Union
 
-from typing import Set, Iterator, List, Optional, Dict, Union, Any, Iterable, Tuple
+from dbt.exceptions import InvalidSelectorError
+from dbt.flags import get_flags
+from dbt_common.dataclass_schema import StrEnum, dbtClassMixin
+from dbt_common.exceptions import DbtRuntimeError
+
 from .graph import UniqueId
 from .selector_methods import MethodName
-from dbt_common.exceptions import DbtRuntimeError
-from dbt.exceptions import InvalidSelectorError
-
 
 RAW_SELECTOR_PATTERN = re.compile(
     r"\A"
@@ -110,7 +111,6 @@ class SelectionCriteria:
         cls,
         raw: Any,
         dct: Dict[str, Any],
-        indirect_selection: IndirectSelection = IndirectSelection.Eager,
     ) -> "SelectionCriteria":
         if "value" not in dct:
             raise DbtRuntimeError(f'Invalid node spec "{raw}" - no search value!')
@@ -121,7 +121,7 @@ class SelectionCriteria:
 
         # If defined field in selector, override CLI flag
         indirect_selection = IndirectSelection(
-            dct.get("indirect_selection", None) or indirect_selection
+            dct.get("indirect_selection", get_flags().INDIRECT_SELECTION)
         )
 
         return cls(
@@ -158,17 +158,13 @@ class SelectionCriteria:
         return dct
 
     @classmethod
-    def from_single_spec(
-        cls, raw: str, indirect_selection: IndirectSelection = IndirectSelection.Eager
-    ) -> "SelectionCriteria":
+    def from_single_spec(cls, raw: str) -> "SelectionCriteria":
         result = RAW_SELECTOR_PATTERN.match(raw)
         if result is None:
             # bad spec!
             raise DbtRuntimeError(f'Invalid selector spec "{raw}"')
 
-        return cls.selection_criteria_from_dict(
-            raw, result.groupdict(), indirect_selection=indirect_selection
-        )
+        return cls.selection_criteria_from_dict(raw, result.groupdict())
 
 
 class BaseSelectionGroup(dbtClassMixin, Iterable[SelectionSpec], metaclass=ABCMeta):

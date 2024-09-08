@@ -1,30 +1,35 @@
 import os
-from pathlib import Path
-import pytest  # type: ignore
 import random
 from argparse import Namespace
 from datetime import datetime
-import warnings
+from pathlib import Path
+from typing import Mapping
+
+import pytest  # type: ignore
 import yaml
 
+import dbt.flags as flags
+from dbt.adapters.factory import (
+    get_adapter,
+    get_adapter_by_type,
+    register_adapter,
+    reset_adapters,
+)
+from dbt.config.runtime import RuntimeConfig
+from dbt.context.providers import generate_runtime_macro_context
+from dbt.events.logging import setup_event_logger
 from dbt.mp_context import get_mp_context
 from dbt.parser.manifest import ManifestLoader
-from dbt_common.context import set_invocation_context
-from dbt_common.exceptions import CompilationError, DbtDatabaseError
-from dbt.context.providers import generate_runtime_macro_context
-import dbt.flags as flags
-from dbt_common.tests import enable_test_caching
-from dbt.config.runtime import RuntimeConfig
-from dbt.adapters.factory import get_adapter, register_adapter, reset_adapters, get_adapter_by_type
-from dbt_common.events.event_manager_client import cleanup_event_logger
-from dbt.events.logging import setup_event_logger
 from dbt.tests.util import (
-    write_file,
-    run_sql_with_adapter,
     TestProcessingException,
     get_connection,
+    run_sql_with_adapter,
+    write_file,
 )
-
+from dbt_common.context import set_invocation_context
+from dbt_common.events.event_manager_client import cleanup_event_logger
+from dbt_common.exceptions import CompilationError, DbtDatabaseError
+from dbt_common.tests import enable_test_caching
 
 # These are the fixtures that are used in dbt core functional tests
 #
@@ -277,8 +282,8 @@ def adapter(
     project_root,
     profiles_root,
     profiles_yml,
-    dbt_project_yml,
     clean_up_logging,
+    dbt_project_yml,
 ):
     # The profiles.yml and dbt_project.yml should already be written out
     args = Namespace(
@@ -336,6 +341,7 @@ def write_project_files_recursively(path, file_dict):
 # Provide a dictionary of file names to contents. Nested directories
 # are handle by nested dictionaries.
 
+
 # models directory
 @pytest.fixture(scope="class")
 def models():
@@ -380,7 +386,20 @@ def analyses():
 
 # Write out the files provided by models, macros, properties, snapshots, seeds, tests, analyses
 @pytest.fixture(scope="class")
-def project_files(project_root, models, macros, snapshots, properties, seeds, tests, analyses):
+def project_files(
+    project_root,
+    models,
+    macros,
+    snapshots,
+    properties,
+    seeds,
+    tests,
+    analyses,
+    selectors_yml,
+    dependencies_yml,
+    packages_yml,
+    dbt_project_yml,
+):
     write_project_files(project_root, "models", {**models, **properties})
     write_project_files(project_root, "macros", macros)
     write_project_files(project_root, "snapshots", snapshots)
@@ -493,22 +512,25 @@ class TestProjInfo:
         return {model_name: materialization for (model_name, materialization) in result}
 
 
+@pytest.fixture(scope="class")
+def environment() -> Mapping[str, str]:
+    # By default, fixture initialization is done with the following environment
+    # from the os, but this fixture provides a way to customize the environment.
+    return os.environ
+
+
 # Housekeeping that needs to be done before we start setting up any test fixtures.
 @pytest.fixture(scope="class")
-def initialization() -> None:
+def initialization(environment) -> None:
     # Create an "invocation context," which dbt application code relies on.
-    set_invocation_context(os.environ)
+    set_invocation_context(environment)
 
     # Enable caches used between test runs, for better testing performance.
     enable_test_caching()
 
 
-# This is the main fixture that is used in all functional tests. It pulls in the other
-# fixtures that are necessary to set up a dbt project, and saves some of the information
-# in a TestProjInfo class, which it returns, so that individual test cases do not have
-# to pull in the other fixtures individually to access their information.
 @pytest.fixture(scope="class")
-def project(
+def project_setup(
     initialization,
     clean_up_logging,
     project_root,
@@ -516,20 +538,12 @@ def project(
     request,
     unique_schema,
     profiles_yml,
-    dbt_project_yml,
-    packages_yml,
-    dependencies_yml,
-    selectors_yml,
     adapter,
-    project_files,
     shared_data_dir,
     test_data_dir,
     logs_dir,
     test_config,
 ):
-    # Logbook warnings are ignored so we don't have to fork logbook to support python 3.10.
-    # This _only_ works for tests in `tests/` that use the project fixture.
-    warnings.filterwarnings("ignore", category=DeprecationWarning, module="logbook")
     log_flags = Namespace(
         LOG_PATH=logs_dir,
         LOG_FORMAT="json",
@@ -578,3 +592,16 @@ def project(
         pass
     os.chdir(orig_cwd)
     cleanup_event_logger()
+
+
+# This is the main fixture that is used in all functional tests. It pulls in the other
+# fixtures that are necessary to set up a dbt project, and saves some of the information
+# in a TestProjInfo class, which it returns, so that individual test cases do not have
+# to pull in the other fixtures individually to access their information.
+# The order of arguments here determine which steps runs first.
+@pytest.fixture(scope="class")
+def project(
+    project_setup: TestProjInfo,
+    project_files,
+):
+    return project_setup

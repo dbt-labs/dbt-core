@@ -1,7 +1,7 @@
 import pytest
 
-from dbt.tests.util import run_dbt
 from dbt.exceptions import CompilationError
+from dbt.tests.util import run_dbt
 
 seeds__seed_csv = """id,value
 4,2

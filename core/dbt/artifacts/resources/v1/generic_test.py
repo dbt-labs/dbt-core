@@ -1,9 +1,10 @@
 from dataclasses import dataclass, field
-from typing import Optional, Any, Dict, Literal
-from dbt_common.dataclass_schema import dbtClassMixin
+from typing import Any, Dict, Literal, Optional
+
 from dbt.artifacts.resources.types import NodeType
-from dbt.artifacts.resources.v1.config import TestConfig
 from dbt.artifacts.resources.v1.components import CompiledResource
+from dbt.artifacts.resources.v1.config import TestConfig
+from dbt_common.dataclass_schema import dbtClassMixin
 
 
 @dataclass

@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: Treat SystemExit as an interrupt if raised during node execution.
-time: 2023-11-06T08:04:22.022179-05:00
-custom:
-  Author: benmosher
-  Issue: n/a
