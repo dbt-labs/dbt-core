@@ -31,7 +31,7 @@ from dbt.adapters.factory import (
     get_adapter_type_names,
 )
 from dbt.artifacts.resources import NodeConfig, NodeVersion, RefArgs
-from dbt.artifacts.resources.types import PartitionGrain
+from dbt.artifacts.resources.types import BatchSize
 from dbt.clients.jinja import (
     MacroGenerator,
     MacroStack,
@@ -247,13 +247,13 @@ class BaseResolver(metaclass=abc.ABCMeta):
             return None
 
         assert isinstance(self.model.config, NodeConfig)
-        grain = self.model.config.batch_size
-        if grain is None:
+        batch_size = self.model.config.batch_size
+        if batch_size is None:
             # TODO: Better error message
-            raise DbtRuntimeError("Partition grain not specified")
+            raise DbtRuntimeError("Partition batch_size not specified")
 
         lookback = self.model.config.lookback
-        if grain == PartitionGrain.hour:
+        if batch_size == BatchSize.hour:
             start = datetime(
                 checkpoint.year,
                 checkpoint.month,
@@ -264,16 +264,16 @@ class BaseResolver(metaclass=abc.ABCMeta):
                 0,
                 pytz.utc,
             ) - timedelta(hours=lookback)
-        elif grain == PartitionGrain.day:
+        elif batch_size == BatchSize.day:
             start = datetime(
                 checkpoint.year, checkpoint.month, checkpoint.day, 0, 0, 0, 0, pytz.utc
             ) - timedelta(days=lookback)
-        elif grain == PartitionGrain.month:
+        elif batch_size == BatchSize.month:
             start = datetime(checkpoint.year, checkpoint.month, 1, 0, 0, 0, 0, pytz.utc)
             for _ in range(lookback):
                 start = start - timedelta(days=1)
                 start = datetime(start.year, start.month, 1, 0, 0, 0, 0, pytz.utc)
-        elif grain == PartitionGrain.year:
+        elif batch_size == BatchSize.year:
             start = datetime(checkpoint.year - lookback, 1, 1, 0, 0, 0, 0, pytz.utc)
         else:
             # TODO: Better error message

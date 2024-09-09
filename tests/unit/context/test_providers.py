@@ -10,7 +10,7 @@ from pytest_mock import MockerFixture
 
 from dbt.adapters.base import BaseRelation
 from dbt.artifacts.resources import NodeConfig, Quoting
-from dbt.artifacts.resources.types import PartitionGrain
+from dbt.artifacts.resources.types import BatchSize
 from dbt.context.providers import (
     BaseResolver,
     EventTimeFilter,
@@ -47,15 +47,15 @@ class TestBaseResolver:
     @pytest.mark.parametrize(
         "is_incremental,materialized,incremental_strategy,event_time_end,event_time_start,batch_size,lookback,expected_filter",
         [
-            (True, "table", "microbatch", None, None, PartitionGrain.day, 0, None),
-            (True, "incremental", "merge", None, None, PartitionGrain.day, 0, None),
+            (True, "table", "microbatch", None, None, BatchSize.day, 0, None),
+            (True, "incremental", "merge", None, None, BatchSize.day, 0, None),
             (
                 True,
                 "incremental",
                 "microbatch",
                 None,
                 None,
-                PartitionGrain.day,
+                BatchSize.day,
                 0,
                 EventTimeFilter(
                     field_name="created_at",
@@ -69,7 +69,7 @@ class TestBaseResolver:
                 "microbatch",
                 datetime(2024, 8, 1, 8, 11, 0),
                 None,
-                PartitionGrain.day,
+                BatchSize.day,
                 0,
                 EventTimeFilter(
                     field_name="created_at",
@@ -83,7 +83,7 @@ class TestBaseResolver:
                 "microbatch",
                 None,
                 datetime(2024, 8, 1),
-                PartitionGrain.day,
+                BatchSize.day,
                 0,
                 EventTimeFilter(
                     field_name="created_at",
@@ -97,7 +97,7 @@ class TestBaseResolver:
                 "microbatch",
                 datetime(2024, 9, 1),
                 datetime(2024, 8, 1),
-                PartitionGrain.day,
+                BatchSize.day,
                 0,
                 EventTimeFilter(
                     field_name="created_at",
@@ -105,14 +105,14 @@ class TestBaseResolver:
                     start=datetime(2024, 8, 1, 0, 0, 0, 0, pytz.UTC),
                 ),
             ),
-            (False, "incremental", "microbatch", None, None, PartitionGrain.day, 0, None),
+            (False, "incremental", "microbatch", None, None, BatchSize.day, 0, None),
             (
                 False,
                 "incremental",
                 "microbatch",
                 datetime(2024, 8, 1, 8, 11, 0),
                 None,
-                PartitionGrain.day,
+                BatchSize.day,
                 0,
                 EventTimeFilter(
                     field_name="created_at",
@@ -126,7 +126,7 @@ class TestBaseResolver:
                 "microbatch",
                 None,
                 datetime(2024, 8, 1),
-                PartitionGrain.day,
+                BatchSize.day,
                 0,
                 EventTimeFilter(
                     field_name="created_at",
@@ -140,7 +140,7 @@ class TestBaseResolver:
                 "microbatch",
                 datetime(2024, 9, 1),
                 datetime(2024, 8, 1),
-                PartitionGrain.day,
+                BatchSize.day,
                 0,
                 EventTimeFilter(
                     field_name="created_at",
@@ -154,7 +154,7 @@ class TestBaseResolver:
                 "microbatch",
                 datetime(2024, 9, 1, 0, 49, 0),
                 None,
-                PartitionGrain.hour,
+                BatchSize.hour,
                 1,
                 EventTimeFilter(
                     field_name="created_at",
@@ -168,7 +168,7 @@ class TestBaseResolver:
                 "microbatch",
                 datetime(2024, 9, 1, 13, 31, 0),
                 None,
-                PartitionGrain.day,
+                BatchSize.day,
                 1,
                 EventTimeFilter(
                     field_name="created_at",
@@ -182,7 +182,7 @@ class TestBaseResolver:
                 "microbatch",
                 datetime(2024, 1, 23, 12, 30, 0),
                 None,
-                PartitionGrain.month,
+                BatchSize.month,
                 1,
                 EventTimeFilter(
                     field_name="created_at",
@@ -196,7 +196,7 @@ class TestBaseResolver:
                 "microbatch",
                 datetime(2024, 1, 23, 12, 30, 0),
                 None,
-                PartitionGrain.year,
+                BatchSize.year,
                 1,
                 EventTimeFilter(
                     field_name="created_at",
@@ -215,7 +215,7 @@ class TestBaseResolver:
         incremental_strategy: str,
         event_time_end: Optional[str],
         event_time_start: Optional[str],
-        batch_size: PartitionGrain,
+        batch_size: BatchSize,
         lookback: int,
         expected_filter: Optional[EventTimeFilter],
     ) -> None:
