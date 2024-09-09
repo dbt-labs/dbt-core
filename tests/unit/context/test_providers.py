@@ -90,10 +90,52 @@ class TestBaseResolver:
     @freeze_time("2024-09-05 08:56:00")
     @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
     @pytest.mark.parametrize(
-        "is_incremental,event_time_end,event_time_start,batch_size,lookback,expected_filter",
+        "event_time_end,event_time_start,expect_filter",
+        [
+            (None, None, False),
+            (datetime(2024, 9, 5), None, True),
+            (None, datetime(2024, 9, 4), True),
+            (datetime(2024, 9, 5), datetime(2024, 9, 4), True),
+        ],
+    )
+    def test_event_time_filtering_is_incremental_false(
+        self,
+        mocker: MockerFixture,
+        resolver: ResolverSubclass,
+        event_time_end: datetime,
+        event_time_start: datetime,
+        expect_filter: bool,
+    ) -> None:
+        mocker.patch("dbt.context.providers.BaseResolver._is_incremental").return_value = False
+
+        # Target mocking
+        target = mock.Mock()
+        target.config = mock.MagicMock(NodeConfig)
+        target.config.event_time = "created_at"
+
+        # Resolver mocking
+        resolver.config.args.EVENT_TIME_END = event_time_end
+        resolver.config.args.EVENT_TIME_START = event_time_start
+        resolver.model.config = mock.MagicMock(NodeConfig)
+        resolver.model.config.materialized = "incremental"
+        resolver.model.config.incremental_strategy = "microbatch"
+        resolver.model.config.batch_size = BatchSize.day
+        resolver.model.config.lookback = 0
+
+        # Try to get an EventTimeFilter
+        event_time_filter = resolver.resolve_event_time_filter(target=target)
+
+        if expect_filter:
+            assert isinstance(event_time_filter, EventTimeFilter)
+        else:
+            assert event_time_filter is None
+
+    @freeze_time("2024-09-05 08:56:00")
+    @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
+    @pytest.mark.parametrize(
+        "event_time_end,event_time_start,batch_size,lookback,expected_filter",
         [
             (
-                True,
                 None,
                 None,
                 BatchSize.day,
@@ -105,7 +147,6 @@ class TestBaseResolver:
                 ),
             ),
             (
-                True,
                 datetime(2024, 8, 1, 8, 11, 0),
                 None,
                 BatchSize.day,
@@ -117,7 +158,6 @@ class TestBaseResolver:
                 ),
             ),
             (
-                True,
                 None,
                 datetime(2024, 8, 1),
                 BatchSize.day,
@@ -129,44 +169,6 @@ class TestBaseResolver:
                 ),
             ),
             (
-                True,
-                datetime(2024, 9, 1),
-                datetime(2024, 8, 1),
-                BatchSize.day,
-                0,
-                EventTimeFilter(
-                    field_name="created_at",
-                    end=datetime(2024, 9, 1, 0, 0, 0, 0, pytz.UTC),
-                    start=datetime(2024, 8, 1, 0, 0, 0, 0, pytz.UTC),
-                ),
-            ),
-            (False, None, None, BatchSize.day, 0, None),
-            (
-                False,
-                datetime(2024, 8, 1, 8, 11, 0),
-                None,
-                BatchSize.day,
-                0,
-                EventTimeFilter(
-                    field_name="created_at",
-                    end=datetime(2024, 8, 1, 8, 11, 0, 0, pytz.UTC),
-                    start=None,
-                ),
-            ),
-            (
-                False,
-                None,
-                datetime(2024, 8, 1),
-                BatchSize.day,
-                0,
-                EventTimeFilter(
-                    field_name="created_at",
-                    end=None,
-                    start=datetime(2024, 8, 1, 0, 0, 0, 0, pytz.UTC),
-                ),
-            ),
-            (
-                False,
                 datetime(2024, 9, 1),
                 datetime(2024, 8, 1),
                 BatchSize.day,
@@ -178,7 +180,6 @@ class TestBaseResolver:
                 ),
             ),
             (
-                True,
                 datetime(2024, 9, 1, 0, 49, 0),
                 None,
                 BatchSize.hour,
@@ -190,7 +191,6 @@ class TestBaseResolver:
                 ),
             ),
             (
-                True,
                 datetime(2024, 9, 1, 13, 31, 0),
                 None,
                 BatchSize.day,
@@ -202,7 +202,6 @@ class TestBaseResolver:
                 ),
             ),
             (
-                True,
                 datetime(2024, 1, 23, 12, 30, 0),
                 None,
                 BatchSize.month,
@@ -214,7 +213,6 @@ class TestBaseResolver:
                 ),
             ),
             (
-                True,
                 datetime(2024, 1, 23, 12, 30, 0),
                 None,
                 BatchSize.year,
@@ -231,16 +229,14 @@ class TestBaseResolver:
         self,
         mocker: MockerFixture,
         resolver: ResolverSubclass,
-        is_incremental: bool,
         event_time_end: Optional[str],
         event_time_start: Optional[str],
         batch_size: BatchSize,
         lookback: int,
         expected_filter: Optional[EventTimeFilter],
     ) -> None:
-        mocker.patch("dbt.context.providers.BaseResolver._is_incremental").return_value = (
-            is_incremental
-        )
+        mocker.patch("dbt.context.providers.BaseResolver._is_incremental").return_value = True
+
         target = mock.Mock()
         target.config = mock.MagicMock(NodeConfig)
         target.config.event_time = "created_at"
