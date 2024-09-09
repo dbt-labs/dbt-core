@@ -2,8 +2,6 @@ from dataclasses import dataclass
 import re
 from typing import List
 
-from packaging import version as packaging_version
-
 from dbt.exceptions import VersionsNotCompatibleException
 import dbt.utils
 
@@ -64,6 +62,11 @@ $
     version_extra_regex=_VERSION_EXTRA_REGEX)
 
 _VERSION_REGEX = re.compile(_VERSION_REGEX_PAT_STR, re.VERBOSE)
+
+
+def _cmp(a, b):
+    """Return negative if a<b, zero if a==b, positive if a>b."""
+    return (a > b) - (a < b)
 
 
 @dataclass
@@ -145,10 +148,19 @@ class VersionSpecifier(VersionSpecification):
                     return 1
                 if b is None:
                     return -1
-            if packaging_version.parse(a) > packaging_version.parse(b):
-                return 1
-            elif packaging_version.parse(a) < packaging_version.parse(b):
-                return -1
+
+                # Check the prerelease component only
+                prcmp = self._nat_cmp(a, b)
+                if prcmp != 0:  # either -1 or 1
+                    return prcmp
+                # else is equal and will fall through
+
+            else:  # major/minor/patch, should all be numbers
+                if int(a) > int(b):
+                    return 1
+                elif int(a) < int(b):
+                    return -1
+                # else is equal and will fall through
 
         equal = ((self.matcher == Matchers.GREATER_THAN_OR_EQUAL and
                   other.matcher == Matchers.LESS_THAN_OR_EQUAL) or
@@ -204,6 +216,29 @@ class VersionSpecifier(VersionSpecification):
     @property
     def is_exact(self):
         return self.matcher == Matchers.EXACT
+
+    @classmethod
+    def _nat_cmp(cls, a, b):
+        def cmp_prerelease_tag(a, b):
+            if isinstance(a, int) and isinstance(b, int):
+                return _cmp(a, b)
+            elif isinstance(a, int):
+                return -1
+            elif isinstance(b, int):
+                return 1
+            else:
+                return _cmp(a, b)
+
+        a, b = a or "", b or ""
+        a_parts, b_parts = a.split("."), b.split(".")
+        a_parts = [int(x) if re.match(r"^\d+$", x) else x for x in a_parts]
+        b_parts = [int(x) if re.match(r"^\d+$", x) else x for x in b_parts]
+        for sub_a, sub_b in zip(a_parts, b_parts):
+            cmp_result = cmp_prerelease_tag(sub_a, sub_b)
+            if cmp_result != 0:
+                return cmp_result
+        else:
+            return _cmp(len(a), len(b))
 
 
 @dataclass

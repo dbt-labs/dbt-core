@@ -62,7 +62,7 @@ setup(
         'mashumaro==2.9',
         'minimal-snowplow-tracker==0.0.2',
         'networkx>=2.3,<2.8.1',
-        'packaging>=20.9,<22.0',
+        'packaging>=20.9',
         'sqlparse>=0.2.3,<0.5',
         'dbt-extractor~=0.4.1',
         'typing-extensions>=3.7.4,<3.11',
