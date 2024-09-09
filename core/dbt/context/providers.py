@@ -250,7 +250,7 @@ class BaseResolver(metaclass=abc.ABCMeta):
         batch_size = self.model.config.batch_size
         if batch_size is None:
             # TODO: Better error message
-            raise DbtRuntimeError("Partition batch_size not specified")
+            raise DbtRuntimeError("Batch size not specified")
 
         lookback = self.model.config.lookback
         if batch_size == BatchSize.hour:
