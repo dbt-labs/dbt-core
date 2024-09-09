@@ -42,17 +42,58 @@ class TestBaseResolver:
 
         assert resolver.resolve_limit == expected_resolve_limit
 
+    @pytest.mark.parametrize(
+        "dbt_experimental_microbatch,materialized,incremental_strategy,expect_filter",
+        [
+            (True, "incremental", "microbatch", True),
+            (False, "incremental", "microbatch", False),
+            (True, "table", "microbatch", False),
+            (True, "incremental", "merge", False),
+        ],
+    )
+    def test_resolve_event_time_filter_gating(
+        self,
+        mocker: MockerFixture,
+        resolver: ResolverSubclass,
+        dbt_experimental_microbatch: bool,
+        materialized: str,
+        incremental_strategy: str,
+        expect_filter: bool,
+    ) -> None:
+        if dbt_experimental_microbatch:
+            mocker.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
+
+        mocker.patch("dbt.context.providers.BaseResolver._is_incremental").return_value = True
+
+        # Target mocking
+        target = mock.Mock()
+        target.config = mock.MagicMock(NodeConfig)
+        target.config.event_time = "created_at"
+
+        # Resolver mocking
+        resolver.config.args.EVENT_TIME_END = None
+        resolver.config.args.EVENT_TIME_START = None
+        resolver.model.config = mock.MagicMock(NodeConfig)
+        resolver.model.config.materialized = materialized
+        resolver.model.config.incremental_strategy = incremental_strategy
+        resolver.model.config.batch_size = BatchSize.day
+        resolver.model.config.lookback = 0
+
+        # Try to get an EventTimeFilter
+        event_time_filter = resolver.resolve_event_time_filter(target=target)
+
+        if expect_filter:
+            assert isinstance(event_time_filter, EventTimeFilter)
+        else:
+            assert event_time_filter is None
+
     @freeze_time("2024-09-05 08:56:00")
     @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
     @pytest.mark.parametrize(
-        "is_incremental,materialized,incremental_strategy,event_time_end,event_time_start,batch_size,lookback,expected_filter",
+        "is_incremental,event_time_end,event_time_start,batch_size,lookback,expected_filter",
         [
-            (True, "table", "microbatch", None, None, BatchSize.day, 0, None),
-            (True, "incremental", "merge", None, None, BatchSize.day, 0, None),
             (
                 True,
-                "incremental",
-                "microbatch",
                 None,
                 None,
                 BatchSize.day,
@@ -65,8 +106,6 @@ class TestBaseResolver:
             ),
             (
                 True,
-                "incremental",
-                "microbatch",
                 datetime(2024, 8, 1, 8, 11, 0),
                 None,
                 BatchSize.day,
@@ -79,8 +118,6 @@ class TestBaseResolver:
             ),
             (
                 True,
-                "incremental",
-                "microbatch",
                 None,
                 datetime(2024, 8, 1),
                 BatchSize.day,
@@ -93,8 +130,6 @@ class TestBaseResolver:
             ),
             (
                 True,
-                "incremental",
-                "microbatch",
                 datetime(2024, 9, 1),
                 datetime(2024, 8, 1),
                 BatchSize.day,
@@ -105,11 +140,9 @@ class TestBaseResolver:
                     start=datetime(2024, 8, 1, 0, 0, 0, 0, pytz.UTC),
                 ),
             ),
-            (False, "incremental", "microbatch", None, None, BatchSize.day, 0, None),
+            (False, None, None, BatchSize.day, 0, None),
             (
                 False,
-                "incremental",
-                "microbatch",
                 datetime(2024, 8, 1, 8, 11, 0),
                 None,
                 BatchSize.day,
@@ -122,8 +155,6 @@ class TestBaseResolver:
             ),
             (
                 False,
-                "incremental",
-                "microbatch",
                 None,
                 datetime(2024, 8, 1),
                 BatchSize.day,
@@ -136,8 +167,6 @@ class TestBaseResolver:
             ),
             (
                 False,
-                "incremental",
-                "microbatch",
                 datetime(2024, 9, 1),
                 datetime(2024, 8, 1),
                 BatchSize.day,
@@ -150,8 +179,6 @@ class TestBaseResolver:
             ),
             (
                 True,
-                "incremental",
-                "microbatch",
                 datetime(2024, 9, 1, 0, 49, 0),
                 None,
                 BatchSize.hour,
@@ -164,8 +191,6 @@ class TestBaseResolver:
             ),
             (
                 True,
-                "incremental",
-                "microbatch",
                 datetime(2024, 9, 1, 13, 31, 0),
                 None,
                 BatchSize.day,
@@ -178,8 +203,6 @@ class TestBaseResolver:
             ),
             (
                 True,
-                "incremental",
-                "microbatch",
                 datetime(2024, 1, 23, 12, 30, 0),
                 None,
                 BatchSize.month,
@@ -192,8 +215,6 @@ class TestBaseResolver:
             ),
             (
                 True,
-                "incremental",
-                "microbatch",
                 datetime(2024, 1, 23, 12, 30, 0),
                 None,
                 BatchSize.year,
@@ -211,8 +232,6 @@ class TestBaseResolver:
         mocker: MockerFixture,
         resolver: ResolverSubclass,
         is_incremental: bool,
-        materialized: str,
-        incremental_strategy: str,
         event_time_end: Optional[str],
         event_time_start: Optional[str],
         batch_size: BatchSize,
@@ -226,8 +245,8 @@ class TestBaseResolver:
         target.config = mock.MagicMock(NodeConfig)
         target.config.event_time = "created_at"
         resolver.model.config = mock.MagicMock(NodeConfig)
-        resolver.model.config.materialized = materialized
-        resolver.model.config.incremental_strategy = incremental_strategy
+        resolver.model.config.materialized = "incremental"
+        resolver.model.config.incremental_strategy = "microbatch"
         resolver.model.config.batch_size = batch_size
         resolver.model.config.lookback = lookback
         resolver.config.args.EVENT_TIME_END = event_time_end
