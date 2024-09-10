@@ -234,11 +234,8 @@ class BaseResolver(metaclass=abc.ABCMeta):
     def resolve_limit(self) -> Optional[int]:
         return 0 if getattr(self.config.args, "EMPTY", False) else None
 
-    def _build_end_time(self, is_incremental: bool) -> Optional[datetime]:
-        if not is_incremental:
-            return None
-        else:
-            return datetime.now(tz=pytz.utc)
+    def _build_end_time(self) -> Optional[datetime]:
+        return datetime.now(tz=pytz.utc)
 
     def _build_start_time(
         self, checkpoint: Optional[datetime], is_incremental: bool
@@ -308,11 +305,7 @@ class BaseResolver(metaclass=abc.ABCMeta):
         ):
             is_incremental = self._is_incremental()
             end: Optional[datetime] = getattr(self.config.args, "EVENT_TIME_END", None)
-            end = (
-                end.replace(tzinfo=pytz.UTC)
-                if end
-                else self._build_end_time(is_incremental=is_incremental)
-            )
+            end = end.replace(tzinfo=pytz.UTC) if end else self._build_end_time()
 
             start: Optional[datetime] = getattr(self.config.args, "EVENT_TIME_START", None)
             start = (

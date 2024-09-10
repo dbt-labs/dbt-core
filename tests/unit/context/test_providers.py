@@ -92,7 +92,7 @@ class TestBaseResolver:
     @pytest.mark.parametrize(
         "event_time_end,event_time_start,expect_filter",
         [
-            (None, None, False),
+            (None, None, True),
             (datetime(2024, 9, 5), None, True),
             (None, datetime(2024, 9, 4), True),
             (datetime(2024, 9, 5), datetime(2024, 9, 4), True),

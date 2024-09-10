@@ -89,7 +89,7 @@ class TestMicroBatchBoundsDefault:
     @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
     def test_run_with_event_time(self, project):
         # initial run -- backfills all data
-        with freeze_time("2020-01-01 13:57:00"):
+        with freeze_time("2020-01-03 13:57:00"):
             run_dbt(["run"])
         self.assert_row_count(project, "microbatch_model", 3)
 
