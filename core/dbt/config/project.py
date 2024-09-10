@@ -480,6 +480,7 @@ class PartialProject(RenderComponents):
                 rendered.selectors_dict["selectors"]
             )
         dbt_cloud = cfg.dbt_cloud
+        flags: Dict[str, Any] = cfg.flags
 
         project = Project(
             project_name=name,
@@ -524,6 +525,7 @@ class PartialProject(RenderComponents):
             project_env_vars=project_env_vars,
             restrict_access=cfg.restrict_access,
             dbt_cloud=dbt_cloud,
+            flags=flags,
         )
         # sanity check - this means an internal issue
         project.validate()
@@ -567,11 +569,6 @@ class PartialProject(RenderComponents):
             packages_specified_path,
         ) = package_and_project_data_from_root(project_root)
         selectors_dict = selector_data_from_root(project_root)
-
-        if "flags" in project_dict:
-            # We don't want to include "flags" in the Project,
-            # it goes in ProjectFlags
-            project_dict.pop("flags")
 
         return cls.from_dicts(
             project_root=project_root,
@@ -645,6 +642,7 @@ class Project:
     project_env_vars: Dict[str, Any]
     restrict_access: bool
     dbt_cloud: Dict[str, Any]
+    flags: Dict[str, Any]
 
     @property
     def all_source_paths(self) -> List[str]:
@@ -724,6 +722,7 @@ class Project:
                 "require-dbt-version": [v.to_version_string() for v in self.dbt_version],
                 "restrict-access": self.restrict_access,
                 "dbt-cloud": self.dbt_cloud,
+                "flags": self.flags,
             }
         )
         if self.query_comment:
