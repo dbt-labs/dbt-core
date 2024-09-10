@@ -246,8 +246,7 @@ class BaseResolver(metaclass=abc.ABCMeta):
         assert isinstance(self.model.config, NodeConfig)
         batch_size = self.model.config.batch_size
         if batch_size is None:
-            # TODO: Better error message
-            raise DbtRuntimeError("Batch size not specified")
+            raise DbtRuntimeError(f"The model `{self.model.name}` requires a `batch_size`")
 
         lookback = self.model.config.lookback
         if batch_size == BatchSize.hour:
@@ -273,8 +272,9 @@ class BaseResolver(metaclass=abc.ABCMeta):
         elif batch_size == BatchSize.year:
             start = datetime(checkpoint.year - lookback, 1, 1, 0, 0, 0, 0, pytz.utc)
         else:
-            # TODO: Better error message
-            raise DbtInternalError("This should be impossible :eeek:")
+            raise DbtInternalError(
+                f"Batch size `{batch_size}` is not handled during batch calculation"
+            )
 
         return start
 
