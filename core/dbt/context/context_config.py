@@ -365,7 +365,7 @@ class ContextConfig:
             src = UnrenderedConfigGenerator(self._active_project)  # type: ignore[assignment]
 
             # preserve legacy behaviour - using unreliable (potentially rendered) _config_call_dict
-            if get_flags().require_config_jinja_insensitivity_for_state_modified is False:
+            if get_flags().state_modified_compare_more_unrendered_values is False:
                 config_call_dict = self._config_call_dict
             else:
                 # Prefer _config_call_dict if it is available and _unrendered_config_call_dict is not,

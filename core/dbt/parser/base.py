@@ -373,7 +373,7 @@ class ConfiguredParser(
             if hasattr(parsed_node, "contract"):
                 parsed_node.contract = Contract.from_dict(contract_dct)
 
-        if get_flags().require_config_jinja_insensitivity_for_state_modified:
+        if get_flags().state_modified_compare_more_unrendered_values:
             # Use the patch_file.unrendered_configs if available to update patch_dict_config,
             # as provided patch_config_dict may actuallly already be rendered and thus sensitive to jinja evaluations
             if patch_file_id:

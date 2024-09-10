@@ -59,7 +59,7 @@ from tests.unit.utils import (
 )
 
 set_from_args(
-    Namespace(warn_error=False, require_config_jinja_insensitivity_for_state_modified=False), None
+    Namespace(warn_error=False, state_modified_compare_more_unrendered_values=False), None
 )
 
 
@@ -95,9 +95,7 @@ class BaseParserTest(unittest.TestCase):
 
     def setUp(self):
         set_from_args(
-            Namespace(
-                warn_error=True, require_config_jinja_insensitivity_for_state_modified=False
-            ),
+            Namespace(warn_error=True, state_modified_compare_more_unrendered_values=False),
             None,
         )
         # HACK: this is needed since tracking events can
