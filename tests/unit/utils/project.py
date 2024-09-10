@@ -70,6 +70,7 @@ def project(selector_config: SelectorConfig) -> Project:
         project_env_vars={},
         restrict_access=False,
         dbt_cloud={},
+        flags={},
     )
 
 

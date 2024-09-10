@@ -388,6 +388,9 @@ class ConfigTargetPathDeprecation(WarnLevel):
         return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
 
 
+# Note: this deprecation has been removed, but we are leaving
+# the event class here, because users may have specified it in
+# warn_error_options.
 class TestsConfigDeprecation(WarnLevel):
     def code(self) -> str:
         return "D012"
@@ -1612,6 +1615,18 @@ class CompiledNode(InfoLevel):
                 return f"Compiled inline node is:\n{self.compiled}"
             else:
                 return f"Compiled node '{self.node_name}' is:\n{self.compiled}"
+
+
+class SnapshotTimestampWarning(WarnLevel):
+    def code(self) -> str:
+        return "Q043"
+
+    def message(self) -> str:
+        return (
+            f"Data type of snapshot table timestamp columns ({self.snapshot_time_data_type}) "
+            f"doesn't match derived column 'updated_at' ({self.updated_at_data_type}). "
+            "Please update snapshot config 'updated_at'."
+        )
 
 
 # =======================================================
