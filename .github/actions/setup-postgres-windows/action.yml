@@ -32,6 +32,8 @@ runs:
         echo "PGBIN=$PGBIN" >> $GITHUB_ENV
         echo "PGROOT=$PGROOT" >> $GITHUB_ENV
         echo "PGDATA=$PGDATA" >> $GITHUB_ENV
+
+        "$PGBIN\pg_ctl.exe" register -N "PostgreSQL" -U "NT AUTHORITY\NetworkService" -D "C:/Program Files/postgresql/pgsql/bin/pgsql/data" -w
     - shell: pwsh
       run: |
         $pgService = Get-Service -Name postgresql*
