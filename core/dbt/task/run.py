@@ -85,10 +85,9 @@ def get_execution_status(sql: str, adapter: BaseAdapter) -> Tuple[RunStatus, str
     if not sql.strip():
         return RunStatus.Success, "OK"
 
-    message = ""
-    status = RunStatus.Success
     try:
         response, _ = adapter.execute(sql, auto_begin=False, fetch=False)
+        status = RunStatus.Success
         message = response._message
     except DbtRuntimeError as exc:
         status = RunStatus.Error
@@ -349,26 +348,26 @@ class RunTask(CompileTask):
         fire_event(Formatting(""))
         fire_event(HooksRunning(num_hooks=num_hooks, hook_type=hook_type))
 
-        message = None
         idx = 0
         timings = []
         total_execution_time = 0.0
 
-        for idx in range(len(ordered_hooks)):
+        while idx < num_hooks:
             hook = ordered_hooks[idx]
             # We want to include node_info in the appropriate log files, so use
             # log_contextvars
             with log_contextvars(node_info=hook.node_info):
+                hook.index = idx + 1
                 hook.update_event_status(
                     started_at=started_at.isoformat(), node_status=RunningStatus.Started
                 )
-                sql = self.get_hook_sql(adapter, hook, idx + 1, num_hooks, extra_context)
+                sql = self.get_hook_sql(adapter, hook, hook.index, num_hooks, extra_context)
 
-                hook_name = f"{hook.package_name}.{hook_type}.{idx + 1}"
+                hook_name = f"{hook.package_name}.{hook_type}.{hook.index}"
                 fire_event(
                     LogHookStartLine(
                         statement=hook_name,
-                        index=idx + 1,
+                        index=hook.index,
                         total=num_hooks,
                         node_info=hook.node_info,
                     )
@@ -388,7 +387,7 @@ class RunTask(CompileTask):
                     LogHookEndLine(
                         statement=hook_name,
                         status=status,
-                        index=idx + 1,
+                        index=hook.index,
                         total=num_hooks,
                         execution_time=execution_time,
                         node_info=hook.node_info,
@@ -399,10 +398,12 @@ class RunTask(CompileTask):
                 if status != RunStatus.Success:
                     break
 
-        self._total_executed += idx + 1
+                idx += 1
+
+        self._total_executed += hook.index or 0
 
         if status == RunStatus.Success:
-            node_result_message = f"{idx + 1} {hook_type.value} hooks executed successfully"
+            node_result_message = f"{hook.index} {hook_type.value} hooks executed successfully"
             num_failures = 0
         else:
             fire_event(Formatting(""))

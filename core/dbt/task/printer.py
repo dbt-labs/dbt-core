@@ -1,7 +1,7 @@
 from typing import Dict, Optional
 
 from dbt.artifacts.schemas.results import NodeStatus
-from dbt.contracts.graph.nodes import Group
+from dbt.contracts.graph.nodes import Group, HookNode
 from dbt.events.types import (
     CheckNodeTestFailure,
     EndOfRunSummary,
@@ -61,9 +61,20 @@ def print_run_status_line(results) -> None:
     }
 
     for r in results:
-        result_type = interpret_run_result(r)
-        stats[result_type] += 1
-        stats["total"] += 1
+        # All on-run-* nodes are returned as a single result, so we need to unpack it to get the correct counts
+        if isinstance(r.node, HookNode):
+            n = r.node.index or 0
+            stats["total"] += n
+            # Hooks "fail fast", so there will be at most one error
+            if r.status == NodeStatus.Error:
+                stats["error"] += 1
+                stats["pass"] += n - 1
+            else:
+                stats["pass"] += n
+        else:
+            result_type = interpret_run_result(r)
+            stats[result_type] += 1
+            stats["total"] += 1
 
     fire_event(Formatting(""))
     fire_event(StatsLine(stats=stats))
