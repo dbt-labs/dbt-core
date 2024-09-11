@@ -34,7 +34,7 @@ runs:
         echo "PGDATA=$PGDATA" >> $GITHUB_ENV
 
         echo "registering service using $PGBIN\pg_ctl.exe"
-        "$PGBIN\pg_ctl.exe" register -N "postgresql16" -D "C:\Program Files\PostgreSQL\16\data" -w
+        "$PGBIN\pg_ctl.exe" register -N "postgresql16" -D "%ProgramData%/db_data" -S auto
     - shell: pwsh
       run: |
         $pgService = Get-Service -Name postgresql16
