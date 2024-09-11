@@ -14,7 +14,7 @@ runs:
         #   echo "$name=" >> $GITHUB_ENV
         # done
 
-        choco install postgresql16 \
+        choco upgrade postgresql16 \
           --params "/Password:password" \
           --ia "--enable-components server,commandlinetools --extract-only 1" \
           --no-progress
