@@ -1513,10 +1513,17 @@ class LogHookEndLine(InfoLevel):
         return "Q033"
 
     def message(self) -> str:
-        msg = f"OK hook: {self.statement}"
+        if self.status == "success":
+            info = "OK"
+            status = green(info)
+        else:
+            info = "ERROR"
+            status = red(info)
+        msg = f"{info} hook: {self.statement}"
+
         return format_fancy_output_line(
             msg=msg,
-            status=green(self.status),
+            status=status,
             index=self.index,
             total=self.total,
             execution_time=self.execution_time,

@@ -1,11 +1,10 @@
 import functools
 import threading
-import time
 from datetime import datetime
 from typing import AbstractSet, Any, Dict, Iterable, List, Optional, Set, Tuple, Type
 
 from dbt import tracking, utils
-from dbt.adapters.base import BaseRelation
+from dbt.adapters.base import BaseAdapter, BaseRelation
 from dbt.adapters.events.types import (
     DatabaseErrorRunningHook,
     FinishedRunningStats,
@@ -14,10 +13,10 @@ from dbt.adapters.events.types import (
 from dbt.adapters.exceptions import MissingMaterializationError
 from dbt.artifacts.resources import Hook
 from dbt.artifacts.schemas.results import (
-    BaseResult,
     NodeStatus,
     RunningStatus,
     RunStatus,
+    TimingInfo,
 )
 from dbt.artifacts.schemas.run import RunResult
 from dbt.cli.flags import Flags
@@ -46,25 +45,6 @@ from dbt_common.exceptions import DbtValidationError
 
 from .compile import CompileRunner, CompileTask
 from .printer import get_counts, print_run_end_messages
-
-
-class Timer:
-    def __init__(self) -> None:
-        self.start = None
-        self.end = None
-
-    @property
-    def elapsed(self):
-        if self.start is None or self.end is None:
-            return None
-        return self.end - self.start
-
-    def __enter__(self):
-        self.start = time.time()
-        return self
-
-    def __exit__(self, exc_type, exc_value, exc_tracebck):
-        self.end = time.time()
 
 
 @functools.total_ordering
@@ -99,6 +79,22 @@ def get_hook(source, index):
     hook_dict.setdefault("index", index)
     Hook.validate(hook_dict)
     return Hook.from_dict(hook_dict)
+
+
+def get_execution_status(sql: str, adapter: BaseAdapter) -> Tuple[RunStatus, str]:
+    if not sql.strip():
+        return RunStatus.Success, "OK"
+
+    message = ""
+    status = RunStatus.Success
+    try:
+        response, _ = adapter.execute(sql, auto_begin=False, fetch=False)
+        message = response._message
+    except DbtRuntimeError as exc:
+        status = RunStatus.Error
+        message = exc.msg
+    finally:
+        return status, message
 
 
 def track_model_run(index, num_nodes, run_model_result):
@@ -336,7 +332,10 @@ class RunTask(CompileTask):
         hooks.sort(key=self._hook_keyfunc)
         return hooks
 
-    def run_hooks(self, adapter, hook_type: RunHookType, extra_context) -> None:
+    def safe_run_hooks(
+        self, adapter: BaseAdapter, hook_type: RunHookType, extra_context: Dict[str, Any]
+    ) -> None:
+        started_at = datetime.utcnow()
         ordered_hooks = self.get_hooks_by_type(hook_type)
 
         # on-run-* hooks should run outside of a transaction. This happens
@@ -350,71 +349,77 @@ class RunTask(CompileTask):
         fire_event(Formatting(""))
         fire_event(HooksRunning(num_hooks=num_hooks, hook_type=hook_type))
 
-        for idx, hook in enumerate(ordered_hooks, start=1):
-            # We want to include node_info in the appropriate log files, so use
-            # log_contextvars
+        message = None
+        idx = 0
+        timings = []
+        total_execution_time = 0.0
+
+        for idx in range(len(ordered_hooks)):
+            hook = ordered_hooks[idx]
             with log_contextvars(node_info=hook.node_info):
                 hook.update_event_status(
-                    started_at=datetime.utcnow().isoformat(), node_status=RunningStatus.Started
+                    started_at=started_at.isoformat(), node_status=RunningStatus.Started
                 )
-                sql = self.get_hook_sql(adapter, hook, idx, num_hooks, extra_context)
+                sql = self.get_hook_sql(adapter, hook, idx + 1, num_hooks, extra_context)
 
-                hook_text = "{}.{}.{}".format(hook.package_name, hook_type, hook.index)
+                hook_name = f"{hook.package_name}.{hook_type}.{idx + 1}"
                 fire_event(
                     LogHookStartLine(
-                        statement=hook_text,
-                        index=idx,
+                        statement=hook_name,
+                        index=idx + 1,
                         total=num_hooks,
                         node_info=hook.node_info,
                     )
                 )
 
-                with Timer() as timer:
-                    if len(sql.strip()) > 0:
-                        response, _ = adapter.execute(sql, auto_begin=False, fetch=False)
-                        status = response._message
-                    else:
-                        status = "OK"
+                status, message = get_execution_status(sql, adapter)
+                finished_at = datetime.utcnow()
+                timings.append(TimingInfo(hook_name, started_at, finished_at))
 
+                hook.update_event_status(finished_at=finished_at.isoformat(), node_status=status)
                 self.ran_hooks.append(hook)
-                hook.update_event_status(finished_at=datetime.utcnow().isoformat())
-                hook.update_event_status(node_status=RunStatus.Success)
+
+                execution_time = (finished_at - started_at).total_seconds()
+                total_execution_time += execution_time
+
                 fire_event(
                     LogHookEndLine(
-                        statement=hook_text,
+                        statement=hook_name,
                         status=status,
-                        index=idx,
+                        index=idx + 1,
                         total=num_hooks,
-                        execution_time=timer.elapsed,
+                        execution_time=execution_time,
                         node_info=hook.node_info,
                     )
                 )
-                # `_event_status` dict is only used for logging.  Make sure
-                # it gets deleted when we're done with it
                 hook.clear_event_status()
 
-        self._total_executed += len(ordered_hooks)
+                if status != RunStatus.Success:
+                    break
 
-        fire_event(Formatting(""))
+        self._total_executed += idx + 1
 
-    def safe_run_hooks(
-        self, adapter, hook_type: RunHookType, extra_context: Dict[str, Any]
-    ) -> None:
-        try:
-            self.run_hooks(adapter, hook_type, extra_context)
-        except DbtRuntimeError as exc:
+        if status == RunStatus.Success:
+            node_result_message = f"{idx + 1} {hook_type.value} hooks executed successfully"
+            num_failures = 0
+        else:
+            fire_event(Formatting(""))
             fire_event(DatabaseErrorRunningHook(hook_type=hook_type.value))
-            self.node_results.append(
-                BaseResult(
-                    status=RunStatus.Error,
-                    thread_id="main",
-                    timing=[],
-                    message=f"{hook_type.value} failed, error:\n {exc.msg}",
-                    adapter_response={},
-                    execution_time=0,
-                    failures=1,
-                )
+            node_result_message = f"{hook_type.value} failed, error:\n {message}"
+            num_failures = 1
+
+        self.node_results.append(
+            RunResult(
+                status=status,
+                thread_id="main",
+                timing=timings,
+                message=node_result_message,
+                adapter_response={},
+                execution_time=total_execution_time,
+                failures=num_failures,
+                node=hook,
             )
+        )
 
     def print_results_line(self, results, execution_time) -> None:
         nodes = [r.node for r in results if hasattr(r, "node")] + self.ran_hooks

@@ -1654,6 +1654,7 @@ ManifestNode = Union[
 ResultNode = Union[
     ManifestNode,
     SourceDefinition,
+    HookNode,
 ]
 
 # All nodes that can be in the DAG
