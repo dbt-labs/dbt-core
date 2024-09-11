@@ -37,14 +37,12 @@ runs:
         mkdir $PGDATA
 
         echo "registering service using $PGBIN/pg_ctl.exe"
-        "$PGBIN/pg_ctl.exe" register -N "postgresql16" -D "$PGDATA" -S auto
+        # "$PGBIN/pg_ctl.exe" register -N "postgresql" -D "$PGDATA" -S auto
     - shell: pwsh
       run: |
         $installerArgs = @("--install_runtimes 0", "--superpassword root", "--enable_acledit 1", "--unattendedmodeui none", "--mode unattended")
-        Install-Binary `
-            -Url "https://get.enterprisedb.com/postgresql/postgresql-16.1-1-windows-x64.exe" `
-            -InstallArgs $installerArgs `
-            -ExpectedSignature (Get-ToolsetContent).postgresql.signature
+        $filePath = Invoke-DownloadWithRetry -Url "https://get.enterprisedb.com/postgresql/postgresql-16.1-1-windows-x64.exe" -Path "$env:PGROOT/postgresql-16.1-1-windows-x64.exe"
+        Start-Process -FilePath $filePath -ArgumentList $installerArgs -Wait -PassThru
 
         Get-Service -Name postgresql*
 
@@ -55,7 +53,7 @@ runs:
             exit $exitCode
         }
 
-        $pgService = Get-Service -Name postgresql16
+        $pgService = Get-Service -Name postgresql-x64-16
         Set-Service -InputObject $pgService -Status running -StartupType automatic
         # Start-Process -FilePath "$env:PGBIN\pg_isready" -Wait -PassThru
         $env:Path += ";$env:PGBIN"
