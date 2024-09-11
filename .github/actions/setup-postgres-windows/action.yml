@@ -35,10 +35,11 @@ runs:
 
         echo "registering service using $PGBIN\pg_ctl.exe"
         "$PGBIN\pg_ctl.exe" register -N "postgresql16" -D "%ProgramData%/db_data" -S auto
+         "$PGBIN\pg_ctl.exe restart -D "C:\Program Files\PostgreSQL\16\data"
     - shell: pwsh
       run: |
-        $pgService = Get-Service -Name postgresql16
-        Set-Service -InputObject $pgService -Status running -StartupType automatic
-        Start-Process -FilePath "$env:PGBIN\pg_isready" -Wait -PassThru
+        # $pgService = Get-Service -Name postgresql16
+        # Set-Service -InputObject $pgService -Status running -StartupType automatic
+        # Start-Process -FilePath "$env:PGBIN\pg_isready" -Wait -PassThru
         $env:Path += ";$env:PGBIN"
         bash ${{ github.action_path }}/setup_db.sh
