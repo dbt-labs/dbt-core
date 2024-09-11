@@ -5,41 +5,58 @@ runs:
   steps:
     - shell: bash
       run: |
-        # The Windows runner has some PostgreSQL environment variables set
-        # that may confuse users since they may be irrelevant to the
-        # PostgreSQL server we're using. Since GitHub actions does not
-        # support unsetting environment variables, the best we can do is to
-        # clear their values in order to indicate they must not be used.
-        # for name in "PGROOT" "PGDATA" "PGBIN" "PGUSER" "PGPASSWORD"; do
-        #   echo "$name=" >> $GITHUB_ENV
-        # done
-
         choco upgrade postgresql16 \
           --params "/Password:password" \
           --ia "--enable-components server,commandlinetools --extract-only 1" \
           --no-progress
 
-        PG_BINDIR="C:\Program Files\PostgreSQL\16\bin"
-        PG_LIBDIR="C:\Program Files\PostgreSQL\16\lib"
+        PG_BINDIR=$("$PROGRAMFILES/PostgreSQL/16/bin/pg_config.exe" --bindir)
+        PG_LIBDIR=$("$PROGRAMFILES/PostgreSQL/16/bin/pg_config.exe" --libdir)
+
+        echo "PG_BINDIR:$PG_BINDIR"
+        echo "PG_LIBDIR:$PG_LIBDIR"
 
         echo "$PG_BINDIR" >> $GITHUB_PATH
         echo "PQ_LIB_DIR=$PG_LIBDIR" >> $GITHUB_ENV
 
-        PGBIN="C:\Program Files\PostgreSQL\16\bin"
-        PGROOT="C:\Program Files\PostgreSQL\16"
-        PGDATA="C:\Program Files\PostgreSQL\16\data"
+        PGBIN=$PG_BINDIR
+        PGROOT=$(dirname $PG_BINDIR)
+        PGDATA="$PGROOT/data"
 
         echo "PGBIN=$PGBIN" >> $GITHUB_ENV
         echo "PGROOT=$PGROOT" >> $GITHUB_ENV
         echo "PGDATA=$PGDATA" >> $GITHUB_ENV
 
-        echo "registering service using $PGBIN\pg_ctl.exe"
-        "$PGBIN\pg_ctl.exe" register -N "postgresql16" -D "%ProgramData%/db_data" -S auto
-         "$PGBIN\pg_ctl.exe restart -D "C:\Program Files\PostgreSQL\16\data"
+        echo "PGROOT:$PGROOT"
+        ls $PGROOT
+
+        echo "PGBIN:$PGBIN"
+        # ls $PGBIN
+
+        echo "PGDATA:$PGDATA"
+        mkdir $PGDATA
+
+        echo "registering service using $PGBIN/pg_ctl.exe"
+        "$PGBIN/pg_ctl.exe" register -N "postgresql16" -D "$PGDATA" -S auto
     - shell: pwsh
       run: |
-        # $pgService = Get-Service -Name postgresql16
-        # Set-Service -InputObject $pgService -Status running -StartupType automatic
+        $installerArgs = @("--install_runtimes 0", "--superpassword root", "--enable_acledit 1", "--unattendedmodeui none", "--mode unattended")
+        Install-Binary `
+            -Url "https://get.enterprisedb.com/postgresql/postgresql-16.1-1-windows-x64.exe" `
+            -InstallArgs $installerArgs `
+            -ExpectedSignature (Get-ToolsetContent).postgresql.signature
+
+        Get-Service -Name postgresql*
+
+        $pgReady = Start-Process -FilePath "$env:PGBIN\pg_isready" -Wait -PassThru
+        $exitCode = $pgReady.ExitCode
+        if ($exitCode -ne 0) {
+            Write-Host -Object "PostgreSQL is not ready. Exitcode: $exitCode"
+            exit $exitCode
+        }
+
+        $pgService = Get-Service -Name postgresql16
+        Set-Service -InputObject $pgService -Status running -StartupType automatic
         # Start-Process -FilePath "$env:PGBIN\pg_isready" -Wait -PassThru
         $env:Path += ";$env:PGBIN"
         bash ${{ github.action_path }}/setup_db.sh
