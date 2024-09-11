@@ -356,6 +356,8 @@ class RunTask(CompileTask):
 
         for idx in range(len(ordered_hooks)):
             hook = ordered_hooks[idx]
+            # We want to include node_info in the appropriate log files, so use
+            # log_contextvars
             with log_contextvars(node_info=hook.node_info):
                 hook.update_event_status(
                     started_at=started_at.isoformat(), node_status=RunningStatus.Started
