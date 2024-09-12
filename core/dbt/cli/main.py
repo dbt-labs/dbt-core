@@ -7,6 +7,7 @@ import click
 from click.exceptions import BadOptionUsage
 from click.exceptions import Exit as ClickExit
 from click.exceptions import NoSuchOption, UsageError
+
 from dbt.artifacts.schemas.catalog import CatalogArtifact
 from dbt.artifacts.schemas.run import RunExecutionResult
 from dbt.cli import params as p
