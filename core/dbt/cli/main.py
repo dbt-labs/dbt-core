@@ -7,7 +7,6 @@ import click
 from click.exceptions import BadOptionUsage
 from click.exceptions import Exit as ClickExit
 from click.exceptions import NoSuchOption, UsageError
-
 from dbt.artifacts.schemas.catalog import CatalogArtifact
 from dbt.artifacts.schemas.run import RunExecutionResult
 from dbt.cli import params as p
@@ -783,6 +782,7 @@ cli.commands["source"].add_command(snapshot_freshness, "snapshot-freshness")  # 
 @click.pass_context
 @global_flags
 @p.exclude
+@p.resource_type
 @p.exclude_resource_type
 @p.profiles_dir
 @p.project_dir
