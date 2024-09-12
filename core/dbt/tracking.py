@@ -25,6 +25,7 @@ from dbt.events.types import (
     SendingEvent,
     TrackingInitializeFailure,
 )
+from dbt_common.events.base_types import EventMsg
 from dbt_common.events.functions import fire_event, get_invocation_id
 from dbt_common.exceptions import NotImplementedError
 
@@ -36,6 +37,7 @@ DBT_INVOCATION_ENV = "DBT_INVOCATION_ENV"
 
 ADAPTER_INFO_SPEC = "iglu:com.dbt/adapter_info/jsonschema/1-0-1"
 DEPRECATION_WARN_SPEC = "iglu:com.dbt/deprecation_warn/jsonschema/1-0-0"
+BEHAVIOR_DEPRECATION_WARN_SPEC = "iglu:com.dbt/behavior_deprecation_warn/jsonschema/1-0-0"
 EXPERIMENTAL_PARSER = "iglu:com.dbt/experimental_parser/jsonschema/1-0-0"
 INVOCATION_ENV_SPEC = "iglu:com.dbt/invocation_env/jsonschema/1-0-0"
 INVOCATION_SPEC = "iglu:com.dbt/invocation/jsonschema/1-0-2"
@@ -360,6 +362,34 @@ def track_deprecation_warn(options):
         action="deprecation",
         label=get_invocation_id(),
         property_="warn",
+        context=context,
+    )
+
+
+def track_behavior_deprecation_warn(msg: EventMsg) -> None:
+    if msg.info.name != "BehaviorDeprecationEvent":
+        return
+
+    if active_user is None:
+        # cannot track deprecation warnings when active user is None
+        return
+
+    data = {
+        "flag_name": getattr(msg.data, "flag_name"),
+        "flag_source": getattr(msg.data, "flag_source"),
+        "deprecation_version": getattr(msg.data, "deprecation_version", ""),
+        "deprecation_message": getattr(msg.data, "deprecation_message", ""),
+        "docs_url": getattr(msg.data, "docs_url", ""),
+    }
+
+    context = [SelfDescribingJson(BEHAVIOR_DEPRECATION_WARN_SPEC, data)]
+
+    track(
+        active_user,
+        category="dbt",
+        action="behavior_deprecation",
+        label=get_invocation_id(),
+        property_=getattr(msg.data, "flag_name"),
         context=context,
     )
 
