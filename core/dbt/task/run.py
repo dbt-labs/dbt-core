@@ -333,7 +333,7 @@ class RunTask(CompileTask):
 
     def safe_run_hooks(
         self, adapter: BaseAdapter, hook_type: RunHookType, extra_context: Dict[str, Any]
-    ) -> None:
+    ) -> RunStatus:
         started_at = datetime.utcnow()
         ordered_hooks = self.get_hooks_by_type(hook_type)
 
@@ -342,7 +342,7 @@ class RunTask(CompileTask):
         # is created.
         adapter.clear_transaction()
         if not ordered_hooks:
-            return
+            return RunStatus.Success
         num_hooks = len(ordered_hooks)
 
         fire_event(Formatting(""))
@@ -424,6 +424,8 @@ class RunTask(CompileTask):
             )
         )
 
+        return status
+
     def print_results_line(self, results, execution_time) -> None:
         nodes = [r.node for r in results if hasattr(r, "node")] + self.ran_hooks
         stat_line = get_counts(nodes)
@@ -440,13 +442,14 @@ class RunTask(CompileTask):
             )
         )
 
-    def before_run(self, adapter, selected_uids: AbstractSet[str]) -> None:
+    def before_run(self, adapter: BaseAdapter, selected_uids: AbstractSet[str]) -> RunStatus:
         with adapter.connection_named("master"):
             self.defer_to_manifest()
             required_schemas = self.get_model_schemas(adapter, selected_uids)
             self.create_schemas(adapter, required_schemas)
             self.populate_adapter_cache(adapter, required_schemas)
-            self.safe_run_hooks(adapter, RunHookType.Start, {})
+            run_hooks_status = self.safe_run_hooks(adapter, RunHookType.Start, {})
+            return run_hooks_status
 
     def after_run(self, adapter, results) -> None:
         # in on-run-end hooks, provide the value 'database_schemas', which is a

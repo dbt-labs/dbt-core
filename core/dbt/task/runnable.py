@@ -11,7 +11,7 @@ import dbt.exceptions
 import dbt.tracking
 import dbt.utils
 import dbt_common.utils.formatting
-from dbt.adapters.base import BaseRelation
+from dbt.adapters.base import BaseAdapter, BaseRelation
 from dbt.adapters.factory import get_adapter
 from dbt.artifacts.schemas.results import (
     BaseResult,
@@ -63,6 +63,18 @@ RESULT_FILE_NAME = "run_results.json"
 class GraphRunnableMode(StrEnum):
     Topological = "topological"
     Independent = "independent"
+
+
+def mark_nodes_as_skipped(
+    executed_node_ids: Set[str], flattened_nodes: List[ResultNode], message: str
+) -> List[RunResult]:
+    node_results = []
+
+    for r in flattened_nodes:
+        if r.unique_id not in executed_node_ids:
+            node_results.append(RunResult.from_node(r, RunStatus.Skipped, message))
+
+    return node_results
 
 
 class GraphRunnableTask(ConfiguredTask):
@@ -401,13 +413,12 @@ class GraphRunnableTask(ConfiguredTask):
         except FailFastError as failure:
             self._cancel_connections(pool)
 
-            executed_node_ids = [r.node.unique_id for r in self.node_results]
-
-            for r in self._flattened_nodes:
-                if r.unique_id not in executed_node_ids:
-                    self.node_results.append(
-                        RunResult.from_node(r, RunStatus.Skipped, "Skipping due to fail_fast")
-                    )
+            skipped_results = mark_nodes_as_skipped(
+                {r.node.unique_id for r in self.node_results},
+                self._flattened_nodes,
+                "Skipping due to fail_fast",
+            )
+            self.node_results.extend(skipped_results)
 
             print_run_result_error(failure.result)
             # ensure information about all nodes is propagated to run results when failing fast
@@ -478,10 +489,11 @@ class GraphRunnableTask(ConfiguredTask):
                 {"adapter_cache_construction_elapsed": cache_populate_time}
             )
 
-    def before_run(self, adapter, selected_uids: AbstractSet[str]):
+    def before_run(self, adapter: BaseAdapter, selected_uids: AbstractSet[str]) -> RunStatus:
         with adapter.connection_named("master"):
             self.defer_to_manifest()
             self.populate_adapter_cache(adapter)
+            return RunStatus.Success
 
     def after_run(self, adapter, results) -> None:
         pass
@@ -493,8 +505,18 @@ class GraphRunnableTask(ConfiguredTask):
         adapter = get_adapter(self.config)
         self.started_at = time.time()
         try:
-            self.before_run(adapter, selected_uids)
-            res = self.execute_nodes()
+            before_run_status = self.before_run(adapter, selected_uids)
+
+            if before_run_status == RunStatus.Success:
+                res = self.execute_nodes()
+            else:
+                res = mark_nodes_as_skipped(
+                    {r.node.unique_id for r in self.node_results if hasattr(r, "node")},
+                    self._flattened_nodes or [],
+                    "Skipping due to on-run-start failure",
+                )
+                self.node_results.extend(res)
+
             self.after_run(adapter, res)
         finally:
             adapter.cleanup_connections()
