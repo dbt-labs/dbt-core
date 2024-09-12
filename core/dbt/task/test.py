@@ -385,16 +385,6 @@ class TestRunner(CompileRunner):
         return rendered
 
 
-class TestSelector(ResourceTypeSelector):
-    def __init__(self, graph, manifest, previous_state, resource_types: List[NodeType]) -> None:
-        super().__init__(
-            graph=graph,
-            manifest=manifest,
-            previous_state=previous_state,
-            resource_types=resource_types,
-        )
-
-
 class TestTask(RunTask):
     """
     Testing:
@@ -417,10 +407,10 @@ class TestTask(RunTask):
         resource_types = [rt for rt in resource_types if rt in TEST_NODE_TYPES]
         return list(resource_types)
 
-    def get_node_selector(self) -> TestSelector:
+    def get_node_selector(self) -> ResourceTypeSelector:
         if self.manifest is None or self.graph is None:
             raise DbtInternalError("manifest and graph must be set to get perform node selection")
-        return TestSelector(
+        return ResourceTypeSelector(
             graph=self.graph,
             manifest=self.manifest,
             previous_state=self.previous_state,
