@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from dbt.tests.util import check_table_does_not_exist, run_dbt
+from dbt_common.exceptions import DbtDatabaseError
 from tests.functional.adapter.hooks.fixtures import (
     macros__before_and_after,
     macros__hook,
@@ -158,4 +159,7 @@ class TestAfterRunHooks(object):
         }
 
     def test_missing_column_pre_hook(self, project):
-        run_dbt(["run"], expect_pass=False)
+        with pytest.raises(
+            DbtDatabaseError, match=r'relation "(\w+)\.test_column" does not exist'
+        ):
+            run_dbt(["run"], expect_pass=False)
