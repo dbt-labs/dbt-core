@@ -7954,6 +7954,9 @@
               "enabled": {
                 "type": "boolean",
                 "default": true
+              },
+              "event_time": {
+                "default": null
               }
             },
             "additionalProperties": true
@@ -17641,6 +17644,9 @@
                         "enabled": {
                           "type": "boolean",
                           "default": true
+                        },
+                        "event_time": {
+                          "default": null
                         }
                       },
                       "additionalProperties": true
