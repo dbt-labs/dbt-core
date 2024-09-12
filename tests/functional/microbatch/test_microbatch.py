@@ -4,7 +4,7 @@ from unittest import mock
 import pytest
 from freezegun import freeze_time
 
-from dbt.tests.util import relation_from_name, run_dbt
+from dbt.tests.util import relation_from_name, run_dbt, write_file
 
 input_model_sql = """
 {{ config(materialized='table', event_time='event_time') }}
@@ -29,6 +29,11 @@ select 3 as id, TIMESTAMP '2020-01-03 00:00:00-0' as event_time
 microbatch_model_sql = """
 {{ config(materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='day') }}
 select * from {{ ref('input_model') }}
+"""
+
+microbatch_model_ref_render_sql = """
+{{ config(materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='day') }}
+select * from {{ ref('input_model').render() }}
 """
 
 seed_csv = """id,event_time
@@ -267,6 +272,61 @@ class TestMicrobatchWithInputWithoutEventTime:
         self.assert_row_count(project, "input_model", 5)
 
         # re-run without changing current time => INSERT BECAUSE INPUT MODEL ISN'T BEING FILTERED
+        with freeze_time("2020-01-03 14:57:00"):
+            run_dbt(["run", "--select", "microbatch_model"])
+        self.assert_row_count(project, "microbatch_model", 5)
+
+
+class TestMicrobatchUsingRefRenderSkipsFilter:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "input_model.sql": input_model_sql,
+            "microbatch_model.sql": microbatch_model_sql,
+        }
+
+    def assert_row_count(self, project, relation_name: str, expected_row_count: int):
+        relation = relation_from_name(project.adapter, relation_name)
+        result = project.run_sql(f"select count(*) as num_rows from {relation}", fetch="one")
+
+        if result[0] != expected_row_count:
+            # running show for debugging
+            run_dbt(["show", "--inline", f"select * from {relation}"])
+
+            assert result[0] == expected_row_count
+
+    @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
+    def test_run_with_event_time(self, project):
+        # initial run -- backfills all data
+        with freeze_time("2020-01-03 13:57:00"):
+            run_dbt(["run"])
+        self.assert_row_count(project, "microbatch_model", 3)
+
+        # our partition grain is "day" so running the same day without new data should produce the same results
+        with freeze_time("2020-01-03 14:57:00"):
+            run_dbt(["run"])
+        self.assert_row_count(project, "microbatch_model", 3)
+
+        # add next two days of data
+        test_schema_relation = project.adapter.Relation.create(
+            database=project.database, schema=project.test_schema
+        )
+        project.run_sql(
+            f"insert into {test_schema_relation}.input_model(id, event_time) values (4, TIMESTAMP '2020-01-04 00:00:00-0'), (5, TIMESTAMP '2020-01-05 00:00:00-0')"
+        )
+        self.assert_row_count(project, "input_model", 5)
+
+        # re-run without changing current time => no insert
+        with freeze_time("2020-01-03 14:57:00"):
+            run_dbt(["run", "--select", "microbatch_model"])
+        self.assert_row_count(project, "microbatch_model", 3)
+
+        # Update microbatch model to call .render() on ref('input_model')
+        write_file(
+            microbatch_model_ref_render_sql, project.project_root, "models", "microbatch_model.sql"
+        )
+
+        # re-run without changing current time => INSERT because .render() skips filtering
         with freeze_time("2020-01-03 14:57:00"):
             run_dbt(["run", "--select", "microbatch_model"])
         self.assert_row_count(project, "microbatch_model", 5)
