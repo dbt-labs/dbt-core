@@ -3,8 +3,12 @@ from unittest import mock
 
 import pytest
 
-from dbt.tests.util import relation_from_name, run_dbt, write_file
-from tests.functional.utils import patch_microbatch_end_time
+from dbt.tests.util import (
+    patch_microbatch_end_time,
+    relation_from_name,
+    run_dbt,
+    write_file,
+)
 
 input_model_sql = """
 {{ config(materialized='table', event_time='event_time') }}
