@@ -66,6 +66,13 @@ class BaseTask(metaclass=ABCMeta):
     def __init__(self, args: Flags) -> None:
         self.args = args
 
+    def __enter__(self):
+        self.orig_dir = os.getcwd()
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        os.chdir(self.orig_dir)
+
     @abstractmethod
     def run(self):
         raise dbt_common.exceptions.base.NotImplementedError("Not Implemented")

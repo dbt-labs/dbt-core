@@ -70,7 +70,7 @@ class TimePeriod(StrEnum):
         return str(self) + "s"
 
 
-class PartitionGrain(StrEnum):
+class BatchSize(StrEnum):
     hour = "hour"
     day = "day"
     month = "month"

@@ -28,7 +28,7 @@ from dbt.adapters.factory import (
     get_adapter_package_names,
     get_adapter_type_names,
 )
-from dbt.artifacts.resources import NodeConfig, NodeVersion, RefArgs
+from dbt.artifacts.resources import NodeConfig, NodeVersion, RefArgs, SourceConfig
 from dbt.clients.jinja import (
     MacroGenerator,
     MacroStack,
@@ -235,7 +235,7 @@ class BaseResolver(metaclass=abc.ABCMeta):
         event_time_filter = None
         if (
             os.environ.get("DBT_EXPERIMENTAL_MICROBATCH")
-            and isinstance(target.config, NodeConfig)
+            and (isinstance(target.config, NodeConfig) or isinstance(target.config, SourceConfig))
             and target.config.event_time
             and self.model.config.materialized == "incremental"
             and self.model.config.incremental_strategy == "microbatch"

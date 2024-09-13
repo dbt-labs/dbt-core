@@ -16,7 +16,7 @@ from dbt.adapters.events.types import (
 )
 from dbt.adapters.exceptions import MissingMaterializationError
 from dbt.artifacts.resources import Hook, NodeConfig
-from dbt.artifacts.resources.types import PartitionGrain
+from dbt.artifacts.resources.types import BatchSize
 from dbt.artifacts.schemas.results import (
     BaseResult,
     NodeStatus,
@@ -488,10 +488,8 @@ class ModelRunner(CompileRunner):
             and not (getattr(self.config.args, "FULL_REFRESH", False) or model.config.full_refresh)
         )
 
-    def _offset_timestamp(
-        self, timestamp: datetime, grain: PartitionGrain, offset: int
-    ) -> datetime:
-        if grain == PartitionGrain.hour:
+    def _offset_timestamp(self, timestamp: datetime, grain: BatchSize, offset: int) -> datetime:
+        if grain == BatchSize.hour:
             offset_timestamp = datetime(
                 timestamp.year,
                 timestamp.month,
@@ -502,16 +500,16 @@ class ModelRunner(CompileRunner):
                 0,
                 pytz.utc,
             ) + timedelta(hours=offset)
-        elif grain == PartitionGrain.day:
+        elif grain == BatchSize.day:
             offset_timestamp = datetime(
                 timestamp.year, timestamp.month, timestamp.day, 0, 0, 0, 0, pytz.utc
             ) + timedelta(days=offset)
-        elif grain == PartitionGrain.month:
+        elif grain == BatchSize.month:
             offset_timestamp = datetime(timestamp.year, timestamp.month, 1, 0, 0, 0, 0, pytz.utc)
             for _ in range(offset):
                 start = timestamp + timedelta(days=1)
                 start = datetime(start.year, start.month, 1, 0, 0, 0, 0, pytz.utc)
-        elif grain == PartitionGrain.year:
+        elif grain == BatchSize.year:
             offset_timestamp = datetime(timestamp.year + offset, 1, 1, 0, 0, 0, 0, pytz.utc)
 
         return offset_timestamp

@@ -4,7 +4,6 @@ from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Generic, Iterable, List, Optional, Type, TypeVar
 
-from dbt import deprecations
 from dbt.artifacts.resources import RefArgs
 from dbt.artifacts.resources.v1.model import TimeSpine
 from dbt.clients.jinja_static import statically_parse_ref_or_source
@@ -567,12 +566,6 @@ class PatchParser(YamlReader, Generic[NonSourceTarget, Parsed]):
                 if "tests" in data and "data_tests" in data:
                     raise ValidationError(
                         "Invalid test config: cannot have both 'tests' and 'data_tests' defined"
-                    )
-                if is_root_project:
-                    deprecations.warn(
-                        "project-test-config",
-                        deprecated_path="tests",
-                        exp_path="data_tests",
                     )
                 data["data_tests"] = data.pop("tests")
 
