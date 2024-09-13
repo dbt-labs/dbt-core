@@ -24,10 +24,11 @@ snapshots:
     config:
       strategy: timestamp
       updated_at: updated_at
-      dbt_valid_to_column_name: test_valid_to
-      dbt_valid_from_column_name: test_valid_from
-      dbt_scd_id_column_name: test_scd_id
-      dbt_updated_at_column_name: test_updated_at
+      snapshot_meta_column_names:
+          dbt_valid_to: test_valid_to
+          dbt_valid_from: test_valid_from
+          dbt_scd_id: test_scd_id
+          dbt_updated_at: test_updated_at
 """
 
 ref_snapshot_sql = """
