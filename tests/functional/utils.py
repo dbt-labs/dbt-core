@@ -1,12 +1,11 @@
 import os
 from contextlib import contextmanager
 from datetime import datetime
-from typing import List, Optional
+from pathlib import Path
+from typing import Optional
 from unittest import mock
 
 from dbt.context.providers import BaseResolver
-from dbt_common.events.base_types import BaseEvent, EventMsg
-from typing import Optional
 
 
 @contextmanager
