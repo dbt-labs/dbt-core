@@ -5,11 +5,7 @@ from typing import AbstractSet, Any, Dict, Iterable, List, Optional, Set, Tuple,
 
 from dbt import tracking, utils
 from dbt.adapters.base import BaseAdapter, BaseRelation
-from dbt.adapters.events.types import (
-    DatabaseErrorRunningHook,
-    FinishedRunningStats,
-    HooksRunning,
-)
+from dbt.adapters.events.types import FinishedRunningStats, HooksRunning
 from dbt.adapters.exceptions import MissingMaterializationError
 from dbt.artifacts.resources import Hook
 from dbt.artifacts.schemas.results import (
@@ -407,7 +403,6 @@ class RunTask(CompileTask):
             num_failures = 0
         else:
             fire_event(Formatting(""))
-            fire_event(DatabaseErrorRunningHook(hook_type=hook_type.value))
             node_result_message = f"{hook_type.value} failed, error:\n {message}"
             num_failures = 1
 

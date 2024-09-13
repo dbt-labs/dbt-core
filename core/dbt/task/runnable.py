@@ -36,6 +36,7 @@ from dbt.events.types import (
     NodeStart,
     NothingToDo,
     QueryCancelationUnsupported,
+    SkippingDetails,
 )
 from dbt.exceptions import DbtInternalError, DbtRuntimeError, FailFastError
 from dbt.flags import get_flags
@@ -65,16 +66,12 @@ class GraphRunnableMode(StrEnum):
     Independent = "independent"
 
 
-def mark_nodes_as_skipped(
-    executed_node_ids: Set[str], flattened_nodes: List[ResultNode], message: str
-) -> List[RunResult]:
-    node_results = []
-
-    for r in flattened_nodes:
-        if r.unique_id not in executed_node_ids:
-            node_results.append(RunResult.from_node(r, RunStatus.Skipped, message))
-
-    return node_results
+def mark_node_as_skipped(
+    node: ResultNode, executed_node_ids: Set[str], message: Optional[str]
+) -> Optional[RunResult]:
+    if node.unique_id not in executed_node_ids:
+        return RunResult.from_node(node, RunStatus.Skipped, message)
+    return None
 
 
 class GraphRunnableTask(ConfiguredTask):
@@ -413,12 +410,14 @@ class GraphRunnableTask(ConfiguredTask):
         except FailFastError as failure:
             self._cancel_connections(pool)
 
-            skipped_results = mark_nodes_as_skipped(
-                {r.node.unique_id for r in self.node_results},
-                self._flattened_nodes,
-                "Skipping due to fail_fast",
-            )
-            self.node_results.extend(skipped_results)
+            executed_node_ids = {r.node.unique_id for r in self.node_results}
+            message = "Skipping due to fail_fast"
+
+            for node in self._flattened_nodes:
+                if node.unique_id not in executed_node_ids:
+                    self.node_results.append(
+                        mark_node_as_skipped(node, executed_node_ids, message)
+                    )
 
             print_run_result_error(failure.result)
             # ensure information about all nodes is propagated to run results when failing fast
@@ -510,12 +509,27 @@ class GraphRunnableTask(ConfiguredTask):
             if before_run_status == RunStatus.Success:
                 res = self.execute_nodes()
             else:
-                res = mark_nodes_as_skipped(
-                    {r.node.unique_id for r in self.node_results if hasattr(r, "node")},
-                    self._flattened_nodes or [],
-                    "Skipping due to on-run-start failure",
-                )
-                self.node_results.extend(res)
+                executed_node_ids = {
+                    r.node.unique_id for r in self.node_results if hasattr(r, "node")
+                }
+
+                res = []
+
+                for index, node in enumerate(self._flattened_nodes or []):
+                    if node.unique_id not in executed_node_ids:
+                        fire_event(
+                            SkippingDetails(
+                                resource_type=node.resource_type,
+                                schema=node.schema,
+                                node_name=node.name,
+                                index=index + 1,
+                                total=self.num_nodes,
+                                node_info=node.node_info,
+                            )
+                        )
+                        skipped_node = mark_node_as_skipped(node, executed_node_ids, None)
+                        if skipped_node:
+                            self.node_results.append(skipped_node)
 
             self.after_run(adapter, res)
         finally:
