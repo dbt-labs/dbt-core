@@ -416,10 +416,8 @@ class ModelRunner(CompileRunner):
         # iterate over each batch, calling materialization_macro to get a batch-level run result
         for batch_idx, batch in enumerate(batches):
             batch_description = self.describe_batch(batch[0], batch[1])
-            # TODO: consider setting timestamps on 'ref' and passing to extra_context
-            # or at least naming configs with more unique names + popping after execution (e.g. _dbt_microbatch_event_time_start)
-            model.config["event_time_start"] = batch[0]
-            model.config["event_time_end"] = batch[1]
+            model.config["__dbt_internal_microbatch_event_time_start"] = batch[0]
+            model.config["__dbt_internal_microbatch_event_time_end"] = batch[1]
 
             self.print_batch_start_line(batch_description, batch_idx + 1, len(batches))
 
