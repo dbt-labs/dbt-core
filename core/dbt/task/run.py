@@ -427,6 +427,7 @@ class ModelRunner(CompileRunner):
                 self.compiler.compile_node(model, manifest, {})
                 context["model"] = model
                 context["sql"] = model.compiled_code
+                context["compiled_code"] = model.compiled_code
 
                 result = MacroGenerator(
                     materialization_macro, context, stack=context["context_macro_stack"]
