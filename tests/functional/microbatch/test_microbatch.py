@@ -285,7 +285,7 @@ class TestMicrobatchUsingRefRenderSkipsFilter(BaseMicrobatchTest):
 
 microbatch_model_failing_incremental_partition_sql = """
 {{ config(materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='day') }}
-{% if '2020-01-02' in (model.config.event_time_start | string) %}
+{% if '2020-01-02' in (model.config.__dbt_internal_microbatch_event_time_start | string) %}
  invalid_sql
 {% endif %}
 select * from {{ ref('input_model') }}
@@ -310,7 +310,7 @@ class TestMicrobatchIncrementalPartitionFailure(BaseMicrobatchTest):
 
 microbatch_model_first_partition_failing_sql = """
 {{ config(materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='day') }}
-{% if '2020-01-01' in (model.config.event_time_start | string) %}
+{% if '2020-01-01' in (model.config.__dbt_internal_microbatch_event_time_start | string) %}
  invalid_sql
 {% endif %}
 select * from {{ ref('input_model') }}
