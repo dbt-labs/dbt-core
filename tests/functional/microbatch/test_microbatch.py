@@ -94,12 +94,12 @@ class TestMicrobatchCLI(BaseMicrobatchTest):
     @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
     def test_run_with_event_time(self, project):
         # run without --event-time-start or --event-time-end - 3 expected rows in output
-        with freeze_time("2020-01-03 13:57:00"):
+        with patch_microbatch_end_time("2020-01-03 13:57:00"):
             run_dbt(["run"])
         self.assert_row_count(project, "microbatch_model", 3)
 
         # build model >= 2020-01-02
-        with freeze_time("2020-01-03 13:57:00"):
+        with patch_microbatch_end_time("2020-01-03 13:57:00"):
             run_dbt(["run", "--event-time-start", "2020-01-02", "--full-refresh"])
         self.assert_row_count(project, "microbatch_model", 2)
 
@@ -307,7 +307,7 @@ class TestMicrobatchIncrementalPartitionFailure(BaseMicrobatchTest):
     @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
     def test_run_with_event_time(self, project):
         # run all partitions from start - 2 expected rows in output, one failed
-        with freeze_time("2020-01-03 13:57:00", tick=True):
+        with patch_microbatch_end_time("2020-01-03 13:57:00"):
             run_dbt(["run", "--event-time-start", "2020-01-01"])
         self.assert_row_count(project, "microbatch_model", 2)
 
@@ -332,6 +332,6 @@ class TestMicrobatchInitialPartitionFailure(BaseMicrobatchTest):
     @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
     def test_run_with_event_time(self, project):
         # run all partitions from start - 2 expected rows in output, one failed
-        with freeze_time("2020-01-03 13:57:00", tick=True):
+        with patch_microbatch_end_time("2020-01-03 13:57:00"):
             run_dbt(["run", "--event-time-start", "2020-01-01"])
         self.assert_row_count(project, "microbatch_model", 2)
