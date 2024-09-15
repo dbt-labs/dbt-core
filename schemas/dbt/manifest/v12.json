@@ -259,6 +259,12 @@
                     ],
                     "default": null
                   },
+                  "batch_size": {
+                    "default": null
+                  },
+                  "lookback": {
+                    "default": 0
+                  },
                   "persist_docs": {
                     "type": "object",
                     "propertyNames": {
@@ -433,6 +439,9 @@
                       }
                     },
                     "additionalProperties": false
+                  },
+                  "event_time": {
+                    "default": null
                   },
                   "delimiter": {
                     "type": "string",
@@ -909,6 +918,12 @@
                                 ],
                                 "default": null
                               },
+                              "batch_size": {
+                                "default": null
+                              },
+                              "lookback": {
+                                "default": 0
+                              },
                               "persist_docs": {
                                 "type": "object",
                                 "propertyNames": {
@@ -1083,6 +1098,9 @@
                                   }
                                 },
                                 "additionalProperties": false
+                              },
+                              "event_time": {
+                                "default": null
                               }
                             },
                             "additionalProperties": true
@@ -1283,6 +1301,12 @@
                     ],
                     "default": null
                   },
+                  "batch_size": {
+                    "default": null
+                  },
+                  "lookback": {
+                    "default": 0
+                  },
                   "persist_docs": {
                     "type": "object",
                     "propertyNames": {
@@ -1457,6 +1481,9 @@
                       }
                     },
                     "additionalProperties": false
+                  },
+                  "event_time": {
+                    "default": null
                   }
                 },
                 "additionalProperties": true
@@ -2704,6 +2731,12 @@
                     ],
                     "default": null
                   },
+                  "batch_size": {
+                    "default": null
+                  },
+                  "lookback": {
+                    "default": 0
+                  },
                   "persist_docs": {
                     "type": "object",
                     "propertyNames": {
@@ -2878,6 +2911,9 @@
                       }
                     },
                     "additionalProperties": false
+                  },
+                  "event_time": {
+                    "default": null
                   }
                 },
                 "additionalProperties": true
@@ -3488,6 +3524,12 @@
                     ],
                     "default": null
                   },
+                  "batch_size": {
+                    "default": null
+                  },
+                  "lookback": {
+                    "default": 0
+                  },
                   "persist_docs": {
                     "type": "object",
                     "propertyNames": {
@@ -3662,6 +3704,9 @@
                       }
                     },
                     "additionalProperties": false
+                  },
+                  "event_time": {
+                    "default": null
                   },
                   "access": {
                     "enum": [
@@ -4399,6 +4444,12 @@
                                 ],
                                 "default": null
                               },
+                              "batch_size": {
+                                "default": null
+                              },
+                              "lookback": {
+                                "default": 0
+                              },
                               "persist_docs": {
                                 "type": "object",
                                 "propertyNames": {
@@ -4573,6 +4624,9 @@
                                   }
                                 },
                                 "additionalProperties": false
+                              },
+                              "event_time": {
+                                "default": null
                               }
                             },
                             "additionalProperties": true
@@ -4800,6 +4854,12 @@
                     ],
                     "default": null
                   },
+                  "batch_size": {
+                    "default": null
+                  },
+                  "lookback": {
+                    "default": 0
+                  },
                   "persist_docs": {
                     "type": "object",
                     "propertyNames": {
@@ -4974,6 +5034,9 @@
                       }
                     },
                     "additionalProperties": false
+                  },
+                  "event_time": {
+                    "default": null
                   }
                 },
                 "additionalProperties": true
@@ -6282,6 +6345,12 @@
                     ],
                     "default": null
                   },
+                  "batch_size": {
+                    "default": null
+                  },
+                  "lookback": {
+                    "default": 0
+                  },
                   "persist_docs": {
                     "type": "object",
                     "propertyNames": {
@@ -6450,6 +6519,9 @@
                       }
                     },
                     "additionalProperties": false
+                  },
+                  "event_time": {
+                    "default": null
                   },
                   "strategy": {
                     "anyOf": [
@@ -7117,6 +7189,12 @@
                                 ],
                                 "default": null
                               },
+                              "batch_size": {
+                                "default": null
+                              },
+                              "lookback": {
+                                "default": 0
+                              },
                               "persist_docs": {
                                 "type": "object",
                                 "propertyNames": {
@@ -7291,6 +7369,9 @@
                                   }
                                 },
                                 "additionalProperties": false
+                              },
+                              "event_time": {
+                                "default": null
                               }
                             },
                             "additionalProperties": true
@@ -7873,6 +7954,9 @@
               "enabled": {
                 "type": "boolean",
                 "default": true
+              },
+              "event_time": {
+                "default": null
               }
             },
             "additionalProperties": true
@@ -9874,6 +9958,12 @@
                           ],
                           "default": null
                         },
+                        "batch_size": {
+                          "default": null
+                        },
+                        "lookback": {
+                          "default": 0
+                        },
                         "persist_docs": {
                           "type": "object",
                           "propertyNames": {
@@ -10048,6 +10138,9 @@
                             }
                           },
                           "additionalProperties": false
+                        },
+                        "event_time": {
+                          "default": null
                         },
                         "delimiter": {
                           "type": "string",
@@ -10524,6 +10617,12 @@
                                       ],
                                       "default": null
                                     },
+                                    "batch_size": {
+                                      "default": null
+                                    },
+                                    "lookback": {
+                                      "default": 0
+                                    },
                                     "persist_docs": {
                                       "type": "object",
                                       "propertyNames": {
@@ -10698,6 +10797,9 @@
                                         }
                                       },
                                       "additionalProperties": false
+                                    },
+                                    "event_time": {
+                                      "default": null
                                     }
                                   },
                                   "additionalProperties": true
@@ -10898,6 +11000,12 @@
                           ],
                           "default": null
                         },
+                        "batch_size": {
+                          "default": null
+                        },
+                        "lookback": {
+                          "default": 0
+                        },
                         "persist_docs": {
                           "type": "object",
                           "propertyNames": {
@@ -11072,6 +11180,9 @@
                             }
                           },
                           "additionalProperties": false
+                        },
+                        "event_time": {
+                          "default": null
                         }
                       },
                       "additionalProperties": true
@@ -12319,6 +12430,12 @@
                           ],
                           "default": null
                         },
+                        "batch_size": {
+                          "default": null
+                        },
+                        "lookback": {
+                          "default": 0
+                        },
                         "persist_docs": {
                           "type": "object",
                           "propertyNames": {
@@ -12493,6 +12610,9 @@
                             }
                           },
                           "additionalProperties": false
+                        },
+                        "event_time": {
+                          "default": null
                         }
                       },
                       "additionalProperties": true
@@ -13103,6 +13223,12 @@
                           ],
                           "default": null
                         },
+                        "batch_size": {
+                          "default": null
+                        },
+                        "lookback": {
+                          "default": 0
+                        },
                         "persist_docs": {
                           "type": "object",
                           "propertyNames": {
@@ -13277,6 +13403,9 @@
                             }
                           },
                           "additionalProperties": false
+                        },
+                        "event_time": {
+                          "default": null
                         },
                         "access": {
                           "enum": [
@@ -14014,6 +14143,12 @@
                                       ],
                                       "default": null
                                     },
+                                    "batch_size": {
+                                      "default": null
+                                    },
+                                    "lookback": {
+                                      "default": 0
+                                    },
                                     "persist_docs": {
                                       "type": "object",
                                       "propertyNames": {
@@ -14188,6 +14323,9 @@
                                         }
                                       },
                                       "additionalProperties": false
+                                    },
+                                    "event_time": {
+                                      "default": null
                                     }
                                   },
                                   "additionalProperties": true
@@ -14415,6 +14553,12 @@
                           ],
                           "default": null
                         },
+                        "batch_size": {
+                          "default": null
+                        },
+                        "lookback": {
+                          "default": 0
+                        },
                         "persist_docs": {
                           "type": "object",
                           "propertyNames": {
@@ -14589,6 +14733,9 @@
                             }
                           },
                           "additionalProperties": false
+                        },
+                        "event_time": {
+                          "default": null
                         }
                       },
                       "additionalProperties": true
@@ -15897,6 +16044,12 @@
                           ],
                           "default": null
                         },
+                        "batch_size": {
+                          "default": null
+                        },
+                        "lookback": {
+                          "default": 0
+                        },
                         "persist_docs": {
                           "type": "object",
                           "propertyNames": {
@@ -16065,6 +16218,9 @@
                             }
                           },
                           "additionalProperties": false
+                        },
+                        "event_time": {
+                          "default": null
                         },
                         "strategy": {
                           "anyOf": [
@@ -16732,6 +16888,12 @@
                                       ],
                                       "default": null
                                     },
+                                    "batch_size": {
+                                      "default": null
+                                    },
+                                    "lookback": {
+                                      "default": 0
+                                    },
                                     "persist_docs": {
                                       "type": "object",
                                       "propertyNames": {
@@ -16906,6 +17068,9 @@
                                         }
                                       },
                                       "additionalProperties": false
+                                    },
+                                    "event_time": {
+                                      "default": null
                                     }
                                   },
                                   "additionalProperties": true
@@ -17479,6 +17644,9 @@
                         "enabled": {
                           "type": "boolean",
                           "default": true
+                        },
+                        "event_time": {
+                          "default": null
                         }
                       },
                       "additionalProperties": true

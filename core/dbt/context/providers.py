@@ -1,6 +1,7 @@
 import abc
 import os
 from copy import deepcopy
+from datetime import datetime, timedelta
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -16,10 +17,12 @@ from typing import (
     Union,
 )
 
+import pytz
 from typing_extensions import Protocol
 
 from dbt import selected_resources
 from dbt.adapters.base.column import Column
+from dbt.adapters.base.relation import EventTimeFilter
 from dbt.adapters.contracts.connection import AdapterResponse
 from dbt.adapters.exceptions import MissingConfigError
 from dbt.adapters.factory import (
@@ -27,7 +30,8 @@ from dbt.adapters.factory import (
     get_adapter_package_names,
     get_adapter_type_names,
 )
-from dbt.artifacts.resources import NodeVersion, RefArgs
+from dbt.artifacts.resources import NodeConfig, NodeVersion, RefArgs, SourceConfig
+from dbt.artifacts.resources.types import BatchSize
 from dbt.clients.jinja import (
     MacroGenerator,
     MacroStack,
@@ -229,6 +233,95 @@ class BaseResolver(metaclass=abc.ABCMeta):
     @property
     def resolve_limit(self) -> Optional[int]:
         return 0 if getattr(self.config.args, "EMPTY", False) else None
+
+    def _build_end_time(self) -> Optional[datetime]:
+        return datetime.now(tz=pytz.utc)
+
+    def _build_start_time(
+        self, checkpoint: Optional[datetime], is_incremental: bool
+    ) -> Optional[datetime]:
+        if not is_incremental or checkpoint is None:
+            return None
+
+        assert isinstance(self.model.config, NodeConfig)
+        batch_size = self.model.config.batch_size
+        if batch_size is None:
+            raise DbtRuntimeError(f"The model `{self.model.name}` requires a `batch_size`")
+
+        lookback = self.model.config.lookback
+        if batch_size == BatchSize.hour:
+            start = datetime(
+                checkpoint.year,
+                checkpoint.month,
+                checkpoint.day,
+                checkpoint.hour,
+                0,
+                0,
+                0,
+                pytz.utc,
+            ) - timedelta(hours=lookback)
+        elif batch_size == BatchSize.day:
+            start = datetime(
+                checkpoint.year, checkpoint.month, checkpoint.day, 0, 0, 0, 0, pytz.utc
+            ) - timedelta(days=lookback)
+        elif batch_size == BatchSize.month:
+            start = datetime(checkpoint.year, checkpoint.month, 1, 0, 0, 0, 0, pytz.utc)
+            for _ in range(lookback):
+                start = start - timedelta(days=1)
+                start = datetime(start.year, start.month, 1, 0, 0, 0, 0, pytz.utc)
+        elif batch_size == BatchSize.year:
+            start = datetime(checkpoint.year - lookback, 1, 1, 0, 0, 0, 0, pytz.utc)
+        else:
+            raise DbtInternalError(
+                f"Batch size `{batch_size}` is not handled during batch calculation"
+            )
+
+        return start
+
+    def _is_incremental(self) -> bool:
+        # TODO: Remove. This is a temporary method. We're working with adapters on
+        # a strategy to ensure we can access the `is_incremental` logic without drift
+        relation_info = self.Relation.create_from(self.config, self.model)
+        relation = self.db_wrapper.get_relation(
+            relation_info.database, relation_info.schema, relation_info.name
+        )
+        return (
+            relation is not None
+            and relation.type == "table"
+            and self.model.config.materialized == "incremental"
+            and not (
+                getattr(self.config.args, "FULL_REFRESH", False) or self.model.config.full_refresh
+            )
+        )
+
+    def resolve_event_time_filter(self, target: ManifestNode) -> Optional[EventTimeFilter]:
+        event_time_filter = None
+        if (
+            os.environ.get("DBT_EXPERIMENTAL_MICROBATCH")
+            and (isinstance(target.config, NodeConfig) or isinstance(target.config, SourceConfig))
+            and target.config.event_time
+            and self.model.config.materialized == "incremental"
+            and self.model.config.incremental_strategy == "microbatch"
+        ):
+            is_incremental = self._is_incremental()
+            end: Optional[datetime] = getattr(self.config.args, "EVENT_TIME_END", None)
+            end = end.replace(tzinfo=pytz.UTC) if end else self._build_end_time()
+
+            start: Optional[datetime] = getattr(self.config.args, "EVENT_TIME_START", None)
+            start = (
+                start.replace(tzinfo=pytz.UTC)
+                if start
+                else self._build_start_time(checkpoint=end, is_incremental=is_incremental)
+            )
+
+            if start is not None or end is not None:
+                event_time_filter = EventTimeFilter(
+                    field_name=target.config.event_time,
+                    start=start,
+                    end=end,
+                )
+
+        return event_time_filter
 
     @abc.abstractmethod
     def __call__(self, *args: str) -> Union[str, RelationProxy, MetricReference]:
@@ -545,7 +638,11 @@ class RuntimeRefResolver(BaseRefResolver):
     def create_relation(self, target_model: ManifestNode) -> RelationProxy:
         if target_model.is_ephemeral_model:
             self.model.set_cte(target_model.unique_id, None)
-            return self.Relation.create_ephemeral_from(target_model, limit=self.resolve_limit)
+            return self.Relation.create_ephemeral_from(
+                target_model,
+                limit=self.resolve_limit,
+                event_time_filter=self.resolve_event_time_filter(target_model),
+            )
         elif (
             hasattr(target_model, "defer_relation")
             and target_model.defer_relation
@@ -563,10 +660,18 @@ class RuntimeRefResolver(BaseRefResolver):
             )
         ):
             return self.Relation.create_from(
-                self.config, target_model.defer_relation, limit=self.resolve_limit
+                self.config,
+                target_model.defer_relation,
+                limit=self.resolve_limit,
+                event_time_filter=self.resolve_event_time_filter(target_model),
             )
         else:
-            return self.Relation.create_from(self.config, target_model, limit=self.resolve_limit)
+            return self.Relation.create_from(
+                self.config,
+                target_model,
+                limit=self.resolve_limit,
+                event_time_filter=self.resolve_event_time_filter(target_model),
+            )
 
     def validate(
         self,
@@ -633,7 +738,12 @@ class RuntimeSourceResolver(BaseSourceResolver):
                 target_kind="source",
                 disabled=(isinstance(target_source, Disabled)),
             )
-        return self.Relation.create_from(self.config, target_source, limit=self.resolve_limit)
+        return self.Relation.create_from(
+            self.config,
+            target_source,
+            limit=self.resolve_limit,
+            event_time_filter=self.resolve_event_time_filter(target_source),
+        )
 
 
 class RuntimeUnitTestSourceResolver(BaseSourceResolver):

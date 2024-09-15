@@ -39,6 +39,9 @@ def get_rendered_model_config(**updates):
         "docs": {"node_color": None, "show": True},
         "contract": {"enforced": False, "alias_types": True},
         "access": "protected",
+        "event_time": None,
+        "lookback": 0,
+        "batch_size": None,
     }
     result.update(updates)
     return result
@@ -74,6 +77,9 @@ def get_rendered_seed_config(**updates):
         "incremental_strategy": None,
         "docs": {"node_color": None, "show": True},
         "contract": {"enforced": False, "alias_types": True},
+        "event_time": None,
+        "lookback": 0,
+        "batch_size": None,
     }
     result.update(updates)
     return result
@@ -114,6 +120,9 @@ def get_rendered_snapshot_config(**updates):
         "incremental_strategy": None,
         "docs": {"node_color": None, "show": True},
         "contract": {"enforced": False, "alias_types": True},
+        "event_time": None,
+        "lookback": 0,
+        "batch_size": None,
     }
     result.update(updates)
     return result
@@ -752,6 +761,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 },
                 "config": {
                     "enabled": True,
+                    "event_time": None,
                 },
                 "quoting": {
                     "database": None,
@@ -1254,6 +1264,7 @@ def expected_references_manifest(project):
                 },
                 "config": {
                     "enabled": True,
+                    "event_time": None,
                 },
                 "quoting": {
                     "database": False,
