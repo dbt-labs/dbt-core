@@ -367,15 +367,10 @@ def track_deprecation_warn(options):
 
 
 def track_behavior_deprecation_warn(msg: EventMsg) -> None:
-    if msg.info.name != "BehaviorDeprecationEvent":
-        return
-
-    if active_user is None:
-        # cannot track deprecation warnings when active user is None
+    if msg.info.name != "BehaviorDeprecationEvent" or active_user is None:
         return
 
     context = [SelfDescribingJson(BEHAVIOR_DEPRECATION_WARN_SPEC, msg_to_dict(msg))]
-
     track(
         active_user,
         category="dbt",

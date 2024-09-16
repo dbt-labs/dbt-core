@@ -70,6 +70,7 @@ def setup_event_logger(flags, callbacks: List[Callable[[EventMsg], None]] = []) 
     make_log_dir_if_missing(flags.LOG_PATH)
     event_manager = get_event_manager()
     event_manager.callbacks = callbacks.copy()
+    add_callback_to_manager(track_behavior_deprecation_warn)
 
     if flags.LOG_LEVEL != "none":
         line_format = _line_format_from_str(flags.LOG_FORMAT, LineFormat.PlainText)
@@ -90,8 +91,6 @@ def setup_event_logger(flags, callbacks: List[Callable[[EventMsg], None]] = []) 
             # being sent to stdout.
             console_config.output_stream = get_capture_stream()
         add_logger_to_manager(console_config)
-
-        add_callback_to_manager(track_behavior_deprecation_warn)
 
     if flags.LOG_LEVEL_FILE != "none":
         # create and add the file logger to the event manager
