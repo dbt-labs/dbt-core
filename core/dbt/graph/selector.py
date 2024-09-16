@@ -333,9 +333,9 @@ class NodeSelector(MethodManager):
 
     def get_graph_queue(self, spec: SelectionSpec, preserve_edges: bool = True) -> GraphQueue:
         """Returns a queue over nodes in the graph that tracks progress of
-        dependecies.
+        dependencies.
         """
-        # Filtering hapens in get_selected
+        # Filtering happens in get_selected
         selected_nodes = self.get_selected(spec)
         # Save to global variable
         selected_resources.set_selected_resources(selected_nodes)
