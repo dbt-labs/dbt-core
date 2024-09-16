@@ -165,6 +165,8 @@ def cli(ctx, **kwargs):
 @click.pass_context
 @global_flags
 @p.empty
+@p.event_time_start
+@p.event_time_end
 @p.exclude
 @p.export_saved_queries
 @p.full_refresh
@@ -537,6 +539,8 @@ def parse(ctx, **kwargs):
 @p.profiles_dir
 @p.project_dir
 @p.empty
+@p.event_time_start
+@p.event_time_end
 @p.select
 @p.selector
 @p.target_path
