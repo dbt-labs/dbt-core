@@ -6583,6 +6583,57 @@
                       }
                     ],
                     "default": null
+                  },
+                  "snapshot_meta_column_names": {
+                    "type": "object",
+                    "title": "SnapshotMetaColumnNames",
+                    "properties": {
+                      "dbt_valid_to": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null
+                      },
+                      "dbt_valid_from": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null
+                      },
+                      "dbt_scd_id": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null
+                      },
+                      "dbt_updated_at": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null
+                      }
+                    },
+                    "additionalProperties": false
                   }
                 },
                 "additionalProperties": true
@@ -16282,6 +16333,57 @@
                             }
                           ],
                           "default": null
+                        },
+                        "snapshot_meta_column_names": {
+                          "type": "object",
+                          "title": "SnapshotMetaColumnNames",
+                          "properties": {
+                            "dbt_valid_to": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ],
+                              "default": null
+                            },
+                            "dbt_valid_from": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ],
+                              "default": null
+                            },
+                            "dbt_scd_id": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ],
+                              "default": null
+                            },
+                            "dbt_updated_at": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ],
+                              "default": null
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": true
