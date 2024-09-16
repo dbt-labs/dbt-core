@@ -84,14 +84,22 @@ class MicrobatchBuilder:
     @staticmethod
     def offset_timestamp(timestamp: datetime, batch_size: BatchSize, offset: int) -> datetime:
         truncated = MicrobatchBuilder.truncate_timestamp(timestamp, batch_size)
+
+        offset_timestamp: datetime
         if batch_size == BatchSize.hour:
             offset_timestamp = truncated + timedelta(hours=offset)
         elif batch_size == BatchSize.day:
             offset_timestamp = truncated + timedelta(days=offset)
         elif batch_size == BatchSize.month:
-            for _ in range(offset):
-                truncated = timestamp + timedelta(days=1)
-                truncated = datetime(truncated.year, truncated.month, 1, 0, 0, 0, 0, pytz.utc)
+            offset_timestamp = truncated
+            for _ in range(abs(offset)):
+                if offset < 0:
+                    offset_timestamp = offset_timestamp - timedelta(days=1)
+                else:
+                    offset_timestamp = offset_timestamp + timedelta(days=31)
+                offset_timestamp = MicrobatchBuilder.truncate_timestamp(
+                    offset_timestamp, batch_size
+                )
         elif batch_size == BatchSize.year:
             offset_timestamp = truncated.replace(year=truncated.year + offset)
 
