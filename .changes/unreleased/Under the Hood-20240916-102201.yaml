@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Replace `TestSelector` with `ResourceTypeSelector`
+time: 2024-09-16T10:22:01.339462-06:00
+custom:
+  Author: dbeatty10
+  Issue: "10718"
