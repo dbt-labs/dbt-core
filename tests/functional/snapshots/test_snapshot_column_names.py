@@ -2,7 +2,13 @@ import os
 
 import pytest
 
-from dbt.tests.util import check_relations_equal, run_dbt
+from dbt.tests.util import (
+    check_relations_equal,
+    get_manifest,
+    run_dbt,
+    run_dbt_and_capture,
+    update_config_file,
+)
 
 snapshot_actual_sql = """
 {% snapshot snapshot_actual %}
@@ -106,7 +112,7 @@ class TestSnapshotColumnNames:
             "ref_snapshot.sql": ref_snapshot_sql,
         }
 
-    def test_basic_snapshot(self, project):
+    def test_snapshot_column_names(self, project):
         path = os.path.join(project.test_data_dir, "seed_cn.sql")
         project.run_sql_file(path)
         results = run_dbt(["snapshot"])
@@ -149,7 +155,7 @@ class TestSnapshotColumnNamesFromDbtProject:
             }
         }
 
-    def test_basic_snapshot(self, project):
+    def test_snapshot_column_names_from_project(self, project):
         path = os.path.join(project.test_data_dir, "seed_cn.sql")
         project.run_sql_file(path)
         results = run_dbt(["snapshot"])
@@ -163,3 +169,68 @@ class TestSnapshotColumnNamesFromDbtProject:
 
         # run_dbt(["test"])
         check_relations_equal(project.adapter, ["snapshot_actual", "snapshot_expected"])
+
+
+class TestSnapshotInvalidColumnNames:
+    @pytest.fixture(scope="class")
+    def snapshots(self):
+        return {"snapshot.sql": snapshot_actual_sql}
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "snapshots.yml": snapshots_no_column_names_yml,
+            "ref_snapshot.sql": ref_snapshot_sql,
+        }
+
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "snapshots": {
+                "test": {
+                    "+snapshot_meta_column_names": {
+                        "dbt_valid_to": "test_valid_to",
+                        "dbt_valid_from": "test_valid_from",
+                        "dbt_scd_id": "test_scd_id",
+                        "dbt_updated_at": "test_updated_at",
+                    }
+                }
+            }
+        }
+
+    def test_snapshot_invalid_column_names(self, project):
+        path = os.path.join(project.test_data_dir, "seed_cn.sql")
+        project.run_sql_file(path)
+        results = run_dbt(["snapshot"])
+        assert len(results) == 1
+        manifest = get_manifest(project.project_root)
+        snapshot_node = manifest.nodes["snapshot.test.snapshot_actual"]
+        snapshot_node.config.snapshot_meta_column_names == {
+            "dbt_valid_to": "test_valid_to",
+            "dbt_valid_from": "test_valid_from",
+            "dbt_scd_id": "test_scd_id",
+            "dbt_updated_at": "test_updated_at",
+        }
+
+        project.run_sql(invalidate_sql)
+        project.run_sql(update_sql)
+
+        # Change snapshot_meta_columns and look for an error
+        different_columns = {
+            "snapshots": {
+                "test": {
+                    "+snapshot_meta_column_names": {
+                        "dbt_valid_to": "test_valid_to",
+                        "dbt_updated_at": "test_updated_at",
+                    }
+                }
+            }
+        }
+        update_config_file(different_columns, "dbt_project.yml")
+
+        results, log_output = run_dbt_and_capture(["snapshot"], expect_pass=False)
+        assert len(results) == 1
+        assert (
+            "Compilation Error in snapshot snapshot_actual (snapshots/snapshot.sql)" in log_output
+        )
+        assert "Snapshot target is missing configured columns" in log_output
