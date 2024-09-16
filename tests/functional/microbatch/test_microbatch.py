@@ -7,6 +7,7 @@ from dbt.tests.util import (
     patch_microbatch_end_time,
     relation_from_name,
     run_dbt,
+    run_dbt_and_capture,
     write_file,
 )
 
@@ -285,6 +286,37 @@ class TestMicrobatchUsingRefRenderSkipsFilter(BaseMicrobatchTest):
         with patch_microbatch_end_time("2020-01-03 14:57:00"):
             run_dbt(["run", "--select", "microbatch_model"])
         self.assert_row_count(project, "microbatch_model", 5)
+
+
+microbatch_model_context_vars = """
+{{ config(materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='day') }}
+{{ log("start: "~ model.config.__dbt_internal_microbatch_event_time_start, info=True)}}
+{{ log("end: "~ model.config.__dbt_internal_microbatch_event_time_end, info=True)}}
+select * from {{ ref('input_model') }}
+"""
+
+
+class TestMicrobatchJinjaContextVarsAvailable(BaseMicrobatchTest):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "input_model.sql": input_model_sql,
+            "microbatch_model.sql": microbatch_model_context_vars,
+        }
+
+    @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
+    def test_run_with_event_time_logs(self, project):
+        with patch_microbatch_end_time("2020-01-03 13:57:00"):
+            _, logs = run_dbt_and_capture(["run", "--event-time-start", "2020-01-01"])
+
+        assert "start: 2020-01-01 00:00:00+00:00" in logs
+        assert "end: 2020-01-02 00:00:00+00:00" in logs
+
+        assert "start: 2020-01-02 00:00:00+00:00" in logs
+        assert "end: 2020-01-03 00:00:00+00:00" in logs
+
+        assert "start: 2020-01-03 00:00:00+00:00" in logs
+        assert "end: 2020-01-03 13:57:00+00:00" in logs
 
 
 microbatch_model_failing_incremental_partition_sql = """
