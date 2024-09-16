@@ -379,7 +379,7 @@ def track_behavior_deprecation_warn(msg: EventMsg) -> None:
     track(
         active_user,
         category="dbt",
-        action="behavior_deprecation",
+        action=msg.info.name,
         label=get_invocation_id(),
         context=context,
     )
