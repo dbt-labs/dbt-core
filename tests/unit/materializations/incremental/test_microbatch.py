@@ -358,3 +358,89 @@ class TestMicrobatchBuilder:
         actual_batches = microbatch_builder.build_batches(start, end)
         assert len(actual_batches) == len(expected_batches)
         assert actual_batches == expected_batches
+
+    @pytest.mark.parametrize(
+        "timestamp,batch_size,offset,expected_timestamp",
+        [
+            (
+                datetime(2024, 9, 5, 3, 56, 1, 1, pytz.UTC),
+                BatchSize.year,
+                1,
+                datetime(2025, 1, 1, 0, 0, 0, 0, pytz.UTC),
+            ),
+            (
+                datetime(2024, 9, 5, 3, 56, 1, 1, pytz.UTC),
+                BatchSize.year,
+                -1,
+                datetime(2023, 1, 1, 0, 0, 0, 0, pytz.UTC),
+            ),
+            (
+                datetime(2024, 9, 5, 3, 56, 1, 1, pytz.UTC),
+                BatchSize.month,
+                1,
+                datetime(2024, 10, 1, 0, 0, 0, 0, pytz.UTC),
+            ),
+            (
+                datetime(2024, 9, 5, 3, 56, 1, 1, pytz.UTC),
+                BatchSize.month,
+                -1,
+                datetime(2024, 8, 1, 0, 0, 0, 0, pytz.UTC),
+            ),
+            (
+                datetime(2024, 9, 5, 3, 56, 1, 1, pytz.UTC),
+                BatchSize.day,
+                1,
+                datetime(2024, 9, 6, 0, 0, 0, 0, pytz.UTC),
+            ),
+            (
+                datetime(2024, 9, 5, 3, 56, 1, 1, pytz.UTC),
+                BatchSize.day,
+                -1,
+                datetime(2024, 9, 4, 0, 0, 0, 0, pytz.UTC),
+            ),
+            (
+                datetime(2024, 9, 5, 3, 56, 1, 1, pytz.UTC),
+                BatchSize.hour,
+                1,
+                datetime(2024, 9, 5, 4, 0, 0, 0, pytz.UTC),
+            ),
+            (
+                datetime(2024, 9, 5, 3, 56, 1, 1, pytz.UTC),
+                BatchSize.hour,
+                -1,
+                datetime(2024, 9, 5, 2, 0, 0, 0, pytz.UTC),
+            ),
+        ],
+    )
+    def test_offset_timestamp(self, timestamp, batch_size, offset, expected_timestamp):
+        assert (
+            MicrobatchBuilder.offset_timestamp(timestamp, batch_size, offset) == expected_timestamp
+        )
+
+    @pytest.mark.parametrize(
+        "timestamp,batch_size,expected_timestamp",
+        [
+            (
+                datetime(2024, 9, 5, 3, 56, 1, 1, pytz.UTC),
+                BatchSize.year,
+                datetime(2024, 1, 1, 0, 0, 0, 0, pytz.UTC),
+            ),
+            (
+                datetime(2024, 9, 5, 3, 56, 1, 1, pytz.UTC),
+                BatchSize.month,
+                datetime(2024, 9, 1, 0, 0, 0, 0, pytz.UTC),
+            ),
+            (
+                datetime(2024, 9, 5, 3, 56, 1, 1, pytz.UTC),
+                BatchSize.day,
+                datetime(2024, 9, 5, 0, 0, 0, 0, pytz.UTC),
+            ),
+            (
+                datetime(2024, 9, 5, 3, 56, 1, 1, pytz.UTC),
+                BatchSize.hour,
+                datetime(2024, 9, 5, 3, 0, 0, 0, pytz.UTC),
+            ),
+        ],
+    )
+    def test_truncate_timestamp(self, timestamp, batch_size, expected_timestamp):
+        assert MicrobatchBuilder.truncate_timestamp(timestamp, batch_size) == expected_timestamp
