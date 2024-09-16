@@ -2,10 +2,8 @@ import functools
 import os
 import threading
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import AbstractSet, Any, Dict, Iterable, List, Optional, Set, Tuple, Type
-
-import pytz
 
 from dbt import tracking, utils
 from dbt.adapters.base import BaseRelation
@@ -15,7 +13,7 @@ from dbt.adapters.events.types import (
     HooksRunning,
 )
 from dbt.adapters.exceptions import MissingMaterializationError
-from dbt.artifacts.resources import Hook, NodeConfig
+from dbt.artifacts.resources import Hook
 from dbt.artifacts.resources.types import BatchSize
 from dbt.artifacts.schemas.results import (
     BaseResult,
@@ -39,6 +37,7 @@ from dbt.events.types import (
 from dbt.exceptions import CompilationError, DbtInternalError, DbtRuntimeError
 from dbt.graph import ResourceTypeSelector
 from dbt.hooks import get_hook_dict
+from dbt.materializations.incremental.microbatch import MicrobatchBuilder
 from dbt.node_types import NodeType, RunHookType
 from dbt.task.base import BaseRunner
 from dbt_common.dataclass_schema import dbtClassMixin
@@ -194,8 +193,14 @@ class ModelRunner(CompileRunner):
         )
         return f"{self.node.language} {materialization} model {self.get_node_representation()}"
 
-    def describe_batch(self, batch_start, batch_end) -> str:
-        return f"batch {self.get_node_representation()} from {batch_start} to {batch_end}"
+    def describe_batch(self, batch_start: Optional[datetime]) -> str:
+        # Only visualize date if batch_start year/month/day
+        formatted_batch_start = (
+            batch_start.date()
+            if (batch_start and self.node.config.batch_size != BatchSize.hour)
+            else batch_start
+        )
+        return f"batch {formatted_batch_start} of {self.get_node_representation()}"
 
     def print_start_line(self):
         fire_event(
@@ -227,7 +232,15 @@ class ModelRunner(CompileRunner):
             level=level,
         )
 
-    def print_batch_result_line(self, result, description, batch_idx, batch_total):
+    def print_batch_result_line(
+        self,
+        result: RunResult,
+        batch_start: datetime,
+        batch_idx: int,
+        batch_total: int,
+        exception: Exception,
+    ):
+        description = self.describe_batch(batch_start)
         if result.status == NodeStatus.Error:
             status = result.status
             level = EventLevel.ERROR
@@ -245,11 +258,19 @@ class ModelRunner(CompileRunner):
             ),
             level=level,
         )
+        if exception:
+            print(exception)
 
-    def print_batch_start_line(self, description, batch_idx, batch_total):
+    def print_batch_start_line(
+        self, batch_start: Optional[datetime], batch_idx: int, batch_total: int
+    ) -> None:
+        if batch_start is None:
+            return
+
+        batch_description = self.describe_batch(batch_start)
         fire_event(
             LogStartLine(
-                description=description,
+                description=batch_description,
                 index=batch_idx,
                 total=batch_total,
                 node_info=self.node.node_info,
@@ -296,14 +317,13 @@ class ModelRunner(CompileRunner):
             failures=failures,
         )
 
-    def _build_failed_run_batch_result(self, model):
+    def _build_failed_run_batch_result(self, model) -> RunResult:
         return RunResult(
             node=model,
             status=RunStatus.Error,
             timing=[],
             thread_id=threading.current_thread().name,
-            # TODO -- why isn't this getting propagated to logs?
-            execution_time=None,
+            execution_time=0,
             message="ERROR",
             adapter_response={},
             failures=1,
@@ -380,63 +400,42 @@ class ModelRunner(CompileRunner):
 
     def _execute_microbatch_materialization(self, model, manifest, context, materialization_macro):
         batch_results = []
-        # get the overall start/end bounds
-        is_incremental = self._is_incremental(model)
-        end: Optional[datetime] = getattr(self.config.args, "EVENT_TIME_END", None)
-        end = end.replace(tzinfo=pytz.UTC) if end else self._build_end_time()
-
-        start: Optional[datetime] = getattr(self.config.args, "EVENT_TIME_START", None)
-        start = (
-            start.replace(tzinfo=pytz.UTC)
-            if start
-            else self._build_start_time(model, checkpoint=end, is_incremental=is_incremental)
+        microbatch_builder = MicrobatchBuilder(
+            model=model,
+            is_incremental=self._is_incremental(model),
+            event_time_start=getattr(self.config.args, "EVENT_TIME_START", None),
+            event_time_end=getattr(self.config.args, "EVENT_TIME_END", None),
         )
-        # split by batch_size
-        #   * if full-refresh / first run (is_incremental: False), will need to get a start_time
-        #   * option 1: cheap - have user provide start_time (implemented)
-        #   * option 2: no start_time, only send one query, no filters (implemented)
-        #       * option 2a: min of the min, query each input that has event_time
-        if not start:
-            batches = [(start, end)]
-        else:
-            batch_size = model.config.batch_size
-
-            curr_batch_start: datetime = start
-            curr_batch_end: datetime = self._offset_timestamp(curr_batch_start, batch_size, 1)
-
-            batches: List[Tuple[datetime, datetime]] = [(curr_batch_start, curr_batch_end)]
-            while curr_batch_end <= end:
-                curr_batch_start = curr_batch_end
-                curr_batch_end = self._offset_timestamp(curr_batch_start, batch_size, 1)
-                batches.append((curr_batch_start, curr_batch_end))
-
-            # use exact end value as stop
-            batches[-1] = (batches[-1][0], end)
+        end = microbatch_builder.build_end_time()
+        start = microbatch_builder.build_start_time(end)
+        batches = microbatch_builder.build_batches(start, end)
 
         # iterate over each batch, calling materialization_macro to get a batch-level run result
         for batch_idx, batch in enumerate(batches):
-            batch_description = self.describe_batch(batch[0], batch[1])
-            model.config["__dbt_internal_microbatch_event_time_start"] = batch[0]
-            model.config["__dbt_internal_microbatch_event_time_end"] = batch[1]
-
-            self.print_batch_start_line(batch_description, batch_idx + 1, len(batches))
+            self.print_batch_start_line(batch[0], batch_idx + 1, len(batches))
 
             exception = None
             try:
-                # Recompile node to re-resolve refs with event time filters rendered
+                # Set start/end in context prior to re-compiling
+                model.config["__dbt_internal_microbatch_event_time_start"] = batch[0]
+                model.config["__dbt_internal_microbatch_event_time_end"] = batch[1]
+
+                # Recompile node to re-resolve refs with event time filters rendered, update context
                 self.compiler.compile_node(model, manifest, {})
                 context["model"] = model
                 context["sql"] = model.compiled_code
                 context["compiled_code"] = model.compiled_code
 
+                # Materialize batch and cache any materialized relations
                 result = MacroGenerator(
                     materialization_macro, context, stack=context["context_macro_stack"]
                 )()
                 for relation in self._materialization_relations(result, model):
                     self.adapter.cache_added(relation.incorporate(dbt_created=True))
 
+                # Build result fo executed batch
                 batch_run_result = self._build_run_model_result(model, context)
-
+                # Update context vars for future batches
                 context["is_incremental"] = lambda: True
                 context["should_full_refresh"] = lambda: False
             except Exception as e:
@@ -444,34 +443,11 @@ class ModelRunner(CompileRunner):
                 batch_run_result = self._build_failed_run_batch_result(model)
 
             self.print_batch_result_line(
-                batch_run_result, batch_description, batch_idx + 1, len(batches)
+                batch_run_result, batch[0], batch_idx + 1, len(batches), exception
             )
-            if exception:
-                print(exception)
-
             batch_results.append(batch_run_result)
 
         return batch_results
-
-    def _build_end_time(self) -> Optional[datetime]:
-        return datetime.now(tz=pytz.utc)
-
-    def _build_start_time(
-        self, model, checkpoint: Optional[datetime], is_incremental: bool
-    ) -> Optional[datetime]:
-        if not is_incremental or checkpoint is None:
-            return None
-
-        assert isinstance(model.config, NodeConfig)
-        grain = model.config.batch_size
-        if grain is None:
-            # TODO: Better error message
-            raise DbtRuntimeError("Partition grain not specified")
-
-        lookback = model.config.lookback
-        start = self._offset_timestamp(checkpoint, grain, -1 * lookback)
-
-        return start
 
     def _is_incremental(self, model) -> bool:
         # TODO: Remove. This is a temporary method. We're working with adapters on
@@ -486,32 +462,6 @@ class ModelRunner(CompileRunner):
             and model.config.materialized == "incremental"
             and not (getattr(self.config.args, "FULL_REFRESH", False) or model.config.full_refresh)
         )
-
-    def _offset_timestamp(self, timestamp: datetime, grain: BatchSize, offset: int) -> datetime:
-        if grain == BatchSize.hour:
-            offset_timestamp = datetime(
-                timestamp.year,
-                timestamp.month,
-                timestamp.day,
-                timestamp.hour,
-                0,
-                0,
-                0,
-                pytz.utc,
-            ) + timedelta(hours=offset)
-        elif grain == BatchSize.day:
-            offset_timestamp = datetime(
-                timestamp.year, timestamp.month, timestamp.day, 0, 0, 0, 0, pytz.utc
-            ) + timedelta(days=offset)
-        elif grain == BatchSize.month:
-            offset_timestamp = datetime(timestamp.year, timestamp.month, 1, 0, 0, 0, 0, pytz.utc)
-            for _ in range(offset):
-                start = timestamp + timedelta(days=1)
-                start = datetime(start.year, start.month, 1, 0, 0, 0, 0, pytz.utc)
-        elif grain == BatchSize.year:
-            offset_timestamp = datetime(timestamp.year + offset, 1, 1, 0, 0, 0, 0, pytz.utc)
-
-        return offset_timestamp
 
 
 class RunTask(CompileTask):
