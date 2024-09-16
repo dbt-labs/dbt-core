@@ -31,6 +31,14 @@ snapshots:
           dbt_updated_at: test_updated_at
 """
 
+snapshots_no_column_names_yml = """
+snapshots:
+  - name: snapshot_actual
+    config:
+      strategy: timestamp
+      updated_at: updated_at
+"""
+
 ref_snapshot_sql = """
 select * from {{ ref('snapshot_actual') }}
 """
@@ -96,6 +104,49 @@ class TestSnapshotColumnNames:
         return {
             "snapshots.yml": snapshots_yml,
             "ref_snapshot.sql": ref_snapshot_sql,
+        }
+
+    def test_basic_snapshot(self, project):
+        path = os.path.join(project.test_data_dir, "seed_cn.sql")
+        project.run_sql_file(path)
+        results = run_dbt(["snapshot"])
+        assert len(results) == 1
+
+        project.run_sql(invalidate_sql)
+        project.run_sql(update_sql)
+
+        results = run_dbt(["snapshot"])
+        assert len(results) == 1
+
+        # run_dbt(["test"])
+        check_relations_equal(project.adapter, ["snapshot_actual", "snapshot_expected"])
+
+
+class TestSnapshotColumnNamesFromDbtProject:
+    @pytest.fixture(scope="class")
+    def snapshots(self):
+        return {"snapshot.sql": snapshot_actual_sql}
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "snapshots.yml": snapshots_no_column_names_yml,
+            "ref_snapshot.sql": ref_snapshot_sql,
+        }
+
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "snapshots": {
+                "test": {
+                    "+snapshot_meta_column_names": {
+                        "dbt_valid_to": "test_valid_to",
+                        "dbt_valid_from": "test_valid_from",
+                        "dbt_scd_id": "test_scd_id",
+                        "dbt_updated_at": "test_updated_at",
+                    }
+                }
+            }
         }
 
     def test_basic_snapshot(self, project):
