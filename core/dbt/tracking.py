@@ -26,7 +26,7 @@ from dbt.events.types import (
     TrackingInitializeFailure,
 )
 from dbt_common.events.base_types import EventMsg
-from dbt_common.events.functions import fire_event, get_invocation_id
+from dbt_common.events.functions import fire_event, get_invocation_id, msg_to_dict
 from dbt_common.exceptions import NotImplementedError
 
 sp_logger.setLevel(100)
@@ -374,22 +374,13 @@ def track_behavior_deprecation_warn(msg: EventMsg) -> None:
         # cannot track deprecation warnings when active user is None
         return
 
-    data = {
-        "flag_name": getattr(msg.data, "flag_name"),
-        "flag_source": getattr(msg.data, "flag_source"),
-        "deprecation_version": getattr(msg.data, "deprecation_version", ""),
-        "deprecation_message": getattr(msg.data, "deprecation_message", ""),
-        "docs_url": getattr(msg.data, "docs_url", ""),
-    }
-
-    context = [SelfDescribingJson(BEHAVIOR_DEPRECATION_WARN_SPEC, data)]
+    context = [SelfDescribingJson(BEHAVIOR_DEPRECATION_WARN_SPEC, msg_to_dict(msg))]
 
     track(
         active_user,
         category="dbt",
         action="behavior_deprecation",
         label=get_invocation_id(),
-        property_=getattr(msg.data, "flag_name"),
         context=context,
     )
 

@@ -2,8 +2,10 @@ import os
 from functools import partial
 from typing import Callable, List
 
+from dbt.tracking import track_behavior_deprecation_warn
 from dbt_common.events.base_types import EventLevel, EventMsg
 from dbt_common.events.event_manager_client import (
+    add_callback_to_manager,
     add_logger_to_manager,
     cleanup_event_logger,
     get_event_manager,
@@ -88,6 +90,8 @@ def setup_event_logger(flags, callbacks: List[Callable[[EventMsg], None]] = []) 
             # being sent to stdout.
             console_config.output_stream = get_capture_stream()
         add_logger_to_manager(console_config)
+
+        add_callback_to_manager(track_behavior_deprecation_warn)
 
     if flags.LOG_LEVEL_FILE != "none":
         # create and add the file logger to the event manager
