@@ -21,6 +21,7 @@ from dbt.artifacts.resources import (
     NodeVersion,
     Owner,
     Quoting,
+    TimeSpine,
     UnitTestInputFixture,
     UnitTestNodeVersions,
     UnitTestOutputFixture,
@@ -208,25 +209,13 @@ class UnparsedNodeUpdate(HasConfig, HasColumnTests, HasColumnAndTestProps, HasYa
 
 
 @dataclass
-class UnparsedCustomGranularity(dbtClassMixin):
-    name: str
-    column_name: Optional[str] = None
-
-
-@dataclass
-class UnparsedTimeSpine(dbtClassMixin):
-    standard_granularity_column: str
-    custom_granularities: List[UnparsedCustomGranularity] = field(default_factory=list)
-
-
-@dataclass
 class UnparsedModelUpdate(UnparsedNodeUpdate):
     quote_columns: Optional[bool] = None
     access: Optional[str] = None
     latest_version: Optional[NodeVersion] = None
     versions: Sequence[UnparsedVersion] = field(default_factory=list)
     deprecation_date: Optional[datetime.datetime] = None
-    time_spine: Optional[UnparsedTimeSpine] = None
+    time_spine: Optional[TimeSpine] = None
 
     def __post_init__(self) -> None:
         if self.latest_version:
