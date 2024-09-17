@@ -7,6 +7,7 @@ from fixtures import (  # noqa: F401
     my_model_a_sql,
     my_model_b_sql,
     my_model_vars_sql,
+    test_my_model_a_yml,
     test_my_model_yml,
 )
 
@@ -21,6 +22,7 @@ class TestUnitTestList:
             "my_model_a.sql": my_model_a_sql,
             "my_model_b.sql": my_model_b_sql,
             "test_my_model.yml": test_my_model_yml + datetime_test,
+            "test_my_model_a.yml": test_my_model_a_yml,
         }
 
     @pytest.fixture(scope="class")
@@ -32,13 +34,14 @@ class TestUnitTestList:
         results = run_dbt(["run"])
         assert len(results) == 3
         results = run_dbt(["test"], expect_pass=False)
-        assert len(results) == 5
+        assert len(results) == 6
 
         results = run_dbt(["list"])
         expected = [
             "test.my_model",
             "test.my_model_a",
             "test.my_model_b",
+            "test.not_null_my_model_a_id",
             "unit_test:test.test_my_model",
             "unit_test:test.test_my_model_datetime",
             "unit_test:test.test_my_model_empty",
@@ -81,3 +84,12 @@ class TestUnitTestList:
         for result in results:
             json_result = json.loads(result)
             assert json_result["model"] == "my_model"
+
+        results = run_dbt(["list", "--resource-type", "unit_test"])
+        assert len(results) == 5
+
+        results = run_dbt(["list", "--resource-type", "test"])
+        assert len(results) == 1
+
+        results = run_dbt(["list", "--resource-type", "unit_test", "test"])
+        assert len(results) == 6
