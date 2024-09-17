@@ -376,12 +376,14 @@ class TestRunner(CompileRunner):
 
 
 class TestSelector(ResourceTypeSelector):
-    def __init__(self, graph, manifest, previous_state) -> None:
+    def __init__(
+        self, graph, manifest, previous_state, resource_types=[NodeType.Test, NodeType.Unit]
+    ) -> None:
         super().__init__(
             graph=graph,
             manifest=manifest,
             previous_state=previous_state,
-            resource_types=[NodeType.Test, NodeType.Unit],
+            resource_types=resource_types,
         )
 
 
