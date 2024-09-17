@@ -50,15 +50,6 @@ END a_is_null
 FROM {{ ref('my_model_a') }}
 """
 
-test_my_model_a_yml = """
-models:
-  - name: my_model_a
-    columns:
-      - name: id
-        tests:
-          - not_null
-"""
-
 test_my_model_yml = """
 unit_tests:
   - name: test_my_model
