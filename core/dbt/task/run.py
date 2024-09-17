@@ -322,60 +322,66 @@ class RunTask(CompileTask):
         started_at = datetime.utcnow()
         ordered_hooks = self.get_hooks_by_type(hook_type)
 
-        # on-run-* hooks should run outside of a transaction. This happens
-        # b/c psycopg2 automatically begins a transaction when a connection
-        # is created.
+        # on-run-* hooks should run outside a transaction. This happens because psycopg2 automatically begins a transaction when a connection is created.
         adapter.clear_transaction()
         if not ordered_hooks:
             return RunStatus.Success
+
+        status = RunStatus.Success
+        failed = False
         num_hooks = len(ordered_hooks)
 
-        idx = 0
-
-        while idx < num_hooks:
-            hook = ordered_hooks[idx]
-            # We want to include node_info in the appropriate log files, so use
-            # log_contextvars
+        for idx, hook in enumerate(ordered_hooks, 1):
             with log_contextvars(node_info=hook.node_info):
-                hook.index = idx + 1
-                hook.update_event_status(
-                    started_at=started_at.isoformat(), node_status=RunningStatus.Started
-                )
-                sql = self.get_hook_sql(adapter, hook, hook.index, num_hooks, extra_context)
-
+                hook.index = idx
                 hook_name = f"{hook.package_name}.{hook_type}.{hook.index}"
-                fire_event(
-                    LogHookStartLine(
-                        statement=hook_name,
-                        index=hook.index,
-                        total=num_hooks,
-                        node_info=hook.node_info,
+                execution_time = 0.0
+                timing = []
+                failures = 1
+
+                if not failed:
+                    hook.update_event_status(
+                        started_at=started_at.isoformat(), node_status=RunningStatus.Started
                     )
-                )
+                    sql = self.get_hook_sql(adapter, hook, hook.index, num_hooks, extra_context)
+                    fire_event(
+                        LogHookStartLine(
+                            statement=hook_name,
+                            index=hook.index,
+                            total=num_hooks,
+                            node_info=hook.node_info,
+                        )
+                    )
 
-                status, message = get_execution_status(sql, adapter)
-                finished_at = datetime.utcnow()
-                hook.update_event_status(finished_at=finished_at.isoformat())
+                    status, message = get_execution_status(sql, adapter)
+                    finished_at = datetime.utcnow()
+                    hook.update_event_status(finished_at=finished_at.isoformat())
+                    execution_time = (finished_at - started_at).total_seconds()
+                    timing = [TimingInfo(hook_name, started_at, finished_at)]
+                    failures = 0 if status == RunStatus.Success else 1
 
-                execution_time = (finished_at - started_at).total_seconds()
-
-                if status == RunStatus.Success:
-                    message = f"{hook_name} passed"
+                    if status == RunStatus.Success:
+                        message = f"{hook_name} passed"
+                    else:
+                        message = f"{hook_name} failed, error:\n {message}"
+                        failed = True
                 else:
-                    message = f"{hook_name} failed, error:\n {message}"
+                    status = RunStatus.Skipped
+                    message = f"{hook_name} skipped"
 
                 self.node_results.append(
                     RunResult(
                         status=status,
                         thread_id="main",
-                        timing=[TimingInfo(hook_name, started_at, finished_at)],
+                        timing=timing,
                         message=message,
                         adapter_response={},
                         execution_time=execution_time,
-                        failures=0 if status == RunStatus.Success else 1,
+                        failures=failures,
                         node=hook,
                     )
                 )
+
                 fire_event(
                     LogHookEndLine(
                         statement=hook_name,
@@ -386,42 +392,6 @@ class RunTask(CompileTask):
                         node_info=hook.node_info,
                     )
                 )
-                idx += 1
-
-                if status != RunStatus.Success:
-                    break
-
-        while idx < num_hooks:
-            hook = ordered_hooks[idx]
-
-            with log_contextvars(node_info=hook.node_info):
-                hook.index = idx + 1
-                hook_name = f"{hook.package_name}.{hook_type}.{hook.index}"
-                status = RunStatus.Skipped
-
-                self.node_results.append(
-                    RunResult(
-                        status=status,
-                        thread_id="main",
-                        timing=[],
-                        message=f"{status} hook: '{hook_name}'",
-                        adapter_response={},
-                        execution_time=0,
-                        failures=1,
-                        node=hook,
-                    )
-                )
-                fire_event(
-                    LogHookEndLine(
-                        statement=hook_name,
-                        status=RunStatus.Skipped,
-                        index=hook.index,
-                        total=num_hooks,
-                        execution_time=0,
-                        node_info=hook.node_info,
-                    )
-                )
-                idx += 1
 
         return status
 
