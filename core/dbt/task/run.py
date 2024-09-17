@@ -334,7 +334,7 @@ class RunTask(CompileTask):
         for idx, hook in enumerate(ordered_hooks, 1):
             with log_contextvars(node_info=hook.node_info):
                 hook.index = idx
-                hook_name = f"{hook.package_name}.{hook_type}.{hook.index}"
+                hook_name = f"{hook.package_name}.{hook_type}.{hook.index - 1}"
                 execution_time = 0.0
                 timing = []
                 failures = 1
