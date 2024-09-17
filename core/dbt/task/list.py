@@ -204,7 +204,7 @@ class ListTask(GraphRunnableTask):
                 graph=self.graph,
                 manifest=self.manifest,
                 previous_state=self.previous_state,
-                resource_types=self.resource_types,
+                resource_types=[NodeType.Test, NodeType.Unit],
             )
         else:
             return ResourceTypeSelector(

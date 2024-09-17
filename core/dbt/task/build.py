@@ -201,7 +201,7 @@ class BuildTask(RunTask):
                 graph=self.graph,
                 manifest=self.manifest,
                 previous_state=self.previous_state,
-                resource_types=resource_types,
+                resource_types=[NodeType.Test, NodeType.Unit],
             )
         return ResourceTypeSelector(
             graph=self.graph,
