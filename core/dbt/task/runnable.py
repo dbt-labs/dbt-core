@@ -395,14 +395,6 @@ class GraphRunnableTask(ConfiguredTask):
 
     def execute_nodes(self):
         num_threads = self.config.threads
-        target_name = self.config.target_name
-
-        fire_event(
-            ConcurrencyLine(
-                num_threads=num_threads, target_name=target_name, node_count=self.num_nodes
-            )
-        )
-        fire_event(Formatting(""))
 
         pool = ThreadPool(num_threads, self._pool_thread_initializer, [get_invocation_context()])
         try:
@@ -502,9 +494,20 @@ class GraphRunnableTask(ConfiguredTask):
 
     def execute_with_hooks(self, selected_uids: AbstractSet[str]):
         adapter = get_adapter(self.config)
+
+        fire_event(
+            ConcurrencyLine(
+                num_threads=self.config.threads,
+                target_name=self.config.target_name,
+                node_count=self.num_nodes,
+            )
+        )
+        fire_event(Formatting(""))
+
         self.started_at = time.time()
         try:
             before_run_status = self.before_run(adapter, selected_uids)
+            fire_event(Formatting(""))
 
             if before_run_status == RunStatus.Success:
                 res = self.execute_nodes()

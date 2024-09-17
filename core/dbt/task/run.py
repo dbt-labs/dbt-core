@@ -5,7 +5,7 @@ from typing import AbstractSet, Any, Dict, Iterable, List, Optional, Set, Tuple,
 
 from dbt import tracking, utils
 from dbt.adapters.base import BaseAdapter, BaseRelation
-from dbt.adapters.events.types import FinishedRunningStats, HooksRunning
+from dbt.adapters.events.types import FinishedRunningStats
 from dbt.adapters.exceptions import MissingMaterializationError
 from dbt.artifacts.resources import Hook
 from dbt.artifacts.schemas.results import (
@@ -15,11 +15,8 @@ from dbt.artifacts.schemas.results import (
     TimingInfo,
 )
 from dbt.artifacts.schemas.run import RunResult
-from dbt.cli.flags import Flags
 from dbt.clients.jinja import MacroGenerator
-from dbt.config.runtime import RuntimeConfig
 from dbt.context.providers import generate_runtime_model_context
-from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import HookNode, ResultNode
 from dbt.events.types import (
     LogHookEndLine,
@@ -289,14 +286,6 @@ class ModelRunner(CompileRunner):
 
 
 class RunTask(CompileTask):
-    def __init__(self, args: Flags, config: RuntimeConfig, manifest: Manifest) -> None:
-        super().__init__(args, config, manifest)
-        self.ran_hooks: List[HookNode] = []
-        self._total_executed = 0
-
-    def index_offset(self, value: int) -> int:
-        return self._total_executed + value
-
     def raise_on_first_error(self) -> bool:
         return False
 
@@ -341,12 +330,7 @@ class RunTask(CompileTask):
             return RunStatus.Success
         num_hooks = len(ordered_hooks)
 
-        fire_event(Formatting(""))
-        fire_event(HooksRunning(num_hooks=num_hooks, hook_type=hook_type))
-
         idx = 0
-        timings = []
-        total_execution_time = 0.0
 
         while idx < num_hooks:
             hook = ordered_hooks[idx]
@@ -371,14 +355,27 @@ class RunTask(CompileTask):
 
                 status, message = get_execution_status(sql, adapter)
                 finished_at = datetime.utcnow()
-                timings.append(TimingInfo(hook_name, started_at, finished_at))
-
-                hook.update_event_status(finished_at=finished_at.isoformat(), node_status=status)
-                self.ran_hooks.append(hook)
+                hook.update_event_status(finished_at=finished_at.isoformat())
 
                 execution_time = (finished_at - started_at).total_seconds()
-                total_execution_time += execution_time
 
+                if status == RunStatus.Success:
+                    message = f"{hook_name} passed"
+                else:
+                    message = f"{hook_name} failed, error:\n {message}"
+
+                self.node_results.append(
+                    RunResult(
+                        status=status,
+                        thread_id="main",
+                        timing=[TimingInfo(hook_name, started_at, finished_at)],
+                        message=message,
+                        adapter_response={},
+                        execution_time=execution_time,
+                        failures=0 if status == RunStatus.Success else 1,
+                        node=hook,
+                    )
+                )
                 fire_event(
                     LogHookEndLine(
                         statement=hook_name,
@@ -389,40 +386,47 @@ class RunTask(CompileTask):
                         node_info=hook.node_info,
                     )
                 )
-                hook.clear_event_status()
+                idx += 1
 
                 if status != RunStatus.Success:
                     break
 
+        while idx < num_hooks:
+            hook = ordered_hooks[idx]
+
+            with log_contextvars(node_info=hook.node_info):
+                hook.index = idx + 1
+                hook_name = f"{hook.package_name}.{hook_type}.{hook.index}"
+                status = RunStatus.Skipped
+
+                self.node_results.append(
+                    RunResult(
+                        status=status,
+                        thread_id="main",
+                        timing=[],
+                        message=f"{status} hook: '{hook_name}'",
+                        adapter_response={},
+                        execution_time=0,
+                        failures=1,
+                        node=hook,
+                    )
+                )
+                fire_event(
+                    LogHookEndLine(
+                        statement=hook_name,
+                        status=RunStatus.Skipped,
+                        index=hook.index,
+                        total=num_hooks,
+                        execution_time=0,
+                        node_info=hook.node_info,
+                    )
+                )
                 idx += 1
-
-        self._total_executed += hook.index or 0
-
-        if status == RunStatus.Success:
-            node_result_message = f"{hook.index} {hook_type.value} hooks executed successfully"
-            num_failures = 0
-        else:
-            fire_event(Formatting(""))
-            node_result_message = f"{hook_type.value} failed, error:\n {message}"
-            num_failures = 1
-
-        self.node_results.append(
-            RunResult(
-                status=status,
-                thread_id="main",
-                timing=timings,
-                message=node_result_message,
-                adapter_response={},
-                execution_time=total_execution_time,
-                failures=num_failures,
-                node=hook,
-            )
-        )
 
         return status
 
     def print_results_line(self, results, execution_time) -> None:
-        nodes = [r.node for r in results if hasattr(r, "node")] + self.ran_hooks
+        nodes = [r.node for r in results if hasattr(r, "node")]
         stat_line = get_counts(nodes)
 
         execution = ""
@@ -458,8 +462,6 @@ class RunTask(CompileTask):
             if (hasattr(r, "node") and r.node.is_relational)
             and r.status not in (NodeStatus.Error, NodeStatus.Fail, NodeStatus.Skipped)
         }
-
-        self._total_executed += len(results)
 
         extras = {
             "schemas": list({s for _, s in database_schema_set}),

@@ -1516,6 +1516,9 @@ class LogHookEndLine(InfoLevel):
         if self.status == "success":
             info = "OK"
             status = green(info)
+        elif self.status == "skipped":
+            info = "SKIP"
+            status = yellow(info)
         else:
             info = "ERROR"
             status = red(info)
