@@ -9,6 +9,8 @@ from dbt.exceptions import DbtInternalError, DbtRuntimeError
 
 
 class MicrobatchBuilder:
+    """A utility class for building microbatch definitions associated with a specific model"""
+
     def __init__(
         self,
         model: ModelNode,
@@ -34,9 +36,17 @@ class MicrobatchBuilder:
         self.event_time_end = event_time_end.replace(tzinfo=pytz.UTC) if event_time_end else None
 
     def build_end_time(self):
+        """Defaults the end_time to the current time in UTC unless a non `None` event_time_end was provided"""
         return self.event_time_end or datetime.now(tz=pytz.utc)
 
     def build_start_time(self, checkpoint: Optional[datetime]):
+        """Create a start time based off the passed in checkpoint.
+
+        If the checkpoint is `None`, then `None` will be returned as a checkpoint is necessary
+        to build a start time. This is because we build the start time relative to the checkpoint
+        via the batchsize and offset, and we cannot offset a checkpoint if there is no checkpoint.
+        """
+
         if self.event_time_start:
             return MicrobatchBuilder.truncate_timestamp(
                 self.event_time_start, self.model.config.batch_size
@@ -83,6 +93,23 @@ class MicrobatchBuilder:
 
     @staticmethod
     def offset_timestamp(timestamp: datetime, batch_size: BatchSize, offset: int) -> datetime:
+        """Truncates the passed in timestamp based on the batch_size and then applies the offset by the batch_size.
+
+        Note: It's important to understand that the offset applies to the truncated timestamp, not
+        the origin timestamp. Thus being offset by a day isn't relative to the any given hour that day,
+        but relative to the start of the day. So if the timestamp is the very end of a day, 2024-09-17 23:59:59,
+        you have a batch size of a day, and an offset of +1, then the returned value ends up being only one
+        second later, 2024-09-18 00:00:00.
+
+        2024-09-17 16:06:00 + Batchsize.hour -1 -> 2024-09-17 15:00:00
+        2024-09-17 16:06:00 + Batchsize.hour +1 -> 2024-09-17 17:00:00
+        2024-09-17 16:06:00 + Batchsize.day -1 -> 2024-09-16 00:00:00
+        2024-09-17 16:06:00 + Batchsize.day +1 -> 2024-09-18 00:00:00
+        2024-09-17 16:06:00 + Batchsize.month -1 -> 2024-08-01 00:00:00
+        2024-09-17 16:06:00 + Batchsize.month +1 -> 2024-10-01 00:00:00
+        2024-09-17 16:06:00 + Batchsize.year -1 -> 2023-01-01 00:00:00
+        2024-09-17 16:06:00 + Batchsize.year +1 -> 2025-01-01 00:00:00
+        """
         truncated = MicrobatchBuilder.truncate_timestamp(timestamp, batch_size)
 
         offset_timestamp: datetime
@@ -107,6 +134,13 @@ class MicrobatchBuilder:
 
     @staticmethod
     def truncate_timestamp(timestamp: datetime, batch_size: BatchSize):
+        """Truncates the passed in timestamp based on the batch_size.
+
+        2024-09-17 16:06:00 + Batchsize.hour -> 2024-09-17 16:00:00
+        2024-09-17 16:06:00 + Batchsize.day -> 2024-09-17 00:00:00
+        2024-09-17 16:06:00 + Batchsize.month -> 2024-09-01 00:00:00
+        2024-09-17 16:06:00 + Batchsize.year -> 2024-01-01 00:00:00
+        """
         if batch_size == BatchSize.hour:
             truncated = datetime(
                 timestamp.year,
