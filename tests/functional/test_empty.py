@@ -1,6 +1,6 @@
 import pytest
 
-from dbt.tests.util import relation_from_name, run_dbt
+from dbt.tests.util import run_dbt, assert_row_count
 
 model_input_sql = """
 select 1 as id
@@ -53,30 +53,25 @@ class TestEmptyFlag:
             "sources.yml": schema_sources_yml,
         }
 
-    def assert_row_count(self, project, relation_name: str, expected_row_count: int):
-        relation = relation_from_name(project.adapter, relation_name)
-        result = project.run_sql(f"select count(*) as num_rows from {relation}", fetch="one")
-        assert result[0] == expected_row_count
-
     def test_run_with_empty(self, project):
         # create source from seed
         run_dbt(["seed"])
 
         # run without empty - 3 expected rows in output - 1 from each input
         run_dbt(["run"])
-        self.assert_row_count(project, "model", 3)
+        assert_row_count(project, "model", 3)
 
         # run with empty - 0 expected rows in output
         run_dbt(["run", "--empty"])
-        self.assert_row_count(project, "model", 0)
+        assert_row_count(project, "model", 0)
 
         # build without empty - 3 expected rows in output - 1 from each input
         run_dbt(["build"])
-        self.assert_row_count(project, "model", 3)
+        assert_row_count(project, "model", 3)
 
         # build with empty - 0 expected rows in output
         run_dbt(["build", "--empty"])
-        self.assert_row_count(project, "model", 0)
+        assert_row_count(project, "model", 0)
 
         # ensure dbt compile supports --empty flag
         run_dbt(["compile", "--empty"])

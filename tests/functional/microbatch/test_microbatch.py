@@ -1,15 +1,17 @@
-import os
 from unittest import mock
 
 import pytest
 
 from dbt.tests.util import (
     patch_microbatch_end_time,
-    relation_from_name,
     run_dbt,
     run_dbt_and_capture,
     write_file,
+    assert_row_count
 )
+
+from dbt.tests.fixtures.project import TestProjInfo as ProjInfo
+
 
 input_model_sql = """
 {{ config(materialized='table', event_time='event_time') }}
@@ -86,6 +88,18 @@ custom_microbatch_strategy = """
 """
 
 
+# Most tests rely on DBT_EXPERIMENTAL_MICROBATCH to be True.
+# For tests with other needs, use monkeypatch.delenv or monkeypatch.setenv.
+@pytest.fixture(autouse=True)
+def _setenv_experimental_microbatch_true(monkeypatch) -> None:
+    monkeypatch.setenv("DBT_EXPERIMENTAL_MICROBATCH", "True")
+
+
+def _mock_valid_incremental_strategies(project: ProjInfo, strategies: list[str]):
+    """Patch the valid incremental strategies for the project, using its adapter."""
+    return mock.patch.object(type(project.adapter), "valid_incremental_strategies", lambda _: strategies)
+
+
 class BaseMicrobatchCustomUserStrategy:
     @pytest.fixture(scope="class")
     def models(self):
@@ -100,10 +114,9 @@ class BaseMicrobatchCustomUserStrategy:
 
 
 class TestMicrobatchCustomUserStrategyDefault(BaseMicrobatchCustomUserStrategy):
-    def test_use_custom_microbatch_strategy_by_default(self, project):
-        with mock.patch.object(
-            type(project.adapter), "valid_incremental_strategies", lambda _: []
-        ):
+    def test_use_custom_microbatch_strategy_by_default(self, project, monkeypatch):
+        monkeypatch.delenv("DBT_EXPERIMENTAL_MICROBATCH")
+        with _mock_valid_incremental_strategies(project, strategies=[]):
             # Initial run
             run_dbt(["run"])
 
@@ -113,13 +126,10 @@ class TestMicrobatchCustomUserStrategyDefault(BaseMicrobatchCustomUserStrategy):
 
 
 class TestMicrobatchCustomUserStrategyEnvVarTrueValid(BaseMicrobatchCustomUserStrategy):
-    @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
     def test_use_custom_microbatch_strategy_env_var_true_invalid_incremental_strategy(
         self, project
     ):
-        with mock.patch.object(
-            type(project.adapter), "valid_incremental_strategies", lambda _: ["microbatch"]
-        ):
+        with _mock_valid_incremental_strategies(project, strategies=["microbatch"]):
             # Initial run
             run_dbt(["run"])
 
@@ -131,13 +141,10 @@ class TestMicrobatchCustomUserStrategyEnvVarTrueValid(BaseMicrobatchCustomUserSt
 # TODO: Consider a behaviour flag here if DBT_EXPERIMENTAL_MICROBATCH is removed
 # Since this causes an exception prior to using an override
 class TestMicrobatchCustomUserStrategyEnvVarTrueInvalid(BaseMicrobatchCustomUserStrategy):
-    @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
     def test_use_custom_microbatch_strategy_env_var_true_invalid_incremental_strategy(
         self, project
     ):
-        with mock.patch.object(
-            type(project.adapter), "valid_incremental_strategies", lambda _: []
-        ):
+        with _mock_valid_incremental_strategies(project, strategies=[]):
             # Initial run
             run_dbt(["run"])
 
@@ -153,30 +160,19 @@ class TestMicrobatchCLI:
             "input_model.sql": input_model_sql,
             "microbatch_model.sql": microbatch_model_sql,
         }
-
-    def assert_row_count(self, project, relation_name: str, expected_row_count: int):
-        relation = relation_from_name(project.adapter, relation_name)
-        result = project.run_sql(f"select count(*) as num_rows from {relation}", fetch="one")
-
-        if result[0] != expected_row_count:
-            # running show for debugging
-            run_dbt(["show", "--inline", f"select * from {relation}"])
-
-            assert result[0] == expected_row_count
-
-    @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
+    
     def test_run_with_event_time(self, project):
         # run without --event-time-start or --event-time-end - 3 expected rows in output
         run_dbt(["run"])
-        self.assert_row_count(project, "microbatch_model", 3)
+        assert_row_count(project, "microbatch_model", 3)
 
         # build model >= 2020-01-02
         run_dbt(["run", "--event-time-start", "2020-01-02", "--full-refresh"])
-        self.assert_row_count(project, "microbatch_model", 2)
+        assert_row_count(project, "microbatch_model", 2)
 
         # build model < 2020-01-03
         run_dbt(["run", "--event-time-end", "2020-01-03", "--full-refresh"])
-        self.assert_row_count(project, "microbatch_model", 2)
+        assert_row_count(project, "microbatch_model", 2)
 
         # build model between 2020-01-02 >= event_time < 2020-01-03
         run_dbt(
@@ -189,7 +185,7 @@ class TestMicrobatchCLI:
                 "--full-refresh",
             ]
         )
-        self.assert_row_count(project, "microbatch_model", 1)
+        assert_row_count(project, "microbatch_model", 1)
 
 
 class TestMicroBatchBoundsDefault:
@@ -200,27 +196,16 @@ class TestMicroBatchBoundsDefault:
             "microbatch_model.sql": microbatch_model_sql,
         }
 
-    def assert_row_count(self, project, relation_name: str, expected_row_count: int):
-        relation = relation_from_name(project.adapter, relation_name)
-        result = project.run_sql(f"select count(*) as num_rows from {relation}", fetch="one")
-
-        if result[0] != expected_row_count:
-            # running show for debugging
-            run_dbt(["show", "--inline", f"select * from {relation}"])
-
-            assert result[0] == expected_row_count
-
-    @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
     def test_run_with_event_time(self, project):
         # initial run -- backfills all data
         with patch_microbatch_end_time("2020-01-03 13:57:00"):
             run_dbt(["run"])
-        self.assert_row_count(project, "microbatch_model", 3)
+        assert_row_count(project, "microbatch_model", 3)
 
         # our partition grain is "day" so running the same day without new data should produce the same results
         with patch_microbatch_end_time("2020-01-03 14:57:00"):
             run_dbt(["run"])
-        self.assert_row_count(project, "microbatch_model", 3)
+        assert_row_count(project, "microbatch_model", 3)
 
         # add next two days of data
         test_schema_relation = project.adapter.Relation.create(
@@ -229,22 +214,22 @@ class TestMicroBatchBoundsDefault:
         project.run_sql(
             f"insert into {test_schema_relation}.input_model(id, event_time) values (4, TIMESTAMP '2020-01-04 00:00:00-0'), (5, TIMESTAMP '2020-01-05 00:00:00-0')"
         )
-        self.assert_row_count(project, "input_model", 5)
+        assert_row_count(project, "input_model", 5)
 
         # re-run without changing current time => no insert
         with patch_microbatch_end_time("2020-01-03 14:57:00"):
             run_dbt(["run", "--select", "microbatch_model"])
-        self.assert_row_count(project, "microbatch_model", 3)
+        assert_row_count(project, "microbatch_model", 3)
 
         # re-run by advancing time by one day changing current time => insert 1 row
         with patch_microbatch_end_time("2020-01-04 14:57:00"):
             run_dbt(["run", "--select", "microbatch_model"])
-        self.assert_row_count(project, "microbatch_model", 4)
+        assert_row_count(project, "microbatch_model", 4)
 
         # re-run by advancing time by one more day changing current time => insert 1 more row
         with patch_microbatch_end_time("2020-01-05 14:57:00"):
             run_dbt(["run", "--select", "microbatch_model"])
-        self.assert_row_count(project, "microbatch_model", 5)
+        assert_row_count(project, "microbatch_model", 5)
 
 
 class TestMicrobatchWithSource:
@@ -262,17 +247,6 @@ class TestMicrobatchWithSource:
             "seeds.yml": seeds_yaml,
         }
 
-    def assert_row_count(self, project, relation_name: str, expected_row_count: int):
-        relation = relation_from_name(project.adapter, relation_name)
-        result = project.run_sql(f"select count(*) as num_rows from {relation}", fetch="one")
-
-        if result[0] != expected_row_count:
-            # running show for debugging
-            run_dbt(["show", "--inline", f"select * from {relation}"])
-
-            assert result[0] == expected_row_count
-
-    @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
     def test_run_with_event_time(self, project):
         # ensure seed is created for source
         run_dbt(["seed"])
@@ -280,12 +254,12 @@ class TestMicrobatchWithSource:
         # initial run -- backfills all data
         with patch_microbatch_end_time("2020-01-03 13:57:00"):
             run_dbt(["run"])
-        self.assert_row_count(project, "microbatch_model", 3)
+        assert_row_count(project, "microbatch_model", 3)
 
         # our partition grain is "day" so running the same day without new data should produce the same results
         with patch_microbatch_end_time("2020-01-03 14:57:00"):
             run_dbt(["run"])
-        self.assert_row_count(project, "microbatch_model", 3)
+        assert_row_count(project, "microbatch_model", 3)
 
         # add next two days of data
         test_schema_relation = project.adapter.Relation.create(
@@ -294,22 +268,22 @@ class TestMicrobatchWithSource:
         project.run_sql(
             f"insert into {test_schema_relation}.raw_source(id, event_time) values (4, TIMESTAMP '2020-01-04 00:00:00-0'), (5, TIMESTAMP '2020-01-05 00:00:00-0')"
         )
-        self.assert_row_count(project, "raw_source", 5)
+        assert_row_count(project, "raw_source", 5)
 
         # re-run without changing current time => no insert
         with patch_microbatch_end_time("2020-01-03 14:57:00"):
             run_dbt(["run", "--select", "microbatch_model"])
-        self.assert_row_count(project, "microbatch_model", 3)
+        assert_row_count(project, "microbatch_model", 3)
 
         # re-run by advancing time by one day changing current time => insert 1 row
         with patch_microbatch_end_time("2020-01-04 14:57:00"):
             run_dbt(["run", "--select", "microbatch_model"])
-        self.assert_row_count(project, "microbatch_model", 4)
+        assert_row_count(project, "microbatch_model", 4)
 
         # re-run by advancing time by one more day changing current time => insert 1 more row
         with patch_microbatch_end_time("2020-01-05 14:57:00"):
             run_dbt(["run", "--select", "microbatch_model"])
-        self.assert_row_count(project, "microbatch_model", 5)
+        assert_row_count(project, "microbatch_model", 5)
 
 
 class TestMicrobatchWithInputWithoutEventTime:
@@ -320,27 +294,16 @@ class TestMicrobatchWithInputWithoutEventTime:
             "microbatch_model.sql": microbatch_model_sql,
         }
 
-    def assert_row_count(self, project, relation_name: str, expected_row_count: int):
-        relation = relation_from_name(project.adapter, relation_name)
-        result = project.run_sql(f"select count(*) as num_rows from {relation}", fetch="one")
-
-        if result[0] != expected_row_count:
-            # running show for debugging
-            run_dbt(["show", "--inline", f"select * from {relation}"])
-
-            assert result[0] == expected_row_count
-
-    @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
     def test_run_with_event_time(self, project):
         # initial run -- backfills all data
         with patch_microbatch_end_time("2020-01-03 13:57:00"):
             run_dbt(["run"])
-        self.assert_row_count(project, "microbatch_model", 3)
+        assert_row_count(project, "microbatch_model", 3)
 
         # our partition grain is "day" so running the same day without new data should produce the same results
         with patch_microbatch_end_time("2020-01-03 14:57:00"):
             run_dbt(["run"])
-        self.assert_row_count(project, "microbatch_model", 3)
+        assert_row_count(project, "microbatch_model", 3)
 
         # add next two days of data
         test_schema_relation = project.adapter.Relation.create(
@@ -349,12 +312,12 @@ class TestMicrobatchWithInputWithoutEventTime:
         project.run_sql(
             f"insert into {test_schema_relation}.input_model(id, event_time) values (4, TIMESTAMP '2020-01-04 00:00:00-0'), (5, TIMESTAMP '2020-01-05 00:00:00-0')"
         )
-        self.assert_row_count(project, "input_model", 5)
+        assert_row_count(project, "input_model", 5)
 
         # re-run without changing current time => INSERT BECAUSE INPUT MODEL ISN'T BEING FILTERED
         with patch_microbatch_end_time("2020-01-03 14:57:00"):
             run_dbt(["run", "--select", "microbatch_model"])
-        self.assert_row_count(project, "microbatch_model", 5)
+        assert_row_count(project, "microbatch_model", 5)
 
 
 class TestMicrobatchUsingRefRenderSkipsFilter:
@@ -365,27 +328,16 @@ class TestMicrobatchUsingRefRenderSkipsFilter:
             "microbatch_model.sql": microbatch_model_sql,
         }
 
-    def assert_row_count(self, project, relation_name: str, expected_row_count: int):
-        relation = relation_from_name(project.adapter, relation_name)
-        result = project.run_sql(f"select count(*) as num_rows from {relation}", fetch="one")
-
-        if result[0] != expected_row_count:
-            # running show for debugging
-            run_dbt(["show", "--inline", f"select * from {relation}"])
-
-            assert result[0] == expected_row_count
-
-    @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
     def test_run_with_event_time(self, project):
         # initial run -- backfills all data
         with patch_microbatch_end_time("2020-01-03 13:57:00"):
             run_dbt(["run"])
-        self.assert_row_count(project, "microbatch_model", 3)
+        assert_row_count(project, "microbatch_model", 3)
 
         # our partition grain is "day" so running the same day without new data should produce the same results
         with patch_microbatch_end_time("2020-01-03 14:57:00"):
             run_dbt(["run"])
-        self.assert_row_count(project, "microbatch_model", 3)
+        assert_row_count(project, "microbatch_model", 3)
 
         # add next two days of data
         test_schema_relation = project.adapter.Relation.create(
@@ -394,12 +346,12 @@ class TestMicrobatchUsingRefRenderSkipsFilter:
         project.run_sql(
             f"insert into {test_schema_relation}.input_model(id, event_time) values (4, TIMESTAMP '2020-01-04 00:00:00-0'), (5, TIMESTAMP '2020-01-05 00:00:00-0')"
         )
-        self.assert_row_count(project, "input_model", 5)
+        assert_row_count(project, "input_model", 5)
 
         # re-run without changing current time => no insert
         with patch_microbatch_end_time("2020-01-03 14:57:00"):
             run_dbt(["run", "--select", "microbatch_model"])
-        self.assert_row_count(project, "microbatch_model", 3)
+        assert_row_count(project, "microbatch_model", 3)
 
         # Update microbatch model to call .render() on ref('input_model')
         write_file(
@@ -409,4 +361,4 @@ class TestMicrobatchUsingRefRenderSkipsFilter:
         # re-run without changing current time => INSERT because .render() skips filtering
         with patch_microbatch_end_time("2020-01-03 14:57:00"):
             run_dbt(["run", "--select", "microbatch_model"])
-        self.assert_row_count(project, "microbatch_model", 5)
+        assert_row_count(project, "microbatch_model", 5)

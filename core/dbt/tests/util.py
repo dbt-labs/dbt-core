@@ -647,3 +647,19 @@ def safe_set_invocation_context():
 def patch_microbatch_end_time(dt_str: str):
     dt = datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S")
     return mock.patch.object(BaseResolver, "_build_end_time", return_value=dt)
+
+
+# Quoted type hint to prevent circular import issues.
+def assert_row_count(project: "TestProjInfo", relation_name: str, expected_row_count: int) -> None:
+    """
+    Assert if a relation in a project has the correct number of rows. If not,
+    prints the relation and raises an AssertionError.
+    """
+    relation = relation_from_name(project.adapter, relation_name)
+    result = project.run_sql(f"select count(*) as num_rows from {relation}", fetch="one")
+
+    if result[0] != expected_row_count:
+        # running show for debugging
+        run_dbt(["show", "--inline", f"select * from {relation}"])
+
+        assert result[0] == expected_row_count
