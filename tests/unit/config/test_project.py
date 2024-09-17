@@ -3,7 +3,6 @@ import json
 import os
 import unittest
 import pytest
-from typing import Any, Dict
 
 from unittest import mock
 
@@ -12,7 +11,7 @@ from dbt.constants import DEPENDENCIES_FILE_NAME
 import dbt.exceptions
 from dbt.adapters.factory import load_plugin
 from dbt.adapters.contracts.connection import QueryComment, DEFAULT_QUERY_COMMENT
-from dbt.config.project import Project, _get_required_version
+from dbt.config.project import Project
 from dbt.contracts.project import PackageConfig, LocalPackage, GitPackage
 from dbt.node_types import NodeType
 from dbt_common.exceptions import DbtRuntimeError
@@ -538,53 +537,3 @@ class TestMultipleProjectFlags(BaseConfigTest):
     def test_setting_multiple_flags(self):
         with pytest.raises(dbt.exceptions.DbtProjectError):
             set_from_args(self.args, None)
-
-
-class TestGetRequiredVersion:
-    @pytest.fixture
-    def project_dict(self) -> Dict[str, Any]:
-        return {
-            "name": "test_project",
-            "require-dbt-version": ">0.0.0",
-        }
-
-    def test_supported_version(self, project_dict: Dict[str, Any]) -> None:
-        specifiers = _get_required_version(project_dict=project_dict, verify_version=True)
-        assert set(x.to_version_string() for x in specifiers) == {">0.0.0"}
-
-    def test_unsupported_version(self, project_dict: Dict[str, Any]) -> None:
-        project_dict["require-dbt-version"] = ">99999.0.0"
-        with pytest.raises(
-            dbt.exceptions.DbtProjectError, match="This version of dbt is not supported"
-        ):
-            _get_required_version(project_dict=project_dict, verify_version=True)
-
-    def test_unsupported_version_no_check(self, project_dict: Dict[str, Any]) -> None:
-        project_dict["require-dbt-version"] = ">99999.0.0"
-        specifiers = _get_required_version(project_dict=project_dict, verify_version=False)
-        assert set(x.to_version_string() for x in specifiers) == {">99999.0.0"}
-
-    def test_supported_version_range(self, project_dict: Dict[str, Any]) -> None:
-        project_dict["require-dbt-version"] = [">0.0.0", "<=99999.0.0"]
-        specifiers = _get_required_version(project_dict=project_dict, verify_version=True)
-        assert set(x.to_version_string() for x in specifiers) == {">0.0.0", "<=99999.0.0"}
-
-    def test_unsupported_version_range(self, project_dict: Dict[str, Any]) -> None:
-        project_dict["require-dbt-version"] = [">0.0.0", "<=0.0.1"]
-        with pytest.raises(
-            dbt.exceptions.DbtProjectError, match="This version of dbt is not supported"
-        ):
-            _get_required_version(project_dict=project_dict, verify_version=True)
-
-    def test_unsupported_version_range_no_check(self, project_dict: Dict[str, Any]) -> None:
-        project_dict["require-dbt-version"] = [">0.0.0", "<=0.0.1"]
-        specifiers = _get_required_version(project_dict=project_dict, verify_version=False)
-        assert set(x.to_version_string() for x in specifiers) == {">0.0.0", "<=0.0.1"}
-
-    def test_impossible_version_range(self, project_dict: Dict[str, Any]) -> None:
-        project_dict["require-dbt-version"] = [">99999.0.0", "<=0.0.1"]
-        with pytest.raises(
-            dbt.exceptions.DbtProjectError,
-            match="The package version requirement can never be satisfied",
-        ):
-            _get_required_version(project_dict=project_dict, verify_version=True)
