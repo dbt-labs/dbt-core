@@ -27,7 +27,7 @@ from dbt.clients.jinja import MacroGenerator
 from dbt.config.runtime import RuntimeConfig
 from dbt.context.providers import generate_runtime_model_context
 from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.graph.nodes import HookNode, ResultNode
+from dbt.contracts.graph.nodes import HookNode, ModelNode, ResultNode
 from dbt.events.types import (
     LogHookEndLine,
     LogHookStartLine,
@@ -40,6 +40,7 @@ from dbt.hooks import get_hook_dict
 from dbt.materializations.incremental.microbatch import MicrobatchBuilder
 from dbt.node_types import NodeType, RunHookType
 from dbt.task.base import BaseRunner
+from dbt_common.clients.jinja import MacroProtocol
 from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_common.events.base_types import EventLevel
 from dbt_common.events.contextvars import log_contextvars
@@ -235,10 +236,10 @@ class ModelRunner(CompileRunner):
     def print_batch_result_line(
         self,
         result: RunResult,
-        batch_start: datetime,
+        batch_start: Optional[datetime],
         batch_idx: int,
         batch_total: int,
-        exception: Exception,
+        exception: Optional[Exception],
     ):
         description = self.describe_batch(batch_start)
         if result.status == NodeStatus.Error:
@@ -302,7 +303,9 @@ class ModelRunner(CompileRunner):
             failures=result.get("failures"),
         )
 
-    def _build_run_microbatch_model_result(self, model, batch_run_results):
+    def _build_run_microbatch_model_result(
+        self, model: ModelNode, batch_run_results: List[RunResult]
+    ) -> RunResult:
         failures = sum([result.failures for result in batch_run_results if result.failures])
 
         return RunResult(
@@ -311,13 +314,13 @@ class ModelRunner(CompileRunner):
             timing=[],
             thread_id=threading.current_thread().name,
             # TODO -- why isn't this getting propagated to logs?
-            execution_time=None,
+            execution_time=0,
             message="SUCCESS",
             adapter_response={},
             failures=failures,
         )
 
-    def _build_failed_run_batch_result(self, model) -> RunResult:
+    def _build_failed_run_batch_result(self, model: ModelNode) -> RunResult:
         return RunResult(
             node=model,
             status=RunStatus.Error,
@@ -398,8 +401,14 @@ class ModelRunner(CompileRunner):
 
         return self._build_run_model_result(model, context)
 
-    def _execute_microbatch_materialization(self, model, manifest, context, materialization_macro):
-        batch_results = []
+    def _execute_microbatch_materialization(
+        self,
+        model: ModelNode,
+        manifest: Manifest,
+        context: Dict[str, Any],
+        materialization_macro: MacroProtocol,
+    ) -> List[RunResult]:
+        batch_results: List[RunResult] = []
         microbatch_builder = MicrobatchBuilder(
             model=model,
             is_incremental=self._is_incremental(model),
