@@ -32,7 +32,9 @@ def snowplow_tracker(mocker):
 
 
 def test_false_evaluation_triggers_snowplow_tracking(snowplow_tracker):
-    behavior = Behavior([{"name": "my_flag", "default": False}], {})
+    behavior = Behavior(
+        [{"name": "my_flag", "default": False, "description": "This is a false flag."}], {}
+    )
     if behavior.my_flag:
         # trigger a False evaluation
         assert False, "This flag should evaluate to false and skip this line"
@@ -40,7 +42,9 @@ def test_false_evaluation_triggers_snowplow_tracking(snowplow_tracker):
 
 
 def test_true_evaluation_does_not_trigger_snowplow_tracking(snowplow_tracker):
-    behavior = Behavior([{"name": "my_flag", "default": True}], {})
+    behavior = Behavior(
+        [{"name": "my_flag", "default": True, "description": "This is a true flag."}], {}
+    )
     if behavior.my_flag:
         pass
     else:
@@ -52,7 +56,9 @@ def test_true_evaluation_does_not_trigger_snowplow_tracking(snowplow_tracker):
 def test_false_evaluation_does_not_trigger_snowplow_tracking_when_disabled(snowplow_tracker):
     disable_tracking()
 
-    behavior = Behavior([{"name": "my_flag", "default": False}], {})
+    behavior = Behavior(
+        [{"name": "my_flag", "default": False, "description": "This is a false flag."}], {}
+    )
     if behavior.my_flag:
         # trigger a False evaluation
         assert False, "This flag should evaluate to false and skip this line"
