@@ -73,7 +73,7 @@ class TestUnitTestResourceTypes:
 
         # models
         results = run_dbt(["list", "--resource-type", "model"])
-        assert len(results) == len(EXPECTED_MODELS)
+        assert sorted(results) == EXPECTED_MODELS
 
         results = run_dbt(["list", "--exclude-resource-type", "unit_test", "test"])
         assert sorted(results) == EXPECTED_MODELS
