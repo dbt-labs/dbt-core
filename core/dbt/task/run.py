@@ -261,7 +261,7 @@ class ModelRunner(CompileRunner):
             level=level,
         )
         if exception:
-            fire_event(RunningOperationCaughtError(exc=exception))
+            fire_event(RunningOperationCaughtError(exc=str(exception)))
 
     def print_batch_start_line(
         self, batch_start: Optional[datetime], batch_idx: int, batch_total: int
