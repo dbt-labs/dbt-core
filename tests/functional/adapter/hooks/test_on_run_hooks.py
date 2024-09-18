@@ -153,4 +153,4 @@ class Test__SelectorEmpty__NoHooksRan:
         )
 
         run_results = get_artifact(project.project_root, "target", "run_results.json")
-        assert [run_results["results"]] == []
+        assert run_results["results"] == []
