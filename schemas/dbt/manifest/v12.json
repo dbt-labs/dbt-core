@@ -4672,6 +4672,33 @@
                     "properties": {
                       "standard_granularity_column": {
                         "type": "string"
+                      },
+                      "custom_granularities": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "title": "CustomGranularity",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "column_name": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ],
+                              "default": null
+                            }
+                          },
+                          "additionalProperties": false,
+                          "required": [
+                            "name"
+                          ]
+                        }
                       }
                     },
                     "additionalProperties": false,
@@ -14371,6 +14398,33 @@
                           "properties": {
                             "standard_granularity_column": {
                               "type": "string"
+                            },
+                            "custom_granularities": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "title": "CustomGranularity",
+                                "properties": {
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "column_name": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ],
+                                    "default": null
+                                  }
+                                },
+                                "additionalProperties": false,
+                                "required": [
+                                  "name"
+                                ]
+                              }
                             }
                           },
                           "additionalProperties": false,
