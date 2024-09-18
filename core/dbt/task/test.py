@@ -127,7 +127,7 @@ class TestRunner(CompileRunner):
     def execute_data_test(self, data_test: TestNode, manifest: Manifest) -> TestResultData:
         context = generate_runtime_model_context(data_test, self.config, manifest)
 
-        hook_ctx = self.adapter.pre_model_hook(context)
+        hook_ctx = self.adapter.pre_model_hook(context["config"])
 
         materialization_macro = manifest.find_materialization_macro_by_name(
             self.config.project_name, data_test.get_materialization(), self.adapter.type()
@@ -205,7 +205,7 @@ class TestRunner(CompileRunner):
         # materialization, not compile the node.compiled_code
         context = generate_runtime_model_context(unit_test_node, self.config, unit_test_manifest)
 
-        hook_ctx = self.adapter.pre_model_hook(context)
+        hook_ctx = self.adapter.pre_model_hook(context["config"])
 
         materialization_macro = unit_test_manifest.find_materialization_macro_by_name(
             self.config.project_name, unit_test_node.get_materialization(), self.adapter.type()
