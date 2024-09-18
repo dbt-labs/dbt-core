@@ -36,6 +36,7 @@ microbatch_model_sql = """
 select * from {{ ref('input_model') }}
 """
 
+
 microbatch_model_ref_render_sql = """
 {{ config(materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='day') }}
 select * from {{ ref('input_model').render() }}
@@ -146,7 +147,7 @@ class TestMicrobatchCustomUserStrategyEnvVarTrueInvalid(BaseMicrobatchCustomUser
             assert "'microbatch' is not valid" in logs
 
 
-class TestMicrobatchCLI:
+class BaseMicrobatchTest:
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -164,14 +165,18 @@ class TestMicrobatchCLI:
 
             assert result[0] == expected_row_count
 
+
+class TestMicrobatchCLI(BaseMicrobatchTest):
     @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
     def test_run_with_event_time(self, project):
         # run without --event-time-start or --event-time-end - 3 expected rows in output
-        run_dbt(["run"])
+        with patch_microbatch_end_time("2020-01-03 13:57:00"):
+            run_dbt(["run"])
         self.assert_row_count(project, "microbatch_model", 3)
 
         # build model >= 2020-01-02
-        run_dbt(["run", "--event-time-start", "2020-01-02", "--full-refresh"])
+        with patch_microbatch_end_time("2020-01-03 13:57:00"):
+            run_dbt(["run", "--event-time-start", "2020-01-02", "--full-refresh"])
         self.assert_row_count(project, "microbatch_model", 2)
 
         # build model < 2020-01-03
@@ -192,24 +197,7 @@ class TestMicrobatchCLI:
         self.assert_row_count(project, "microbatch_model", 1)
 
 
-class TestMicroBatchBoundsDefault:
-    @pytest.fixture(scope="class")
-    def models(self):
-        return {
-            "input_model.sql": input_model_sql,
-            "microbatch_model.sql": microbatch_model_sql,
-        }
-
-    def assert_row_count(self, project, relation_name: str, expected_row_count: int):
-        relation = relation_from_name(project.adapter, relation_name)
-        result = project.run_sql(f"select count(*) as num_rows from {relation}", fetch="one")
-
-        if result[0] != expected_row_count:
-            # running show for debugging
-            run_dbt(["show", "--inline", f"select * from {relation}"])
-
-            assert result[0] == expected_row_count
-
+class TestMicroBatchBoundsDefault(BaseMicrobatchTest):
     @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
     def test_run_with_event_time(self, project):
         # initial run -- backfills all data
@@ -247,7 +235,7 @@ class TestMicroBatchBoundsDefault:
         self.assert_row_count(project, "microbatch_model", 5)
 
 
-class TestMicrobatchWithSource:
+class TestMicrobatchWithSource(BaseMicrobatchTest):
     @pytest.fixture(scope="class")
     def seeds(self):
         return {
@@ -261,16 +249,6 @@ class TestMicrobatchWithSource:
             "sources.yml": sources_yaml,
             "seeds.yml": seeds_yaml,
         }
-
-    def assert_row_count(self, project, relation_name: str, expected_row_count: int):
-        relation = relation_from_name(project.adapter, relation_name)
-        result = project.run_sql(f"select count(*) as num_rows from {relation}", fetch="one")
-
-        if result[0] != expected_row_count:
-            # running show for debugging
-            run_dbt(["show", "--inline", f"select * from {relation}"])
-
-            assert result[0] == expected_row_count
 
     @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
     def test_run_with_event_time(self, project):
@@ -312,23 +290,13 @@ class TestMicrobatchWithSource:
         self.assert_row_count(project, "microbatch_model", 5)
 
 
-class TestMicrobatchWithInputWithoutEventTime:
+class TestMicrobatchWithInputWithoutEventTime(BaseMicrobatchTest):
     @pytest.fixture(scope="class")
     def models(self):
         return {
             "input_model.sql": input_model_without_event_time_sql,
             "microbatch_model.sql": microbatch_model_sql,
         }
-
-    def assert_row_count(self, project, relation_name: str, expected_row_count: int):
-        relation = relation_from_name(project.adapter, relation_name)
-        result = project.run_sql(f"select count(*) as num_rows from {relation}", fetch="one")
-
-        if result[0] != expected_row_count:
-            # running show for debugging
-            run_dbt(["show", "--inline", f"select * from {relation}"])
-
-            assert result[0] == expected_row_count
 
     @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
     def test_run_with_event_time(self, project):
@@ -357,24 +325,7 @@ class TestMicrobatchWithInputWithoutEventTime:
         self.assert_row_count(project, "microbatch_model", 5)
 
 
-class TestMicrobatchUsingRefRenderSkipsFilter:
-    @pytest.fixture(scope="class")
-    def models(self):
-        return {
-            "input_model.sql": input_model_sql,
-            "microbatch_model.sql": microbatch_model_sql,
-        }
-
-    def assert_row_count(self, project, relation_name: str, expected_row_count: int):
-        relation = relation_from_name(project.adapter, relation_name)
-        result = project.run_sql(f"select count(*) as num_rows from {relation}", fetch="one")
-
-        if result[0] != expected_row_count:
-            # running show for debugging
-            run_dbt(["show", "--inline", f"select * from {relation}"])
-
-            assert result[0] == expected_row_count
-
+class TestMicrobatchUsingRefRenderSkipsFilter(BaseMicrobatchTest):
     @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
     def test_run_with_event_time(self, project):
         # initial run -- backfills all data
@@ -410,3 +361,84 @@ class TestMicrobatchUsingRefRenderSkipsFilter:
         with patch_microbatch_end_time("2020-01-03 14:57:00"):
             run_dbt(["run", "--select", "microbatch_model"])
         self.assert_row_count(project, "microbatch_model", 5)
+
+
+microbatch_model_context_vars = """
+{{ config(materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='day') }}
+{{ log("start: "~ model.config.__dbt_internal_microbatch_event_time_start, info=True)}}
+{{ log("end: "~ model.config.__dbt_internal_microbatch_event_time_end, info=True)}}
+select * from {{ ref('input_model') }}
+"""
+
+
+class TestMicrobatchJinjaContextVarsAvailable(BaseMicrobatchTest):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "input_model.sql": input_model_sql,
+            "microbatch_model.sql": microbatch_model_context_vars,
+        }
+
+    @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
+    def test_run_with_event_time_logs(self, project):
+        with patch_microbatch_end_time("2020-01-03 13:57:00"):
+            _, logs = run_dbt_and_capture(["run", "--event-time-start", "2020-01-01"])
+
+        assert "start: 2020-01-01 00:00:00+00:00" in logs
+        assert "end: 2020-01-02 00:00:00+00:00" in logs
+
+        assert "start: 2020-01-02 00:00:00+00:00" in logs
+        assert "end: 2020-01-03 00:00:00+00:00" in logs
+
+        assert "start: 2020-01-03 00:00:00+00:00" in logs
+        assert "end: 2020-01-03 13:57:00+00:00" in logs
+
+
+microbatch_model_failing_incremental_partition_sql = """
+{{ config(materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='day') }}
+{% if '2020-01-02' in (model.config.__dbt_internal_microbatch_event_time_start | string) %}
+ invalid_sql
+{% endif %}
+select * from {{ ref('input_model') }}
+"""
+
+
+class TestMicrobatchIncrementalPartitionFailure(BaseMicrobatchTest):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "input_model.sql": input_model_sql,
+            "microbatch_model.sql": microbatch_model_failing_incremental_partition_sql,
+        }
+
+    @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
+    def test_run_with_event_time(self, project):
+        # run all partitions from start - 2 expected rows in output, one failed
+        with patch_microbatch_end_time("2020-01-03 13:57:00"):
+            run_dbt(["run", "--event-time-start", "2020-01-01"])
+        self.assert_row_count(project, "microbatch_model", 2)
+
+
+microbatch_model_first_partition_failing_sql = """
+{{ config(materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='day') }}
+{% if '2020-01-01' in (model.config.__dbt_internal_microbatch_event_time_start | string) %}
+ invalid_sql
+{% endif %}
+select * from {{ ref('input_model') }}
+"""
+
+
+class TestMicrobatchInitialPartitionFailure(BaseMicrobatchTest):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "input_model.sql": input_model_sql,
+            "microbatch_model.sql": microbatch_model_first_partition_failing_sql,
+        }
+
+    @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
+    def test_run_with_event_time(self, project):
+        # run all partitions from start - 2 expected rows in output, one failed
+        with patch_microbatch_end_time("2020-01-03 13:57:00"):
+            run_dbt(["run", "--event-time-start", "2020-01-01"])
+        self.assert_row_count(project, "microbatch_model", 2)

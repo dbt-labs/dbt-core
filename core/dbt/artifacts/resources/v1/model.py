@@ -23,8 +23,15 @@ class ModelConfig(NodeConfig):
 
 
 @dataclass
+class CustomGranularity(dbtClassMixin):
+    name: str
+    column_name: Optional[str] = None
+
+
+@dataclass
 class TimeSpine(dbtClassMixin):
     standard_granularity_column: str
+    custom_granularities: List[CustomGranularity] = field(default_factory=list)
 
 
 @dataclass
