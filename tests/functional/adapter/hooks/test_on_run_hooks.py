@@ -49,7 +49,6 @@ class Test__StartHookFail__FlagIsNone__ModelFail:
         ]
 
         assert [(result.node.unique_id, result.status) for result in results] == expected_results
-        assert f'relation "{project.test_schema}.my_start_table" does not exist' in log_output
         assert log_counts in log_output
         assert "4 project hooks, 1 view model" in log_output
 
@@ -57,6 +56,10 @@ class Test__StartHookFail__FlagIsNone__ModelFail:
         assert [
             (result["unique_id"], result["status"]) for result in run_results["results"]
         ] == expected_results
+        assert (
+            f'relation "{project.test_schema}.my_start_table" does not exist'
+            in run_results["results"][2]["message"]
+        )
 
 
 class Test__StartHookFail__FlagIsFalse__ModelFail(Test__StartHookFail__FlagIsNone__ModelFail):
@@ -81,7 +84,7 @@ class Test__StartHookFail__FlagIsTrue__ModelSkipped(Test__StartHookFail__FlagIsN
 
 class Test__ModelPass__EndHookFail:
     @pytest.fixture(scope="class")
-    def project_config_update(self, on_run_end):
+    def project_config_update(self):
         return {
             "on-run-end": [
                 "create table {{ target.schema }}.my_start_table ( id int )",  # success
@@ -96,7 +99,9 @@ class Test__ModelPass__EndHookFail:
         return {"my_model.sql": "select 1"}
 
     def test_results(self, project):
-        results, log_output = run_dbt_and_capture(["run"], expect_pass=False)
+        results, log_output = run_dbt_and_capture(
+            ["--debug", "run", "--log-format", "json"], expect_pass=False
+        )
 
         expected_results = [
             ("model.test.my_model", RunStatus.Success),
@@ -107,7 +112,6 @@ class Test__ModelPass__EndHookFail:
         ]
 
         assert [(result.node.unique_id, result.status) for result in results] == expected_results
-        assert f'relation "{project.test_schema}.my_start_table" does not exist' in log_output
         assert "PASS=3 WARN=0 ERROR=1 SKIP=1 TOTAL=5" in log_output
         assert "4 project hooks, 1 view model" in log_output
 
@@ -115,3 +119,7 @@ class Test__ModelPass__EndHookFail:
         assert [
             (result["unique_id"], result["status"]) for result in run_results["results"]
         ] == expected_results
+        assert (
+            f'relation "{project.test_schema}.my_start_table" does not exist'
+            in run_results["results"][3]["message"]
+        )
