@@ -85,6 +85,10 @@ class TestUnitTests:
         results = run_dbt(["test", "--select", "my_model"], expect_pass=True)
         assert len(results) == 0
 
+        # Exclude unit tests with environment variable for list command
+        results = run_dbt(["list", "--select", "my_model"], expect_pass=True)
+        assert len(results) == 1
+
         del os.environ["DBT_EXCLUDE_RESOURCE_TYPES"]
 
         # Test select by test name
