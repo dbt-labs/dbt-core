@@ -362,10 +362,11 @@ class ModelRunner(CompileRunner):
             result = MacroGenerator(
                 materialization_macro, context, stack=context["context_macro_stack"]
             )()
-            for relation in self._materialization_relations(result, model):
-                self.adapter.cache_added(relation.incorporate(dbt_created=True))
         finally:
             self.adapter.post_model_hook(context_config, hook_ctx)
+
+        for relation in self._materialization_relations(result, model):
+            self.adapter.cache_added(relation.incorporate(dbt_created=True))
 
         return self._build_run_model_result(model, context)
 
