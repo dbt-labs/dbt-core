@@ -21,6 +21,7 @@ from dbt.artifacts.resources import (
     NodeVersion,
     Owner,
     Quoting,
+    TimeSpine,
     UnitTestInputFixture,
     UnitTestNodeVersions,
     UnitTestOutputFixture,
@@ -208,18 +209,13 @@ class UnparsedNodeUpdate(HasConfig, HasColumnTests, HasColumnAndTestProps, HasYa
 
 
 @dataclass
-class UnparsedTimeSpine(dbtClassMixin):
-    standard_granularity_column: str
-
-
-@dataclass
 class UnparsedModelUpdate(UnparsedNodeUpdate):
     quote_columns: Optional[bool] = None
     access: Optional[str] = None
     latest_version: Optional[NodeVersion] = None
     versions: Sequence[UnparsedVersion] = field(default_factory=list)
     deprecation_date: Optional[datetime.datetime] = None
-    time_spine: Optional[UnparsedTimeSpine] = None
+    time_spine: Optional[TimeSpine] = None
 
     def __post_init__(self) -> None:
         if self.latest_version:
@@ -254,11 +250,26 @@ class UnparsedModelUpdate(UnparsedNodeUpdate):
                     f"column name '{self.time_spine.standard_granularity_column}' for model '{self.name}'. Valid names"
                     f"{' for latest version' if self.latest_version else ''}: {list(column_names_to_columns.keys())}."
                 )
-            column = column_names_to_columns[self.time_spine.standard_granularity_column]
-            if not column.granularity:
+            standard_column = column_names_to_columns[self.time_spine.standard_granularity_column]
+            if not standard_column.granularity:
                 raise ParsingError(
                     f"Time spine standard granularity column must have a granularity defined. Please add one for "
                     f"column '{self.time_spine.standard_granularity_column}' in model '{self.name}'."
+                )
+            custom_granularity_columns_not_found = []
+            for custom_granularity in self.time_spine.custom_granularities:
+                column_name = (
+                    custom_granularity.column_name
+                    if custom_granularity.column_name
+                    else custom_granularity.name
+                )
+                if column_name not in column_names_to_columns:
+                    custom_granularity_columns_not_found.append(column_name)
+            if custom_granularity_columns_not_found:
+                raise ParsingError(
+                    "Time spine custom granularity columns do not exist in the model. "
+                    f"Columns not found: {custom_granularity_columns_not_found}; "
+                    f"Available columns: {list(column_names_to_columns.keys())}"
                 )
 
     def get_columns_for_version(self, version: NodeVersion) -> List[UnparsedColumn]:
