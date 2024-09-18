@@ -331,6 +331,8 @@ class RunTask(CompileTask):
         failed = False
         num_hooks = len(ordered_hooks)
 
+        fire_event(Formatting(""))
+
         for idx, hook in enumerate(ordered_hooks, 1):
             with log_contextvars(node_info=hook.node_info):
                 hook.index = idx

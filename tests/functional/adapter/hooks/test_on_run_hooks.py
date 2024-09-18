@@ -4,7 +4,7 @@ from dbt.artifacts.schemas.results import RunStatus
 from dbt.tests.util import get_artifact, run_dbt_and_capture
 
 
-class Test__StartHookFail__FlagIsNone__SelectedNodesRun:
+class Test__StartHookFail__FlagIsNone__ModelFail:
     @pytest.fixture(scope="class")
     def flags(self):
         return {}
@@ -59,17 +59,13 @@ class Test__StartHookFail__FlagIsNone__SelectedNodesRun:
         ] == expected_results
 
 
-class Test__StartHookFail__FlagIsFalse__SelectedNodesRun(
-    Test__StartHookFail__FlagIsNone__SelectedNodesRun
-):
+class Test__StartHookFail__FlagIsFalse__ModelFail(Test__StartHookFail__FlagIsNone__ModelFail):
     @pytest.fixture(scope="class")
     def flags(self):
         return {"skip_nodes_if_on_run_start_fails": False}
 
 
-class Test__StartHookFail__FlagIsTrue__SelectedNodesSkipped(
-    Test__StartHookFail__FlagIsNone__SelectedNodesRun
-):
+class Test__StartHookFail__FlagIsTrue__ModelSkipped(Test__StartHookFail__FlagIsNone__ModelFail):
     @pytest.fixture(scope="class")
     def flags(self):
         return {"skip_nodes_if_on_run_start_fails": True}
@@ -81,3 +77,41 @@ class Test__StartHookFail__FlagIsTrue__SelectedNodesSkipped(
     @pytest.fixture(scope="class")
     def my_model_run_status(self):
         return RunStatus.Skipped
+
+
+class Test__ModelPass__EndHookFail:
+    @pytest.fixture(scope="class")
+    def project_config_update(self, on_run_end):
+        return {
+            "on-run-end": [
+                "create table {{ target.schema }}.my_start_table ( id int )",  # success
+                "drop table {{ target.schema }}.my_start_table",  # success
+                "insert into {{ target.schema }}.my_start_table (id) values (1, 2, 3)",  # fail
+                "create table {{ target.schema }}.my_start_table ( id int )",  # skip
+            ],
+        }
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"my_model.sql": "select 1"}
+
+    def test_results(self, project):
+        results, log_output = run_dbt_and_capture(["run"], expect_pass=False)
+
+        expected_results = [
+            ("model.test.my_model", RunStatus.Success),
+            ("operation.test.test-on-run-end-0", RunStatus.Success),
+            ("operation.test.test-on-run-end-1", RunStatus.Success),
+            ("operation.test.test-on-run-end-2", RunStatus.Error),
+            ("operation.test.test-on-run-end-3", RunStatus.Skipped),
+        ]
+
+        assert [(result.node.unique_id, result.status) for result in results] == expected_results
+        assert f'relation "{project.test_schema}.my_start_table" does not exist' in log_output
+        assert "PASS=3 WARN=0 ERROR=1 SKIP=1 TOTAL=5" in log_output
+        assert "4 project hooks, 1 view model" in log_output
+
+        run_results = get_artifact(project.project_root, "target", "run_results.json")
+        assert [
+            (result["unique_id"], result["status"]) for result in run_results["results"]
+        ] == expected_results

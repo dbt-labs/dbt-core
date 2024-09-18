@@ -502,7 +502,6 @@ class GraphRunnableTask(ConfiguredTask):
                 node_count=self.num_nodes,
             )
         )
-        fire_event(Formatting(""))
 
         self.started_at = time.time()
         try:
