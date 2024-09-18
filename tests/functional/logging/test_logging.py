@@ -87,7 +87,7 @@ def test_formatted_logs(project, logs_dir):
         if log_event == "Formatting":
             formatted_json_lines += 1
 
-    assert formatted_json_lines == 5
+    assert formatted_json_lines == 6
 
 
 def test_invalid_event_value(project, logs_dir):

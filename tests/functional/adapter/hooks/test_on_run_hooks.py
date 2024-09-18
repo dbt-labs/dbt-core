@@ -1,12 +1,16 @@
 import pytest
 
 from dbt.artifacts.schemas.results import RunStatus
-from dbt.tests.util import run_dbt_and_capture
+from dbt.tests.util import get_artifact, run_dbt_and_capture
 
 
-class Test__StartHookFail__SelectedNodesSkip__EndHookFail:
+class Test__StartHookFail__FlagIsNone__SelectedNodesRun:
     @pytest.fixture(scope="class")
-    def project_config_update(self):
+    def flags(self):
+        return {}
+
+    @pytest.fixture(scope="class")
+    def project_config_update(self, flags):
         return {
             "on-run-start": [
                 "create table {{ target.schema }}.my_start_table ( id int )",  # success
@@ -14,12 +18,7 @@ class Test__StartHookFail__SelectedNodesSkip__EndHookFail:
                 "insert into {{ target.schema }}.my_start_table (id) values (1, 2, 3)",  # fail
                 "create table {{ target.schema }}.my_start_table ( id int )",  # skip
             ],
-            "on-run-end": [
-                "create table {{ target.schema }}.my_end_table ( id int )",  # success
-                "drop table {{ target.schema }}.my_end_table",  # success
-                "insert into {{ target.schema }}.my_end_table (id) values (1, 2, 3)",  # fail
-                "create table {{ target.schema }}.my_end_table ( id int )",  # skip
-            ],
+            "flags": flags,
         }
 
     @pytest.fixture(scope="class")
@@ -30,62 +29,55 @@ class Test__StartHookFail__SelectedNodesSkip__EndHookFail:
             "select * from {{ target.schema }}.my_end_table"
         }
 
-    def test_results(self, project):
-        results, log_output = run_dbt_and_capture(["run"], expect_pass=False)
-        assert [(result.node.alias, result.status) for result in results] == [
-            ("test-on-run-start-0", RunStatus.Success),
-            ("test-on-run-start-1", RunStatus.Success),
-            ("test-on-run-start-2", RunStatus.Error),
-            ("test-on-run-start-3", RunStatus.Skipped),
-            ("my_model", RunStatus.Skipped),
-            ("test-on-run-end-0", RunStatus.Success),
-            ("test-on-run-end-1", RunStatus.Success),
-            ("test-on-run-end-2", RunStatus.Error),
-            ("test-on-run-end-3", RunStatus.Skipped),
-        ]
-
-        assert f'relation "{project.test_schema}.my_start_table" does not exist' in log_output
-        assert "PASS=4 WARN=0 ERROR=2 SKIP=3 TOTAL=9" in log_output
-        assert "8 project hooks, 1 view model" in log_output
-
-
-class Test__StartHookFail__SelectedNodesSkip__EndHookPass:
     @pytest.fixture(scope="class")
-    def project_config_update(self):
-        return {
-            "on-run-start": [
-                "create table {{ target.schema }}.my_start_table ( id int )",  # success
-                "drop table {{ target.schema }}.my_start_table",  # success
-                "insert into {{ target.schema }}.my_start_table (id) values (1, 2, 3)",  # fail
-                "create table {{ target.schema }}.my_start_table ( id int )",  # skip
-            ],
-            "on-run-end": [
-                "create table {{ target.schema }}.my_end_table ( id int )",  # success
-                "drop table {{ target.schema }}.my_end_table",  # success
-            ],
-        }
+    def log_counts(self):
+        return "PASS=2 WARN=0 ERROR=2 SKIP=1 TOTAL=5"
 
     @pytest.fixture(scope="class")
-    def models(self):
-        return {
-            "my_model.sql": "select * from {{ target.schema }}.my_start_table"
-            " union all "
-            "select * from {{ target.schema }}.my_end_table"
-        }
+    def my_model_run_status(self):
+        return RunStatus.Error
 
-    def test_results(self, project):
+    def test_results(self, project, log_counts, my_model_run_status):
         results, log_output = run_dbt_and_capture(["run"], expect_pass=False)
 
-        assert [(result.node.alias, result.status) for result in results] == [
-            ("test-on-run-start-0", RunStatus.Success),
-            ("test-on-run-start-1", RunStatus.Success),
-            ("test-on-run-start-2", RunStatus.Error),
-            ("test-on-run-start-3", RunStatus.Skipped),
-            ("my_model", RunStatus.Skipped),
-            ("test-on-run-end-0", RunStatus.Success),
-            ("test-on-run-end-1", RunStatus.Success),
+        expected_results = [
+            ("operation.test.test-on-run-start-0", RunStatus.Success),
+            ("operation.test.test-on-run-start-1", RunStatus.Success),
+            ("operation.test.test-on-run-start-2", RunStatus.Error),
+            ("operation.test.test-on-run-start-3", RunStatus.Skipped),
+            ("model.test.my_model", my_model_run_status),
         ]
 
+        assert [(result.node.unique_id, result.status) for result in results] == expected_results
         assert f'relation "{project.test_schema}.my_start_table" does not exist' in log_output
-        assert "PASS=4 WARN=0 ERROR=1 SKIP=2 TOTAL=7" in log_output
-        assert "6 project hooks, 1 view model" in log_output
+        assert log_counts in log_output
+        assert "4 project hooks, 1 view model" in log_output
+
+        run_results = get_artifact(project.project_root, "target", "run_results.json")
+        assert [
+            (result["unique_id"], result["status"]) for result in run_results["results"]
+        ] == expected_results
+
+
+class Test__StartHookFail__FlagIsFalse__SelectedNodesRun(
+    Test__StartHookFail__FlagIsNone__SelectedNodesRun
+):
+    @pytest.fixture(scope="class")
+    def flags(self):
+        return {"skip_nodes_if_on_run_start_fails": False}
+
+
+class Test__StartHookFail__FlagIsTrue__SelectedNodesSkipped(
+    Test__StartHookFail__FlagIsNone__SelectedNodesRun
+):
+    @pytest.fixture(scope="class")
+    def flags(self):
+        return {"skip_nodes_if_on_run_start_fails": True}
+
+    @pytest.fixture(scope="class")
+    def log_counts(self):
+        return "PASS=2 WARN=0 ERROR=1 SKIP=2 TOTAL=5"
+
+    @pytest.fixture(scope="class")
+    def my_model_run_status(self):
+        return RunStatus.Skipped
