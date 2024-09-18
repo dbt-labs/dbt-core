@@ -1,5 +1,5 @@
 kind: Features
-body: Add new 'skip_nodes_if_on_run_start_fails' to allow skipping nodes if on-run-start hooks fail
+body: Add new 'skip_nodes_if_on_run_start_fails' behavior change flag
 time: 2024-09-18T16:29:59.268422+01:00
 custom:
     Author: aranke
