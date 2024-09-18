@@ -22,7 +22,8 @@ def snowplow_tracker(mocker):
     add_callback_to_manager(track_behavior_change_warn)
 
     # don't make a call, catch the request
-    snowplow_tracker = mocker.patch("dbt.tracking.tracker.track_struct_event")
+    # to avoid confusion, this is snowplow_tracker's track, not our wrapper that's also named track
+    snowplow_tracker = mocker.patch("dbt.tracking.tracker.track")
 
     yield snowplow_tracker
 
