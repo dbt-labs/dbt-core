@@ -33,6 +33,7 @@ from dbt.events.types import (
     LogHookStartLine,
     LogModelResult,
     LogStartLine,
+    RunningOperationCaughtError,
 )
 from dbt.exceptions import CompilationError, DbtInternalError, DbtRuntimeError
 from dbt.graph import ResourceTypeSelector
@@ -260,7 +261,7 @@ class ModelRunner(CompileRunner):
             level=level,
         )
         if exception:
-            print(exception)
+            fire_event(RunningOperationCaughtError(exc=exception))
 
     def print_batch_start_line(
         self, batch_start: Optional[datetime], batch_idx: int, batch_total: int
