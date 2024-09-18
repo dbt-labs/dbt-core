@@ -365,3 +365,26 @@ class TestRetryTargetPathFlag:
         results = run_dbt(["retry", "--state", "artifacts", "--target-path", "my_target_path"])
         assert len(results) == 1
         assert Path("my_target_path").is_dir()
+
+
+class TestRetryHooksAlwaysRun:
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "on-run-start": ["select 1;"],
+            "on-run-end": ["select 2;"],
+        }
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "sample_model.sql": models__sample_model,
+        }
+
+    def test_retry_hooks_always_run(self, project):
+        res = run_dbt(["run", "--target-path", "target"], expect_pass=False)
+        assert len(res) == 3
+
+        write_file(models__second_model, "models", "sample_model.sql")
+        res = run_dbt(["retry", "--state", "target"])
+        assert len(res) == 3
