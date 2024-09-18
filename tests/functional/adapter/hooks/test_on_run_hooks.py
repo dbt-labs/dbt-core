@@ -13,10 +13,10 @@ class Test__StartHookFail__FlagIsNone__ModelFail:
     def project_config_update(self, flags):
         return {
             "on-run-start": [
-                "create table {{ target.schema }}.my_start_table ( id int )",  # success
-                "drop table {{ target.schema }}.my_start_table",  # success
-                "insert into {{ target.schema }}.my_start_table (id) values (1, 2, 3)",  # fail
-                "create table {{ target.schema }}.my_start_table ( id int )",  # skip
+                "create table {{ target.schema }}.my_hook_table ( id int )",  # success
+                "drop table {{ target.schema }}.my_hook_table",  # success
+                "insert into {{ target.schema }}.my_hook_table (id) values (1, 2, 3)",  # fail
+                "create table {{ target.schema }}.my_hook_table ( id int )",  # skip
             ],
             "flags": flags,
         }
@@ -24,7 +24,7 @@ class Test__StartHookFail__FlagIsNone__ModelFail:
     @pytest.fixture(scope="class")
     def models(self):
         return {
-            "my_model.sql": "select * from {{ target.schema }}.my_start_table"
+            "my_model.sql": "select * from {{ target.schema }}.my_hook_table"
             " union all "
             "select * from {{ target.schema }}.my_end_table"
         }
@@ -57,7 +57,7 @@ class Test__StartHookFail__FlagIsNone__ModelFail:
             (result["unique_id"], result["status"]) for result in run_results["results"]
         ] == expected_results
         assert (
-            f'relation "{project.test_schema}.my_start_table" does not exist'
+            f'relation "{project.test_schema}.my_hook_table" does not exist'
             in run_results["results"][2]["message"]
         )
 
@@ -87,10 +87,10 @@ class Test__ModelPass__EndHookFail:
     def project_config_update(self):
         return {
             "on-run-end": [
-                "create table {{ target.schema }}.my_start_table ( id int )",  # success
-                "drop table {{ target.schema }}.my_start_table",  # success
-                "insert into {{ target.schema }}.my_start_table (id) values (1, 2, 3)",  # fail
-                "create table {{ target.schema }}.my_start_table ( id int )",  # skip
+                "create table {{ target.schema }}.my_hook_table ( id int )",  # success
+                "drop table {{ target.schema }}.my_hook_table",  # success
+                "insert into {{ target.schema }}.my_hook_table (id) values (1, 2, 3)",  # fail
+                "create table {{ target.schema }}.my_hook_table ( id int )",  # skip
             ],
         }
 
@@ -99,9 +99,7 @@ class Test__ModelPass__EndHookFail:
         return {"my_model.sql": "select 1"}
 
     def test_results(self, project):
-        results, log_output = run_dbt_and_capture(
-            ["--debug", "run", "--log-format", "json"], expect_pass=False
-        )
+        results, log_output = run_dbt_and_capture(["run"], expect_pass=False)
 
         expected_results = [
             ("model.test.my_model", RunStatus.Success),
@@ -120,6 +118,39 @@ class Test__ModelPass__EndHookFail:
             (result["unique_id"], result["status"]) for result in run_results["results"]
         ] == expected_results
         assert (
-            f'relation "{project.test_schema}.my_start_table" does not exist'
+            f'relation "{project.test_schema}.my_hook_table" does not exist'
             in run_results["results"][3]["message"]
         )
+
+
+class Test__SelectorEmpty__NoHooksRan:
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "on-run-start": [
+                "create table {{ target.schema }}.my_hook_table ( id int )",  # success
+                "drop table {{ target.schema }}.my_hook_table",  # success
+            ],
+            "on-run-end": [
+                "create table {{ target.schema }}.my_hook_table ( id int )",  # success
+                "drop table {{ target.schema }}.my_hook_table",  # success
+            ],
+        }
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"my_model.sql": "select 1"}
+
+    def test_results(self, project):
+        results, log_output = run_dbt_and_capture(
+            ["--debug", "run", "--select", "tag:no_such_tag", "--log-format", "json"]
+        )
+
+        assert results.results == []
+        assert (
+            "The selection criterion 'tag:no_such_tag' does not match any enabled nodes"
+            in log_output
+        )
+
+        run_results = get_artifact(project.project_root, "target", "run_results.json")
+        assert [run_results["results"]] == []
