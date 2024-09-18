@@ -18,7 +18,6 @@ from typing import (
 
 from mashumaro.types import SerializableType
 
-from dbt import deprecations
 from dbt.adapters.base import ConstraintSupport
 from dbt.adapters.factory import get_adapter_constraint_support
 from dbt.artifacts.resources import Analysis as AnalysisResource
@@ -1148,12 +1147,6 @@ class UnpatchedSourceDefinition(BaseNode):
                 "Invalid test config: cannot have both 'tests' and 'data_tests' defined"
             )
         if self.tests:
-            if is_root_project:
-                deprecations.warn(
-                    "project-test-config",
-                    deprecated_path="tests",
-                    exp_path="data_tests",
-                )
             self.data_tests.extend(self.tests)
             self.tests.clear()
 
@@ -1164,12 +1157,6 @@ class UnpatchedSourceDefinition(BaseNode):
                     "Invalid test config: cannot have both 'tests' and 'data_tests' defined"
                 )
             if column.tests:
-                if is_root_project:
-                    deprecations.warn(
-                        "project-test-config",
-                        deprecated_path="tests",
-                        exp_path="data_tests",
-                    )
                 column.data_tests.extend(column.tests)
                 column.tests.clear()
 

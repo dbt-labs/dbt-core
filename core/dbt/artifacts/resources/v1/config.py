@@ -80,6 +80,8 @@ class NodeConfig(NodeAndTestConfig):
     # 'mergebehavior' dictionary
     materialized: str = "view"
     incremental_strategy: Optional[str] = None
+    batch_size: Any = None
+    lookback: Any = 0
     persist_docs: Dict[str, Any] = field(default_factory=dict)
     post_hook: List[Hook] = field(
         default_factory=list,
@@ -122,6 +124,7 @@ class NodeConfig(NodeAndTestConfig):
         default_factory=ContractConfig,
         metadata=MergeBehavior.Update.meta(),
     )
+    event_time: Any = None
 
     def __post_init__(self):
         # we validate that node_color has a suitable value to prevent dbt-docs from crashing

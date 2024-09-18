@@ -1,4 +1,5 @@
 import functools
+import os
 import threading
 import time
 from datetime import datetime
@@ -13,6 +14,7 @@ from dbt.adapters.events.types import (
 )
 from dbt.adapters.exceptions import MissingMaterializationError
 from dbt.artifacts.resources import Hook
+from dbt.artifacts.resources.types import BatchSize
 from dbt.artifacts.schemas.results import (
     BaseResult,
     NodeStatus,
@@ -25,18 +27,21 @@ from dbt.clients.jinja import MacroGenerator
 from dbt.config.runtime import RuntimeConfig
 from dbt.context.providers import generate_runtime_model_context
 from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.graph.nodes import HookNode, ResultNode
+from dbt.contracts.graph.nodes import HookNode, ModelNode, ResultNode
 from dbt.events.types import (
     LogHookEndLine,
     LogHookStartLine,
     LogModelResult,
     LogStartLine,
+    RunningOperationCaughtError,
 )
 from dbt.exceptions import CompilationError, DbtInternalError, DbtRuntimeError
 from dbt.graph import ResourceTypeSelector
 from dbt.hooks import get_hook_dict
+from dbt.materializations.incremental.microbatch import MicrobatchBuilder
 from dbt.node_types import NodeType, RunHookType
 from dbt.task.base import BaseRunner
+from dbt_common.clients.jinja import MacroProtocol
 from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_common.events.base_types import EventLevel
 from dbt_common.events.contextvars import log_contextvars
@@ -182,7 +187,22 @@ class ModelRunner(CompileRunner):
 
     def describe_node(self) -> str:
         # TODO CL 'language' will be moved to node level when we change representation
-        return f"{self.node.language} {self.node.get_materialization()} model {self.get_node_representation()}"
+        materialization_strategy = self.node.config.get("incremental_strategy")
+        materialization = (
+            "microbatch"
+            if materialization_strategy == "microbatch"
+            else self.node.get_materialization()
+        )
+        return f"{self.node.language} {materialization} model {self.get_node_representation()}"
+
+    def describe_batch(self, batch_start: Optional[datetime]) -> str:
+        # Only visualize date if batch_start year/month/day
+        formatted_batch_start = (
+            batch_start.date()
+            if (batch_start and self.node.config.batch_size != BatchSize.hour)
+            else batch_start
+        )
+        return f"batch {formatted_batch_start} of {self.get_node_representation()}"
 
     def print_start_line(self):
         fire_event(
@@ -214,6 +234,51 @@ class ModelRunner(CompileRunner):
             level=level,
         )
 
+    def print_batch_result_line(
+        self,
+        result: RunResult,
+        batch_start: Optional[datetime],
+        batch_idx: int,
+        batch_total: int,
+        exception: Optional[Exception],
+    ):
+        description = self.describe_batch(batch_start)
+        if result.status == NodeStatus.Error:
+            status = result.status
+            level = EventLevel.ERROR
+        else:
+            status = result.message
+            level = EventLevel.INFO
+        fire_event(
+            LogModelResult(
+                description=description,
+                status=status,
+                index=batch_idx,
+                total=batch_total,
+                execution_time=result.execution_time,
+                node_info=self.node.node_info,
+            ),
+            level=level,
+        )
+        if exception:
+            fire_event(RunningOperationCaughtError(exc=str(exception)))
+
+    def print_batch_start_line(
+        self, batch_start: Optional[datetime], batch_idx: int, batch_total: int
+    ) -> None:
+        if batch_start is None:
+            return
+
+        batch_description = self.describe_batch(batch_start)
+        fire_event(
+            LogStartLine(
+                description=batch_description,
+                index=batch_idx,
+                total=batch_total,
+                node_info=self.node.node_info,
+            )
+        )
+
     def before_execute(self) -> None:
         self.print_start_line()
 
@@ -237,6 +302,35 @@ class ModelRunner(CompileRunner):
             message=str(result.response),
             adapter_response=adapter_response,
             failures=result.get("failures"),
+        )
+
+    def _build_run_microbatch_model_result(
+        self, model: ModelNode, batch_run_results: List[RunResult]
+    ) -> RunResult:
+        failures = sum([result.failures for result in batch_run_results if result.failures])
+        return RunResult(
+            node=model,
+            # TODO We should do something like RunStatus.PartialSuccess if there is a mixture of success and failures
+            status=RunStatus.Success if failures != len(batch_run_results) else RunStatus.Error,
+            timing=[],
+            thread_id=threading.current_thread().name,
+            # TODO -- why isn't this getting propagated to logs?
+            execution_time=0,
+            message="SUCCESS" if failures != len(batch_run_results) else "ERROR",
+            adapter_response={},
+            failures=failures,
+        )
+
+    def _build_failed_run_batch_result(self, model: ModelNode) -> RunResult:
+        return RunResult(
+            node=model,
+            status=RunStatus.Error,
+            timing=[],
+            thread_id=threading.current_thread().name,
+            execution_time=0,
+            message="ERROR",
+            adapter_response={},
+            failures=1,
         )
 
     def _materialization_relations(self, result: Any, model) -> List[BaseRelation]:
@@ -284,17 +378,100 @@ class ModelRunner(CompileRunner):
             )
 
         hook_ctx = self.adapter.pre_model_hook(context_config)
+        batch_results = None
         try:
-            result = MacroGenerator(
-                materialization_macro, context, stack=context["context_macro_stack"]
-            )()
+            if (
+                os.environ.get("DBT_EXPERIMENTAL_MICROBATCH")
+                and model.config.materialized == "incremental"
+                and model.config.incremental_strategy == "microbatch"
+            ):
+                batch_results = self._execute_microbatch_materialization(
+                    model, manifest, context, materialization_macro
+                )
+            else:
+                result = MacroGenerator(
+                    materialization_macro, context, stack=context["context_macro_stack"]
+                )()
+                for relation in self._materialization_relations(result, model):
+                    self.adapter.cache_added(relation.incorporate(dbt_created=True))
         finally:
             self.adapter.post_model_hook(context_config, hook_ctx)
 
-        for relation in self._materialization_relations(result, model):
-            self.adapter.cache_added(relation.incorporate(dbt_created=True))
+        if batch_results:
+            return self._build_run_microbatch_model_result(model, batch_results)
 
         return self._build_run_model_result(model, context)
+
+    def _execute_microbatch_materialization(
+        self,
+        model: ModelNode,
+        manifest: Manifest,
+        context: Dict[str, Any],
+        materialization_macro: MacroProtocol,
+    ) -> List[RunResult]:
+        batch_results: List[RunResult] = []
+        microbatch_builder = MicrobatchBuilder(
+            model=model,
+            is_incremental=self._is_incremental(model),
+            event_time_start=getattr(self.config.args, "EVENT_TIME_START", None),
+            event_time_end=getattr(self.config.args, "EVENT_TIME_END", None),
+        )
+        end = microbatch_builder.build_end_time()
+        start = microbatch_builder.build_start_time(end)
+        batches = microbatch_builder.build_batches(start, end)
+
+        # iterate over each batch, calling materialization_macro to get a batch-level run result
+        for batch_idx, batch in enumerate(batches):
+            self.print_batch_start_line(batch[0], batch_idx + 1, len(batches))
+
+            exception = None
+            try:
+                # Set start/end in context prior to re-compiling
+                model.config["__dbt_internal_microbatch_event_time_start"] = batch[0]
+                model.config["__dbt_internal_microbatch_event_time_end"] = batch[1]
+
+                # Recompile node to re-resolve refs with event time filters rendered, update context
+                self.compiler.compile_node(model, manifest, {})
+                context["model"] = model
+                context["sql"] = model.compiled_code
+                context["compiled_code"] = model.compiled_code
+
+                # Materialize batch and cache any materialized relations
+                result = MacroGenerator(
+                    materialization_macro, context, stack=context["context_macro_stack"]
+                )()
+                for relation in self._materialization_relations(result, model):
+                    self.adapter.cache_added(relation.incorporate(dbt_created=True))
+
+                # Build result fo executed batch
+                batch_run_result = self._build_run_model_result(model, context)
+                # Update context vars for future batches
+                context["is_incremental"] = lambda: True
+                context["should_full_refresh"] = lambda: False
+            except Exception as e:
+                exception = e
+                batch_run_result = self._build_failed_run_batch_result(model)
+
+            self.print_batch_result_line(
+                batch_run_result, batch[0], batch_idx + 1, len(batches), exception
+            )
+            batch_results.append(batch_run_result)
+
+        return batch_results
+
+    def _is_incremental(self, model) -> bool:
+        # TODO: Remove. This is a temporary method. We're working with adapters on
+        # a strategy to ensure we can access the `is_incremental` logic without drift
+        relation_info = self.adapter.Relation.create_from(self.config, model)
+        relation = self.adapter.get_relation(
+            relation_info.database, relation_info.schema, relation_info.name
+        )
+        return (
+            relation is not None
+            and relation.type == "table"
+            and model.config.materialized == "incremental"
+            and not (getattr(self.config.args, "FULL_REFRESH", False) or model.config.full_refresh)
+        )
 
 
 class RunTask(CompileTask):

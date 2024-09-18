@@ -7,7 +7,6 @@ import click
 from click.exceptions import BadOptionUsage
 from click.exceptions import Exit as ClickExit
 from click.exceptions import NoSuchOption, UsageError
-
 from dbt.artifacts.schemas.catalog import CatalogArtifact
 from dbt.artifacts.schemas.run import RunExecutionResult
 from dbt.cli import params as p
@@ -165,6 +164,8 @@ def cli(ctx, **kwargs):
 @click.pass_context
 @global_flags
 @p.empty
+@p.event_time_start
+@p.event_time_end
 @p.exclude
 @p.export_saved_queries
 @p.full_refresh
@@ -218,10 +219,9 @@ def clean(ctx, **kwargs):
     """Delete all folders in the clean-targets list (usually the dbt_packages and target directories.)"""
     from dbt.task.clean import CleanTask
 
-    task = CleanTask(ctx.obj["flags"], ctx.obj["project"])
-
-    results = task.run()
-    success = task.interpret_results(results)
+    with CleanTask(ctx.obj["flags"], ctx.obj["project"]) as task:
+        results = task.run()
+        success = task.interpret_results(results)
     return results, success
 
 
@@ -437,9 +437,9 @@ def deps(ctx, **kwargs):
                 message=f"Version is required in --add-package when a package when source is {flags.SOURCE}",
                 option_name="--add-package",
             )
-    task = DepsTask(flags, ctx.obj["project"])
-    results = task.run()
-    success = task.interpret_results(results)
+    with DepsTask(flags, ctx.obj["project"]) as task:
+        results = task.run()
+        success = task.interpret_results(results)
     return results, success
 
 
@@ -459,10 +459,9 @@ def init(ctx, **kwargs):
     """Initialize a new dbt project."""
     from dbt.task.init import InitTask
 
-    task = InitTask(ctx.obj["flags"])
-
-    results = task.run()
-    success = task.interpret_results(results)
+    with InitTask(ctx.obj["flags"]) as task:
+        results = task.run()
+        success = task.interpret_results(results)
     return results, success
 
 
@@ -539,6 +538,8 @@ def parse(ctx, **kwargs):
 @p.profiles_dir
 @p.project_dir
 @p.empty
+@p.event_time_start
+@p.event_time_end
 @p.select
 @p.selector
 @p.target_path

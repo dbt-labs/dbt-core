@@ -4,9 +4,8 @@ from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Generic, Iterable, List, Optional, Type, TypeVar
 
-from dbt import deprecations
 from dbt.artifacts.resources import RefArgs
-from dbt.artifacts.resources.v1.model import TimeSpine
+from dbt.artifacts.resources.v1.model import CustomGranularity, TimeSpine
 from dbt.clients.jinja_static import statically_parse_ref_or_source
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.config import RuntimeConfig
@@ -568,12 +567,6 @@ class PatchParser(YamlReader, Generic[NonSourceTarget, Parsed]):
                     raise ValidationError(
                         "Invalid test config: cannot have both 'tests' and 'data_tests' defined"
                     )
-                if is_root_project:
-                    deprecations.warn(
-                        "project-test-config",
-                        deprecated_path="tests",
-                        exp_path="data_tests",
-                    )
                 data["data_tests"] = data.pop("tests")
 
         # model-level tests
@@ -627,7 +620,14 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
             deprecation_date = block.target.deprecation_date
             time_spine = (
                 TimeSpine(
-                    standard_granularity_column=block.target.time_spine.standard_granularity_column
+                    standard_granularity_column=block.target.time_spine.standard_granularity_column,
+                    custom_granularities=[
+                        CustomGranularity(
+                            name=custom_granularity.name,
+                            column_name=custom_granularity.column_name,
+                        )
+                        for custom_granularity in block.target.time_spine.custom_granularities
+                    ],
                 )
                 if block.target.time_spine
                 else None
