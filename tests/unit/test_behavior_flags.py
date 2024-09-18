@@ -3,7 +3,7 @@ import pytest
 from dbt.tracking import (
     disable_tracking,
     initialize_from_flags,
-    track_behavior_deprecation_warn,
+    track_behavior_change_warn,
 )
 from dbt_common.behavior_flags import Behavior
 from dbt_common.events.event_manager_client import (
@@ -19,7 +19,7 @@ def snowplow_tracker(mocker):
     mocker.patch("dbt.tracking.User.set_cookie").return_value = {"id": 42}
 
     # add the relevant callback to the event manager
-    add_callback_to_manager(track_behavior_deprecation_warn)
+    add_callback_to_manager(track_behavior_change_warn)
 
     # don't make a call, catch the request
     snowplow_tracker = mocker.patch("dbt.tracking.tracker.track_struct_event")

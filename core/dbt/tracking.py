@@ -37,7 +37,7 @@ DBT_INVOCATION_ENV = "DBT_INVOCATION_ENV"
 
 ADAPTER_INFO_SPEC = "iglu:com.dbt/adapter_info/jsonschema/1-0-1"
 DEPRECATION_WARN_SPEC = "iglu:com.dbt/deprecation_warn/jsonschema/1-0-0"
-BEHAVIOR_DEPRECATION_WARN_SPEC = "iglu:com.dbt/behavior_deprecation_warn/jsonschema/1-0-0"
+BEHAVIOR_CHANGE_WARN_SPEC = "iglu:com.dbt/behavior_change_warn/jsonschema/1-0-0"
 EXPERIMENTAL_PARSER = "iglu:com.dbt/experimental_parser/jsonschema/1-0-0"
 INVOCATION_ENV_SPEC = "iglu:com.dbt/invocation_env/jsonschema/1-0-0"
 INVOCATION_SPEC = "iglu:com.dbt/invocation/jsonschema/1-0-2"
@@ -366,11 +366,11 @@ def track_deprecation_warn(options):
     )
 
 
-def track_behavior_deprecation_warn(msg: EventMsg) -> None:
-    if msg.info.name != "BehaviorDeprecationEvent" or active_user is None:
+def track_behavior_change_warn(msg: EventMsg) -> None:
+    if msg.info.name != "BehaviorChangeEvent" or active_user is None:
         return
 
-    context = [SelfDescribingJson(BEHAVIOR_DEPRECATION_WARN_SPEC, msg_to_dict(msg))]
+    context = [SelfDescribingJson(BEHAVIOR_CHANGE_WARN_SPEC, msg_to_dict(msg))]
     track(
         active_user,
         category="dbt",

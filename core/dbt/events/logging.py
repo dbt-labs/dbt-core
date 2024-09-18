@@ -2,7 +2,7 @@ import os
 from functools import partial
 from typing import Callable, List
 
-from dbt.tracking import track_behavior_deprecation_warn
+from dbt.tracking import track_behavior_change_warn
 from dbt_common.events.base_types import EventLevel, EventMsg
 from dbt_common.events.event_manager_client import (
     add_callback_to_manager,
@@ -70,7 +70,7 @@ def setup_event_logger(flags, callbacks: List[Callable[[EventMsg], None]] = []) 
     make_log_dir_if_missing(flags.LOG_PATH)
     event_manager = get_event_manager()
     event_manager.callbacks = callbacks.copy()
-    add_callback_to_manager(track_behavior_deprecation_warn)
+    add_callback_to_manager(track_behavior_change_warn)
 
     if flags.LOG_LEVEL != "none":
         line_format = _line_format_from_str(flags.LOG_FORMAT, LineFormat.PlainText)
