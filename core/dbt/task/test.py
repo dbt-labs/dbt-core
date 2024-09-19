@@ -127,7 +127,7 @@ class TestRunner(CompileRunner):
     def execute_data_test(self, data_test: TestNode, manifest: Manifest) -> TestResultData:
         context = generate_runtime_model_context(data_test, self.config, manifest)
 
-        hook_ctx = self.adapter.pre_model_hook(context)
+        hook_ctx = self.adapter.pre_model_hook(context["config"])
 
         materialization_macro = manifest.find_materialization_macro_by_name(
             self.config.project_name, data_test.get_materialization(), self.adapter.type()
@@ -205,7 +205,7 @@ class TestRunner(CompileRunner):
         # materialization, not compile the node.compiled_code
         context = generate_runtime_model_context(unit_test_node, self.config, unit_test_manifest)
 
-        hook_ctx = self.adapter.pre_model_hook(context)
+        hook_ctx = self.adapter.pre_model_hook(context["config"])
 
         materialization_macro = unit_test_manifest.find_materialization_macro_by_name(
             self.config.project_name, unit_test_node.get_materialization(), self.adapter.type()
@@ -375,18 +375,6 @@ class TestRunner(CompileRunner):
         return rendered
 
 
-class TestSelector(ResourceTypeSelector):
-    def __init__(
-        self, graph, manifest, previous_state, resource_types=[NodeType.Test, NodeType.Unit]
-    ) -> None:
-        super().__init__(
-            graph=graph,
-            manifest=manifest,
-            previous_state=previous_state,
-            resource_types=resource_types,
-        )
-
-
 class TestTask(RunTask):
     """
     Testing:
@@ -399,13 +387,14 @@ class TestTask(RunTask):
     def raise_on_first_error(self) -> bool:
         return False
 
-    def get_node_selector(self) -> TestSelector:
+    def get_node_selector(self) -> ResourceTypeSelector:
         if self.manifest is None or self.graph is None:
             raise DbtInternalError("manifest and graph must be set to get perform node selection")
-        return TestSelector(
+        return ResourceTypeSelector(
             graph=self.graph,
             manifest=self.manifest,
             previous_state=self.previous_state,
+            resource_types=[NodeType.Test, NodeType.Unit],
         )
 
     def get_runner_type(self, _) -> Optional[Type[BaseRunner]]:

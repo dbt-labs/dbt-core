@@ -11,7 +11,6 @@ from dbt.exceptions import DbtInternalError
 from dbt.graph import Graph, GraphQueue, ResourceTypeSelector
 from dbt.node_types import NodeType
 from dbt.task.base import BaseRunner, resource_types_from_args
-from dbt.task.test import TestSelector
 from dbt_common.events.functions import fire_event
 
 from .run import ModelRunner as run_model_runner
@@ -198,7 +197,7 @@ class BuildTask(RunTask):
         resource_types = self.resource_types(no_unit_tests)
 
         if resource_types == [NodeType.Test]:
-            return TestSelector(
+            return ResourceTypeSelector(
                 graph=self.graph,
                 manifest=self.manifest,
                 previous_state=self.previous_state,

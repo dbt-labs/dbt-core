@@ -17,7 +17,6 @@ from dbt.graph import ResourceTypeSelector
 from dbt.node_types import NodeType
 from dbt.task.base import resource_types_from_args
 from dbt.task.runnable import GraphRunnableTask
-from dbt.task.test import TestSelector
 from dbt_common.events.contextvars import task_contextvars
 from dbt_common.events.functions import fire_event, warn_or_error
 from dbt_common.events.types import PrintEvent
@@ -201,7 +200,7 @@ class ListTask(GraphRunnableTask):
         if self.manifest is None or self.graph is None:
             raise DbtInternalError("manifest and graph must be set to get perform node selection")
         if self.resource_types == [NodeType.Test]:
-            return TestSelector(
+            return ResourceTypeSelector(
                 graph=self.graph,
                 manifest=self.manifest,
                 previous_state=self.previous_state,
