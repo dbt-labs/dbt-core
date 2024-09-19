@@ -350,6 +350,48 @@ class ModelRunner(CompileRunner):
         )
         raise CompilationError(msg, node=model)
 
+    def _execute_model(
+        self,
+        hook_ctx: Any,
+        context_config: Any,
+        model: ModelNode,
+        context: Dict[str, Any],
+        materialization_macro: MacroProtocol,
+    ) -> RunResult:
+        try:
+            result = MacroGenerator(
+                materialization_macro, context, stack=context["context_macro_stack"]
+            )()
+        finally:
+            self.adapter.post_model_hook(context_config, hook_ctx)
+
+        for relation in self._materialization_relations(result, model):
+            self.adapter.cache_added(relation.incorporate(dbt_created=True))
+
+        return self._build_run_model_result(model, context)
+
+    def _execute_microbatch_model(
+        self,
+        hook_ctx: Any,
+        context_config: Any,
+        model: ModelNode,
+        manifest: Manifest,
+        context: Dict[str, Any],
+        materialization_macro: MacroProtocol,
+    ) -> RunResult:
+        batch_results = None
+        try:
+            batch_results = self._execute_microbatch_materialization(
+                model, manifest, context, materialization_macro
+            )
+        finally:
+            self.adapter.post_model_hook(context_config, hook_ctx)
+
+        if batch_results is not None:
+            return self._build_run_microbatch_model_result(model, batch_results)
+        else:
+            return self._build_run_model_result(model, context)
+
     def execute(self, model, manifest):
         context = generate_runtime_model_context(model, self.config, manifest)
 
@@ -378,29 +420,19 @@ class ModelRunner(CompileRunner):
             )
 
         hook_ctx = self.adapter.pre_model_hook(context_config)
-        batch_results = None
-        try:
-            if (
-                os.environ.get("DBT_EXPERIMENTAL_MICROBATCH")
-                and model.config.materialized == "incremental"
-                and model.config.incremental_strategy == "microbatch"
-            ):
-                batch_results = self._execute_microbatch_materialization(
-                    model, manifest, context, materialization_macro
-                )
-            else:
-                result = MacroGenerator(
-                    materialization_macro, context, stack=context["context_macro_stack"]
-                )()
-                for relation in self._materialization_relations(result, model):
-                    self.adapter.cache_added(relation.incorporate(dbt_created=True))
-        finally:
-            self.adapter.post_model_hook(context_config, hook_ctx)
 
-        if batch_results:
-            return self._build_run_microbatch_model_result(model, batch_results)
-
-        return self._build_run_model_result(model, context)
+        if (
+            os.environ.get("DBT_EXPERIMENTAL_MICROBATCH")
+            and model.config.materialized == "incremental"
+            and model.config.incremental_strategy == "microbatch"
+        ):
+            return self._execute_microbatch_model(
+                hook_ctx, context_config, model, manifest, context, materialization_macro
+            )
+        else:
+            return self._execute_model(
+                hook_ctx, context_config, model, context, materialization_macro
+            )
 
     def _execute_microbatch_materialization(
         self,

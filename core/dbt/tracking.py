@@ -12,6 +12,7 @@ from packaging.version import Version
 from snowplow_tracker import Emitter, SelfDescribingJson, Subject, Tracker
 from snowplow_tracker import __version__ as snowplow_version  # type: ignore
 from snowplow_tracker import logger as sp_logger
+from snowplow_tracker.events import StructuredEvent
 
 from dbt import version as dbt_version
 from dbt.adapters.exceptions import FailedToConnectError
@@ -217,12 +218,12 @@ def get_dbt_env_context():
 def track(user, *args, **kwargs):
     if user.do_not_track:
         return
-    else:
-        fire_event(SendingEvent(kwargs=str(kwargs)))
-        try:
-            tracker.track_struct_event(*args, **kwargs)
-        except Exception:
-            fire_event(SendEventFailure())
+
+    fire_event(SendingEvent(kwargs=str(kwargs)))
+    try:
+        tracker.track(StructuredEvent(*args, **kwargs))
+    except Exception:
+        fire_event(SendEventFailure())
 
 
 def track_project_id(options):
