@@ -329,7 +329,7 @@ class MultiDict(Mapping[str, Any]):
 # cli args and flags, which is more complete than just the cli args.
 # If new args are added that are false by default (particularly in the
 # global options) they should be added to the 'default_false_keys' list.
-def args_to_dict(args):
+def args_to_dict(args) -> dict:
     var_args = vars(args).copy()
     # update the args with the flags, which could also come from environment
     # variables or project_flags
