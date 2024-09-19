@@ -2,8 +2,19 @@ import functools
 import os
 import threading
 import time
-from datetime import datetime
-from typing import AbstractSet, Any, Dict, Iterable, List, Optional, Set, Tuple, Type
+from datetime import date, datetime
+from typing import (
+    AbstractSet,
+    Any,
+    Dict,
+    Iterable,
+    List,
+    Optional,
+    Set,
+    Tuple,
+    Type,
+    Union,
+)
 
 from dbt import tracking, utils
 from dbt.adapters.base import BaseRelation
@@ -197,12 +208,18 @@ class ModelRunner(CompileRunner):
 
     def describe_batch(self, batch_start: Optional[datetime]) -> str:
         # Only visualize date if batch_start year/month/day
-        formatted_batch_start = (
+        formatted_batch_start = self.format_batch_start(batch_start)
+
+        return f"batch {formatted_batch_start} of {self.get_node_representation()}"
+
+    def format_batch_start(
+        self, batch_start: Optional[datetime]
+    ) -> Optional[Union[date, datetime]]:
+        return (
             batch_start.date()
             if (batch_start and self.node.config.batch_size != BatchSize.hour)
             else batch_start
         )
-        return f"batch {formatted_batch_start} of {self.get_node_representation()}"
 
     def print_start_line(self):
         fire_event(
@@ -463,7 +480,9 @@ class ModelRunner(CompileRunner):
                 model.config["__dbt_internal_microbatch_event_time_end"] = batch[1]
 
                 # Recompile node to re-resolve refs with event time filters rendered, update context
-                self.compiler.compile_node(model, manifest, {})
+                self.compiler.compile_node(
+                    model, manifest, {}, split_suffix=str(self.format_batch_start(batch[0]))
+                )
                 context["model"] = model
                 context["sql"] = model.compiled_code
                 context["compiled_code"] = model.compiled_code
