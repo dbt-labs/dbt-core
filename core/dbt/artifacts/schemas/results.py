@@ -55,6 +55,7 @@ class NodeStatus(StrEnum):
     Fail = "fail"
     Warn = "warn"
     Skipped = "skipped"
+    PartialSuccess = "partial success"
     Pass = "pass"
     RuntimeErr = "runtime error"
 
@@ -63,6 +64,7 @@ class RunStatus(StrEnum):
     Success = NodeStatus.Success
     Error = NodeStatus.Error
     Skipped = NodeStatus.Skipped
+    PartialSuccess = NodeStatus.PartialSuccess
 
 
 class TestStatus(StrEnum):

@@ -308,15 +308,28 @@ class ModelRunner(CompileRunner):
         self, model: ModelNode, batch_run_results: List[RunResult]
     ) -> RunResult:
         failures = sum([result.failures for result in batch_run_results if result.failures])
+        successes = len(batch_run_results) - failures
+
+        if failures == 0:
+            status = RunStatus.Success
+        elif successes == 0:
+            status = RunStatus.Error
+        else:
+            status = RunStatus.PartialSuccess
+
+        if failures == 0:
+            msg = f"Batches: {successes} successful"
+        else:
+            msg = f"Batches: {successes} succeeded, {failures} failed"
+
         return RunResult(
             node=model,
-            # TODO We should do something like RunStatus.PartialSuccess if there is a mixture of success and failures
-            status=RunStatus.Success if failures != len(batch_run_results) else RunStatus.Error,
+            status=status,
             timing=[],
             thread_id=threading.current_thread().name,
             # TODO -- why isn't this getting propagated to logs?
             execution_time=0,
-            message="SUCCESS" if failures != len(batch_run_results) else "ERROR",
+            message=msg,
             adapter_response={},
             failures=failures,
         )
