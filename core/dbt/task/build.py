@@ -53,6 +53,7 @@ class SavedQueryRunner(BaseRunner):
             message="NO-OP",
             adapter_response={},
             failures=0,
+            batch_results=None,
             agate_table=None,
         )
 

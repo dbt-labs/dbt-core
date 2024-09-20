@@ -17,6 +17,8 @@ from dbt.artifacts.resources import Hook
 from dbt.artifacts.resources.types import BatchSize
 from dbt.artifacts.schemas.results import (
     BaseResult,
+    BatchResults,
+    BatchType,
     NodeStatus,
     RunningStatus,
     RunStatus,
@@ -302,25 +304,31 @@ class ModelRunner(CompileRunner):
             message=str(result.response),
             adapter_response=adapter_response,
             failures=result.get("failures"),
+            batch_results=None,
         )
 
     def _build_run_microbatch_model_result(
         self, model: ModelNode, batch_run_results: List[RunResult]
     ) -> RunResult:
-        failures = sum([result.failures for result in batch_run_results if result.failures])
-        successes = len(batch_run_results) - failures
+        batch_results = BatchResults()
+        for result in batch_run_results:
+            if result.batch_results is not None:
+                batch_results += result.batch_results
+            else:
+                # TODO: Should we raise an error here?
+                continue
 
-        if failures == 0:
+        if len(batch_results.failed) == 0:
             status = RunStatus.Success
-        elif successes == 0:
+        elif len(batch_results.successful) == 0:
             status = RunStatus.Error
         else:
             status = RunStatus.PartialSuccess
 
-        if failures == 0:
-            msg = f"Batches: {successes} successful"
+        if len(batch_results.failed) == 0:
+            msg = f"Batches: {len(batch_results.successful)} successful"
         else:
-            msg = f"Batches: {successes} succeeded, {failures} failed"
+            msg = f"Batches: {len(batch_results.successful)} succeeded, {batch_results.failed} failed"
 
         return RunResult(
             node=model,
@@ -331,10 +339,18 @@ class ModelRunner(CompileRunner):
             execution_time=0,
             message=msg,
             adapter_response={},
-            failures=failures,
+            failures=len(batch_results.failed),
+            batch_results=batch_results,
         )
 
-    def _build_failed_run_batch_result(self, model: ModelNode) -> RunResult:
+    def _build_succesful_run_batch_result(
+        self, model: ModelNode, context: Dict[str, Any], batch: BatchType
+    ) -> RunResult:
+        run_result = self._build_run_model_result(model, context)
+        run_result.batch_results = BatchResults(successful=[batch])
+        return run_result
+
+    def _build_failed_run_batch_result(self, model: ModelNode, batch: BatchType) -> RunResult:
         return RunResult(
             node=model,
             status=RunStatus.Error,
@@ -344,6 +360,7 @@ class ModelRunner(CompileRunner):
             message="ERROR",
             adapter_response={},
             failures=1,
+            batch_results=BatchResults(failed=[batch]),
         )
 
     def _materialization_relations(self, result: Any, model) -> List[BaseRelation]:
@@ -488,14 +505,14 @@ class ModelRunner(CompileRunner):
                 for relation in self._materialization_relations(result, model):
                     self.adapter.cache_added(relation.incorporate(dbt_created=True))
 
-                # Build result fo executed batch
-                batch_run_result = self._build_run_model_result(model, context)
+                # Build result of executed batch
+                batch_run_result = self._build_succesful_run_batch_result(model, context, batch)
                 # Update context vars for future batches
                 context["is_incremental"] = lambda: True
                 context["should_full_refresh"] = lambda: False
             except Exception as e:
                 exception = e
-                batch_run_result = self._build_failed_run_batch_result(model)
+                batch_run_result = self._build_failed_run_batch_result(model, batch)
 
             self.print_batch_result_line(
                 batch_run_result, batch[0], batch_idx + 1, len(batches), exception
@@ -635,6 +652,7 @@ class RunTask(CompileTask):
                     adapter_response={},
                     execution_time=0,
                     failures=1,
+                    batch_results=None,
                 )
             )
 

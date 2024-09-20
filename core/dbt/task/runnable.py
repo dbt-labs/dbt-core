@@ -251,6 +251,7 @@ class GraphRunnableTask(ConfiguredTask):
                         adapter_response={},
                         message=msg,
                         failures=None,
+                        batch_results=None,
                         node=runner.node,
                     )
 

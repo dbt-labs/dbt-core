@@ -51,6 +51,7 @@ class RunResult(NodeResult):
             node=node,
             adapter_response={},
             failures=None,
+            batch_results=None,
         )
 
 
@@ -82,6 +83,7 @@ def process_run_result(result: RunResult) -> RunResultOutput:
         message=result.message,
         adapter_response=result.adapter_response,
         failures=result.failures,
+        batch_results=result.batch_results,
         compiled=result.node.compiled if compiled else None,  # type:ignore
         compiled_code=result.node.compiled_code if compiled else None,  # type:ignore
         relation_name=result.node.relation_name if compiled else None,  # type:ignore
