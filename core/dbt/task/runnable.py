@@ -495,6 +495,7 @@ class GraphRunnableTask(ConfiguredTask):
     def execute_with_hooks(self, selected_uids: AbstractSet[str]):
         adapter = get_adapter(self.config)
 
+        fire_event(Formatting(""))
         fire_event(
             ConcurrencyLine(
                 num_threads=self.config.threads,
@@ -502,11 +503,11 @@ class GraphRunnableTask(ConfiguredTask):
                 node_count=self.num_nodes,
             )
         )
+        fire_event(Formatting(""))
 
         self.started_at = time.time()
         try:
             before_run_status = self.before_run(adapter, selected_uids)
-            fire_event(Formatting(""))
 
             if before_run_status == RunStatus.Success or (
                 not get_flags().skip_nodes_if_on_run_start_fails
@@ -531,9 +532,9 @@ class GraphRunnableTask(ConfiguredTask):
                                 node_info=node.node_info,
                             )
                         )
-                        skipped_node = mark_node_as_skipped(node, executed_node_ids, None)
-                        if skipped_node:
-                            self.node_results.append(skipped_node)
+                        skipped_node_result = mark_node_as_skipped(node, executed_node_ids, None)
+                        if skipped_node_result:
+                            self.node_results.append(skipped_node_result)
 
             self.after_run(adapter, res)
         finally:
@@ -561,7 +562,6 @@ class GraphRunnableTask(ConfiguredTask):
                 )
 
             if len(self._flattened_nodes) == 0:
-                fire_event(Formatting(""))
                 warn_or_error(NothingToDo())
                 result = self.get_result(
                     results=[],
@@ -569,7 +569,6 @@ class GraphRunnableTask(ConfiguredTask):
                     elapsed_time=0.0,
                 )
             else:
-                fire_event(Formatting(""))
                 selected_uids = frozenset(n.unique_id for n in self._flattened_nodes)
                 result = self.execute_with_hooks(selected_uids)
 

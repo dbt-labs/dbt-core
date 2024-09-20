@@ -532,6 +532,9 @@ class RunTask(CompileTask):
         started_at = datetime.utcnow()
         ordered_hooks = self.get_hooks_by_type(hook_type)
 
+        if hook_type == RunHookType.End and ordered_hooks:
+            fire_event(Formatting(""))
+
         # on-run-* hooks should run outside a transaction. This happens because psycopg2 automatically begins a transaction when a connection is created.
         adapter.clear_transaction()
         if not ordered_hooks:
@@ -540,8 +543,6 @@ class RunTask(CompileTask):
         status = RunStatus.Success
         failed = False
         num_hooks = len(ordered_hooks)
-
-        fire_event(Formatting(""))
 
         for idx, hook in enumerate(ordered_hooks, 1):
             with log_contextvars(node_info=hook.node_info):
@@ -604,6 +605,9 @@ class RunTask(CompileTask):
                         node_info=hook.node_info,
                     )
                 )
+
+        if hook_type == RunHookType.Start and ordered_hooks:
+            fire_event(Formatting(""))
 
         return status
 
