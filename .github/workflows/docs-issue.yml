@@ -37,5 +37,5 @@ jobs:
     with:
         issue_repository: "dbt-labs/docs.getdbt.com"
         issue_title: "[Core] Docs Changes Needed from ${{ github.event.repository.name }} Issue #${{ github.event.issue.number }}"
-        issue_body: "At a minimum, update body to include a link to the page on docs.getdbt.com requiring updates and what part(s) of the page you would like to see updated."
+        issue_body: "At a minimum, update body to include a link to the page on docs.getdbt.com requiring updates and what part(s) of the page you would like to see updated.\n Originating from this issue: https://github.com/dbt-labs/dbt-core/issues/${{ github.event.issue.number }}"
     secrets: inherit

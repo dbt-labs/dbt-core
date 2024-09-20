@@ -1,7 +1,6 @@
 import abc
 import os
 from copy import deepcopy
-from datetime import datetime, timedelta
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -17,7 +16,6 @@ from typing import (
     Union,
 )
 
-import pytz
 from typing_extensions import Protocol
 
 from dbt import selected_resources
@@ -31,7 +29,6 @@ from dbt.adapters.factory import (
     get_adapter_type_names,
 )
 from dbt.artifacts.resources import NodeConfig, NodeVersion, RefArgs, SourceConfig
-from dbt.artifacts.resources.types import BatchSize
 from dbt.clients.jinja import (
     MacroGenerator,
     MacroStack,
@@ -234,66 +231,6 @@ class BaseResolver(metaclass=abc.ABCMeta):
     def resolve_limit(self) -> Optional[int]:
         return 0 if getattr(self.config.args, "EMPTY", False) else None
 
-    def _build_end_time(self) -> Optional[datetime]:
-        return datetime.now(tz=pytz.utc)
-
-    def _build_start_time(
-        self, checkpoint: Optional[datetime], is_incremental: bool
-    ) -> Optional[datetime]:
-        if not is_incremental or checkpoint is None:
-            return None
-
-        assert isinstance(self.model.config, NodeConfig)
-        batch_size = self.model.config.batch_size
-        if batch_size is None:
-            raise DbtRuntimeError(f"The model `{self.model.name}` requires a `batch_size`")
-
-        lookback = self.model.config.lookback
-        if batch_size == BatchSize.hour:
-            start = datetime(
-                checkpoint.year,
-                checkpoint.month,
-                checkpoint.day,
-                checkpoint.hour,
-                0,
-                0,
-                0,
-                pytz.utc,
-            ) - timedelta(hours=lookback)
-        elif batch_size == BatchSize.day:
-            start = datetime(
-                checkpoint.year, checkpoint.month, checkpoint.day, 0, 0, 0, 0, pytz.utc
-            ) - timedelta(days=lookback)
-        elif batch_size == BatchSize.month:
-            start = datetime(checkpoint.year, checkpoint.month, 1, 0, 0, 0, 0, pytz.utc)
-            for _ in range(lookback):
-                start = start - timedelta(days=1)
-                start = datetime(start.year, start.month, 1, 0, 0, 0, 0, pytz.utc)
-        elif batch_size == BatchSize.year:
-            start = datetime(checkpoint.year - lookback, 1, 1, 0, 0, 0, 0, pytz.utc)
-        else:
-            raise DbtInternalError(
-                f"Batch size `{batch_size}` is not handled during batch calculation"
-            )
-
-        return start
-
-    def _is_incremental(self) -> bool:
-        # TODO: Remove. This is a temporary method. We're working with adapters on
-        # a strategy to ensure we can access the `is_incremental` logic without drift
-        relation_info = self.Relation.create_from(self.config, self.model)
-        relation = self.db_wrapper.get_relation(
-            relation_info.database, relation_info.schema, relation_info.name
-        )
-        return (
-            relation is not None
-            and relation.type == "table"
-            and self.model.config.materialized == "incremental"
-            and not (
-                getattr(self.config.args, "FULL_REFRESH", False) or self.model.config.full_refresh
-            )
-        )
-
     def resolve_event_time_filter(self, target: ManifestNode) -> Optional[EventTimeFilter]:
         event_time_filter = None
         if (
@@ -303,16 +240,8 @@ class BaseResolver(metaclass=abc.ABCMeta):
             and self.model.config.materialized == "incremental"
             and self.model.config.incremental_strategy == "microbatch"
         ):
-            is_incremental = self._is_incremental()
-            end: Optional[datetime] = getattr(self.config.args, "EVENT_TIME_END", None)
-            end = end.replace(tzinfo=pytz.UTC) if end else self._build_end_time()
-
-            start: Optional[datetime] = getattr(self.config.args, "EVENT_TIME_START", None)
-            start = (
-                start.replace(tzinfo=pytz.UTC)
-                if start
-                else self._build_start_time(checkpoint=end, is_incremental=is_incremental)
-            )
+            start = self.model.config.get("__dbt_internal_microbatch_event_time_start")
+            end = self.model.config.get("__dbt_internal_microbatch_event_time_end")
 
             if start is not None or end is not None:
                 event_time_filter = EventTimeFilter(
