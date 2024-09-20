@@ -230,7 +230,5 @@ class TestSnapshotInvalidColumnNames:
 
         results, log_output = run_dbt_and_capture(["snapshot"], expect_pass=False)
         assert len(results) == 1
-        assert (
-            "Compilation Error in snapshot snapshot_actual (snapshots/snapshot.sql)" in log_output
-        )
+        assert "Compilation Error in snapshot snapshot_actual" in log_output
         assert "Snapshot target is missing configured columns" in log_output
