@@ -357,6 +357,7 @@ def args_to_dict(args) -> dict:
             "use_experimental_parser",
             "static",
             "empty_catalog",
+            "show",
         )
         default_empty_yaml_dict_keys = ("vars", "warn_error_options")
         if key in default_false_keys and var_args[key] is False:
