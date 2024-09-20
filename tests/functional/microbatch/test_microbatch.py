@@ -5,6 +5,7 @@ import pytest
 
 from dbt.tests.util import (
     patch_microbatch_end_time,
+    read_file,
     relation_from_name,
     run_dbt,
     run_dbt_and_capture,
@@ -442,3 +443,68 @@ class TestMicrobatchInitialPartitionFailure(BaseMicrobatchTest):
         with patch_microbatch_end_time("2020-01-03 13:57:00"):
             run_dbt(["run", "--event-time-start", "2020-01-01"])
         self.assert_row_count(project, "microbatch_model", 2)
+
+
+class TestMicrobatchCompiledRunPaths(BaseMicrobatchTest):
+    @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
+    def test_run_with_event_time(self, project):
+        # run all partitions from start - 2 expected rows in output, one failed
+        with patch_microbatch_end_time("2020-01-03 13:57:00"):
+            run_dbt(["run", "--event-time-start", "2020-01-01"])
+
+        # Compiled paths
+        assert read_file(
+            project.project_root,
+            "target",
+            "compiled",
+            "test",
+            "models",
+            "microbatch_model",
+            "microbatch_model_2020-01-01.sql",
+        )
+        assert read_file(
+            project.project_root,
+            "target",
+            "compiled",
+            "test",
+            "models",
+            "microbatch_model",
+            "microbatch_model_2020-01-02.sql",
+        )
+        assert read_file(
+            project.project_root,
+            "target",
+            "compiled",
+            "test",
+            "models",
+            "microbatch_model",
+            "microbatch_model_2020-01-03.sql",
+        )
+
+        assert read_file(
+            project.project_root,
+            "target",
+            "run",
+            "test",
+            "models",
+            "microbatch_model",
+            "microbatch_model_2020-01-01.sql",
+        )
+        assert read_file(
+            project.project_root,
+            "target",
+            "run",
+            "test",
+            "models",
+            "microbatch_model",
+            "microbatch_model_2020-01-02.sql",
+        )
+        assert read_file(
+            project.project_root,
+            "target",
+            "run",
+            "test",
+            "models",
+            "microbatch_model",
+            "microbatch_model_2020-01-03.sql",
+        )

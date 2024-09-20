@@ -60,6 +60,7 @@ from dbt.artifacts.resources import SourceDefinition as SourceDefinitionResource
 from dbt.artifacts.resources import SqlOperation as SqlOperationResource
 from dbt.artifacts.resources import TimeSpine
 from dbt.artifacts.resources import UnitTestDefinition as UnitTestDefinitionResource
+from dbt.artifacts.resources.types import BatchSize
 from dbt.contracts.graph.model_config import UnitTestNodeConfig
 from dbt.contracts.graph.node_args import ModelNodeArgs
 from dbt.contracts.graph.unparsed import (
@@ -570,6 +571,16 @@ class ModelNode(ModelResource, CompiledNode):
             return list(columns_with_disabled_unique_tests)
 
         return []
+
+    def format_batch_start(self, batch_start: Optional[datetime]) -> Optional[str]:
+        if batch_start is None:
+            return batch_start
+
+        return str(
+            batch_start.date()
+            if (batch_start and self.config.batch_size != BatchSize.hour)
+            else batch_start
+        )
 
     def same_contents(self, old, adapter_type) -> bool:
         return super().same_contents(old, adapter_type) and self.same_ref_representation(old)

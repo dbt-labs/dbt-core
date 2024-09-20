@@ -51,6 +51,7 @@ from dbt.contracts.graph.nodes import (
     Exposure,
     Macro,
     ManifestNode,
+    ModelNode,
     Resource,
     SeedNode,
     SemanticModel,
@@ -972,7 +973,19 @@ class ProviderContext(ManifestContext):
         # macros/source defs aren't 'writeable'.
         if isinstance(self.model, (Macro, SourceDefinition)):
             raise MacrosSourcesUnWriteableError(node=self.model)
-        self.model.build_path = self.model.get_target_write_path(self.config.target_path, "run")
+
+        split_suffix = None
+        if (
+            isinstance(self.model, ModelNode)
+            and self.model.config.get("incremental_strategy") == "microbatch"
+        ):
+            split_suffix = self.model.format_batch_start(
+                self.model.config.get("__dbt_internal_microbatch_event_time_start")
+            )
+
+        self.model.build_path = self.model.get_target_write_path(
+            self.config.target_path, "run", split_suffix=split_suffix
+        )
         self.model.write_node(self.config.project_root, self.model.build_path, payload)
         return ""
 
