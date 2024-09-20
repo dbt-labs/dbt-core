@@ -1,25 +1,26 @@
 import threading
-from typing import AbstractSet, Any, List, Iterable, Set
+from typing import AbstractSet, Any, Collection, Iterable, List, Optional, Set, Type
 
 from dbt.adapters.base import BaseRelation
+from dbt.artifacts.resources.types import NodeType
+from dbt.artifacts.schemas.run import RunResult, RunStatus
 from dbt.clients.jinja import MacroGenerator
 from dbt.context.providers import generate_runtime_model_context
-from dbt.contracts.results import RunStatus, RunResult
-from dbt.dataclass_schema import dbtClassMixin
-from dbt.exceptions import DbtInternalError, CompilationError
+from dbt.contracts.graph.manifest import Manifest
 from dbt.graph import ResourceTypeSelector
-from dbt.node_types import NodeType
-from dbt.parser.manifest import write_manifest
-from dbt.task.base import BaseRunner
+from dbt.node_types import REFABLE_NODE_TYPES
+from dbt.task.base import BaseRunner, resource_types_from_args
 from dbt.task.run import _validate_materialization_relations_dict
-from dbt.task.runnable import GraphRunnableTask
+from dbt.task.runnable import GraphRunnableMode, GraphRunnableTask
+from dbt_common.dataclass_schema import dbtClassMixin
+from dbt_common.exceptions import CompilationError, DbtInternalError
 
 
 class CloneRunner(BaseRunner):
-    def before_execute(self):
+    def before_execute(self) -> None:
         pass
 
-    def after_execute(self, result):
+    def after_execute(self, result) -> None:
         pass
 
     def _build_run_model_result(self, model, context):
@@ -44,7 +45,7 @@ class CloneRunner(BaseRunner):
             failures=None,
         )
 
-    def compile(self, manifest):
+    def compile(self, manifest: Manifest):
         # no-op
         return self.node
 
@@ -91,8 +92,16 @@ class CloneRunner(BaseRunner):
 
 
 class CloneTask(GraphRunnableTask):
-    def raise_on_first_error(self):
+    def raise_on_first_error(self) -> bool:
         return False
+
+    def get_run_mode(self) -> GraphRunnableMode:
+        return GraphRunnableMode.Independent
+
+    def _get_deferred_manifest(self) -> Optional[Manifest]:
+        # Unlike other commands, 'clone' always requires a state manifest
+        # Load previous state, regardless of whether --defer flag has been set
+        return self._get_previous_state()
 
     def get_model_schemas(self, adapter, selected_uids: Iterable[str]) -> Set[BaseRelation]:
         if self.manifest is None:
@@ -108,7 +117,7 @@ class CloneTask(GraphRunnableTask):
 
                 # cache the 'other' schemas too!
                 if node.defer_relation:  # type: ignore
-                    other_relation = adapter.Relation.create_from_node(
+                    other_relation = adapter.Relation.create_from(
                         self.config, node.defer_relation  # type: ignore
                     )
                     result.add(other_relation.without_identifier())
@@ -117,28 +126,22 @@ class CloneTask(GraphRunnableTask):
 
     def before_run(self, adapter, selected_uids: AbstractSet[str]):
         with adapter.connection_named("master"):
-            # unlike in other tasks, we want to add information from the --state manifest *before* caching!
-            self.defer_to_manifest(adapter, selected_uids)
-            # only create *our* schemas, but cache *other* schemas in addition
+            self.defer_to_manifest()
+            # only create target schemas, but also cache defer_relation schemas
             schemas_to_create = super().get_model_schemas(adapter, selected_uids)
             self.create_schemas(adapter, schemas_to_create)
             schemas_to_cache = self.get_model_schemas(adapter, selected_uids)
             self.populate_adapter_cache(adapter, schemas_to_cache)
 
     @property
-    def resource_types(self):
-        if not self.args.resource_types:
-            return NodeType.refable()
+    def resource_types(self) -> List[NodeType]:
+        resource_types: Collection[NodeType] = resource_types_from_args(
+            self.args, set(REFABLE_NODE_TYPES), set(REFABLE_NODE_TYPES)
+        )
 
-        values = set(self.args.resource_types)
-
-        if "all" in values:
-            values.remove("all")
-            values.update(NodeType.refable())
-
-        values = [NodeType(val) for val in values if val in NodeType.refable()]
-
-        return list(values)
+        # filter out any non-refable node types
+        resource_types = [rt for rt in resource_types if rt in REFABLE_NODE_TYPES]
+        return list(resource_types)
 
     def get_node_selector(self) -> ResourceTypeSelector:
         resource_types = self.resource_types
@@ -152,19 +155,5 @@ class CloneTask(GraphRunnableTask):
             resource_types=resource_types,
         )
 
-    def get_runner_type(self, _):
+    def get_runner_type(self, _) -> Optional[Type[BaseRunner]]:
         return CloneRunner
-
-    # Note that this is different behavior from --defer with other commands, which *merge*
-    # selected nodes from this manifest + unselected nodes from the other manifest
-    def defer_to_manifest(self, adapter, selected_uids: AbstractSet[str]):
-        deferred_manifest = self._get_deferred_manifest()
-        if deferred_manifest is None:
-            return
-        if self.manifest is None:
-            raise DbtInternalError(
-                "Expected to defer to manifest, but there is no runtime manifest to defer from!"
-            )
-        self.manifest.add_from_artifact(other=deferred_manifest)
-        # TODO: is it wrong to write the manifest here? I think it's right...
-        write_manifest(self.manifest, self.config.target_path)

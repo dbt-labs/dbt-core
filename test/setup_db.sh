@@ -39,6 +39,7 @@ for i in {1..10}; do
 done;
 
 createdb dbt
+psql -c "SELECT version();"
 psql -c "CREATE ROLE root WITH PASSWORD 'password';"
 psql -c "ALTER ROLE root WITH LOGIN;"
 psql -c "GRANT CREATE, CONNECT ON DATABASE dbt TO root WITH GRANT OPTION;"

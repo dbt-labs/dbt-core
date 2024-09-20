@@ -1,5 +1,6 @@
 import pytest
-from dbt.tests.util import run_dbt, write_file, get_manifest, rm_file
+
+from dbt.tests.util import get_manifest, rm_file, run_dbt, write_file
 
 model_one_sql = """
 select 1 as fun
@@ -72,7 +73,7 @@ sources:
       - name: raw_customers
         columns:
           - name: id
-            tests:
+            data_tests:
               - not_null:
                   severity: "{{ 'error' if target.name == 'prod' else 'warn' }}"
               - unique

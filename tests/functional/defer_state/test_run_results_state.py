@@ -4,16 +4,15 @@ import shutil
 import pytest
 
 from dbt.tests.util import run_dbt, write_file
-
 from tests.functional.defer_state.fixtures import (
+    ephemeral_model_sql,
+    exposures_yml,
+    infinite_macros_sql,
+    macros_sql,
+    schema_yml,
     seed_csv,
     table_model_sql,
     view_model_sql,
-    ephemeral_model_sql,
-    schema_yml,
-    exposures_yml,
-    macros_sql,
-    infinite_macros_sql,
 )
 
 

@@ -1,0 +1,6 @@
+kind: Fixes
+body: Saved Query node fail during skip
+time: 2024-06-12T12:42:56.329073-07:00
+custom:
+  Author: ChenyuLInx
+  Issue: "10029"

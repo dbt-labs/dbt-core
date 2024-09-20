@@ -47,7 +47,8 @@ ___
 
 ### How to re-run jobs
 
-- Some actions cannot be rerun in the GitHub UI.  Namely the snyk checks and the cla check.  Snyk checks are rerun by closing and reopening the PR.  You can retrigger the cla check by commenting on the PR with `@cla-bot check`
+- From the UI you can rerun from failure
+- You can retrigger the cla check by commenting on the PR with `@cla-bot check`
 
 ___
 

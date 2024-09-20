@@ -14,13 +14,11 @@ rm -rf "$DBT_PATH"/dist
 rm -rf "$DBT_PATH"/build
 mkdir -p "$DBT_PATH"/dist
 
-for SUBPATH in core plugins/postgres tests/adapter
-do
-    rm -rf "$DBT_PATH"/"$SUBPATH"/dist
-    rm -rf "$DBT_PATH"/"$SUBPATH"/build
-    cd "$DBT_PATH"/"$SUBPATH"
-    $PYTHON_BIN setup.py sdist bdist_wheel
-    cp -r "$DBT_PATH"/"$SUBPATH"/dist/* "$DBT_PATH"/dist/
-done
+rm -rf "$DBT_PATH"/core/dist
+rm -rf "$DBT_PATH"core/build
+cd "$DBT_PATH"/core
+$PYTHON_BIN setup.py sdist bdist_wheel
+cp -r "$DBT_PATH"/"core"/dist/* "$DBT_PATH"/dist/
+
 
 set +x

@@ -1,7 +1,7 @@
 # Configuration for pre-commit hooks (see https://pre-commit.com/).
 # Eventually the hooks described here will be run as tests before merging each PR.
 
-exclude: ^(core/dbt/docs/build/|core/dbt/events/types_pb2.py)
+exclude: ^(core/dbt/docs/build/|core/dbt/common/events/types_pb2.py|core/dbt/events/core_types_pb2.py|core/dbt/adapters/events/adapter_types_pb2.py)
 
 # Force all unspecified python hooks to run python 3.8
 default_language_version:
@@ -15,12 +15,19 @@ repos:
     args: [--unsafe]
   - id: check-json
   - id: end-of-file-fixer
+    exclude: schemas/dbt/manifest/
   - id: trailing-whitespace
     exclude_types:
       - "markdown"
   - id: check-case-conflict
+- repo: https://github.com/pycqa/isort
+  # rev must match what's in dev-requirements.txt
+  rev: 5.13.2
+  hooks:
+    - id: isort
 - repo: https://github.com/psf/black
-  rev: 22.3.0
+  # rev must match what's in dev-requirements.txt
+  rev: 24.3.0
   hooks:
   - id: black
   - id: black
@@ -30,6 +37,7 @@ repos:
     - "--check"
     - "--diff"
 - repo: https://github.com/pycqa/flake8
+  # rev must match what's in dev-requirements.txt
   rev: 4.0.1
   hooks:
   - id: flake8
@@ -37,6 +45,7 @@ repos:
     alias: flake8-check
     stages: [manual]
 - repo: https://github.com/pre-commit/mirrors-mypy
+  # rev must match what's in dev-requirements.txt
   rev: v1.4.1
   hooks:
   - id: mypy

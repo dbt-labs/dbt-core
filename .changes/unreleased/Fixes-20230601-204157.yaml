@@ -1,0 +1,6 @@
+kind: Fixes
+body: Remove unused check_new method
+time: 2023-06-01T20:41:57.556342+02:00
+custom:
+  Author: kevinneville
+  Issue: "7586"

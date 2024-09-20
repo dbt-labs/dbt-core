@@ -1,0 +1,6 @@
+kind: Fixes
+body: Limit data_tests deprecation to root_project
+time: 2024-06-27T15:44:48.579869-04:00
+custom:
+  Author: gshank
+  Issue: "9835"

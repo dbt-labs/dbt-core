@@ -1,22 +1,25 @@
-import dbt.tracking
 import datetime
-import shutil
 import tempfile
-import unittest
+
+import pytest
+
+import dbt.tracking
 
 
-class TestTracking(unittest.TestCase):
-    def setUp(self):
-        dbt.tracking.active_user = None
-        self.tempdir = tempfile.mkdtemp()
+@pytest.fixture(scope="function")
+def active_user_none() -> None:
+    dbt.tracking.active_user = None
 
-    def tearDown(self):
-        dbt.tracking.active_user = None
-        shutil.rmtree(self.tempdir)
 
-    def test_tracking_initial(self):
+@pytest.fixture(scope="function")
+def tempdir(active_user_none) -> str:
+    return tempfile.mkdtemp()
+
+
+class TestTracking:
+    def test_tracking_initial(self, tempdir):
         assert dbt.tracking.active_user is None
-        dbt.tracking.initialize_from_flags(True, self.tempdir)
+        dbt.tracking.initialize_from_flags(True, tempdir)
         assert isinstance(dbt.tracking.active_user, dbt.tracking.User)
 
         invocation_id = dbt.tracking.active_user.invocation_id
@@ -48,7 +51,7 @@ class TestTracking(unittest.TestCase):
         # if you use `!=`, you might hit a race condition (especially on windows)
         assert dbt.tracking.active_user.run_started_at is not run_started_at
 
-    def test_tracking_never_ok(self):
+    def test_tracking_never_ok(self, active_user_none):
         assert dbt.tracking.active_user is None
 
         # this should generate a whole new user object -> new invocation_id/run_started_at
@@ -60,7 +63,7 @@ class TestTracking(unittest.TestCase):
         assert isinstance(dbt.tracking.active_user.invocation_id, str)
         assert isinstance(dbt.tracking.active_user.run_started_at, datetime.datetime)
 
-    def test_disable_never_enabled(self):
+    def test_disable_never_enabled(self, active_user_none):
         assert dbt.tracking.active_user is None
 
         # this should generate a whole new user object -> new invocation_id/run_started_at
@@ -72,10 +75,7 @@ class TestTracking(unittest.TestCase):
         assert isinstance(dbt.tracking.active_user.invocation_id, str)
         assert isinstance(dbt.tracking.active_user.run_started_at, datetime.datetime)
 
-    def test_initialize_from_flags(self):
-        for send_anonymous_usage_stats in [True, False]:
-            with self.subTest(send_anonymous_usage_stats=send_anonymous_usage_stats):
-
-                dbt.tracking.initialize_from_flags(send_anonymous_usage_stats, self.tempdir)
-
-                assert dbt.tracking.active_user.do_not_track != send_anonymous_usage_stats
+    @pytest.mark.parametrize("send_anonymous_usage_stats", [True, False])
+    def test_initialize_from_flags(self, tempdir, send_anonymous_usage_stats):
+        dbt.tracking.initialize_from_flags(send_anonymous_usage_stats, tempdir)
+        assert dbt.tracking.active_user.do_not_track != send_anonymous_usage_stats

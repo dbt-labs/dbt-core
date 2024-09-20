@@ -1,5 +1,0 @@
-config-version: 2
-name: dbt_postgres
-version: 1.0
-
-macro-paths: ["macros"]

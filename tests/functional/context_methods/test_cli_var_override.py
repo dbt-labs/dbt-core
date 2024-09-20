@@ -2,14 +2,13 @@ import pytest
 
 from dbt.tests.util import run_dbt
 
-
 models_override__schema_yml = """
 version: 2
 models:
 - name: test_vars
   columns:
   - name: field
-    tests:
+    data_tests:
     - accepted_values:
         values:
         - override

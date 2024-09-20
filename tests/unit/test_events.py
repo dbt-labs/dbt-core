@@ -1,25 +1,31 @@
-import pytest
+import logging
 import re
 from typing import TypeVar
 
-from dbt.contracts.results import TimingInfo
-from dbt.events import AdapterLogger, types
+import pytest
+
+from dbt.adapters.events import types as adapter_types
+from dbt.adapters.events.logging import AdapterLogger
+from dbt.artifacts.schemas.results import RunStatus, TimingInfo
+from dbt.artifacts.schemas.run import RunResult
+from dbt.events import types as core_types
 from dbt.events.base_types import (
-    BaseEvent,
+    CoreBaseEvent,
     DebugLevel,
     DynamicLevel,
     ErrorLevel,
     InfoLevel,
     TestLevel,
     WarnLevel,
-    msg_from_base_event,
 )
-from dbt.events.functions import msg_to_dict, msg_to_json
-from dbt.events.helpers import get_json_string_utcnow
-from dbt.flags import set_from_args
-from argparse import Namespace
-
-set_from_args(Namespace(WARN_ERROR=False), None)
+from dbt.events.types import RunResultError
+from dbt.task.printer import print_run_result_error
+from dbt_common.events import types
+from dbt_common.events.base_types import msg_from_base_event
+from dbt_common.events.event_manager import EventManager, TestEventManager
+from dbt_common.events.event_manager_client import ctx_set_event_manager
+from dbt_common.events.functions import msg_to_dict, msg_to_json
+from dbt_common.events.helpers import get_json_string_utcnow
 
 
 # takes in a class and finds any subclasses for it
@@ -51,14 +57,16 @@ class TestAdapterLogger:
         logger.debug("hello {}", "world")
 
         # enters lower in the call stack to test that it formats correctly
-        event = types.AdapterEventDebug(name="dbt_tests", base_msg="hello {}", args=["world"])
+        event = adapter_types.AdapterEventDebug(
+            name="dbt_tests", base_msg="hello {}", args=["world"]
+        )
         assert "hello world" in event.message()
 
         # tests that it doesn't throw
         logger.debug("1 2 {}", "3")
 
         # enters lower in the call stack to test that it formats correctly
-        event = types.AdapterEventDebug(name="dbt_tests", base_msg="1 2 {}", args=[3])
+        event = adapter_types.AdapterEventDebug(name="dbt_tests", base_msg="1 2 {}", args=[3])
         assert "1 2 3" in event.message()
 
         # tests that it doesn't throw
@@ -67,17 +75,23 @@ class TestAdapterLogger:
         # enters lower in the call stack to test that it formats correctly
         # in this case it's that we didn't attempt to replace anything since there
         # were no args passed after the initial message
-        event = types.AdapterEventDebug(name="dbt_tests", base_msg="boop{x}boop", args=[])
+        event = adapter_types.AdapterEventDebug(name="dbt_tests", base_msg="boop{x}boop", args=[])
         assert "boop{x}boop" in event.message()
 
         # ensure AdapterLogger and subclasses makes all base_msg members
         # of type string; when someone writes logger.debug(a) where a is
         # any non-string object
-        event = types.AdapterEventDebug(name="dbt_tests", base_msg=[1, 2, 3], args=[3])
+        event = adapter_types.AdapterEventDebug(name="dbt_tests", base_msg=[1, 2, 3], args=[3])
         assert isinstance(event.base_msg, str)
 
-        event = types.JinjaLogDebug(msg=[1, 2, 3])
+        event = core_types.JinjaLogDebug(msg=[1, 2, 3])
         assert isinstance(event.msg, str)
+
+    def test_set_adapter_dependency_log_level(self):
+        logger = AdapterLogger("dbt_tests")
+        package_log = logging.getLogger("test_package_log")
+        logger.set_adapter_dependency_log_level("test_package_log", "DEBUG")
+        package_log.debug("debug message")
 
 
 class TestEventCodes:
@@ -85,7 +99,7 @@ class TestEventCodes:
     # checks to see if event codes are duplicated to keep codes singluar and clear.
     # also checks that event codes follow correct namming convention ex. E001
     def test_event_codes(self):
-        all_concrete = get_all_subclasses(BaseEvent)
+        all_concrete = get_all_subclasses(CoreBaseEvent)
         all_codes = set()
 
         for event_cls in all_concrete:
@@ -103,101 +117,110 @@ sample_values = [
     # N.B. Events instantiated here include the module prefix in order to
     # avoid having the entire list twice in the code.
     # A - pre-project loading
-    types.MainReportVersion(version=""),
-    types.MainReportArgs(args={}),
-    types.MainTrackingUserState(user_state=""),
-    types.MergedFromState(num_merged=0, sample=[]),
-    types.MissingProfileTarget(profile_name="", target_name=""),
-    types.InvalidOptionYAML(option_name="vars"),
-    types.LogDbtProjectError(),
-    types.LogDbtProfileError(),
-    types.StarterProjectPath(dir=""),
-    types.ConfigFolderDirectory(dir=""),
-    types.NoSampleProfileFound(adapter=""),
-    types.ProfileWrittenWithSample(name="", path=""),
-    types.ProfileWrittenWithTargetTemplateYAML(name="", path=""),
-    types.ProfileWrittenWithProjectTemplateYAML(name="", path=""),
-    types.SettingUpProfile(),
-    types.InvalidProfileTemplateYAML(),
-    types.ProjectNameAlreadyExists(name=""),
-    types.ProjectCreated(project_name=""),
+    core_types.MainReportVersion(version=""),
+    core_types.MainReportArgs(args={}),
+    core_types.MainTrackingUserState(user_state=""),
+    core_types.MissingProfileTarget(profile_name="", target_name=""),
+    core_types.InvalidOptionYAML(option_name="vars"),
+    core_types.LogDbtProjectError(),
+    core_types.LogDbtProfileError(),
+    core_types.StarterProjectPath(dir=""),
+    core_types.ConfigFolderDirectory(dir=""),
+    core_types.NoSampleProfileFound(adapter=""),
+    core_types.ProfileWrittenWithSample(name="", path=""),
+    core_types.ProfileWrittenWithTargetTemplateYAML(name="", path=""),
+    core_types.ProfileWrittenWithProjectTemplateYAML(name="", path=""),
+    core_types.SettingUpProfile(),
+    core_types.InvalidProfileTemplateYAML(),
+    core_types.ProjectNameAlreadyExists(name=""),
+    core_types.ProjectCreated(project_name=""),
     # D - Deprecations ======================
-    types.PackageRedirectDeprecation(old_name="", new_name=""),
-    types.PackageInstallPathDeprecation(),
-    types.ConfigSourcePathDeprecation(deprecated_path="", exp_path=""),
-    types.ConfigDataPathDeprecation(deprecated_path="", exp_path=""),
-    types.AdapterDeprecationWarning(old_name="", new_name=""),
-    types.MetricAttributesRenamed(metric_name=""),
-    types.ExposureNameDeprecation(exposure=""),
-    types.InternalDeprecation(name="", reason="", suggested_action="", version=""),
-    types.EnvironmentVariableRenamed(old_name="", new_name=""),
-    types.ConfigLogPathDeprecation(deprecated_path=""),
-    types.ConfigTargetPathDeprecation(deprecated_path=""),
-    types.CollectFreshnessReturnSignature(),
+    core_types.PackageRedirectDeprecation(old_name="", new_name=""),
+    core_types.PackageInstallPathDeprecation(),
+    core_types.ConfigSourcePathDeprecation(deprecated_path="", exp_path=""),
+    core_types.ConfigDataPathDeprecation(deprecated_path="", exp_path=""),
+    adapter_types.AdapterDeprecationWarning(old_name="", new_name=""),
+    core_types.MetricAttributesRenamed(metric_name=""),
+    core_types.ExposureNameDeprecation(exposure=""),
+    core_types.InternalDeprecation(name="", reason="", suggested_action="", version=""),
+    core_types.EnvironmentVariableRenamed(old_name="", new_name=""),
+    core_types.ConfigLogPathDeprecation(deprecated_path=""),
+    core_types.ConfigTargetPathDeprecation(deprecated_path=""),
+    adapter_types.CollectFreshnessReturnSignature(),
+    core_types.TestsConfigDeprecation(deprecated_path="", exp_path=""),
+    core_types.ProjectFlagsMovedDeprecation(),
+    core_types.SpacesInResourceNameDeprecation(unique_id="", level=""),
+    core_types.ResourceNamesWithSpacesDeprecation(
+        count_invalid_names=1, show_debug_hint=True, level=""
+    ),
+    core_types.PackageMaterializationOverrideDeprecation(
+        package_name="my_package", materialization_name="view"
+    ),
+    core_types.SourceFreshnessProjectHooksNotRun(),
     # E - DB Adapter ======================
-    types.AdapterEventDebug(),
-    types.AdapterEventInfo(),
-    types.AdapterEventWarning(),
-    types.AdapterEventError(),
-    types.AdapterRegistered(adapter_name="dbt-awesome", adapter_version="1.2.3"),
-    types.NewConnection(conn_type="", conn_name=""),
-    types.ConnectionReused(conn_name=""),
-    types.ConnectionLeftOpenInCleanup(conn_name=""),
-    types.ConnectionClosedInCleanup(conn_name=""),
-    types.RollbackFailed(conn_name=""),
-    types.ConnectionClosed(conn_name=""),
-    types.ConnectionLeftOpen(conn_name=""),
-    types.Rollback(conn_name=""),
-    types.CacheMiss(conn_name="", database="", schema=""),
-    types.ListRelations(database="", schema=""),
-    types.ConnectionUsed(conn_type="", conn_name=""),
-    types.SQLQuery(conn_name="", sql=""),
-    types.SQLQueryStatus(status="", elapsed=0.1),
-    types.SQLCommit(conn_name=""),
-    types.ColTypeChange(
+    adapter_types.AdapterEventDebug(),
+    adapter_types.AdapterEventInfo(),
+    adapter_types.AdapterEventWarning(),
+    adapter_types.AdapterEventError(),
+    adapter_types.AdapterRegistered(adapter_name="dbt-awesome", adapter_version="1.2.3"),
+    adapter_types.NewConnection(conn_type="", conn_name=""),
+    adapter_types.ConnectionReused(conn_name=""),
+    adapter_types.ConnectionLeftOpenInCleanup(conn_name=""),
+    adapter_types.ConnectionClosedInCleanup(conn_name=""),
+    adapter_types.RollbackFailed(conn_name=""),
+    adapter_types.ConnectionClosed(conn_name=""),
+    adapter_types.ConnectionLeftOpen(conn_name=""),
+    adapter_types.Rollback(conn_name=""),
+    adapter_types.CacheMiss(conn_name="", database="", schema=""),
+    adapter_types.ListRelations(database="", schema=""),
+    adapter_types.ConnectionUsed(conn_type="", conn_name=""),
+    adapter_types.SQLQuery(conn_name="", sql=""),
+    adapter_types.SQLQueryStatus(status="", elapsed=0.1),
+    adapter_types.SQLCommit(conn_name=""),
+    adapter_types.ColTypeChange(
         orig_type="",
         new_type="",
         table={"database": "", "schema": "", "identifier": ""},
     ),
-    types.SchemaCreation(relation={"database": "", "schema": "", "identifier": ""}),
-    types.SchemaDrop(relation={"database": "", "schema": "", "identifier": ""}),
-    types.CacheAction(
+    adapter_types.SchemaCreation(relation={"database": "", "schema": "", "identifier": ""}),
+    adapter_types.SchemaDrop(relation={"database": "", "schema": "", "identifier": ""}),
+    adapter_types.CacheAction(
         action="adding_relation",
         ref_key={"database": "", "schema": "", "identifier": ""},
         ref_key_2={"database": "", "schema": "", "identifier": ""},
     ),
-    types.CacheDumpGraph(before_after="before", action="rename", dump=dict()),
-    types.AdapterImportError(exc=""),
-    types.PluginLoadError(exc_info=""),
-    types.NewConnectionOpening(connection_state=""),
-    types.CodeExecution(conn_name="", code_content=""),
-    types.CodeExecutionStatus(status="", elapsed=0.1),
-    types.CatalogGenerationError(exc=""),
-    types.WriteCatalogFailure(num_exceptions=0),
-    types.CatalogWritten(path=""),
-    types.CannotGenerateDocs(),
-    types.BuildingCatalog(),
-    types.DatabaseErrorRunningHook(hook_type=""),
-    types.HooksRunning(num_hooks=0, hook_type=""),
-    types.FinishedRunningStats(stat_line="", execution="", execution_time=0),
-    types.ConstraintNotEnforced(constraint="", adapter=""),
-    types.ConstraintNotSupported(constraint="", adapter=""),
+    adapter_types.CacheDumpGraph(before_after="before", action="rename", dump=dict()),
+    adapter_types.AdapterImportError(exc=""),
+    adapter_types.PluginLoadError(exc_info=""),
+    adapter_types.NewConnectionOpening(connection_state=""),
+    adapter_types.CodeExecution(conn_name="", code_content=""),
+    adapter_types.CodeExecutionStatus(status="", elapsed=0.1),
+    adapter_types.CatalogGenerationError(exc=""),
+    adapter_types.WriteCatalogFailure(num_exceptions=0),
+    adapter_types.CatalogWritten(path=""),
+    adapter_types.CannotGenerateDocs(),
+    adapter_types.BuildingCatalog(),
+    adapter_types.DatabaseErrorRunningHook(hook_type=""),
+    adapter_types.HooksRunning(num_hooks=0, hook_type=""),
+    adapter_types.FinishedRunningStats(stat_line="", execution="", execution_time=0),
+    adapter_types.ConstraintNotEnforced(constraint="", adapter=""),
+    adapter_types.ConstraintNotSupported(constraint="", adapter=""),
     # I - Project parsing ======================
-    types.InputFileDiffError(category="testing", file_id="my_file"),
-    types.InvalidValueForField(field_name="test", field_value="test"),
-    types.ValidationWarning(resource_type="model", field_name="access", node_name="my_macro"),
-    types.ParsePerfInfoPath(path=""),
-    types.PartialParsingErrorProcessingFile(file=""),
-    types.PartialParsingFile(file_id=""),
-    types.PartialParsingError(exc_info={}),
-    types.PartialParsingSkipParsing(),
-    types.UnableToPartialParse(reason="something went wrong"),
-    types.StateCheckVarsHash(vars="testing", target="testing", profile="testing"),
-    types.PartialParsingNotEnabled(),
-    types.ParsedFileLoadFailed(path="", exc="", exc_info=""),
-    types.PartialParsingEnabled(deleted=0, added=0, changed=0),
-    types.PartialParsingFile(file_id=""),
-    types.InvalidDisabledTargetInTestNode(
+    core_types.InputFileDiffError(category="testing", file_id="my_file"),
+    core_types.InvalidValueForField(field_name="test", field_value="test"),
+    core_types.ValidationWarning(resource_type="model", field_name="access", node_name="my_macro"),
+    core_types.ParsePerfInfoPath(path=""),
+    core_types.PartialParsingErrorProcessingFile(file=""),
+    core_types.PartialParsingFile(file_id=""),
+    core_types.PartialParsingError(exc_info={}),
+    core_types.PartialParsingSkipParsing(),
+    core_types.UnableToPartialParse(reason="something went wrong"),
+    core_types.StateCheckVarsHash(vars="testing", target="testing", profile="testing"),
+    core_types.PartialParsingNotEnabled(),
+    core_types.ParsedFileLoadFailed(path="", exc="", exc_info=""),
+    core_types.PartialParsingEnabled(deleted=0, added=0, changed=0),
+    core_types.PartialParsingFile(file_id=""),
+    core_types.InvalidDisabledTargetInTestNode(
         resource_type_title="",
         unique_id="",
         original_file_path="",
@@ -205,18 +228,18 @@ sample_values = [
         target_name="",
         target_package="",
     ),
-    types.UnusedResourceConfigPath(unused_config_paths=[]),
-    types.SeedIncreased(package_name="", name=""),
-    types.SeedExceedsLimitSamePath(package_name="", name=""),
-    types.SeedExceedsLimitAndPathChanged(package_name="", name=""),
-    types.SeedExceedsLimitChecksumChanged(package_name="", name="", checksum_name=""),
-    types.UnusedTables(unused_tables=[]),
-    types.WrongResourceSchemaFile(
+    core_types.UnusedResourceConfigPath(unused_config_paths=[]),
+    core_types.SeedIncreased(package_name="", name=""),
+    core_types.SeedExceedsLimitSamePath(package_name="", name=""),
+    core_types.SeedExceedsLimitAndPathChanged(package_name="", name=""),
+    core_types.SeedExceedsLimitChecksumChanged(package_name="", name="", checksum_name=""),
+    core_types.UnusedTables(unused_tables=[]),
+    core_types.WrongResourceSchemaFile(
         patch_name="", resource_type="", file_path="", plural_resource_type=""
     ),
-    types.NoNodeForYamlKey(patch_name="", yaml_key="", file_path=""),
-    types.MacroNotFoundForPatch(patch_name=""),
-    types.NodeNotFoundOrDisabled(
+    core_types.NoNodeForYamlKey(patch_name="", yaml_key="", file_path=""),
+    core_types.MacroNotFoundForPatch(patch_name=""),
+    core_types.NodeNotFoundOrDisabled(
         original_file_path="",
         unique_id="",
         resource_type_title="",
@@ -225,79 +248,99 @@ sample_values = [
         target_package="",
         disabled="",
     ),
-    types.JinjaLogWarning(),
-    types.JinjaLogInfo(msg=""),
-    types.JinjaLogDebug(msg=""),
-    types.UnpinnedRefNewVersionAvailable(
+    core_types.JinjaLogWarning(),
+    core_types.JinjaLogInfo(msg=""),
+    core_types.JinjaLogDebug(msg=""),
+    core_types.UnpinnedRefNewVersionAvailable(
         ref_node_name="", ref_node_package="", ref_node_version="", ref_max_version=""
     ),
-    types.DeprecatedModel(model_name="", model_version="", deprecation_date=""),
-    types.DeprecatedReference(
+    core_types.DeprecatedModel(model_name="", model_version="", deprecation_date=""),
+    core_types.DeprecatedReference(
         model_name="",
         ref_model_name="",
         ref_model_package="",
         ref_model_deprecation_date="",
         ref_model_latest_version="",
     ),
-    types.UpcomingReferenceDeprecation(
+    core_types.UpcomingReferenceDeprecation(
         model_name="",
         ref_model_name="",
         ref_model_package="",
         ref_model_deprecation_date="",
         ref_model_latest_version="",
     ),
-    types.UnsupportedConstraintMaterialization(materialized=""),
-    types.ParseInlineNodeError(exc=""),
+    core_types.UnsupportedConstraintMaterialization(materialized=""),
+    core_types.ParseInlineNodeError(exc=""),
+    core_types.SemanticValidationFailure(msg=""),
+    core_types.UnversionedBreakingChange(
+        breaking_changes=[],
+        model_name="",
+        model_file_path="",
+        contract_enforced_disabled=True,
+        columns_removed=[],
+        column_type_changes=[],
+        enforced_column_constraint_removed=[],
+        enforced_model_constraint_removed=[],
+        materialization_changed=[],
+    ),
+    core_types.WarnStateTargetEqual(state_path=""),
+    core_types.FreshnessConfigProblem(msg=""),
+    core_types.SemanticValidationFailure(msg=""),
     # M - Deps generation ======================
-    types.GitSparseCheckoutSubdirectory(subdir=""),
-    types.GitProgressCheckoutRevision(revision=""),
-    types.GitProgressUpdatingExistingDependency(dir=""),
-    types.GitProgressPullingNewDependency(dir=""),
-    types.GitNothingToDo(sha=""),
-    types.GitProgressUpdatedCheckoutRange(start_sha="", end_sha=""),
-    types.GitProgressCheckedOutAt(end_sha=""),
-    types.RegistryProgressGETRequest(url=""),
-    types.RegistryProgressGETResponse(url="", resp_code=1234),
-    types.SelectorReportInvalidSelector(valid_selectors="", spec_method="", raw_spec=""),
-    types.DepsNoPackagesFound(),
-    types.DepsStartPackageInstall(package_name=""),
-    types.DepsInstallInfo(version_name=""),
-    types.DepsUpdateAvailable(version_latest=""),
-    types.DepsUpToDate(),
-    types.DepsListSubdirectory(subdirectory=""),
-    types.DepsNotifyUpdatesAvailable(packages=["my_pkg", "other_pkg"]),
+    core_types.GitSparseCheckoutSubdirectory(subdir=""),
+    core_types.GitProgressCheckoutRevision(revision=""),
+    core_types.GitProgressUpdatingExistingDependency(dir=""),
+    core_types.GitProgressPullingNewDependency(dir=""),
+    core_types.GitNothingToDo(sha=""),
+    core_types.GitProgressUpdatedCheckoutRange(start_sha="", end_sha=""),
+    core_types.GitProgressCheckedOutAt(end_sha=""),
+    core_types.RegistryProgressGETRequest(url=""),
+    core_types.RegistryProgressGETResponse(url="", resp_code=1234),
+    core_types.SelectorReportInvalidSelector(valid_selectors="", spec_method="", raw_spec=""),
+    core_types.DepsNoPackagesFound(),
+    core_types.DepsStartPackageInstall(package_name=""),
+    core_types.DepsInstallInfo(version_name=""),
+    core_types.DepsUpdateAvailable(version_latest=""),
+    core_types.DepsUpToDate(),
+    core_types.DepsListSubdirectory(subdirectory=""),
+    core_types.DepsNotifyUpdatesAvailable(packages=["my_pkg", "other_pkg"]),
     types.RetryExternalCall(attempt=0, max=0),
     types.RecordRetryException(exc=""),
-    types.RegistryIndexProgressGETRequest(url=""),
-    types.RegistryIndexProgressGETResponse(url="", resp_code=1234),
-    types.RegistryResponseUnexpectedType(response=""),
-    types.RegistryResponseMissingTopKeys(response=""),
-    types.RegistryResponseMissingNestedKeys(response=""),
-    types.RegistryResponseExtraNestedKeys(response=""),
-    types.DepsSetDownloadDirectory(path=""),
-    types.SemanticValidationFailure(msg=""),
+    core_types.RegistryIndexProgressGETRequest(url=""),
+    core_types.RegistryIndexProgressGETResponse(url="", resp_code=1234),
+    core_types.RegistryResponseUnexpectedType(response=""),
+    core_types.RegistryResponseMissingTopKeys(response=""),
+    core_types.RegistryResponseMissingNestedKeys(response=""),
+    core_types.RegistryResponseExtraNestedKeys(response=""),
+    core_types.DepsSetDownloadDirectory(path=""),
+    core_types.DepsLockUpdating(lock_filepath=""),
+    core_types.DepsAddPackage(package_name="", version="", packages_filepath=""),
+    core_types.DepsFoundDuplicatePackage(removed_package={}),
+    core_types.DepsScrubbedPackageName(package_name=""),
+    core_types.DepsUnpinned(revision="", git=""),
+    core_types.NoNodesForSelectionCriteria(spec_raw=""),
     # Q - Node execution ======================
-    types.RunningOperationCaughtError(exc=""),
-    types.CompileComplete(),
-    types.FreshnessCheckComplete(),
-    types.SeedHeader(header=""),
-    types.SQLRunnerException(exc=""),
-    types.LogTestResult(
+    core_types.RunningOperationCaughtError(exc=""),
+    core_types.CompileComplete(),
+    core_types.FreshnessCheckComplete(),
+    core_types.SeedHeader(header=""),
+    core_types.SQLRunnerException(exc=""),
+    core_types.LogTestResult(
         name="",
         index=0,
         num_models=0,
         execution_time=0,
         num_failures=0,
     ),
-    types.LogStartLine(description="", index=0, total=0),
-    types.LogModelResult(
+    core_types.LogStartLine(description="", index=0, total=0),
+    core_types.LogModelResult(
         description="",
         status="",
         index=0,
         total=0,
         execution_time=0,
     ),
-    types.LogSnapshotResult(
+    core_types.LogSnapshotResult(
         status="",
         description="",
         cfg={},
@@ -305,7 +348,7 @@ sample_values = [
         total=0,
         execution_time=0,
     ),
-    types.LogSeedResult(
+    core_types.LogSeedResult(
         status="",
         index=0,
         total=0,
@@ -313,100 +356,113 @@ sample_values = [
         schema="",
         relation="",
     ),
-    types.LogFreshnessResult(
+    core_types.LogFreshnessResult(
         source_name="",
         table_name="",
         index=0,
         total=0,
         execution_time=0,
     ),
-    types.LogCancelLine(conn_name=""),
-    types.DefaultSelector(name=""),
-    types.NodeStart(),
-    types.NodeFinished(),
-    types.QueryCancelationUnsupported(type=""),
-    types.ConcurrencyLine(num_threads=0, target_name=""),
-    types.WritingInjectedSQLForNode(),
-    types.NodeCompiling(),
-    types.NodeExecuting(),
-    types.LogHookStartLine(
+    core_types.LogNodeNoOpResult(
+        description="",
+        status="",
+        index=0,
+        total=0,
+        execution_time=0,
+    ),
+    core_types.LogCancelLine(conn_name=""),
+    core_types.DefaultSelector(name=""),
+    core_types.NodeStart(),
+    core_types.NodeFinished(),
+    core_types.QueryCancelationUnsupported(type=""),
+    core_types.ConcurrencyLine(num_threads=0, target_name=""),
+    core_types.WritingInjectedSQLForNode(),
+    core_types.NodeCompiling(),
+    core_types.NodeExecuting(),
+    core_types.LogHookStartLine(
         statement="",
         index=0,
         total=0,
     ),
-    types.LogHookEndLine(
+    core_types.LogHookEndLine(
         statement="",
         status="",
         index=0,
         total=0,
         execution_time=0,
     ),
-    types.SkippingDetails(
+    core_types.SkippingDetails(
         resource_type="",
         schema="",
         node_name="",
         index=0,
         total=0,
     ),
-    types.NothingToDo(),
-    types.RunningOperationUncaughtError(exc=""),
-    types.EndRunResult(),
-    types.NoNodesSelected(),
-    types.DepsUnpinned(revision="", git=""),
-    types.NoNodesForSelectionCriteria(spec_raw=""),
-    types.CommandCompleted(
-        command="", success=True, elapsed=0.1, completed_at=get_json_string_utcnow()
+    core_types.NothingToDo(),
+    core_types.RunningOperationUncaughtError(exc=""),
+    core_types.EndRunResult(),
+    core_types.NoNodesSelected(),
+    core_types.CommandCompleted(
+        command="",
+        success=True,
+        elapsed=0.1,
+        completed_at=get_json_string_utcnow(),
     ),
-    types.ShowNode(node_name="", preview="", is_inline=True, unique_id="model.test.my_model"),
-    types.CompiledNode(node_name="", compiled="", is_inline=True, unique_id="model.test.my_model"),
+    core_types.ShowNode(node_name="", preview="", is_inline=True, unique_id="model.test.my_model"),
+    core_types.CompiledNode(
+        node_name="", compiled="", is_inline=True, unique_id="model.test.my_model"
+    ),
+    core_types.SnapshotTimestampWarning(
+        snapshot_time_data_type="DATETIME", updated_at_data_type="DATETIMEZ"
+    ),
     # W - Node testing ======================
-    types.CatchableExceptionOnRun(exc=""),
-    types.InternalErrorOnRun(build_path="", exc=""),
-    types.GenericExceptionOnRun(build_path="", unique_id="", exc=""),
-    types.NodeConnectionReleaseError(node_name="", exc=""),
-    types.FoundStats(stat_line=""),
+    core_types.CatchableExceptionOnRun(exc=""),
+    core_types.InternalErrorOnRun(build_path="", exc=""),
+    core_types.GenericExceptionOnRun(build_path="", unique_id="", exc=""),
+    core_types.NodeConnectionReleaseError(node_name="", exc=""),
+    core_types.FoundStats(stat_line=""),
     # Z - misc ======================
-    types.MainKeyboardInterrupt(),
-    types.MainEncounteredError(exc=""),
-    types.MainStackTrace(stack_trace=""),
+    core_types.MainKeyboardInterrupt(),
+    core_types.MainEncounteredError(exc=""),
+    core_types.MainStackTrace(stack_trace=""),
     types.SystemCouldNotWrite(path="", reason="", exc=""),
     types.SystemExecutingCmd(cmd=[""]),
     types.SystemStdOut(bmsg=str(b"")),
     types.SystemStdErr(bmsg=str(b"")),
     types.SystemReportReturnCode(returncode=0),
-    types.TimingInfoCollected(),
-    types.LogDebugStackTrace(),
-    types.CheckCleanPath(path=""),
-    types.ConfirmCleanPath(path=""),
-    types.ProtectedCleanPath(path=""),
-    types.FinishedCleanPaths(),
-    types.OpenCommand(open_cmd="", profiles_dir=""),
-    types.RunResultWarning(resource_type="", node_name="", path=""),
-    types.RunResultFailure(resource_type="", node_name="", path=""),
-    types.StatsLine(stats={"error": 0, "skip": 0, "pass": 0, "warn": 0, "total": 0}),
-    types.RunResultError(msg=""),
-    types.RunResultErrorNoMessage(status=""),
-    types.SQLCompiledPath(path=""),
-    types.CheckNodeTestFailure(relation_name=""),
-    types.FirstRunResultError(msg=""),
-    types.AfterFirstRunResultError(msg=""),
-    types.EndOfRunSummary(num_errors=0, num_warnings=0, keyboard_interrupt=False),
-    types.LogSkipBecauseError(schema="", relation="", index=0, total=0),
-    types.EnsureGitInstalled(),
-    types.DepsCreatingLocalSymlink(),
-    types.DepsSymlinkNotAvailable(),
-    types.DisableTracking(),
-    types.SendingEvent(kwargs=""),
-    types.SendEventFailure(),
-    types.FlushEvents(),
-    types.FlushEventsFailure(),
+    core_types.TimingInfoCollected(),
+    core_types.LogDebugStackTrace(),
+    core_types.CheckCleanPath(path=""),
+    core_types.ConfirmCleanPath(path=""),
+    core_types.ProtectedCleanPath(path=""),
+    core_types.FinishedCleanPaths(),
+    core_types.OpenCommand(open_cmd="", profiles_dir=""),
+    core_types.RunResultWarning(resource_type="", node_name="", path=""),
+    core_types.RunResultFailure(resource_type="", node_name="", path=""),
+    core_types.StatsLine(stats={"error": 0, "skip": 0, "pass": 0, "warn": 0, "total": 0}),
+    core_types.RunResultError(msg=""),
+    core_types.RunResultErrorNoMessage(status=""),
+    core_types.SQLCompiledPath(path=""),
+    core_types.CheckNodeTestFailure(relation_name=""),
+    core_types.EndOfRunSummary(num_errors=0, num_warnings=0, keyboard_interrupt=False),
+    core_types.MarkSkippedChildren(unique_id="", status="skipped"),
+    core_types.LogSkipBecauseError(schema="", relation="", index=0, total=0),
+    core_types.EnsureGitInstalled(),
+    core_types.DepsCreatingLocalSymlink(),
+    core_types.DepsSymlinkNotAvailable(),
+    core_types.DisableTracking(),
+    core_types.SendingEvent(kwargs=""),
+    core_types.SendEventFailure(),
+    core_types.FlushEvents(),
+    core_types.FlushEventsFailure(),
     types.Formatting(),
-    types.TrackingInitializeFailure(),
-    types.RunResultWarningMessage(),
-    types.DebugCmdOut(),
-    types.DebugCmdResult(),
-    types.ListCmdOut(),
+    core_types.TrackingInitializeFailure(),
+    core_types.RunResultWarningMessage(),
+    core_types.DebugCmdOut(),
+    core_types.DebugCmdResult(),
+    core_types.ListCmdOut(),
     types.Note(msg="This is a note."),
+    core_types.ResourceReport(),
 ]
 
 
@@ -417,7 +473,7 @@ class TestEventJSONSerialization:
     # just fine and others won't.
     def test_all_serializable(self):
         all_non_abstract_events = set(
-            get_all_subclasses(BaseEvent),
+            get_all_subclasses(CoreBaseEvent),
         )
         all_event_values_list = list(map(lambda x: x.__class__, sample_values))
         diff = all_non_abstract_events.difference(set(all_event_values_list))
@@ -485,3 +541,34 @@ def test_bad_serialization():
         str(excinfo.value)
         == "[Note]: Unable to parse dict {'param_event_doesnt_have': 'This should break'}"
     )
+
+
+def test_single_run_error():
+
+    try:
+        # Add a recording event manager to the context, so we can test events.
+        event_mgr = TestEventManager()
+        ctx_set_event_manager(event_mgr)
+
+        error_result = RunResult(
+            status=RunStatus.Error,
+            timing=[],
+            thread_id="",
+            execution_time=0.0,
+            node=None,
+            adapter_response=dict(),
+            message="oh no!",
+            failures=[],
+        )
+
+        print_run_result_error(error_result)
+        events = [e for e in event_mgr.event_history if isinstance(e[0], RunResultError)]
+
+        assert len(events) == 1
+        assert events[0][0].msg == "oh no!"
+
+    finally:
+        # Set an empty event manager unconditionally on exit. This is an early
+        # attempt at unit testing events, and we need to think about how it
+        # could be done in a thread safe way in the long run.
+        ctx_set_event_manager(EventManager())

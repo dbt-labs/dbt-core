@@ -1,6 +1,5 @@
 import pytest
 
-
 dupe_models__schema2_yml = """
 version: 2
 sources:
@@ -12,20 +11,23 @@ sources:
       error_after: {count: 3, period: day}
     tables:
       - name: my_table
+        freshness: null
         identifier: my_real_seed
         # on the override, the "color" column is only unique, it can be null!
         columns:
           - name: id
-            tests:
+            data_tests:
               - not_null
               - unique
           - name: color
-            tests:
+            data_tests:
               - unique
       - name: my_other_table
+        freshness: null
         identifier: my_real_other_seed
       - name: snapshot_freshness
         identifier: snapshot_freshness_base
+
         freshness:
           error_after: {count: 1, period: day}
 
@@ -42,20 +44,23 @@ sources:
       error_after: {count: 3, period: day}
     tables:
       - name: my_table
+        freshness: null
         identifier: my_real_seed
         # on the override, the "color" column is only unique, it can be null!
         columns:
           - name: id
-            tests:
+            data_tests:
               - not_null
               - unique
           - name: color
-            tests:
+            data_tests:
               - unique
       - name: my_other_table
+        freshness: null
         identifier: my_real_other_seed
       - name: snapshot_freshness
         identifier: snapshot_freshness_base
+        loaded_at_field: updated_at
         freshness:
           error_after: {count: 1, period: day}
 
@@ -86,25 +91,26 @@ sources:
       error_after: {count: 3, period: hour}
     tables:
       - name: my_table
+        freshness: null
         identifier: my_seed
         columns:
           - name: id
-            tests:
+            data_tests:
               - unique
               - not_null
           - name: color
-            tests:
+            data_tests:
               - unique
               - not_null
       - name: my_other_table
         identifier: my_other_seed
         columns:
           - name: id
-            tests:
+            data_tests:
               - unique
               - not_null
           - name: letter
-            tests:
+            data_tests:
               - unique
               - not_null
       - name: snapshot_freshness
@@ -316,20 +322,23 @@ sources:
       error_after: {count: 3, period: day}
     tables:
       - name: my_table
+        freshness: null
         identifier: my_real_seed
         # on the override, the "color" column is only unique, it can be null!
         columns:
           - name: id
-            tests:
+            data_tests:
               - not_null
               - unique
           - name: color
-            tests:
+            data_tests:
               - unique
       - name: my_other_table
+        freshness: null
         identifier: my_real_other_seed
       - name: snapshot_freshness
         identifier: snapshot_freshness_base
+        loaded_at_field: updated_at
         freshness:
           error_after: {count: 1, period: day}
 

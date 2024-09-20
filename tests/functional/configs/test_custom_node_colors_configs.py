@@ -1,8 +1,8 @@
 import pytest
 
-from dbt.tests.util import run_dbt, get_manifest
-
-from hologram import ValidationError
+from dbt.exceptions import ConfigUpdateError
+from dbt.tests.util import get_manifest, run_dbt
+from dbt_common.dataclass_schema import ValidationError
 
 CUSTOM_NODE_COLOR_MODEL_LEVEL = "red"
 CUSTOM_NODE_COLOR_SCHEMA_LEVEL = "blue"
@@ -305,7 +305,7 @@ class TestCustomNodeColorIncorrectColorModelConfig:
         self,
         project,
     ):
-        with pytest.raises(ValidationError):
+        with pytest.raises((ValidationError, ConfigUpdateError)):
             run_dbt(["compile"])
 
 

@@ -1,0 +1,6 @@
+kind: Fixes
+body: Late render pre- and post-hooks configs in properties / schema YAML files
+time: 2024-08-24T21:09:03.252733-06:00
+custom:
+  Author: dbeatty10
+  Issue: "10603"

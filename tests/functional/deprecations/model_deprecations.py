@@ -1,9 +1,8 @@
 import pytest
 
-from dbt.exceptions import EventCompilationError
 from dbt.cli.main import dbtRunner
+from dbt.exceptions import EventCompilationError
 from dbt.tests.util import run_dbt
-
 
 deprecated_model__yml = """
 version: 2
@@ -53,7 +52,7 @@ class TestModelDeprecationWarning:
             run_dbt(["--warn-error-options", '{"include": ["DeprecatedModel"]}', "parse"])
 
 
-class TestReferenceDeprecatingWarning:
+class TestUpcomingReferenceDeprecatingWarning:
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -81,7 +80,7 @@ class TestReferenceDeprecatingWarning:
             )
 
 
-class TestReferenceDeprecatedWarning:
+class TestDeprecatedReferenceWarning:
     @pytest.fixture(scope="class")
     def models(self):
         return {

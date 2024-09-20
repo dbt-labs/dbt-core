@@ -1,19 +1,25 @@
-import os
 import json
-import pytest
+import os
 from datetime import datetime, timedelta
 
+import pytest
+import yaml
+
 import dbt.version
+from dbt import deprecations
+from dbt.artifacts.schemas.freshness import FreshnessResult
+from dbt.artifacts.schemas.results import FreshnessStatus
+from dbt.cli.main import dbtRunner
+from dbt.tests.util import AnyFloat, AnyStringWith
 from tests.functional.sources.common_source_setup import BaseSourcesTest
 from tests.functional.sources.fixtures import (
-    error_models_schema_yml,
-    error_models_model_sql,
-    filtered_models_schema_yml,
-    override_freshness_models_schema_yml,
     collect_freshness_macro_override_previous_return_signature,
+    error_models_model_sql,
+    error_models_schema_yml,
+    filtered_models_schema_yml,
+    freshness_via_metadata_schema_yml,
+    override_freshness_models_schema_yml,
 )
-from dbt.tests.util import AnyStringWith, AnyFloat
-from dbt import deprecations
 
 
 class SuccessfulSourceFreshnessTest(BaseSourcesTest):
@@ -121,6 +127,14 @@ class SuccessfulSourceFreshnessTest(BaseSourcesTest):
                 ],
             }
         ]
+
+    def _assert_project_hooks_called(self, logs: str):
+        assert "Running 1 on-run-start hook" in logs
+        assert "Running 1 on-run-end hook" in logs
+
+    def _assert_project_hooks_not_called(self, logs: str):
+        assert "Running 1 on-run-start hook" not in logs
+        assert "Running 1 on-run-end hook" not in logs
 
 
 class TestSourceFreshness(SuccessfulSourceFreshnessTest):
@@ -366,12 +380,201 @@ class TestSourceFreshnessMacroOverride(SuccessfulSourceFreshnessTest):
 
     def test_source_freshness(self, project):
         # ensure that the deprecation warning is raised
+        vars_dict = {
+            "test_run_schema": project.test_schema,
+            "test_loaded_at": project.adapter.quote("updated_at"),
+        }
+        events = []
+        dbtRunner(callbacks=[events.append]).invoke(
+            ["source", "freshness", "--vars", yaml.safe_dump(vars_dict)]
+        )
+        matches = list([e for e in events if e.info.name == "CollectFreshnessReturnSignature"])
+        assert matches
+
+
+class TestMetadataFreshnessFails:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"schema.yml": freshness_via_metadata_schema_yml}
+
+    def test_metadata_freshness_unsupported_parse_warning(self, project):
+        """Since the default test adapter (postgres) does not support metadata
+        based source freshness checks, trying to use that mechanism should
+        result in a parse-time warning."""
+        got_warning = False
+
+        def warning_probe(e):
+            nonlocal got_warning
+            if e.info.name == "FreshnessConfigProblem" and e.info.level == "warn":
+                got_warning = True
+
+        runner = dbtRunner(callbacks=[warning_probe])
+        runner.invoke(["parse"])
+
+        assert got_warning
+
+    def test_metadata_freshness_unsupported_error_when_run(self, project):
+
+        runner = dbtRunner()
+        result = runner.invoke(["source", "freshness"])
+        assert isinstance(result.result, FreshnessResult)
+        assert len(result.result.results) == 1
+        freshness_result = result.result.results[0]
+        assert freshness_result.status == FreshnessStatus.RuntimeErr
+        assert "Could not compute freshness for source test_table" in freshness_result.message
+
+
+class TestSourceFreshnessProjectHooksNotRun(SuccessfulSourceFreshnessTest):
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "config-version": 2,
+            "on-run-start": ["{{ log('on-run-start hooks called') }}"],
+            "on-run-end": ["{{ log('on-run-end hooks called') }}"],
+            "flags": {
+                "source_freshness_run_project_hooks": False,
+            },
+        }
+
+    @pytest.fixture(scope="class")
+    def global_deprecations(self):
         deprecations.reset_deprecations()
+        yield
+        deprecations.reset_deprecations()
+
+    def test_hooks_do_run_for_source_freshness(
+        self,
+        project,
+        global_deprecations,
+    ):
         assert deprecations.active_deprecations == set()
-        self.run_dbt_with_vars(
+        _, log_output = self.run_dbt_and_capture_with_vars(
             project,
-            ["source", "freshness"],
+            [
+                "source",
+                "freshness",
+            ],
             expect_pass=False,
         )
-        expected = {"collect-freshness-return-signature"}
+        assert "on-run-start hooks called" not in log_output
+        assert "on-run-end hooks called" not in log_output
+        expected = {"source-freshness-project-hooks"}
         assert expected == deprecations.active_deprecations
+
+
+class TestHooksInSourceFreshness(SuccessfulSourceFreshnessTest):
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "config-version": 2,
+            "on-run-start": ["{{ log('on-run-start hooks called') }}"],
+            "on-run-end": ["{{ log('on-run-end hooks called') }}"],
+            "flags": {
+                "source_freshness_run_project_hooks": True,
+            },
+        }
+
+    def test_hooks_do_run_for_source_freshness(
+        self,
+        project,
+    ):
+        _, log_output = self.run_dbt_and_capture_with_vars(
+            project,
+            [
+                "source",
+                "freshness",
+            ],
+            expect_pass=False,
+        )
+
+        self._assert_project_hooks_called(log_output)
+
+
+class TestHooksInSourceFreshnessError:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": error_models_schema_yml,
+            "model.sql": error_models_model_sql,
+        }
+
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "config-version": 2,
+            "on-run-start": ["select fake_column from table_does_not_exist"],
+            "flags": {
+                "source_freshness_run_project_hooks": True,
+            },
+        }
+
+    def test_hooks_do_not_run_for_source_freshness(
+        self,
+        project,
+    ):
+        run_result_error = None
+
+        def run_result_error_probe(e):
+            nonlocal run_result_error
+            if (
+                e.info.name == "RunResultError"
+                and e.info.level == "error"
+                and "on-run-start" in e.info.msg
+            ):
+                run_result_error = e.info.msg
+
+        runner = dbtRunner(callbacks=[run_result_error_probe])
+        runner.invoke(["source", "freshness"])
+        assert 'relation "table_does_not_exist" does not exist' in run_result_error
+
+
+class TestHooksInSourceFreshnessDisabled(SuccessfulSourceFreshnessTest):
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "config-version": 2,
+            "on-run-start": ["{{ log('on-run-start hooks called') }}"],
+            "on-run-end": ["{{ log('on-run-end hooks called') }}"],
+            "flags": {
+                "source_freshness_run_project_hooks": False,
+            },
+        }
+
+    def test_hooks_do_not_run_for_source_freshness(
+        self,
+        project,
+    ):
+        _, log_output = self.run_dbt_and_capture_with_vars(
+            project,
+            [
+                "source",
+                "freshness",
+            ],
+            expect_pass=False,
+        )
+        self._assert_project_hooks_not_called(log_output)
+
+
+class TestHooksInSourceFreshnessDefault(SuccessfulSourceFreshnessTest):
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "config-version": 2,
+            "on-run-start": ["{{ log('on-run-start hooks called') }}"],
+            "on-run-end": ["{{ log('on-run-end hooks called') }}"],
+        }
+
+    def test_hooks_do_not_run_for_source_freshness(
+        self,
+        project,
+    ):
+        _, log_output = self.run_dbt_and_capture_with_vars(
+            project,
+            [
+                "source",
+                "freshness",
+            ],
+            expect_pass=False,
+        )
+        # default behaviour - no hooks run in source freshness
+        self._assert_project_hooks_not_called(log_output)

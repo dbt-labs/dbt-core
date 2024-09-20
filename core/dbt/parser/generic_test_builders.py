@@ -1,21 +1,11 @@
 import re
 from copy import deepcopy
-from typing import (
-    Generic,
-    Dict,
-    Any,
-    Tuple,
-    Optional,
-    List,
-)
+from typing import Any, Dict, Generic, List, Optional, Tuple
 
-from dbt.clients.jinja import get_rendered, GENERIC_TEST_KWARGS_NAME
+from dbt.artifacts.resources import NodeVersion
+from dbt.clients.jinja import GENERIC_TEST_KWARGS_NAME, get_rendered
 from dbt.contracts.graph.nodes import UnpatchedSourceDefinition
-from dbt.contracts.graph.unparsed import (
-    NodeVersion,
-    UnparsedNodeUpdate,
-    UnparsedModelUpdate,
-)
+from dbt.contracts.graph.unparsed import UnparsedModelUpdate, UnparsedNodeUpdate
 from dbt.exceptions import (
     CustomMacroPopulatingConfigValueError,
     SameKeyNestedError,
@@ -24,13 +14,13 @@ from dbt.exceptions import (
     TestArgIncludesModelError,
     TestArgsNotDictError,
     TestDefinitionDictLengthError,
-    TestTypeError,
     TestNameNotStringError,
+    TestTypeError,
     UnexpectedTestNamePatternError,
-    UndefinedMacroError,
 )
 from dbt.parser.common import Testable
 from dbt.utils import md5
+from dbt_common.exceptions.macros import UndefinedMacroError
 
 
 def synthesize_generic_test_names(
@@ -101,6 +91,7 @@ class TestBuilder(Generic[Testable]):
         "error_if",
         "fail_calc",
         "store_failures",
+        "store_failures_as",
         "meta",
         "database",
         "schema",
@@ -109,21 +100,22 @@ class TestBuilder(Generic[Testable]):
 
     def __init__(
         self,
-        test: Dict[str, Any],
+        data_test: Dict[str, Any],
         target: Testable,
         package_name: str,
         render_ctx: Dict[str, Any],
         column_name: Optional[str] = None,
         version: Optional[NodeVersion] = None,
     ) -> None:
-        test_name, test_args = self.extract_test_args(test, column_name)
+        test_name, test_args = self.extract_test_args(data_test, column_name)
         self.args: Dict[str, Any] = test_args
         if "model" in self.args:
             raise TestArgIncludesModelError()
         self.package_name: str = package_name
         self.target: Testable = target
         self.version: Optional[NodeVersion] = version
-
+        self.render_ctx: Dict[str, Any] = render_ctx
+        self.column_name: Optional[str] = column_name
         self.args["model"] = self.build_model_str()
 
         match = self.TEST_NAME_PATTERN.match(test_name)
@@ -134,38 +126,12 @@ class TestBuilder(Generic[Testable]):
         self.name: str = groups["test_name"]
         self.namespace: str = groups["test_namespace"]
         self.config: Dict[str, Any] = {}
+        # Process legacy args
+        self.config.update(self._process_legacy_args())
 
-        # This code removes keys identified as config args from the test entry
-        # dictionary. The keys remaining in the 'args' dictionary will be
-        # "kwargs", or keyword args that are passed to the test macro.
-        # The "kwargs" are not rendered into strings until compilation time.
-        # The "configs" are rendered here (since they were not rendered back
-        # in the 'get_key_dicts' methods in the schema parsers).
-        for key in self.CONFIG_ARGS:
-            value = self.args.pop(key, None)
-            # 'modifier' config could be either top level arg or in config
-            if value and "config" in self.args and key in self.args["config"]:
-                raise SameKeyNestedError()
-            if not value and "config" in self.args:
-                value = self.args["config"].pop(key, None)
-            if isinstance(value, str):
-
-                try:
-                    value = get_rendered(value, render_ctx, native=True)
-                except UndefinedMacroError as e:
-                    raise CustomMacroPopulatingConfigValueError(
-                        target_name=self.target.name,
-                        column_name=column_name,
-                        name=self.name,
-                        key=key,
-                        err_msg=e.msg,
-                    )
-
-            if value is not None:
-                self.config[key] = value
-
+        # Process config args if present
         if "config" in self.args:
-            del self.args["config"]
+            self.config.update(self._render_values(self.args.pop("config", {})))
 
         if self.namespace is not None:
             self.package_name = self.namespace
@@ -190,28 +156,58 @@ class TestBuilder(Generic[Testable]):
             if short_name != full_name and "alias" not in self.config:
                 self.config["alias"] = short_name
 
+    def _process_legacy_args(self):
+        config = {}
+        for key in self.CONFIG_ARGS:
+            value = self.args.pop(key, None)
+            if value and "config" in self.args and key in self.args["config"]:
+                raise SameKeyNestedError()
+            if not value and "config" in self.args:
+                value = self.args["config"].pop(key, None)
+            config[key] = value
+
+        return self._render_values(config)
+
+    def _render_values(self, config: Dict[str, Any]) -> Dict[str, Any]:
+        rendered_config = {}
+        for key, value in config.items():
+            if isinstance(value, str):
+                try:
+                    value = get_rendered(value, self.render_ctx, native=True)
+                except UndefinedMacroError as e:
+                    raise CustomMacroPopulatingConfigValueError(
+                        target_name=self.target.name,
+                        column_name=self.column_name,
+                        name=self.name,
+                        key=key,
+                        err_msg=e.msg,
+                    )
+            if value is not None:
+                rendered_config[key] = value
+        return rendered_config
+
     def _bad_type(self) -> TypeError:
         return TypeError('invalid target type "{}"'.format(type(self.target)))
 
     @staticmethod
-    def extract_test_args(test, name=None) -> Tuple[str, Dict[str, Any]]:
-        if not isinstance(test, dict):
-            raise TestTypeError(test)
+    def extract_test_args(data_test, name=None) -> Tuple[str, Dict[str, Any]]:
+        if not isinstance(data_test, dict):
+            raise TestTypeError(data_test)
 
         # If the test is a dictionary with top-level keys, the test name is "test_name"
         # and the rest are arguments
         # {'name': 'my_favorite_test', 'test_name': 'unique', 'config': {'where': '1=1'}}
-        if "test_name" in test.keys():
-            test_name = test.pop("test_name")
-            test_args = test
+        if "test_name" in data_test.keys():
+            test_name = data_test.pop("test_name")
+            test_args = data_test
         # If the test is a nested dictionary with one top-level key, the test name
         # is the dict name, and nested keys are arguments
         # {'unique': {'name': 'my_favorite_test', 'config': {'where': '1=1'}}}
         else:
-            test = list(test.items())
-            if len(test) != 1:
-                raise TestDefinitionDictLengthError(test)
-            test_name, test_args = test[0]
+            data_test = list(data_test.items())
+            if len(data_test) != 1:
+                raise TestDefinitionDictLengthError(data_test)
+            test_name, test_args = data_test[0]
 
         if not isinstance(test_args, dict):
             raise TestArgsNotDictError(test_args)
@@ -241,6 +237,10 @@ class TestBuilder(Generic[Testable]):
     @property
     def store_failures(self) -> Optional[bool]:
         return self.config.get("store_failures")
+
+    @property
+    def store_failures_as(self) -> Optional[bool]:
+        return self.config.get("store_failures_as")
 
     @property
     def where(self) -> Optional[str]:
@@ -294,6 +294,8 @@ class TestBuilder(Generic[Testable]):
             config["fail_calc"] = self.fail_calc
         if self.store_failures is not None:
             config["store_failures"] = self.store_failures
+        if self.store_failures_as is not None:
+            config["store_failures_as"] = self.store_failures_as
         if self.meta is not None:
             config["meta"] = self.meta
         if self.database is not None:

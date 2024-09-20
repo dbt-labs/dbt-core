@@ -1,0 +1,6 @@
+kind: Features
+body: Support cumulative_type_params & sub-daily granularities in semantic manifest.
+time: 2024-06-25T09:51:07.983248-07:00
+custom:
+  Author: courtneyholcomb
+  Issue: "10360"

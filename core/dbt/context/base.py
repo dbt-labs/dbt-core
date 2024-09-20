@@ -1,35 +1,45 @@
+from __future__ import annotations
+
+import datetime
+import itertools
 import json
 import os
-from typing import Any, Dict, NoReturn, Optional, Mapping, Iterable, Set, List
+import re
 import threading
-
-from dbt.flags import get_flags
-import dbt.flags as flags_module
-from dbt import tracking
-from dbt import utils
-from dbt.clients.jinja import get_rendered
-from dbt.clients.yaml_helper import yaml, safe_load, SafeLoader, Loader, Dumper  # noqa: F401
-from dbt.constants import SECRET_ENV_PREFIX, DEFAULT_ENV_PLACEHOLDER
-from dbt.contracts.graph.nodes import Resource
-from dbt.exceptions import (
-    SecretEnvVarLocationError,
-    EnvVarMissingError,
-    MacroReturn,
-    RequiredVarNotFoundError,
-    SetStrictWrongTypeError,
-    ZipStrictWrongTypeError,
-)
-from dbt.events.functions import fire_event, get_invocation_id
-from dbt.events.types import JinjaLogInfo, JinjaLogDebug
-from dbt.events.contextvars import get_node_info
-from dbt.version import __version__ as dbt_version
+from typing import Any, Callable, Dict, Iterable, List, Mapping, NoReturn, Optional, Set
 
 # These modules are added to the context. Consider alternative
 # approaches which will extend well to potentially many modules
 import pytz
-import datetime
-import re
-import itertools
+
+import dbt.flags as flags_module
+from dbt import tracking, utils
+from dbt.clients.jinja import get_rendered
+from dbt.clients.yaml_helper import (  # noqa: F401
+    Dumper,
+    Loader,
+    SafeLoader,
+    safe_load,
+    yaml,
+)
+from dbt.constants import DEFAULT_ENV_PLACEHOLDER, SECRET_PLACEHOLDER
+from dbt.contracts.graph.nodes import Resource
+from dbt.events.types import JinjaLogDebug, JinjaLogInfo
+from dbt.exceptions import (
+    EnvVarMissingError,
+    RequiredVarNotFoundError,
+    SecretEnvVarLocationError,
+    SetStrictWrongTypeError,
+    ZipStrictWrongTypeError,
+)
+from dbt.flags import get_flags
+from dbt.version import __version__ as dbt_version
+from dbt_common.constants import SECRET_ENV_PREFIX
+from dbt_common.context import get_invocation_context
+from dbt_common.events.contextvars import get_node_info
+from dbt_common.events.functions import fire_event, get_invocation_id
+from dbt_common.events.types import PrintEvent
+from dbt_common.exceptions.macros import MacroReturn
 
 # See the `contexts` module README for more information on how contexts work
 
@@ -86,33 +96,29 @@ def get_context_modules() -> Dict[str, Dict[str, Any]]:
 
 
 class ContextMember:
-    def __init__(self, value, name=None):
+    def __init__(self, value: Any, name: Optional[str] = None) -> None:
         self.name = name
         self.inner = value
 
-    def key(self, default):
+    def key(self, default: str) -> str:
         if self.name is None:
             return default
         return self.name
 
 
-def contextmember(value):
-    if isinstance(value, str):
-        return lambda v: ContextMember(v, name=value)
-    return ContextMember(value)
+def contextmember(value: Optional[str] = None) -> Callable:
+    return lambda v: ContextMember(v, name=value)
 
 
-def contextproperty(value):
-    if isinstance(value, str):
-        return lambda v: ContextMember(property(v), name=value)
-    return ContextMember(property(value))
+def contextproperty(value: Optional[str] = None) -> Callable:
+    return lambda v: ContextMember(property(v), name=value)
 
 
 class ContextMeta(type):
-    def __new__(mcls, name, bases, dct):
-        context_members = {}
-        context_attrs = {}
-        new_dct = {}
+    def __new__(mcls, name, bases, dct: Dict[str, Any]) -> ContextMeta:
+        context_members: Dict[str, Any] = {}
+        context_attrs: Dict[str, Any] = {}
+        new_dct: Dict[str, Any] = {}
 
         for base in bases:
             context_members.update(getattr(base, "_context_members_", {}))
@@ -148,27 +154,28 @@ class Var:
         return self._cli_vars
 
     @property
-    def node_name(self):
+    def node_name(self) -> str:
         if self._node is not None:
             return self._node.name
         else:
             return "<Configuration>"
 
-    def get_missing_var(self, var_name):
-        raise RequiredVarNotFoundError(var_name, self._merged, self._node)
+    def get_missing_var(self, var_name: str) -> NoReturn:
+        # TODO function name implies a non exception resolution
+        raise RequiredVarNotFoundError(var_name, dict(self._merged), self._node)
 
-    def has_var(self, var_name: str):
+    def has_var(self, var_name: str) -> bool:
         return var_name in self._merged
 
-    def get_rendered_var(self, var_name):
+    def get_rendered_var(self, var_name: str) -> Any:
         raw = self._merged[var_name]
         # if bool/int/float/etc are passed in, don't compile anything
         if not isinstance(raw, str):
             return raw
 
-        return get_rendered(raw, self._context)
+        return get_rendered(raw, dict(self._context))
 
-    def __call__(self, var_name, default=_VAR_NOTSET):
+    def __call__(self, var_name: str, default: Any = _VAR_NOTSET) -> Any:
         if self.has_var(var_name):
             return self.get_rendered_var(var_name)
         elif default is not self._VAR_NOTSET:
@@ -178,13 +185,17 @@ class Var:
 
 
 class BaseContext(metaclass=ContextMeta):
-    # subclass is TargetContext
-    def __init__(self, cli_vars):
-        self._ctx = {}
-        self.cli_vars = cli_vars
-        self.env_vars = {}
+    # Set by ContextMeta
+    _context_members_: Dict[str, Any]
+    _context_attrs_: Dict[str, Any]
 
-    def generate_builtins(self):
+    # subclass is TargetContext
+    def __init__(self, cli_vars: Dict[str, Any]) -> None:
+        self._ctx: Dict[str, Any] = {}
+        self.cli_vars: Dict[str, Any] = cli_vars
+        self.env_vars: Dict[str, Any] = {}
+
+    def generate_builtins(self) -> Dict[str, Any]:
         builtins: Dict[str, Any] = {}
         for key, value in self._context_members_.items():
             if hasattr(value, "__get__"):
@@ -194,14 +205,14 @@ class BaseContext(metaclass=ContextMeta):
         return builtins
 
     # no dbtClassMixin so this is not an actual override
-    def to_dict(self):
+    def to_dict(self) -> Dict[str, Any]:
         self._ctx["context"] = self._ctx
         builtins = self.generate_builtins()
         self._ctx["builtins"] = builtins
         self._ctx.update(builtins)
         return self._ctx
 
-    @contextproperty
+    @contextproperty()
     def dbt_version(self) -> str:
         """The `dbt_version` variable returns the installed version of dbt that
         is currently running. It can be used for debugging or auditing
@@ -221,7 +232,7 @@ class BaseContext(metaclass=ContextMeta):
         """
         return dbt_version
 
-    @contextproperty
+    @contextproperty()
     def var(self) -> Var:
         """Variables can be passed from your `dbt_project.yml` file into models
         during compilation. These variables are useful for configuring packages
@@ -290,7 +301,7 @@ class BaseContext(metaclass=ContextMeta):
         """
         return Var(self._ctx, self.cli_vars)
 
-    @contextmember
+    @contextmember()
     def env_var(self, var: str, default: Optional[str] = None) -> str:
         """The env_var() function. Return the environment variable named 'var'.
         If there is no such environment variable set, return the default.
@@ -300,8 +311,9 @@ class BaseContext(metaclass=ContextMeta):
         return_value = None
         if var.startswith(SECRET_ENV_PREFIX):
             raise SecretEnvVarLocationError(var)
-        if var in os.environ:
-            return_value = os.environ[var]
+        env = get_invocation_context().env
+        if var in env:
+            return_value = env[var]
         elif default is not None:
             return_value = default
 
@@ -310,7 +322,7 @@ class BaseContext(metaclass=ContextMeta):
             # that so we can skip partial parsing.  Otherwise the file will be scheduled for
             # reparsing. If the default changes, the file will have been updated and therefore
             # will be scheduled for reparsing anyways.
-            self.env_vars[var] = return_value if var in os.environ else DEFAULT_ENV_PLACEHOLDER
+            self.env_vars[var] = return_value if var in env else DEFAULT_ENV_PLACEHOLDER
 
             return return_value
         else:
@@ -318,11 +330,12 @@ class BaseContext(metaclass=ContextMeta):
 
     if os.environ.get("DBT_MACRO_DEBUGGING"):
 
-        @contextmember
+        @contextmember()
         @staticmethod
         def debug():
             """Enter a debugger at this line in the compiled jinja code."""
             import sys
+
             import ipdb  # type: ignore
 
             frame = sys._getframe(3)
@@ -357,7 +370,7 @@ class BaseContext(metaclass=ContextMeta):
         """
         raise MacroReturn(data)
 
-    @contextmember
+    @contextmember()
     @staticmethod
     def fromjson(string: str, default: Any = None) -> Any:
         """The `fromjson` context method can be used to deserialize a json
@@ -378,7 +391,7 @@ class BaseContext(metaclass=ContextMeta):
         except ValueError:
             return default
 
-    @contextmember
+    @contextmember()
     @staticmethod
     def tojson(value: Any, default: Any = None, sort_keys: bool = False) -> Any:
         """The `tojson` context method can be used to serialize a Python
@@ -401,7 +414,7 @@ class BaseContext(metaclass=ContextMeta):
         except ValueError:
             return default
 
-    @contextmember
+    @contextmember()
     @staticmethod
     def fromyaml(value: str, default: Any = None) -> Any:
         """The fromyaml context method can be used to deserialize a yaml string
@@ -432,7 +445,7 @@ class BaseContext(metaclass=ContextMeta):
 
     # safe_dump defaults to sort_keys=True, but we act like json.dumps (the
     # opposite)
-    @contextmember
+    @contextmember()
     @staticmethod
     def toyaml(
         value: Any, default: Optional[str] = None, sort_keys: bool = False
@@ -477,7 +490,7 @@ class BaseContext(metaclass=ContextMeta):
         except TypeError:
             return default
 
-    @contextmember
+    @contextmember()
     @staticmethod
     def set_strict(value: Iterable[Any]) -> Set[Any]:
         """The `set_strict` context method can be used to convert any iterable
@@ -519,7 +532,7 @@ class BaseContext(metaclass=ContextMeta):
         except TypeError:
             return default
 
-    @contextmember
+    @contextmember()
     @staticmethod
     def zip_strict(*args: Iterable[Any]) -> Iterable[Any]:
         """The `zip_strict` context method can be used to used to return
@@ -541,7 +554,7 @@ class BaseContext(metaclass=ContextMeta):
         except TypeError as e:
             raise ZipStrictWrongTypeError(e)
 
-    @contextmember
+    @contextmember()
     @staticmethod
     def log(msg: str, info: bool = False) -> str:
         """Logs a line to either the log file or stdout.
@@ -556,13 +569,25 @@ class BaseContext(metaclass=ContextMeta):
               {{ log("Running some_macro: " ~ arg1 ~ ", " ~ arg2) }}
             {% endmacro %}"
         """
+        # Detect instances of the placeholder value ($$$DBT_SECRET_START...DBT_SECRET_END$$$)
+        # and replace it with the standard mask '*****'
+        if "DBT_SECRET_START" in str(msg):
+            search_group = f"({SECRET_ENV_PREFIX}(.*))"
+            pattern = SECRET_PLACEHOLDER.format(search_group).replace("$", r"\$")
+            m = re.search(
+                pattern,
+                msg,
+            )
+            if m:
+                msg = re.sub(pattern, "*****", msg)
+
         if info:
             fire_event(JinjaLogInfo(msg=msg, node_info=get_node_info()))
         else:
             fire_event(JinjaLogDebug(msg=msg, node_info=get_node_info()))
         return ""
 
-    @contextproperty
+    @contextproperty()
     def run_started_at(self) -> Optional[datetime.datetime]:
         """`run_started_at` outputs the timestamp that this run started, e.g.
         `2017-04-21 01:23:45.678`. The `run_started_at` variable is a Python
@@ -590,19 +615,19 @@ class BaseContext(metaclass=ContextMeta):
         else:
             return None
 
-    @contextproperty
+    @contextproperty()
     def invocation_id(self) -> Optional[str]:
         """invocation_id outputs a UUID generated for this dbt run (useful for
         auditing)
         """
         return get_invocation_id()
 
-    @contextproperty
+    @contextproperty()
     def thread_id(self) -> str:
         """thread_id outputs an ID for the current thread (useful for auditing)"""
         return threading.current_thread().name
 
-    @contextproperty
+    @contextproperty()
     def modules(self) -> Dict[str, Any]:
         """The `modules` variable in the Jinja context contains useful Python
         modules for operating on data.
@@ -627,7 +652,7 @@ class BaseContext(metaclass=ContextMeta):
         """  # noqa
         return get_context_modules()
 
-    @contextproperty
+    @contextproperty()
     def flags(self) -> Any:
         """The `flags` variable contains true/false values for flags provided
         on the command line.
@@ -644,7 +669,7 @@ class BaseContext(metaclass=ContextMeta):
         """
         return flags_module.get_flag_obj()
 
-    @contextmember
+    @contextmember()
     @staticmethod
     def print(msg: str) -> str:
         """Prints a line to stdout.
@@ -659,10 +684,11 @@ class BaseContext(metaclass=ContextMeta):
         """
 
         if get_flags().PRINT:
-            print(msg)
+            # No formatting, still get to stdout when --quiet is used
+            fire_event(PrintEvent(msg=msg))
         return ""
 
-    @contextmember
+    @contextmember()
     @staticmethod
     def diff_of_two_dicts(
         dict_a: Dict[str, List[str]], dict_b: Dict[str, List[str]]
@@ -691,7 +717,7 @@ class BaseContext(metaclass=ContextMeta):
                 dict_diff.update({k: dict_a[k]})
         return dict_diff
 
-    @contextmember
+    @contextmember()
     @staticmethod
     def local_md5(value: str) -> str:
         """Calculates an MD5 hash of the given string.

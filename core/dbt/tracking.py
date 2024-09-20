@@ -6,15 +6,17 @@ from contextlib import contextmanager
 from datetime import datetime
 from typing import Optional
 
-import logbook
 import pytz
 import requests
+from packaging.version import Version
 from snowplow_tracker import Emitter, SelfDescribingJson, Subject, Tracker
+from snowplow_tracker import __version__ as snowplow_version  # type: ignore
 from snowplow_tracker import logger as sp_logger
+from snowplow_tracker.events import StructuredEvent
 
 from dbt import version as dbt_version
+from dbt.adapters.exceptions import FailedToConnectError
 from dbt.clients.yaml_helper import safe_load, yaml  # noqa:F401
-from dbt.events.functions import fire_event, get_invocation_id
 from dbt.events.types import (
     DisableTracking,
     FlushEvents,
@@ -24,7 +26,9 @@ from dbt.events.types import (
     SendingEvent,
     TrackingInitializeFailure,
 )
-from dbt.exceptions import FailedToConnectError, NotImplementedError
+from dbt_common.events.base_types import EventMsg
+from dbt_common.events.functions import fire_event, get_invocation_id, msg_to_dict
+from dbt_common.exceptions import NotImplementedError
 
 sp_logger.setLevel(100)
 
@@ -34,6 +38,7 @@ DBT_INVOCATION_ENV = "DBT_INVOCATION_ENV"
 
 ADAPTER_INFO_SPEC = "iglu:com.dbt/adapter_info/jsonschema/1-0-1"
 DEPRECATION_WARN_SPEC = "iglu:com.dbt/deprecation_warn/jsonschema/1-0-0"
+BEHAVIOR_CHANGE_WARN_SPEC = "iglu:com.dbt/behavior_change_warn/jsonschema/1-0-0"
 EXPERIMENTAL_PARSER = "iglu:com.dbt/experimental_parser/jsonschema/1-0-0"
 INVOCATION_ENV_SPEC = "iglu:com.dbt/invocation_env/jsonschema/1-0-0"
 INVOCATION_SPEC = "iglu:com.dbt/invocation/jsonschema/1-0-2"
@@ -46,18 +51,27 @@ RESOURCE_COUNTS = "iglu:com.dbt/resource_counts/jsonschema/1-0-1"
 RPC_REQUEST_SPEC = "iglu:com.dbt/rpc_request/jsonschema/1-0-1"
 RUNNABLE_TIMING = "iglu:com.dbt/runnable/jsonschema/1-0-0"
 RUN_MODEL_SPEC = "iglu:com.dbt/run_model/jsonschema/1-0-3"
+PLUGIN_GET_NODES = "iglu:com.dbt/plugin_get_nodes/jsonschema/1-0-0"
+
+SNOWPLOW_TRACKER_VERSION = Version(snowplow_version)
+
+# workaround in case real snowplow tracker is in the env
+# the argument was renamed in https://github.com/snowplow/snowplow-python-tracker/commit/39fd50a3aff98a5efdd5c5c7fb5518fe4761305b
+INIT_KW_ARGS = (
+    {"buffer_size": 30} if SNOWPLOW_TRACKER_VERSION < Version("0.13.0") else {"batch_size": 30}
+)
 
 
 class TimeoutEmitter(Emitter):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(
             COLLECTOR_URL,
             protocol=COLLECTOR_PROTOCOL,
-            buffer_size=30,
             on_failure=self.handle_failure,
             method="post",
             # don't set this.
             byte_limit=None,
+            **INIT_KW_ARGS,
         )
 
     @staticmethod
@@ -102,14 +116,14 @@ class TimeoutEmitter(Emitter):
 
 emitter = TimeoutEmitter()
 tracker = Tracker(
-    emitter,
+    emitters=emitter,
     namespace="cf",
     app_id="dbt",
 )
 
 
 class User:
-    def __init__(self, cookie_dir):
+    def __init__(self, cookie_dir) -> None:
         self.do_not_track = True
         self.cookie_dir = cookie_dir
 
@@ -204,12 +218,12 @@ def get_dbt_env_context():
 def track(user, *args, **kwargs):
     if user.do_not_track:
         return
-    else:
-        fire_event(SendingEvent(kwargs=str(kwargs)))
-        try:
-            tracker.track_struct_event(*args, **kwargs)
-        except Exception:
-            fire_event(SendEventFailure())
+
+    fire_event(SendingEvent(kwargs=str(kwargs)))
+    try:
+        tracker.track(StructuredEvent(*args, **kwargs))
+    except Exception:
+        fire_event(SendEventFailure())
 
 
 def track_project_id(options):
@@ -353,6 +367,20 @@ def track_deprecation_warn(options):
     )
 
 
+def track_behavior_change_warn(msg: EventMsg) -> None:
+    if msg.info.name != "BehaviorChangeEvent" or active_user is None:
+        return
+
+    context = [SelfDescribingJson(BEHAVIOR_CHANGE_WARN_SPEC, msg_to_dict(msg))]
+    track(
+        active_user,
+        category="dbt",
+        action=msg.info.name,
+        label=get_invocation_id(),
+        context=context,
+    )
+
+
 def track_invocation_end(invocation_context, result_type=None):
     data = {"progress": "end", "result_type": result_type, "result": None}
     data.update(invocation_context)
@@ -409,6 +437,19 @@ def track_partial_parser(options):
     )
 
 
+def track_plugin_get_nodes(options):
+    context = [SelfDescribingJson(PLUGIN_GET_NODES, options)]
+    assert active_user is not None, "Cannot track plugin node info when active user is None"
+
+    track(
+        active_user,
+        category="dbt",
+        action="plugin_get_nodes",
+        label=get_invocation_id(),
+        context=context,
+    )
+
+
 def track_runnable_timing(options):
     context = [SelfDescribingJson(RUNNABLE_TIMING, options)]
     assert active_user is not None, "Cannot track runnable info when active user is None"
@@ -442,22 +483,7 @@ def do_not_track():
     active_user = User(None)
 
 
-class InvocationProcessor(logbook.Processor):
-    def __init__(self):
-        super().__init__()
-
-    def process(self, record):
-        if active_user is not None:
-            record.extra.update(
-                {
-                    "run_started_at": active_user.run_started_at.isoformat(),
-                    "invocation_id": get_invocation_id(),
-                }
-            )
-
-
 def initialize_from_flags(send_anonymous_usage_stats, profiles_dir):
-    # Setting these used to be in UserConfig, but had to be moved here
     global active_user
     if send_anonymous_usage_stats:
         active_user = User(profiles_dir)

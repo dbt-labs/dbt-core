@@ -1,16 +1,15 @@
 import pytest
-from hologram import ValidationError
 
-from dbt.contracts.graph.model_config import SourceConfig
-
-from dbt.tests.util import run_dbt, update_config_file, get_manifest
+from dbt.artifacts.resources import SourceConfig
+from dbt.tests.util import get_manifest, run_dbt, update_config_file
+from dbt_common.dataclass_schema import ValidationError
 from tests.functional.sources.fixtures import (
-    basic_source_schema_yml,
-    disabled_source_level_schema_yml,
-    disabled_source_table_schema_yml,
     all_configs_everywhere_schema_yml,
     all_configs_not_table_schema_yml,
     all_configs_project_source_schema_yml,
+    basic_source_schema_yml,
+    disabled_source_level_schema_yml,
+    disabled_source_table_schema_yml,
     invalid_config_source_schema_yml,
 )
 

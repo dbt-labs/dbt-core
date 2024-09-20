@@ -1,23 +1,29 @@
-import pytest
 import os
 from datetime import datetime
-import dbt
-import jsonschema
 
-from dbt.tests.util import run_dbt, get_artifact, check_datetime_between, run_dbt_and_capture
+import jsonschema
+import pytest
+
+import dbt
+from dbt.artifacts.schemas.results import RunStatus
+from dbt.artifacts.schemas.run import RunResultsArtifact
+from dbt.contracts.graph.manifest import WritableManifest
+from dbt.tests.util import (
+    check_datetime_between,
+    get_artifact,
+    run_dbt,
+    run_dbt_and_capture,
+)
 from tests.functional.artifacts.expected_manifest import (
-    expected_seeded_manifest,
     expected_references_manifest,
+    expected_seeded_manifest,
     expected_versions_manifest,
 )
 from tests.functional.artifacts.expected_run_results import (
-    expected_run_results,
     expected_references_run_results,
+    expected_run_results,
     expected_versions_run_results,
 )
-
-from dbt.contracts.graph.manifest import WritableManifest
-from dbt.contracts.results import RunResultsArtifact, RunStatus
 
 models__schema_yml = """
 version: 2
@@ -30,7 +36,7 @@ models:
     columns:
       - name: id
         description: The user ID number
-        tests:
+        data_tests:
           - unique
           - not_null
       - name: first_name
@@ -41,7 +47,7 @@ models:
         description: The user's IP address
       - name: updated_at
         description: The last time this user's email was updated
-    tests:
+    data_tests:
       - test.nothing
 
   - name: second_model
@@ -368,13 +374,13 @@ models:
       meta:
         color: blue
         size: large
-    tests:
+    data_tests:
       - unique:
           column_name: count
     columns:
       - name: first_name
         description: "The first name being summarized"
-        tests:
+        data_tests:
           - unique
       - name: ct
         description: "The number of instances of the first name"
@@ -387,7 +393,7 @@ models:
           materialized: view
           meta:
             color: red
-        tests: []
+        data_tests: []
         columns:
           - include: '*'
             exclude: ['ct']
@@ -469,6 +475,8 @@ def verify_manifest(project, expected_manifest, start_time, manifest_schema_path
         "exposures",
         "selectors",
         "semantic_models",
+        "unit_tests",
+        "saved_queries",
     }
 
     assert set(manifest.keys()) == manifest_keys
@@ -494,7 +502,7 @@ def verify_manifest(project, expected_manifest, start_time, manifest_schema_path
             for unique_id, node in expected_manifest[key].items():
                 assert unique_id in manifest[key]
                 assert manifest[key][unique_id] == node, f"{unique_id} did not match"
-        else:  # ['docs', 'parent_map', 'child_map', 'group_map', 'selectors']
+        else:  # ['docs', 'parent_map', 'child_map', 'group_map', 'selectors', 'semantic_models', 'saved_queries']
             assert manifest[key] == expected_manifest[key]
 
 

@@ -1,86 +1,89 @@
 {
-  "type": "object",
-  "required": [
-    "metadata",
-    "results",
-    "elapsed_time"
-  ],
-  "properties": {
-    "metadata": {
-      "$ref": "#/definitions/BaseArtifactMetadata"
-    },
-    "results": {
-      "type": "array",
-      "items": {
-        "$ref": "#/definitions/RunResultOutput"
-      }
-    },
-    "elapsed_time": {
-      "type": "number"
-    },
-    "args": {
-      "type": "object",
-      "default": {}
-    }
-  },
-  "additionalProperties": false,
-  "description": "RunResultsArtifact(metadata: dbt.contracts.util.BaseArtifactMetadata, results: Sequence[dbt.contracts.results.RunResultOutput], elapsed_time: float, args: Dict[str, Any] = <factory>)",
-  "definitions": {
+  "$ref": "#/$defs/RunResultsArtifact",
+  "$defs": {
     "BaseArtifactMetadata": {
       "type": "object",
-      "required": [
-        "dbt_schema_version"
-      ],
+      "title": "BaseArtifactMetadata",
       "properties": {
         "dbt_schema_version": {
           "type": "string"
         },
         "dbt_version": {
           "type": "string",
-          "default": "1.5.0a1"
+          "default": "1.7.0b1"
         },
         "generated_at": {
-          "type": "string",
-          "format": "date-time",
-          "default": "2023-02-09T23:46:55.264544Z"
+          "type": "string"
         },
         "invocation_id": {
-          "oneOf": [
+          "anyOf": [
             {
               "type": "string"
             },
             {
               "type": "null"
             }
-          ],
-          "default": "e6a9b266-203d-4fec-93af-fb8f55423a6b"
+          ]
         },
         "env": {
           "type": "object",
           "additionalProperties": {
             "type": "string"
           },
-          "default": {}
+          "propertyNames": {
+            "type": "string"
+          }
         }
       },
       "additionalProperties": false,
-      "description": "BaseArtifactMetadata(dbt_schema_version: str, dbt_version: str = '1.5.0a1', generated_at: datetime.datetime = <factory>, invocation_id: Optional[str] = <factory>, env: Dict[str, str] = <factory>)"
+      "required": [
+        "dbt_schema_version"
+      ]
+    },
+    "TimingInfo": {
+      "type": "object",
+      "title": "TimingInfo",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "started_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "completed_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name"
+      ]
     },
     "RunResultOutput": {
       "type": "object",
-      "required": [
-        "status",
-        "timing",
-        "thread_id",
-        "execution_time",
-        "adapter_response",
-        "unique_id"
-      ],
+      "title": "RunResultOutput",
       "properties": {
         "status": {
-          "oneOf": [
+          "anyOf": [
             {
-              "type": "string",
               "enum": [
                 "success",
                 "error",
@@ -88,7 +91,6 @@
               ]
             },
             {
-              "type": "string",
               "enum": [
                 "pass",
                 "error",
@@ -98,7 +100,6 @@
               ]
             },
             {
-              "type": "string",
               "enum": [
                 "pass",
                 "warn",
@@ -111,7 +112,7 @@
         "timing": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/TimingInfo"
+            "$ref": "#/$defs/TimingInfo"
           }
         },
         "thread_id": {
@@ -121,10 +122,13 @@
           "type": "number"
         },
         "adapter_response": {
-          "type": "object"
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          }
         },
         "message": {
-          "oneOf": [
+          "anyOf": [
             {
               "type": "string"
             },
@@ -134,7 +138,7 @@
           ]
         },
         "failures": {
-          "oneOf": [
+          "anyOf": [
             {
               "type": "integer"
             },
@@ -148,255 +152,47 @@
         }
       },
       "additionalProperties": false,
-      "description": "RunResultOutput(status: Union[dbt.contracts.results.RunStatus, dbt.contracts.results.TestStatus, dbt.contracts.results.FreshnessStatus], timing: List[dbt.contracts.results.TimingInfo], thread_id: str, execution_time: float, adapter_response: Dict[str, Any], message: Optional[str], failures: Optional[int], unique_id: str)"
-    },
-    "TimingInfo": {
-      "type": "object",
       "required": [
-        "name"
-      ],
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "started_at": {
-          "oneOf": [
-            {
-              "type": "string",
-              "format": "date-time"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "completed_at": {
-          "oneOf": [
-            {
-              "type": "string",
-              "format": "date-time"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "additionalProperties": false,
-      "description": "TimingInfo(name: str, started_at: Optional[datetime.datetime] = None, completed_at: Optional[datetime.datetime] = None)"
-    },
-    "FreshnessMetadata": {
-      "type": "object",
-      "required": [],
-      "properties": {
-        "dbt_schema_version": {
-          "type": "string",
-          "default": "https://schemas.getdbt.com/dbt/sources/v3.json"
-        },
-        "dbt_version": {
-          "type": "string",
-          "default": "1.5.0a1"
-        },
-        "generated_at": {
-          "type": "string",
-          "format": "date-time",
-          "default": "2023-02-09T23:46:55.263337Z"
-        },
-        "invocation_id": {
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": "e6a9b266-203d-4fec-93af-fb8f55423a6b"
-        },
-        "env": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "string"
-          },
-          "default": {}
-        }
-      },
-      "additionalProperties": false,
-      "description": "FreshnessMetadata(dbt_schema_version: str = <factory>, dbt_version: str = '1.5.0a1', generated_at: datetime.datetime = <factory>, invocation_id: Optional[str] = <factory>, env: Dict[str, str] = <factory>)"
-    },
-    "SourceFreshnessRuntimeError": {
-      "type": "object",
-      "required": [
-        "unique_id",
-        "status"
-      ],
-      "properties": {
-        "unique_id": {
-          "type": "string"
-        },
-        "error": {
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "status": {
-          "type": "string",
-          "enum": [
-            "runtime error"
-          ]
-        }
-      },
-      "additionalProperties": false,
-      "description": "SourceFreshnessRuntimeError(unique_id: str, error: Union[str, int, NoneType], status: dbt.contracts.results.FreshnessErrorEnum)"
-    },
-    "SourceFreshnessOutput": {
-      "type": "object",
-      "required": [
-        "unique_id",
-        "max_loaded_at",
-        "snapshotted_at",
-        "max_loaded_at_time_ago_in_s",
         "status",
-        "criteria",
-        "adapter_response",
         "timing",
         "thread_id",
-        "execution_time"
-      ],
+        "execution_time",
+        "adapter_response",
+        "message",
+        "failures",
+        "unique_id"
+      ]
+    },
+    "RunResultsArtifact": {
+      "type": "object",
+      "title": "RunResultsArtifact",
       "properties": {
-        "unique_id": {
-          "type": "string"
+        "metadata": {
+          "$ref": "#/$defs/BaseArtifactMetadata"
         },
-        "max_loaded_at": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "snapshotted_at": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "max_loaded_at_time_ago_in_s": {
-          "type": "number"
-        },
-        "status": {
-          "type": "string",
-          "enum": [
-            "pass",
-            "warn",
-            "error",
-            "runtime error"
-          ]
-        },
-        "criteria": {
-          "$ref": "#/definitions/FreshnessThreshold"
-        },
-        "adapter_response": {
-          "type": "object"
-        },
-        "timing": {
+        "results": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/TimingInfo"
+            "$ref": "#/$defs/RunResultOutput"
           }
         },
-        "thread_id": {
-          "type": "string"
-        },
-        "execution_time": {
+        "elapsed_time": {
           "type": "number"
-        }
-      },
-      "additionalProperties": false,
-      "description": "SourceFreshnessOutput(unique_id: str, max_loaded_at: datetime.datetime, snapshotted_at: datetime.datetime, max_loaded_at_time_ago_in_s: float, status: dbt.contracts.results.FreshnessStatus, criteria: dbt.contracts.graph.unparsed.FreshnessThreshold, adapter_response: Dict[str, Any], timing: List[dbt.contracts.results.TimingInfo], thread_id: str, execution_time: float)"
-    },
-    "FreshnessThreshold": {
-      "type": "object",
-      "required": [],
-      "properties": {
-        "warn_after": {
-          "oneOf": [
-            {
-              "$ref": "#/definitions/Time"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": {
-            "count": null,
-            "period": null
+        },
+        "args": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
           }
-        },
-        "error_after": {
-          "oneOf": [
-            {
-              "$ref": "#/definitions/Time"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": {
-            "count": null,
-            "period": null
-          }
-        },
-        "filter": {
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
         }
       },
       "additionalProperties": false,
-      "description": "FreshnessThreshold(warn_after: Optional[dbt.contracts.graph.unparsed.Time] = <factory>, error_after: Optional[dbt.contracts.graph.unparsed.Time] = <factory>, filter: Optional[str] = None)"
-    },
-    "Time": {
-      "type": "object",
-      "required": [],
-      "properties": {
-        "count": {
-          "oneOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "period": {
-          "oneOf": [
-            {
-              "type": "string",
-              "enum": [
-                "minute",
-                "hour",
-                "day"
-              ]
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "additionalProperties": false,
-      "description": "Time(count: Optional[int] = None, period: Optional[dbt.contracts.graph.unparsed.TimePeriod] = None)"
+      "required": [
+        "metadata",
+        "results",
+        "elapsed_time"
+      ]
     }
   },
-  "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://schemas.getdbt.com/dbt/run-results/v4.json"
 }

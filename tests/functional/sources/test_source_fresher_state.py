@@ -1,20 +1,19 @@
-import os
 import json
+import os
 import shutil
-import pytest
 from datetime import datetime, timedelta
 
-from dbt.exceptions import DbtInternalError
+import pytest
 
-
-from dbt.tests.util import AnyStringWith, AnyFloat
 import dbt.version
+from dbt.contracts.results import FreshnessExecutionResultArtifact
+from dbt.tests.util import AnyFloat, AnyStringWith
+from dbt_common.exceptions import DbtInternalError
 from tests.functional.sources.common_source_setup import BaseSourcesTest
-
 from tests.functional.sources.fixtures import (
     error_models_schema_yml,
-    models_newly_added_model_sql,
     models_newly_added_error_model_sql,
+    models_newly_added_model_sql,
 )
 
 
@@ -81,6 +80,10 @@ class SuccessfulSourceFreshnessTest(BaseSourcesTest):
         with open(path) as fp:
             data = json.load(fp)
 
+        try:
+            FreshnessExecutionResultArtifact.validate(data)
+        except Exception:
+            raise pytest.fail("FreshnessExecutionResultArtifact did not validate")
         assert set(data) == {"metadata", "results", "elapsed_time"}
         assert "generated_at" in data["metadata"]
         assert isinstance(data["elapsed_time"], float)
@@ -621,7 +624,7 @@ class TestSourceFresherNoPreviousState(SuccessfulSourceFreshnessTest):
         with pytest.raises(DbtInternalError) as excinfo:
             self.run_dbt_with_vars(
                 project,
-                ["run", "-s", "source_status:fresher", "--defer", "--state", "previous_state"],
+                ["run", "-s", "source_status:fresher", "--state", "previous_state"],
             )
         assert "No previous state comparison freshness results in sources.json" in str(
             excinfo.value

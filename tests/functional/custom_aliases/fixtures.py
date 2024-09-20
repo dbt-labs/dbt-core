@@ -55,13 +55,13 @@ models:
   - name: model1
     columns:
       - name: model_name
-        tests:
+        data_tests:
           - accepted_values:
              values: ['custom_alias']
   - name: model2
     columns:
       - name: model_name
-        tests:
+        data_tests:
           - accepted_values:
              values: ['model2']
 

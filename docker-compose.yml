@@ -30,7 +30,3 @@ services:
     working_dir: /usr/app
     depends_on:
       - database
-
-networks:
-  default:
-    name: dbt-net

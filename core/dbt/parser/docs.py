@@ -1,14 +1,12 @@
-from typing import Iterable, Optional
-
 import re
+from typing import Iterable, Optional
 
 from dbt.clients.jinja import get_rendered
 from dbt.contracts.files import SourceFile
 from dbt.contracts.graph.nodes import Documentation
 from dbt.node_types import NodeType
 from dbt.parser.base import Parser
-from dbt.parser.search import BlockContents, FileBlock, BlockSearcher
-
+from dbt.parser.search import BlockContents, BlockSearcher, FileBlock
 
 SHOULD_PARSE_RE = re.compile(r"{[{%]")
 

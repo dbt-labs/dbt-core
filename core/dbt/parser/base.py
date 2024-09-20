@@ -1,27 +1,30 @@
 import abc
 import itertools
 import os
-from typing import List, Dict, Any, Generic, Optional, TypeVar
+from typing import Any, Dict, Generic, List, Optional, TypeVar
 
-from dbt.dataclass_schema import ValidationError
-
-from dbt import utils
-from dbt.clients.jinja import MacroGenerator
-from dbt.context.providers import (
-    generate_parser_model_context,
-    generate_generate_name_macro_context,
-)
+from dbt import hooks, utils
 from dbt.adapters.factory import get_adapter  # noqa: F401
-from dbt.clients.jinja import get_rendered
-from dbt.config import Project, RuntimeConfig
+from dbt.artifacts.resources import Contract
+from dbt.clients.jinja import MacroGenerator, get_rendered
+from dbt.config import RuntimeConfig
 from dbt.context.context_config import ContextConfig
+from dbt.context.providers import (
+    generate_generate_name_macro_context,
+    generate_parser_model_context,
+)
 from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.graph.nodes import Contract, BaseNode, ManifestNode
+from dbt.contracts.graph.nodes import BaseNode, ManifestNode
 from dbt.contracts.graph.unparsed import Docs, UnparsedNode
-from dbt.exceptions import DbtInternalError, ConfigUpdateError, DictParseError
-from dbt import hooks
-from dbt.node_types import NodeType, ModelLanguage
+from dbt.exceptions import (
+    ConfigUpdateError,
+    DbtInternalError,
+    DictParseError,
+    InvalidAccessTypeError,
+)
+from dbt.node_types import AccessType, ModelLanguage, NodeType
 from dbt.parser.search import FileBlock
+from dbt_common.dataclass_schema import ValidationError
 
 # internally, the parser may store a less-restrictive type that will be
 # transformed into the final type. But it will have to be derived from
@@ -29,7 +32,6 @@ from dbt.parser.search import FileBlock
 FinalValue = TypeVar("FinalValue", bound=BaseNode)
 IntermediateValue = TypeVar("IntermediateValue", bound=BaseNode)
 
-IntermediateNode = TypeVar("IntermediateNode", bound=Any)
 FinalNode = TypeVar("FinalNode", bound=ManifestNode)
 
 
@@ -37,9 +39,9 @@ ConfiguredBlockType = TypeVar("ConfiguredBlockType", bound=FileBlock)
 
 
 class BaseParser(Generic[FinalValue]):
-    def __init__(self, project: Project, manifest: Manifest) -> None:
-        self.project = project
-        self.manifest = manifest
+    def __init__(self, project: RuntimeConfig, manifest: Manifest) -> None:
+        self.project: RuntimeConfig = project
+        self.manifest: Manifest = manifest
 
     @abc.abstractmethod
     def parse_file(self, block: FileBlock) -> None:
@@ -61,7 +63,7 @@ class BaseParser(Generic[FinalValue]):
 class Parser(BaseParser[FinalValue], Generic[FinalValue]):
     def __init__(
         self,
-        project: Project,
+        project: RuntimeConfig,
         manifest: Manifest,
         root_project: RuntimeConfig,
     ) -> None:
@@ -70,6 +72,7 @@ class Parser(BaseParser[FinalValue], Generic[FinalValue]):
 
 
 class RelationUpdate:
+    # "component" is database, schema or alias
     def __init__(self, config: RuntimeConfig, manifest: Manifest, component: str) -> None:
         default_macro = manifest.find_generate_macro_by_name(
             component=component,
@@ -103,7 +106,7 @@ class RelationUpdate:
         self.component = component
 
     def __call__(self, parsed_node: Any, override: Optional[str]) -> None:
-        if parsed_node.package_name in self.package_updaters:
+        if getattr(parsed_node, "package_name", None) in self.package_updaters:
             new_value = self.package_updaters[parsed_node.package_name](override, parsed_node)
         else:
             new_value = self.default_updater(override, parsed_node)
@@ -115,16 +118,17 @@ class RelationUpdate:
 
 class ConfiguredParser(
     Parser[FinalNode],
-    Generic[ConfiguredBlockType, IntermediateNode, FinalNode],
+    Generic[ConfiguredBlockType, FinalNode],
 ):
     def __init__(
         self,
-        project: Project,
+        project: RuntimeConfig,
         manifest: Manifest,
         root_project: RuntimeConfig,
     ) -> None:
         super().__init__(project, manifest, root_project)
 
+        # this sets callables from RelationUpdate
         self._update_node_database = RelationUpdate(
             manifest=manifest, config=root_project, component="database"
         )
@@ -141,7 +145,7 @@ class ConfiguredParser(
         pass
 
     @abc.abstractmethod
-    def parse_from_dict(self, dict, validate=True) -> IntermediateNode:
+    def parse_from_dict(self, dict, validate=True) -> FinalNode:
         pass
 
     @abc.abstractproperty
@@ -205,7 +209,7 @@ class ConfiguredParser(
         fqn: List[str],
         name=None,
         **kwargs,
-    ) -> IntermediateNode:
+    ) -> FinalNode:
         """Create the node that will be passed in to the parser context for
         "rendering". Some information may be partial, as it'll be updated by
         config() and any ref()/source() calls discovered during rendering.
@@ -236,6 +240,7 @@ class ConfiguredParser(
             "checksum": block.file.checksum.to_dict(omit_none=True),
         }
         dct.update(kwargs)
+
         try:
             return self.parse_from_dict(dct, validate=True)
         except ValidationError as exc:
@@ -249,10 +254,10 @@ class ConfiguredParser(
             )
             raise DictParseError(exc, node=node)
 
-    def _context_for(self, parsed_node: IntermediateNode, config: ContextConfig) -> Dict[str, Any]:
+    def _context_for(self, parsed_node: FinalNode, config: ContextConfig) -> Dict[str, Any]:
         return generate_parser_model_context(parsed_node, self.root_project, self.manifest, config)
 
-    def render_with_context(self, parsed_node: IntermediateNode, config: ContextConfig):
+    def render_with_context(self, parsed_node: FinalNode, config: ContextConfig):
         # Given the parsed node and a ContextConfig to use during parsing,
         # render the node's sql with macro capture enabled.
         # Note: this mutates the config object when config calls are rendered.
@@ -267,7 +272,7 @@ class ConfiguredParser(
     # updating the config with new config passed in, then re-creating the
     # config from the dict in the node.
     def update_parsed_node_config_dict(
-        self, parsed_node: IntermediateNode, config_dict: Dict[str, Any]
+        self, parsed_node: FinalNode, config_dict: Dict[str, Any]
     ) -> None:
         # Overwrite node config
         final_config_dict = parsed_node.config.to_dict(omit_none=True)
@@ -277,7 +282,7 @@ class ConfiguredParser(
         parsed_node.config = parsed_node.config.from_dict(final_config_dict)
 
     def update_parsed_node_relation_names(
-        self, parsed_node: IntermediateNode, config_dict: Dict[str, Any]
+        self, parsed_node: FinalNode, config_dict: Dict[str, Any]
     ) -> None:
 
         # These call the RelationUpdate callable to go through generate_name macros
@@ -285,8 +290,11 @@ class ConfiguredParser(
         self._update_node_schema(parsed_node, config_dict.get("schema"))
         self._update_node_alias(parsed_node, config_dict.get("alias"))
 
-        # Snapshot nodes use special "target_database" and "target_schema" fields for some reason
-        if parsed_node.resource_type == NodeType.Snapshot:
+        # Snapshot nodes use special "target_database" and "target_schema" fields
+        # for backward compatibility
+        # We have to do getattr here because saved_query parser calls this method with
+        # Export object instead of a node.
+        if getattr(parsed_node, "resource_type", None) == NodeType.Snapshot:
             if "target_database" in config_dict and config_dict["target_database"]:
                 parsed_node.database = config_dict["target_database"]
             if "target_schema" in config_dict and config_dict["target_schema"]:
@@ -296,7 +304,7 @@ class ConfiguredParser(
 
     def update_parsed_node_config(
         self,
-        parsed_node: IntermediateNode,
+        parsed_node: FinalNode,
         config: ContextConfig,
         context=None,
         patch_config_dict=None,
@@ -327,6 +335,16 @@ class ConfiguredParser(
         if "group" in config_dict and config_dict["group"]:
             parsed_node.group = config_dict["group"]
 
+        # If we have access in the config, copy to node level
+        if parsed_node.resource_type == NodeType.Model and config_dict.get("access", None):
+            if AccessType.is_valid(config_dict["access"]):
+                assert hasattr(parsed_node, "access")
+                parsed_node.access = AccessType(config_dict["access"])
+            else:
+                raise InvalidAccessTypeError(
+                    unique_id=parsed_node.unique_id, field_value=config_dict["access"]
+                )
+
         # If we have docs in the config, merge with the node level, for backwards
         # compatibility with earlier node-only config.
         if "docs" in config_dict and config_dict["docs"]:
@@ -345,7 +363,11 @@ class ConfiguredParser(
 
         # If we have contract in the config, copy to node level
         if "contract" in config_dict and config_dict["contract"]:
-            parsed_node.contract = Contract(enforced=config_dict["contract"]["enforced"])
+            contract_dct = config_dict["contract"]
+            Contract.validate(contract_dct)
+            # Seed node has contract config (from NodeConfig) but no contract in SeedNode
+            if hasattr(parsed_node, "contract"):
+                parsed_node.contract = Contract.from_dict(contract_dct)
 
         # unrendered_config is used to compare the original database/schema/alias
         # values and to handle 'same_config' and 'same_contents' calls
@@ -367,6 +389,7 @@ class ConfiguredParser(
 
         # at this point, we've collected our hooks. Use the node context to
         # render each hook and collect refs/sources
+        assert hasattr(parsed_node.config, "pre_hook") and hasattr(parsed_node.config, "post_hook")
         hooks = list(itertools.chain(parsed_node.config.pre_hook, parsed_node.config.post_hook))
         # skip context rebuilding if there aren't any hooks
         if not hooks:
@@ -398,7 +421,7 @@ class ConfiguredParser(
         self._mangle_hooks(config_dict)
         return config_dict
 
-    def render_update(self, node: IntermediateNode, config: ContextConfig) -> None:
+    def render_update(self, node: FinalNode, config: ContextConfig) -> None:
         try:
             context = self.render_with_context(node, config)
             self.update_parsed_node_config(node, config, context=context)
@@ -425,16 +448,15 @@ class ConfiguredParser(
             fqn=fqn,
         )
         self.render_update(node, config)
-        result = self.transform(node)
-        self.add_result_node(block, result)
-        return result
+        self.add_result_node(block, node)
+        return node
 
     def _update_node_relation_name(self, node: ManifestNode):
         # Seed and Snapshot nodes and Models that are not ephemeral,
         # and TestNodes that store_failures.
         # TestNodes do not get a relation_name without store failures
         # because no schema is created.
-        if node.is_relational and not node.is_ephemeral_model:
+        if getattr(node, "is_relational", None) and not getattr(node, "is_ephemeral_model", None):
             adapter = get_adapter(self.root_project)
             relation_cls = adapter.Relation
             node.relation_name = str(relation_cls.create_from(self.root_project, node))
@@ -446,26 +468,18 @@ class ConfiguredParser(
     def parse_file(self, file_block: FileBlock) -> None:
         pass
 
-    @abc.abstractmethod
-    def transform(self, node: IntermediateNode) -> FinalNode:
-        pass
-
 
 class SimpleParser(
-    ConfiguredParser[ConfiguredBlockType, FinalNode, FinalNode],
+    ConfiguredParser[ConfiguredBlockType, FinalNode],
     Generic[ConfiguredBlockType, FinalNode],
 ):
-    def transform(self, node):
-        return node
+    pass
 
 
-class SQLParser(
-    ConfiguredParser[FileBlock, IntermediateNode, FinalNode], Generic[IntermediateNode, FinalNode]
-):
+class SQLParser(ConfiguredParser[FileBlock, FinalNode], Generic[FinalNode]):
     def parse_file(self, file_block: FileBlock) -> None:
         self.parse_node(file_block)
 
 
-class SimpleSQLParser(SQLParser[FinalNode, FinalNode]):
-    def transform(self, node):
-        return node
+class SimpleSQLParser(SQLParser[FinalNode]):
+    pass

@@ -1,10 +1,10 @@
 import json
 import os
 from pathlib import Path
+
 import pytest
 
 from dbt.tests.util import run_dbt, update_config_file, write_file
-
 
 good_docs_blocks_model_sql = "select 1 as id, 'joe' as first_name"
 
@@ -91,6 +91,7 @@ class TestGoodDocsBlocks:
             "meta": {},
             "quote": None,
             "tags": [],
+            "granularity": None,
         } == model_data["columns"]["id"]
 
         assert {
@@ -101,6 +102,7 @@ class TestGoodDocsBlocks:
             "meta": {},
             "quote": None,
             "tags": [],
+            "granularity": None,
         } == model_data["columns"]["first_name"]
 
         assert {
@@ -111,6 +113,7 @@ class TestGoodDocsBlocks:
             "meta": {},
             "quote": None,
             "tags": [],
+            "granularity": None,
         } == model_data["columns"]["last_name"]
 
         assert len(model_data["columns"]) == 3
@@ -152,6 +155,7 @@ class TestGoodDocsBlocksAltPath:
             "meta": {},
             "quote": None,
             "tags": [],
+            "granularity": None,
         } == model_data["columns"]["id"]
 
         assert {
@@ -162,6 +166,7 @@ class TestGoodDocsBlocksAltPath:
             "meta": {},
             "quote": None,
             "tags": [],
+            "granularity": None,
         } == model_data["columns"]["first_name"]
 
         assert {
@@ -172,6 +177,7 @@ class TestGoodDocsBlocksAltPath:
             "meta": {},
             "quote": None,
             "tags": [],
+            "granularity": None,
         } == model_data["columns"]["last_name"]
 
         assert len(model_data["columns"]) == 3

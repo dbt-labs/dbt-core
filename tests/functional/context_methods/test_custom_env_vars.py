@@ -1,6 +1,7 @@
-import pytest
 import json
 import os
+
+import pytest
 
 from dbt.tests.util import run_dbt_and_capture
 

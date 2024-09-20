@@ -1,72 +1,63 @@
-import argparse
 import json
-
-import networkx as nx  # type: ignore
 import os
 import pickle
-
 from collections import defaultdict
-from typing import List, Dict, Any, Tuple, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
-from dbt.flags import get_flags
+import networkx as nx  # type: ignore
+import sqlparse
+
+import dbt.tracking
 from dbt.adapters.factory import get_adapter
 from dbt.clients import jinja
-from dbt.clients.system import make_directory
-from dbt.context.providers import generate_runtime_model_context
+from dbt.context.providers import (
+    generate_runtime_model_context,
+    generate_runtime_unit_test_context,
+)
 from dbt.contracts.graph.manifest import Manifest, UniqueID
 from dbt.contracts.graph.nodes import (
-    ManifestNode,
-    ManifestSQLNode,
     GenericTestNode,
     GraphMemberNode,
     InjectedCTE,
+    ManifestNode,
+    ManifestSQLNode,
+    ModelNode,
     SeedNode,
+    UnitTestDefinition,
+    UnitTestNode,
 )
+from dbt.events.types import FoundStats, WritingInjectedSQLForNode
 from dbt.exceptions import (
-    GraphDependencyNotFoundError,
     DbtInternalError,
     DbtRuntimeError,
+    ForeignKeyConstraintToSyntaxError,
+    GraphDependencyNotFoundError,
+    ParsingError,
 )
+from dbt.flags import get_flags
 from dbt.graph import Graph
-from dbt.events.functions import fire_event, get_invocation_id
-from dbt.events.types import FoundStats, Note, WritingInjectedSQLForNode
-from dbt.events.contextvars import get_node_info
-from dbt.node_types import NodeType, ModelLanguage
-from dbt.events.format import pluralize
-import dbt.tracking
-import dbt.task.list as list_task
-import sqlparse
+from dbt.node_types import ModelLanguage, NodeType
+from dbt_common.clients.system import make_directory
+from dbt_common.contracts.constraints import ConstraintType
+from dbt_common.events.contextvars import get_node_info
+from dbt_common.events.format import pluralize
+from dbt_common.events.functions import fire_event
+from dbt_common.events.types import Note
+from dbt_common.invocation import get_invocation_id
 
 graph_file_name = "graph.gpickle"
 
 
-def print_compile_stats(stats):
-    names = {
-        NodeType.Model: "model",
-        NodeType.Test: "test",
-        NodeType.Snapshot: "snapshot",
-        NodeType.Analysis: "analysis",
-        NodeType.Macro: "macro",
-        NodeType.Operation: "operation",
-        NodeType.Seed: "seed",
-        NodeType.Source: "source",
-        NodeType.Exposure: "exposure",
-        NodeType.SemanticModel: "semantic model",
-        NodeType.Metric: "metric",
-        NodeType.Group: "group",
-    }
-
-    results = {k: 0 for k in names.keys()}
-    results.update(stats)
-
+def print_compile_stats(stats: Dict[NodeType, int]):
     # create tracking event for resource_counts
     if dbt.tracking.active_user is not None:
-        resource_counts = {k.pluralize(): v for k, v in results.items()}
+        resource_counts = {k.pluralize(): v for k, v in stats.items()}
         dbt.tracking.track_resource_counts(resource_counts)
 
     # do not include resource types that are not actually defined in the project
-    stat_line = ", ".join([pluralize(ct, names.get(t)) for t, ct in stats.items() if t in names])
-
+    stat_line = ", ".join(
+        [pluralize(ct, t).replace("_", " ") for t, ct in stats.items() if ct != 0]
+    )
     fire_event(FoundStats(stat_line=stat_line))
 
 
@@ -78,7 +69,7 @@ def _node_enabled(node: ManifestNode):
         return True
 
 
-def _generate_stats(manifest: Manifest):
+def _generate_stats(manifest: Manifest) -> Dict[NodeType, int]:
     stats: Dict[NodeType, int] = defaultdict(int)
     for node in manifest.nodes.values():
         if _node_enabled(node):
@@ -91,6 +82,8 @@ def _generate_stats(manifest: Manifest):
     stats[NodeType.Macro] += len(manifest.macros)
     stats[NodeType.Group] += len(manifest.groups)
     stats[NodeType.SemanticModel] += len(manifest.semantic_models)
+    stats[NodeType.SavedQuery] += len(manifest.saved_queries)
+    stats[NodeType.Unit] += len(manifest.unit_tests)
 
     # TODO: should we be counting dimensions + entities?
 
@@ -125,10 +118,10 @@ def _get_tests_for_node(manifest: Manifest, unique_id: UniqueID) -> List[UniqueI
 
 
 class Linker:
-    def __init__(self, data=None):
+    def __init__(self, data=None) -> None:
         if data is None:
             data = {}
-        self.graph = nx.DiGraph(**data)
+        self.graph: nx.DiGraph = nx.DiGraph(**data)
 
     def edges(self):
         return self.graph.edges()
@@ -183,14 +176,18 @@ class Linker:
     def link_graph(self, manifest: Manifest):
         for source in manifest.sources.values():
             self.add_node(source.unique_id)
-        for semantic_model in manifest.semantic_models.values():
-            self.add_node(semantic_model.unique_id)
         for node in manifest.nodes.values():
             self.link_node(node, manifest)
+        for semantic_model in manifest.semantic_models.values():
+            self.link_node(semantic_model, manifest)
         for exposure in manifest.exposures.values():
             self.link_node(exposure, manifest)
         for metric in manifest.metrics.values():
             self.link_node(metric, manifest)
+        for unit_test in manifest.unit_tests.values():
+            self.link_node(unit_test, manifest)
+        for saved_query in manifest.saved_queries.values():
+            self.link_node(saved_query, manifest)
 
         cycle = self.find_cycles()
 
@@ -232,6 +229,7 @@ class Linker:
                 # Get all tests that depend on any upstream nodes.
                 upstream_tests = []
                 for upstream_node in upstream_nodes:
+                    # This gets tests with unique_ids starting with "test."
                     upstream_tests += _get_tests_for_node(manifest, upstream_node)
 
                 for upstream_test in upstream_tests:
@@ -274,12 +272,11 @@ class Linker:
 
 
 class Compiler:
-    def __init__(self, config):
+    def __init__(self, config) -> None:
         self.config = config
 
     def initialize(self):
         make_directory(self.config.project_target_path)
-        make_directory(self.config.packages_install_path)
 
     # creates a ModelContext which is converted to
     # a dict for jinja rendering of SQL
@@ -289,8 +286,10 @@ class Compiler:
         manifest: Manifest,
         extra_context: Dict[str, Any],
     ) -> Dict[str, Any]:
-
-        context = generate_runtime_model_context(node, self.config, manifest)
+        if isinstance(node, UnitTestNode):
+            context = generate_runtime_unit_test_context(node, self.config, manifest)
+        else:
+            context = generate_runtime_model_context(node, self.config, manifest)
         context.update(extra_context)
 
         if isinstance(node, GenericTestNode):
@@ -319,6 +318,10 @@ class Compiler:
         """
         if model.compiled_code is None:
             raise DbtRuntimeError("Cannot inject ctes into an uncompiled node", model)
+
+        # tech debt: safe flag/arg access (#6259)
+        if not getattr(self.config.args, "inject_ephemeral_ctes", True):
+            return (model, [])
 
         # extra_ctes_injected flag says that we've already recursively injected the ctes
         if model.extra_ctes_injected:
@@ -372,7 +375,7 @@ class Compiler:
 
             _extend_prepended_ctes(prepended_ctes, new_prepended_ctes)
 
-            new_cte_name = self.add_ephemeral_prefix(cte_model.name)
+            new_cte_name = self.add_ephemeral_prefix(cte_model.identifier)
             rendered_sql = cte_model._pre_injected_sql or cte_model.compiled_code
             sql = f" {new_cte_name} as (\n{rendered_sql}\n)"
 
@@ -438,7 +441,30 @@ class Compiler:
             relation_name = str(relation_cls.create_from(self.config, node))
             node.relation_name = relation_name
 
+        # Compile 'ref' and 'source' expressions in foreign key constraints
+        if isinstance(node, ModelNode):
+            for constraint in node.all_constraints:
+                if constraint.type == ConstraintType.foreign_key and constraint.to:
+                    constraint.to = self._compile_relation_for_foreign_key_constraint_to(
+                        manifest, node, constraint.to
+                    )
+
         return node
+
+    def _compile_relation_for_foreign_key_constraint_to(
+        self, manifest: Manifest, node: ManifestSQLNode, to_expression: str
+    ) -> str:
+        try:
+            foreign_key_node = manifest.find_node_from_ref_or_source(to_expression)
+        except ParsingError:
+            raise ForeignKeyConstraintToSyntaxError(node, to_expression)
+
+        if not foreign_key_node:
+            raise GraphDependencyNotFoundError(node, to_expression)
+
+        adapter = get_adapter(self.config)
+        relation_name = str(adapter.Relation.create_from(self.config, foreign_key_node))
+        return relation_name
 
     # This method doesn't actually "compile" any of the nodes. That is done by the
     # "compile_node" method. This creates a Linker and builds the networkx graph,
@@ -454,6 +480,7 @@ class Compiler:
         summaries["_invocation_id"] = get_invocation_id()
         summaries["linked"] = linker.get_graph_summary(manifest)
 
+        # This is only called for the "build" command
         if add_test_edges:
             manifest.build_parent_and_child_maps()
             linker.add_test_edges(manifest)
@@ -479,11 +506,8 @@ class Compiler:
         if write:
             self.write_graph_file(linker, manifest)
 
-        # Do not print these for ListTask's
-        if not (
-            self.config.args.__class__ == argparse.Namespace
-            and self.config.args.cls == list_task.ListTask
-        ):
+        # Do not print these for list command
+        if self.config.args.which != "list":
             stats = _generate_stats(manifest)
             print_compile_stats(stats)
 
@@ -523,6 +547,11 @@ class Compiler:
         the node's raw_code into compiled_code, and then calls the
         recursive method to "prepend" the ctes.
         """
+        # REVIEW: UnitTestDefinition shouldn't be possible here because of the
+        # type of node, and it is likewise an invalid return type.
+        if isinstance(node, UnitTestDefinition):
+            return node
+
         # Make sure Lexer for sqlparse 0.4.4 is initialized
         from sqlparse.lexer import Lexer  # type: ignore
 

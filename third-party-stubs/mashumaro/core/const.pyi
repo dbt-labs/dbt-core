@@ -1,13 +1,17 @@
-from typing import Any
+import enum
+from _typeshed import Incomplete
 
-PY_36: Any
-PY_37: Any
-PY_38: Any
-PY_39: Any
-PY_310: Any
-PY_37_MIN: Any
-PY_38_MIN: Any
-PY_39_MIN: Any
-PY_310_MIN = PY_310
+PY_37: Incomplete
+PY_38: Incomplete
+PY_39: Incomplete
+PY_310: Incomplete
+PY_311_MIN: Incomplete
+PY_310_MIN: Incomplete
+PY_39_MIN: Incomplete
+PY_38_MIN: Incomplete
+PY_37_MIN: Incomplete
 PEP_585_COMPATIBLE = PY_39_MIN
 PEP_586_COMPATIBLE = PY_38_MIN
+
+class Sentinel(enum.Enum):
+    MISSING: Incomplete

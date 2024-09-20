@@ -1,7 +1,8 @@
-import pytest
 import re
-from dbt.tests.util import run_dbt_and_capture
 
+import pytest
+
+from dbt.tests.util import run_dbt_and_capture
 
 models__do_nothing_then_fail_sql = """
 select 1,

@@ -1,6 +1,8 @@
-import pytest
-from dbt.cli.resolvers import default_log_path
 from pathlib import Path
+
+import pytest
+
+from dbt.cli.resolvers import default_log_path
 
 
 class TestDefaultLogPathNoProject:

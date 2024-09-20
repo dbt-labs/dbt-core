@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix issues with selectors and inline nodes
+time: 2024-06-05T11:16:52.187667-04:00
+custom:
+  Author: gshank
+  Issue: 8943 9269

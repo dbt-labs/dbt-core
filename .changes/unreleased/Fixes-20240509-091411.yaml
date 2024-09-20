@@ -1,0 +1,6 @@
+kind: Fixes
+body: Unit test fixture (csv) returns null for empty value
+time: 2024-05-09T09:14:11.772709-04:00
+custom:
+  Author: michelleark
+  Issue: "9881"

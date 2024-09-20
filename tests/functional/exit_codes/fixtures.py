@@ -44,17 +44,17 @@ models:
 - name: good
   columns:
   - name: updated_at
-    tests:
+    data_tests:
     - not_null
 - name: bad
   columns:
   - name: updated_at
-    tests:
+    data_tests:
     - not_null
 - name: dupe
   columns:
   - name: updated_at
-    tests:
+    data_tests:
     - unique
 """
 

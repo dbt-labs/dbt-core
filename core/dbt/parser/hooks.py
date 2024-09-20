@@ -1,14 +1,14 @@
 from dataclasses import dataclass
-from typing import Iterable, Iterator, Union, List, Tuple
+from typing import Iterable, Iterator, List, Tuple, Union
 
 from dbt.context.context_config import ContextConfig
 from dbt.contracts.files import FilePath
 from dbt.contracts.graph.nodes import HookNode
-from dbt.exceptions import DbtInternalError
 from dbt.node_types import NodeType, RunHookType
 from dbt.parser.base import SimpleParser
 from dbt.parser.search import FileBlock
 from dbt.utils import get_pseudo_hook_path
+from dbt_common.exceptions import DbtInternalError
 
 
 @dataclass
@@ -66,8 +66,6 @@ class HookSearcher(Iterable[HookBlock]):
 
 
 class HookParser(SimpleParser[HookBlock, HookNode]):
-    def transform(self, node):
-        return node
 
     # Hooks are only in the dbt_project.yml file for the project
     def get_path(self) -> FilePath:

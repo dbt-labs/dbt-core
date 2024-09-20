@@ -26,12 +26,13 @@ Legacy tests are found in the 'test' directory:
 
 The "tasks" map to top-level dbt commands. So `dbt run` => task.run.RunTask, etc. Some are more like abstract base classes (GraphRunnableTask, for example) but all the concrete types outside of task should map to tasks. Currently one executes at a time. The tasks kick off their “Runners” and those do execute in parallel. The parallelism is managed via a thread pool, in GraphRunnableTask.
 
-core/dbt/include/index.html
+core/dbt/task/docs/index.html
 This is the docs website code. It comes from the dbt-docs repository, and is generated when a release is packaged.
 
 ## Adapters
 
-dbt uses an adapter-plugin pattern to extend support to different databases, warehouses, query engines, etc. For testing and development purposes, the dbt-postgres plugin lives alongside the dbt-core codebase, in the [`plugins`](plugins) subdirectory. Like other adapter plugins, it is a self-contained codebase and package that builds on top of dbt-core.
+dbt uses an adapter-plugin pattern to extend support to different databases, warehouses, query engines, etc. 
+Note: dbt-postgres used to exist in dbt-core but is now in [its own repo](https://github.com/dbt-labs/dbt-postgres) 
 
 Each adapter is a mix of python, Jinja2, and SQL. The adapter code also makes heavy use of Jinja2 to wrap modular chunks of SQL functionality, define default implementations, and allow plugins to override it.
 

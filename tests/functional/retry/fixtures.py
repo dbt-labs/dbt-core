@@ -11,7 +11,7 @@ models:
   - name: sample_model
     columns:
       - name: foo
-        tests:
+        data_tests:
           - accepted_values:
               values: [3]
               quote: false
@@ -20,7 +20,7 @@ models:
   - name: second_model
     columns:
       - name: bar
-        tests:
+        data_tests:
           - accepted_values:
               values: [3]
               quote: false
@@ -29,7 +29,7 @@ models:
   - name: union_model
     columns:
       - name: sum3
-        tests:
+        data_tests:
           - accepted_values:
               values: [3]
               quote: false
@@ -44,4 +44,17 @@ macros__alter_timezone_sql = """
 {% do run_query(sql) %}
 {% do log("Timezone set to: " + timezone, info=True) %}
 {% endmacro %}
+"""
+
+simple_model = """
+select null as id
+"""
+
+simple_schema = """
+models:
+  - name: some_model
+    columns:
+      - name: id
+        data_tests:
+          - not_null
 """

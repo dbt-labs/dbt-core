@@ -1,36 +1,39 @@
-black==23.3.0
+git+https://github.com/dbt-labs/dbt-adapters.git@main
+git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-tests-adapter
+git+https://github.com/dbt-labs/dbt-common.git@main
+git+https://github.com/dbt-labs/dbt-postgres.git@main
+# black must match what's in .pre-commit-config.yaml to be sure local env matches CI
+black==24.3.0
 bumpversion
-ddtrace
+ddtrace==2.3.0
 docutils
-flake8
+# flake8 must match what's in .pre-commit-config.yaml to be sure local env matches CI
+flake8==4.0.1
 flaky
-freezegun==0.3.12
+freezegun>=1.4.0,<1.5
+hypothesis
 ipdb
+# isort must match what's in .pre-commit-config.yaml to be sure local env matches CI
+isort==5.13.2
+# mypy must match what's in .pre-commit-config.yaml to be sure local env matches CI
 mypy==1.4.1
 pip-tools
 pre-commit
-protobuf>=4.0.0
-pytest
+pytest>=7.4,<8.0
 pytest-cov
-pytest-csv
+pytest-csv>=3.0,<4.0
 pytest-dotenv
-pytest-logbook
 pytest-mock
 pytest-split
 pytest-xdist
 sphinx
 tox>=3.13
-twine
-types-colorama
 types-docutils
 types-PyYAML
-types-freezegun
 types-Jinja2
 types-mock
-types-protobuf
-types-python-dateutil
+types-protobuf>=4.0.0,<5.0.0
 types-pytz
 types-requests
 types-setuptools
-wheel
 mocker

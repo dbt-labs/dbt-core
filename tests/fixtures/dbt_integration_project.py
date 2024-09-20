@@ -39,7 +39,7 @@ models:
 - name: table_model
   columns:
   - name: id
-    tests:
+    data_tests:
     - unique
 """
 
