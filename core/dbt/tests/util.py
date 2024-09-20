@@ -8,13 +8,14 @@ from io import StringIO
 from typing import Any, Dict, List, Optional
 from unittest import mock
 
+import pytz
 import yaml
 
 from dbt.adapters.base.relation import BaseRelation
 from dbt.adapters.factory import Adapter
 from dbt.cli.main import dbtRunner
-from dbt.context.providers import BaseResolver
 from dbt.contracts.graph.manifest import Manifest
+from dbt.materializations.incremental.microbatch import MicrobatchBuilder
 from dbt_common.context import _INVOCATION_CONTEXT_VAR, InvocationContext
 from dbt_common.events.base_types import EventLevel
 from dbt_common.events.functions import (
@@ -645,5 +646,5 @@ def safe_set_invocation_context():
 
 
 def patch_microbatch_end_time(dt_str: str):
-    dt = datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S")
-    return mock.patch.object(BaseResolver, "_build_end_time", return_value=dt)
+    dt = datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=pytz.UTC)
+    return mock.patch.object(MicrobatchBuilder, "build_end_time", return_value=dt)
