@@ -117,7 +117,5 @@ class BaseMergeExcludeColumns:
         self.check_scenario_correctness(expected_fields, test_case_fields, project)
 
 
-# https://github.com/dbt-labs/dbt-core/issues/8286
-@pytest.mark.skip(reason="Needs PostgreSQL 15 in CI")
 class TestMergeExcludeColumns(BaseMergeExcludeColumns):
     pass
