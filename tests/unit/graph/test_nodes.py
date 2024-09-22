@@ -13,6 +13,7 @@ from dbt.artifacts.resources import (
     Measure,
     TestMetadata,
 )
+from dbt.artifacts.resources.types import BatchSize
 from dbt.artifacts.resources.v1.semantic_model import NodeRelation
 from dbt.contracts.graph.model_config import TestConfig
 from dbt.contracts.graph.nodes import ColumnInfo, ModelNode, ParsedNode, SemanticModel
@@ -109,6 +110,22 @@ class TestModelNode:
         default_model_node.columns = columns
 
         assert default_model_node.all_constraints == expected_all_constraints
+
+    @pytest.mark.parametrize(
+        "batch_size,batch_start,expected_formatted_batch_start",
+        [
+            (None, None, None),
+            (BatchSize.year, datetime(2020, 1, 1, 1), "2020-01-01"),
+            (BatchSize.month, datetime(2020, 1, 1, 1), "2020-01-01"),
+            (BatchSize.day, datetime(2020, 1, 1, 1), "2020-01-01"),
+            (BatchSize.hour, datetime(2020, 1, 1, 1), "2020-01-01 01:00:00"),
+        ],
+    )
+    def test_format_batch_start(
+        self, default_model_node, batch_size, batch_start, expected_formatted_batch_start
+    ):
+        default_model_node.config.batch_size = batch_size
+        assert default_model_node.format_batch_start(batch_start) == expected_formatted_batch_start
 
 
 class TestSemanticModel:
