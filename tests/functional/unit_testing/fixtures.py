@@ -304,6 +304,20 @@ where event_time > (select max(event_time) from {{ this }})
 {% endif %}
 """
 
+my_incremental_model_with_alias_sql = """
+{{
+    config(
+        materialized='incremental',
+        alias='alias_name'
+    )
+}}
+
+select * from {{ ref('events') }}
+{% if is_incremental() %}
+where event_time > (select max(event_time) from {{ this }})
+{% endif %}
+"""
+
 test_my_model_incremental_yml_basic = """
 unit_tests:
   - name: incremental_false
