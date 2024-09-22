@@ -46,12 +46,24 @@ class TestUnitTestResourceTypes:
         results = run_dbt(["list", "--exclude-resource-types", "model", "test"])
         assert sorted(results) == EXPECTED_UNIT_TESTS
 
+        results = run_dbt(["test", "--resource-type", "unit_test"])
+        assert len(results) == len(EXPECTED_UNIT_TESTS)
+
+        results = run_dbt(["test", "--exclude-resource-types", "model", "test"])
+        assert len(results) == len(EXPECTED_UNIT_TESTS)
+
         # data tests
         results = run_dbt(["list", "--resource-type", "test"])
         assert sorted(results) == EXPECTED_DATA_TESTS
 
         results = run_dbt(["list", "--exclude-resource-types", "unit_test", "model"])
         assert sorted(results) == EXPECTED_DATA_TESTS
+
+        results = run_dbt(["test", "--resource-type", "test"])
+        assert len(results) == len(EXPECTED_DATA_TESTS)
+
+        results = run_dbt(["test", "--exclude-resource-types", "unit_test", "model"])
+        assert len(results) == len(EXPECTED_DATA_TESTS)
 
         results = run_dbt(["build", "--resource-type", "test"])
         assert len(results) == len(EXPECTED_DATA_TESTS)
@@ -61,10 +73,16 @@ class TestUnitTestResourceTypes:
 
         # models
         results = run_dbt(["list", "--resource-type", "model"])
-        assert len(results) == len(EXPECTED_MODELS)
+        assert sorted(results) == EXPECTED_MODELS
 
         results = run_dbt(["list", "--exclude-resource-type", "unit_test", "test"])
         assert sorted(results) == EXPECTED_MODELS
+
+        results = run_dbt(["test", "--resource-type", "model"])
+        assert len(results) == 0
+
+        results = run_dbt(["test", "--exclude-resource-types", "unit_test", "test"])
+        assert len(results) == 0
 
         results = run_dbt(["build", "--resource-type", "model"])
         assert len(results) == len(EXPECTED_MODELS)

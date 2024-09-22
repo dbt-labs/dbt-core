@@ -196,24 +196,16 @@ class ListTask(GraphRunnableTask):
         else:
             return self.args.select
 
-    def get_node_selector(self):
+    def get_node_selector(self) -> ResourceTypeSelector:
         if self.manifest is None or self.graph is None:
             raise DbtInternalError("manifest and graph must be set to get perform node selection")
-        if self.resource_types == [NodeType.Test]:
-            return ResourceTypeSelector(
-                graph=self.graph,
-                manifest=self.manifest,
-                previous_state=self.previous_state,
-                resource_types=self.resource_types,
-            )
-        else:
-            return ResourceTypeSelector(
-                graph=self.graph,
-                manifest=self.manifest,
-                previous_state=self.previous_state,
-                resource_types=self.resource_types,
-                include_empty_nodes=True,
-            )
+        return ResourceTypeSelector(
+            graph=self.graph,
+            manifest=self.manifest,
+            previous_state=self.previous_state,
+            resource_types=self.resource_types,
+            include_empty_nodes=True,
+        )
 
     def interpret_results(self, results):
         # list command should always return 0 as exit code
