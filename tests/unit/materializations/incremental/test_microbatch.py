@@ -9,6 +9,8 @@ from dbt.artifacts.resources import NodeConfig
 from dbt.artifacts.resources.types import BatchSize
 from dbt.materializations.incremental.microbatch import MicrobatchBuilder
 
+MODEL_CONFIG_BEGIN = datetime(2024, 1, 1, 0, 0, 0, 0, pytz.UTC)
+
 
 class TestMicrobatchBuilder:
     @pytest.fixture(scope="class")
@@ -17,6 +19,7 @@ class TestMicrobatchBuilder:
         model.config = mock.MagicMock(NodeConfig)
         model.config.materialized = "incremental"
         model.config.incremental_strategy = "microbatch"
+        model.config.begin = MODEL_CONFIG_BEGIN
 
         return model
 
@@ -67,7 +70,8 @@ class TestMicrobatchBuilder:
                 datetime(2024, 9, 5, 8, 56, 0, 0, pytz.UTC),
                 BatchSize.day,
                 0,
-                None,
+                # is_incremental: False => model.config.begin
+                MODEL_CONFIG_BEGIN,
             ),
             # BatchSize.year
             (
@@ -93,8 +97,8 @@ class TestMicrobatchBuilder:
                 datetime(2024, 9, 5, 8, 56, 0, 0, pytz.UTC),
                 BatchSize.year,
                 0,
-                # is_incremental=False + no start_time -> None
-                None,
+                # is_incremental=False + no start_time -> model.config.begin
+                MODEL_CONFIG_BEGIN,
             ),
             (
                 True,
@@ -136,8 +140,8 @@ class TestMicrobatchBuilder:
                 datetime(2024, 9, 5, 8, 56, 0, 0, pytz.UTC),
                 BatchSize.month,
                 0,
-                # is_incremental=False + no start_time -> None
-                None,
+                # is_incremental=False + no start_time -> model.config.begin
+                MODEL_CONFIG_BEGIN,
             ),
             (
                 True,
@@ -179,8 +183,8 @@ class TestMicrobatchBuilder:
                 datetime(2024, 9, 5, 8, 56, 0, 0, pytz.UTC),
                 BatchSize.day,
                 0,
-                # is_incremental=False + no start_time -> None
-                None,
+                # is_incremental=False + no start_time -> model.config.begin
+                MODEL_CONFIG_BEGIN,
             ),
             (
                 True,
@@ -222,8 +226,8 @@ class TestMicrobatchBuilder:
                 datetime(2024, 9, 5, 8, 56, 0, 0, pytz.UTC),
                 BatchSize.hour,
                 0,
-                # is_incremental=False + no start_time -> None
-                None,
+                # is_incremental=False + no start_time -> model.config.begin
+                MODEL_CONFIG_BEGIN,
             ),
             (
                 True,

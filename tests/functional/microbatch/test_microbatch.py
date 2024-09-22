@@ -32,7 +32,7 @@ select 3 as id, TIMESTAMP '2020-01-03 00:00:00-0' as event_time
 """
 
 microbatch_model_sql = """
-{{ config(materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='day') }}
+{{ config(materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='day', begin=modules.datetime.datetime(2020, 1, 1, 0, 0, 0)) }}
 select * from {{ ref('input_model') }}
 """
 
@@ -67,7 +67,7 @@ sources:
 """
 
 microbatch_model_calling_source_sql = """
-{{ config(materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='day') }}
+{{ config(materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='day', begin=modules.datetime.datetime(2020, 1, 1, 0, 0, 0)) }}
 select * from {{ source('seed_sources', 'raw_source') }}
 """
 
@@ -122,10 +122,12 @@ class TestMicrobatchCustomUserStrategyEnvVarTrueValid(BaseMicrobatchCustomUserSt
             type(project.adapter), "valid_incremental_strategies", lambda _: ["microbatch"]
         ):
             # Initial run
-            run_dbt(["run"])
+            with patch_microbatch_end_time("2020-01-03 13:57:00"):
+                run_dbt(["run"])
 
             # Incremental run uses custom strategy
-            _, logs = run_dbt_and_capture(["run"])
+            with patch_microbatch_end_time("2020-01-03 13:57:00"):
+                _, logs = run_dbt_and_capture(["run"])
             assert "custom microbatch strategy" in logs
 
 
@@ -140,10 +142,12 @@ class TestMicrobatchCustomUserStrategyEnvVarTrueInvalid(BaseMicrobatchCustomUser
             type(project.adapter), "valid_incremental_strategies", lambda _: []
         ):
             # Initial run
-            run_dbt(["run"])
+            with patch_microbatch_end_time("2020-01-03 13:57:00"):
+                run_dbt(["run"])
 
             # Incremental run fails
-            _, logs = run_dbt_and_capture(["run"], expect_pass=False)
+            with patch_microbatch_end_time("2020-01-03 13:57:00"):
+                _, logs = run_dbt_and_capture(["run"], expect_pass=False)
             assert "'microbatch' is not valid" in logs
 
 
