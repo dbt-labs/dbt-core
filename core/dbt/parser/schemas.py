@@ -205,6 +205,7 @@ class SchemaParser(SimpleParser[YamlBlock, ModelNode]):
 
             # PatchParser.parse()
             if "snapshots" in dct:
+                self._add_yaml_snapshot_nodes_to_manifest(dct["snapshots"], block)
                 snapshot_parse_result = TestablePatchParser(self, yaml_block, "snapshots").parse()
                 for test_block in snapshot_parse_result.test_blocks:
                     self.generic_test_parser.parse_tests(test_block)
@@ -264,6 +265,55 @@ class SchemaParser(SimpleParser[YamlBlock, ModelNode]):
 
                 saved_query_parser = SavedQueryParser(self, yaml_block)
                 saved_query_parser.parse()
+
+    def _add_yaml_snapshot_nodes_to_manifest(
+        self, snapshots: List[Dict[str, Any]], block: FileBlock
+    ) -> None:
+        """We support the creation of simple snapshots in yaml, without an
+        accompanying SQL definition. For such snapshots, the user must supply
+        a 'relation' property to indicate the target of the snapshot. This
+        function looks for such snapshots and adds a node to manifest for each
+        one we find, since they were not added during SQL parsing."""
+
+        rebuild_refs = False
+        for snapshot in snapshots:
+            if "relation" in snapshot:
+                from dbt.parser import SnapshotParser
+
+                if "name" not in snapshot:
+                    raise ParsingError("A snapshot must define the 'name' property. ")
+
+                # Reuse the logic of SnapshotParser as far as possible to create
+                # a new node we can add to the manifest.
+                parser = SnapshotParser(self.project, self.manifest, self.root_project)
+                fqn = parser.get_fqn_prefix(block.path.relative_path)
+                fqn.append(snapshot["name"])
+                snapshot_node = parser._create_parsetime_node(
+                    block,
+                    self.get_compiled_path(block),
+                    parser.initial_config(fqn),
+                    fqn,
+                    snapshot["name"],
+                )
+
+                # Parse the expected ref() or source() expression given by
+                # 'relation' so that we know what we are snapshotting.
+                source_or_ref = statically_parse_ref_or_source(snapshot["relation"])
+                if isinstance(source_or_ref, RefArgs):
+                    snapshot_node.refs.append(source_or_ref)
+                else:
+                    snapshot_node.sources.append(source_or_ref)
+
+                # Implement the snapshot SQL as a simple select *
+                snapshot_node.raw_code = "select * from {{ " + snapshot["relation"] + " }}"
+
+                # Add our new node to the manifest, and note that ref lookup collections
+                # will need to be rebuilt.
+                self.manifest.add_node_nofile(snapshot_node)
+                rebuild_refs = True
+
+        if rebuild_refs:
+            self.manifest.rebuild_ref_lookup()
 
 
 Parsed = TypeVar("Parsed", UnpatchedSourceDefinition, ParsedNodePatch, ParsedMacroPatch)

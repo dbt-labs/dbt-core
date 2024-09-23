@@ -291,6 +291,19 @@ snapshots_pg__snapshot_sql = """
 {% endsnapshot %}
 """
 
+snapshots_pg__snapshot_yml = """
+version: 2
+snapshots:
+  - name: snapshot_actual
+    relation: "ref('seed')"
+    config:
+      unique_key: "id || '-' || first_name"
+      strategy: timestamp
+      updated_at: updated_at
+      meta:
+        owner: 'a_owner'
+"""
+
 snapshots_pg__snapshot_no_target_schema_sql = """
 {% snapshot snapshot_actual %}
 
