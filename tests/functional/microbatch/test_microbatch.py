@@ -4,6 +4,7 @@ from unittest import mock
 import pytest
 
 from dbt.tests.util import (
+    get_artifact,
     patch_microbatch_end_time,
     relation_from_name,
     run_dbt,
@@ -417,6 +418,14 @@ class TestMicrobatchIncrementalPartitionFailure(BaseMicrobatchTest):
         with patch_microbatch_end_time("2020-01-03 13:57:00"):
             run_dbt(["run", "--event-time-start", "2020-01-01"])
         self.assert_row_count(project, "microbatch_model", 2)
+
+        run_results = get_artifact(project.project_root, "target", "run_results.json")
+        microbatch_run_result = run_results["results"][1]
+        assert microbatch_run_result["status"] == "partial success"
+        batch_results = microbatch_run_result["batch_results"]
+        assert batch_results is not None
+        assert len(batch_results["successful"]) == 2
+        assert len(batch_results["failed"]) == 1
 
 
 microbatch_model_first_partition_failing_sql = """
