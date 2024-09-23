@@ -17,13 +17,12 @@ from dbt.artifacts.resources import Hook
 from dbt.artifacts.resources.types import BatchSize
 from dbt.artifacts.schemas.results import (
     BaseResult,
-    BatchResults,
-    BatchType,
     NodeStatus,
     RunningStatus,
     RunStatus,
 )
 from dbt.artifacts.schemas.run import RunResult
+from dbt.artifacts.schemas.run.v5.run import BatchResults, BatchType
 from dbt.cli.flags import Flags
 from dbt.clients.jinja import MacroGenerator
 from dbt.config.runtime import RuntimeConfig
@@ -652,7 +651,6 @@ class RunTask(CompileTask):
                     adapter_response={},
                     execution_time=0,
                     failures=1,
-                    batch_results=None,
                 )
             )
 

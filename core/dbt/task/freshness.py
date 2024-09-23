@@ -98,7 +98,6 @@ class FreshnessRunner(BaseRunner):
             node=node,
             adapter_response={},
             failures=None,
-            batch_results=None,
         )
 
     def from_run_result(self, result, start_time, timing_info):
@@ -161,7 +160,6 @@ class FreshnessRunner(BaseRunner):
             message=None,
             adapter_response=adapter_response or {},
             failures=None,
-            batch_results=None,
             **freshness,
         )
 

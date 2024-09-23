@@ -6,8 +6,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from dbt.adapters.postgres import PostgresAdapter
-from dbt.artifacts.schemas.results import BatchResults, RunStatus
-from dbt.artifacts.schemas.run import RunResult
+from dbt.artifacts.schemas.results import RunStatus
+from dbt.artifacts.schemas.run import BatchResults, RunResult
 from dbt.config.runtime import RuntimeConfig
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import ModelNode

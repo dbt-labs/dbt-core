@@ -1,8 +1,6 @@
-from __future__ import annotations
-
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Sequence, Union
 
 from dbt.contracts.graph.nodes import ResultNode
 from dbt_common.dataclass_schema import StrEnum, dbtClassMixin
@@ -85,21 +83,6 @@ class FreshnessStatus(StrEnum):
     RuntimeErr = NodeStatus.RuntimeErr
 
 
-BatchType = Tuple[Optional[datetime], datetime]
-
-
-@dataclass
-class BatchResults(dbtClassMixin):
-    successful: List[BatchType] = field(default_factory=list)
-    failed: List[BatchType] = field(default_factory=list)
-
-    def __add__(self, other: BatchResults) -> BatchResults:
-        return BatchResults(
-            successful=self.successful + other.successful,
-            failed=self.failed + other.failed,
-        )
-
-
 @dataclass
 class BaseResult(dbtClassMixin):
     status: Union[RunStatus, TestStatus, FreshnessStatus]
@@ -109,7 +92,6 @@ class BaseResult(dbtClassMixin):
     adapter_response: Dict[str, Any]
     message: Optional[str]
     failures: Optional[int]
-    batch_results: Optional[BatchResults]
 
     @classmethod
     def __pre_deserialize__(cls, data):
@@ -118,8 +100,6 @@ class BaseResult(dbtClassMixin):
             data["message"] = None
         if "failures" not in data:
             data["failures"] = None
-        if "batch_results" not in data:
-            data["batch_results"] = None
         return data
 
     def to_msg_dict(self):

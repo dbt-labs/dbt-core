@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 import copy
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, Iterable, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 # https://github.com/dbt-labs/dbt-core/issues/10098
 # Needed for Mashumaro serialization of RunResult below
@@ -27,6 +29,21 @@ from dbt.artifacts.schemas.results import (
 from dbt.exceptions import scrub_secrets
 from dbt_common.clients.system import write_json
 from dbt_common.constants import SECRET_ENV_PREFIX
+from dbt_common.dataclass_schema import dbtClassMixin
+
+BatchType = Tuple[Optional[datetime], datetime]
+
+
+@dataclass
+class BatchResults(dbtClassMixin):
+    successful: List[BatchType] = field(default_factory=list)
+    failed: List[BatchType] = field(default_factory=list)
+
+    def __add__(self, other: BatchResults) -> BatchResults:
+        return BatchResults(
+            successful=self.successful + other.successful,
+            failed=self.failed + other.failed,
+        )
 
 
 @dataclass
@@ -34,6 +51,8 @@ class RunResult(NodeResult):
     agate_table: Optional["agate.Table"] = field(
         default=None, metadata={"serialize": lambda x: None, "deserialize": lambda x: None}
     )
+    # TODO: Do we need to do the field(...) stuff from above?
+    batch_results: Optional[BatchResults] = None
 
     @property
     def skipped(self):
@@ -68,6 +87,7 @@ class RunResultOutput(BaseResult):
     compiled: Optional[bool]
     compiled_code: Optional[str]
     relation_name: Optional[str]
+    batch_results: Optional[BatchResults] = None
 
 
 def process_run_result(result: RunResult) -> RunResultOutput:
