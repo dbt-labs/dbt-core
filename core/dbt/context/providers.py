@@ -634,6 +634,11 @@ class OperationRefResolver(RuntimeRefResolver):
 
 
 class RuntimeUnitTestRefResolver(RuntimeRefResolver):
+    @property
+    def resolve_limit(self) -> Optional[int]:
+        # Unit tests should never respect --empty flag or provide a limit since they are based on fake data.
+        return None
+
     def resolve(
         self,
         target_name: str,
@@ -676,6 +681,11 @@ class RuntimeSourceResolver(BaseSourceResolver):
 
 
 class RuntimeUnitTestSourceResolver(BaseSourceResolver):
+    @property
+    def resolve_limit(self) -> Optional[int]:
+        # Unit tests should never respect --empty flag or provide a limit since they are based on fake data.
+        return None
+
     def resolve(self, source_name: str, table_name: str):
         target_source = self.manifest.resolve_source(
             source_name,
