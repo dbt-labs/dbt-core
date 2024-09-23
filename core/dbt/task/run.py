@@ -116,10 +116,12 @@ def track_model_run(index, num_nodes, run_model_result):
         access = node.access.value if node.access is not None else None
         contract_enforced = node.contract.enforced
         versioned = True if node.version else False
+        incremental_strategy = node.config.incremental_strategy
     else:
         access = None
         contract_enforced = False
         versioned = False
+        incremental_strategy = None
     tracking.track_model_run(
         {
             "invocation_id": invocation_id,
@@ -130,6 +132,7 @@ def track_model_run(index, num_nodes, run_model_result):
             "run_skipped": run_model_result.status == NodeStatus.Skipped,
             "run_error": run_model_result.status == NodeStatus.Error,
             "model_materialization": node.get_materialization(),
+            "model_incremental_strategy": incremental_strategy,
             "model_id": utils.get_hash(node),
             "hashed_contents": utils.get_hashed_contents(node),
             "timing": [t.to_dict(omit_none=True) for t in run_model_result.timing],
