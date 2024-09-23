@@ -10,6 +10,7 @@
 ### Fixes
 
 - Late render pre- and post-hooks configs in properties / schema YAML files ([#10603](https://github.com/dbt-labs/dbt-core/issues/10603))
+- Use model alias for the CTE identifier generated during ephemeral materialization ([#5273](https://github.com/dbt-labs/dbt-core/issues/5273))
 
 ### Under the Hood
 
@@ -17,6 +18,7 @@
 
 ### Contributors
 - [@ttusing](https://github.com/ttusing) ([#10434](https://github.com/dbt-labs/dbt-core/issues/10434))
+- [@jeancochrane](https://github.com/jeancochrane) ([#5273](https://github.com/dbt-labs/dbt-core/issues/5273))
 
 
 ## dbt-core 1.8.5 - August 07, 2024
