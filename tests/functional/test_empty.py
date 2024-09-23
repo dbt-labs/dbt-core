@@ -67,6 +67,7 @@ unit_tests:
         2
 """
 
+
 class TestEmptyFlag:
     @pytest.fixture(scope="class")
     def seeds(self):
