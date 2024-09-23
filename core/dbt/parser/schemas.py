@@ -1089,7 +1089,16 @@ class SingularTestPatchParser(PatchParser[UnparsedSingularTestUpdate, ParsedSing
         unique_id = self.manifest.singular_test_lookup.get_unique_id(
             block.name, block.target.package_name
         )
-        assert unique_id is not None
+        if not unique_id:
+            warn_or_error(
+                NoNodeForYamlKey(
+                    patch_name=patch.name,
+                    yaml_key=patch.yaml_key,
+                    file_path=source_file.path.original_file_path,
+                )
+            )
+            return
+
         node = self.manifest.nodes.get(unique_id)
         assert node is not None
 
