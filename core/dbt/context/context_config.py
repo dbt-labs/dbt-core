@@ -8,7 +8,7 @@ from dbt.config import IsFQNResource, Project, RuntimeConfig
 from dbt.contracts.graph.model_config import get_config_for
 from dbt.node_types import NodeType
 from dbt.utils import fqn_search
-from dbt_common.contracts.config.base import BaseConfig, _listify
+from dbt_common.contracts.config.base import BaseConfig, merge_config_dicts
 from dbt_common.exceptions import DbtInternalError
 
 
@@ -293,55 +293,7 @@ class ContextConfig:
 
     def add_config_call(self, opts: Dict[str, Any]) -> None:
         dct = self._config_call_dict
-        self._add_config_call(dct, opts)
-
-    @classmethod
-    def _add_config_call(cls, config_call_dict, opts: Dict[str, Any]) -> None:
-        # config_call_dict is already encountered configs, opts is new
-        # This mirrors code in _merge_field_value in model_config.py which is similar but
-        # operates on config objects.
-        for k, v in opts.items():
-            # MergeBehavior for post-hook and pre-hook is to collect all
-            # values, instead of overwriting
-            if k in BaseConfig.mergebehavior["append"]:
-                if not isinstance(v, list):
-                    v = [v]
-                if k in config_call_dict:  # should always be a list here
-                    config_call_dict[k].extend(v)
-                else:
-                    config_call_dict[k] = v
-
-            elif k in BaseConfig.mergebehavior["update"]:
-                if not isinstance(v, dict):
-                    raise DbtInternalError(f"expected dict, got {v}")
-                if k in config_call_dict and isinstance(config_call_dict[k], dict):
-                    config_call_dict[k].update(v)
-                else:
-                    config_call_dict[k] = v
-            elif k in BaseConfig.mergebehavior["dict_key_append"]:
-                if not isinstance(v, dict):
-                    raise DbtInternalError(f"expected dict, got {v}")
-                if k in config_call_dict:  # should always be a dict
-                    for key, value in v.items():
-                        extend = False
-                        # This might start with a +, to indicate we should extend the list
-                        # instead of just clobbering it
-                        if key.startswith("+"):
-                            extend = True
-                        if key in config_call_dict[k] and extend:
-                            # extend the list
-                            config_call_dict[k][key].extend(_listify(value))
-                        else:
-                            # clobber the list
-                            config_call_dict[k][key] = _listify(value)
-                else:
-                    # This is always a dictionary
-                    config_call_dict[k] = v
-                    # listify everything
-                    for key, value in config_call_dict[k].items():
-                        config_call_dict[k][key] = _listify(value)
-            else:
-                config_call_dict[k] = v
+        merge_config_dicts(dct, opts)
 
     def build_config_dict(
         self,
