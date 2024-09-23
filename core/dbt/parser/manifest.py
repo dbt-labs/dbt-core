@@ -1364,35 +1364,50 @@ class ManifestLoader:
                     node.config.materialized == "incremental"
                     and node.config.incremental_strategy == "microbatch"
                 ):
+                    # Required configs: event_time, batch_size, begin
                     event_time = node.config.event_time
+                    if event_time is None:
+                        raise dbt.exceptions.ParsingError(
+                            f"Microbatch model '{node.name}' must provide an 'event_time' (string) config that indicates "
+                            "the name of the column"
+                        )
                     if not isinstance(event_time, str):
-                        # TODO be more specific/verbose
-                        raise DbtValidationError(
-                            f"When used with microbatch, `event_time` must be of type str, but got {type(event_time)}"
+                        raise dbt.exceptions.ParsingError(
+                            f"Microbatch model '{node.name}' must provide an 'event_time' config of type string, but got: {type(event_time)}."
                         )
 
-                    lookback = node.config.lookback
-                    if not isinstance(lookback, int) and lookback is not None:
-                        # TODO be more specific/verbose
-                        raise DbtValidationError(
-                            f"When used with microbatch, `lookback` must be of type int or None, but got {type(lookback)}"
-                        )
+                    # begin = node.config.begin
+                    # if begin is None:
+                    #     raise dbt.exceptions.ParsingError(
+                    #         f"Microbatch model '{node.name}' must provide a 'begin' (datetime) config that indicates the earliest timestamp the microbatch"
+                    #         "model should be built from."
+                    #     )
+                    # if not isinstance(begin, datetime):
+                    #     raise dbt.exceptions.ParsingError(
+                    #         f"Microbatch model '{node.name}' must provide a 'begin' config of type datetime, but got: {type(begin)}."
+                    #     )
 
                     batch_size = node.config.batch_size
                     valid_batch_sizes = [size.value for size in BatchSize]
                     if batch_size not in valid_batch_sizes:
-                        # TODO be more specific/verbose
-                        raise DbtValidationError(
-                            f"When used with microbatch, `batch_size` must be one of {valid_batch_sizes}, but got {batch_size}"
+                        raise dbt.exceptions.ParsingError(
+                            f"Microbatch model '{node.name}' must provide a 'batch_size' config that is one of {valid_batch_sizes}, but got: {batch_size}."
                         )
 
+                    # Optional config: lookback (int)
+                    lookback = node.config.lookback
+                    if not isinstance(lookback, int) and lookback is not None:
+                        raise dbt.exceptions.ParsingError(
+                            f"Microbatch model '{node.name}' must provide the optional 'lookback' config as type int, but got: {type(lookback)})."
+                        )
+
+                    # Validate upstream node event_time (if configured)
                     for input_unique_id in node.depends_on.nodes:
                         input_node = self.manifest.expect(unique_id=input_unique_id)
                         input_event_time = input_node.config.event_time
                         if input_event_time and not isinstance(input_event_time, str):
-                            # TODO be more specific/verbose
-                            raise DbtValidationError(
-                                f"When used as an input to a microbatch model, `event_time` must be a str or None, but got {type(input_event_time)}"
+                            raise dbt.exceptions.ParsingError(
+                                f"Microbatch model '{node.name}' depends on an input node '{input_node.name}' with an 'event_time' config of invalid (non-string) type: {type(input_event_time)}."
                             )
 
     def write_perf_info(self, target_path: str):
