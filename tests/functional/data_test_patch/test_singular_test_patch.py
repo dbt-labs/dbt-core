@@ -1,3 +1,5 @@
+import os
+
 import pytest
 
 from dbt.tests.util import get_artifact, run_dbt, run_dbt_and_capture
@@ -39,7 +41,13 @@ class TestPatchSingularTestInvalidName:
 
     def test_compile(self, project):
         _, log_output = run_dbt_and_capture(["compile"])
+
+        file_path = (
+            "tests\\schema_with_invalid_name.yml"
+            if os.name == "nt"
+            else "tests/schema_with_invalid_name.yml"
+        )
         assert (
-            "Did not find matching node for patch with name 'my_double_test' in the 'data_tests' section of file 'tests/schema_with_invalid_name.yml'"
+            f"Did not find matching node for patch with name 'my_double_test' in the 'data_tests' section of file '{file_path}'"
             in log_output
         )
