@@ -63,6 +63,12 @@ class TestList:
                     "persist_docs": {},
                     "target_database": happy_path_project.database,
                     "target_schema": happy_path_project.test_schema,
+                    "snapshot_meta_column_names": {
+                        "dbt_scd_id": None,
+                        "dbt_updated_at": None,
+                        "dbt_valid_from": None,
+                        "dbt_valid_to": None,
+                    },
                     "unique_key": "id",
                     "strategy": "timestamp",
                     "updated_at": "updated_at",
