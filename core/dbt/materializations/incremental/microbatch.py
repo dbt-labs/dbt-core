@@ -42,7 +42,8 @@ class MicrobatchBuilder:
     def build_start_time(self, checkpoint: Optional[datetime]):
         """Create a start time based off the passed in checkpoint.
 
-        If the checkpoint is `None`, then `None` will be returned as a checkpoint is necessary
+        If the checkpoint is `None`, or this is the first run of a microbatch model, then the
+        model's configured `begin` value will be returned as a checkpoint is necessary
         to build a start time. This is because we build the start time relative to the checkpoint
         via the batchsize and offset, and we cannot offset a checkpoint if there is no checkpoint.
         """
