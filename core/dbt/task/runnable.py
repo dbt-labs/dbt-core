@@ -66,7 +66,7 @@ class GraphRunnableMode(StrEnum):
 
 
 class GraphRunnableTask(ConfiguredTask):
-    MARK_DEPENDENT_ERRORS_STATUSES = [NodeStatus.Error]
+    MARK_DEPENDENT_ERRORS_STATUSES = [NodeStatus.Error, NodeStatus.PartialSuccess]
 
     def __init__(self, args: Flags, config: RuntimeConfig, manifest: Manifest) -> None:
         super().__init__(args, config, manifest)
