@@ -120,6 +120,23 @@ class TestShowInline(ShowBase):
         assert "sample_bool" in log_output
 
 
+class TestShowInlineDirect(ShowBase):
+
+    def test_inline_direct_pass(self, project):
+        query = f"select * from {project.test_schema}.sample_seed"
+        (_, log_output) = run_dbt_and_capture(["show", "--inline-direct", query])
+        assert "Previewing inline node" in log_output
+        assert "sample_num" in log_output
+        assert "sample_bool" in log_output
+
+        # This is a bit of a hack. Unfortunately, the test teardown code
+        # expects that dbt loaded an adapter with a macro context the last
+        # time it was called. The '--inline-direct' parameter used on the
+        # previous run explicitly disables macros. So now we call 'dbt seed',
+        # which will load the adapter fully and satisfy the teardown code.
+        run_dbt(["seed"])
+
+
 class TestShowInlineFail(ShowBase):
     def test_inline_fail(self, project):
         with pytest.raises(DbtException, match="Error parsing inline query"):
