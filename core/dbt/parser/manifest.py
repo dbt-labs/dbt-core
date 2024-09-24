@@ -1375,16 +1375,15 @@ class ManifestLoader:
                             f"Microbatch model '{node.name}' must provide an 'event_time' config of type string, but got: {type(event_time)}."
                         )
 
-                    # begin = node.config.begin
-                    # if begin is None:
-                    #     raise dbt.exceptions.ParsingError(
-                    #         f"Microbatch model '{node.name}' must provide a 'begin' (datetime) config that indicates the earliest timestamp the microbatch"
-                    #         "model should be built from."
-                    #     )
-                    # if not isinstance(begin, datetime):
-                    #     raise dbt.exceptions.ParsingError(
-                    #         f"Microbatch model '{node.name}' must provide a 'begin' config of type datetime, but got: {type(begin)}."
-                    #     )
+                    begin = node.config.begin
+                    if begin is None:
+                        raise dbt.exceptions.ParsingError(
+                            f"Microbatch model '{node.name}' must provide a 'begin' (datetime) config that indicates the earliest timestamp the microbatch model should be built from."
+                        )
+                    if not isinstance(begin, datetime.datetime):
+                        raise dbt.exceptions.ParsingError(
+                            f"Microbatch model '{node.name}' must provide a 'begin' config of type datetime, but got: {type(begin)}."
+                        )
 
                     batch_size = node.config.batch_size
                     valid_batch_sizes = [size.value for size in BatchSize]

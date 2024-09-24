@@ -23,6 +23,17 @@ invalid_event_time_microbatch_model_sql = """
 select * from {{ ref('input_model') }}
 """
 
+missing_begin_microbatch_model_sql = """
+{{ config(materialized='incremental', incremental_strategy='microbatch', batch_size='day', event_time='event_time') }}
+select * from {{ ref('input_model') }}
+"""
+
+invalid_begin_microbatch_model_sql = """
+{{ config(materialized='incremental', incremental_strategy='microbatch', batch_size='day', event_time='event_time', begin=2) }}
+select * from {{ ref('input_model') }}
+"""
+
+
 missing_batch_size_microbatch_model_sql = """
 {{ config(materialized='incremental', incremental_strategy='microbatch', event_time='event_time') }}
 select * from {{ ref('input_model') }}
@@ -72,6 +83,24 @@ class TestInvalidEventTimeMicrobatch(BaseMicrobatchTest):
         return {
             "input_model.sql": valid_input_model_sql,
             "microbatch.sql": invalid_event_time_microbatch_model_sql
+        }
+
+
+class TestMissingBeginMicrobatch(BaseMicrobatchTest):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "input_model.sql": valid_input_model_sql,
+            "microbatch.sql": missing_begin_microbatch_model_sql
+        }
+    
+
+class TestInvaliBeginMicrobatch(BaseMicrobatchTest):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "input_model.sql": valid_input_model_sql,
+            "microbatch.sql": invalid_begin_microbatch_model_sql
         }
 
 
