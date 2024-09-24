@@ -471,15 +471,19 @@ class ModelRunner(CompileRunner):
         materialization_macro: MacroProtocol,
     ) -> List[RunResult]:
         batch_results: List[RunResult] = []
-        microbatch_builder = MicrobatchBuilder(
-            model=model,
-            is_incremental=self._is_incremental(model),
-            event_time_start=getattr(self.config.args, "EVENT_TIME_START", None),
-            event_time_end=getattr(self.config.args, "EVENT_TIME_END", None),
-        )
-        end = microbatch_builder.build_end_time()
-        start = microbatch_builder.build_start_time(end)
-        batches = microbatch_builder.build_batches(start, end)
+
+        if model.batches is None:
+            microbatch_builder = MicrobatchBuilder(
+                model=model,
+                is_incremental=self._is_incremental(model),
+                event_time_start=getattr(self.config.args, "EVENT_TIME_START", None),
+                event_time_end=getattr(self.config.args, "EVENT_TIME_END", None),
+            )
+            end = microbatch_builder.build_end_time()
+            start = microbatch_builder.build_start_time(end)
+            batches = microbatch_builder.build_batches(start, end)
+        else:
+            batches = model.batches
 
         # iterate over each batch, calling materialization_macro to get a batch-level run result
         for batch_idx, batch in enumerate(batches):
@@ -536,10 +540,17 @@ class ModelRunner(CompileRunner):
 
 
 class RunTask(CompileTask):
-    def __init__(self, args: Flags, config: RuntimeConfig, manifest: Manifest) -> None:
+    def __init__(
+        self,
+        args: Flags,
+        config: RuntimeConfig,
+        manifest: Manifest,
+        batch_map: Optional[Dict[str, List[BatchType]]] = None,
+    ) -> None:
         super().__init__(args, config, manifest)
         self.ran_hooks: List[HookNode] = []
         self._total_executed = 0
+        self.batch_map = batch_map
 
     def index_offset(self, value: int) -> int:
         return self._total_executed + value
@@ -670,12 +681,21 @@ class RunTask(CompileTask):
             )
         )
 
+    def populate_microbatch_batches(self, selected_uids: AbstractSet[str]):
+        if self.batch_map is not None and self.manifest is not None:
+            for uid in selected_uids:
+                if uid in self.batch_map:
+                    node = self.manifest.ref_lookup.perform_lookup(uid, self.manifest)
+                    if isinstance(node, ModelNode):
+                        node.batches = self.batch_map[uid]
+
     def before_run(self, adapter, selected_uids: AbstractSet[str]) -> None:
         with adapter.connection_named("master"):
             self.defer_to_manifest()
             required_schemas = self.get_model_schemas(adapter, selected_uids)
             self.create_schemas(adapter, required_schemas)
             self.populate_adapter_cache(adapter, required_schemas)
+            self.populate_microbatch_batches(selected_uids)
             self.safe_run_hooks(adapter, RunHookType.Start, {})
 
     def after_run(self, adapter, results) -> None:
