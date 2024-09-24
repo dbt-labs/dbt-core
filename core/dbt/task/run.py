@@ -15,6 +15,7 @@ from dbt.adapters.events.types import (
 from dbt.adapters.exceptions import MissingMaterializationError
 from dbt.artifacts.resources import Hook
 from dbt.artifacts.resources.types import BatchSize
+from dbt.artifacts.schemas.batch_results import BatchResults, BatchType
 from dbt.artifacts.schemas.results import (
     BaseResult,
     NodeStatus,
@@ -22,7 +23,6 @@ from dbt.artifacts.schemas.results import (
     RunStatus,
 )
 from dbt.artifacts.schemas.run import RunResult
-from dbt.artifacts.schemas.run.v5.run import BatchResults, BatchType
 from dbt.cli.flags import Flags
 from dbt.clients.jinja import MacroGenerator
 from dbt.config.runtime import RuntimeConfig
