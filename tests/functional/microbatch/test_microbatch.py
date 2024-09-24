@@ -89,6 +89,11 @@ custom_microbatch_strategy = """
 """
 
 
+downstream_model_of_microbatch_sql = """
+SELECT * FROM {{ ref('microbatch_model') }}
+"""
+
+
 class BaseMicrobatchCustomUserStrategy:
     @pytest.fixture(scope="class")
     def models(self):
@@ -415,13 +420,14 @@ class TestMicrobatchIncrementalPartitionFailure(BaseMicrobatchTest):
         return {
             "input_model.sql": input_model_sql,
             "microbatch_model.sql": microbatch_model_failing_incremental_partition_sql,
+            "downstream_model.sql": downstream_model_of_microbatch_sql,
         }
 
     @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
     def test_run_with_event_time(self, project):
         # run all partitions from start - 2 expected rows in output, one failed
         with patch_microbatch_end_time("2020-01-03 13:57:00"):
-            run_dbt(["run", "--event-time-start", "2020-01-01"])
+            run_dbt(["run", "--event-time-start", "2020-01-01"], expect_pass=False)
         self.assert_row_count(project, "microbatch_model", 2)
 
         run_results = get_artifact(project.project_root, "target", "run_results.json")
@@ -431,6 +437,7 @@ class TestMicrobatchIncrementalPartitionFailure(BaseMicrobatchTest):
         assert batch_results is not None
         assert len(batch_results["successful"]) == 2
         assert len(batch_results["failed"]) == 1
+        assert run_results["results"][2]["status"] == "skipped"
 
 
 class TestMicrobatchRetriesPartialSuccesses(BaseMicrobatchTest):
