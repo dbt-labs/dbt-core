@@ -1,0 +1,7 @@
+kind: Features
+body: 'Parse-time validation of microbatch configs: require event_time, batch_size,
+  lookback and validate input event_time'
+time: 2024-09-24T15:46:39.83112+01:00
+custom:
+  Author: michelleark
+  Issue: "10709"
