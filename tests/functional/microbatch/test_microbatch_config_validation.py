@@ -26,6 +26,17 @@ models:
       begin: 2020-01-01
 """
 
+invalid_microbatch_model_config_yml = """
+models:
+  - name: microbatch
+    config:
+      materialized: incremental
+      incremental_strategy: microbatch
+      batch_size: day
+      event_time: event_time
+      begin: 2020-01-01 11 PM
+"""
+
 missing_event_time_microbatch_model_sql = """
 {{ config(materialized='incremental', incremental_strategy='microbatch', batch_size='day') }}
 select * from {{ ref('input_model') }}
@@ -118,12 +129,22 @@ class TestMissingBeginMicrobatch(BaseMicrobatchTestParseError):
         }
 
 
-class TestInvaliBeginMicrobatch(BaseMicrobatchTestParseError):
+class TestInvaliBeginTypeMicrobatch(BaseMicrobatchTestParseError):
     @pytest.fixture(scope="class")
     def models(self):
         return {
             "input_model.sql": valid_input_model_sql,
             "microbatch.sql": invalid_begin_microbatch_model_sql,
+        }
+
+
+class TestInvaliBegiFormatMicrobatch(BaseMicrobatchTestParseError):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "input_model.sql": valid_input_model_sql,
+            "microbatch.sql": valid_microbatch_model_no_config_sql,
+            "microbatch.yml": invalid_microbatch_model_config_yml,
         }
 
 
