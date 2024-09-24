@@ -40,7 +40,7 @@ select * from {{ ref('input_model') }}
 
 
 microbatch_model_ref_render_sql = """
-{{ config(materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='day') }}
+{{ config(materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='day', begin=modules.datetime.datetime(2020, 1, 1, 0, 0, 0)) }}
 select * from {{ ref('input_model').render() }}
 """
 
@@ -375,7 +375,7 @@ class TestMicrobatchUsingRefRenderSkipsFilter(BaseMicrobatchTest):
 
 
 microbatch_model_context_vars = """
-{{ config(materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='day') }}
+{{ config(materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='day', begin=modules.datetime.datetime(2020, 1, 1, 0, 0, 0)) }}
 {{ log("start: "~ model.config.__dbt_internal_microbatch_event_time_start, info=True)}}
 {{ log("end: "~ model.config.__dbt_internal_microbatch_event_time_end, info=True)}}
 select * from {{ ref('input_model') }}
@@ -406,7 +406,7 @@ class TestMicrobatchJinjaContextVarsAvailable(BaseMicrobatchTest):
 
 
 microbatch_model_failing_incremental_partition_sql = """
-{{ config(materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='day') }}
+{{ config(materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='day', begin=modules.datetime.datetime(2020, 1, 1, 0, 0, 0)) }}
 {% if '2020-01-02' in (model.config.__dbt_internal_microbatch_event_time_start | string) %}
  invalid_sql
 {% endif %}
@@ -472,7 +472,7 @@ class TestMicrobatchRetriesPartialSuccesses(BaseMicrobatchTest):
 
 
 microbatch_model_first_partition_failing_sql = """
-{{ config(materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='day') }}
+{{ config(materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='day', begin=modules.datetime.datetime(2020, 1, 1, 0, 0, 0)) }}
 {% if '2020-01-01' in (model.config.__dbt_internal_microbatch_event_time_start | string) %}
  invalid_sql
 {% endif %}

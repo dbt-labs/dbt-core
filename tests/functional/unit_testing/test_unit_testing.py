@@ -8,6 +8,8 @@ from fixtures import (  # noqa: F401
     external_package,
     external_package__accounts_seed_csv,
     my_incremental_model_sql,
+    my_incremental_model_versioned_yml,
+    my_incremental_model_with_alias_sql,
     my_model_a_sql,
     my_model_b_sql,
     my_model_sql,
@@ -269,6 +271,42 @@ unit_tests:
       rows:
         - {id: 1, c: 7}
 """
+
+
+class TestUnitTestIncrementalModelWithAlias:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_incremental_model.sql": my_incremental_model_with_alias_sql,
+            "events.sql": event_sql,
+            "schema.yml": test_my_model_incremental_yml_basic,
+        }
+
+    def test_basic(self, project):
+        results = run_dbt(["run"])
+        assert len(results) == 2
+
+        # Select by model name
+        results = run_dbt(["test", "--select", "my_incremental_model"], expect_pass=True)
+        assert len(results) == 2
+
+
+class TestUnitTestIncrementalModelWithVersion:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_incremental_model.sql": my_incremental_model_sql,
+            "events.sql": event_sql,
+            "schema.yml": my_incremental_model_versioned_yml + test_my_model_incremental_yml_basic,
+        }
+
+    def test_basic(self, project):
+        results = run_dbt(["run"])
+        assert len(results) == 2
+
+        # Select by model name
+        results = run_dbt(["test", "--select", "my_incremental_model"], expect_pass=True)
+        assert len(results) == 2
 
 
 class TestUnitTestExplicitSeed:
