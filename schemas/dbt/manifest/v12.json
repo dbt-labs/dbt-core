@@ -265,6 +265,9 @@
                   "lookback": {
                     "default": 0
                   },
+                  "begin": {
+                    "default": null
+                  },
                   "persist_docs": {
                     "type": "object",
                     "propertyNames": {
@@ -924,6 +927,9 @@
                               "lookback": {
                                 "default": 0
                               },
+                              "begin": {
+                                "default": null
+                              },
                               "persist_docs": {
                                 "type": "object",
                                 "propertyNames": {
@@ -1306,6 +1312,9 @@
                   },
                   "lookback": {
                     "default": 0
+                  },
+                  "begin": {
+                    "default": null
                   },
                   "persist_docs": {
                     "type": "object",
@@ -2737,6 +2746,9 @@
                   "lookback": {
                     "default": 0
                   },
+                  "begin": {
+                    "default": null
+                  },
                   "persist_docs": {
                     "type": "object",
                     "propertyNames": {
@@ -3529,6 +3541,9 @@
                   },
                   "lookback": {
                     "default": 0
+                  },
+                  "begin": {
+                    "default": null
                   },
                   "persist_docs": {
                     "type": "object",
@@ -4450,6 +4465,9 @@
                               "lookback": {
                                 "default": 0
                               },
+                              "begin": {
+                                "default": null
+                              },
                               "persist_docs": {
                                 "type": "object",
                                 "propertyNames": {
@@ -4886,6 +4904,9 @@
                   },
                   "lookback": {
                     "default": 0
+                  },
+                  "begin": {
+                    "default": null
                   },
                   "persist_docs": {
                     "type": "object",
@@ -6378,6 +6399,9 @@
                   "lookback": {
                     "default": 0
                   },
+                  "begin": {
+                    "default": null
+                  },
                   "persist_docs": {
                     "type": "object",
                     "propertyNames": {
@@ -7272,6 +7296,9 @@
                               },
                               "lookback": {
                                 "default": 0
+                              },
+                              "begin": {
+                                "default": null
                               },
                               "persist_docs": {
                                 "type": "object",
@@ -10042,6 +10069,9 @@
                         "lookback": {
                           "default": 0
                         },
+                        "begin": {
+                          "default": null
+                        },
                         "persist_docs": {
                           "type": "object",
                           "propertyNames": {
@@ -10701,6 +10731,9 @@
                                     "lookback": {
                                       "default": 0
                                     },
+                                    "begin": {
+                                      "default": null
+                                    },
                                     "persist_docs": {
                                       "type": "object",
                                       "propertyNames": {
@@ -11083,6 +11116,9 @@
                         },
                         "lookback": {
                           "default": 0
+                        },
+                        "begin": {
+                          "default": null
                         },
                         "persist_docs": {
                           "type": "object",
@@ -12514,6 +12550,9 @@
                         "lookback": {
                           "default": 0
                         },
+                        "begin": {
+                          "default": null
+                        },
                         "persist_docs": {
                           "type": "object",
                           "propertyNames": {
@@ -13306,6 +13345,9 @@
                         },
                         "lookback": {
                           "default": 0
+                        },
+                        "begin": {
+                          "default": null
                         },
                         "persist_docs": {
                           "type": "object",
@@ -14227,6 +14269,9 @@
                                     "lookback": {
                                       "default": 0
                                     },
+                                    "begin": {
+                                      "default": null
+                                    },
                                     "persist_docs": {
                                       "type": "object",
                                       "propertyNames": {
@@ -14663,6 +14708,9 @@
                         },
                         "lookback": {
                           "default": 0
+                        },
+                        "begin": {
+                          "default": null
                         },
                         "persist_docs": {
                           "type": "object",
@@ -16155,6 +16203,9 @@
                         "lookback": {
                           "default": 0
                         },
+                        "begin": {
+                          "default": null
+                        },
                         "persist_docs": {
                           "type": "object",
                           "propertyNames": {
@@ -17049,6 +17100,9 @@
                                     },
                                     "lookback": {
                                       "default": 0
+                                    },
+                                    "begin": {
+                                      "default": null
                                     },
                                     "persist_docs": {
                                       "type": "object",
