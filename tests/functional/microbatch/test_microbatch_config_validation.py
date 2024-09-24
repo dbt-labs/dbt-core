@@ -1,12 +1,10 @@
 import os
-import pytest
 from unittest import mock
 
-from dbt.tests.util import (
-    run_dbt,
-)
-from dbt.exceptions import ParsingError
+import pytest
 
+from dbt.exceptions import ParsingError
+from dbt.tests.util import run_dbt
 
 valid_microbatch_model_sql = """
 {{ config(materialized='incremental', incremental_strategy='microbatch', batch_size='day', event_time='event_time') }}
@@ -73,16 +71,16 @@ class TestMissingEventTimeMicrobatch(BaseMicrobatchTest):
     def models(self):
         return {
             "input_model.sql": valid_input_model_sql,
-            "microbatch.sql": missing_event_time_microbatch_model_sql
+            "microbatch.sql": missing_event_time_microbatch_model_sql,
         }
-    
+
 
 class TestInvalidEventTimeMicrobatch(BaseMicrobatchTest):
     @pytest.fixture(scope="class")
     def models(self):
         return {
             "input_model.sql": valid_input_model_sql,
-            "microbatch.sql": invalid_event_time_microbatch_model_sql
+            "microbatch.sql": invalid_event_time_microbatch_model_sql,
         }
 
 
@@ -91,16 +89,16 @@ class TestMissingBeginMicrobatch(BaseMicrobatchTest):
     def models(self):
         return {
             "input_model.sql": valid_input_model_sql,
-            "microbatch.sql": missing_begin_microbatch_model_sql
+            "microbatch.sql": missing_begin_microbatch_model_sql,
         }
-    
+
 
 class TestInvaliBeginMicrobatch(BaseMicrobatchTest):
     @pytest.fixture(scope="class")
     def models(self):
         return {
             "input_model.sql": valid_input_model_sql,
-            "microbatch.sql": invalid_begin_microbatch_model_sql
+            "microbatch.sql": invalid_begin_microbatch_model_sql,
         }
 
 
@@ -109,7 +107,7 @@ class TestMissingBatchSizeMicrobatch(BaseMicrobatchTest):
     def models(self):
         return {
             "input_model.sql": valid_input_model_sql,
-            "microbatch.sql": missing_batch_size_microbatch_model_sql
+            "microbatch.sql": missing_batch_size_microbatch_model_sql,
         }
 
 
@@ -118,7 +116,7 @@ class TestInvalidBatchSizeMicrobatch(BaseMicrobatchTest):
     def models(self):
         return {
             "input_model.sql": valid_input_model_sql,
-            "microbatch.sql": invalid_batch_size_microbatch_model_sql
+            "microbatch.sql": invalid_batch_size_microbatch_model_sql,
         }
 
 
@@ -127,5 +125,5 @@ class TestInvalidInputEventTimeMicrobatch(BaseMicrobatchTest):
     def models(self):
         return {
             "input_model.sql": invalid_event_time_input_model_sql,
-            "microbatch.sql": valid_microbatch_model_sql
+            "microbatch.sql": valid_microbatch_model_sql,
         }
