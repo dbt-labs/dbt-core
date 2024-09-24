@@ -1368,8 +1368,7 @@ class ManifestLoader:
                     event_time = node.config.event_time
                     if event_time is None:
                         raise dbt.exceptions.ParsingError(
-                            f"Microbatch model '{node.name}' must provide an 'event_time' (string) config that indicates "
-                            "the name of the column"
+                            f"Microbatch model '{node.name}' must provide an 'event_time' (string) config that indicates the name of the event time column."
                         )
                     if not isinstance(event_time, str):
                         raise dbt.exceptions.ParsingError(

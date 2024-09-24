@@ -1,12 +1,17 @@
+import os
 import pytest
+from unittest import mock
+
 from dbt.tests.util import (
-    patch_microbatch_end_time,
-    relation_from_name,
     run_dbt,
-    run_dbt_and_capture,
-    write_file,
 )
 from dbt.exceptions import ParsingError
+
+
+valid_microbatch_model_sql = """
+{{ config(materialized='incremental', incremental_strategy='microbatch', batch_size='day', event_time='event_time') }}
+select * from {{ ref('input_model') }}
+"""
 
 missing_event_time_microbatch_model_sql = """
 {{ config(materialized='incremental', incremental_strategy='microbatch', batch_size='day') }}
@@ -46,6 +51,7 @@ class BaseMicrobatchTest:
     def models(self):
         return {}
 
+    @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
     def test_parsing_error_raised(self, project):
         with pytest.raises(ParsingError):
             run_dbt(["parse"])
@@ -57,4 +63,40 @@ class TestMissingEventTimeMicrobatch(BaseMicrobatchTest):
         return {
             "input_model.sql": valid_input_model_sql,
             "microbatch.sql": missing_event_time_microbatch_model_sql
+        }
+    
+
+class TestInvalidEventTimeMicrobatch(BaseMicrobatchTest):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "input_model.sql": valid_input_model_sql,
+            "microbatch.sql": invalid_event_time_microbatch_model_sql
+        }
+
+
+class TestMissingBatchSizeMicrobatch(BaseMicrobatchTest):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "input_model.sql": valid_input_model_sql,
+            "microbatch.sql": missing_batch_size_microbatch_model_sql
+        }
+
+
+class TestInvalidBatchSizeMicrobatch(BaseMicrobatchTest):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "input_model.sql": valid_input_model_sql,
+            "microbatch.sql": invalid_batch_size_microbatch_model_sql
+        }
+
+
+class TestInvalidInputEventTimeMicrobatch(BaseMicrobatchTest):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "input_model.sql": invalid_event_time_input_model_sql,
+            "microbatch.sql": valid_microbatch_model_sql
         }
