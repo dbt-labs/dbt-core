@@ -14,7 +14,6 @@ from dbt.adapters.events.types import (
 )
 from dbt.adapters.exceptions import MissingMaterializationError
 from dbt.artifacts.resources import Hook
-from dbt.artifacts.resources.types import BatchSize
 from dbt.artifacts.schemas.results import (
     BaseResult,
     NodeStatus,
@@ -197,11 +196,10 @@ class ModelRunner(CompileRunner):
 
     def describe_batch(self, batch_start: Optional[datetime]) -> str:
         # Only visualize date if batch_start year/month/day
-        formatted_batch_start = (
-            batch_start.date()
-            if (batch_start and self.node.config.batch_size != BatchSize.hour)
-            else batch_start
+        formatted_batch_start = MicrobatchBuilder.format_batch_start(
+            batch_start, self.node.config.batch_size
         )
+
         return f"batch {formatted_batch_start} of {self.get_node_representation()}"
 
     def print_start_line(self):
@@ -463,7 +461,14 @@ class ModelRunner(CompileRunner):
                 model.config["__dbt_internal_microbatch_event_time_end"] = batch[1]
 
                 # Recompile node to re-resolve refs with event time filters rendered, update context
-                self.compiler.compile_node(model, manifest, {})
+                self.compiler.compile_node(
+                    model,
+                    manifest,
+                    {},
+                    split_suffix=MicrobatchBuilder.format_batch_start(
+                        batch[0], model.config.batch_size
+                    ),
+                )
                 context["model"] = model
                 context["sql"] = model.compiled_code
                 context["compiled_code"] = model.compiled_code

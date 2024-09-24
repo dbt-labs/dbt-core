@@ -82,6 +82,7 @@ class NodeConfig(NodeAndTestConfig):
     incremental_strategy: Optional[str] = None
     batch_size: Any = None
     lookback: Any = 0
+    begin: Any = None
     persist_docs: Dict[str, Any] = field(default_factory=dict)
     post_hook: List[Hook] = field(
         default_factory=list,

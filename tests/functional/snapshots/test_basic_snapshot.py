@@ -20,6 +20,7 @@ from tests.functional.snapshots.fixtures import (
     seeds__seed_newcol_csv,
     snapshots_pg__snapshot_no_target_schema_sql,
     snapshots_pg__snapshot_sql,
+    snapshots_pg__snapshot_yml,
     snapshots_pg_custom__snapshot_sql,
     snapshots_pg_custom_namespaced__snapshot_sql,
 )
@@ -372,3 +373,24 @@ class TestBasicUpdatedAtCheckCols(UpdatedAtCheckCols):
 class TestRefUpdatedAtCheckCols(UpdatedAtCheckCols):
     def test_updated_at_ref(self, project):
         ref_setup(project, num_snapshot_models=2)
+
+
+class BasicYaml(Basic):
+    @pytest.fixture(scope="class")
+    def snapshots(self):
+        """Overrides the same function in Basic to use the YAML method of
+        defining a snapshot."""
+        return {"snapshot.yml": snapshots_pg__snapshot_yml}
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        """Overrides the same function in Basic to use a modified version of
+        schema.yml without snapshot config."""
+        return {
+            "ref_snapshot.sql": models__ref_snapshot_sql,
+        }
+
+
+class TestBasicSnapshotYaml(BasicYaml):
+    def test_basic_snapshot_yaml(self, project):
+        snapshot_setup(project, num_snapshot_models=1)
