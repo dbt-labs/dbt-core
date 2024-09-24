@@ -11,6 +11,21 @@ valid_microbatch_model_sql = """
 select * from {{ ref('input_model') }}
 """
 
+valid_microbatch_model_no_config_sql = """
+select * from {{ ref('input_model') }}
+"""
+
+valid_microbatch_model_config_yml = """
+models:
+  - name: microbatch
+    config:
+      materialized: incremental
+      incremental_strategy: microbatch
+      batch_size: day
+      event_time: event_time
+      begin: 2020-01-01
+"""
+
 missing_event_time_microbatch_model_sql = """
 {{ config(materialized='incremental', incremental_strategy='microbatch', batch_size='day') }}
 select * from {{ ref('input_model') }}
@@ -55,7 +70,7 @@ select 1 as id, TIMESTAMP '2020-01-01 00:00:00-0' as event_time
 """
 
 
-class BaseMicrobatchTest:
+class BaseMicrobatchTestParseError:
     @pytest.fixture(scope="class")
     def models(self):
         return {}
@@ -66,7 +81,17 @@ class BaseMicrobatchTest:
             run_dbt(["parse"])
 
 
-class TestMissingEventTimeMicrobatch(BaseMicrobatchTest):
+class BaseMicrobatchTestNoError:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {}
+
+    @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
+    def test_parsing_error_not_raised(self, project):
+        run_dbt(["parse"])
+
+
+class TestMissingEventTimeMicrobatch(BaseMicrobatchTestParseError):
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -75,7 +100,7 @@ class TestMissingEventTimeMicrobatch(BaseMicrobatchTest):
         }
 
 
-class TestInvalidEventTimeMicrobatch(BaseMicrobatchTest):
+class TestInvalidEventTimeMicrobatch(BaseMicrobatchTestParseError):
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -84,7 +109,7 @@ class TestInvalidEventTimeMicrobatch(BaseMicrobatchTest):
         }
 
 
-class TestMissingBeginMicrobatch(BaseMicrobatchTest):
+class TestMissingBeginMicrobatch(BaseMicrobatchTestParseError):
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -93,7 +118,7 @@ class TestMissingBeginMicrobatch(BaseMicrobatchTest):
         }
 
 
-class TestInvaliBeginMicrobatch(BaseMicrobatchTest):
+class TestInvaliBeginMicrobatch(BaseMicrobatchTestParseError):
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -102,7 +127,7 @@ class TestInvaliBeginMicrobatch(BaseMicrobatchTest):
         }
 
 
-class TestMissingBatchSizeMicrobatch(BaseMicrobatchTest):
+class TestMissingBatchSizeMicrobatch(BaseMicrobatchTestParseError):
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -111,7 +136,7 @@ class TestMissingBatchSizeMicrobatch(BaseMicrobatchTest):
         }
 
 
-class TestInvalidBatchSizeMicrobatch(BaseMicrobatchTest):
+class TestInvalidBatchSizeMicrobatch(BaseMicrobatchTestParseError):
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -120,10 +145,20 @@ class TestInvalidBatchSizeMicrobatch(BaseMicrobatchTest):
         }
 
 
-class TestInvalidInputEventTimeMicrobatch(BaseMicrobatchTest):
+class TestInvalidInputEventTimeMicrobatch(BaseMicrobatchTestParseError):
     @pytest.fixture(scope="class")
     def models(self):
         return {
             "input_model.sql": invalid_event_time_input_model_sql,
             "microbatch.sql": valid_microbatch_model_sql,
+        }
+
+
+class TestValidBeginMicrobatch(BaseMicrobatchTestNoError):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "input_model.sql": valid_input_model_sql,
+            "microbatch.sql": valid_microbatch_model_no_config_sql,
+            "schema.yml": valid_microbatch_model_config_yml,
         }

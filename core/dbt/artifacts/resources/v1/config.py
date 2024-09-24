@@ -1,5 +1,6 @@
 import re
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 
 from mashumaro.jsonschema.annotations import Pattern
@@ -82,7 +83,7 @@ class NodeConfig(NodeAndTestConfig):
     incremental_strategy: Optional[str] = None
     batch_size: Any = None
     lookback: Any = 0
-    begin: Any = None
+    begin: Union[datetime, Any] = None
     persist_docs: Dict[str, Any] = field(default_factory=dict)
     post_hook: List[Hook] = field(
         default_factory=list,
