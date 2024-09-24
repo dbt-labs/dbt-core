@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 
 from dbt_common.dataclass_schema import dbtClassMixin
 
-BatchType = Tuple[Optional[datetime], datetime]
+BatchType = Tuple[datetime, datetime]
 
 
 @dataclass
