@@ -134,6 +134,7 @@ class SchemaGenericTestParser(SimpleParser):
             "column_name": column_name,
             "checksum": FileHash.empty().to_dict(omit_none=True),
             "file_key_name": file_key_name,
+            "meta": target.config.get('meta', {}) if hasattr(target, 'config') else {},
         }
         try:
             GenericTestNode.validate(dct)
