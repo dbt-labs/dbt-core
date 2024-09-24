@@ -1593,7 +1593,7 @@ class UnitTestContext(ModelContext):
         if self.model.this_input_node_unique_id:
             this_node = self.manifest.expect(self.model.this_input_node_unique_id)
             self.model.set_cte(this_node.unique_id, None)  # type: ignore
-            return self.adapter.Relation.add_ephemeral_prefix(this_node.name)
+            return self.adapter.Relation.add_ephemeral_prefix(this_node.identifier)  # type: ignore
         return None
 
 
