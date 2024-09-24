@@ -162,3 +162,14 @@ class MicrobatchBuilder:
             truncated = datetime(timestamp.year, 1, 1, 0, 0, 0, 0, pytz.utc)
 
         return truncated
+
+    @staticmethod
+    def format_batch_start(
+        batch_start: Optional[datetime], batch_size: BatchSize
+    ) -> Optional[str]:
+        if batch_start is None:
+            return batch_start
+
+        return str(
+            batch_start.date() if (batch_start and batch_size != BatchSize.hour) else batch_start
+        )

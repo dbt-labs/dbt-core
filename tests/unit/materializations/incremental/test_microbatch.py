@@ -444,3 +444,19 @@ class TestMicrobatchBuilder:
     )
     def test_truncate_timestamp(self, timestamp, batch_size, expected_timestamp):
         assert MicrobatchBuilder.truncate_timestamp(timestamp, batch_size) == expected_timestamp
+
+    @pytest.mark.parametrize(
+        "batch_size,batch_start,expected_formatted_batch_start",
+        [
+            (None, None, None),
+            (BatchSize.year, datetime(2020, 1, 1, 1), "2020-01-01"),
+            (BatchSize.month, datetime(2020, 1, 1, 1), "2020-01-01"),
+            (BatchSize.day, datetime(2020, 1, 1, 1), "2020-01-01"),
+            (BatchSize.hour, datetime(2020, 1, 1, 1), "2020-01-01 01:00:00"),
+        ],
+    )
+    def test_format_batch_start(self, batch_size, batch_start, expected_formatted_batch_start):
+        assert (
+            MicrobatchBuilder.format_batch_start(batch_start, batch_size)
+            == expected_formatted_batch_start
+        )

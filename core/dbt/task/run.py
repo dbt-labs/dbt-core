@@ -196,7 +196,9 @@ class ModelRunner(CompileRunner):
 
     def describe_batch(self, batch_start: Optional[datetime]) -> str:
         # Only visualize date if batch_start year/month/day
-        formatted_batch_start = self.node.format_batch_start(batch_start)
+        formatted_batch_start = MicrobatchBuilder.format_batch_start(
+            batch_start, self.node.config.batch_size
+        )
 
         return f"batch {formatted_batch_start} of {self.get_node_representation()}"
 
@@ -460,7 +462,12 @@ class ModelRunner(CompileRunner):
 
                 # Recompile node to re-resolve refs with event time filters rendered, update context
                 self.compiler.compile_node(
-                    model, manifest, {}, split_suffix=model.format_batch_start(batch[0])
+                    model,
+                    manifest,
+                    {},
+                    split_suffix=MicrobatchBuilder.format_batch_start(
+                        batch[0], model.config.batch_size
+                    ),
                 )
                 context["model"] = model
                 context["sql"] = model.compiled_code

@@ -78,6 +78,7 @@ from dbt.exceptions import (
     SecretEnvVarLocationError,
     TargetNotFoundError,
 )
+from dbt.materializations.incremental.microbatch import MicrobatchBuilder
 from dbt.node_types import ModelLanguage, NodeType
 from dbt.utils import MultiDict, args_to_dict
 from dbt_common.clients.jinja import MacroProtocol
@@ -979,8 +980,9 @@ class ProviderContext(ManifestContext):
             isinstance(self.model, ModelNode)
             and self.model.config.get("incremental_strategy") == "microbatch"
         ):
-            split_suffix = self.model.format_batch_start(
-                self.model.config.get("__dbt_internal_microbatch_event_time_start")
+            split_suffix = MicrobatchBuilder.format_batch_start(
+                self.model.config.get("__dbt_internal_microbatch_event_time_start"),
+                self.model.config.batch_size,
             )
 
         self.model.build_path = self.model.get_target_write_path(
