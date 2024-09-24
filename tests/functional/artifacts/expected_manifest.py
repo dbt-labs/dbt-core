@@ -42,6 +42,7 @@ def get_rendered_model_config(**updates):
         "event_time": None,
         "lookback": 0,
         "batch_size": None,
+        "begin": None,
     }
     result.update(updates)
     return result
@@ -80,6 +81,7 @@ def get_rendered_seed_config(**updates):
         "event_time": None,
         "lookback": 0,
         "batch_size": None,
+        "begin": None,
     }
     result.update(updates)
     return result
@@ -103,6 +105,12 @@ def get_rendered_snapshot_config(**updates):
         "post-hook": [],
         "column_types": {},
         "quoting": {},
+        "snapshot_meta_column_names": {
+            "dbt_valid_to": None,
+            "dbt_valid_from": None,
+            "dbt_updated_at": None,
+            "dbt_scd_id": None,
+        },
         "tags": [],
         "persist_docs": {},
         "full_refresh": None,
@@ -123,6 +131,7 @@ def get_rendered_snapshot_config(**updates):
         "event_time": None,
         "lookback": 0,
         "batch_size": None,
+        "begin": None,
     }
     result.update(updates)
     return result
