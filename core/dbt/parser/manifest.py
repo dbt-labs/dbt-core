@@ -1158,7 +1158,9 @@ class ManifestLoader:
                 continue
             if not model_to_generic_test_map:
                 model_to_generic_test_map = self.build_model_to_generic_tests_map()
-            generic_tests = model_to_generic_test_map[node.unique_id]
+            generic_tests: List[GenericTestNode] = []
+            if node.unique_id in model_to_generic_test_map:
+                generic_tests = model_to_generic_test_map[node.unique_id]
             primary_key = node.infer_primary_key(generic_tests)
             node.primary_key = sorted(primary_key)
 
@@ -1430,10 +1432,7 @@ class ManifestLoader:
         write_file(path, json.dumps(self._perf_info, cls=dbt.utils.JSONEncoder, indent=4))
         fire_event(ParsePerfInfoPath(path=path))
 
-    def build_model_to_generic_tests_map(
-        self,
-        model: ModelNode,
-    ) -> Dict[str, List[GenericTestNode]]:
+    def build_model_to_generic_tests_map(self) -> Dict[str, List[GenericTestNode]]:
         """Return a list of generic tests that are attached to the given model, including disabled tests"""
         model_to_generic_tests_map: Dict[str, List[GenericTestNode]] = {}
         for _, node in self.manifest.nodes.items():
