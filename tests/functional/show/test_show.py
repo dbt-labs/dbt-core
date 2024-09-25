@@ -120,6 +120,18 @@ class TestShowInline(ShowBase):
         assert "sample_bool" in log_output
 
 
+class TestShowInlineFail(ShowBase):
+    def test_inline_fail(self, project):
+        with pytest.raises(DbtException, match="Error parsing inline query"):
+            run_dbt(["show", "--inline", "select * from {{ ref('third_model') }}"])
+
+
+class TestShowInlineFailDB(ShowBase):
+    def test_inline_fail_database_error(self, project):
+        with pytest.raises(DbtRuntimeError, match="Database Error"):
+            run_dbt(["show", "--inline", "slect asdlkjfsld;j"])
+
+
 class TestShowInlineDirect(ShowBase):
 
     def test_inline_direct_pass(self, project):
@@ -137,16 +149,14 @@ class TestShowInlineDirect(ShowBase):
         run_dbt(["seed"])
 
 
-class TestShowInlineFail(ShowBase):
-    def test_inline_fail(self, project):
-        with pytest.raises(DbtException, match="Error parsing inline query"):
-            run_dbt(["show", "--inline", "select * from {{ ref('third_model') }}"])
+class TestShowInlineDirectFail(ShowBase):
 
-
-class TestShowInlineFailDB(ShowBase):
     def test_inline_fail_database_error(self, project):
         with pytest.raises(DbtRuntimeError, match="Database Error"):
-            run_dbt(["show", "--inline", "slect asdlkjfsld;j"])
+            run_dbt(["show", "--inline-direct", "slect asdlkjfsld;j"])
+
+        # See prior test for explanation of why this is here
+        run_dbt(["seed"])
 
 
 class TestShowEphemeral(ShowBase):
