@@ -403,7 +403,6 @@ class YamlReader(metaclass=ABCMeta):
             unrendered_config = {}
             if "config" in entry:
                 unrendered_config = entry["config"]
-                print(f"unrendered_config: {unrendered_config}")
 
             unrendered_version_configs = {}
             if "versions" in entry:
@@ -485,8 +484,6 @@ class SourceParser(YamlReader):
                 self.manifest.source_patches[key] = patch
                 source_file.source_patches.append(key)
             else:
-                # TODO: add unrendered_database from manifest.unrendered_source_patch
-                # self.yaml.path.original_file_path
                 source = self._target_from_dict(UnparsedSourceDefinition, data)
                 self.add_source_definitions(source)
         return ParseResult()
