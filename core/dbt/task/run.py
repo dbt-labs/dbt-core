@@ -312,8 +312,9 @@ class ModelRunner(CompileRunner):
             if result.batch_results is not None:
                 batch_results += result.batch_results
             else:
-                # TODO: Should we raise an error here?
-                continue
+                raise DbtInternalError(
+                    "Got a run result without batch results for a batch run, this should be impossible"
+                )
 
         num_successes = len(batch_results.successful)
         num_failures = len(batch_results.failed)
