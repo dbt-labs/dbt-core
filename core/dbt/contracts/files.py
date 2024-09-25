@@ -338,6 +338,14 @@ class SchemaSourceFile(BaseSourceFile):
 
         return self.unrendered_configs[yaml_key][versioned_name]
 
+    def delete_from_unrendered_configs(self, yaml_key, name):
+        # We delete all unrendered_configs for this yaml_key/name because the
+        # entry has been scheduled for reparsing.
+        if self.get_unrendered_config(yaml_key, name):
+            del self.unrendered_configs[yaml_key][name]
+            if not self.unrendered_configs[yaml_key]:
+                del self.unrendered_configs[yaml_key]
+
     def add_env_var(self, var, yaml_key, name):
         if yaml_key not in self.env_vars:
             self.env_vars[yaml_key] = {}

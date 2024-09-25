@@ -16,7 +16,7 @@ class TestStateSelectionVarConfigLegacy(BaseModifiedState):
     def project_config_update(self):
         return {
             "flags": {
-                "require_config_jinja_insensitivity_for_state_modified": False,
+                "state_modified_compare_more_unrendered_values": False,
             }
         }
 
@@ -65,7 +65,7 @@ class TestStateSelectionVarConfig(BaseModifiedState):
     def project_config_update(self):
         return {
             "flags": {
-                "require_config_jinja_insensitivity_for_state_modified": True,
+                "state_modified_compare_more_unrendered_values": True,
             }
         }
 

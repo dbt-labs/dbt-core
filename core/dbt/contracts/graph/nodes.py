@@ -2,6 +2,7 @@ import hashlib
 import os
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 from typing import (
     Any,
     Dict,
@@ -18,7 +19,6 @@ from typing import (
 
 from mashumaro.types import SerializableType
 
-from dbt import deprecations
 from dbt.adapters.base import ConstraintSupport
 from dbt.adapters.factory import get_adapter_constraint_support
 from dbt.artifacts.resources import Analysis as AnalysisResource
@@ -244,7 +244,9 @@ class NodeInfoMixin:
 
 @dataclass
 class ParsedNode(ParsedResource, NodeInfoMixin, ParsedNodeMandatory, SerializableType):
-    def get_target_write_path(self, target_path: str, subdirectory: str):
+    def get_target_write_path(
+        self, target_path: str, subdirectory: str, split_suffix: Optional[str] = None
+    ):
         # This is called for both the "compiled" subdirectory of "target" and the "run" subdirectory
         if os.path.basename(self.path) == os.path.basename(self.original_file_path):
             # One-to-one relationship of nodes to files.
@@ -252,6 +254,15 @@ class ParsedNode(ParsedResource, NodeInfoMixin, ParsedNodeMandatory, Serializabl
         else:
             #  Many-to-one relationship of nodes to files.
             path = os.path.join(self.original_file_path, self.path)
+
+        if split_suffix:
+            pathlib_path = Path(path)
+            path = str(
+                pathlib_path.parent
+                / pathlib_path.stem
+                / (pathlib_path.stem + f"_{split_suffix}" + pathlib_path.suffix)
+            )
+
         target_write_path = os.path.join(target_path, subdirectory, self.package_name, path)
         return target_write_path
 
@@ -1148,12 +1159,6 @@ class UnpatchedSourceDefinition(BaseNode):
                 "Invalid test config: cannot have both 'tests' and 'data_tests' defined"
             )
         if self.tests:
-            if is_root_project:
-                deprecations.warn(
-                    "project-test-config",
-                    deprecated_path="tests",
-                    exp_path="data_tests",
-                )
             self.data_tests.extend(self.tests)
             self.tests.clear()
 
@@ -1164,12 +1169,6 @@ class UnpatchedSourceDefinition(BaseNode):
                     "Invalid test config: cannot have both 'tests' and 'data_tests' defined"
                 )
             if column.tests:
-                if is_root_project:
-                    deprecations.warn(
-                        "project-test-config",
-                        deprecated_path="tests",
-                        exp_path="data_tests",
-                    )
                 column.data_tests.extend(column.tests)
                 column.tests.clear()
 
@@ -1225,7 +1224,7 @@ class SourceDefinition(
     def same_database_representation(self, other: "SourceDefinition") -> bool:
 
         # preserve legacy behaviour -- use potentially rendered database
-        if get_flags().require_config_jinja_insensitivity_for_state_modified is False:
+        if get_flags().state_modified_compare_more_unrendered_values is False:
             same_database = self.database == other.database
         else:
             same_database = self.unrendered_database == other.unrendered_database
@@ -1645,6 +1644,11 @@ class ParsedNodePatch(ParsedPatch):
 @dataclass
 class ParsedMacroPatch(ParsedPatch):
     arguments: List[MacroArgument] = field(default_factory=list)
+
+
+@dataclass
+class ParsedSingularTestPatch(ParsedPatch):
+    pass
 
 
 # ====================================

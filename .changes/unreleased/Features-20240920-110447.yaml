@@ -1,0 +1,6 @@
+kind: Features
+body: Allow snapshots to be defined in YAML.
+time: 2024-09-20T11:04:47.703117-04:00
+custom:
+  Author: peterallenwebb
+  Issue: "10246"

@@ -1,0 +1,6 @@
+kind: Features
+body: Execute microbatch models in batches
+time: 2024-09-13T23:21:11.935434-04:00
+custom:
+  Author: michelleark
+  Issue: "10700"

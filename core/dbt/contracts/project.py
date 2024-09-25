@@ -5,7 +5,6 @@ from mashumaro.jsonschema.annotations import Pattern
 from mashumaro.types import SerializableType
 from typing_extensions import Annotated
 
-from dbt import deprecations
 from dbt.adapters.contracts.connection import QueryComment
 from dbt.contracts.util import Identifier, list_str
 from dbt_common.contracts.util import Mergeable
@@ -259,6 +258,7 @@ class Project(dbtClassMixin):
     query_comment: Optional[Union[QueryComment, NoValue, str]] = field(default_factory=NoValue)
     restrict_access: bool = False
     dbt_cloud: Optional[Dict[str, Any]] = None
+    flags: Dict[str, Any] = field(default_factory=dict)
 
     class Config(dbtMashConfig):
         # These tell mashumaro to use aliases for jsonschema and for "from_dict"
@@ -312,10 +312,6 @@ class Project(dbtClassMixin):
             raise ValidationError(
                 "Invalid project config: cannot have both 'tests' and 'data_tests' defined"
             )
-        if "tests" in data:
-            deprecations.warn(
-                "project-test-config", deprecated_path="tests", exp_path="data_tests"
-            )
 
 
 @dataclass
@@ -342,18 +338,18 @@ class ProjectFlags(ExtensibleDbtClassMixin):
     write_json: Optional[bool] = None
 
     # legacy behaviors - https://github.com/dbt-labs/dbt-core/blob/main/docs/guides/behavior-change-flags.md
-    require_config_jinja_insensitivity_for_state_modified: bool = False
     require_explicit_package_overrides_for_builtin_materializations: bool = True
     require_resource_names_without_spaces: bool = False
     source_freshness_run_project_hooks: bool = False
+    state_modified_compare_more_unrendered_values: bool = False
 
     @property
     def project_only_flags(self) -> Dict[str, Any]:
         return {
-            "require_config_jinja_insensitivity_for_state_modified": self.require_config_jinja_insensitivity_for_state_modified,
             "require_explicit_package_overrides_for_builtin_materializations": self.require_explicit_package_overrides_for_builtin_materializations,
             "require_resource_names_without_spaces": self.require_resource_names_without_spaces,
             "source_freshness_run_project_hooks": self.source_freshness_run_project_hooks,
+            "state_modified_compare_more_unrendered_values": self.state_modified_compare_more_unrendered_values,
         }
 
 

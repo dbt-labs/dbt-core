@@ -91,6 +91,22 @@ empty = click.option(
     is_flag=True,
 )
 
+event_time_end = click.option(
+    "--event-time-end",
+    envvar="DBT_EVENT_TIME_END",
+    help="If specified, the end datetime dbt uses to filter microbatch model inputs (exclusive).",
+    type=click.DateTime(),
+    default=None,
+)
+
+event_time_start = click.option(
+    "--event-time-start",
+    envvar="DBT_EVENT_TIME_START",
+    help="If specified, the start datetime dbt uses to filter microbatch model inputs (inclusive).",
+    type=click.DateTime(),
+    default=None,
+)
+
 exclude = click.option(
     "--exclude",
     envvar=None,

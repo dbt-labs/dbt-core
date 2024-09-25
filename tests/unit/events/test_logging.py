@@ -23,7 +23,7 @@ class TestSetupEventLogger:
 
         setup_event_logger(get_flags())
         assert len(manager.loggers) == 0
-        assert len(manager.callbacks) == 0
+        assert len(manager.callbacks) == 1  # snowplow tracker for behavior flags
 
     def test_specify_max_bytes(
         self,

@@ -19,6 +19,7 @@ from dbt_common.exceptions import CompilationError
 @dataclass
 class SourceConfig(BaseConfig):
     enabled: bool = True
+    event_time: Any = None
 
 
 @dataclass

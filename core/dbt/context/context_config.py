@@ -9,7 +9,7 @@ from dbt.contracts.graph.model_config import get_config_for
 from dbt.flags import get_flags
 from dbt.node_types import NodeType
 from dbt.utils import fqn_search
-from dbt_common.contracts.config.base import BaseConfig, _listify
+from dbt_common.contracts.config.base import BaseConfig, merge_config_dicts
 from dbt_common.exceptions import DbtInternalError
 
 
@@ -295,59 +295,11 @@ class ContextConfig:
 
     def add_config_call(self, opts: Dict[str, Any]) -> None:
         dct = self._config_call_dict
-        self._add_config_call(dct, opts)
+        merge_config_dicts(dct, opts)
 
     def add_unrendered_config_call(self, opts: Dict[str, Any]) -> None:
         # Cannot perform complex merge behaviours on unrendered configs as they may not be appropriate types.
         self._unrendered_config_call_dict.update(opts)
-
-    @classmethod
-    def _add_config_call(cls, config_call_dict, opts: Dict[str, Any]) -> None:
-        # config_call_dict is already encountered configs, opts is new
-        # This mirrors code in _merge_field_value in model_config.py which is similar but
-        # operates on config objects.
-        for k, v in opts.items():
-            # MergeBehavior for post-hook and pre-hook is to collect all
-            # values, instead of overwriting
-            if k in BaseConfig.mergebehavior["append"]:
-                if not isinstance(v, list):
-                    v = [v]
-                if k in config_call_dict:  # should always be a list here
-                    config_call_dict[k].extend(v)
-                else:
-                    config_call_dict[k] = v
-
-            elif k in BaseConfig.mergebehavior["update"]:
-                if not isinstance(v, dict):
-                    raise DbtInternalError(f"expected dict, got {v}")
-                if k in config_call_dict and isinstance(config_call_dict[k], dict):
-                    config_call_dict[k].update(v)
-                else:
-                    config_call_dict[k] = v
-            elif k in BaseConfig.mergebehavior["dict_key_append"]:
-                if not isinstance(v, dict):
-                    raise DbtInternalError(f"expected dict, got {v}")
-                if k in config_call_dict:  # should always be a dict
-                    for key, value in v.items():
-                        extend = False
-                        # This might start with a +, to indicate we should extend the list
-                        # instead of just clobbering it
-                        if key.startswith("+"):
-                            extend = True
-                        if key in config_call_dict[k] and extend:
-                            # extend the list
-                            config_call_dict[k][key].extend(_listify(value))
-                        else:
-                            # clobber the list
-                            config_call_dict[k][key] = _listify(value)
-                else:
-                    # This is always a dictionary
-                    config_call_dict[k] = v
-                    # listify everything
-                    for key, value in config_call_dict[k].items():
-                        config_call_dict[k][key] = _listify(value)
-            else:
-                config_call_dict[k] = v
 
     def build_config_dict(
         self,
@@ -365,7 +317,7 @@ class ContextConfig:
             src = UnrenderedConfigGenerator(self._active_project)  # type: ignore[assignment]
 
             # preserve legacy behaviour - using unreliable (potentially rendered) _config_call_dict
-            if get_flags().require_config_jinja_insensitivity_for_state_modified is False:
+            if get_flags().state_modified_compare_more_unrendered_values is False:
                 config_call_dict = self._config_call_dict
             else:
                 # Prefer _config_call_dict if it is available and _unrendered_config_call_dict is not,

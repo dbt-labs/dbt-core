@@ -23,7 +23,7 @@ class BaseTestStateSelectionEnvVarConfig(BaseModifiedState):
     def project_config_update(self):
         return {
             "flags": {
-                "require_config_jinja_insensitivity_for_state_modified": True,
+                "state_modified_compare_more_unrendered_values": True,
             }
         }
 
@@ -90,7 +90,7 @@ class TestModelNodeWithEnvVarConfigInProjectYmlAndSchemaYml(BaseTestStateSelecti
     def project_config_update(self):
         return {
             "flags": {
-                "require_config_jinja_insensitivity_for_state_modified": True,
+                "state_modified_compare_more_unrendered_values": True,
             },
             "models": {
                 "test": {

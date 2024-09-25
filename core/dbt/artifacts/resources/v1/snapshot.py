@@ -1,10 +1,18 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Dict, List, Literal, Optional, Union
 
 from dbt.artifacts.resources.types import NodeType
 from dbt.artifacts.resources.v1.components import CompiledResource, DeferRelation
 from dbt.artifacts.resources.v1.config import NodeConfig
-from dbt_common.dataclass_schema import ValidationError
+from dbt_common.dataclass_schema import ValidationError, dbtClassMixin
+
+
+@dataclass
+class SnapshotMetaColumnNames(dbtClassMixin):
+    dbt_valid_to: Optional[str] = None
+    dbt_valid_from: Optional[str] = None
+    dbt_scd_id: Optional[str] = None
+    dbt_updated_at: Optional[str] = None
 
 
 @dataclass
@@ -17,6 +25,18 @@ class SnapshotConfig(NodeConfig):
     updated_at: Optional[str] = None
     # Not using Optional because of serialization issues with a Union of str and List[str]
     check_cols: Union[str, List[str], None] = None
+    snapshot_meta_column_names: SnapshotMetaColumnNames = field(
+        default_factory=SnapshotMetaColumnNames
+    )
+
+    @property
+    def snapshot_table_column_names(self):
+        return {
+            "dbt_valid_from": self.snapshot_meta_column_names.dbt_valid_from or "dbt_valid_from",
+            "dbt_valid_to": self.snapshot_meta_column_names.dbt_valid_to or "dbt_valid_to",
+            "dbt_scd_id": self.snapshot_meta_column_names.dbt_scd_id or "dbt_scd_id",
+            "dbt_updated_at": self.snapshot_meta_column_names.dbt_updated_at or "dbt_updated_at",
+        }
 
     def final_validate(self):
         if not self.strategy or not self.unique_key:

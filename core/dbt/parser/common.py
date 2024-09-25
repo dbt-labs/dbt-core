@@ -13,6 +13,7 @@ from dbt.contracts.graph.unparsed import (
     UnparsedMacroUpdate,
     UnparsedModelUpdate,
     UnparsedNodeUpdate,
+    UnparsedSingularTestUpdate,
 )
 from dbt.exceptions import ParsingError
 from dbt.parser.search import FileBlock
@@ -38,6 +39,7 @@ Target = TypeVar(
     UnpatchedSourceDefinition,
     UnparsedExposure,
     UnparsedModelUpdate,
+    UnparsedSingularTestUpdate,
 )
 
 

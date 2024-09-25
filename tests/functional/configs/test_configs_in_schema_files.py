@@ -112,7 +112,7 @@ models:
 class TestSchemaFileConfigs:
     @pytest.fixture(scope="class")
     def expected_unrendered_config(self):
-        # my_attr is unrendered when require_config_jinja_insensitivity_for_state_modified: True
+        # my_attr is unrendered when state_modified_compare_more_unrendered_values: True
         return {
             "materialized": "view",
             "meta": {"my_attr": "{{ var('my_var') }}", "owner": "Julie Smith"},
@@ -135,7 +135,7 @@ class TestSchemaFileConfigs:
     def project_config_update(self):
         return {
             "flags": {
-                "require_config_jinja_insensitivity_for_state_modified": True,
+                "state_modified_compare_more_unrendered_values": True,
             },
             "models": {
                 "+meta": {
@@ -263,7 +263,7 @@ class TestSchemaFileConfigs:
 class TestLegacySchemaFileConfigs(TestSchemaFileConfigs):
     @pytest.fixture(scope="class")
     def expected_unrendered_config(self):
-        # my_attr is rendered ("TESTING") when require_config_jinja_insensitivity_for_state_modified: False
+        # my_attr is rendered ("TESTING") when state_modified_compare_more_unrendered_values: False
         return {
             "materialized": "view",
             "meta": {"my_attr": "TESTING", "owner": "Julie Smith"},
@@ -274,9 +274,9 @@ class TestLegacySchemaFileConfigs(TestSchemaFileConfigs):
     def project_config_update(self):
         return {
             # The uncommented below lines can be removed once the default behaviour is flipped.
-            # require_config_jinja_insensitivity_for_state_modified defaults to false currently
+            # state_modified_compare_more_unrendered_values defaults to false currently
             # "flags": {
-            #     "require_config_jinja_insensitivity_for_state_modified": False,
+            #     "state_modified_compare_more_unrendered_values": False,
             # },
             "models": {
                 "+meta": {
