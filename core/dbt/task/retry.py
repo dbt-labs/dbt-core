@@ -132,7 +132,9 @@ class RetryTask(ConfiguredTask):
         batch_map = {
             result.unique_id: result.batch_results.failed
             for result in self.previous_results.results
-            if result.batch_results is not None and len(result.batch_results.failed) > 0
+            if result.status == NodeStatus.PartialSuccess
+            and result.batch_results is not None
+            and len(result.batch_results.failed) > 0
         }
 
         class TaskWrapper(self.task_class):
