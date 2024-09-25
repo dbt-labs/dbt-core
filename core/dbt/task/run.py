@@ -315,17 +315,18 @@ class ModelRunner(CompileRunner):
                 # TODO: Should we raise an error here?
                 continue
 
-        if len(batch_results.failed) == 0:
+        num_successes = len(batch_results.successful)
+        num_failures = len(batch_results.failed)
+
+        if num_failures == 0:
             status = RunStatus.Success
-        elif len(batch_results.successful) == 0:
+            msg = "SUCCESS"
+        elif num_successes == 0:
             status = RunStatus.Error
+            msg = "ERROR"
         else:
             status = RunStatus.PartialSuccess
-
-        if len(batch_results.failed) == 0:
-            msg = f"Batches: {len(batch_results.successful)} successful"
-        else:
-            msg = f"Batches: {len(batch_results.successful)} succeeded, {batch_results.failed} failed"
+            msg = f"PARTIAL SUCCESS ({num_successes}/{num_successes + num_failures})"
 
         return RunResult(
             node=model,
@@ -336,7 +337,7 @@ class ModelRunner(CompileRunner):
             execution_time=0,
             message=msg,
             adapter_response={},
-            failures=len(batch_results.failed),
+            failures=num_failures,
             batch_results=batch_results,
         )
 
