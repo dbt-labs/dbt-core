@@ -1,0 +1,6 @@
+kind: Features
+body: Added the --inline-direct parameter to 'dbt show'
+time: 2024-09-24T15:29:22.874496-04:00
+custom:
+  Author: aranke peterallenwebb
+  Issue: "10770"
