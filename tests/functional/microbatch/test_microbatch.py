@@ -452,7 +452,11 @@ class TestMicrobatchRetriesPartialSuccesses(BaseMicrobatchTest):
     def test_run_with_event_time(self, project):
         # run all partitions from start - 2 expected rows in output, one failed
         with patch_microbatch_end_time("2020-01-03 13:57:00"):
-            run_dbt(["run", "--event-time-start", "2020-01-01"])
+            _, console_output = run_dbt_and_capture(["run", "--event-time-start", "2020-01-01"])
+
+        assert "PARTIAL SUCCESS (2/3)" in console_output
+        assert "Completed with 1 partial success" in console_output
+
         self.assert_row_count(project, "microbatch_model", 2)
 
         run_results = get_artifact(project.project_root, "target", "run_results.json")
@@ -467,7 +471,12 @@ class TestMicrobatchRetriesPartialSuccesses(BaseMicrobatchTest):
         write_file(microbatch_model_sql, project.project_root, "models", "microbatch_model.sql")
 
         with patch_microbatch_end_time("2020-01-03 13:57:00"):
-            run_dbt(["retry"])
+            _, console_output = run_dbt_and_capture(["retry"])
+
+        assert "PARTIAL SUCCESS" not in console_output
+        assert "Completed with 1 partial success" not in console_output
+        assert "Completed successfully" in console_output
+
         self.assert_row_count(project, "microbatch_model", 3)
 
 
