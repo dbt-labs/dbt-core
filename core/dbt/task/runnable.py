@@ -261,7 +261,10 @@ class GraphRunnableTask(ConfiguredTask):
 
         fail_fast = get_flags().FAIL_FAST
 
-        if result.status in (NodeStatus.Error, NodeStatus.Fail) and fail_fast:
+        if (
+            result.status in (NodeStatus.Error, NodeStatus.Fail, NodeStatus.PartialSuccess)
+            and fail_fast
+        ):
             self._raise_next_tick = FailFastError(
                 msg="Failing early due to test failure or runtime error",
                 result=result,
