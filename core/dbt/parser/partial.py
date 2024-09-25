@@ -808,6 +808,7 @@ class PartialParsing:
                 pp_dict[key].append(patch)
 
         schema_file.delete_from_env_vars(key, patch["name"])
+        schema_file.delete_from_unrendered_configs(key, patch["name"])
         self.add_to_pp_files(schema_file)
 
     # For model, seed, snapshot, analysis schema dictionary keys,

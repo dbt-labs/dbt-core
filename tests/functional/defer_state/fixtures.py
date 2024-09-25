@@ -573,3 +573,33 @@ model_with_var_in_config_sql = """
 {{ config(materialized=var('DBT_TEST_STATE_MODIFIED')) }}
 select 1 as id
 """
+
+model_with_jinja_in_config_sql = """
+{{ config(
+    materialized = ('table' if execute else 'view')
+) }}
+
+select 1 as id
+"""
+
+model_with_updated_jinja_in_config_sql = """
+{{ config(
+    materialized = ('view' if execute else 'table')
+) }}
+
+select 1 as id
+"""
+
+schema_model_with_jinja_in_config_yml = """
+models:
+  - name: model
+    config:
+      materialized: "{{ ('table' if execute else 'view') }}"
+"""
+
+schema_model_with_updated_jinja_in_config_yml = """
+models:
+  - name: model
+    config:
+      materialized: "{{ ('view' if execute else 'table') }}"
+"""

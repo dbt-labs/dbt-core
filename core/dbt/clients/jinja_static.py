@@ -280,5 +280,11 @@ def _construct_static_kwarg_value(kwarg) -> str:
 
         return f"{kwarg.value.node.name}({formatted_all_args})"
 
+    elif kwarg_type == "CondExpr":
+        # Instead of trying to re-assemble complex kwarg value, simply stringify the value
+        # This is still useful to be able to detect changes in unrendered configs, even if it is
+        # not an exact representation of the user input.
+        return str(kwarg.value)
+
     else:
         return ""

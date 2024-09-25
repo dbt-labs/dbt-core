@@ -403,6 +403,7 @@ class YamlReader(metaclass=ABCMeta):
             unrendered_config = {}
             if "config" in entry:
                 unrendered_config = entry["config"]
+                print(f"unrendered_config: {unrendered_config}")
 
             unrendered_version_configs = {}
             if "versions" in entry:
