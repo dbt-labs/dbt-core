@@ -1280,6 +1280,7 @@ message LogTestResult {
     int32 num_models = 5;
     float execution_time = 6;
     int32 num_failures = 7;
+    Group group = 8;
 }
 
 message LogTestResultMsg {
@@ -1304,6 +1305,12 @@ message LogStartLineMsg {
     LogStartLine data = 2;
 }
 
+message Group {
+    string name = 1;
+    string package_name = 3;
+    map<string, string> owner = 7;
+}
+
 // Q012
 message LogModelResult {
     NodeInfo node_info = 1;
@@ -1312,6 +1319,7 @@ message LogModelResult {
     int32 index = 4;
     int32 total = 5;
     float execution_time = 6;
+    Group group = 7;
 }
 
 message LogModelResultMsg {
@@ -1331,6 +1339,7 @@ message LogSnapshotResult {
     float execution_time = 6;
     map<string, string> cfg = 7;
     string result_message = 8;
+    Group group = 9;
 }
 
 message LogSnapshotResultMsg {
@@ -1348,6 +1357,7 @@ message LogSeedResult {
     float execution_time = 6;
     string schema = 7;
     string relation = 8;
+    Group group = 9;
 }
 
 message LogSeedResultMsg {
@@ -1366,6 +1376,7 @@ message LogFreshnessResult {
     float execution_time = 5;
     string source_name = 6;
     string table_name = 7;
+    Group group = 8;
 }
 
 message LogFreshnessResultMsg {
@@ -1381,6 +1392,7 @@ message LogNodeNoOpResult {
     int32 index = 4;
     int32 total = 5;
     float execution_time = 6;
+    Group group = 7;
 }
 
 message LogNodeNoOpResultMsg {
@@ -1818,12 +1830,6 @@ message ServingDocsExitInfo {
 message ServingDocsExitInfoMsg {
     CoreEventInfo info = 1;
     ServingDocsExitInfo data = 2;
-}
-
-message Group {
-    string name = 1;
-    string package_name = 3;
-    map<string, string> owner = 7;
 }
 
 // Z021

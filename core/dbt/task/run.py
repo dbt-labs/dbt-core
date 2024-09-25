@@ -49,6 +49,7 @@ from dbt_common.events.functions import fire_event, get_invocation_id
 from dbt_common.events.types import Formatting
 from dbt_common.exceptions import DbtValidationError
 
+from . import group_lookup
 from .compile import CompileRunner, CompileTask
 from .printer import get_counts, print_run_end_messages
 
@@ -216,6 +217,7 @@ class ModelRunner(CompileRunner):
 
     def print_result_line(self, result):
         description = self.describe_node()
+        group = group_lookup.get(self.node.unique_id)
         if result.status == NodeStatus.Error:
             status = result.status
             level = EventLevel.ERROR
@@ -230,6 +232,7 @@ class ModelRunner(CompileRunner):
                 total=self.num_nodes,
                 execution_time=result.execution_time,
                 node_info=self.node.node_info,
+                group=group,
             ),
             level=level,
         )
@@ -243,6 +246,7 @@ class ModelRunner(CompileRunner):
         exception: Optional[Exception],
     ):
         description = self.describe_batch(batch_start)
+        group = group_lookup.get(self.node.unique_id)
         if result.status == NodeStatus.Error:
             status = result.status
             level = EventLevel.ERROR
@@ -257,6 +261,7 @@ class ModelRunner(CompileRunner):
                 total=batch_total,
                 execution_time=result.execution_time,
                 node_info=self.node.node_info,
+                group=group,
             ),
             level=level,
         )
@@ -648,6 +653,7 @@ class RunTask(CompileTask):
             self.create_schemas(adapter, required_schemas)
             self.populate_adapter_cache(adapter, required_schemas)
             self.safe_run_hooks(adapter, RunHookType.Start, {})
+            group_lookup.init(self.manifest, selected_uids)
 
     def after_run(self, adapter, results) -> None:
         # in on-run-end hooks, provide the value 'database_schemas', which is a
@@ -685,17 +691,6 @@ class RunTask(CompileTask):
     def get_runner_type(self, _) -> Optional[Type[BaseRunner]]:
         return ModelRunner
 
-    def get_groups_for_nodes(self, nodes):
-        node_to_group_name_map = {i: k for k, v in self.manifest.group_map.items() for i in v}
-        group_name_to_group_map = {v.name: v for v in self.manifest.groups.values()}
-
-        return {
-            node.unique_id: group_name_to_group_map.get(node_to_group_name_map.get(node.unique_id))
-            for node in nodes
-        }
-
     def task_end_messages(self, results) -> None:
-        groups = self.get_groups_for_nodes([r.node for r in results if hasattr(r, "node")])
-
         if results:
-            print_run_end_messages(results, groups=groups)
+            print_run_end_messages(results)
