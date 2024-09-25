@@ -1,0 +1,6 @@
+kind: Features
+body: Add basic functionality for creating microbatch incremental models
+time: 2024-09-11T12:10:29.822189-05:00
+custom:
+  Author: MichelleArk QMalcolm
+  Issue: 9490 10635 10637 10638 10636 10662 10639

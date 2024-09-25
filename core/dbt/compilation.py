@@ -521,7 +521,9 @@ class Compiler:
             linker.write_graph(graph_path, manifest)
 
     # writes the "compiled_code" into the target/compiled directory
-    def _write_node(self, node: ManifestSQLNode) -> ManifestSQLNode:
+    def _write_node(
+        self, node: ManifestSQLNode, split_suffix: Optional[str] = None
+    ) -> ManifestSQLNode:
         if not node.extra_ctes_injected or node.resource_type in (
             NodeType.Snapshot,
             NodeType.Seed,
@@ -530,7 +532,9 @@ class Compiler:
         fire_event(WritingInjectedSQLForNode(node_info=get_node_info()))
 
         if node.compiled_code:
-            node.compiled_path = node.get_target_write_path(self.config.target_path, "compiled")
+            node.compiled_path = node.get_target_write_path(
+                self.config.target_path, "compiled", split_suffix
+            )
             node.write_node(self.config.project_root, node.compiled_path, node.compiled_code)
         return node
 
@@ -540,6 +544,7 @@ class Compiler:
         manifest: Manifest,
         extra_context: Optional[Dict[str, Any]] = None,
         write: bool = True,
+        split_suffix: Optional[str] = None,
     ) -> ManifestSQLNode:
         """This is the main entry point into this code. It's called by
         CompileRunner.compile, GenericRPCRunner.compile, and
@@ -562,7 +567,7 @@ class Compiler:
 
         node, _ = self._recursively_prepend_ctes(node, manifest, extra_context)
         if write:
-            self._write_node(node)
+            self._write_node(node, split_suffix=split_suffix)
         return node
 
 

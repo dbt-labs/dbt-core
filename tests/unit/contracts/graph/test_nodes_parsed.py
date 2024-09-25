@@ -100,6 +100,7 @@ def populated_node_config_dict():
         "docs": {"show": True},
         "contract": {"enforced": False, "alias_types": True},
         "access": "protected",
+        "lookback": 0,
     }
 
 
@@ -187,6 +188,7 @@ def base_parsed_model_dict():
             "contract": {"enforced": False, "alias_types": True},
             "packages": [],
             "access": "protected",
+            "lookback": 0,
         },
         "docs": {"show": True},
         "contract": {"enforced": False, "alias_types": True},
@@ -298,6 +300,7 @@ def complex_parsed_model_dict():
             "contract": {"enforced": False, "alias_types": True},
             "packages": [],
             "access": "protected",
+            "lookback": 0,
         },
         "docs": {"show": True},
         "contract": {"enforced": False, "alias_types": True},
@@ -522,6 +525,7 @@ def basic_parsed_seed_dict():
             "docs": {"show": True},
             "contract": {"enforced": False, "alias_types": True},
             "packages": [],
+            "lookback": 0,
         },
         "docs": {"show": True},
         "columns": {},
@@ -614,6 +618,7 @@ def complex_parsed_seed_dict():
             "docs": {"show": True},
             "contract": {"enforced": False, "alias_types": True},
             "packages": [],
+            "lookback": 0,
         },
         "docs": {"show": True},
         "columns": {
@@ -822,6 +827,7 @@ def base_parsed_hook_dict():
             "docs": {"show": True},
             "contract": {"enforced": False, "alias_types": True},
             "packages": [],
+            "lookback": 0,
         },
         "docs": {"show": True},
         "contract": {"enforced": False, "alias_types": True},
@@ -904,6 +910,7 @@ def complex_parsed_hook_dict():
             "docs": {"show": True},
             "contract": {"enforced": False, "alias_types": True},
             "packages": [],
+            "lookback": 0,
         },
         "docs": {"show": True},
         "contract": {"enforced": False, "alias_types": True},
@@ -1251,6 +1258,7 @@ def basic_timestamp_snapshot_config_dict():
         "quoting": {},
         "tags": [],
         "unique_key": "id",
+        "snapshot_meta_column_names": {},
         "strategy": "timestamp",
         "updated_at": "last_update",
         "target_database": "some_snapshot_db",
@@ -1262,6 +1270,7 @@ def basic_timestamp_snapshot_config_dict():
         "packages": [],
         "docs": {"show": True},
         "contract": {"enforced": False, "alias_types": True},
+        "lookback": 0,
     }
 
 
@@ -1286,6 +1295,7 @@ def complex_timestamp_snapshot_config_dict():
         "post-hook": [{"sql": 'insert into blah(a, b) select "1", 1', "transaction": True}],
         "pre-hook": [],
         "quoting": {},
+        "snapshot_meta_column_names": {},
         "tags": [],
         "target_database": "some_snapshot_db",
         "target_schema": "some_snapshot_schema",
@@ -1300,6 +1310,7 @@ def complex_timestamp_snapshot_config_dict():
         "packages": [],
         "docs": {"show": True},
         "contract": {"enforced": False, "alias_types": True},
+        "lookback": 0,
     }
 
 
@@ -1353,6 +1364,7 @@ def basic_check_snapshot_config_dict():
         "post-hook": [],
         "pre-hook": [],
         "quoting": {},
+        "snapshot_meta_column_names": {},
         "tags": [],
         "target_database": "some_snapshot_db",
         "target_schema": "some_snapshot_schema",
@@ -1366,6 +1378,7 @@ def basic_check_snapshot_config_dict():
         "packages": [],
         "docs": {"show": True},
         "contract": {"enforced": False, "alias_types": True},
+        "lookback": 0,
     }
 
 
@@ -1390,6 +1403,7 @@ def complex_set_snapshot_config_dict():
         "post-hook": [{"sql": 'insert into blah(a, b) select "1", 1', "transaction": True}],
         "pre-hook": [],
         "quoting": {},
+        "snapshot_meta_column_names": {},
         "tags": [],
         "target_database": "some_snapshot_db",
         "target_schema": "some_snapshot_schema",
@@ -1404,6 +1418,7 @@ def complex_set_snapshot_config_dict():
         "packages": [],
         "docs": {"show": True},
         "contract": {"enforced": False, "alias_types": True},
+        "lookback": 0,
     }
 
 
@@ -1515,6 +1530,7 @@ def basic_timestamp_snapshot_dict():
             "post-hook": [],
             "pre-hook": [],
             "quoting": {},
+            "snapshot_meta_column_names": {},
             "tags": [],
             "target_database": "some_snapshot_db",
             "target_schema": "some_snapshot_schema",
@@ -1528,6 +1544,7 @@ def basic_timestamp_snapshot_dict():
             "docs": {"show": True},
             "contract": {"enforced": False, "alias_types": True},
             "packages": [],
+            "lookback": 0,
         },
         "docs": {"show": True},
         "contract": {"enforced": False, "alias_types": True},
@@ -1618,6 +1635,7 @@ def basic_check_snapshot_dict():
             "post-hook": [],
             "pre-hook": [],
             "quoting": {},
+            "snapshot_meta_column_names": {},
             "tags": [],
             "target_database": "some_snapshot_db",
             "target_schema": "some_snapshot_schema",
@@ -1631,6 +1649,7 @@ def basic_check_snapshot_dict():
             "docs": {"show": True},
             "contract": {"enforced": False, "alias_types": True},
             "packages": [],
+            "lookback": 0,
         },
         "docs": {"show": True},
         "contract": {"enforced": False, "alias_types": True},

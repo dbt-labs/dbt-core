@@ -30,7 +30,7 @@ env:
 
 jobs:
   checking-schemas:
-    name: "Checking schemas"
+    name: "Post-merge schema changes required"
     runs-on: ubuntu-latest
 
     steps:

@@ -13,8 +13,9 @@ from tests.functional.time_spines.fixtures import (
     metricflow_time_spine_sql,
     models_people_sql,
     semantic_model_people_yml,
-    time_spine_missing_column_yml,
+    time_spine_missing_custom_column_yml,
     time_spine_missing_granularity_yml,
+    time_spine_missing_standard_column_yml,
     valid_time_spines_yml,
 )
 
@@ -65,7 +66,18 @@ class TestValidTimeSpines:
                 model.time_spine.standard_granularity_column
                 == model_names_to_col_names[model.name]
             )
-            assert len(model.columns) == 1
+            if model.name == day_model_name:
+                assert len(model.time_spine.custom_granularities) == 2
+                assert {
+                    custom_granularity.name
+                    for custom_granularity in model.time_spine.custom_granularities
+                } == {"retail_month", "martian_year"}
+                for custom_granularity in model.time_spine.custom_granularities:
+                    if custom_granularity.name == "martian_year":
+                        assert custom_granularity.column_name == "martian__year_xyz"
+            else:
+                assert len(model.time_spine.custom_granularities) == 0
+            assert len(model.columns) > 0
             assert (
                 list(model.columns.values())[0].granularity
                 == model_names_to_granularities[model.name]
@@ -152,8 +164,8 @@ class TestMissingTimeSpine:
         )
 
 
-class TestTimeSpineColumnMissing:
-    """Tests that YAML with time spine column not in model errors."""
+class TestTimeSpineStandardColumnMissing:
+    """Tests that YAML with time spine standard granularity column not in model errors."""
 
     @pytest.fixture(scope="class")
     def models(self):
@@ -162,7 +174,7 @@ class TestTimeSpineColumnMissing:
             "people.sql": models_people_sql,
             "metricflow_time_spine.sql": metricflow_time_spine_sql,
             "metricflow_time_spine_second.sql": metricflow_time_spine_second_sql,
-            "time_spines.yml": time_spine_missing_column_yml,
+            "time_spines.yml": time_spine_missing_standard_column_yml,
         }
 
     def test_time_spines(self, project):
@@ -171,6 +183,29 @@ class TestTimeSpineColumnMissing:
         assert isinstance(result.exception, ParsingError)
         assert (
             "Time spine standard granularity column must be defined on the model."
+            in result.exception.msg
+        )
+
+
+class TestTimeSpineCustomColumnMissing:
+    """Tests that YAML with time spine custom granularity column not in model errors."""
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "semantic_model_people.yml": semantic_model_people_yml,
+            "people.sql": models_people_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+            "metricflow_time_spine_second.sql": metricflow_time_spine_second_sql,
+            "time_spines.yml": time_spine_missing_custom_column_yml,
+        }
+
+    def test_time_spines(self, project):
+        runner = dbtRunner()
+        result = runner.invoke(["parse"])
+        assert isinstance(result.exception, ParsingError)
+        assert (
+            "Time spine custom granularity columns do not exist in the model."
             in result.exception.msg
         )
 

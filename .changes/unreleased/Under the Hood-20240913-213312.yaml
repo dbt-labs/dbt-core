@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Add test utility patch_microbatch_end_time for adapters testing
+time: 2024-09-13T21:33:12.482336-04:00
+custom:
+  Author: michelleark
+  Issue: "10713"

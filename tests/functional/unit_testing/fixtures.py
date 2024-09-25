@@ -50,6 +50,18 @@ END a_is_null
 FROM {{ ref('my_model_a') }}
 """
 
+test_my_model_a_yml = """
+models:
+  - name: my_model_a
+    columns:
+      - name: a
+        tests:
+          - not_null
+      - name: id
+        tests:
+          - not_null
+"""
+
 test_my_model_yml = """
 unit_tests:
   - name: test_my_model
@@ -290,6 +302,28 @@ select * from {{ ref('events') }}
 {% if is_incremental() %}
 where event_time > (select max(event_time) from {{ this }})
 {% endif %}
+"""
+
+my_incremental_model_with_alias_sql = """
+{{
+    config(
+        materialized='incremental',
+        alias='alias_name'
+    )
+}}
+
+select * from {{ ref('events') }}
+{% if is_incremental() %}
+where event_time > (select max(event_time) from {{ this }})
+{% endif %}
+"""
+
+my_incremental_model_versioned_yml = """
+models:
+  - name: my_incremental_model
+    latest_version: 1
+    versions:
+      - v: 1
 """
 
 test_my_model_incremental_yml_basic = """

@@ -12,6 +12,7 @@ from packaging.version import Version
 from snowplow_tracker import Emitter, SelfDescribingJson, Subject, Tracker
 from snowplow_tracker import __version__ as snowplow_version  # type: ignore
 from snowplow_tracker import logger as sp_logger
+from snowplow_tracker.events import StructuredEvent
 
 from dbt import version as dbt_version
 from dbt.adapters.exceptions import FailedToConnectError
@@ -25,7 +26,8 @@ from dbt.events.types import (
     SendingEvent,
     TrackingInitializeFailure,
 )
-from dbt_common.events.functions import fire_event, get_invocation_id
+from dbt_common.events.base_types import EventMsg
+from dbt_common.events.functions import fire_event, get_invocation_id, msg_to_dict
 from dbt_common.exceptions import NotImplementedError
 
 sp_logger.setLevel(100)
@@ -36,6 +38,7 @@ DBT_INVOCATION_ENV = "DBT_INVOCATION_ENV"
 
 ADAPTER_INFO_SPEC = "iglu:com.dbt/adapter_info/jsonschema/1-0-1"
 DEPRECATION_WARN_SPEC = "iglu:com.dbt/deprecation_warn/jsonschema/1-0-0"
+BEHAVIOR_CHANGE_WARN_SPEC = "iglu:com.dbt/behavior_change_warn/jsonschema/1-0-0"
 EXPERIMENTAL_PARSER = "iglu:com.dbt/experimental_parser/jsonschema/1-0-0"
 INVOCATION_ENV_SPEC = "iglu:com.dbt/invocation_env/jsonschema/1-0-0"
 INVOCATION_SPEC = "iglu:com.dbt/invocation/jsonschema/1-0-2"
@@ -215,12 +218,12 @@ def get_dbt_env_context():
 def track(user, *args, **kwargs):
     if user.do_not_track:
         return
-    else:
-        fire_event(SendingEvent(kwargs=str(kwargs)))
-        try:
-            tracker.track_struct_event(*args, **kwargs)
-        except Exception:
-            fire_event(SendEventFailure())
+
+    fire_event(SendingEvent(kwargs=str(kwargs)))
+    try:
+        tracker.track(StructuredEvent(*args, **kwargs))
+    except Exception:
+        fire_event(SendEventFailure())
 
 
 def track_project_id(options):
@@ -360,6 +363,20 @@ def track_deprecation_warn(options):
         action="deprecation",
         label=get_invocation_id(),
         property_="warn",
+        context=context,
+    )
+
+
+def track_behavior_change_warn(msg: EventMsg) -> None:
+    if msg.info.name != "BehaviorChangeEvent" or active_user is None:
+        return
+
+    context = [SelfDescribingJson(BEHAVIOR_CHANGE_WARN_SPEC, msg_to_dict(msg))]
+    track(
+        active_user,
+        category="dbt",
+        action=msg.info.name,
+        label=get_invocation_id(),
         context=context,
     )
 
