@@ -1376,7 +1376,6 @@ message LogFreshnessResult {
     float execution_time = 5;
     string source_name = 6;
     string table_name = 7;
-    Group group = 8;
 }
 
 message LogFreshnessResultMsg {
