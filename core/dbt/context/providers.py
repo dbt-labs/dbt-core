@@ -79,6 +79,7 @@ from dbt.exceptions import (
     SecretEnvVarLocationError,
     TargetNotFoundError,
 )
+from dbt.flags import get_flags
 from dbt.materializations.incremental.microbatch import MicrobatchBuilder
 from dbt.node_types import ModelLanguage, NodeType
 from dbt.utils import MultiDict, args_to_dict
@@ -398,9 +399,10 @@ class ParseConfigObject(Config):
             raise DbtRuntimeError("At parse time, did not receive a context config")
 
         # Track unrendered opts to build parsed node unrendered_config later on
-        unrendered_config = statically_parse_unrendered_config(self.model.raw_code)
-        if unrendered_config:
-            self.context_config.add_unrendered_config_call(unrendered_config)
+        if get_flags().state_modified_compare_more_unrendered_values:
+            unrendered_config = statically_parse_unrendered_config(self.model.raw_code)
+            if unrendered_config:
+                self.context_config.add_unrendered_config_call(unrendered_config)
 
         # Use rendered opts to populate context_config
         self.context_config.add_config_call(opts)
