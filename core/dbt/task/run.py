@@ -484,6 +484,11 @@ class ModelRunner(CompileRunner):
             batches = microbatch_builder.build_batches(start, end)
         else:
             batches = model.batches
+            # if there are batches, then don't run as full_refresh and do force is_incremental
+            # not doing this risks blowing away the work that has already been done
+            if self._has_relation(model=model):
+                context["is_incremental"] = lambda: True
+                context["should_full_refresh"] = lambda: False
 
         # iterate over each batch, calling materialization_macro to get a batch-level run result
         for batch_idx, batch in enumerate(batches):
@@ -530,6 +535,13 @@ class ModelRunner(CompileRunner):
             batch_results.append(batch_run_result)
 
         return batch_results
+
+    def _has_relation(self, model) -> bool:
+        relation_info = self.adapter.Relation.create_from(self.config, model)
+        relation = self.adapter.get_relation(
+            relation_info.database, relation_info.schema, relation_info.name
+        )
+        return relation is not None
 
     def _is_incremental(self, model) -> bool:
         # TODO: Remove. This is a temporary method. We're working with adapters on
