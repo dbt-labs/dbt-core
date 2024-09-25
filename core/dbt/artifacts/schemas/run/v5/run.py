@@ -37,7 +37,6 @@ class RunResult(NodeResult):
     agate_table: Optional["agate.Table"] = field(
         default=None, metadata={"serialize": lambda x: None, "deserialize": lambda x: None}
     )
-    # TODO: Do we need to do the field(...) stuff from above?
     batch_results: Optional[BatchResults] = None
 
     @property
