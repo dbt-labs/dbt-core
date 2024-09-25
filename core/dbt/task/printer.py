@@ -136,7 +136,7 @@ def print_run_result_error(
 def print_run_end_messages(
     results, keyboard_interrupt: bool = False, groups: Optional[Dict[str, Group]] = None
 ) -> None:
-    errors, warnings = [], []
+    errors, warnings, partial_successes = [], [], []
     for r in results:
         if r.status in (NodeStatus.RuntimeErr, NodeStatus.Error, NodeStatus.Fail):
             errors.append(r)
@@ -146,12 +146,15 @@ def print_run_end_messages(
             errors.append(r)
         elif r.status == NodeStatus.Warn:
             warnings.append(r)
+        elif r.status == NodeStatus.PartialSuccess:
+            partial_successes.append(r)
 
     fire_event(Formatting(""))
     fire_event(
         EndOfRunSummary(
             num_errors=len(errors),
             num_warnings=len(warnings),
+            num_partial_success=len(partial_successes),
             keyboard_interrupt=keyboard_interrupt,
         )
     )
