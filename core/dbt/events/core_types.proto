@@ -1271,6 +1271,12 @@ message SQLRunnerExceptionMsg {
     SQLRunnerException data = 2;
 }
 
+message Group {
+    string name = 1;
+    string package_name = 3;
+    map<string, string> owner = 7;
+}
+
 // Q007
 message LogTestResult {
     NodeInfo node_info = 1;
@@ -1303,12 +1309,6 @@ message LogStartLine {
 message LogStartLineMsg {
     CoreEventInfo info = 1;
     LogStartLine data = 2;
-}
-
-message Group {
-    string name = 1;
-    string package_name = 3;
-    map<string, string> owner = 7;
 }
 
 // Q012
@@ -1384,7 +1384,7 @@ message LogFreshnessResultMsg {
     LogFreshnessResult data = 2;
 }
 
-// Q018
+// Q019
 message LogNodeNoOpResult {
     NodeInfo node_info = 1;
     string description = 2;
