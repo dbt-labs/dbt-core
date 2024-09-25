@@ -1475,11 +1475,11 @@ class SnapshotParserTest(BaseParserTest):
                 "updated_at": "last_update",
             },
             unrendered_config_call_dict={
-                "strategy": "timestamp",
-                "target_database": "dbt",
-                "target_schema": "analytics",
-                "unique_key": "id",
-                "updated_at": "last_update",
+                "unique_key": "Keyword(key='unique_key', value=Const(value='id'))",
+                "target_schema": "Keyword(key='target_schema', value=Const(value='analytics'))",
+                "target_database": "Keyword(key='target_database', value=Const(value='dbt'))",
+                "strategy": "Keyword(key='strategy', value=Const(value='timestamp'))",
+                "updated_at": "Keyword(key='updated_at', value=Const(value='last_update'))",
             },
         )
         assertEqualNodes(expected, node)
@@ -1552,11 +1552,11 @@ class SnapshotParserTest(BaseParserTest):
                 "updated_at": "last_update",
             },
             unrendered_config_call_dict={
-                "strategy": "timestamp",
-                "target_database": "dbt",
-                "target_schema": "analytics",
-                "unique_key": "id",
-                "updated_at": "last_update",
+                "unique_key": "Keyword(key='unique_key', value=Const(value='id'))",
+                "target_schema": "Keyword(key='target_schema', value=Const(value='analytics'))",
+                "target_database": "Keyword(key='target_database', value=Const(value='dbt'))",
+                "strategy": "Keyword(key='strategy', value=Const(value='timestamp'))",
+                "updated_at": "Keyword(key='updated_at', value=Const(value='last_update'))",
             },
         )
         expect_bar = SnapshotNode(
@@ -1596,11 +1596,11 @@ class SnapshotParserTest(BaseParserTest):
                 "updated_at": "last_update",
             },
             unrendered_config_call_dict={
-                "strategy": "timestamp",
-                "target_database": "dbt",
-                "target_schema": "analytics",
-                "unique_key": "id",
-                "updated_at": "last_update",
+                "unique_key": "Keyword(key='unique_key', value=Const(value='id'))",
+                "target_schema": "Keyword(key='target_schema', value=Const(value='analytics'))",
+                "target_database": "Keyword(key='target_database', value=Const(value='dbt'))",
+                "strategy": "Keyword(key='strategy', value=Const(value='timestamp'))",
+                "updated_at": "Keyword(key='updated_at', value=Const(value='last_update'))",
             },
         )
         assertEqualNodes(nodes[0], expect_bar)
