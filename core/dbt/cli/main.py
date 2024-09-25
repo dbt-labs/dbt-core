@@ -372,8 +372,8 @@ def show(ctx, **kwargs):
     from dbt.task.show import ShowTask, ShowTaskDirect
 
     if ctx.obj["flags"].inline_direct:
-        # Issue the inline query directly, wit no templating. Does not require
-        # loading the mainfest.
+        # Issue the inline query directly, with no templating. Does not require
+        # loading the manifest.
         register_adapter(ctx.obj["runtime_config"], get_mp_context())
         task = ShowTaskDirect(
             ctx.obj["flags"],
