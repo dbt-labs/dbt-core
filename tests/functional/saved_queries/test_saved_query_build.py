@@ -1,6 +1,6 @@
 import pytest
 
-from dbt.tests.util import run_dbt
+from dbt.tests.util import run_dbt, run_dbt_and_capture
 from tests.functional.saved_queries.fixtures import (
     saved_queries_yml,
     saved_query_description,
@@ -34,6 +34,12 @@ packages:
     def test_build_saved_queries_no_op(self, project) -> None:
         """Test building saved query exports with no flag, so should be no-op."""
         run_dbt(["deps"])
-        result = run_dbt(["build"])
+        result, log_output = run_dbt_and_capture(["build", "--log-format", "json"])
         assert len(result.results) == 3
         assert "NO-OP" in [r.message for r in result.results]
+
+        result_log_line = next(
+            line for line in log_output.split("\n") if "LogNodeNoOpResult" in line
+        )
+        assert "my_group" in result_log_line
+        assert "group_owner" in result_log_line
