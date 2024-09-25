@@ -200,7 +200,7 @@ def statically_parse_unrendered_config(string: str) -> Optional[Dict[str, Any]]:
 
     For example, given:
     "{{ config(materialized=env_var('DBT_TEST_STATE_MODIFIED')) }}\nselect 1 as id"
-    returns: {"materialized" : "env_var('DBT_TEST_STATE_MODIFIED')"}
+    returns: {'materialized': "Keyword(key='materialized', value=Call(node=Name(name='env_var', ctx='load'), args=[Const(value='DBT_TEST_STATE_MODIFIED')], kwargs=[], dyn_args=None, dyn_kwargs=None))"}
 
     No config call:
     "select 1 as id"
@@ -241,50 +241,7 @@ def statically_parse_unrendered_config(string: str) -> Optional[Dict[str, Any]]:
 
 
 def construct_static_kwarg_value(kwarg):
-    static_kwarg_value = _construct_static_kwarg_value(kwarg)
-    if isinstance(static_kwarg_value, str):
-        return static_kwarg_value.strip("'")
-    else:
-        return static_kwarg_value
-
-
-def _construct_static_kwarg_value(kwarg) -> str:
-    kwarg_type = type(kwarg.value).__name__
-    if kwarg_type == "Const":
-        return (
-            f"'{kwarg.value.value}'" if isinstance(kwarg.value.value, str) else kwarg.value.value
-        )
-
-    elif kwarg_type == "Call":
-        unrendered_args = []
-        for arg in kwarg.value.args:
-            arg_type = type(arg).__name__
-            if arg_type == "Const":
-                unrendered_args.append(
-                    f"'{arg.value}'" if isinstance(arg.value, str) else arg.value
-                )
-
-        unrendered_kwargs = {}
-        for call_kwarg in kwarg.value.kwargs:
-            kwarg_value = _construct_static_kwarg_value(call_kwarg)
-
-            unrendered_kwargs[call_kwarg.key] = kwarg_value
-
-        formatted_unrendered_kwargs = [
-            f"{key}={value}" for key, value in unrendered_kwargs.items()
-        ]
-
-        formatted_all_args = ", ".join(
-            str(x) for x in (unrendered_args + formatted_unrendered_kwargs)
-        )
-
-        return f"{kwarg.value.node.name}({formatted_all_args})"
-
-    elif kwarg_type == "CondExpr":
-        # Instead of trying to re-assemble complex kwarg value, simply stringify the value
-        # This is still useful to be able to detect changes in unrendered configs, even if it is
-        # not an exact representation of the user input.
-        return str(kwarg.value)
-
-    else:
-        return ""
+    # Instead of trying to re-assemble complex kwarg value, simply stringify the value
+    # This is still useful to be able to detect changes in unrendered configs, even if it is
+    # not an exact representation of the user input.
+    return str(kwarg)
