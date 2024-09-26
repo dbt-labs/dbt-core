@@ -1339,7 +1339,6 @@ message LogSnapshotResult {
     float execution_time = 6;
     map<string, string> cfg = 7;
     string result_message = 8;
-    Group group = 9;
 }
 
 message LogSnapshotResultMsg {
@@ -1357,7 +1356,6 @@ message LogSeedResult {
     float execution_time = 6;
     string schema = 7;
     string relation = 8;
-    Group group = 9;
 }
 
 message LogSeedResultMsg {
@@ -1391,7 +1389,6 @@ message LogNodeNoOpResult {
     int32 index = 4;
     int32 total = 5;
     float execution_time = 6;
-    Group group = 7;
 }
 
 message LogNodeNoOpResultMsg {
