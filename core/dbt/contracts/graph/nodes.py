@@ -1627,6 +1627,11 @@ class ParsedMacroPatch(ParsedPatch):
     arguments: List[MacroArgument] = field(default_factory=list)
 
 
+@dataclass
+class ParsedSingularTestPatch(ParsedPatch):
+    pass
+
+
 # ====================================
 # Node unions/categories
 # ====================================

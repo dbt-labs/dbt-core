@@ -3,7 +3,17 @@ import json
 import re
 import threading
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Type, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Collection,
+    Dict,
+    List,
+    Optional,
+    Tuple,
+    Type,
+    Union,
+)
 
 import daff
 
@@ -25,9 +35,9 @@ from dbt.events.types import LogStartLine, LogTestResult
 from dbt.exceptions import BooleanError, DbtInternalError
 from dbt.flags import get_flags
 from dbt.graph import ResourceTypeSelector
-from dbt.node_types import NodeType
+from dbt.node_types import TEST_NODE_TYPES, NodeType
 from dbt.parser.unit_tests import UnitTestManifestLoader
-from dbt.task.base import BaseRunner
+from dbt.task.base import BaseRunner, resource_types_from_args
 from dbt.utils import _coerce_decimal, strtobool
 from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_common.events.format import pluralize
@@ -387,6 +397,16 @@ class TestTask(RunTask):
     def raise_on_first_error(self) -> bool:
         return False
 
+    @property
+    def resource_types(self) -> List[NodeType]:
+        resource_types: Collection[NodeType] = resource_types_from_args(
+            self.args, set(TEST_NODE_TYPES), set(TEST_NODE_TYPES)
+        )
+
+        # filter out any non-test node types
+        resource_types = [rt for rt in resource_types if rt in TEST_NODE_TYPES]
+        return list(resource_types)
+
     def get_node_selector(self) -> ResourceTypeSelector:
         if self.manifest is None or self.graph is None:
             raise DbtInternalError("manifest and graph must be set to get perform node selection")
@@ -394,7 +414,7 @@ class TestTask(RunTask):
             graph=self.graph,
             manifest=self.manifest,
             previous_state=self.previous_state,
-            resource_types=[NodeType.Test, NodeType.Unit],
+            resource_types=self.resource_types,
         )
 
     def get_runner_type(self, _) -> Optional[Type[BaseRunner]]:
