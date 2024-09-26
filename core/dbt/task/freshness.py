@@ -25,7 +25,6 @@ from dbt_common.events.functions import fire_event
 from dbt_common.events.types import Note
 from dbt_common.exceptions import DbtInternalError, DbtRuntimeError
 
-from . import group_lookup
 from .base import BaseRunner
 from .printer import print_run_result_error
 from .run import RunTask
@@ -65,7 +64,6 @@ class FreshnessRunner(BaseRunner):
             source_name = result.source_name
             table_name = result.table_name
         level = LogFreshnessResult.status_to_level(str(result.status))
-        group = group_lookup.get(result.node.unique_id)
         fire_event(
             LogFreshnessResult(
                 status=result.status,
@@ -75,7 +73,6 @@ class FreshnessRunner(BaseRunner):
                 total=self.num_nodes,
                 execution_time=result.execution_time,
                 node_info=self.node.node_info,
-                group=group,
             ),
             level=level,
         )
