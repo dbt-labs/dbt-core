@@ -17,7 +17,9 @@ from dbt.artifacts.schemas.results import (
     TimingInfo,
 )
 from dbt.artifacts.schemas.run import RunResult
+from dbt.cli.flags import Flags
 from dbt.clients.jinja import MacroGenerator
+from dbt.config import RuntimeConfig
 from dbt.context.providers import generate_runtime_model_context
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import HookNode, ModelNode, ResultNode
@@ -34,6 +36,8 @@ from dbt.hooks import get_hook_dict
 from dbt.materializations.incremental.microbatch import MicrobatchBuilder
 from dbt.node_types import NodeType, RunHookType
 from dbt.task.base import BaseRunner
+from dbt.task.compile import CompileRunner, CompileTask
+from dbt.task.printer import get_counts, print_run_end_messages
 from dbt_common.clients.jinja import MacroProtocol
 from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_common.events.base_types import EventLevel
@@ -41,11 +45,6 @@ from dbt_common.events.contextvars import log_contextvars
 from dbt_common.events.functions import fire_event, get_invocation_id
 from dbt_common.events.types import Formatting
 from dbt_common.exceptions import DbtValidationError
-
-from ..cli.flags import Flags
-from ..config import RuntimeConfig
-from .compile import CompileRunner, CompileTask
-from .printer import get_counts, print_run_end_messages
 
 
 @functools.total_ordering
