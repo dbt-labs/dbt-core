@@ -342,6 +342,14 @@ class SchemaSourceFile(BaseSourceFile):
         # entry has been scheduled for reparsing.
         if self.get_unrendered_config(yaml_key, name):
             del self.unrendered_configs[yaml_key][name]
+            # Delete all versioned keys associated with name
+            version_names_to_delete = []
+            for potential_version_name in self.unrendered_configs[yaml_key]:
+                if potential_version_name.startswith(f"{name}_v"):
+                    version_names_to_delete.append(potential_version_name)
+            for version_name in version_names_to_delete:
+                del self.unrendered_configs[yaml_key][version_name]
+
             if not self.unrendered_configs[yaml_key]:
                 del self.unrendered_configs[yaml_key]
 
