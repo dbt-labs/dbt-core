@@ -371,6 +371,30 @@ class SchemaSourceFile(BaseSourceFile):
             if not self.env_vars[yaml_key]:
                 del self.env_vars[yaml_key]
 
+    def add_unrendered_database(self, yaml_key: str, name: str, unrendered_database: str) -> None:
+        if yaml_key not in self.unrendered_databases:
+            self.unrendered_databases[yaml_key] = {}
+
+        self.unrendered_databases[yaml_key][name] = unrendered_database
+
+    def get_unrendered_database(self, yaml_key: str, name: str) -> Optional[str]:
+        if yaml_key not in self.unrendered_databases:
+            return None
+
+        return self.unrendered_databases[yaml_key].get(name)
+
+    def add_unrendered_schema(self, yaml_key: str, name: str, unrendered_schema: str) -> None:
+        if yaml_key not in self.unrendered_schemas:
+            self.unrendered_schemas[yaml_key] = {}
+
+        self.unrendered_schemas[yaml_key][name] = unrendered_schema
+
+    def get_unrendered_schema(self, yaml_key: str, name: str) -> Optional[str]:
+        if yaml_key not in self.unrendered_schemas:
+            return None
+
+        return self.unrendered_schemas[yaml_key].get(name)
+
 
 @dataclass
 class FixtureSourceFile(BaseSourceFile):

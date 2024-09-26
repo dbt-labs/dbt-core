@@ -415,19 +415,9 @@ class YamlReader(metaclass=ABCMeta):
                 )
 
             if unrendered_database:
-                schema_file.unrendered_databases[self.key] = (
-                    {}
-                    if self.key not in schema_file.unrendered_databases
-                    else schema_file.unrendered_databases[self.key]
-                )
-                schema_file.unrendered_databases[self.key][entry["name"]] = unrendered_database
+                schema_file.add_unrendered_database(self.key, entry["name"], unrendered_database)
             if unrendered_schema:
-                schema_file.unrendered_schemas[self.key] = (
-                    {}
-                    if self.key not in schema_file.unrendered_schemas
-                    else schema_file.unrendered_schemas[self.key]
-                )
-                schema_file.unrendered_schemas[self.key][entry["name"]] = unrendered_schema
+                schema_file.add_unrendered_schema(self.key, entry["name"], unrendered_schema)
 
             if self.schema_yaml_vars.env_vars:
                 self.schema_parser.manifest.env_vars.update(self.schema_yaml_vars.env_vars)
@@ -489,17 +479,14 @@ class SourceParser(YamlReader):
                 source_file.source_patches.append(key)
             else:
                 source = self._target_from_dict(UnparsedSourceDefinition, data)
-                # Store unrendered_database for state:modified comparisons
+                # Store unrendered_database and unrendered_schema for state:modified comparisons
                 if isinstance(self.yaml.file, SchemaSourceFile):
-                    unrendered_database = self.yaml.file.unrendered_databases.get(
-                        "sources", {}
-                    ).get(source.name)
-                    source.unrendered_database = unrendered_database
-
-                    unrendered_schema = self.yaml.file.unrendered_schemas.get("sources", {}).get(
-                        source.name
+                    source.unrendered_database = self.yaml.file.get_unrendered_database(
+                        "sources", source.name
                     )
-                    source.unrendered_schema = unrendered_schema
+                    source.unrendered_schema = self.yaml.file.get_unrendered_schema(
+                        "sources", source.name
+                    )
 
                 self.add_source_definitions(source)
         return ParseResult()
