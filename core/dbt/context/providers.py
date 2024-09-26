@@ -51,6 +51,7 @@ from dbt.contracts.graph.nodes import (
     Exposure,
     Macro,
     ManifestNode,
+    ModelNode,
     Resource,
     SeedNode,
     SemanticModel,
@@ -77,6 +78,7 @@ from dbt.exceptions import (
     SecretEnvVarLocationError,
     TargetNotFoundError,
 )
+from dbt.materializations.incremental.microbatch import MicrobatchBuilder
 from dbt.node_types import ModelLanguage, NodeType
 from dbt.utils import MultiDict, args_to_dict
 from dbt_common.clients.jinja import MacroProtocol
@@ -982,7 +984,20 @@ class ProviderContext(ManifestContext):
         # macros/source defs aren't 'writeable'.
         if isinstance(self.model, (Macro, SourceDefinition)):
             raise MacrosSourcesUnWriteableError(node=self.model)
-        self.model.build_path = self.model.get_target_write_path(self.config.target_path, "run")
+
+        split_suffix = None
+        if (
+            isinstance(self.model, ModelNode)
+            and self.model.config.get("incremental_strategy") == "microbatch"
+        ):
+            split_suffix = MicrobatchBuilder.format_batch_start(
+                self.model.config.get("__dbt_internal_microbatch_event_time_start"),
+                self.model.config.batch_size,
+            )
+
+        self.model.build_path = self.model.get_target_write_path(
+            self.config.target_path, "run", split_suffix=split_suffix
+        )
         self.model.write_node(self.config.project_root, self.model.build_path, payload)
         return ""
 
@@ -1646,7 +1661,7 @@ class UnitTestContext(ModelContext):
         if self.model.this_input_node_unique_id:
             this_node = self.manifest.expect(self.model.this_input_node_unique_id)
             self.model.set_cte(this_node.unique_id, None)  # type: ignore
-            return self.adapter.Relation.add_ephemeral_prefix(this_node.name)
+            return self.adapter.Relation.add_ephemeral_prefix(this_node.identifier)  # type: ignore
         return None
 
 

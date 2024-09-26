@@ -2,10 +2,12 @@ import io
 import threading
 import time
 
+from dbt.adapters.factory import get_adapter
 from dbt.artifacts.schemas.run import RunResult, RunStatus
 from dbt.context.providers import generate_runtime_model_context
 from dbt.contracts.graph.nodes import SeedNode
 from dbt.events.types import ShowNode
+from dbt.task.base import ConfiguredTask
 from dbt.task.compile import CompileRunner, CompileTask
 from dbt.task.seed import SeedRunner
 from dbt_common.events.base_types import EventLevel
@@ -117,3 +119,28 @@ class ShowTask(CompileTask):
             and (self.args.select or getattr(self.args, "inline", None))
         ):
             self.node_results.append(result)
+
+
+class ShowTaskDirect(ConfiguredTask):
+    def run(self):
+        adapter = get_adapter(self.config)
+        with adapter.connection_named("show", should_release_connection=False):
+            response, table = adapter.execute(
+                self.args.inline_direct, fetch=True, limit=self.args.limit
+            )
+
+            output = io.StringIO()
+            if self.args.output == "json":
+                table.to_json(path=output)
+            else:
+                table.print_table(output=output, max_rows=None)
+
+            fire_event(
+                ShowNode(
+                    node_name="direct-query",
+                    preview=output.getvalue(),
+                    is_inline=True,
+                    output_format=self.args.output,
+                    unique_id="direct-query",
+                )
+            )
