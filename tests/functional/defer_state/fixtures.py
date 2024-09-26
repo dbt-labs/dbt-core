@@ -560,10 +560,19 @@ models:
 
 """
 
-schema_source_with_env_var_as_property_yml = """
+schema_source_with_env_var_as_database_property_yml = """
 sources:
   - name: jaffle_shop
     database: "{{ env_var('DBT_TEST_STATE_MODIFIED') }}"
+    tables:
+      - name: customers
+"""
+
+schema_source_with_env_var_as_schema_property_yml = """
+sources:
+  - name: jaffle_shop
+    database: "test"
+    schema: "{{ env_var('DBT_TEST_STATE_MODIFIED') }}"
     tables:
       - name: customers
 """

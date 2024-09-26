@@ -214,6 +214,7 @@ class SchemaSourceFile(BaseSourceFile):
     env_vars: Dict[str, Any] = field(default_factory=dict)
     unrendered_configs: Dict[str, Any] = field(default_factory=dict)
     unrendered_databases: Dict[str, Any] = field(default_factory=dict)
+    unrendered_schemas: Dict[str, Any] = field(default_factory=dict)
     pp_dict: Optional[Dict[str, Any]] = None
     pp_test_index: Optional[Dict[str, Any]] = None
 

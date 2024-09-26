@@ -397,6 +397,7 @@ class YamlReader(metaclass=ABCMeta):
 
             # For sources
             unrendered_database = entry.get("database", None)
+            unrendered_schema = entry.get("schema", None)
 
             # Render the data (except for tests, data_tests and descriptions).
             # See the SchemaYamlRenderer
@@ -420,6 +421,13 @@ class YamlReader(metaclass=ABCMeta):
                     else schema_file.unrendered_databases[self.key]
                 )
                 schema_file.unrendered_databases[self.key][entry["name"]] = unrendered_database
+            if unrendered_schema:
+                schema_file.unrendered_schemas[self.key] = (
+                    {}
+                    if self.key not in schema_file.unrendered_schemas
+                    else schema_file.unrendered_schemas[self.key]
+                )
+                schema_file.unrendered_schemas[self.key][entry["name"]] = unrendered_schema
 
             if self.schema_yaml_vars.env_vars:
                 self.schema_parser.manifest.env_vars.update(self.schema_yaml_vars.env_vars)
@@ -487,6 +495,12 @@ class SourceParser(YamlReader):
                         "sources", {}
                     ).get(source.name)
                     source.unrendered_database = unrendered_database
+
+                    unrendered_schema = self.yaml.file.unrendered_schemas.get("sources", {}).get(
+                        source.name
+                    )
+                    source.unrendered_schema = unrendered_schema
+
                 self.add_source_definitions(source)
         return ParseResult()
 

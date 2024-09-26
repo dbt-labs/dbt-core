@@ -72,3 +72,4 @@ class SourceDefinition(ParsedSourceMandatory):
     relation_name: Optional[str] = None
     created_at: float = field(default_factory=lambda: time.time())
     unrendered_database: Optional[str] = None
+    unrendered_schema: Optional[str] = None
