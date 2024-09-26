@@ -108,6 +108,9 @@ class TestRunner(CompileRunner):
     def print_result_line(self, result):
         model = result.node
         group = group_lookup.get(model.unique_id)
+        attached_node = (
+            result.node.attached_node if isinstance(result.node, GenericTestNode) else None
+        )
 
         fire_event(
             LogTestResult(
@@ -119,6 +122,7 @@ class TestRunner(CompileRunner):
                 node_info=model.node_info,
                 num_failures=result.failures,
                 group=group,
+                attached_node=attached_node,
             ),
             level=LogTestResult.status_to_level(str(result.status)),
         )

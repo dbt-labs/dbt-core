@@ -67,6 +67,7 @@ class BaseGenericTests:
         assert len(result_log_lines) == 1
         assert "my_group" in result_log_lines[0]
         assert "group_owner" in result_log_lines[0]
+        assert "model.generic_tests.view_model" in result_log_lines[0]
 
 
 class TestGenericTests(BaseGenericTests):

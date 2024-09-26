@@ -1287,6 +1287,7 @@ message LogTestResult {
     float execution_time = 6;
     int32 num_failures = 7;
     Group group = 8;
+    string attached_node = 9;
 }
 
 message LogTestResultMsg {
