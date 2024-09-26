@@ -13,7 +13,6 @@ from dbt.node_types import NodeType
 from dbt.task.base import BaseRunner, resource_types_from_args
 from dbt_common.events.functions import fire_event
 
-from . import group_lookup
 from .run import ModelRunner as run_model_runner
 from .run import RunTask
 from .seed import SeedRunner as seed_runner
@@ -34,14 +33,12 @@ class SavedQueryRunner(BaseRunner):
         return self.node
 
     def after_execute(self, result) -> None:
-        group = group_lookup.get(result.node.unique_id)
         fire_event(
             LogNodeNoOpResult(
                 description=self.description,
                 index=self.node_index,
                 total=self.num_nodes,
                 node_info=self.node.node_info,
-                group=group,
             )
         )
 
