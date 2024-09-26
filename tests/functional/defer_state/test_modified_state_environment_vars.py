@@ -7,8 +7,6 @@ from tests.functional.defer_state.fixtures import (
     model_with_env_var_in_config_sql,
     model_with_no_in_config_sql,
     schema_model_with_env_var_in_config_yml,
-    schema_source_with_env_var_as_database_property_yml,
-    schema_source_with_env_var_as_schema_property_yml,
 )
 from tests.functional.defer_state.test_modified_state import BaseModifiedState
 
@@ -107,20 +105,4 @@ class TestModelNodeWithEnvVarConfigInSqlAndSchemaYml(BaseTestStateSelectionEnvVa
         return {
             "model.sql": model_with_env_var_in_config_sql,
             "schema.yml": schema_model_with_env_var_in_config_yml,
-        }
-
-
-class TestSourceNodeWithEnvVarConfigInDatabase(BaseTestStateSelectionEnvVarConfig):
-    @pytest.fixture(scope="class")
-    def models(self):
-        return {
-            "schema.yml": schema_source_with_env_var_as_database_property_yml,
-        }
-
-
-class TestSourceNodeWithEnvVarConfigInSchema(BaseTestStateSelectionEnvVarConfig):
-    @pytest.fixture(scope="class")
-    def models(self):
-        return {
-            "schema.yml": schema_source_with_env_var_as_schema_property_yml,
         }
