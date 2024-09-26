@@ -221,15 +221,10 @@ semantic_models:
       agg_time_dimension: created_at
 """
 
-schema_yml = """
-models:
+
+schema_yml = """models:
   - name: fct_revenue
     description: This is the model fct_revenue. It should be able to use doc blocks
-
-groups:
-  - name: my_group
-    owner:
-      name: group_owner
 
 semantic_models:
   - name: revenue
