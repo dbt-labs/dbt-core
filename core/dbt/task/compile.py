@@ -35,6 +35,7 @@ class CompileRunner(BaseRunner):
             message=None,
             adapter_response={},
             failures=None,
+            batch_results=None,
         )
 
     def compile(self, manifest: Manifest):

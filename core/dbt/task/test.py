@@ -324,6 +324,7 @@ class TestRunner(CompileRunner):
             message=message,
             adapter_response=result.adapter_response,
             failures=failures,
+            batch_results=None,
         )
         return run_result
 
@@ -349,6 +350,7 @@ class TestRunner(CompileRunner):
             message=message,
             adapter_response=result.adapter_response,
             failures=failures,
+            batch_results=None,
         )
 
     def after_execute(self, result) -> None:

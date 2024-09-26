@@ -39,7 +39,7 @@ def get_counts(flat_nodes) -> str:
 
 
 def interpret_run_result(result) -> str:
-    if result.status in (NodeStatus.Error, NodeStatus.Fail):
+    if result.status in (NodeStatus.Error, NodeStatus.Fail, NodeStatus.PartialSuccess):
         return "error"
     elif result.status == NodeStatus.Skipped:
         return "skip"
@@ -141,12 +141,15 @@ def print_run_end_messages(results, keyboard_interrupt: bool = False) -> None:
             errors.append(r)
         elif r.status == NodeStatus.Warn:
             warnings.append(r)
+        elif r.status == NodeStatus.PartialSuccess:
+            partial_successes.append(r)
 
     fire_event(Formatting(""))
     fire_event(
         EndOfRunSummary(
             num_errors=len(errors),
             num_warnings=len(warnings),
+            num_partial_success=len(partial_successes),
             keyboard_interrupt=keyboard_interrupt,
         )
     )

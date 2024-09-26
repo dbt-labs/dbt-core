@@ -66,7 +66,7 @@ class GraphRunnableMode(StrEnum):
 
 
 class GraphRunnableTask(ConfiguredTask):
-    MARK_DEPENDENT_ERRORS_STATUSES = [NodeStatus.Error]
+    MARK_DEPENDENT_ERRORS_STATUSES = [NodeStatus.Error, NodeStatus.PartialSuccess]
 
     def __init__(self, args: Flags, config: RuntimeConfig, manifest: Manifest) -> None:
         super().__init__(args, config, manifest)
@@ -251,6 +251,7 @@ class GraphRunnableTask(ConfiguredTask):
                         adapter_response={},
                         message=msg,
                         failures=None,
+                        batch_results=None,
                         node=runner.node,
                     )
 
@@ -260,7 +261,10 @@ class GraphRunnableTask(ConfiguredTask):
 
         fail_fast = get_flags().FAIL_FAST
 
-        if result.status in (NodeStatus.Error, NodeStatus.Fail) and fail_fast:
+        if (
+            result.status in (NodeStatus.Error, NodeStatus.Fail, NodeStatus.PartialSuccess)
+            and fail_fast
+        ):
             self._raise_next_tick = FailFastError(
                 msg="Failing early due to test failure or runtime error",
                 result=result,

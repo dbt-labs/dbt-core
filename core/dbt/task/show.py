@@ -54,6 +54,7 @@ class ShowRunner(CompileRunner):
             adapter_response=adapter_response.to_dict(),
             agate_table=execute_result,
             failures=None,
+            batch_results=None,
         )
 
 

@@ -53,6 +53,7 @@ class SavedQueryRunner(BaseRunner):
             message="NO-OP",
             adapter_response={},
             failures=0,
+            batch_results=None,
             agate_table=None,
         )
 
@@ -65,7 +66,12 @@ class BuildTask(RunTask):
     I.E. a resource of type Model is handled by the ModelRunner which is
     imported as run_model_runner."""
 
-    MARK_DEPENDENT_ERRORS_STATUSES = [NodeStatus.Error, NodeStatus.Fail, NodeStatus.Skipped]
+    MARK_DEPENDENT_ERRORS_STATUSES = [
+        NodeStatus.Error,
+        NodeStatus.Fail,
+        NodeStatus.Skipped,
+        NodeStatus.PartialSuccess,
+    ]
 
     RUNNER_MAP = {
         NodeType.Model: run_model_runner,

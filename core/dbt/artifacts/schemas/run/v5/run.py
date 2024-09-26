@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import copy
 import threading
 from dataclasses import dataclass, field
@@ -17,6 +19,7 @@ from dbt.artifacts.schemas.base import (
     get_artifact_schema_version,
     schema_version,
 )
+from dbt.artifacts.schemas.batch_results import BatchResults
 from dbt.artifacts.schemas.results import (
     BaseResult,
     ExecutionResult,
@@ -34,6 +37,7 @@ class RunResult(NodeResult):
     agate_table: Optional["agate.Table"] = field(
         default=None, metadata={"serialize": lambda x: None, "deserialize": lambda x: None}
     )
+    batch_results: Optional[BatchResults] = None
 
     @property
     def skipped(self):
@@ -51,6 +55,7 @@ class RunResult(NodeResult):
             node=node,
             adapter_response={},
             failures=None,
+            batch_results=None,
         )
 
 
@@ -67,6 +72,7 @@ class RunResultOutput(BaseResult):
     compiled: Optional[bool]
     compiled_code: Optional[str]
     relation_name: Optional[str]
+    batch_results: Optional[BatchResults] = None
 
 
 def process_run_result(result: RunResult) -> RunResultOutput:
@@ -82,6 +88,7 @@ def process_run_result(result: RunResult) -> RunResultOutput:
         message=result.message,
         adapter_response=result.adapter_response,
         failures=result.failures,
+        batch_results=result.batch_results,
         compiled=result.node.compiled if compiled else None,  # type:ignore
         compiled_code=result.node.compiled_code if compiled else None,  # type:ignore
         relation_name=result.node.relation_name if compiled else None,  # type:ignore
