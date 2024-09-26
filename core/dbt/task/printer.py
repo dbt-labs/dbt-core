@@ -131,7 +131,7 @@ def print_run_result_error(
 
 
 def print_run_end_messages(results, keyboard_interrupt: bool = False) -> None:
-    errors, warnings = [], []
+    errors, warnings, partial_successes = [], [], []
     for r in results:
         if r.status in (NodeStatus.RuntimeErr, NodeStatus.Error, NodeStatus.Fail):
             errors.append(r)
