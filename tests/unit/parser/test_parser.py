@@ -1474,13 +1474,7 @@ class SnapshotParserTest(BaseParserTest):
                 "unique_key": "id",
                 "updated_at": "last_update",
             },
-            unrendered_config_call_dict={
-                "unique_key": "Keyword(key='unique_key', value=Const(value='id'))",
-                "target_schema": "Keyword(key='target_schema', value=Const(value='analytics'))",
-                "target_database": "Keyword(key='target_database', value=Const(value='dbt'))",
-                "strategy": "Keyword(key='strategy', value=Const(value='timestamp'))",
-                "updated_at": "Keyword(key='updated_at', value=Const(value='last_update'))",
-            },
+            unrendered_config_call_dict={},
         )
         assertEqualNodes(expected, node)
         file_id = "snowplow://" + normalize("snapshots/nested/snap_1.sql")
@@ -1551,13 +1545,8 @@ class SnapshotParserTest(BaseParserTest):
                 "unique_key": "id",
                 "updated_at": "last_update",
             },
-            unrendered_config_call_dict={
-                "unique_key": "Keyword(key='unique_key', value=Const(value='id'))",
-                "target_schema": "Keyword(key='target_schema', value=Const(value='analytics'))",
-                "target_database": "Keyword(key='target_database', value=Const(value='dbt'))",
-                "strategy": "Keyword(key='strategy', value=Const(value='timestamp'))",
-                "updated_at": "Keyword(key='updated_at', value=Const(value='last_update'))",
-            },
+            # Empty until state_modified_compare_more_unrendered_values=True
+            unrendered_config_call_dict={},
         )
         expect_bar = SnapshotNode(
             alias="bar",
@@ -1595,13 +1584,8 @@ class SnapshotParserTest(BaseParserTest):
                 "unique_key": "id",
                 "updated_at": "last_update",
             },
-            unrendered_config_call_dict={
-                "unique_key": "Keyword(key='unique_key', value=Const(value='id'))",
-                "target_schema": "Keyword(key='target_schema', value=Const(value='analytics'))",
-                "target_database": "Keyword(key='target_database', value=Const(value='dbt'))",
-                "strategy": "Keyword(key='strategy', value=Const(value='timestamp'))",
-                "updated_at": "Keyword(key='updated_at', value=Const(value='last_update'))",
-            },
+            # Empty until state_modified_compare_more_unrendered_values=True
+            unrendered_config_call_dict={},
         )
         assertEqualNodes(nodes[0], expect_bar)
         assertEqualNodes(nodes[1], expect_foo)
