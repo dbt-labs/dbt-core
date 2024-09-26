@@ -2,6 +2,7 @@ import hashlib
 import os
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 from typing import (
     Any,
     Dict,
@@ -59,6 +60,7 @@ from dbt.artifacts.resources import SourceDefinition as SourceDefinitionResource
 from dbt.artifacts.resources import SqlOperation as SqlOperationResource
 from dbt.artifacts.resources import TimeSpine
 from dbt.artifacts.resources import UnitTestDefinition as UnitTestDefinitionResource
+from dbt.artifacts.schemas.batch_results import BatchType
 from dbt.contracts.graph.model_config import UnitTestNodeConfig
 from dbt.contracts.graph.node_args import ModelNodeArgs
 from dbt.contracts.graph.unparsed import (
@@ -243,7 +245,9 @@ class NodeInfoMixin:
 
 @dataclass
 class ParsedNode(ParsedResource, NodeInfoMixin, ParsedNodeMandatory, SerializableType):
-    def get_target_write_path(self, target_path: str, subdirectory: str):
+    def get_target_write_path(
+        self, target_path: str, subdirectory: str, split_suffix: Optional[str] = None
+    ):
         # This is called for both the "compiled" subdirectory of "target" and the "run" subdirectory
         if os.path.basename(self.path) == os.path.basename(self.original_file_path):
             # One-to-one relationship of nodes to files.
@@ -251,6 +255,15 @@ class ParsedNode(ParsedResource, NodeInfoMixin, ParsedNodeMandatory, Serializabl
         else:
             #  Many-to-one relationship of nodes to files.
             path = os.path.join(self.original_file_path, self.path)
+
+        if split_suffix:
+            pathlib_path = Path(path)
+            path = str(
+                pathlib_path.parent
+                / pathlib_path.stem
+                / (pathlib_path.stem + f"_{split_suffix}" + pathlib_path.suffix)
+            )
+
         target_write_path = os.path.join(target_path, subdirectory, self.package_name, path)
         return target_write_path
 
@@ -430,6 +443,8 @@ class HookNode(HookNodeResource, CompiledNode):
 
 @dataclass
 class ModelNode(ModelResource, CompiledNode):
+    batches: Optional[List[BatchType]] = None
+
     @classmethod
     def resource_class(cls) -> Type[ModelResource]:
         return ModelResource

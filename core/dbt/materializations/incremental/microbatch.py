@@ -1,9 +1,10 @@
 from datetime import datetime, timedelta
-from typing import List, Optional, Tuple
+from typing import List, Optional
 
 import pytz
 
 from dbt.artifacts.resources.types import BatchSize
+from dbt.artifacts.schemas.batch_results import BatchType
 from dbt.contracts.graph.nodes import ModelNode, NodeConfig
 from dbt.exceptions import DbtInternalError, DbtRuntimeError
 
@@ -42,45 +43,44 @@ class MicrobatchBuilder:
     def build_start_time(self, checkpoint: Optional[datetime]):
         """Create a start time based off the passed in checkpoint.
 
-        If the checkpoint is `None`, then `None` will be returned as a checkpoint is necessary
+        If the checkpoint is `None`, or this is the first run of a microbatch model, then the
+        model's configured `begin` value will be returned as a checkpoint is necessary
         to build a start time. This is because we build the start time relative to the checkpoint
         via the batchsize and offset, and we cannot offset a checkpoint if there is no checkpoint.
         """
-
-        if self.event_time_start:
-            return MicrobatchBuilder.truncate_timestamp(
-                self.event_time_start, self.model.config.batch_size
-            )
-
-        if not self.is_incremental or checkpoint is None:
-            # TODO: return new model-level configuration or raise error
-            return None
-
         assert isinstance(self.model.config, NodeConfig)
         batch_size = self.model.config.batch_size
+
+        # Use event_time_start if it is provided.
+        if self.event_time_start:
+            return MicrobatchBuilder.truncate_timestamp(self.event_time_start, batch_size)
+
+        # First run, use model's configured 'begin' as start.
+        if not self.is_incremental or checkpoint is None:
+            if not self.model.config.begin:
+                raise DbtRuntimeError(
+                    f"Microbatch model '{self.model.name}' requires a 'begin' configuration."
+                )
+
+            return MicrobatchBuilder.truncate_timestamp(self.model.config.begin, batch_size)
 
         lookback = self.model.config.lookback
         start = MicrobatchBuilder.offset_timestamp(checkpoint, batch_size, -1 * lookback)
 
         return start
 
-    def build_batches(
-        self, start: Optional[datetime], end: datetime
-    ) -> List[Tuple[Optional[datetime], datetime]]:
+    def build_batches(self, start: datetime, end: datetime) -> List[BatchType]:
         """
         Given a start and end datetime, builds a list of batches where each batch is
         the size of the model's batch_size.
         """
-        if start is None:
-            return [(start, end)]
-
         batch_size = self.model.config.batch_size
         curr_batch_start: datetime = start
         curr_batch_end: datetime = MicrobatchBuilder.offset_timestamp(
             curr_batch_start, batch_size, 1
         )
 
-        batches: List[Tuple[Optional[datetime], datetime]] = [(curr_batch_start, curr_batch_end)]
+        batches: List[BatchType] = [(curr_batch_start, curr_batch_end)]
         while curr_batch_end <= end:
             curr_batch_start = curr_batch_end
             curr_batch_end = MicrobatchBuilder.offset_timestamp(curr_batch_start, batch_size, 1)
@@ -162,3 +162,14 @@ class MicrobatchBuilder:
             truncated = datetime(timestamp.year, 1, 1, 0, 0, 0, 0, pytz.utc)
 
         return truncated
+
+    @staticmethod
+    def format_batch_start(
+        batch_start: Optional[datetime], batch_size: BatchSize
+    ) -> Optional[str]:
+        if batch_start is None:
+            return batch_start
+
+        return str(
+            batch_start.date() if (batch_start and batch_size != BatchSize.hour) else batch_start
+        )

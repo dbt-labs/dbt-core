@@ -58,6 +58,7 @@ from dbt.parser.common import (
     TestBlock,
     VersionedTestBlock,
     YamlBlock,
+    schema_file_keys_to_resource_types,
     trimmed,
 )
 from dbt.parser.schema_generic_tests import SchemaGenericTestParser
@@ -69,22 +70,6 @@ from dbt_common.dataclass_schema import ValidationError, dbtClassMixin
 from dbt_common.events.functions import warn_or_error
 from dbt_common.exceptions import DbtValidationError
 from dbt_common.utils import deep_merge
-
-schema_file_keys_to_resource_types = {
-    "models": NodeType.Model,
-    "seeds": NodeType.Seed,
-    "snapshots": NodeType.Snapshot,
-    "sources": NodeType.Source,
-    "macros": NodeType.Macro,
-    "analyses": NodeType.Analysis,
-    "exposures": NodeType.Exposure,
-    "metrics": NodeType.Metric,
-    "semantic_models": NodeType.SemanticModel,
-    "saved_queries": NodeType.SavedQuery,
-}
-
-schema_file_keys = list(schema_file_keys_to_resource_types.keys())
-
 
 # ===============================================================================
 #  Schema Parser classes
@@ -400,13 +385,33 @@ class YamlReader(metaclass=ABCMeta):
             if "name" not in entry and "model" not in entry:
                 raise ParsingError("Entry did not contain a name")
 
+            unrendered_config = {}
+            if "config" in entry:
+                unrendered_config = entry["config"]
+
+            unrendered_version_configs = {}
+            if "versions" in entry:
+                for version in entry["versions"]:
+                    if "v" in version:
+                        unrendered_version_configs[version["v"]] = version.get("config", {})
+
             # Render the data (except for tests, data_tests and descriptions).
             # See the SchemaYamlRenderer
             entry = self.render_entry(entry)
+
+            schema_file = self.yaml.file
+            assert isinstance(schema_file, SchemaSourceFile)
+
+            if unrendered_config:
+                schema_file.add_unrendered_config(unrendered_config, self.key, entry["name"])
+
+            for version, unrendered_version_config in unrendered_version_configs.items():
+                schema_file.add_unrendered_config(
+                    unrendered_version_config, self.key, entry["name"], version
+                )
+
             if self.schema_yaml_vars.env_vars:
                 self.schema_parser.manifest.env_vars.update(self.schema_yaml_vars.env_vars)
-                schema_file = self.yaml.file
-                assert isinstance(schema_file, SchemaSourceFile)
                 for var in self.schema_yaml_vars.env_vars.keys():
                     schema_file.add_env_var(var, self.key, entry["name"])
                 self.schema_yaml_vars.env_vars = {}
@@ -663,7 +668,13 @@ class PatchParser(YamlReader, Generic[NonSourceTarget, Parsed]):
         )
         # We need to re-apply the config_call_dict after the patch config
         config._config_call_dict = node.config_call_dict
-        self.schema_parser.update_parsed_node_config(node, config, patch_config_dict=patch.config)
+        config._unrendered_config_call_dict = node.unrendered_config_call_dict
+        self.schema_parser.update_parsed_node_config(
+            node,
+            config,
+            patch_config_dict=patch.config,
+            patch_file_id=patch.file_id,
+        )
 
 
 # Subclasses of NodePatchParser: TestablePatchParser, ModelPatchParser, AnalysisPatchParser,

@@ -23,7 +23,13 @@ from dbt.task.snapshot import SnapshotTask
 from dbt.task.test import TestTask
 from dbt_common.exceptions import DbtRuntimeError
 
-RETRYABLE_STATUSES = {NodeStatus.Error, NodeStatus.Fail, NodeStatus.Skipped, NodeStatus.RuntimeErr}
+RETRYABLE_STATUSES = {
+    NodeStatus.Error,
+    NodeStatus.Fail,
+    NodeStatus.Skipped,
+    NodeStatus.RuntimeErr,
+    NodeStatus.PartialSuccess,
+}
 IGNORE_PARENT_FLAGS = {
     "log_path",
     "output_path",
@@ -123,6 +129,14 @@ class RetryTask(ConfiguredTask):
             ]
         )
 
+        batch_map = {
+            result.unique_id: result.batch_results.failed
+            for result in self.previous_results.results
+            if result.status == NodeStatus.PartialSuccess
+            and result.batch_results is not None
+            and len(result.batch_results.failed) > 0
+        }
+
         class TaskWrapper(self.task_class):
             def get_graph_queue(self):
                 new_graph = self.graph.get_subset_graph(unique_ids)
@@ -137,6 +151,9 @@ class RetryTask(ConfiguredTask):
             self.config,
             self.manifest,
         )
+
+        if self.task_class == RunTask:
+            task.batch_map = batch_map
 
         return_value = task.run()
         return return_value

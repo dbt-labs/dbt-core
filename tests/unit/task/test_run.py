@@ -1,9 +1,12 @@
+import threading
 from argparse import Namespace
+from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from dbt.adapters.postgres import PostgresAdapter
+from dbt.artifacts.schemas.batch_results import BatchResults
 from dbt.artifacts.schemas.results import RunStatus
 from dbt.artifacts.schemas.run import RunResult
 from dbt.config.runtime import RuntimeConfig
@@ -93,6 +96,7 @@ class TestModelRunner:
             adapter_response={},
             message="It did it",
             failures=None,
+            batch_results=None,
             node=table_model,
         )
 
@@ -126,3 +130,47 @@ class TestModelRunner:
     ) -> None:
         model_runner.execute(model=table_model, manifest=manifest)
         # TODO: Assert that the model was executed
+
+    def test__build_run_microbatch_model_result(
+        self, table_model: ModelNode, model_runner: ModelRunner
+    ) -> None:
+        batch = (datetime.now() - timedelta(days=1), datetime.now())
+        only_successes = [
+            RunResult(
+                node=table_model,
+                status=RunStatus.Success,
+                timing=[],
+                thread_id=threading.current_thread().name,
+                execution_time=0,
+                message="SUCCESS",
+                adapter_response={},
+                failures=0,
+                batch_results=BatchResults(successful=[batch]),
+            )
+        ]
+        only_failures = [
+            RunResult(
+                node=table_model,
+                status=RunStatus.Error,
+                timing=[],
+                thread_id=threading.current_thread().name,
+                execution_time=0,
+                message="ERROR",
+                adapter_response={},
+                failures=1,
+                batch_results=BatchResults(failed=[batch]),
+            )
+        ]
+        mixed_results = only_failures + only_successes
+
+        expect_success = model_runner._build_run_microbatch_model_result(
+            table_model, only_successes
+        )
+        expect_error = model_runner._build_run_microbatch_model_result(table_model, only_failures)
+        expect_partial_success = model_runner._build_run_microbatch_model_result(
+            table_model, mixed_results
+        )
+
+        assert expect_success.status == RunStatus.Success
+        assert expect_error.status == RunStatus.Error
+        assert expect_partial_success.status == RunStatus.PartialSuccess

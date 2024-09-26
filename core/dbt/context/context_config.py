@@ -6,6 +6,7 @@ from typing import Any, Dict, Generic, Iterator, List, Optional, TypeVar
 from dbt.adapters.factory import get_config_class_by_name
 from dbt.config import IsFQNResource, Project, RuntimeConfig
 from dbt.contracts.graph.model_config import get_config_for
+from dbt.flags import get_flags
 from dbt.node_types import NodeType
 from dbt.utils import fqn_search
 from dbt_common.contracts.config.base import BaseConfig, merge_config_dicts
@@ -286,6 +287,7 @@ class ContextConfig:
         project_name: str,
     ) -> None:
         self._config_call_dict: Dict[str, Any] = {}
+        self._unrendered_config_call_dict: Dict[str, Any] = {}
         self._active_project = active_project
         self._fqn = fqn
         self._resource_type = resource_type
@@ -294,6 +296,10 @@ class ContextConfig:
     def add_config_call(self, opts: Dict[str, Any]) -> None:
         dct = self._config_call_dict
         merge_config_dicts(dct, opts)
+
+    def add_unrendered_config_call(self, opts: Dict[str, Any]) -> None:
+        # Cannot perform complex merge behaviours on unrendered configs as they may not be appropriate types.
+        self._unrendered_config_call_dict.update(opts)
 
     def build_config_dict(
         self,
@@ -305,12 +311,24 @@ class ContextConfig:
         if rendered:
             # TODO CT-211
             src = ContextConfigGenerator(self._active_project)  # type: ignore[var-annotated]
+            config_call_dict = self._config_call_dict
         else:
             # TODO CT-211
             src = UnrenderedConfigGenerator(self._active_project)  # type: ignore[assignment]
 
+            # preserve legacy behaviour - using unreliable (potentially rendered) _config_call_dict
+            if get_flags().state_modified_compare_more_unrendered_values is False:
+                config_call_dict = self._config_call_dict
+            else:
+                # Prefer _config_call_dict if it is available and _unrendered_config_call_dict is not,
+                # as _unrendered_config_call_dict is unreliable for non-sql nodes (e.g. no jinja config block rendered for python models, etc)
+                if self._config_call_dict and not self._unrendered_config_call_dict:
+                    config_call_dict = self._config_call_dict
+                else:
+                    config_call_dict = self._unrendered_config_call_dict
+
         return src.calculate_node_config_dict(
-            config_call_dict=self._config_call_dict,
+            config_call_dict=config_call_dict,
             fqn=self._fqn,
             resource_type=self._resource_type,
             project_name=self._project_name,

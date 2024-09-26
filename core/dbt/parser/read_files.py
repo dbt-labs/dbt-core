@@ -17,7 +17,8 @@ from dbt.contracts.files import (
 )
 from dbt.events.types import InputFileDiffError
 from dbt.exceptions import ParsingError
-from dbt.parser.schemas import schema_file_keys, yaml_from_file
+from dbt.parser.common import schema_file_keys
+from dbt.parser.schemas import yaml_from_file
 from dbt.parser.search import filesystem_search
 from dbt_common.clients.system import load_file_contents
 from dbt_common.dataclass_schema import dbtClassMixin

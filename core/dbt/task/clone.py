@@ -43,6 +43,7 @@ class CloneRunner(BaseRunner):
             message=message,
             adapter_response=adapter_response,
             failures=None,
+            batch_results=None,
         )
 
     def compile(self, manifest: Manifest):

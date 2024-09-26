@@ -212,6 +212,7 @@ class SchemaSourceFile(BaseSourceFile):
     # created too, but those are in 'sources'
     sop: List[SourceKey] = field(default_factory=list)
     env_vars: Dict[str, Any] = field(default_factory=dict)
+    unrendered_configs: Dict[str, Any] = field(default_factory=dict)
     pp_dict: Optional[Dict[str, Any]] = None
     pp_test_index: Optional[Dict[str, Any]] = None
 
@@ -316,6 +317,41 @@ class SchemaSourceFile(BaseSourceFile):
             for name in self.data_tests[key]:
                 test_ids.extend(self.data_tests[key][name])
         return test_ids
+
+    def add_unrendered_config(self, unrendered_config, yaml_key, name, version=None):
+        versioned_name = f"{name}_v{version}" if version is not None else name
+
+        if yaml_key not in self.unrendered_configs:
+            self.unrendered_configs[yaml_key] = {}
+
+        if versioned_name not in self.unrendered_configs[yaml_key]:
+            self.unrendered_configs[yaml_key][versioned_name] = unrendered_config
+
+    def get_unrendered_config(self, yaml_key, name, version=None) -> Optional[Dict[str, Any]]:
+        versioned_name = f"{name}_v{version}" if version is not None else name
+
+        if yaml_key not in self.unrendered_configs:
+            return None
+        if versioned_name not in self.unrendered_configs[yaml_key]:
+            return None
+
+        return self.unrendered_configs[yaml_key][versioned_name]
+
+    def delete_from_unrendered_configs(self, yaml_key, name):
+        # We delete all unrendered_configs for this yaml_key/name because the
+        # entry has been scheduled for reparsing.
+        if self.get_unrendered_config(yaml_key, name):
+            del self.unrendered_configs[yaml_key][name]
+            # Delete all versioned keys associated with name
+            version_names_to_delete = []
+            for potential_version_name in self.unrendered_configs[yaml_key]:
+                if potential_version_name.startswith(f"{name}_v"):
+                    version_names_to_delete.append(potential_version_name)
+            for version_name in version_names_to_delete:
+                del self.unrendered_configs[yaml_key][version_name]
+
+            if not self.unrendered_configs[yaml_key]:
+                del self.unrendered_configs[yaml_key]
 
     def add_env_var(self, var, yaml_key, name):
         if yaml_key not in self.env_vars:

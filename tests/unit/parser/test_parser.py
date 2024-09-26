@@ -6,8 +6,6 @@ from unittest import mock
 
 import yaml
 
-import dbt.flags
-import dbt.parser
 from dbt import tracking
 from dbt.artifacts.resources import ModelConfig, RefArgs
 from dbt.context.context_config import ContextConfig
@@ -60,7 +58,9 @@ from tests.unit.utils import (
     normalize,
 )
 
-set_from_args(Namespace(WARN_ERROR=False), None)
+set_from_args(
+    Namespace(warn_error=False, state_modified_compare_more_unrendered_values=False), None
+)
 
 
 def get_abs_os_path(unix_path):
@@ -94,7 +94,10 @@ class BaseParserTest(unittest.TestCase):
             yield pm
 
     def setUp(self):
-        dbt.flags.WARN_ERROR = True
+        set_from_args(
+            Namespace(warn_error=True, state_modified_compare_more_unrendered_values=False),
+            None,
+        )
         # HACK: this is needed since tracking events can
         # be sent when using the model parser
         tracking.do_not_track()
@@ -1471,6 +1474,7 @@ class SnapshotParserTest(BaseParserTest):
                 "unique_key": "id",
                 "updated_at": "last_update",
             },
+            unrendered_config_call_dict={},
         )
         assertEqualNodes(expected, node)
         file_id = "snowplow://" + normalize("snapshots/nested/snap_1.sql")
@@ -1541,6 +1545,8 @@ class SnapshotParserTest(BaseParserTest):
                 "unique_key": "id",
                 "updated_at": "last_update",
             },
+            # Empty until state_modified_compare_more_unrendered_values=True
+            unrendered_config_call_dict={},
         )
         expect_bar = SnapshotNode(
             alias="bar",
@@ -1578,6 +1584,8 @@ class SnapshotParserTest(BaseParserTest):
                 "unique_key": "id",
                 "updated_at": "last_update",
             },
+            # Empty until state_modified_compare_more_unrendered_values=True
+            unrendered_config_call_dict={},
         )
         assertEqualNodes(nodes[0], expect_bar)
         assertEqualNodes(nodes[1], expect_foo)

@@ -139,6 +139,7 @@ def basic_uncompiled_dict():
             "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         },
         "unrendered_config": {},
+        "unrendered_config_call_dict": {},
         "config_call_dict": {},
     }
 
@@ -198,6 +199,7 @@ def basic_compiled_dict():
             "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         },
         "unrendered_config": {},
+        "unrendered_config_call_dict": {},
         "config_call_dict": {},
         "access": "protected",
         "constraints": [],
@@ -459,6 +461,7 @@ def basic_uncompiled_schema_test_dict():
             "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         },
         "unrendered_config": {},
+        "unrendered_config_call_dict": {},
         "config_call_dict": {},
     }
 
@@ -516,6 +519,7 @@ def basic_compiled_schema_test_dict():
         "unrendered_config": {
             "severity": "warn",
         },
+        "unrendered_config_call_dict": {},
         "config_call_dict": {},
     }
 
