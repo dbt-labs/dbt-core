@@ -550,12 +550,17 @@ class ModelRunner(CompileRunner):
         relation = self.adapter.get_relation(
             relation_info.database, relation_info.schema, relation_info.name
         )
-        return (
+        if (
             relation is not None
             and relation.type == "table"
             and model.config.materialized == "incremental"
-            and not (getattr(self.config.args, "FULL_REFRESH", False) or model.config.full_refresh)
-        )
+        ):
+            if model.config.full_refresh is not None:
+                return not model.config.full_refresh
+            else:
+                return not getattr(self.config.args, "FULL_REFRESH", False)
+        else:
+            return False
 
 
 class RunTask(CompileTask):
