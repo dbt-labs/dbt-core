@@ -1693,6 +1693,7 @@ Resource = Union[
 
 TestNode = Union[SingularTestNode, GenericTestNode]
 
+SemanticManifestNode = Union[SavedQuery, SemanticModel, Metric]
 
 RESOURCE_CLASS_TO_NODE_CLASS: Dict[Type[BaseResource], Type[BaseNode]] = {
     node_class.resource_class(): node_class
