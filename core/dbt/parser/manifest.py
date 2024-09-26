@@ -1141,6 +1141,24 @@ class ManifestLoader:
 
     def process_saved_queries(self, config: RuntimeConfig):
         """Processes SavedQuery nodes to populate their `depends_on`."""
+        # Note: This will also capture various nodes which have been re-parsed
+        # because they refer to some other changed node, so there will be
+        # false positives. Ideally we would compare actual changes.
+        semantic_manifest_changed = False
+        SemanticManifestNode = Union[SavedQuery, SemanticModel, Metric]
+        semantic_manifest_nodes: chain[SemanticManifestNode] = chain(
+            self.manifest.saved_queries.values(),
+            self.manifest.semantic_models.values(),
+            self.manifest.metrics.values(),
+        )
+        for node in semantic_manifest_nodes:
+            # Check if this node has been modified in this parsing run
+            if node.created_at > self.started_at:
+                semantic_manifest_changed = True
+                break  # as soon as we run into one changed node we can stop
+        if semantic_manifest_changed is False:
+            return
+
         current_project = config.project_name
         for saved_query in self.manifest.saved_queries.values():
             # TODO:
