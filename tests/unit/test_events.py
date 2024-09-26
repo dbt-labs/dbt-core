@@ -558,7 +558,8 @@ def test_single_run_error():
             node=None,
             adapter_response=dict(),
             message="oh no!",
-            failures=[],
+            failures=1,
+            batch_results=None,
         )
 
         print_run_result_error(error_result)

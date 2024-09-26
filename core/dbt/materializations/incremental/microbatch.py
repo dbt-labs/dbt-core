@@ -1,9 +1,10 @@
 from datetime import datetime, timedelta
-from typing import List, Optional, Tuple
+from typing import List, Optional
 
 import pytz
 
 from dbt.artifacts.resources.types import BatchSize
+from dbt.artifacts.schemas.batch_results import BatchType
 from dbt.contracts.graph.nodes import ModelNode, NodeConfig
 from dbt.exceptions import DbtInternalError, DbtRuntimeError
 
@@ -68,7 +69,7 @@ class MicrobatchBuilder:
 
         return start
 
-    def build_batches(self, start: datetime, end: datetime) -> List[Tuple[datetime, datetime]]:
+    def build_batches(self, start: datetime, end: datetime) -> List[BatchType]:
         """
         Given a start and end datetime, builds a list of batches where each batch is
         the size of the model's batch_size.
@@ -79,7 +80,7 @@ class MicrobatchBuilder:
             curr_batch_start, batch_size, 1
         )
 
-        batches: List[Tuple[datetime, datetime]] = [(curr_batch_start, curr_batch_end)]
+        batches: List[BatchType] = [(curr_batch_start, curr_batch_end)]
         while curr_batch_end <= end:
             curr_batch_start = curr_batch_end
             curr_batch_end = MicrobatchBuilder.offset_timestamp(curr_batch_start, batch_size, 1)

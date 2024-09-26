@@ -14,6 +14,7 @@ from dbt.adapters.events.types import (
 )
 from dbt.adapters.exceptions import MissingMaterializationError
 from dbt.artifacts.resources import Hook
+from dbt.artifacts.schemas.batch_results import BatchResults, BatchType
 from dbt.artifacts.schemas.results import (
     BaseResult,
     NodeStatus,
@@ -300,26 +301,55 @@ class ModelRunner(CompileRunner):
             message=str(result.response),
             adapter_response=adapter_response,
             failures=result.get("failures"),
+            batch_results=None,
         )
 
     def _build_run_microbatch_model_result(
         self, model: ModelNode, batch_run_results: List[RunResult]
     ) -> RunResult:
-        failures = sum([result.failures for result in batch_run_results if result.failures])
+        batch_results = BatchResults()
+        for result in batch_run_results:
+            if result.batch_results is not None:
+                batch_results += result.batch_results
+            else:
+                raise DbtInternalError(
+                    "Got a run result without batch results for a batch run, this should be impossible"
+                )
+
+        num_successes = len(batch_results.successful)
+        num_failures = len(batch_results.failed)
+
+        if num_failures == 0:
+            status = RunStatus.Success
+            msg = "SUCCESS"
+        elif num_successes == 0:
+            status = RunStatus.Error
+            msg = "ERROR"
+        else:
+            status = RunStatus.PartialSuccess
+            msg = f"PARTIAL SUCCESS ({num_successes}/{num_successes + num_failures})"
+
         return RunResult(
             node=model,
-            # TODO We should do something like RunStatus.PartialSuccess if there is a mixture of success and failures
-            status=RunStatus.Success if failures != len(batch_run_results) else RunStatus.Error,
+            status=status,
             timing=[],
             thread_id=threading.current_thread().name,
             # TODO -- why isn't this getting propagated to logs?
             execution_time=0,
-            message="SUCCESS" if failures != len(batch_run_results) else "ERROR",
+            message=msg,
             adapter_response={},
-            failures=failures,
+            failures=num_failures,
+            batch_results=batch_results,
         )
 
-    def _build_failed_run_batch_result(self, model: ModelNode) -> RunResult:
+    def _build_succesful_run_batch_result(
+        self, model: ModelNode, context: Dict[str, Any], batch: BatchType
+    ) -> RunResult:
+        run_result = self._build_run_model_result(model, context)
+        run_result.batch_results = BatchResults(successful=[batch])
+        return run_result
+
+    def _build_failed_run_batch_result(self, model: ModelNode, batch: BatchType) -> RunResult:
         return RunResult(
             node=model,
             status=RunStatus.Error,
@@ -329,6 +359,7 @@ class ModelRunner(CompileRunner):
             message="ERROR",
             adapter_response={},
             failures=1,
+            batch_results=BatchResults(failed=[batch]),
         )
 
     def _materialization_relations(self, result: Any, model) -> List[BaseRelation]:
@@ -440,15 +471,24 @@ class ModelRunner(CompileRunner):
         materialization_macro: MacroProtocol,
     ) -> List[RunResult]:
         batch_results: List[RunResult] = []
-        microbatch_builder = MicrobatchBuilder(
-            model=model,
-            is_incremental=self._is_incremental(model),
-            event_time_start=getattr(self.config.args, "EVENT_TIME_START", None),
-            event_time_end=getattr(self.config.args, "EVENT_TIME_END", None),
-        )
-        end = microbatch_builder.build_end_time()
-        start = microbatch_builder.build_start_time(end)
-        batches = microbatch_builder.build_batches(start, end)
+
+        if model.batches is None:
+            microbatch_builder = MicrobatchBuilder(
+                model=model,
+                is_incremental=self._is_incremental(model),
+                event_time_start=getattr(self.config.args, "EVENT_TIME_START", None),
+                event_time_end=getattr(self.config.args, "EVENT_TIME_END", None),
+            )
+            end = microbatch_builder.build_end_time()
+            start = microbatch_builder.build_start_time(end)
+            batches = microbatch_builder.build_batches(start, end)
+        else:
+            batches = model.batches
+            # if there are batches, then don't run as full_refresh and do force is_incremental
+            # not doing this risks blowing away the work that has already been done
+            if self._has_relation(model=model):
+                context["is_incremental"] = lambda: True
+                context["should_full_refresh"] = lambda: False
 
         # iterate over each batch, calling materialization_macro to get a batch-level run result
         for batch_idx, batch in enumerate(batches):
@@ -480,14 +520,14 @@ class ModelRunner(CompileRunner):
                 for relation in self._materialization_relations(result, model):
                     self.adapter.cache_added(relation.incorporate(dbt_created=True))
 
-                # Build result fo executed batch
-                batch_run_result = self._build_run_model_result(model, context)
+                # Build result of executed batch
+                batch_run_result = self._build_succesful_run_batch_result(model, context, batch)
                 # Update context vars for future batches
                 context["is_incremental"] = lambda: True
                 context["should_full_refresh"] = lambda: False
             except Exception as e:
                 exception = e
-                batch_run_result = self._build_failed_run_batch_result(model)
+                batch_run_result = self._build_failed_run_batch_result(model, batch)
 
             self.print_batch_result_line(
                 batch_run_result, batch[0], batch_idx + 1, len(batches), exception
@@ -495,6 +535,13 @@ class ModelRunner(CompileRunner):
             batch_results.append(batch_run_result)
 
         return batch_results
+
+    def _has_relation(self, model) -> bool:
+        relation_info = self.adapter.Relation.create_from(self.config, model)
+        relation = self.adapter.get_relation(
+            relation_info.database, relation_info.schema, relation_info.name
+        )
+        return relation is not None
 
     def _is_incremental(self, model) -> bool:
         # TODO: Remove. This is a temporary method. We're working with adapters on
@@ -512,10 +559,17 @@ class ModelRunner(CompileRunner):
 
 
 class RunTask(CompileTask):
-    def __init__(self, args: Flags, config: RuntimeConfig, manifest: Manifest) -> None:
+    def __init__(
+        self,
+        args: Flags,
+        config: RuntimeConfig,
+        manifest: Manifest,
+        batch_map: Optional[Dict[str, List[BatchType]]] = None,
+    ) -> None:
         super().__init__(args, config, manifest)
         self.ran_hooks: List[HookNode] = []
         self._total_executed = 0
+        self.batch_map = batch_map
 
     def index_offset(self, value: int) -> int:
         return self._total_executed + value
@@ -646,12 +700,21 @@ class RunTask(CompileTask):
             )
         )
 
+    def populate_microbatch_batches(self, selected_uids: AbstractSet[str]):
+        if self.batch_map is not None and self.manifest is not None:
+            for uid in selected_uids:
+                if uid in self.batch_map:
+                    node = self.manifest.ref_lookup.perform_lookup(uid, self.manifest)
+                    if isinstance(node, ModelNode):
+                        node.batches = self.batch_map[uid]
+
     def before_run(self, adapter, selected_uids: AbstractSet[str]) -> None:
         with adapter.connection_named("master"):
             self.defer_to_manifest()
             required_schemas = self.get_model_schemas(adapter, selected_uids)
             self.create_schemas(adapter, required_schemas)
             self.populate_adapter_cache(adapter, required_schemas)
+            self.populate_microbatch_batches(selected_uids)
             self.safe_run_hooks(adapter, RunHookType.Start, {})
 
     def after_run(self, adapter, results) -> None:

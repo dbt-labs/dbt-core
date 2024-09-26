@@ -1916,6 +1916,7 @@ message EndOfRunSummary {
     int32 num_errors = 1;
     int32 num_warnings = 2;
     bool keyboard_interrupt = 3;
+    int32 num_partial_success = 4;
 }
 
 message EndOfRunSummaryMsg {

@@ -8,12 +8,15 @@ from click.exceptions import BadOptionUsage
 from click.exceptions import Exit as ClickExit
 from click.exceptions import NoSuchOption, UsageError
 
+from dbt.adapters.factory import register_adapter
 from dbt.artifacts.schemas.catalog import CatalogArtifact
 from dbt.artifacts.schemas.run import RunExecutionResult
 from dbt.cli import params as p
 from dbt.cli import requires
 from dbt.cli.exceptions import DbtInternalException, DbtUsageException
+from dbt.cli.requires import setup_manifest
 from dbt.contracts.graph.manifest import Manifest
+from dbt.mp_context import get_mp_context
 from dbt_common.events.base_types import EventMsg
 
 
@@ -354,6 +357,7 @@ def compile(ctx, **kwargs):
 @p.select
 @p.selector
 @p.inline
+@p.inline_direct
 @p.target_path
 @p.threads
 @p.vars
@@ -362,17 +366,26 @@ def compile(ctx, **kwargs):
 @requires.profile
 @requires.project
 @requires.runtime_config
-@requires.manifest
 def show(ctx, **kwargs):
     """Generates executable SQL for a named resource or inline query, runs that SQL, and returns a preview of the
     results. Does not materialize anything to the warehouse."""
-    from dbt.task.show import ShowTask
+    from dbt.task.show import ShowTask, ShowTaskDirect
 
-    task = ShowTask(
-        ctx.obj["flags"],
-        ctx.obj["runtime_config"],
-        ctx.obj["manifest"],
-    )
+    if ctx.obj["flags"].inline_direct:
+        # Issue the inline query directly, with no templating. Does not require
+        # loading the manifest.
+        register_adapter(ctx.obj["runtime_config"], get_mp_context())
+        task = ShowTaskDirect(
+            ctx.obj["flags"],
+            ctx.obj["runtime_config"],
+        )
+    else:
+        setup_manifest(ctx)
+        task = ShowTask(
+            ctx.obj["flags"],
+            ctx.obj["runtime_config"],
+            ctx.obj["manifest"],
+        )
 
     results = task.run()
     success = task.interpret_results(results)
