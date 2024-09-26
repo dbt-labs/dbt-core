@@ -10,7 +10,6 @@ from dbt_common.events.functions import fire_event
 from dbt_common.exceptions import DbtInternalError
 from dbt_common.utils import cast_dict_to_dict_of_strings
 
-from . import group_lookup
 from .run import ModelRunner, RunTask
 
 
@@ -22,7 +21,6 @@ class SnapshotRunner(ModelRunner):
         model = result.node
         cfg = model.config.to_dict(omit_none=True)
         level = EventLevel.ERROR if result.status == NodeStatus.Error else EventLevel.INFO
-        group = group_lookup.get(model.unique_id)
         fire_event(
             LogSnapshotResult(
                 status=result.status,
@@ -33,7 +31,6 @@ class SnapshotRunner(ModelRunner):
                 execution_time=result.execution_time,
                 node_info=model.node_info,
                 result_message=result.message,
-                group=group,
             ),
             level=level,
         )
