@@ -106,6 +106,7 @@ class RunOperationTask(ConfiguredTask):
             ),
             thread_id=threading.current_thread().name,
             timing=[TimingInfo(name=macro_name, started_at=start, completed_at=end)],
+            batch_results=None,
         )
 
         results = RunResultsArtifact.from_execution_results(

@@ -4,6 +4,7 @@ from unittest import mock
 import pytest
 
 from dbt.tests.util import (
+    get_artifact,
     patch_microbatch_end_time,
     read_file,
     relation_from_name,
@@ -85,6 +86,11 @@ custom_microbatch_strategy = """
     )
 
 {% endmacro %}
+"""
+
+
+downstream_model_of_microbatch_sql = """
+SELECT * FROM {{ ref('microbatch_model') }}
 """
 
 
@@ -414,14 +420,64 @@ class TestMicrobatchIncrementalPartitionFailure(BaseMicrobatchTest):
         return {
             "input_model.sql": input_model_sql,
             "microbatch_model.sql": microbatch_model_failing_incremental_partition_sql,
+            "downstream_model.sql": downstream_model_of_microbatch_sql,
         }
 
     @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
     def test_run_with_event_time(self, project):
         # run all partitions from start - 2 expected rows in output, one failed
         with patch_microbatch_end_time("2020-01-03 13:57:00"):
-            run_dbt(["run", "--event-time-start", "2020-01-01"])
+            run_dbt(["run", "--event-time-start", "2020-01-01"], expect_pass=False)
         self.assert_row_count(project, "microbatch_model", 2)
+
+        run_results = get_artifact(project.project_root, "target", "run_results.json")
+        microbatch_run_result = run_results["results"][1]
+        assert microbatch_run_result["status"] == "partial success"
+        batch_results = microbatch_run_result["batch_results"]
+        assert batch_results is not None
+        assert len(batch_results["successful"]) == 2
+        assert len(batch_results["failed"]) == 1
+        assert run_results["results"][2]["status"] == "skipped"
+
+
+class TestMicrobatchRetriesPartialSuccesses(BaseMicrobatchTest):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "input_model.sql": input_model_sql,
+            "microbatch_model.sql": microbatch_model_failing_incremental_partition_sql,
+        }
+
+    @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
+    def test_run_with_event_time(self, project):
+        # run all partitions from start - 2 expected rows in output, one failed
+        with patch_microbatch_end_time("2020-01-03 13:57:00"):
+            _, console_output = run_dbt_and_capture(["run", "--event-time-start", "2020-01-01"])
+
+        assert "PARTIAL SUCCESS (2/3)" in console_output
+        assert "Completed with 1 partial success" in console_output
+
+        self.assert_row_count(project, "microbatch_model", 2)
+
+        run_results = get_artifact(project.project_root, "target", "run_results.json")
+        microbatch_run_result = run_results["results"][1]
+        assert microbatch_run_result["status"] == "partial success"
+        batch_results = microbatch_run_result["batch_results"]
+        assert batch_results is not None
+        assert len(batch_results["successful"]) == 2
+        assert len(batch_results["failed"]) == 1
+
+        # update the microbatch model so that it no longer fails
+        write_file(microbatch_model_sql, project.project_root, "models", "microbatch_model.sql")
+
+        with patch_microbatch_end_time("2020-01-03 13:57:00"):
+            _, console_output = run_dbt_and_capture(["retry"])
+
+        assert "PARTIAL SUCCESS" not in console_output
+        assert "Completed with 1 partial success" not in console_output
+        assert "Completed successfully" in console_output
+
+        self.assert_row_count(project, "microbatch_model", 3)
 
 
 microbatch_model_first_partition_failing_sql = """

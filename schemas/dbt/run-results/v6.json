@@ -54,7 +54,8 @@
                 "enum": [
                   "success",
                   "error",
-                  "skipped"
+                  "skipped",
+                  "partial success"
                 ]
               },
               {
@@ -178,6 +179,53 @@
                 "type": "null"
               }
             ]
+          },
+          "batch_results": {
+            "anyOf": [
+              {
+                "type": "object",
+                "title": "BatchResults",
+                "properties": {
+                  "successful": {
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "prefixItems": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ],
+                      "maxItems": 2,
+                      "minItems": 2
+                    }
+                  },
+                  "failed": {
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "prefixItems": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ],
+                      "maxItems": 2,
+                      "minItems": 2
+                    }
+                  }
+                },
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           }
         },
         "additionalProperties": false,
