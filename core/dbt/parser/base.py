@@ -25,6 +25,7 @@ from dbt.exceptions import (
 )
 from dbt.flags import get_flags
 from dbt.node_types import AccessType, ModelLanguage, NodeType
+from dbt.parser.common import resource_types_to_schema_file_keys
 from dbt.parser.search import FileBlock
 from dbt_common.dataclass_schema import ValidationError
 from dbt_common.utils import deep_merge
@@ -379,9 +380,9 @@ class ConfiguredParser(
             if patch_file_id:
                 patch_file = self.manifest.files.get(patch_file_id, None)
                 if patch_file and isinstance(patch_file, SchemaSourceFile):
-                    # TODO: do not hardcode "models"
+                    schema_key = resource_types_to_schema_file_keys[parsed_node.resource_type]
                     if unrendered_patch_config := patch_file.get_unrendered_config(
-                        "models", parsed_node.name, getattr(parsed_node, "version", None)
+                        schema_key, parsed_node.name, getattr(parsed_node, "version", None)
                     ):
                         patch_config_dict = deep_merge(patch_config_dict, unrendered_patch_config)
 
@@ -390,7 +391,6 @@ class ConfiguredParser(
         parsed_node.unrendered_config = config.build_config_dict(
             rendered=False, patch_config_dict=patch_config_dict
         )
-        print(f"final unrendered_config: {parsed_node.unrendered_config}")
 
         parsed_node.config_call_dict = config._config_call_dict
         parsed_node.unrendered_config_call_dict = config._unrendered_config_call_dict

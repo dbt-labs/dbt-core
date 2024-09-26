@@ -58,6 +58,7 @@ from dbt.parser.common import (
     TestBlock,
     VersionedTestBlock,
     YamlBlock,
+    schema_file_keys_to_resource_types,
     trimmed,
 )
 from dbt.parser.schema_generic_tests import SchemaGenericTestParser
@@ -69,22 +70,6 @@ from dbt_common.dataclass_schema import ValidationError, dbtClassMixin
 from dbt_common.events.functions import warn_or_error
 from dbt_common.exceptions import DbtValidationError
 from dbt_common.utils import deep_merge
-
-schema_file_keys_to_resource_types = {
-    "models": NodeType.Model,
-    "seeds": NodeType.Seed,
-    "snapshots": NodeType.Snapshot,
-    "sources": NodeType.Source,
-    "macros": NodeType.Macro,
-    "analyses": NodeType.Analysis,
-    "exposures": NodeType.Exposure,
-    "metrics": NodeType.Metric,
-    "semantic_models": NodeType.SemanticModel,
-    "saved_queries": NodeType.SavedQuery,
-}
-
-schema_file_keys = list(schema_file_keys_to_resource_types.keys())
-
 
 # ===============================================================================
 #  Schema Parser classes
@@ -403,7 +388,6 @@ class YamlReader(metaclass=ABCMeta):
             unrendered_config = {}
             if "config" in entry:
                 unrendered_config = entry["config"]
-                print(f"unrendered_config: {unrendered_config}")
 
             unrendered_version_configs = {}
             if "versions" in entry:
