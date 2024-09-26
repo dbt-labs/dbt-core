@@ -12,7 +12,6 @@ from dbt_common.events.functions import fire_event
 from dbt_common.events.types import Formatting
 from dbt_common.exceptions import DbtInternalError
 
-from . import group_lookup
 from .printer import print_run_end_messages
 from .run import ModelRunner, RunTask
 
@@ -43,7 +42,6 @@ class SeedRunner(ModelRunner):
     def print_result_line(self, result):
         model = result.node
         level = EventLevel.ERROR if result.status == NodeStatus.Error else EventLevel.INFO
-        group = group_lookup.get(model.unique_id)
         fire_event(
             LogSeedResult(
                 status=result.status,
@@ -54,7 +52,6 @@ class SeedRunner(ModelRunner):
                 schema=self.node.schema,
                 relation=model.alias,
                 node_info=model.node_info,
-                group=group,
             ),
             level=level,
         )
