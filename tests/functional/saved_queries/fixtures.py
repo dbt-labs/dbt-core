@@ -6,8 +6,6 @@ saved_queries_yml = """
 saved_queries:
   - name: test_saved_query
     description: "{{ doc('saved_query_description') }}"
-    config:
-        group: my_group
     label: Test Saved Query
     query_params:
         metrics:
