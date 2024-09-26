@@ -1293,7 +1293,7 @@ class LogModelResult(DynamicLevel):
         return "Q012"
 
     def message(self) -> str:
-        if self.status == "error":  # or 'PARTIAL SUCCESS' in self.status:
+        if self.status == "error":
             info = "ERROR creating"
             status = red(self.status.upper())
         elif "PARTIAL SUCCESS" in self.status:
