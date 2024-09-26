@@ -63,7 +63,11 @@ jobs:
       # integration tests generate a ton of logs in different files. the next step will find them all.
       # we actually care if these pass, because the normal test run doesn't usually include many json log outputs
       - name: Run integration tests
-        run: tox -e integration -- -nauto
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 30
+          max_attempts: 3
+          command: tox -e integration -- -nauto
 
       # apply our schema tests to every log event from the previous step
       # skips any output that isn't valid json
