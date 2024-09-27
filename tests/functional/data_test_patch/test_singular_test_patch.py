@@ -44,7 +44,7 @@ class TestPatchSingularTestInvalidName:
         _, log_output = run_dbt_and_capture(["compile"])
 
         file_path = (
-            "tests\\schem a_with_invalid_name.yml"
+            "tests\\schema_with_invalid_name.yml"
             if os.name == "nt"
             else "tests/schema_with_invalid_name.yml"
         )
@@ -64,4 +64,6 @@ class TestPatchSingularTestMalformedYaml:
 
     def test_compile(self, project):
         _, log_output = run_dbt_and_capture(["compile"])
-        assert "Unable to parse 'data_tests' in tests/schema.yml" in log_output
+        file_path = "tests\\schema.yml" if os.name == "nt" else "tests/schema.yml"
+        assert f"Unable to parse 'data_tests' section of file '{file_path}'" in log_output
+        assert "Entry did not contain a name" in log_output

@@ -218,7 +218,7 @@ class SchemaParser(SimpleParser[YamlBlock, ModelNode]):
                 except ParsingError as e:
                     fire_event(
                         Note(
-                            msg=f"Unable to parse 'data_tests' in {block.path.original_file_path}\n{e}",
+                            msg=f"Unable to parse 'data_tests' section of file '{block.path.original_file_path}'\n{e}",
                         ),
                         EventLevel.WARN,
                     )
