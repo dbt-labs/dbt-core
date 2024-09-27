@@ -106,7 +106,7 @@ def test_invalid_event_value(project, logs_dir):
 
 groups_yml = """
 groups:
-  - name: my_group
+  - name: my_group_with_owner_metadata
     owner:
       name: my_name
       email: my.email@gmail.com
@@ -115,7 +115,7 @@ groups:
 
 models:
   - name: my_model
-    group: my_group
+    group: my_group_with_owner_metadata
     access: public
 """
 
@@ -148,7 +148,7 @@ class TestRunResultErrorNodeInfo:
 
 
 def assert_group_data(group_data):
-    assert group_data["name"] == "my_group"
+    assert group_data["name"] == "my_group_with_owner_metadata"
     assert group_data["owner"] == {
         "name": "my_name",
         "email": "my.email@gmail.com",

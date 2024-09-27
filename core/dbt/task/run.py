@@ -35,6 +35,7 @@ from dbt.graph import ResourceTypeSelector
 from dbt.hooks import get_hook_dict
 from dbt.materializations.incremental.microbatch import MicrobatchBuilder
 from dbt.node_types import NodeType, RunHookType
+from dbt.task import group_lookup
 from dbt.task.base import BaseRunner
 from dbt.task.compile import CompileRunner, CompileTask
 from dbt.task.printer import get_counts, print_run_end_messages
@@ -205,6 +206,7 @@ class ModelRunner(CompileRunner):
 
     def print_result_line(self, result):
         description = self.describe_node()
+        group = group_lookup.get(self.node.unique_id)
         if result.status == NodeStatus.Error:
             status = result.status
             level = EventLevel.ERROR
@@ -219,6 +221,7 @@ class ModelRunner(CompileRunner):
                 total=self.num_nodes,
                 execution_time=result.execution_time,
                 node_info=self.node.node_info,
+                group=group,
             ),
             level=level,
         )
@@ -232,6 +235,7 @@ class ModelRunner(CompileRunner):
         exception: Optional[Exception],
     ):
         description = self.describe_batch(batch_start)
+        group = group_lookup.get(self.node.unique_id)
         if result.status == NodeStatus.Error:
             status = result.status
             level = EventLevel.ERROR
@@ -246,6 +250,7 @@ class ModelRunner(CompileRunner):
                 total=batch_total,
                 execution_time=result.execution_time,
                 node_info=self.node.node_info,
+                group=group,
             ),
             level=level,
         )
@@ -540,12 +545,17 @@ class ModelRunner(CompileRunner):
         relation = self.adapter.get_relation(
             relation_info.database, relation_info.schema, relation_info.name
         )
-        return (
+        if (
             relation is not None
             and relation.type == "table"
             and model.config.materialized == "incremental"
-            and not (getattr(self.config.args, "FULL_REFRESH", False) or model.config.full_refresh)
-        )
+        ):
+            if model.config.full_refresh is not None:
+                return not model.config.full_refresh
+            else:
+                return not getattr(self.config.args, "FULL_REFRESH", False)
+        else:
+            return False
 
 
 class RunTask(CompileTask):
@@ -705,6 +715,7 @@ class RunTask(CompileTask):
             self.create_schemas(adapter, required_schemas)
             self.populate_adapter_cache(adapter, required_schemas)
             self.populate_microbatch_batches(selected_uids)
+            group_lookup.init(self.manifest, selected_uids)
             run_hooks_status = self.safe_run_hooks(adapter, RunHookType.Start, {})
             return run_hooks_status
 
@@ -742,17 +753,6 @@ class RunTask(CompileTask):
     def get_runner_type(self, _) -> Optional[Type[BaseRunner]]:
         return ModelRunner
 
-    def get_groups_for_nodes(self, nodes):
-        node_to_group_name_map = {i: k for k, v in self.manifest.group_map.items() for i in v}
-        group_name_to_group_map = {v.name: v for v in self.manifest.groups.values()}
-
-        return {
-            node.unique_id: group_name_to_group_map.get(node_to_group_name_map.get(node.unique_id))
-            for node in nodes
-        }
-
     def task_end_messages(self, results) -> None:
-        groups = self.get_groups_for_nodes([r.node for r in results if hasattr(r, "node")])
-
         if results:
-            print_run_end_messages(results, groups=groups)
+            print_run_end_messages(results)

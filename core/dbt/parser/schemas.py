@@ -17,7 +17,6 @@ from dbt.contracts.graph.nodes import (
     ModelNode,
     ParsedMacroPatch,
     ParsedNodePatch,
-    ParsedSingularTestPatch,
     UnpatchedSourceDefinition,
 )
 from dbt.contracts.graph.unparsed import (
@@ -28,7 +27,6 @@ from dbt.contracts.graph.unparsed import (
     UnparsedMacroUpdate,
     UnparsedModelUpdate,
     UnparsedNodeUpdate,
-    UnparsedSingularTestUpdate,
     UnparsedSourceDefinition,
 )
 from dbt.events.types import (
@@ -209,10 +207,6 @@ class SchemaParser(SimpleParser[YamlBlock, ModelNode]):
                 parser = MacroPatchParser(self, yaml_block, "macros")
                 parser.parse()
 
-            if "data_tests" in dct:
-                parser = SingularTestPatchParser(self, yaml_block, "data_tests")
-                parser.parse()
-
             # PatchParser.parse() (but never test_blocks)
             if "analyses" in dct:
                 parser = AnalysisPatchParser(self, yaml_block, "analyses")
@@ -307,9 +301,7 @@ class SchemaParser(SimpleParser[YamlBlock, ModelNode]):
             self.manifest.rebuild_ref_lookup()
 
 
-Parsed = TypeVar(
-    "Parsed", UnpatchedSourceDefinition, ParsedNodePatch, ParsedMacroPatch, ParsedSingularTestPatch
-)
+Parsed = TypeVar("Parsed", UnpatchedSourceDefinition, ParsedNodePatch, ParsedMacroPatch)
 NodeTarget = TypeVar("NodeTarget", UnparsedNodeUpdate, UnparsedAnalysisUpdate, UnparsedModelUpdate)
 NonSourceTarget = TypeVar(
     "NonSourceTarget",
@@ -317,7 +309,6 @@ NonSourceTarget = TypeVar(
     UnparsedAnalysisUpdate,
     UnparsedMacroUpdate,
     UnparsedModelUpdate,
-    UnparsedSingularTestUpdate,
 )
 
 
@@ -1123,55 +1114,6 @@ class AnalysisPatchParser(NodePatchParser[UnparsedAnalysisUpdate]):
 
     def _target_type(self) -> Type[UnparsedAnalysisUpdate]:
         return UnparsedAnalysisUpdate
-
-
-class SingularTestPatchParser(PatchParser[UnparsedSingularTestUpdate, ParsedSingularTestPatch]):
-    def get_block(self, node: UnparsedSingularTestUpdate) -> TargetBlock:
-        return TargetBlock.from_yaml_block(self.yaml, node)
-
-    def _target_type(self) -> Type[UnparsedSingularTestUpdate]:
-        return UnparsedSingularTestUpdate
-
-    def parse_patch(self, block: TargetBlock[UnparsedSingularTestUpdate], refs: ParserRef) -> None:
-        patch = ParsedSingularTestPatch(
-            name=block.target.name,
-            description=block.target.description,
-            meta=block.target.meta,
-            docs=block.target.docs,
-            config=block.target.config,
-            original_file_path=block.target.original_file_path,
-            yaml_key=block.target.yaml_key,
-            package_name=block.target.package_name,
-        )
-
-        assert isinstance(self.yaml.file, SchemaSourceFile)
-        source_file: SchemaSourceFile = self.yaml.file
-
-        unique_id = self.manifest.singular_test_lookup.get_unique_id(
-            block.name, block.target.package_name
-        )
-        if not unique_id:
-            warn_or_error(
-                NoNodeForYamlKey(
-                    patch_name=patch.name,
-                    yaml_key=patch.yaml_key,
-                    file_path=source_file.path.original_file_path,
-                )
-            )
-            return
-
-        node = self.manifest.nodes.get(unique_id)
-        assert node is not None
-
-        source_file.append_patch(patch.yaml_key, unique_id)
-        if patch.config:
-            self.patch_node_config(node, patch)
-
-        node.patch_path = patch.file_id
-        node.description = patch.description
-        node.created_at = time.time()
-        node.meta = patch.meta
-        node.docs = patch.docs
 
 
 class MacroPatchParser(PatchParser[UnparsedMacroUpdate, ParsedMacroPatch]):
