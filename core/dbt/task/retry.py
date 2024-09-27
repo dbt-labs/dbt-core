@@ -127,7 +127,7 @@ class RetryTask(ConfiguredTask):
             if result.status in RETRYABLE_STATUSES
             and not (
                 self.previous_command_name != "run-operation"
-                and result.unique_id.startswith("operation")
+                and result.unique_id.startswith("operation.")
             )
         }
 
@@ -139,7 +139,7 @@ class RetryTask(ConfiguredTask):
             and len(result.batch_results.failed) > 0
             and not (
                 self.previous_command_name != "run-operation"
-                and result.unique_id.startswith("operation")
+                and result.unique_id.startswith("operation.")
             )
         }
 
