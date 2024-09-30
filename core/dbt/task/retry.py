@@ -131,11 +131,17 @@ class RetryTask(ConfiguredTask):
             )
         }
 
+        # We need this so that re-running of a microbatch model will only rerun
+        # batches that previously failed. Note _explicitly_ do no pass the
+        # batch info if there were _no_ successful batches previously. This is
+        # because passing the batch info _forces_ the microbatch process into
+        # _incremental_ model, and it may be that we need to be in full refresh
+        # mode which is only handled if batch_info _isn't_ passed for a node
         batch_map = {
-            result.unique_id: result.batch_results.failed
+            result.unique_id: result.batch_results
             for result in self.previous_results.results
-            if result.status == NodeStatus.PartialSuccess
-            and result.batch_results is not None
+            if result.batch_results is not None
+            and len(result.batch_results.successful) != 0
             and len(result.batch_results.failed) > 0
             and not (
                 self.previous_command_name != "run-operation"

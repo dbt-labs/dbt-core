@@ -60,7 +60,7 @@ from dbt.artifacts.resources import SourceDefinition as SourceDefinitionResource
 from dbt.artifacts.resources import SqlOperation as SqlOperationResource
 from dbt.artifacts.resources import TimeSpine
 from dbt.artifacts.resources import UnitTestDefinition as UnitTestDefinitionResource
-from dbt.artifacts.schemas.batch_results import BatchType
+from dbt.artifacts.schemas.batch_results import BatchResults
 from dbt.contracts.graph.model_config import UnitTestNodeConfig
 from dbt.contracts.graph.node_args import ModelNodeArgs
 from dbt.contracts.graph.unparsed import (
@@ -454,7 +454,7 @@ class HookNode(HookNodeResource, CompiledNode):
 
 @dataclass
 class ModelNode(ModelResource, CompiledNode):
-    batches: Optional[List[BatchType]] = None
+    batch_info: Optional[BatchResults] = None
 
     @classmethod
     def resource_class(cls) -> Type[ModelResource]:

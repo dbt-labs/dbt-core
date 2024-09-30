@@ -1,6 +1,7 @@
 import functools
 import os
 import threading
+from copy import deepcopy
 from datetime import datetime
 from typing import AbstractSet, Any, Dict, Iterable, List, Optional, Set, Tuple, Type
 
@@ -327,6 +328,13 @@ class ModelRunner(CompileRunner):
             status = RunStatus.PartialSuccess
             msg = f"PARTIAL SUCCESS ({num_successes}/{num_successes + num_failures})"
 
+        if model.batch_info is not None:
+            new_batch_results = deepcopy(model.batch_info)
+            new_batch_results.failed = []
+            new_batch_results = new_batch_results + batch_results
+        else:
+            new_batch_results = batch_results
+
         return RunResult(
             node=model,
             status=status,
@@ -337,7 +345,7 @@ class ModelRunner(CompileRunner):
             message=msg,
             adapter_response={},
             failures=num_failures,
-            batch_results=batch_results,
+            batch_results=new_batch_results,
         )
 
     def _build_succesful_run_batch_result(
@@ -470,7 +478,7 @@ class ModelRunner(CompileRunner):
     ) -> List[RunResult]:
         batch_results: List[RunResult] = []
 
-        if model.batches is None:
+        if model.batch_info is None:
             microbatch_builder = MicrobatchBuilder(
                 model=model,
                 is_incremental=self._is_incremental(model),
@@ -481,8 +489,8 @@ class ModelRunner(CompileRunner):
             start = microbatch_builder.build_start_time(end)
             batches = microbatch_builder.build_batches(start, end)
         else:
-            batches = model.batches
-            # if there are batches, then don't run as full_refresh and do force is_incremental
+            batches = model.batch_info.failed
+            # if there is batch info, then don't run as full_refresh and do force is_incremental
             # not doing this risks blowing away the work that has already been done
             if self._has_relation(model=model):
                 context["is_incremental"] = lambda: True
@@ -567,7 +575,7 @@ class RunTask(CompileTask):
         args: Flags,
         config: RuntimeConfig,
         manifest: Manifest,
-        batch_map: Optional[Dict[str, List[BatchType]]] = None,
+        batch_map: Optional[Dict[str, BatchResults]] = None,
     ) -> None:
         super().__init__(args, config, manifest)
         self.batch_map = batch_map
@@ -709,7 +717,7 @@ class RunTask(CompileTask):
                 if uid in self.batch_map:
                     node = self.manifest.ref_lookup.perform_lookup(uid, self.manifest)
                     if isinstance(node, ModelNode):
-                        node.batches = self.batch_map[uid]
+                        node.batch_info = self.batch_map[uid]
 
     def before_run(self, adapter: BaseAdapter, selected_uids: AbstractSet[str]) -> RunStatus:
         with adapter.connection_named("master"):
