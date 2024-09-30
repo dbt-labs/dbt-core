@@ -1,11 +1,15 @@
 import threading
 from argparse import Namespace
+from dataclasses import dataclass
 from datetime import datetime, timedelta
+from typing import Optional
 from unittest.mock import MagicMock, patch
 
 import pytest
+from pytest_mock import MockerFixture
 
 from dbt.adapters.postgres import PostgresAdapter
+from dbt.artifacts.resources.v1.model import ModelConfig
 from dbt.artifacts.schemas.batch_results import BatchResults
 from dbt.artifacts.schemas.results import RunStatus
 from dbt.artifacts.schemas.run import RunResult
@@ -174,3 +178,64 @@ class TestModelRunner:
         assert expect_success.status == RunStatus.Success
         assert expect_error.status == RunStatus.Error
         assert expect_partial_success.status == RunStatus.PartialSuccess
+
+    @pytest.mark.parametrize(
+        "has_relation,relation_type,materialized,full_refresh_config,full_refresh_flag,expectation",
+        [
+            (False, "table", "incremental", None, False, False),
+            (True, "other", "incremental", None, False, False),
+            (True, "table", "other", None, False, False),
+            # model config takes precendence
+            (True, "table", "incremental", True, False, False),
+            # model config takes precendence
+            (True, "table", "incremental", True, True, False),
+            # model config takes precendence
+            (True, "table", "incremental", False, False, True),
+            # model config takes precendence
+            (True, "table", "incremental", False, True, True),
+            # model config is none, so opposite flag value
+            (True, "table", "incremental", None, True, False),
+            # model config is none, so opposite flag value
+            (True, "table", "incremental", None, False, True),
+        ],
+    )
+    def test__is_incremental(
+        self,
+        mocker: MockerFixture,
+        model_runner: ModelRunner,
+        has_relation: bool,
+        relation_type: str,
+        materialized: str,
+        full_refresh_config: Optional[bool],
+        full_refresh_flag: bool,
+        expectation: bool,
+    ) -> None:
+
+        # Setup adapter relation getting
+        @dataclass
+        class RelationInfo:
+            database: str = "database"
+            schema: str = "schema"
+            name: str = "name"
+
+        @dataclass
+        class Relation:
+            type: str
+
+        model_runner.adapter = mocker.Mock()
+        model_runner.adapter.Relation.create_from.return_value = RelationInfo()
+
+        if has_relation:
+            model_runner.adapter.get_relation.return_value = Relation(type=relation_type)
+        else:
+            model_runner.adapter.get_relation.return_value = None
+
+        # Set ModelRunner configs
+        model_runner.config.args = Namespace(FULL_REFRESH=full_refresh_flag)
+
+        # Create model with configs
+        model = model_runner.node
+        model.config = ModelConfig(materialized=materialized, full_refresh=full_refresh_config)
+
+        # Assert result of _is_incremental
+        assert model_runner._is_incremental(model) == expectation

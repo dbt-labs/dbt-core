@@ -1477,7 +1477,7 @@ class Group(GroupResource, BaseNode):
         return {
             "name": self.name,
             "package_name": self.package_name,
-            "owner": self.owner.to_dict(),
+            "owner": self.owner.to_dict(omit_none=True),
         }
 
 
@@ -1646,11 +1646,6 @@ class ParsedMacroPatch(ParsedPatch):
     arguments: List[MacroArgument] = field(default_factory=list)
 
 
-@dataclass
-class ParsedSingularTestPatch(ParsedPatch):
-    pass
-
-
 # ====================================
 # Node unions/categories
 # ====================================
@@ -1700,6 +1695,7 @@ Resource = Union[
 
 TestNode = Union[SingularTestNode, GenericTestNode]
 
+SemanticManifestNode = Union[SavedQuery, SemanticModel, Metric]
 
 RESOURCE_CLASS_TO_NODE_CLASS: Dict[Type[BaseResource], Type[BaseNode]] = {
     node_class.resource_class(): node_class

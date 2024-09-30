@@ -1,6 +1,0 @@
-kind: Fixes
-body: Allow singular tests to be documented in properties.yml
-time: 2024-09-23T19:07:58.151069+01:00
-custom:
-    Author: aranke
-    Issue: "9005"

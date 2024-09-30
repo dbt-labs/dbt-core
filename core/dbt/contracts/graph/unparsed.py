@@ -203,11 +203,6 @@ class UnparsedAnalysisUpdate(HasConfig, HasColumnDocs, HasColumnProps, HasYamlMe
 
 
 @dataclass
-class UnparsedSingularTestUpdate(HasConfig, HasColumnProps, HasYamlMetadata):
-    pass
-
-
-@dataclass
 class UnparsedNodeUpdate(HasConfig, HasColumnTests, HasColumnAndTestProps, HasYamlMetadata):
     quote_columns: Optional[bool] = None
     access: Optional[str] = None
