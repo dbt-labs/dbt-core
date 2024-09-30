@@ -370,7 +370,10 @@ class ParsedNode(ParsedResource, NodeInfoMixin, ParsedNodeMandatory, Serializabl
         return True
 
     def same_vars(self, old) -> bool:
-        return self.vars == old.vars
+        if get_flags().state_modified_compare_vars:
+            return self.vars == old.vars
+        else:
+            return True
 
     def same_contents(self, old, adapter_type) -> bool:
         if old is None:
@@ -1256,7 +1259,10 @@ class SourceDefinition(
         )
 
     def same_vars(self, other: "SourceDefinition") -> bool:
-        return self.vars == other.vars
+        if get_flags().state_modified_compare_vars:
+            return self.vars == other.vars
+        else:
+            return True
 
     def same_contents(self, old: Optional["SourceDefinition"]) -> bool:
         # existing when it didn't before is a change!
@@ -1376,7 +1382,10 @@ class Exposure(GraphNode, ExposureResource):
         )
 
     def same_vars(self, old: "Exposure") -> bool:
-        return self.vars == old.vars
+        if get_flags().state_modified_compare_vars:
+            return self.vars == old.vars
+        else:
+            return True
 
     def same_contents(self, old: Optional["Exposure"]) -> bool:
         # existing when it didn't before is a change!

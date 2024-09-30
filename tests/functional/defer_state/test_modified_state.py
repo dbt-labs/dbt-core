@@ -1150,6 +1150,9 @@ class TestModifiedVars(BaseModifiedState):
     @pytest.fixture(scope="class")
     def project_config_update(self):
         return {
+            "flags": {
+                "state_modified_compare_vars": True,
+            },
             "vars": {"my_var": 1},
         }
 
@@ -1198,6 +1201,9 @@ class TestModifiedMacroVars(BaseModifiedState):
     @pytest.fixture(scope="class")
     def project_config_update(self):
         return {
+            "flags": {
+                "state_modified_compare_vars": True,
+            },
             "vars": {"my_var": 1},
         }
 
@@ -1261,6 +1267,9 @@ class TestModifiedVarsSchemaYml(BaseModifiedState):
     @pytest.fixture(scope="class")
     def project_config_update(self):
         return {
+            "flags": {
+                "state_modified_compare_vars": True,
+            },
             "vars": {"my_var": "table"},
         }
 
