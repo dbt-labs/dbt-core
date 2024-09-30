@@ -1,12 +1,12 @@
 import os
 
 import pytest
-from functional.data_test_patch.fixtures import tests__malformed_schema_yml
 
 from dbt.tests.util import get_artifact, run_dbt, run_dbt_and_capture
 from tests.functional.data_test_patch.fixtures import (
     tests__doc_block_md,
     tests__invalid_name_schema_yml,
+    tests__malformed_schema_yml,
     tests__my_singular_test_sql,
     tests__schema_yml,
 )
