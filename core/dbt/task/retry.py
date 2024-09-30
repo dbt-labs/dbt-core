@@ -121,13 +121,15 @@ class RetryTask(ConfiguredTask):
         self.task_class = TASK_DICT.get(self.previous_command_name)  # type: ignore
 
     def run(self):
-        unique_ids = set(
-            [
-                result.unique_id
-                for result in self.previous_results.results
-                if result.status in RETRYABLE_STATUSES
-            ]
-        )
+        unique_ids = {
+            result.unique_id
+            for result in self.previous_results.results
+            if result.status in RETRYABLE_STATUSES
+            and not (
+                self.previous_command_name != "run-operation"
+                and result.unique_id.startswith("operation.")
+            )
+        }
 
         batch_map = {
             result.unique_id: result.batch_results.failed
@@ -135,6 +137,10 @@ class RetryTask(ConfiguredTask):
             if result.status == NodeStatus.PartialSuccess
             and result.batch_results is not None
             and len(result.batch_results.failed) > 0
+            and not (
+                self.previous_command_name != "run-operation"
+                and result.unique_id.startswith("operation.")
+            )
         }
 
         class TaskWrapper(self.task_class):

@@ -727,6 +727,12 @@
                 "type": "string",
                 "default": ""
               },
+              "vars": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                }
+              },
               "root_path": {
                 "anyOf": [
                   {
@@ -1766,6 +1772,12 @@
                 "type": "string",
                 "default": ""
               },
+              "vars": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                }
+              },
               "language": {
                 "type": "string",
                 "default": "sql"
@@ -2419,6 +2431,12 @@
               "raw_code": {
                 "type": "string",
                 "default": ""
+              },
+              "vars": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                }
               },
               "language": {
                 "type": "string",
@@ -3210,6 +3228,12 @@
               "raw_code": {
                 "type": "string",
                 "default": ""
+              },
+              "vars": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                }
               },
               "language": {
                 "type": "string",
@@ -4020,6 +4044,12 @@
               "raw_code": {
                 "type": "string",
                 "default": ""
+              },
+              "vars": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                }
               },
               "language": {
                 "type": "string",
@@ -5382,6 +5412,12 @@
                 "type": "string",
                 "default": ""
               },
+              "vars": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                }
+              },
               "language": {
                 "type": "string",
                 "default": "sql"
@@ -6035,6 +6071,12 @@
               "raw_code": {
                 "type": "string",
                 "default": ""
+              },
+              "vars": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                }
               },
               "language": {
                 "type": "string",
@@ -6993,6 +7035,12 @@
               "raw_code": {
                 "type": "string",
                 "default": ""
+              },
+              "vars": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                }
               },
               "language": {
                 "type": "string",
@@ -8131,6 +8179,12 @@
               "type": "string"
             }
           },
+          "vars": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            }
+          },
           "relation_name": {
             "anyOf": [
               {
@@ -8519,6 +8573,12 @@
             "additionalProperties": true
           },
           "unrendered_config": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "vars": {
             "type": "object",
             "propertyNames": {
               "type": "string"
@@ -10601,6 +10661,12 @@
                       "type": "string",
                       "default": ""
                     },
+                    "vars": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      }
+                    },
                     "root_path": {
                       "anyOf": [
                         {
@@ -11640,6 +11706,12 @@
                       "type": "string",
                       "default": ""
                     },
+                    "vars": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      }
+                    },
                     "language": {
                       "type": "string",
                       "default": "sql"
@@ -12293,6 +12365,12 @@
                     "raw_code": {
                       "type": "string",
                       "default": ""
+                    },
+                    "vars": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      }
                     },
                     "language": {
                       "type": "string",
@@ -13084,6 +13162,12 @@
                     "raw_code": {
                       "type": "string",
                       "default": ""
+                    },
+                    "vars": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      }
                     },
                     "language": {
                       "type": "string",
@@ -13894,6 +13978,12 @@
                     "raw_code": {
                       "type": "string",
                       "default": ""
+                    },
+                    "vars": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      }
                     },
                     "language": {
                       "type": "string",
@@ -15256,6 +15346,12 @@
                       "type": "string",
                       "default": ""
                     },
+                    "vars": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      }
+                    },
                     "language": {
                       "type": "string",
                       "default": "sql"
@@ -15909,6 +16005,12 @@
                     "raw_code": {
                       "type": "string",
                       "default": ""
+                    },
+                    "vars": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      }
                     },
                     "language": {
                       "type": "string",
@@ -16867,6 +16969,12 @@
                     "raw_code": {
                       "type": "string",
                       "default": ""
+                    },
+                    "vars": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      }
                     },
                     "language": {
                       "type": "string",
@@ -17996,6 +18104,12 @@
                         "type": "string"
                       }
                     },
+                    "vars": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      }
+                    },
                     "relation_name": {
                       "anyOf": [
                         {
@@ -18182,6 +18296,12 @@
                       "additionalProperties": true
                     },
                     "unrendered_config": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      }
+                    },
+                    "vars": {
                       "type": "object",
                       "propertyNames": {
                         "type": "string"

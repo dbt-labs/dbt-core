@@ -1,7 +1,7 @@
 import threading
 from typing import AbstractSet, Any, Collection, Iterable, List, Optional, Set, Type
 
-from dbt.adapters.base import BaseRelation
+from dbt.adapters.base import BaseAdapter, BaseRelation
 from dbt.artifacts.resources.types import NodeType
 from dbt.artifacts.schemas.run import RunResult, RunStatus
 from dbt.clients.jinja import MacroGenerator
@@ -125,7 +125,7 @@ class CloneTask(GraphRunnableTask):
 
         return result
 
-    def before_run(self, adapter, selected_uids: AbstractSet[str]):
+    def before_run(self, adapter: BaseAdapter, selected_uids: AbstractSet[str]) -> RunStatus:
         with adapter.connection_named("master"):
             self.defer_to_manifest()
             # only create target schemas, but also cache defer_relation schemas
@@ -133,6 +133,7 @@ class CloneTask(GraphRunnableTask):
             self.create_schemas(adapter, schemas_to_create)
             schemas_to_cache = self.get_model_schemas(adapter, selected_uids)
             self.populate_adapter_cache(adapter, schemas_to_cache)
+            return RunStatus.Success
 
     @property
     def resource_types(self) -> List[NodeType]:
