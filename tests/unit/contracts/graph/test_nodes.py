@@ -1,6 +1,6 @@
-from argparse import Namespace
 import pickle
 import re
+from argparse import Namespace
 from dataclasses import replace
 
 import pytest
@@ -27,9 +27,7 @@ from tests.unit.utils import (
 
 @pytest.fixture
 def args_for_flags() -> Namespace:
-    return Namespace(
-        state_modified_compare_vars=False
-    )
+    return Namespace(state_modified_compare_vars=False)
 
 
 def norm_whitespace(string):

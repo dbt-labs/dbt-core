@@ -353,6 +353,7 @@ class SchemaSourceFile(BaseSourceFile):
 
             if not self.unrendered_configs[yaml_key]:
                 del self.unrendered_configs[yaml_key]
+
     def add_vars(self, vars: Dict[str, Any], yaml_key: str, name: str) -> None:
         if yaml_key not in self.vars:
             self.vars[yaml_key] = {}
