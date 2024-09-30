@@ -1146,6 +1146,59 @@ class TestChangedSemanticModelContents(BaseModifiedState):
         assert len(results) == 1
 
 
+class TestModifiedVarsLegacy(BaseModifiedState):
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "flags": {
+                "state_modified_compare_vars": False,
+            },
+            "vars": {"my_var": 1},
+        }
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "model_with_var.sql": "select {{ var('my_var') }} as id",
+        }
+
+    def test_changed_vars(self, project):
+        self.run_and_save_state()
+
+        # No var change
+        assert not run_dbt(["list", "-s", "state:modified", "--state", "./state"])
+        assert not run_dbt(["list", "-s", "state:modified.vars", "--state", "./state"])
+
+        # Modify var (my_var: 1 -> 2)
+        update_config_file({"vars": {"my_var": 2}}, "dbt_project.yml")
+
+        # By default, do not detect vars in state:modified to preserve legacy behaviour
+        assert run_dbt(["list", "-s", "state:modified", "--state", "./state"]) == []
+
+        # state:modified.vars is a new selector, opt-in method -> returns results
+        assert run_dbt(["list", "-s", "state:modified.vars", "--state", "./state"]) == [
+            "test.model_with_var"
+        ]
+
+        # Reset dbt_project.yml
+        update_config_file({"vars": {"my_var": 1}}, "dbt_project.yml")
+
+        # Modify var via --var CLI flag
+        assert not run_dbt(
+            ["list", "--vars", '{"my_var": 1}', "-s", "state:modified", "--state", "./state"]
+        )
+        assert (
+            run_dbt(
+                ["list", "--vars", '{"my_var": 2}', "-s", "state:modified", "--state", "./state"]
+            )
+            == []
+        )
+        # state:modified.vars is a new selector, opt-in method -> returns results
+        assert run_dbt(
+            ["list", "--vars", '{"my_var": 2}', "-s", "state:modified.vars", "--state", "./state"]
+        ) == ["test.model_with_var"]
+
+
 class TestModifiedVars(BaseModifiedState):
     @pytest.fixture(scope="class")
     def project_config_update(self):
