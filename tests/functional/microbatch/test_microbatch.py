@@ -485,6 +485,44 @@ class TestMicrobatchRetriesPartialSuccesses(BaseMicrobatchTest):
         self.assert_row_count(project, "microbatch_model", 3)
 
 
+class TestMicrobatchMultipleRetries(BaseMicrobatchTest):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "input_model.sql": input_model_sql,
+            "microbatch_model.sql": microbatch_model_failing_incremental_partition_sql,
+        }
+
+    @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
+    def test_run_with_event_time(self, project):
+        # run all partitions from start - 2 expected rows in output, one failed
+        with patch_microbatch_end_time("2020-01-03 13:57:00"):
+            _, console_output = run_dbt_and_capture(["run", "--event-time-start", "2020-01-01"])
+
+        assert "PARTIAL SUCCESS (2/3)" in console_output
+        assert "Completed with 1 partial success" in console_output
+
+        self.assert_row_count(project, "microbatch_model", 2)
+
+        with patch_microbatch_end_time("2020-01-03 13:57:00"):
+            _, console_output = run_dbt_and_capture(["retry"], expect_pass=False)
+
+        assert "PARTIAL SUCCESS" not in console_output
+        assert "ERROR" in console_output
+        assert "Completed with 1 error, 0 partial successs, and 0 warnings" in console_output
+
+        self.assert_row_count(project, "microbatch_model", 2)
+
+        with patch_microbatch_end_time("2020-01-03 13:57:00"):
+            _, console_output = run_dbt_and_capture(["retry"], expect_pass=False)
+
+        assert "PARTIAL SUCCESS" not in console_output
+        assert "ERROR" in console_output
+        assert "Completed with 1 error, 0 partial successs, and 0 warnings" in console_output
+
+        self.assert_row_count(project, "microbatch_model", 2)
+
+
 microbatch_model_first_partition_failing_sql = """
 {{ config(materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='day', begin=modules.datetime.datetime(2020, 1, 1, 0, 0, 0)) }}
 {% if '2020-01-01' in (model.config.__dbt_internal_microbatch_event_time_start | string) %}
