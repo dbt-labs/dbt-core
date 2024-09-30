@@ -613,6 +613,15 @@ sources:
       - name: customers
 """
 
+schema_source_with_updated_env_var_as_schema_property_yml = """
+sources:
+  - name: jaffle_shop
+    database: "test"
+    schema: "updated"
+    tables:
+      - name: customers
+"""
+
 schema_source_with_jinja_as_database_property_yml = """
 sources:
   - name: jaffle_shop
