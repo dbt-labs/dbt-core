@@ -1,4 +1,4 @@
-import os
+from pathlib import Path
 
 import pytest
 
@@ -43,11 +43,7 @@ class TestPatchSingularTestInvalidName:
     def test_compile(self, project):
         _, log_output = run_dbt_and_capture(["compile"])
 
-        file_path = (
-            "tests\\schema_with_invalid_name.yml"
-            if os.name == "nt"
-            else "tests/schema_with_invalid_name.yml"
-        )
+        file_path = Path("tests/schema_with_invalid_name.yml")
         assert (
             f"Did not find matching node for patch with name 'my_double_test' in the 'data_tests' section of file '{file_path}'"
             in log_output
@@ -64,6 +60,6 @@ class TestPatchSingularTestMalformedYaml:
 
     def test_compile(self, project):
         _, log_output = run_dbt_and_capture(["compile"])
-        file_path = "tests\\schema.yml" if os.name == "nt" else "tests/schema.yml"
+        file_path = Path("tests/schema.yml")
         assert f"Unable to parse 'data_tests' section of file '{file_path}'" in log_output
         assert "Entry did not contain a name" in log_output
