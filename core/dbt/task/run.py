@@ -478,6 +478,9 @@ class ModelRunner(CompileRunner):
     ) -> List[RunResult]:
         batch_results: List[RunResult] = []
 
+        # Note currently (9/30/2024) model.batch_info is only ever _not_ `None`
+        # IFF `dbt retry` is being run and the microbatch model had batches which
+        # failed on the run of the model (which is being retried)
         if model.batch_info is None:
             microbatch_builder = MicrobatchBuilder(
                 model=model,
