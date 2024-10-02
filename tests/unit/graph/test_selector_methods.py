@@ -1,5 +1,4 @@
 import copy
-from argparse import Namespace
 from dataclasses import replace
 from pathlib import Path
 from unittest import mock
@@ -642,13 +641,6 @@ def create_previous_state(manifest):
 @pytest.fixture
 def previous_state(manifest):
     return create_previous_state(manifest)
-
-
-@pytest.fixture
-def args_for_flags():
-    return Namespace(
-        state_modified_compare_more_unrendered_values=False, state_modified_compare_vars=False
-    )
 
 
 def add_node(manifest, node):

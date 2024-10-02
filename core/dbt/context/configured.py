@@ -31,35 +31,23 @@ class FQNLookup:
         self.resource_type = NodeType.Model
 
 
-class SchemaYamlVars:
-    def __init__(self):
-        self.env_vars = {}
-        self.vars = {}
-
-
 class ConfiguredVar(Var):
     def __init__(
         self,
         context: Dict[str, Any],
         config: AdapterRequiredConfig,
         project_name: str,
-        schema_yaml_vars: Optional[SchemaYamlVars] = None,
     ):
         super().__init__(context, config.cli_vars)
         self._config = config
         self._project_name = project_name
-        self.schema_yaml_vars = schema_yaml_vars
 
     def __call__(self, var_name, default=Var._VAR_NOTSET):
         my_config = self._config.load_dependencies()[self._project_name]
 
-        var_found = False
-        var_value = None
-
         # cli vars > active project > local project
         if var_name in self._config.cli_vars:
-            var_found = True
-            var_value = self._config.cli_vars[var_name]
+            return self._config.cli_vars[var_name]
 
         adapter_type = self._config.credentials.type
         lookup = FQNLookup(self._project_name)
@@ -70,21 +58,19 @@ class ConfiguredVar(Var):
             all_vars.add(my_config.vars.vars_for(lookup, adapter_type))
         all_vars.add(active_vars)
 
-        if not var_found and var_name in all_vars:
-            var_found = True
-            var_value = all_vars[var_name]
+        if var_name in all_vars:
+            return all_vars[var_name]
 
-        if not var_found and default is not Var._VAR_NOTSET:
-            var_found = True
-            var_value = default
+        if default is not Var._VAR_NOTSET:
+            return default
 
-        if not var_found:
-            return self.get_missing_var(var_name)
-        else:
-            if self.schema_yaml_vars:
-                self.schema_yaml_vars.vars[var_name] = var_value
+        return self.get_missing_var(var_name)
 
-            return var_value
+
+class SchemaYamlVars:
+    def __init__(self):
+        self.env_vars = {}
+        self.vars = {}
 
 
 class SchemaYamlContext(ConfiguredContext):
@@ -96,7 +82,7 @@ class SchemaYamlContext(ConfiguredContext):
 
     @contextproperty()
     def var(self) -> ConfiguredVar:
-        return ConfiguredVar(self._ctx, self.config, self._project_name, self.schema_yaml_vars)
+        return ConfiguredVar(self._ctx, self.config, self._project_name)
 
     @contextmember()
     def env_var(self, var: str, default: Optional[str] = None) -> str:

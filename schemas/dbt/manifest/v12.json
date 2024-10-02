@@ -706,12 +706,6 @@
                   "type": "string"
                 }
               },
-              "unrendered_config_call_dict": {
-                "type": "object",
-                "propertyNames": {
-                  "type": "string"
-                }
-              },
               "relation_name": {
                 "anyOf": [
                   {
@@ -726,12 +720,6 @@
               "raw_code": {
                 "type": "string",
                 "default": ""
-              },
-              "vars": {
-                "type": "object",
-                "propertyNames": {
-                  "type": "string"
-                }
               },
               "root_path": {
                 "anyOf": [
@@ -1751,12 +1739,6 @@
                   "type": "string"
                 }
               },
-              "unrendered_config_call_dict": {
-                "type": "object",
-                "propertyNames": {
-                  "type": "string"
-                }
-              },
               "relation_name": {
                 "anyOf": [
                   {
@@ -1771,12 +1753,6 @@
               "raw_code": {
                 "type": "string",
                 "default": ""
-              },
-              "vars": {
-                "type": "object",
-                "propertyNames": {
-                  "type": "string"
-                }
               },
               "language": {
                 "type": "string",
@@ -2411,12 +2387,6 @@
                   "type": "string"
                 }
               },
-              "unrendered_config_call_dict": {
-                "type": "object",
-                "propertyNames": {
-                  "type": "string"
-                }
-              },
               "relation_name": {
                 "anyOf": [
                   {
@@ -2431,12 +2401,6 @@
               "raw_code": {
                 "type": "string",
                 "default": ""
-              },
-              "vars": {
-                "type": "object",
-                "propertyNames": {
-                  "type": "string"
-                }
               },
               "language": {
                 "type": "string",
@@ -3208,12 +3172,6 @@
                   "type": "string"
                 }
               },
-              "unrendered_config_call_dict": {
-                "type": "object",
-                "propertyNames": {
-                  "type": "string"
-                }
-              },
               "relation_name": {
                 "anyOf": [
                   {
@@ -3228,12 +3186,6 @@
               "raw_code": {
                 "type": "string",
                 "default": ""
-              },
-              "vars": {
-                "type": "object",
-                "propertyNames": {
-                  "type": "string"
-                }
               },
               "language": {
                 "type": "string",
@@ -4024,12 +3976,6 @@
                   "type": "string"
                 }
               },
-              "unrendered_config_call_dict": {
-                "type": "object",
-                "propertyNames": {
-                  "type": "string"
-                }
-              },
               "relation_name": {
                 "anyOf": [
                   {
@@ -4044,12 +3990,6 @@
               "raw_code": {
                 "type": "string",
                 "default": ""
-              },
-              "vars": {
-                "type": "object",
-                "propertyNames": {
-                  "type": "string"
-                }
               },
               "language": {
                 "type": "string",
@@ -5391,12 +5331,6 @@
                   "type": "string"
                 }
               },
-              "unrendered_config_call_dict": {
-                "type": "object",
-                "propertyNames": {
-                  "type": "string"
-                }
-              },
               "relation_name": {
                 "anyOf": [
                   {
@@ -5411,12 +5345,6 @@
               "raw_code": {
                 "type": "string",
                 "default": ""
-              },
-              "vars": {
-                "type": "object",
-                "propertyNames": {
-                  "type": "string"
-                }
               },
               "language": {
                 "type": "string",
@@ -6051,12 +5979,6 @@
                   "type": "string"
                 }
               },
-              "unrendered_config_call_dict": {
-                "type": "object",
-                "propertyNames": {
-                  "type": "string"
-                }
-              },
               "relation_name": {
                 "anyOf": [
                   {
@@ -6071,12 +5993,6 @@
               "raw_code": {
                 "type": "string",
                 "default": ""
-              },
-              "vars": {
-                "type": "object",
-                "propertyNames": {
-                  "type": "string"
-                }
               },
               "language": {
                 "type": "string",
@@ -7015,12 +6931,6 @@
                   "type": "string"
                 }
               },
-              "unrendered_config_call_dict": {
-                "type": "object",
-                "propertyNames": {
-                  "type": "string"
-                }
-              },
               "relation_name": {
                 "anyOf": [
                   {
@@ -7035,12 +6945,6 @@
               "raw_code": {
                 "type": "string",
                 "default": ""
-              },
-              "vars": {
-                "type": "object",
-                "propertyNames": {
-                  "type": "string"
-                }
               },
               "language": {
                 "type": "string",
@@ -8179,12 +8083,6 @@
               "type": "string"
             }
           },
-          "vars": {
-            "type": "object",
-            "propertyNames": {
-              "type": "string"
-            }
-          },
           "relation_name": {
             "anyOf": [
               {
@@ -8573,12 +8471,6 @@
             "additionalProperties": true
           },
           "unrendered_config": {
-            "type": "object",
-            "propertyNames": {
-              "type": "string"
-            }
-          },
-          "vars": {
             "type": "object",
             "propertyNames": {
               "type": "string"
@@ -10640,12 +10532,6 @@
                         "type": "string"
                       }
                     },
-                    "unrendered_config_call_dict": {
-                      "type": "object",
-                      "propertyNames": {
-                        "type": "string"
-                      }
-                    },
                     "relation_name": {
                       "anyOf": [
                         {
@@ -10660,12 +10546,6 @@
                     "raw_code": {
                       "type": "string",
                       "default": ""
-                    },
-                    "vars": {
-                      "type": "object",
-                      "propertyNames": {
-                        "type": "string"
-                      }
                     },
                     "root_path": {
                       "anyOf": [
@@ -11685,12 +11565,6 @@
                         "type": "string"
                       }
                     },
-                    "unrendered_config_call_dict": {
-                      "type": "object",
-                      "propertyNames": {
-                        "type": "string"
-                      }
-                    },
                     "relation_name": {
                       "anyOf": [
                         {
@@ -11705,12 +11579,6 @@
                     "raw_code": {
                       "type": "string",
                       "default": ""
-                    },
-                    "vars": {
-                      "type": "object",
-                      "propertyNames": {
-                        "type": "string"
-                      }
                     },
                     "language": {
                       "type": "string",
@@ -12345,12 +12213,6 @@
                         "type": "string"
                       }
                     },
-                    "unrendered_config_call_dict": {
-                      "type": "object",
-                      "propertyNames": {
-                        "type": "string"
-                      }
-                    },
                     "relation_name": {
                       "anyOf": [
                         {
@@ -12365,12 +12227,6 @@
                     "raw_code": {
                       "type": "string",
                       "default": ""
-                    },
-                    "vars": {
-                      "type": "object",
-                      "propertyNames": {
-                        "type": "string"
-                      }
                     },
                     "language": {
                       "type": "string",
@@ -13142,12 +12998,6 @@
                         "type": "string"
                       }
                     },
-                    "unrendered_config_call_dict": {
-                      "type": "object",
-                      "propertyNames": {
-                        "type": "string"
-                      }
-                    },
                     "relation_name": {
                       "anyOf": [
                         {
@@ -13162,12 +13012,6 @@
                     "raw_code": {
                       "type": "string",
                       "default": ""
-                    },
-                    "vars": {
-                      "type": "object",
-                      "propertyNames": {
-                        "type": "string"
-                      }
                     },
                     "language": {
                       "type": "string",
@@ -13958,12 +13802,6 @@
                         "type": "string"
                       }
                     },
-                    "unrendered_config_call_dict": {
-                      "type": "object",
-                      "propertyNames": {
-                        "type": "string"
-                      }
-                    },
                     "relation_name": {
                       "anyOf": [
                         {
@@ -13978,12 +13816,6 @@
                     "raw_code": {
                       "type": "string",
                       "default": ""
-                    },
-                    "vars": {
-                      "type": "object",
-                      "propertyNames": {
-                        "type": "string"
-                      }
                     },
                     "language": {
                       "type": "string",
@@ -15325,12 +15157,6 @@
                         "type": "string"
                       }
                     },
-                    "unrendered_config_call_dict": {
-                      "type": "object",
-                      "propertyNames": {
-                        "type": "string"
-                      }
-                    },
                     "relation_name": {
                       "anyOf": [
                         {
@@ -15345,12 +15171,6 @@
                     "raw_code": {
                       "type": "string",
                       "default": ""
-                    },
-                    "vars": {
-                      "type": "object",
-                      "propertyNames": {
-                        "type": "string"
-                      }
                     },
                     "language": {
                       "type": "string",
@@ -15985,12 +15805,6 @@
                         "type": "string"
                       }
                     },
-                    "unrendered_config_call_dict": {
-                      "type": "object",
-                      "propertyNames": {
-                        "type": "string"
-                      }
-                    },
                     "relation_name": {
                       "anyOf": [
                         {
@@ -16005,12 +15819,6 @@
                     "raw_code": {
                       "type": "string",
                       "default": ""
-                    },
-                    "vars": {
-                      "type": "object",
-                      "propertyNames": {
-                        "type": "string"
-                      }
                     },
                     "language": {
                       "type": "string",
@@ -16949,12 +16757,6 @@
                         "type": "string"
                       }
                     },
-                    "unrendered_config_call_dict": {
-                      "type": "object",
-                      "propertyNames": {
-                        "type": "string"
-                      }
-                    },
                     "relation_name": {
                       "anyOf": [
                         {
@@ -16969,12 +16771,6 @@
                     "raw_code": {
                       "type": "string",
                       "default": ""
-                    },
-                    "vars": {
-                      "type": "object",
-                      "propertyNames": {
-                        "type": "string"
-                      }
                     },
                     "language": {
                       "type": "string",
@@ -18104,12 +17900,6 @@
                         "type": "string"
                       }
                     },
-                    "vars": {
-                      "type": "object",
-                      "propertyNames": {
-                        "type": "string"
-                      }
-                    },
                     "relation_name": {
                       "anyOf": [
                         {
@@ -18296,12 +18086,6 @@
                       "additionalProperties": true
                     },
                     "unrendered_config": {
-                      "type": "object",
-                      "propertyNames": {
-                        "type": "string"
-                      }
-                    },
-                    "vars": {
                       "type": "object",
                       "propertyNames": {
                         "type": "string"

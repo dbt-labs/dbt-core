@@ -369,9 +369,6 @@ class ParsedNode(ParsedResource, NodeInfoMixin, ParsedNodeMandatory, Serializabl
         # This would only apply to seeds
         return True
 
-    def same_vars(self, old) -> bool:
-        return self.vars == old.vars
-
     def same_contents(self, old, adapter_type) -> bool:
         if old is None:
             return False
@@ -379,20 +376,12 @@ class ParsedNode(ParsedResource, NodeInfoMixin, ParsedNodeMandatory, Serializabl
         # Need to ensure that same_contract is called because it
         # could throw an error
         same_contract = self.same_contract(old, adapter_type)
-
-        # Legacy behaviour
-        if not get_flags().state_modified_compare_vars:
-            same_vars = True
-        else:
-            same_vars = self.same_vars(old)
-
         return (
             self.same_body(old)
             and self.same_config(old)
             and self.same_persisted_description(old)
             and self.same_fqn(old)
             and self.same_database_representation(old)
-            and same_vars
             and same_contract
             and True
         )
@@ -1266,9 +1255,6 @@ class SourceDefinition(
             old.unrendered_config,
         )
 
-    def same_vars(self, other: "SourceDefinition") -> bool:
-        return self.vars == other.vars
-
     def same_contents(self, old: Optional["SourceDefinition"]) -> bool:
         # existing when it didn't before is a change!
         if old is None:
@@ -1282,12 +1268,6 @@ class SourceDefinition(
         # freshness changes are changes, I guess
         # metadata/tags changes are not "changes"
         # patching/description changes are not "changes"
-        # Legacy behaviour
-        if not get_flags().state_modified_compare_vars:
-            same_vars = True
-        else:
-            same_vars = self.same_vars(old)
-
         return (
             self.same_database_representation(old)
             and self.same_fqn(old)
@@ -1295,7 +1275,6 @@ class SourceDefinition(
             and self.same_quoting(old)
             and self.same_freshness(old)
             and self.same_external(old)
-            and same_vars
             and True
         )
 
@@ -1392,20 +1371,11 @@ class Exposure(GraphNode, ExposureResource):
             old.unrendered_config,
         )
 
-    def same_vars(self, old: "Exposure") -> bool:
-        return self.vars == old.vars
-
     def same_contents(self, old: Optional["Exposure"]) -> bool:
         # existing when it didn't before is a change!
         # metadata/tags changes are not "changes"
         if old is None:
             return True
-
-        # Legacy behaviour
-        if not get_flags().state_modified_compare_vars:
-            same_vars = True
-        else:
-            same_vars = self.same_vars(old)
 
         return (
             self.same_fqn(old)
@@ -1417,7 +1387,6 @@ class Exposure(GraphNode, ExposureResource):
             and self.same_label(old)
             and self.same_depends_on(old)
             and self.same_config(old)
-            and same_vars
             and True
         )
 
@@ -1669,7 +1638,6 @@ class ParsedNodePatch(ParsedPatch):
     latest_version: Optional[NodeVersion]
     constraints: List[Dict[str, Any]]
     deprecation_date: Optional[datetime]
-    vars: Dict[str, Any]
     time_spine: Optional[TimeSpine] = None
 
 

@@ -1,6 +1,5 @@
 import pickle
 import re
-from argparse import Namespace
 from dataclasses import replace
 
 import pytest
@@ -23,11 +22,6 @@ from tests.unit.utils import (
     assert_symmetric,
     replace_config,
 )
-
-
-@pytest.fixture
-def args_for_flags() -> Namespace:
-    return Namespace(state_modified_compare_vars=False)
 
 
 def norm_whitespace(string):
@@ -206,7 +200,6 @@ def basic_compiled_dict():
         },
         "unrendered_config": {},
         "unrendered_config_call_dict": {},
-        "vars": {},
         "config_call_dict": {},
         "access": "protected",
         "constraints": [],
@@ -527,7 +520,6 @@ def basic_compiled_schema_test_dict():
             "severity": "warn",
         },
         "unrendered_config_call_dict": {},
-        "vars": {},
         "config_call_dict": {},
     }
 
