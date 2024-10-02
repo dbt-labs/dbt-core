@@ -343,6 +343,7 @@ class ProjectFlags(ExtensibleDbtClassMixin):
     source_freshness_run_project_hooks: bool = False
     skip_nodes_if_on_run_start_fails: bool = False
     state_modified_compare_more_unrendered_values: bool = False
+    state_modified_compare_vars: bool = False
 
     @property
     def project_only_flags(self) -> Dict[str, Any]:
@@ -352,6 +353,7 @@ class ProjectFlags(ExtensibleDbtClassMixin):
             "source_freshness_run_project_hooks": self.source_freshness_run_project_hooks,
             "skip_nodes_if_on_run_start_fails": self.skip_nodes_if_on_run_start_fails,
             "state_modified_compare_more_unrendered_values": self.state_modified_compare_more_unrendered_values,
+            "state_modified_compare_vars": self.state_modified_compare_vars,
         }
 
 
