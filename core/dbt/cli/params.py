@@ -1,3 +1,4 @@
+from datetime import datetime
 from functools import update_wrapper
 from pathlib import Path
 
@@ -744,13 +745,17 @@ def validate_option_interactions(func):
         ctx = args[0]
         assert isinstance(ctx, click.Context)
 
-        if (
-            ctx.params.get("event_time_start") is not None
-            and ctx.params.get("event_time_end") is not None
-        ):
-            if ctx.params.get("event_time_start") >= ctx.params.get("event_time_end"):
+        event_time_start = ctx.params.get("event_time_start")
+        if event_time_start is not None:
+            event_time_end = ctx.params.get("event_time_end")
+
+            if event_time_end is not None and event_time_start >= event_time_end:
                 raise DbtRuntimeError(
                     "Value for `--event-time-end` must be less than `--event-time-end`"
+                )
+            elif event_time_start >= datetime.now():
+                raise DbtRuntimeError(
+                    "Value for `--event-time-start` must be less than the current time if `--event-time-end` is not specififed"
                 )
 
         return func(*args, **kwargs)
