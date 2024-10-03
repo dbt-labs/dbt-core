@@ -751,7 +751,7 @@ def validate_option_interactions(func):
 
             if event_time_end is not None and event_time_start >= event_time_end:
                 raise DbtRuntimeError(
-                    "Value for `--event-time-end` must be less than `--event-time-end`"
+                    "Value for `--event-time-start` must be less than `--event-time-end`"
                 )
             elif event_time_start >= datetime.now():
                 raise DbtRuntimeError(

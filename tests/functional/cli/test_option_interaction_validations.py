@@ -28,7 +28,8 @@ class TestEventTimeEndEventTimeStart:
             assert expect_pass
         except Exception as e:
             assert (
-                "Value for `--event-time-end` must be less than `--event-time-end`" in e.__str__()
+                "Value for `--event-time-start` must be less than `--event-time-end`"
+                in e.__str__()
             )
             assert not expect_pass
 
