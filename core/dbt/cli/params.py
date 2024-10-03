@@ -1,3 +1,4 @@
+from functools import update_wrapper
 from pathlib import Path
 
 import click
@@ -5,6 +6,7 @@ import click
 from dbt.cli.option_types import YAML, ChoiceTuple, Package, WarnErrorOptionsType
 from dbt.cli.options import MultiOption
 from dbt.cli.resolvers import default_profiles_dir, default_project_dir
+from dbt.exceptions import DbtRuntimeError
 from dbt.version import get_version_information
 
 add_package = click.option(
@@ -735,3 +737,22 @@ show_resource_report = click.option(
     envvar="DBT_SHOW_RESOURCE_REPORT",
     hidden=True,
 )
+
+
+def validate_option_interactions(func):
+    def wrapper(*args, **kwargs):
+        ctx = args[0]
+        assert isinstance(ctx, click.Context)
+
+        if (
+            ctx.params.get("event_time_start") is not None
+            and ctx.params.get("event_time_end") is not None
+        ):
+            if ctx.params.get("event_time_start") >= ctx.params.get("event_time_end"):
+                raise DbtRuntimeError(
+                    "Value for `--event-time-end` must be less than `--event-time-end`"
+                )
+
+        return func(*args, **kwargs)
+
+    return update_wrapper(wrapper, func)
