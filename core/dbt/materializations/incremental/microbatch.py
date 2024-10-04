@@ -81,7 +81,7 @@ class MicrobatchBuilder:
         )
 
         batches: List[BatchType] = [(curr_batch_start, curr_batch_end)]
-        while curr_batch_end <= end:
+        while curr_batch_end < end:
             curr_batch_start = curr_batch_end
             curr_batch_end = MicrobatchBuilder.offset_timestamp(curr_batch_start, batch_size, 1)
             batches.append((curr_batch_start, curr_batch_end))
