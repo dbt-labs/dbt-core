@@ -7,6 +7,7 @@ from pathlib import Path
 from pprint import pformat as pf
 from typing import Any, Callable, Dict, List, Optional, Set, Union
 
+import pytz
 from click import Context, Parameter, get_current_context
 from click.core import Command as ClickCommand
 from click.core import Group, ParameterSource
@@ -354,21 +355,24 @@ class Flags:
                 set_flag = flag
 
     def _validate_event_time_configs(self) -> None:
-        event_time_start = (
+        event_time_start: datetime = (
             getattr(self, "EVENT_TIME_START") if hasattr(self, "EVENT_TIME_START") else None
         )
-        if event_time_start is not None:
-            event_time_end = (
-                getattr(self, "EVENT_TIME_END") if hasattr(self, "EVENT_TIME_END") else None
-            )
+        event_time_end: datetime = (
+            getattr(self, "EVENT_TIME_END") if hasattr(self, "EVENT_TIME_END") else None
+        )
 
-            if event_time_end is not None and event_time_start >= event_time_end:
+        if event_time_start is not None and event_time_end is not None:
+            if event_time_start >= event_time_end:
                 raise DbtUsageException(
                     "Value for `--event-time-start` must be less than `--event-time-end`"
                 )
-            elif event_time_start >= datetime.now():
+        elif event_time_start is not None:
+            utc_start = event_time_start.replace(tzinfo=pytz.UTC)
+            current_time = datetime.now(pytz.UTC)
+            if utc_start >= current_time:
                 raise DbtUsageException(
-                    "Value for `--event-time-start` must be less than the current time if `--event-time-end` is not specififed"
+                    f"Value for `--event-time-start` ({utc_start}) must be less than the current time ({current_time}) if `--event-time-end` is not specififed"
                 )
 
     def fire_deprecations(self):

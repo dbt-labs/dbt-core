@@ -48,8 +48,5 @@ class TestEventTimeStartCurrent_time:
                 run_dbt(["build", "--event-time-start", event_time_start])
                 assert expect_pass
             except Exception as e:
-                assert (
-                    "Value for `--event-time-start` must be less than the current time if `--event-time-end` is not specififed"
-                    in e.__str__()
-                )
+                assert "must be less than the current time" in e.__str__()
                 assert not expect_pass
