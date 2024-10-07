@@ -1,6 +1,7 @@
 import os
 import sys
 from dataclasses import dataclass
+from datetime import datetime
 from importlib import import_module
 from pathlib import Path
 from pprint import pformat as pf
@@ -313,6 +314,9 @@ class Flags:
         self._assert_mutually_exclusive(params_assigned_from_default, ["SELECT", "INLINE"])
         self._assert_mutually_exclusive(params_assigned_from_default, ["SELECTOR", "INLINE"])
 
+        # Check event_time configs for validity
+        self._validate_event_time_configs()
+
         # Support lower cased access for legacy code.
         params = set(
             x for x in dir(self) if not callable(getattr(self, x)) and not x.startswith("__")
@@ -348,6 +352,24 @@ class Flags:
                 )
             elif flag_set_by_user:
                 set_flag = flag
+
+    def _validate_event_time_configs(self) -> None:
+        event_time_start = (
+            getattr(self, "EVENT_TIME_START") if hasattr(self, "EVENT_TIME_START") else None
+        )
+        if event_time_start is not None:
+            event_time_end = (
+                getattr(self, "EVENT_TIME_END") if hasattr(self, "EVENT_TIME_END") else None
+            )
+
+            if event_time_end is not None and event_time_start >= event_time_end:
+                raise DbtUsageException(
+                    "Value for `--event-time-start` must be less than `--event-time-end`"
+                )
+            elif event_time_start >= datetime.now():
+                raise DbtUsageException(
+                    "Value for `--event-time-start` must be less than the current time if `--event-time-end` is not specififed"
+                )
 
     def fire_deprecations(self):
         """Fires events for deprecated env_var usage."""

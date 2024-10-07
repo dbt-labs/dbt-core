@@ -187,7 +187,6 @@ def cli(ctx, **kwargs):
 @p.vars
 @requires.postflight
 @requires.preflight
-@p.validate_option_interactions
 @requires.profile
 @requires.project
 @requires.runtime_config
@@ -562,7 +561,6 @@ def parse(ctx, **kwargs):
 @p.vars
 @requires.postflight
 @requires.preflight
-@p.validate_option_interactions
 @requires.profile
 @requires.project
 @requires.runtime_config

@@ -1,5 +1,3 @@
-from datetime import datetime
-from functools import update_wrapper
 from pathlib import Path
 
 import click
@@ -7,7 +5,6 @@ import click
 from dbt.cli.option_types import YAML, ChoiceTuple, Package, WarnErrorOptionsType
 from dbt.cli.options import MultiOption
 from dbt.cli.resolvers import default_profiles_dir, default_project_dir
-from dbt.exceptions import DbtRuntimeError
 from dbt.version import get_version_information
 
 add_package = click.option(
@@ -738,26 +735,3 @@ show_resource_report = click.option(
     envvar="DBT_SHOW_RESOURCE_REPORT",
     hidden=True,
 )
-
-
-def validate_option_interactions(func):
-    def wrapper(*args, **kwargs):
-        ctx = args[0]
-        assert isinstance(ctx, click.Context)
-
-        event_time_start = ctx.params.get("event_time_start")
-        if event_time_start is not None:
-            event_time_end = ctx.params.get("event_time_end")
-
-            if event_time_end is not None and event_time_start >= event_time_end:
-                raise DbtRuntimeError(
-                    "Value for `--event-time-start` must be less than `--event-time-end`"
-                )
-            elif event_time_start >= datetime.now():
-                raise DbtRuntimeError(
-                    "Value for `--event-time-start` must be less than the current time if `--event-time-end` is not specififed"
-                )
-
-        return func(*args, **kwargs)
-
-    return update_wrapper(wrapper, func)
