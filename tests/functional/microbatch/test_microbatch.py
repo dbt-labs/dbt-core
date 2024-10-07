@@ -93,6 +93,11 @@ downstream_model_of_microbatch_sql = """
 SELECT * FROM {{ ref('microbatch_model') }}
 """
 
+microbatch_model_full_refresh_false_sql = """
+{{ config(materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='day', begin=modules.datetime.datetime(2020, 1, 1, 0, 0, 0), full_refresh=False) }}
+select * from {{ ref('input_model') }}
+"""
+
 
 class BaseMicrobatchCustomUserStrategy:
     @pytest.fixture(scope="class")
@@ -480,6 +485,44 @@ class TestMicrobatchRetriesPartialSuccesses(BaseMicrobatchTest):
         self.assert_row_count(project, "microbatch_model", 3)
 
 
+class TestMicrobatchMultipleRetries(BaseMicrobatchTest):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "input_model.sql": input_model_sql,
+            "microbatch_model.sql": microbatch_model_failing_incremental_partition_sql,
+        }
+
+    @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
+    def test_run_with_event_time(self, project):
+        # run all partitions from start - 2 expected rows in output, one failed
+        with patch_microbatch_end_time("2020-01-03 13:57:00"):
+            _, console_output = run_dbt_and_capture(["run", "--event-time-start", "2020-01-01"])
+
+        assert "PARTIAL SUCCESS (2/3)" in console_output
+        assert "Completed with 1 partial success" in console_output
+
+        self.assert_row_count(project, "microbatch_model", 2)
+
+        with patch_microbatch_end_time("2020-01-03 13:57:00"):
+            _, console_output = run_dbt_and_capture(["retry"], expect_pass=False)
+
+        assert "PARTIAL SUCCESS" not in console_output
+        assert "ERROR" in console_output
+        assert "Completed with 1 error, 0 partial successs, and 0 warnings" in console_output
+
+        self.assert_row_count(project, "microbatch_model", 2)
+
+        with patch_microbatch_end_time("2020-01-03 13:57:00"):
+            _, console_output = run_dbt_and_capture(["retry"], expect_pass=False)
+
+        assert "PARTIAL SUCCESS" not in console_output
+        assert "ERROR" in console_output
+        assert "Completed with 1 error, 0 partial successs, and 0 warnings" in console_output
+
+        self.assert_row_count(project, "microbatch_model", 2)
+
+
 microbatch_model_first_partition_failing_sql = """
 {{ config(materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='day', begin=modules.datetime.datetime(2020, 1, 1, 0, 0, 0)) }}
 {% if '2020-01-01' in (model.config.__dbt_internal_microbatch_event_time_start | string) %}
@@ -578,3 +621,39 @@ class TestMicrobatchCompiledRunPaths(BaseMicrobatchTest):
             "microbatch_model",
             "microbatch_model_2020-01-03.sql",
         )
+
+
+class TestMicrobatchFullRefreshConfigFalse(BaseMicrobatchTest):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "input_model.sql": input_model_sql,
+            "microbatch_model.sql": microbatch_model_full_refresh_false_sql,
+            "downstream_model.sql": downstream_model_of_microbatch_sql,
+        }
+
+    @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
+    def test_run_with_event_time(self, project):
+        # run all partitions from 2020-01-02 to spoofed "now" - 2 expected rows in output
+        with patch_microbatch_end_time("2020-01-03 13:57:00"):
+            run_dbt(["run", "--event-time-start", "2020-01-02"])
+        self.assert_row_count(project, "microbatch_model", 2)
+
+        # re-running shouldn't change what it's in the data set because there is nothing new
+        with patch_microbatch_end_time("2020-01-03 13:57:00"):
+            run_dbt(["run"])
+        self.assert_row_count(project, "microbatch_model", 2)
+
+        # running with --full-refresh shouldn't pick up 2020-01-01 BECAUSE the model has
+        # full_refresh = false
+        with patch_microbatch_end_time("2020-01-03 13:57:00"):
+            run_dbt(["run", "--full-refresh"])
+        self.assert_row_count(project, "microbatch_model", 2)
+
+        # update the microbatch model to no longer have full_refresh=False config
+        write_file(microbatch_model_sql, project.project_root, "models", "microbatch_model.sql")
+
+        # running with full refresh should now pick up the 2020-01-01 data
+        with patch_microbatch_end_time("2020-01-03 13:57:00"):
+            run_dbt(["run", "--full-refresh"])
+        self.assert_row_count(project, "microbatch_model", 3)

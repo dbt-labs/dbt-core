@@ -29,8 +29,7 @@ class BaseTestStateSelectionJinjaInConfig(BaseModifiedState):
     def update_jinja_expression_in_config(self, project):
         pass
 
-    def test_change_target_jinja_if(self, project, dbt_profile_data, profiles_root):
-        # Generate ./state without changing target.name
+    def test_change_jinja_if(self, project):
         run_dbt(["run"])
         self.copy_state()
         # Model is table when execute = True

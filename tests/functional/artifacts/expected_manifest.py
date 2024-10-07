@@ -808,6 +808,8 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "unique_id": "source.test.my_source.my_table",
                 "fqn": ["test", "my_source", "my_table"],
                 "unrendered_config": {},
+                "unrendered_database": None,
+                "unrendered_schema": "{{ var('test_schema') }}",
             },
         },
         "exposures": {
@@ -1310,6 +1312,8 @@ def expected_references_manifest(project):
                 "unique_id": "source.test.my_source.my_table",
                 "fqn": ["test", "my_source", "my_table"],
                 "unrendered_config": {},
+                "unrendered_database": None,
+                "unrendered_schema": "{{ var('test_schema') }}",
             },
         },
         "exposures": {

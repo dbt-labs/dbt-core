@@ -65,8 +65,12 @@ from tests.unit.utils import (
 
 
 @pytest.fixture
-def flags_for_args() -> Namespace:
-    return Namespace(SEND_ANONYMOUS_USAGE_STATS=False)
+def args_for_flags() -> Namespace:
+    return Namespace(
+        send_anonymous_usage_stats=False,
+        state_modified_compare_more_unrendered_values=False,
+        state_modified_compare_vars=False,
+    )
 
 
 @pytest.fixture

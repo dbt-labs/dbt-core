@@ -129,12 +129,12 @@ class SuccessfulSourceFreshnessTest(BaseSourcesTest):
         ]
 
     def _assert_project_hooks_called(self, logs: str):
-        assert "Running 1 on-run-start hook" in logs
-        assert "Running 1 on-run-end hook" in logs
+        assert "test.on-run-start.0" in logs
+        assert "test.on-run-start.0" in logs
 
     def _assert_project_hooks_not_called(self, logs: str):
-        assert "Running 1 on-run-start hook" not in logs
-        assert "Running 1 on-run-end hook" not in logs
+        assert "test.on-run-end.0" not in logs
+        assert "test.on-run-end.0" not in logs
 
 
 class TestSourceFreshness(SuccessfulSourceFreshnessTest):
