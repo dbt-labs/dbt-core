@@ -1285,6 +1285,12 @@ models:
               values: ['blue', 'red']
               config:
                 custom_config_key: some_value
+          - custom_color_from_config:
+              severity: error
+              config:
+                test_color: orange
+                store_failures: true
+                unlogged: True
 """
 
 mixed_config_yml = """
@@ -1296,9 +1302,13 @@ models:
         data_tests:
           - accepted_values:
               values: ['blue', 'red']
-              severity: warn
               config:
                 custom_config_key: some_value
+                severity: warn
+          - custom_color_from_config:
+              severity: error
+              config:
+                test_color: blue
 """
 
 same_key_error_yml = """
@@ -1332,4 +1342,11 @@ id,color,value
 table_sql = """
 -- content of the table.sql
 select * from {{ ref('seed') }}
+"""
+
+test_custom_color_from_config = """
+{% test custom_color_from_config(model, column_name) %}
+    select * from {{ model }}
+    where color = '{{ config.get('test_color') }}'
+{% endtest %}
 """

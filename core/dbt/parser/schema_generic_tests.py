@@ -200,6 +200,8 @@ class SchemaGenericTestParser(SimpleParser):
 
         # this is the ContextConfig that is used in render_update
         config: ContextConfig = self.initial_config(fqn)
+        # Adding the builder's config to the ContextConfig
+        # is needed to ensure the config makes it to the pre_model hook which dbt-snowflake needs
         config.add_config_call(builder.config)
         # builder.args contains keyword args for the test macro,
         # not configs which have been separated out in the builder.
