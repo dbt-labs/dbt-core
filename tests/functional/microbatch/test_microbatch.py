@@ -194,9 +194,15 @@ class TestMicrobatchCLI(BaseMicrobatchTest):
             run_dbt(["run"], callbacks=[catcher.catch])
         self.assert_row_count(project, "microbatch_model", 3)
 
+        assert len(catcher.caught_events) == 5
+        batch_creation_events = 0
         for caught_event in catcher.caught_events:
-            if "batch" in caught_event.data.description:
+            if "batch 2020" in caught_event.data.description:
+                batch_creation_events += 1
                 assert caught_event.data.execution_time > 0
+        # 3 batches should have been run, so there should be 3 batch
+        # creation events
+        assert batch_creation_events == 3
 
         # build model >= 2020-01-02
         with patch_microbatch_end_time("2020-01-03 13:57:00"):
