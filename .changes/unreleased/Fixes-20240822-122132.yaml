@@ -1,0 +1,6 @@
+kind: Fixes
+body: dbt retry does not respect --threads
+time: 2024-08-22T12:21:32.358066+05:30
+custom:
+    Author: donjin-master
+    Issue: "10584"
