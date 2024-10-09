@@ -159,13 +159,15 @@ class TestRunner(CompileRunner):
                 "Invalid materialization context generated, missing config: {}".format(context)
             )
 
+        context_config = context["config"]
+
         # generate materialization macro
         macro_func = MacroGenerator(materialization_macro, context)
         try:
             # execute materialization macro
             macro_func()
         finally:
-            self.adapter.post_model_hook(context, hook_ctx)
+            self.adapter.post_model_hook(context_config, hook_ctx)
 
         # load results from context
         # could eventually be returned directly by materialization
@@ -238,6 +240,8 @@ class TestRunner(CompileRunner):
                 "Invalid materialization context generated, missing config: {}".format(context)
             )
 
+        context_config = context["config"]
+
         # generate materialization macro
         macro_func = MacroGenerator(materialization_macro, context)
         try:
@@ -249,7 +253,7 @@ class TestRunner(CompileRunner):
                 f"There may be an error in the unit test definition: check the data types.\n {e}"
             )
         finally:
-            self.adapter.post_model_hook(context, hook_ctx)
+            self.adapter.post_model_hook(context_config, hook_ctx)
 
         # load results from context
         # could eventually be returned directly by materialization
