@@ -18,7 +18,7 @@ _TESTING_MACRO_CACHE: Dict[str, Any] = {}
 
 
 def statically_extract_macro_calls(
-    source: str, ctx: Dict[str, Any], db_wrapper: Optional[ParseDatabaseWrapper] = None
+    source: str, ctx: Dict[str, Any], db_wrapper: Optional["ParseDatabaseWrapper"] = None
 ) -> List[str]:
     # set 'capture_macros' to capture undefined
     env = get_environment(None, capture_macros=True)
@@ -77,7 +77,7 @@ def statically_extract_macro_calls(
 
 
 def statically_parse_adapter_dispatch(
-    func_call, ctx: Dict[str, Any], db_wrapper: Optional[ParseDatabaseWrapper]
+    func_call, ctx: Dict[str, Any], db_wrapper: Optional["ParseDatabaseWrapper"]
 ) -> List[str]:
     possible_macro_calls = []
     # This captures an adapter.dispatch('<macro_name>') call.
