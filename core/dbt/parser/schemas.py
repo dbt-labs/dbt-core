@@ -550,12 +550,14 @@ class PatchParser(YamlReader, Generic[NonSourceTarget, Parsed]):
         versioned_test_blocks: List[VersionedTestBlock] = []
 
         # get list of 'node' objects
-        # UnparsedNodeUpdate (TestablePatchParser, models, seeds, snapshots)
+        # UnparsedNodeUpdate (TestablePatchParser, seeds, snapshots)
         #      = HasColumnTests, HasTests
         # UnparsedAnalysisUpdate (UnparsedAnalysisParser, analyses)
         #      = HasColumnDocs, HasDocs
         # UnparsedMacroUpdate (MacroPatchParser, 'macros')
         #      = HasDocs
+        # UnparsedModelUpdate (ModelPatchParser, models)
+        #      = HasColumnTests, HasTests
         # correspond to this parser's 'key'
         for node in self.get_unparsed_target():
             # node_block is a TargetBlock (Macro or Analysis)
@@ -655,7 +657,7 @@ class PatchParser(YamlReader, Generic[NonSourceTarget, Parsed]):
         # Raise a validation error if the user has defined both names
         def validate_and_rename(data, is_root_project: bool) -> None:
             if data.get("tests"):
-                if "tests" in data and "data_tests" in data:
+                if data.get("data_tests"):
                     raise ValidationError(
                         "Invalid test config: cannot have both 'tests' and 'data_tests' defined"
                     )

@@ -394,9 +394,8 @@ class TestInvalidEnabledConfig:
             "my_model.sql": my_model,
         }
 
-    def test_invalis_config(self, project):
+    def test_invalid_config(self, project):
         with pytest.raises(ValidationError) as exc:
             run_dbt(["parse"])
-        exc_str = " ".join(str(exc.value).split())  # flatten all whitespace
-        expected_msg = "'True and False' is not of type 'boolean'"
-        assert expected_msg in exc_str
+        expected_msg = "Invalid value 'True and False': data.enabled must be boolean"
+        assert expected_msg in exc.value.msg
