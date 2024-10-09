@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix missing meta config in test log messages
+time: 2024-10-02T15:57:26.594034+01:00
+custom:
+    Author: tomwphillips
+    Issue: "10811"

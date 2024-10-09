@@ -277,3 +277,30 @@ class TestRunResultWarningGroup:
                 run_result_warning_count += 1
 
         assert run_result_warning_count == 1
+
+
+class TestRunResultMeta:
+    @pytest.fixture(scope="class")
+    def models(self):
+        model_config = """
+        models:
+          - name: my_model
+            meta:
+              owner: analytics
+            columns:
+              - name: id
+                tests:
+                  - not_null
+        """
+        return {"my_model.sql": "select null as id", "models.yml": model_config}
+
+    def test_test_failures_include_meta_from_model_config(self, project, logs_dir):
+        results = run_dbt(["--log-format=json", "build"], expect_pass=False)
+        assert len(results) == 2
+
+        log_file = read_file(logs_dir, "dbt.log")
+        messages = [json.loads(line) for line in log_file.split("\n") if line]
+        [
+            test_result,
+        ] = [message for message in messages if message["info"]["name"] == "LogTestResult"]
+        assert test_result["data"]["node_info"]["meta"] == {"owner": "analytics"}
