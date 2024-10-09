@@ -1,14 +1,18 @@
+import typing
 from typing import Any, Dict, List, Optional, Union
 
 import jinja2
 
 from dbt.artifacts.resources import RefArgs
-from dbt.context.providers import ParseDatabaseWrapper
 from dbt.exceptions import MacroNamespaceNotStringError, ParsingError
 from dbt_common.clients.jinja import get_environment
 from dbt_common.exceptions.macros import MacroNameNotStringError
 from dbt_common.tests import test_caching_enabled
 from dbt_extractor import ExtractionError, py_extract_from_source  # type: ignore
+
+if typing.TYPE_CHECKING:
+    from dbt.context.providers import ParseDatabaseWrapper
+
 
 _TESTING_MACRO_CACHE: Dict[str, Any] = {}
 
