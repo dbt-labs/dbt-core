@@ -134,5 +134,5 @@ class TestInvalidSnapshotsMaterializationSchema(object):
         )
         write_file(simple_snapshot, snapshots_dir, "mysnapshot.sql")
 
-        with pytest.raises(SchemaConfigError):
+        with pytest.raises(ValidationError):
             run_dbt()
