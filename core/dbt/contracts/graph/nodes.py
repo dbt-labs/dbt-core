@@ -60,7 +60,7 @@ from dbt.artifacts.resources import SourceDefinition as SourceDefinitionResource
 from dbt.artifacts.resources import SqlOperation as SqlOperationResource
 from dbt.artifacts.resources import TimeSpine
 from dbt.artifacts.resources import UnitTestDefinition as UnitTestDefinitionResource
-from dbt.artifacts.schemas.batch_results import BatchType
+from dbt.artifacts.schemas.batch_results import BatchResults
 from dbt.contracts.graph.model_config import UnitTestNodeConfig
 from dbt.contracts.graph.node_args import ModelNodeArgs
 from dbt.contracts.graph.unparsed import (
@@ -443,7 +443,7 @@ class HookNode(HookNodeResource, CompiledNode):
 
 @dataclass
 class ModelNode(ModelResource, CompiledNode):
-    batches: Optional[List[BatchType]] = None
+    batch_info: Optional[BatchResults] = None
 
     @classmethod
     def resource_class(cls) -> Type[ModelResource]:
@@ -1225,12 +1225,16 @@ class SourceDefinition(
         return SourceDefinitionResource
 
     def same_database_representation(self, other: "SourceDefinition") -> bool:
-        return (
-            self.database == other.database
-            and self.schema == other.schema
-            and self.identifier == other.identifier
-            and True
-        )
+
+        # preserve legacy behaviour -- use potentially rendered database
+        if get_flags().state_modified_compare_more_unrendered_values is False:
+            same_database = self.database == other.database
+            same_schema = self.schema == other.schema
+        else:
+            same_database = self.unrendered_database == other.unrendered_database
+            same_schema = self.unrendered_schema == other.unrendered_schema
+
+        return same_database and same_schema and self.identifier == other.identifier and True
 
     def same_quoting(self, other: "SourceDefinition") -> bool:
         return self.quoting == other.quoting
@@ -1473,7 +1477,7 @@ class Group(GroupResource, BaseNode):
         return {
             "name": self.name,
             "package_name": self.package_name,
-            "owner": self.owner.to_dict(),
+            "owner": self.owner.to_dict(omit_none=True),
         }
 
 
@@ -1674,6 +1678,7 @@ ManifestNode = Union[
 ResultNode = Union[
     ManifestNode,
     SourceDefinition,
+    HookNode,
 ]
 
 # All nodes that can be in the DAG
@@ -1696,6 +1701,7 @@ Resource = Union[
 
 TestNode = Union[SingularTestNode, GenericTestNode]
 
+SemanticManifestNode = Union[SavedQuery, SemanticModel, Metric]
 
 RESOURCE_CLASS_TO_NODE_CLASS: Dict[Type[BaseResource], Type[BaseNode]] = {
     node_class.resource_class(): node_class

@@ -30,3 +30,9 @@ data_tests:
   - name: my_double_test
     description: documentation, but make it double
 """
+
+tests__malformed_schema_yml = """
+data_tests: &not_null
+  - not_null:
+      where: some_condition
+"""

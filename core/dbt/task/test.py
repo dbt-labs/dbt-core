@@ -45,6 +45,7 @@ from dbt_common.events.functions import fire_event
 from dbt_common.exceptions import DbtBaseException, DbtRuntimeError
 from dbt_common.ui import green, red
 
+from . import group_lookup
 from .compile import CompileRunner
 from .run import RunTask
 
@@ -93,7 +94,6 @@ class UnitTestResultData(dbtClassMixin):
 
 class TestRunner(CompileRunner):
     _ANSI_ESCAPE = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
-    _LOG_TEST_RESULT_EVENTS = LogTestResult
 
     def describe_node_name(self) -> str:
         if self.node.resource_type == NodeType.Unit:
@@ -107,9 +107,13 @@ class TestRunner(CompileRunner):
 
     def print_result_line(self, result):
         model = result.node
+        group = group_lookup.get(model.unique_id)
+        attached_node = (
+            result.node.attached_node if isinstance(result.node, GenericTestNode) else None
+        )
 
         fire_event(
-            self._LOG_TEST_RESULT_EVENTS(
+            LogTestResult(
                 name=self.describe_node_name(),
                 status=str(result.status),
                 index=self.node_index,
@@ -117,6 +121,8 @@ class TestRunner(CompileRunner):
                 execution_time=result.execution_time,
                 node_info=model.node_info,
                 num_failures=result.failures,
+                group=group,
+                attached_node=attached_node,
             ),
             level=LogTestResult.status_to_level(str(result.status)),
         )
@@ -298,7 +304,7 @@ class TestRunner(CompileRunner):
             failures = result.failures
         elif result.should_warn:
             if get_flags().WARN_ERROR or get_flags().WARN_ERROR_OPTIONS.includes(
-                self._LOG_TEST_RESULT_EVENTS.__name__
+                LogTestResult.__name__
             ):
                 status = TestStatus.Fail
                 message = f"Got {num_errors}, configured to fail if {test.config.warn_if}"

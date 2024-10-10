@@ -5,7 +5,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar, copy_context
 from datetime import datetime
 from io import StringIO
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 from unittest import mock
 
 import pytz
@@ -17,7 +17,7 @@ from dbt.cli.main import dbtRunner
 from dbt.contracts.graph.manifest import Manifest
 from dbt.materializations.incremental.microbatch import MicrobatchBuilder
 from dbt_common.context import _INVOCATION_CONTEXT_VAR, InvocationContext
-from dbt_common.events.base_types import EventLevel
+from dbt_common.events.base_types import EventLevel, EventMsg
 from dbt_common.events.functions import (
     capture_stdout_logs,
     fire_event,
@@ -76,6 +76,7 @@ from dbt_common.events.types import Note
 def run_dbt(
     args: Optional[List[str]] = None,
     expect_pass: bool = True,
+    callbacks: Optional[List[Callable[[EventMsg], None]]] = None,
 ):
     # reset global vars
     reset_metadata_vars()
@@ -93,7 +94,7 @@ def run_dbt(
         args.extend(["--project-dir", project_dir])
     if profiles_dir and "--profiles-dir" not in args:
         args.extend(["--profiles-dir", profiles_dir])
-    dbt = dbtRunner()
+    dbt = dbtRunner(callbacks=callbacks)
 
     res = dbt.invoke(args)
 

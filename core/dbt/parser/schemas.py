@@ -67,7 +67,9 @@ from dbt.parser.search import FileBlock
 from dbt.utils import coerce_dict_str
 from dbt_common.contracts.constraints import ConstraintType, ModelLevelConstraint
 from dbt_common.dataclass_schema import ValidationError, dbtClassMixin
-from dbt_common.events.functions import warn_or_error
+from dbt_common.events import EventLevel
+from dbt_common.events.functions import fire_event, warn_or_error
+from dbt_common.events.types import Note
 from dbt_common.exceptions import DbtValidationError
 from dbt_common.utils import deep_merge
 
@@ -211,7 +213,15 @@ class SchemaParser(SimpleParser[YamlBlock, ModelNode]):
 
             if "data_tests" in dct:
                 parser = SingularTestPatchParser(self, yaml_block, "data_tests")
-                parser.parse()
+                try:
+                    parser.parse()
+                except ParsingError as e:
+                    fire_event(
+                        Note(
+                            msg=f"Unable to parse 'data_tests' section of file '{block.path.original_file_path}'\n{e}",
+                        ),
+                        EventLevel.WARN,
+                    )
 
             # PatchParser.parse() (but never test_blocks)
             if "analyses" in dct:
@@ -395,6 +405,10 @@ class YamlReader(metaclass=ABCMeta):
                     if "v" in version:
                         unrendered_version_configs[version["v"]] = version.get("config", {})
 
+            # For sources
+            unrendered_database = entry.get("database", None)
+            unrendered_schema = entry.get("schema", None)
+
             # Render the data (except for tests, data_tests and descriptions).
             # See the SchemaYamlRenderer
             entry = self.render_entry(entry)
@@ -409,6 +423,11 @@ class YamlReader(metaclass=ABCMeta):
                 schema_file.add_unrendered_config(
                     unrendered_version_config, self.key, entry["name"], version
                 )
+
+            if unrendered_database:
+                schema_file.add_unrendered_database(self.key, entry["name"], unrendered_database)
+            if unrendered_schema:
+                schema_file.add_unrendered_schema(self.key, entry["name"], unrendered_schema)
 
             if self.schema_yaml_vars.env_vars:
                 self.schema_parser.manifest.env_vars.update(self.schema_yaml_vars.env_vars)
@@ -470,6 +489,15 @@ class SourceParser(YamlReader):
                 source_file.source_patches.append(key)
             else:
                 source = self._target_from_dict(UnparsedSourceDefinition, data)
+                # Store unrendered_database and unrendered_schema for state:modified comparisons
+                if isinstance(self.yaml.file, SchemaSourceFile):
+                    source.unrendered_database = self.yaml.file.get_unrendered_database(
+                        "sources", source.name
+                    )
+                    source.unrendered_schema = self.yaml.file.get_unrendered_schema(
+                        "sources", source.name
+                    )
+
                 self.add_source_definitions(source)
         return ParseResult()
 
