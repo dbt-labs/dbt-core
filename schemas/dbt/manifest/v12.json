@@ -6685,6 +6685,17 @@
                       }
                     },
                     "additionalProperties": false
+                  },
+                  "dbt_valid_to_current": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
                   }
                 },
                 "additionalProperties": true
@@ -16511,6 +16522,17 @@
                             }
                           },
                           "additionalProperties": false
+                        },
+                        "dbt_valid_to_current": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null
                         }
                       },
                       "additionalProperties": true

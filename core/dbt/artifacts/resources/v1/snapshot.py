@@ -28,6 +28,7 @@ class SnapshotConfig(NodeConfig):
     snapshot_meta_column_names: SnapshotMetaColumnNames = field(
         default_factory=SnapshotMetaColumnNames
     )
+    dbt_valid_to_current: Optional[str] = None
 
     @property
     def snapshot_table_column_names(self):
