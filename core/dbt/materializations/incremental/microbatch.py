@@ -65,9 +65,15 @@ class MicrobatchBuilder:
             return MicrobatchBuilder.truncate_timestamp(self.model.config.begin, batch_size)
 
         lookback = self.model.config.lookback
-        start = MicrobatchBuilder.offset_timestamp(checkpoint, batch_size, -1 * lookback)
 
-        return start
+        # If the checkpoint is equivalent to itself truncated then the checkpoint stradles
+        # the batch line. In this case the last batch will end with the checkpoint, but start
+        # should be the previous hour/day/month/year. Thus we need to increase the lookback by
+        # 1 to get this affect properly.
+        if checkpoint == MicrobatchBuilder.truncate_timestamp(checkpoint, batch_size):
+            lookback += 1
+
+        return MicrobatchBuilder.offset_timestamp(checkpoint, batch_size, -1 * lookback)
 
     def build_batches(self, start: datetime, end: datetime) -> List[BatchType]:
         """
@@ -81,7 +87,7 @@ class MicrobatchBuilder:
         )
 
         batches: List[BatchType] = [(curr_batch_start, curr_batch_end)]
-        while curr_batch_end <= end:
+        while curr_batch_end < end:
             curr_batch_start = curr_batch_end
             curr_batch_end = MicrobatchBuilder.offset_timestamp(curr_batch_start, batch_size, 1)
             batches.append((curr_batch_start, curr_batch_end))

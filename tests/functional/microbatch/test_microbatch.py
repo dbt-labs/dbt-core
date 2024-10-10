@@ -3,6 +3,7 @@ from unittest import mock
 
 import pytest
 
+from dbt.events.types import LogModelResult
 from dbt.tests.util import (
     get_artifact,
     patch_microbatch_end_time,
@@ -12,6 +13,7 @@ from dbt.tests.util import (
     run_dbt_and_capture,
     write_file,
 )
+from tests.utils import EventCatcher
 
 input_model_sql = """
 {{ config(materialized='table', event_time='event_time') }}
@@ -186,9 +188,21 @@ class TestMicrobatchCLI(BaseMicrobatchTest):
     @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
     def test_run_with_event_time(self, project):
         # run without --event-time-start or --event-time-end - 3 expected rows in output
+        catcher = EventCatcher(event_to_catch=LogModelResult)
+
         with patch_microbatch_end_time("2020-01-03 13:57:00"):
-            run_dbt(["run"])
+            run_dbt(["run"], callbacks=[catcher.catch])
         self.assert_row_count(project, "microbatch_model", 3)
+
+        assert len(catcher.caught_events) == 5
+        batch_creation_events = 0
+        for caught_event in catcher.caught_events:
+            if "batch 2020" in caught_event.data.description:
+                batch_creation_events += 1
+                assert caught_event.data.execution_time > 0
+        # 3 batches should have been run, so there should be 3 batch
+        # creation events
+        assert batch_creation_events == 3
 
         # build model >= 2020-01-02
         with patch_microbatch_end_time("2020-01-03 13:57:00"):

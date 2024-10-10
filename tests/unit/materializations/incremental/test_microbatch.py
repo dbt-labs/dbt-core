@@ -245,6 +245,70 @@ class TestMicrobatchBuilder:
                 1,
                 datetime(2024, 9, 5, 7, 0, 0, 0, pytz.UTC),
             ),
+            (
+                True,
+                None,
+                datetime(2024, 9, 5, 0, 0, 0, 0, pytz.UTC),
+                BatchSize.hour,
+                0,
+                datetime(2024, 9, 4, 23, 0, 0, 0, pytz.UTC),
+            ),
+            (
+                True,
+                None,
+                datetime(2024, 9, 5, 0, 0, 0, 0, pytz.UTC),
+                BatchSize.hour,
+                1,
+                datetime(2024, 9, 4, 22, 0, 0, 0, pytz.UTC),
+            ),
+            (
+                True,
+                None,
+                datetime(2024, 9, 5, 0, 0, 0, 0, pytz.UTC),
+                BatchSize.day,
+                0,
+                datetime(2024, 9, 4, 0, 0, 0, 0, pytz.UTC),
+            ),
+            (
+                True,
+                None,
+                datetime(2024, 9, 5, 0, 0, 0, 0, pytz.UTC),
+                BatchSize.day,
+                1,
+                datetime(2024, 9, 3, 0, 0, 0, 0, pytz.UTC),
+            ),
+            (
+                True,
+                None,
+                datetime(2024, 9, 1, 0, 0, 0, 0, pytz.UTC),
+                BatchSize.month,
+                0,
+                datetime(2024, 8, 1, 0, 0, 0, 0, pytz.UTC),
+            ),
+            (
+                True,
+                None,
+                datetime(2024, 9, 1, 0, 0, 0, 0, pytz.UTC),
+                BatchSize.month,
+                1,
+                datetime(2024, 7, 1, 0, 0, 0, 0, pytz.UTC),
+            ),
+            (
+                True,
+                None,
+                datetime(2024, 1, 1, 0, 0, 0, 0, pytz.UTC),
+                BatchSize.year,
+                0,
+                datetime(2023, 1, 1, 0, 0, 0, 0, pytz.UTC),
+            ),
+            (
+                True,
+                None,
+                datetime(2024, 1, 1, 0, 0, 0, 0, pytz.UTC),
+                BatchSize.year,
+                1,
+                datetime(2022, 1, 1, 0, 0, 0, 0, pytz.UTC),
+            ),
         ],
     )
     def test_build_start_time(
@@ -348,6 +412,67 @@ class TestMicrobatchBuilder:
                     (
                         datetime(2024, 9, 5, 3, 0, 0, 0, pytz.UTC),
                         datetime(2024, 9, 5, 3, 56, 0, 0, pytz.UTC),
+                    ),
+                ],
+            ),
+            # Test when event_time_end matches the truncated batch size
+            (
+                datetime(2024, 1, 1, 0, 0, 0, 0, pytz.UTC),
+                datetime(2026, 1, 1, 0, 0, 0, 0, pytz.UTC),
+                BatchSize.year,
+                [
+                    (
+                        datetime(2024, 1, 1, 0, 0, 0, 0, pytz.UTC),
+                        datetime(2025, 1, 1, 0, 0, 0, 0, pytz.UTC),
+                    ),
+                    (
+                        datetime(2025, 1, 1, 0, 0, 0, 0, pytz.UTC),
+                        datetime(2026, 1, 1, 0, 0, 0, 0, pytz.UTC),
+                    ),
+                ],
+            ),
+            (
+                datetime(2024, 9, 1, 0, 0, 0, 0, pytz.UTC),
+                datetime(2024, 11, 1, 0, 0, 0, 0, pytz.UTC),
+                BatchSize.month,
+                [
+                    (
+                        datetime(2024, 9, 1, 0, 0, 0, 0, pytz.UTC),
+                        datetime(2024, 10, 1, 0, 0, 0, 0, pytz.UTC),
+                    ),
+                    (
+                        datetime(2024, 10, 1, 0, 0, 0, 0, pytz.UTC),
+                        datetime(2024, 11, 1, 0, 0, 0, 0, pytz.UTC),
+                    ),
+                ],
+            ),
+            (
+                datetime(2024, 9, 5, 0, 0, 0, 0, pytz.UTC),
+                datetime(2024, 9, 7, 0, 0, 0, 0, pytz.UTC),
+                BatchSize.day,
+                [
+                    (
+                        datetime(2024, 9, 5, 0, 0, 0, 0, pytz.UTC),
+                        datetime(2024, 9, 6, 0, 0, 0, 0, pytz.UTC),
+                    ),
+                    (
+                        datetime(2024, 9, 6, 0, 0, 0, 0, pytz.UTC),
+                        datetime(2024, 9, 7, 0, 0, 0, 0, pytz.UTC),
+                    ),
+                ],
+            ),
+            (
+                datetime(2024, 9, 5, 1, 0, 0, 0, pytz.UTC),
+                datetime(2024, 9, 5, 3, 0, 0, 0, pytz.UTC),
+                BatchSize.hour,
+                [
+                    (
+                        datetime(2024, 9, 5, 1, 0, 0, 0, pytz.UTC),
+                        datetime(2024, 9, 5, 2, 0, 0, 0, pytz.UTC),
+                    ),
+                    (
+                        datetime(2024, 9, 5, 2, 0, 0, 0, pytz.UTC),
+                        datetime(2024, 9, 5, 3, 0, 0, 0, pytz.UTC),
                     ),
                 ],
             ),
