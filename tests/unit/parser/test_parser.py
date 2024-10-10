@@ -1003,7 +1003,7 @@ python_model_custom_materialization = """
 import pandas as pd
 
 def model(dbt, session):
-    dbt.config(materialized="view")
+    dbt.config(materialized="incremental")
     return pd.dataframe([1, 2])
 """
 
@@ -1198,7 +1198,7 @@ class ModelParserTest(BaseParserTest):
         self.parser.manifest.files[block.file.file_id] = block.file
         self.parser.parse_file(block)
         node = list(self.parser.manifest.nodes.values())[0]
-        self.assertEqual(node.get_materialization(), "view")
+        self.assertEqual(node.get_materialization(), "incremental")
 
 
 class StaticModelParserTest(BaseParserTest):
