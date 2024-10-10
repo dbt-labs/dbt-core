@@ -720,6 +720,8 @@ class UnparsedQueryParams(dbtClassMixin):
     group_by: List[str] = field(default_factory=list)
     # Note: `Union` must be the outermost part of the type annotation for serialization to work properly.
     where: Union[str, List[str], None] = None
+    order_by: List[str] = field(default_factory=list)
+    limit: Optional[int] = None
 
 
 @dataclass
