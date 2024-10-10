@@ -2,6 +2,7 @@ import datetime
 import time
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass, field
+from pprint import pformat
 from typing import Any, Callable, Dict, Generic, Iterable, List, Optional, Type, TypeVar
 
 from dbt.artifacts.resources import RefArgs
@@ -393,7 +394,9 @@ class YamlReader(metaclass=ABCMeta):
                 raise YamlParseListError(path, self.key, data, "expected a dict with string keys")
 
             if "name" not in entry and "model" not in entry:
-                raise ParsingError("Entry did not contain a name")
+                raise ParsingError(
+                    f"Entry in '{self.yaml.path.original_file_path}' did not contain a name:\n{pformat(entry, sort_dicts=False)}"
+                )
 
             unrendered_config = {}
             if "config" in entry:
