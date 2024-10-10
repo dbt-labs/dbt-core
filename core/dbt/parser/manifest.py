@@ -1383,7 +1383,7 @@ class ManifestLoader:
             node.config.final_validate()
 
     def check_valid_microbatch_config(self):
-        if os.environ.get("DBT_EXPERIMENTAL_MICROBATCH"):
+        if get_flags().require_builtin_microbatch_strategy:
             for node in self.manifest.nodes.values():
                 if (
                     node.config.materialized == "incremental"

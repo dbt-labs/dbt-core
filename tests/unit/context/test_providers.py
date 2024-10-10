@@ -1,4 +1,4 @@
-import os
+from argparse import Namespace
 from unittest import mock
 
 import pytest
@@ -13,6 +13,7 @@ from dbt.context.providers import (
     RuntimeRefResolver,
     RuntimeSourceResolver,
 )
+from dbt.flags import set_from_args
 
 
 class TestBaseResolver:
@@ -56,8 +57,9 @@ class TestBaseResolver:
         incremental_strategy: str,
         expect_filter: bool,
     ) -> None:
-        if dbt_experimental_microbatch:
-            mocker.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
+        set_from_args(
+            Namespace(require_builtin_microbatch_strategy=dbt_experimental_microbatch), None
+        )
 
         # Target mocking
         target = mock.Mock()
@@ -117,6 +119,8 @@ class TestRuntimeRefResolver:
         mock_node.is_ephemeral_model = is_ephemeral_model
         mock_node.defer_relation = None
 
+        set_from_args(Namespace(require_builtin_microbatch_strategy=False), None)
+
         # create limited relation
         with mock.patch("dbt.contracts.graph.nodes.ParsedNode", new=mock.Mock):
             relation = resolver.create_relation(mock_node)
@@ -155,6 +159,8 @@ class TestRuntimeSourceResolver:
         mock_source.quoting = Quoting()
         mock_source.quoting_dict = {}
         resolver.manifest.resolve_source.return_value = mock_source
+
+        set_from_args(Namespace(require_builtin_microbatch_strategy=False), None)
 
         # create limited relation
         relation = resolver.resolve("test", "test")
