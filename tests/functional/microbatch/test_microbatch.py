@@ -1,7 +1,9 @@
 import os
+from datetime import datetime
 from unittest import mock
 
 import pytest
+import pytz
 
 from dbt.events.types import LogModelResult
 from dbt.tests.util import (
@@ -38,6 +40,11 @@ select 3 as id, TIMESTAMP '2020-01-03 00:00:00-0' as event_time
 microbatch_model_sql = """
 {{ config(materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='day', begin=modules.datetime.datetime(2020, 1, 1, 0, 0, 0)) }}
 select * from {{ ref('input_model') }}
+"""
+
+microbatch_model_downstream_sql = """
+{{ config(materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='day', begin=modules.datetime.datetime(2020, 1, 1, 0, 0, 0)) }}
+select * from {{ ref('microbatch_model') }}
 """
 
 
@@ -671,3 +678,28 @@ class TestMicrobatchFullRefreshConfigFalse(BaseMicrobatchTest):
         with patch_microbatch_end_time("2020-01-03 13:57:00"):
             run_dbt(["run", "--full-refresh"])
         self.assert_row_count(project, "microbatch_model", 3)
+
+
+class TestMicrbobatchModelsRunWithSameCurrentTime(BaseMicrobatchTest):
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "input_model.sql": input_model_sql,
+            "microbatch_model.sql": microbatch_model_sql,
+            "second_microbatch_model.sql": microbatch_model_downstream_sql,
+        }
+
+    @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
+    def test_microbatch(self, project) -> None:
+        current_time = datetime.now(pytz.UTC)
+        run_dbt(["run", "--event-time-start", current_time.strftime("%Y-%m-%d")])
+
+        run_results = get_artifact(project.project_root, "target", "run_results.json")
+        microbatch_model_last_batch = run_results["results"][1]["batch_results"]["successful"][-1]
+        second_microbatch_model_last_batch = run_results["results"][2]["batch_results"][
+            "successful"
+        ][-1]
+
+        # they should have the same last batch because they are using the _same_ "current_time"
+        assert microbatch_model_last_batch == second_microbatch_model_last_batch

@@ -1,0 +1,6 @@
+kind: Features
+body: Ensure microbatch models use same `current_time` value
+time: 2024-10-07T11:58:53.460941-05:00
+custom:
+  Author: QMalcolm
+  Issue: "10819"
