@@ -235,7 +235,6 @@ class GraphRunnableTask(ConfiguredTask):
                 thread_exception = e
             finally:
                 if result is not None:
-                    runner.node.update_event_status(node_status=result.status)
                     fire_event(
                         NodeFinished(
                             node_info=runner.node.node_info,
@@ -264,6 +263,10 @@ class GraphRunnableTask(ConfiguredTask):
                         batch_results=None,
                         node=runner.node,
                     )
+
+            # `_event_status` dict is only used for logging.  Make sure
+            # it gets deleted when we're done with it
+            runner.node.clear_event_status()
 
         fail_fast = get_flags().FAIL_FAST
 
