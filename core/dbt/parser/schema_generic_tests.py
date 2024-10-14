@@ -96,6 +96,7 @@ class SchemaGenericTestParser(SimpleParser):
         test_metadata: Dict[str, Any],
         file_key_name: str,
         column_name: Optional[str],
+        description: str,
     ) -> GenericTestNode:
 
         HASH_LENGTH = 10
@@ -134,6 +135,7 @@ class SchemaGenericTestParser(SimpleParser):
             "column_name": column_name,
             "checksum": FileHash.empty().to_dict(omit_none=True),
             "file_key_name": file_key_name,
+            "description": description,
         }
         try:
             GenericTestNode.validate(dct)
@@ -229,6 +231,7 @@ class SchemaGenericTestParser(SimpleParser):
             column_name=column_name,
             test_metadata=metadata,
             file_key_name=file_key_name,
+            description=builder.description,
         )
         self.render_test_update(node, config, builder, schema_file_id)
 

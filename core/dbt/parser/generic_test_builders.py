@@ -136,6 +136,17 @@ class TestBuilder(Generic[Testable]):
         if self.namespace is not None:
             self.package_name = self.namespace
 
+        # If the user has provided a description for this generic test, use it
+        # Then delete the "description" argument to:
+        # 1. Avoid passing it into the test macro
+        # 2. Avoid passing it into the test name synthesis
+        # Otherwise, use an empty string
+        self.description: str = ""
+
+        if "description" in self.args:
+            self.description = self.args["description"]
+            del self.args["description"]
+
         # If the user has provided a custom name for this generic test, use it
         # Then delete the "name" argument to avoid passing it into the test macro
         # Otherwise, use an auto-generated name synthesized from test inputs
