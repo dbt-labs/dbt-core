@@ -1315,25 +1315,6 @@ class Manifest(MacroMethods, dbtClassMixin):
     def external_node_unique_ids(self):
         return [node.unique_id for node in self.nodes.values() if node.is_external_node]
 
-    def resolve_refs(
-        self,
-        source_node: ModelNode,
-        current_project: str,  # TODO: ModelNode is overly restrictive typing
-    ) -> List[MaybeNonSource]:
-        resolved_refs: List[MaybeNonSource] = []
-        for ref in source_node.refs:
-            resolved = self.resolve_ref(
-                source_node,
-                ref.name,
-                ref.package,
-                ref.version,
-                current_project,
-                source_node.package_name,
-            )
-            resolved_refs.append(resolved)
-
-        return resolved_refs
-
     # Called by dbt.parser.manifest._process_refs & ManifestLoader.check_for_model_deprecations
     def resolve_ref(
         self,
