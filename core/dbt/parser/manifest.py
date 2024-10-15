@@ -573,6 +573,8 @@ class ManifestLoader:
         return project_parser_files
 
     def check_for_model_deprecations(self):
+        # build parent and child_maps
+        self.manifest.build_parent_and_child_maps()
         for node in self.manifest.nodes.values():
             if isinstance(node, ModelNode) and node.deprecation_date:
                 if node.is_past_deprecation_date:
@@ -584,7 +586,7 @@ class ManifestLoader:
                         )
                     )
                 # At this point _process_refs should already have been called, and
-                # the parent and child maps rebuilt.
+                # we just rebuilt the parent and child maps.
                 # Get the child_nodes and check for deprecations.
                 child_nodes = self.manifest.child_map[node.unique_id]
                 for child_unique_id in child_nodes:
