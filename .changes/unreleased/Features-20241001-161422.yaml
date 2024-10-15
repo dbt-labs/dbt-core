@@ -1,0 +1,6 @@
+kind: Features
+body: Change gating of microbatch feature to be behind project flag / behavior flag
+time: 2024-10-01T16:14:22.267253-05:00
+custom:
+  Author: MichelleArk QMalcolm
+  Issue: "10798"
