@@ -586,9 +586,9 @@ class ManifestLoader:
                 # At this point _process_refs should already have been called, and
                 # the parent and child maps rebuilt.
                 # Get the child_nodes and check for deprecations.
-                child_nodes = self.child_map[node.unique_id]
+                child_nodes = self.manifest.child_map[node.unique_id]
                 for child_unique_id in child_nodes:
-                    child_node = self.nodes[child_unique_id]
+                    child_node = self.manifest.nodes[child_unique_id]
                     if node.is_past_deprecation_date:
                         event_cls = DeprecatedReference
                     else:
