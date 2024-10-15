@@ -1,8 +1,8 @@
 import pytest
 
 from dbt.cli.main import dbtRunner
-from dbt.exceptions import EventCompilationError
 from dbt.tests.util import run_dbt
+from dbt_common.exceptions import EventCompilationError
 
 deprecated_model__yml = """
 version: 2
