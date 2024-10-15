@@ -4,7 +4,7 @@ from dbt import deprecations
 from dbt.exceptions import CompilationError, ProjectContractError, YamlParseDictError
 from dbt.tests.fixtures.project import write_project_files
 from dbt.tests.util import run_dbt, update_config_file
-from tests.functional.deprecation_warnings.fixtures import (
+from tests.functional.deprecations.fixtures import (
     data_tests_yaml,
     local_dependency__dbt_project_yml,
     local_dependency__schema_yml,

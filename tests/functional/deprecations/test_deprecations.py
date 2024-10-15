@@ -5,7 +5,7 @@ import dbt_common
 from dbt import deprecations
 from dbt.tests.util import run_dbt, run_dbt_and_capture, write_file
 from dbt_common.exceptions import EventCompilationError
-from tests.functional.deprecation_warnings.fixtures import (
+from tests.functional.deprecations.fixtures import (
     bad_name_yaml,
     models_trivial__model_sql,
 )
