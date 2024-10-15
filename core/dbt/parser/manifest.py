@@ -591,6 +591,8 @@ class ManifestLoader:
                 child_nodes = self.manifest.child_map[node.unique_id]
                 for child_unique_id in child_nodes:
                     child_node = self.manifest.nodes[child_unique_id]
+                    if not isinstance(child_node, ModelNode):
+                        continue
                     if node.is_past_deprecation_date:
                         event_cls = DeprecatedReference
                     else:
