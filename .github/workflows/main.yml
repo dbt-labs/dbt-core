@@ -52,7 +52,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.8'
+          python-version: '3.9'
 
       - name: Install python dependencies
         run: |
@@ -74,7 +74,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.7", "3.8", "3.9", "3.10", "3.11"]
+        python-version: [ "3.9", "3.10", "3.11"]
 
     env:
       TOXENV: "unit"
@@ -139,7 +139,7 @@ jobs:
       - name: generate include
         id: generate-include
         run: |
-          INCLUDE=('"python-version":"3.8","os":"windows-latest"' '"python-version":"3.8","os":"macos-12"' )
+          INCLUDE=('"python-version":"3.9","os":"windows-latest"' '"python-version":"3.9","os":"macos-12"' )
           INCLUDE_GROUPS="["
           for include in ${INCLUDE[@]}; do
               for group in $(seq 1 ${{ env.PYTHON_INTEGRATION_TEST_WORKERS }}); do
@@ -161,7 +161,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.7", "3.8", "3.9", "3.10", "3.11"]
+        python-version: [ "3.9", "3.10", "3.11"]
         os: [ubuntu-20.04]
         split-group: ${{ fromJson(needs.integration-metadata.outputs.split-groups) }}
         include: ${{ fromJson(needs.integration-metadata.outputs.include) }}
@@ -256,7 +256,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.8'
+          python-version: '3.9'
 
       - name: Install python dependencies
         run: |
