@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Remove support and testing for Python 3.8, which is now EOL.
+time: 2024-10-16T14:40:56.451972-04:00
+custom:
+  Author: gshank peterallenwebb
+  Issue: "10861"
