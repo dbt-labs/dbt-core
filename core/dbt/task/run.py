@@ -133,6 +133,7 @@ def track_model_run(index, num_nodes, run_model_result):
             "contract_enforced": contract_enforced,
             "access": access,
             "versioned": versioned,
+            "adapter": BaseAdapter.get_adapter_run_info(run_model_result.node.config),
         }
     )
 
