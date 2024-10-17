@@ -20,6 +20,7 @@ class UnitTestConfig(BaseConfig):
         default_factory=dict,
         metadata=MergeBehavior.Update.meta(),
     )
+    enabled: bool = True
 
 
 class UnitTestFormat(StrEnum):

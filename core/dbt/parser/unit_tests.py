@@ -52,6 +52,8 @@ class UnitTestManifestLoader:
         for unique_id in self.selected:
             if unique_id in self.manifest.unit_tests:
                 unit_test_case: UnitTestDefinition = self.manifest.unit_tests[unique_id]
+                if not unit_test_case.config.enabled:
+                    continue
                 self.parse_unit_test_case(unit_test_case)
         return self.unit_test_manifest
 
@@ -295,7 +297,10 @@ class UnitTestParser(YamlReader):
             # for calculating state:modified
             unit_test_definition.build_unit_test_checksum()
             assert isinstance(self.yaml.file, SchemaSourceFile)
-            self.manifest.add_unit_test(self.yaml.file, unit_test_definition)
+            if unit_test_config.enabled:
+                self.manifest.add_unit_test(self.yaml.file, unit_test_definition)
+            else:
+                self.manifest.add_disabled(self.yaml.file, unit_test_definition)
 
         return ParseResult()
 
@@ -505,6 +510,16 @@ def process_models_for_unit_test(
     # The UnitTestDefinition should only have one "depends_on" at this point,
     # the one that's found by the "model" field.
     target_model_id = unit_test_def.depends_on.nodes[0]
+    if target_model_id not in manifest.nodes:
+        if target_model_id in manifest.disabled:
+            # The model is disabled, so we don't need to do anything (#10540)
+            return
+        else:
+            # If we've reached here and the model is not disabled, throw an error
+            raise ParsingError(
+                f"Unit test '{unit_test_def.name}' references a model that does not exist: {target_model_id}"
+            )
+
     target_model = manifest.nodes[target_model_id]
     assert isinstance(target_model, ModelNode)
 

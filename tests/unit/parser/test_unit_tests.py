@@ -135,6 +135,19 @@ unit_tests:
         - {"id":  , "col1": "e"}
 """
 
+UNIT_TEST_DISABLED = """
+unit_tests:
+    - name: test_my_model_disabled
+      model: my_model
+      description: "this unit test is disabled"
+      config:
+        enabled: false
+      given: []
+      expect:
+        rows:
+          - {a: 1}
+"""
+
 
 class UnitTestParserTest(SchemaParserTest):
     def setUp(self):
@@ -197,6 +210,22 @@ class UnitTestParserTest(SchemaParserTest):
         unit_test = self.parser.manifest.unit_tests["unit_test.snowplow.my_model.test_my_model"]
         self.assertEqual(sorted(unit_test.config.tags), sorted(["schema_tag", "project_tag"]))
         self.assertEqual(unit_test.config.meta, {"meta_key": "meta_value", "meta_jinja_key": "2"})
+
+    def test_unit_test_disabled(self):
+        block = self.yaml_block_for(UNIT_TEST_DISABLED, "test_my_model.yml")
+        self.root_project_config.unit_tests = {
+            "snowplow": {"my_model": {"+tags": ["project_tag"]}}
+        }
+
+        UnitTestParser(self.parser, block).parse()
+
+        self.assert_has_manifest_lengths(self.parser.manifest, nodes=1, unit_tests=0, disabled=1)
+        unit_test_disabled_list = self.parser.manifest.disabled[
+            "unit_test.snowplow.my_model.test_my_model_disabled"
+        ]
+        self.assertEqual(len(unit_test_disabled_list), 1)
+        unit_test_disabled = unit_test_disabled_list[0]
+        self.assertEqual(unit_test_disabled.config.enabled, False)
 
     def test_unit_test_versioned_model(self):
         block = self.yaml_block_for(UNIT_TEST_VERSIONED_MODEL_SOURCE, "test_my_model.yml")
