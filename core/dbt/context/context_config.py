@@ -170,6 +170,7 @@ class BaseContextConfigGenerator(Generic[T]):
             for fqn_config in self._active_project_configs(fqn, resource_type):
                 result = self._update_from_config(result, fqn_config)
 
+        # pytest.set_trace()
         # this is mostly impactful in the snapshot config case
         # TODO CT-211
         return result  # type: ignore[return-value]
