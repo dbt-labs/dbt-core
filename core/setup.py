@@ -69,7 +69,7 @@ setup(
         # These are major-version-0 packages also maintained by dbt-labs.
         # Accept patches but avoid automatically updating past a set minor version range.
         "dbt-extractor>=0.5.0,<=0.6",
-        "dbt-semantic-interfaces>=0.7.3,<0.8",
+        "dbt-semantic-interfaces>=0.7.4,<0.8",
         # Minor versions for these are expected to be backwards-compatible
         "dbt-common>=1.9.0,<2.0",
         "dbt-adapters>=1.7.0,<2.0",
