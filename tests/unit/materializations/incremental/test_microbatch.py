@@ -589,3 +589,54 @@ class TestMicrobatchBuilder:
             MicrobatchBuilder.format_batch_start(batch_start, batch_size)
             == expected_formatted_batch_start
         )
+
+    @pytest.mark.parametrize(
+        "timestamp,batch_size,expected_datetime",
+        [
+            (
+                datetime(2024, 9, 17, 16, 6, 0, 0, pytz.UTC),
+                BatchSize.hour,
+                datetime(2024, 9, 17, 17, 0, 0, 0, pytz.UTC),
+            ),
+            (
+                datetime(2024, 9, 17, 16, 0, 0, 0, pytz.UTC),
+                BatchSize.hour,
+                datetime(2024, 9, 17, 16, 0, 0, 0, pytz.UTC),
+            ),
+            (
+                datetime(2024, 9, 17, 16, 6, 0, 0, pytz.UTC),
+                BatchSize.day,
+                datetime(2024, 9, 18, 0, 0, 0, 0, pytz.UTC),
+            ),
+            (
+                datetime(2024, 9, 17, 0, 0, 0, 0, pytz.UTC),
+                BatchSize.day,
+                datetime(2024, 9, 17, 0, 0, 0, 0, pytz.UTC),
+            ),
+            (
+                datetime(2024, 9, 17, 16, 6, 0, 0, pytz.UTC),
+                BatchSize.month,
+                datetime(2024, 10, 1, 0, 0, 0, 0, pytz.UTC),
+            ),
+            (
+                datetime(2024, 9, 1, 0, 0, 0, 0, pytz.UTC),
+                BatchSize.month,
+                datetime(2024, 9, 1, 0, 0, 0, 0, pytz.UTC),
+            ),
+            (
+                datetime(2024, 9, 17, 16, 6, 0, 0, pytz.UTC),
+                BatchSize.year,
+                datetime(2025, 1, 1, 0, 0, 0, 0, pytz.UTC),
+            ),
+            (
+                datetime(2024, 1, 1, 0, 0, 0, 0, pytz.UTC),
+                BatchSize.year,
+                datetime(2024, 1, 1, 0, 0, 0, 0, pytz.UTC),
+            ),
+        ],
+    )
+    def test_ceiling_timestamp(
+        self, timestamp: datetime, batch_size: BatchSize, expected_datetime: datetime
+    ) -> None:
+        ceilinged = MicrobatchBuilder.ceiling_timestamp(timestamp, batch_size)
+        assert ceilinged == expected_datetime
