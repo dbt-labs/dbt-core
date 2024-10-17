@@ -29,3 +29,21 @@ class TestEventTimeEndEventTimeStart:
                 in e.__str__()
             )
             assert not expect_pass
+
+
+class TestEventTimeEndEventTimeStartMutuallyRequired:
+    @pytest.mark.parametrize(
+        "specified,missing",
+        [
+            ("--event-time-start", "--event-time-end"),
+            ("--event-time-end", "--event-time-start"),
+        ],
+    )
+    def test_option_combo(self, project, specified, missing):
+        try:
+            run_dbt(["build", specified, "2024-10-01"])
+            assert False, f"An error should have been raised for missing `{missing}` flag"
+        except Exception as e:
+            assert (
+                f"When specifying `{specified}`, `{missing}` must also be present." in e.__str__()
+            )
