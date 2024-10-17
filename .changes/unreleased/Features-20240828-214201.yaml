@@ -1,0 +1,6 @@
+kind: Features
+body: env_var() default can now be none
+time: 2024-08-28T21:42:01.241444-05:00
+custom:
+  Author: kentkr
+  Issue: "10485"
