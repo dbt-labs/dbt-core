@@ -1271,6 +1271,12 @@ message SQLRunnerExceptionMsg {
     SQLRunnerException data = 2;
 }
 
+message Group {
+    string name = 1;
+    string package_name = 3;
+    map<string, string> owner = 7;
+}
+
 // Q007
 message LogTestResult {
     NodeInfo node_info = 1;
@@ -1280,6 +1286,8 @@ message LogTestResult {
     int32 num_models = 5;
     float execution_time = 6;
     int32 num_failures = 7;
+    Group group = 8;
+    string attached_node = 9;
 }
 
 message LogTestResultMsg {
@@ -1312,6 +1320,7 @@ message LogModelResult {
     int32 index = 4;
     int32 total = 5;
     float execution_time = 6;
+    Group group = 7;
 }
 
 message LogModelResultMsg {
@@ -1373,7 +1382,7 @@ message LogFreshnessResultMsg {
     LogFreshnessResult data = 2;
 }
 
-// Q018
+// Q019
 message LogNodeNoOpResult {
     NodeInfo node_info = 1;
     string description = 2;
@@ -1818,12 +1827,6 @@ message ServingDocsExitInfo {
 message ServingDocsExitInfoMsg {
     CoreEventInfo info = 1;
     ServingDocsExitInfo data = 2;
-}
-
-message Group {
-    string name = 1;
-    string package_name = 3;
-    map<string, string> owner = 7;
 }
 
 // Z021

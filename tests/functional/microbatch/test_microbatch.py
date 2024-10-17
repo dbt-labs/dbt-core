@@ -1,8 +1,11 @@
 import os
+from datetime import datetime
 from unittest import mock
 
 import pytest
+import pytz
 
+from dbt.events.types import LogModelResult
 from dbt.tests.util import (
     get_artifact,
     patch_microbatch_end_time,
@@ -12,6 +15,7 @@ from dbt.tests.util import (
     run_dbt_and_capture,
     write_file,
 )
+from tests.utils import EventCatcher
 
 input_model_sql = """
 {{ config(materialized='table', event_time='event_time') }}
@@ -36,6 +40,11 @@ select 3 as id, TIMESTAMP '2020-01-03 00:00:00-0' as event_time
 microbatch_model_sql = """
 {{ config(materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='day', begin=modules.datetime.datetime(2020, 1, 1, 0, 0, 0)) }}
 select * from {{ ref('input_model') }}
+"""
+
+microbatch_model_downstream_sql = """
+{{ config(materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='day', begin=modules.datetime.datetime(2020, 1, 1, 0, 0, 0)) }}
+select * from {{ ref('microbatch_model') }}
 """
 
 
@@ -91,6 +100,11 @@ custom_microbatch_strategy = """
 
 downstream_model_of_microbatch_sql = """
 SELECT * FROM {{ ref('microbatch_model') }}
+"""
+
+microbatch_model_full_refresh_false_sql = """
+{{ config(materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='day', begin=modules.datetime.datetime(2020, 1, 1, 0, 0, 0), full_refresh=False) }}
+select * from {{ ref('input_model') }}
 """
 
 
@@ -181,9 +195,21 @@ class TestMicrobatchCLI(BaseMicrobatchTest):
     @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
     def test_run_with_event_time(self, project):
         # run without --event-time-start or --event-time-end - 3 expected rows in output
+        catcher = EventCatcher(event_to_catch=LogModelResult)
+
         with patch_microbatch_end_time("2020-01-03 13:57:00"):
-            run_dbt(["run"])
+            run_dbt(["run"], callbacks=[catcher.catch])
         self.assert_row_count(project, "microbatch_model", 3)
+
+        assert len(catcher.caught_events) == 5
+        batch_creation_events = 0
+        for caught_event in catcher.caught_events:
+            if "batch 2020" in caught_event.data.description:
+                batch_creation_events += 1
+                assert caught_event.data.execution_time > 0
+        # 3 batches should have been run, so there should be 3 batch
+        # creation events
+        assert batch_creation_events == 3
 
         # build model >= 2020-01-02
         with patch_microbatch_end_time("2020-01-03 13:57:00"):
@@ -480,6 +506,44 @@ class TestMicrobatchRetriesPartialSuccesses(BaseMicrobatchTest):
         self.assert_row_count(project, "microbatch_model", 3)
 
 
+class TestMicrobatchMultipleRetries(BaseMicrobatchTest):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "input_model.sql": input_model_sql,
+            "microbatch_model.sql": microbatch_model_failing_incremental_partition_sql,
+        }
+
+    @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
+    def test_run_with_event_time(self, project):
+        # run all partitions from start - 2 expected rows in output, one failed
+        with patch_microbatch_end_time("2020-01-03 13:57:00"):
+            _, console_output = run_dbt_and_capture(["run", "--event-time-start", "2020-01-01"])
+
+        assert "PARTIAL SUCCESS (2/3)" in console_output
+        assert "Completed with 1 partial success" in console_output
+
+        self.assert_row_count(project, "microbatch_model", 2)
+
+        with patch_microbatch_end_time("2020-01-03 13:57:00"):
+            _, console_output = run_dbt_and_capture(["retry"], expect_pass=False)
+
+        assert "PARTIAL SUCCESS" not in console_output
+        assert "ERROR" in console_output
+        assert "Completed with 1 error, 0 partial successs, and 0 warnings" in console_output
+
+        self.assert_row_count(project, "microbatch_model", 2)
+
+        with patch_microbatch_end_time("2020-01-03 13:57:00"):
+            _, console_output = run_dbt_and_capture(["retry"], expect_pass=False)
+
+        assert "PARTIAL SUCCESS" not in console_output
+        assert "ERROR" in console_output
+        assert "Completed with 1 error, 0 partial successs, and 0 warnings" in console_output
+
+        self.assert_row_count(project, "microbatch_model", 2)
+
+
 microbatch_model_first_partition_failing_sql = """
 {{ config(materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='day', begin=modules.datetime.datetime(2020, 1, 1, 0, 0, 0)) }}
 {% if '2020-01-01' in (model.config.__dbt_internal_microbatch_event_time_start | string) %}
@@ -578,3 +642,64 @@ class TestMicrobatchCompiledRunPaths(BaseMicrobatchTest):
             "microbatch_model",
             "microbatch_model_2020-01-03.sql",
         )
+
+
+class TestMicrobatchFullRefreshConfigFalse(BaseMicrobatchTest):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "input_model.sql": input_model_sql,
+            "microbatch_model.sql": microbatch_model_full_refresh_false_sql,
+            "downstream_model.sql": downstream_model_of_microbatch_sql,
+        }
+
+    @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
+    def test_run_with_event_time(self, project):
+        # run all partitions from 2020-01-02 to spoofed "now" - 2 expected rows in output
+        with patch_microbatch_end_time("2020-01-03 13:57:00"):
+            run_dbt(["run", "--event-time-start", "2020-01-02"])
+        self.assert_row_count(project, "microbatch_model", 2)
+
+        # re-running shouldn't change what it's in the data set because there is nothing new
+        with patch_microbatch_end_time("2020-01-03 13:57:00"):
+            run_dbt(["run"])
+        self.assert_row_count(project, "microbatch_model", 2)
+
+        # running with --full-refresh shouldn't pick up 2020-01-01 BECAUSE the model has
+        # full_refresh = false
+        with patch_microbatch_end_time("2020-01-03 13:57:00"):
+            run_dbt(["run", "--full-refresh"])
+        self.assert_row_count(project, "microbatch_model", 2)
+
+        # update the microbatch model to no longer have full_refresh=False config
+        write_file(microbatch_model_sql, project.project_root, "models", "microbatch_model.sql")
+
+        # running with full refresh should now pick up the 2020-01-01 data
+        with patch_microbatch_end_time("2020-01-03 13:57:00"):
+            run_dbt(["run", "--full-refresh"])
+        self.assert_row_count(project, "microbatch_model", 3)
+
+
+class TestMicrbobatchModelsRunWithSameCurrentTime(BaseMicrobatchTest):
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "input_model.sql": input_model_sql,
+            "microbatch_model.sql": microbatch_model_sql,
+            "second_microbatch_model.sql": microbatch_model_downstream_sql,
+        }
+
+    @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
+    def test_microbatch(self, project) -> None:
+        current_time = datetime.now(pytz.UTC)
+        run_dbt(["run", "--event-time-start", current_time.strftime("%Y-%m-%d")])
+
+        run_results = get_artifact(project.project_root, "target", "run_results.json")
+        microbatch_model_last_batch = run_results["results"][1]["batch_results"]["successful"][-1]
+        second_microbatch_model_last_batch = run_results["results"][2]["batch_results"][
+            "successful"
+        ][-1]
+
+        # they should have the same last batch because they are using the _same_ "current_time"
+        assert microbatch_model_last_batch == second_microbatch_model_last_batch

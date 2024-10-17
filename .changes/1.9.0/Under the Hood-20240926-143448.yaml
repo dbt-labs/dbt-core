@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Add group metadata info to LogModelResult and LogTestResult
+time: 2024-09-26T14:34:48.334703+01:00
+custom:
+    Author: aranke
+    Issue: "10775"

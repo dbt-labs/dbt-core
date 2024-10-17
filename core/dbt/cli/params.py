@@ -490,7 +490,8 @@ inline = click.option(
 inline_direct = click.option(
     "--inline-direct",
     envvar=None,
-    help="Pass SQL inline to dbt show. Do not load the entire project or apply templating.",
+    help="Internal flag to pass SQL inline to dbt show. Do not load the entire project or apply templating.",
+    hidden=True,
 )
 
 # `--select` and `--models` are analogous for most commands except `dbt list` for legacy reasons.

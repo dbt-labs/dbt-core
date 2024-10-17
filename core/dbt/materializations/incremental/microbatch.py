@@ -18,6 +18,7 @@ class MicrobatchBuilder:
         is_incremental: bool,
         event_time_start: Optional[datetime],
         event_time_end: Optional[datetime],
+        default_end_time: Optional[datetime] = None,
     ):
         if model.config.incremental_strategy != "microbatch":
             raise DbtInternalError(
@@ -35,10 +36,11 @@ class MicrobatchBuilder:
             event_time_start.replace(tzinfo=pytz.UTC) if event_time_start else None
         )
         self.event_time_end = event_time_end.replace(tzinfo=pytz.UTC) if event_time_end else None
+        self.default_end_time = default_end_time or datetime.now(pytz.UTC)
 
     def build_end_time(self):
         """Defaults the end_time to the current time in UTC unless a non `None` event_time_end was provided"""
-        return self.event_time_end or datetime.now(tz=pytz.utc)
+        return self.event_time_end or self.default_end_time
 
     def build_start_time(self, checkpoint: Optional[datetime]):
         """Create a start time based off the passed in checkpoint.
@@ -65,9 +67,15 @@ class MicrobatchBuilder:
             return MicrobatchBuilder.truncate_timestamp(self.model.config.begin, batch_size)
 
         lookback = self.model.config.lookback
-        start = MicrobatchBuilder.offset_timestamp(checkpoint, batch_size, -1 * lookback)
 
-        return start
+        # If the checkpoint is equivalent to itself truncated then the checkpoint stradles
+        # the batch line. In this case the last batch will end with the checkpoint, but start
+        # should be the previous hour/day/month/year. Thus we need to increase the lookback by
+        # 1 to get this affect properly.
+        if checkpoint == MicrobatchBuilder.truncate_timestamp(checkpoint, batch_size):
+            lookback += 1
+
+        return MicrobatchBuilder.offset_timestamp(checkpoint, batch_size, -1 * lookback)
 
     def build_batches(self, start: datetime, end: datetime) -> List[BatchType]:
         """
@@ -81,7 +89,7 @@ class MicrobatchBuilder:
         )
 
         batches: List[BatchType] = [(curr_batch_start, curr_batch_end)]
-        while curr_batch_end <= end:
+        while curr_batch_end < end:
             curr_batch_start = curr_batch_end
             curr_batch_end = MicrobatchBuilder.offset_timestamp(curr_batch_start, batch_size, 1)
             batches.append((curr_batch_start, curr_batch_end))
