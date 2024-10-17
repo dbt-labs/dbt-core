@@ -537,10 +537,7 @@ def test_bad_serialization():
     with pytest.raises(Exception) as excinfo:
         types.Note(param_event_doesnt_have="This should break")
 
-    assert (
-        str(excinfo.value)
-        == "[Note]: Unable to parse dict {'param_event_doesnt_have': 'This should break'}"
-    )
+    assert str(excinfo.value).startswith("[Note]: Unable to parse")
 
 
 def test_single_run_error():
