@@ -263,7 +263,7 @@
                     "default": null
                   },
                   "lookback": {
-                    "default": 0
+                    "default": 1
                   },
                   "begin": {
                     "default": null
@@ -931,7 +931,7 @@
                                 "default": null
                               },
                               "lookback": {
-                                "default": 0
+                                "default": 1
                               },
                               "begin": {
                                 "default": null
@@ -1317,7 +1317,7 @@
                     "default": null
                   },
                   "lookback": {
-                    "default": 0
+                    "default": 1
                   },
                   "begin": {
                     "default": null
@@ -2762,7 +2762,7 @@
                     "default": null
                   },
                   "lookback": {
-                    "default": 0
+                    "default": 1
                   },
                   "begin": {
                     "default": null
@@ -3564,7 +3564,7 @@
                     "default": null
                   },
                   "lookback": {
-                    "default": 0
+                    "default": 1
                   },
                   "begin": {
                     "default": null
@@ -4493,7 +4493,7 @@
                                 "default": null
                               },
                               "lookback": {
-                                "default": 0
+                                "default": 1
                               },
                               "begin": {
                                 "default": null
@@ -4933,7 +4933,7 @@
                     "default": null
                   },
                   "lookback": {
-                    "default": 0
+                    "default": 1
                   },
                   "begin": {
                     "default": null
@@ -6439,7 +6439,7 @@
                     "default": null
                   },
                   "lookback": {
-                    "default": 0
+                    "default": 1
                   },
                   "begin": {
                     "default": null
@@ -7354,7 +7354,7 @@
                                 "default": null
                               },
                               "lookback": {
-                                "default": 0
+                                "default": 1
                               },
                               "begin": {
                                 "default": null
@@ -10148,7 +10148,7 @@
                           "default": null
                         },
                         "lookback": {
-                          "default": 0
+                          "default": 1
                         },
                         "begin": {
                           "default": null
@@ -10816,7 +10816,7 @@
                                       "default": null
                                     },
                                     "lookback": {
-                                      "default": 0
+                                      "default": 1
                                     },
                                     "begin": {
                                       "default": null
@@ -11202,7 +11202,7 @@
                           "default": null
                         },
                         "lookback": {
-                          "default": 0
+                          "default": 1
                         },
                         "begin": {
                           "default": null
@@ -12647,7 +12647,7 @@
                           "default": null
                         },
                         "lookback": {
-                          "default": 0
+                          "default": 1
                         },
                         "begin": {
                           "default": null
@@ -13449,7 +13449,7 @@
                           "default": null
                         },
                         "lookback": {
-                          "default": 0
+                          "default": 1
                         },
                         "begin": {
                           "default": null
@@ -14378,7 +14378,7 @@
                                       "default": null
                                     },
                                     "lookback": {
-                                      "default": 0
+                                      "default": 1
                                     },
                                     "begin": {
                                       "default": null
@@ -14818,7 +14818,7 @@
                           "default": null
                         },
                         "lookback": {
-                          "default": 0
+                          "default": 1
                         },
                         "begin": {
                           "default": null
@@ -16324,7 +16324,7 @@
                           "default": null
                         },
                         "lookback": {
-                          "default": 0
+                          "default": 1
                         },
                         "begin": {
                           "default": null
@@ -17239,7 +17239,7 @@
                                       "default": null
                                     },
                                     "lookback": {
-                                      "default": 0
+                                      "default": 1
                                     },
                                     "begin": {
                                       "default": null
