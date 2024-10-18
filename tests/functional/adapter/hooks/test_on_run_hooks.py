@@ -170,7 +170,7 @@ class Test__SelectorEmpty__NoHooksRan:
         assert run_results["results"] == []
 
 
-class Test__HookContext:
+class Test__HookContext__HookSuccess:
     @pytest.fixture(scope="class")
     def project_config_update(self):
         return {
@@ -200,9 +200,45 @@ class Test__HookContext:
     def models(self):
         return {"my_model.sql": "select 1"}
 
-    def test_results_in_context(self, project):
+    def test_results_in_context_success(self, project):
         results, log_output = run_dbt_and_capture(["--debug", "run"])
         assert "Thread ID: " in log_output
         assert "Thread ID: main" not in log_output
+        assert results[0].thread_id == "main"  # hook still exists in run results
+        assert "Num Results in context: 1" in log_output  # only model given hook was successful
+
+
+class Test__HookContext__HookFail:
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "on-run-start": [
+                "select a as id",  # fail
+            ],
+            "on-run-end": [
+                '{{ log("Num Results in context: " ~ results|length)}}'
+                "{{ output_thread_ids(results) }}",
+            ],
+        }
+
+    @pytest.fixture(scope="class")
+    def macros(self):
+        return {
+            "log.sql": """
+{% macro output_thread_ids(results) %}
+    {% for result in results %}
+        {{ log("Thread ID: " ~ result.thread_id) }}
+    {% endfor %}
+{% endmacro %}
+"""
+        }
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"my_model.sql": "select 1"}
+
+    def test_results_in_context_hook_fail(self, project):
+        results, log_output = run_dbt_and_capture(["--debug", "run"], expect_pass=False)
+        assert "Thread ID: main" in log_output
         assert results[0].thread_id == "main"
-        assert "Num Results in context: 1" in log_output
+        assert "Num Results in context: 2" in log_output  # failed hook and model
