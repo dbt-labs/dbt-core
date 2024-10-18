@@ -162,11 +162,8 @@ class TestMicrobatchCustomUserStrategyEnvVarTrueInvalid(BaseMicrobatchCustomUser
         with mock.patch.object(
             type(project.adapter), "valid_incremental_strategies", lambda _: []
         ):
-            # Initial run
-            with patch_microbatch_end_time("2020-01-03 13:57:00"):
-                run_dbt(["run"])
-
-            # Incremental run fails
+            # Run of microbatch model while adapter doesn't have a "valid"
+            # microbatch strategy causes an error to be raised
             with patch_microbatch_end_time("2020-01-03 13:57:00"):
                 _, logs = run_dbt_and_capture(["run"], expect_pass=False)
             assert "'microbatch' is not valid" in logs
