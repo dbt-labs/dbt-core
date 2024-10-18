@@ -2,6 +2,7 @@ import functools
 import os
 import threading
 from copy import deepcopy
+from dataclasses import asdict
 from datetime import datetime
 from typing import AbstractSet, Any, Dict, Iterable, List, Optional, Set, Tuple, Type
 
@@ -98,7 +99,7 @@ def get_execution_status(sql: str, adapter: BaseAdapter) -> Tuple[RunStatus, str
         return status, message
 
 
-def track_model_run(index, num_nodes, run_model_result):
+def track_model_run(adapter, index, num_nodes, run_model_result):
     if tracking.active_user is None:
         raise DbtInternalError("cannot track model run with no active user")
     invocation_id = get_invocation_id()
@@ -114,6 +115,11 @@ def track_model_run(index, num_nodes, run_model_result):
         contract_enforced = False
         versioned = False
         incremental_strategy = None
+
+    # Each adapter decides what adapter-specific fields will be included
+    # so this is a flexible dictionary.
+    adapter_info = adapter.get_adapter_run_info(run_model_result.node.config)
+
     tracking.track_model_run(
         {
             "invocation_id": invocation_id,
@@ -133,7 +139,7 @@ def track_model_run(index, num_nodes, run_model_result):
             "contract_enforced": contract_enforced,
             "access": access,
             "versioned": versioned,
-            "adapter": BaseAdapter.get_adapter_run_info(run_model_result.node.config),
+            "adapter_info": asdict(adapter_info),
         }
     )
 
@@ -282,7 +288,7 @@ class ModelRunner(CompileRunner):
         self.print_start_line()
 
     def after_execute(self, result) -> None:
-        track_model_run(self.node_index, self.num_nodes, result)
+        track_model_run(self.adapter, self.node_index, self.num_nodes, result)
         self.print_result_line(result)
 
     def _build_run_model_result(self, model, context):
