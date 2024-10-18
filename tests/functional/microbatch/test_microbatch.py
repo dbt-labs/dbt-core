@@ -164,7 +164,7 @@ class TestMicrobatchCustomUserStrategyEnvVarTrueInvalid(BaseMicrobatchCustomUser
         ):
             # Initial run
             with patch_microbatch_end_time("2020-01-03 13:57:00"):
-                run_dbt(["run"])
+                run_dbt(["run"], expect_pass=False)
 
             # Incremental run fails
             with patch_microbatch_end_time("2020-01-03 13:57:00"):
