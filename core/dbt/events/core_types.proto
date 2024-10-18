@@ -445,6 +445,14 @@ message SourceFreshnessProjectHooksNotRunMsg {
     SourceFreshnessProjectHooksNotRun data = 2;
 }
 
+// D018
+message MFTimespineWithoutYamlConfigurationDeprecation {}
+
+message MFTimespineWithoutYamlConfigurationDeprecationMsg {
+    CoreEventInfo info = 1;
+    MFTimespineWithoutYamlConfigurationDeprecation data = 2;
+}
+
 // I065
 message DeprecatedModel {
     string model_name = 1;

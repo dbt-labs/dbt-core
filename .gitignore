@@ -105,3 +105,6 @@ venv/
 
 # poetry
 poetry.lock
+
+# asdf
+.tool-versions
