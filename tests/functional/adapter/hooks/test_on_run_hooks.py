@@ -168,3 +168,41 @@ class Test__SelectorEmpty__NoHooksRan:
 
         run_results = get_artifact(project.project_root, "target", "run_results.json")
         assert run_results["results"] == []
+
+
+class Test__HookContext:
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "on-run-start": [
+                "select 1 as id",  # success
+                "select 1 as id",  # success
+            ],
+            "on-run-end": [
+                '{{ log("Num Results in context: " ~ results|length)}}'
+                "{{ output_thread_ids(results) }}",
+            ],
+        }
+
+    @pytest.fixture(scope="class")
+    def macros(self):
+        return {
+            "log.sql": """
+{% macro output_thread_ids(results) %}
+    {% for result in results %}
+        {{ log("Thread ID: " ~ result.thread_id) }}
+    {% endfor %}
+{% endmacro %}
+"""
+        }
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"my_model.sql": "select 1"}
+
+    def test_results_in_context(self, project):
+        results, log_output = run_dbt_and_capture(["--debug", "run"])
+        assert "Thread ID: " in log_output
+        assert "Thread ID: main" not in log_output
+        assert results[0].thread_id == "main"
+        assert "Num Results in context: 1" in log_output

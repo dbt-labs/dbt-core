@@ -774,7 +774,9 @@ class RunTask(CompileTask):
 
         extras = {
             "schemas": list({s for _, s in database_schema_set}),
-            "results": results,
+            "results": [
+                r for r in results if r.thread_id != "main"
+            ],  # exclude hooks to preserve backwards compatibility
             "database_schemas": list(database_schema_set),
         }
         with adapter.connection_named("master"):
