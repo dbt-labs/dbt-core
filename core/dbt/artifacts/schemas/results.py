@@ -27,7 +27,7 @@ class TimingInfo(dbtClassMixin):
         self.completed_at = datetime.utcnow()
 
     def to_msg_dict(self):
-        msg_dict = {"name": self.name}
+        msg_dict = {"name": str(self.name)}
         if self.started_at:
             msg_dict["started_at"] = datetime_to_json_string(self.started_at)
         if self.completed_at:
