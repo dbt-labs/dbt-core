@@ -1,6 +1,6 @@
 git+https://github.com/dbt-labs/dbt-adapters.git@main
 git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-tests-adapter
-git+https://github.com/dbt-labs/dbt-common.git@main
+git+https://github.com/dbt-labs/dbt-common.git@1.10.latest
 git+https://github.com/dbt-labs/dbt-postgres.git@main
 black>=24.3.0,<25.0
 bumpversion
