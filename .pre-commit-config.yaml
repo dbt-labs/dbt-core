@@ -3,7 +3,7 @@
 
 exclude: ^(core/dbt/docs/build/|core/dbt/common/events/types_pb2.py|core/dbt/events/core_types_pb2.py|core/dbt/adapters/events/adapter_types_pb2.py)
 
-# Force all unspecified python hooks to run python 3.8
+# Force all unspecified python hooks to run python 3.9
 default_language_version:
   python: python3
 

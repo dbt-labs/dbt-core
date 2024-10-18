@@ -573,36 +573,41 @@ class ManifestLoader:
         return project_parser_files
 
     def check_for_model_deprecations(self):
+        # build parent and child_maps
+        self.manifest.build_parent_and_child_maps()
         for node in self.manifest.nodes.values():
-            if isinstance(node, ModelNode) and node.is_past_deprecation_date:
-                warn_or_error(
-                    DeprecatedModel(
-                        model_name=node.name,
-                        model_version=version_to_str(node.version),
-                        deprecation_date=node.deprecation_date.isoformat(),
-                    )
-                )
-
-                resolved_refs = self.manifest.resolve_refs(node, self.root_project.project_name)
-                resolved_model_refs = [r for r in resolved_refs if isinstance(r, ModelNode)]
-                node.depends_on
-                for resolved_ref in resolved_model_refs:
-                    if resolved_ref.deprecation_date:
-                        if resolved_ref.is_past_deprecation_date:
-                            event_cls = DeprecatedReference
-                        else:
-                            event_cls = UpcomingReferenceDeprecation
-
-                        warn_or_error(
-                            event_cls(
-                                model_name=node.name,
-                                ref_model_package=resolved_ref.package_name,
-                                ref_model_name=resolved_ref.name,
-                                ref_model_version=version_to_str(resolved_ref.version),
-                                ref_model_latest_version=str(resolved_ref.latest_version),
-                                ref_model_deprecation_date=resolved_ref.deprecation_date.isoformat(),
-                            )
+            if isinstance(node, ModelNode) and node.deprecation_date:
+                if node.is_past_deprecation_date:
+                    warn_or_error(
+                        DeprecatedModel(
+                            model_name=node.name,
+                            model_version=version_to_str(node.version),
+                            deprecation_date=node.deprecation_date.isoformat(),
                         )
+                    )
+                # At this point _process_refs should already have been called, and
+                # we just rebuilt the parent and child maps.
+                # Get the child_nodes and check for deprecations.
+                child_nodes = self.manifest.child_map[node.unique_id]
+                for child_unique_id in child_nodes:
+                    child_node = self.manifest.nodes[child_unique_id]
+                    if not isinstance(child_node, ModelNode):
+                        continue
+                    if node.is_past_deprecation_date:
+                        event_cls = DeprecatedReference
+                    else:
+                        event_cls = UpcomingReferenceDeprecation
+
+                    warn_or_error(
+                        event_cls(
+                            model_name=child_node.name,
+                            ref_model_package=node.package_name,
+                            ref_model_name=node.name,
+                            ref_model_version=version_to_str(node.version),
+                            ref_model_latest_version=str(node.latest_version),
+                            ref_model_deprecation_date=node.deprecation_date.isoformat(),
+                        )
+                    )
 
     def check_for_spaces_in_resource_names(self):
         """Validates that resource names do not contain spaces

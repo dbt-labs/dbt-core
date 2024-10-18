@@ -101,7 +101,7 @@ def test_invalid_event_value(project, logs_dir):
     with pytest.raises(Exception) as excinfo:
         fire_event(InvalidOptionYAML(option_name=1))
 
-    assert str(excinfo.value) == "[InvalidOptionYAML]: Unable to parse dict {'option_name': 1}"
+    assert "[InvalidOptionYAML]: Unable to parse logging event dictionary." in str(excinfo.value)
 
 
 groups_yml = """

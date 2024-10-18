@@ -1,6 +1,7 @@
 import pytest
 
 from dbt.artifacts.schemas.results import RunStatus
+from dbt.contracts.graph.nodes import HookNode
 from dbt.tests.util import get_artifact, run_dbt_and_capture
 
 
@@ -49,6 +50,11 @@ class Test__StartHookFail__FlagIsNone__ModelFail:
         ]
 
         assert [(result.node.unique_id, result.status) for result in results] == expected_results
+        assert [
+            (result.node.unique_id, result.node.node_info["node_status"])
+            for result in results
+            if isinstance(result.node, HookNode)
+        ] == [(id, str(status)) for id, status in expected_results if id.startswith("operation")]
         assert log_counts in log_output
         assert "4 project hooks, 1 view model" in log_output
 

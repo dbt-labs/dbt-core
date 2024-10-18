@@ -111,6 +111,7 @@ def get_rendered_snapshot_config(**updates):
             "dbt_updated_at": None,
             "dbt_scd_id": None,
         },
+        "dbt_valid_to_current": None,
         "tags": [],
         "persist_docs": {},
         "full_refresh": None,

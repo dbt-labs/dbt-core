@@ -279,6 +279,7 @@ models:
             - not_null:
                 severity: WARN
             - accepted_values:
+                description: Only primary colors are allowed in here
                 values: ['red', 'blue', 'green']
             - foreign_package.test_case:
                 arg: 100
@@ -631,6 +632,7 @@ class SchemaParserModelsTest(SchemaParserTest):
         self.assertEqual(tests[0].tags, [])
         self.assertEqual(tests[0].refs, [RefArgs(name="my_model")])
         self.assertEqual(tests[0].column_name, "color")
+        self.assertEqual(tests[0].description, "Only primary colors are allowed in here")
         self.assertEqual(tests[0].package_name, "snowplow")
         self.assertTrue(tests[0].name.startswith("accepted_values_"))
         self.assertEqual(tests[0].fqn, ["snowplow", tests[0].name])
@@ -654,7 +656,7 @@ class SchemaParserModelsTest(SchemaParserTest):
         self.assertEqual(tests[1].tags, [])
         self.assertEqual(tests[1].refs, [RefArgs(name="my_model")])
         self.assertEqual(tests[1].column_name, "color")
-        self.assertEqual(tests[1].column_name, "color")
+        self.assertEqual(tests[1].description, "")
         self.assertEqual(tests[1].fqn, ["snowplow", tests[1].name])
         self.assertTrue(tests[1].name.startswith("foreign_package_test_case_"))
         self.assertEqual(tests[1].package_name, "snowplow")

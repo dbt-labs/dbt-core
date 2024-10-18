@@ -788,6 +788,8 @@ class SavedQueryParser(YamlReader):
             group_by=unparsed.group_by,
             metrics=unparsed.metrics,
             where=parse_where_filter(unparsed.where),
+            order_by=unparsed.order_by,
+            limit=unparsed.limit,
         )
 
     def parse_saved_query(self, unparsed: UnparsedSavedQuery) -> None:
