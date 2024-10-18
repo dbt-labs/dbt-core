@@ -55,6 +55,14 @@ class Test__StartHookFail__FlagIsNone__ModelFail:
             for result in results
             if isinstance(result.node, HookNode)
         ] == [(id, str(status)) for id, status in expected_results if id.startswith("operation")]
+
+        for result in results:
+            if result.status == RunStatus.Skipped:
+                continue
+
+            timing_keys = [timing.name for timing in result.timing]
+            assert timing_keys == ["compile", "execute"]
+
         assert log_counts in log_output
         assert "4 project hooks, 1 view model" in log_output
 

@@ -3,6 +3,7 @@ import os
 import pytest
 import yaml
 
+from dbt.artifacts.schemas.results import RunStatus
 from dbt.tests.util import (
     check_table_does_exist,
     mkdir,
@@ -135,9 +136,25 @@ name: 'pkg'
         run_dbt(["deps"])
 
         results, log_output = run_dbt_and_capture(["run-operation", "something_cool"])
+
+        for result in results:
+            if result.status == RunStatus.Skipped:
+                continue
+
+            timing_keys = [timing.name for timing in result.timing]
+            assert timing_keys == ["compile", "execute"]
+
         assert "something cool" in log_output
 
         results, log_output = run_dbt_and_capture(["run-operation", "pkg.something_cool"])
+
+        for result in results:
+            if result.status == RunStatus.Skipped:
+                continue
+
+            timing_keys = [timing.name for timing in result.timing]
+            assert timing_keys == ["compile", "execute"]
+
         assert "something cool" in log_output
 
         rm_dir("pkg")

@@ -17,6 +17,7 @@ from dbt.artifacts.schemas.results import (
     RunningStatus,
     RunStatus,
     TimingInfo,
+    collect_timing_info,
 )
 from dbt.artifacts.schemas.run import RunResult
 from dbt.cli.flags import Flags
@@ -633,7 +634,6 @@ class RunTask(CompileTask):
     def safe_run_hooks(
         self, adapter: BaseAdapter, hook_type: RunHookType, extra_context: Dict[str, Any]
     ) -> RunStatus:
-        started_at = datetime.utcnow()
         ordered_hooks = self.get_hooks_by_type(hook_type)
 
         if hook_type == RunHookType.End and ordered_hooks:
@@ -653,14 +653,20 @@ class RunTask(CompileTask):
                 hook.index = idx
                 hook_name = f"{hook.package_name}.{hook_type}.{hook.index - 1}"
                 execution_time = 0.0
-                timing = []
+                timing: List[TimingInfo] = []
                 failures = 1
 
                 if not failed:
+                    with collect_timing_info("compile", timing.append):
+                        sql = self.get_hook_sql(
+                            adapter, hook, hook.index, num_hooks, extra_context
+                        )
+
+                    started_at = timing[0].started_at or datetime.utcnow()
                     hook.update_event_status(
                         started_at=started_at.isoformat(), node_status=RunningStatus.Started
                     )
-                    sql = self.get_hook_sql(adapter, hook, hook.index, num_hooks, extra_context)
+
                     fire_event(
                         LogHookStartLine(
                             statement=hook_name,
@@ -670,11 +676,12 @@ class RunTask(CompileTask):
                         )
                     )
 
-                    status, message = get_execution_status(sql, adapter)
-                    finished_at = datetime.utcnow()
+                    with collect_timing_info("execute", timing.append):
+                        status, message = get_execution_status(sql, adapter)
+
+                    finished_at = timing[1].completed_at or datetime.utcnow()
                     hook.update_event_status(finished_at=finished_at.isoformat())
                     execution_time = (finished_at - started_at).total_seconds()
-                    timing = [TimingInfo(hook_name, started_at, finished_at)]
                     failures = 0 if status == RunStatus.Success else 1
 
                     if status == RunStatus.Success:
