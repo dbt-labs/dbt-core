@@ -99,7 +99,7 @@ def get_execution_status(sql: str, adapter: BaseAdapter) -> Tuple[RunStatus, str
         return status, message
 
 
-def track_model_run(adapter, index, num_nodes, run_model_result):
+def track_model_run(index, num_nodes, run_model_result, adapter=BaseAdapter):
     if tracking.active_user is None:
         raise DbtInternalError("cannot track model run with no active user")
     invocation_id = get_invocation_id()
@@ -288,7 +288,7 @@ class ModelRunner(CompileRunner):
         self.print_start_line()
 
     def after_execute(self, result) -> None:
-        track_model_run(self.adapter, self.node_index, self.num_nodes, result)
+        track_model_run(self.node_index, self.num_nodes, result, adapter=self.adapter)
         self.print_result_line(result)
 
     def _build_run_model_result(self, model, context):
