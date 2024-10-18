@@ -71,7 +71,7 @@ class TestBaseResolver:
         resolver.model.config.materialized = materialized
         resolver.model.config.incremental_strategy = incremental_strategy
         resolver.model.config.batch_size = BatchSize.day
-        resolver.model.config.lookback = 0
+        resolver.model.config.lookback = 1
 
         # Try to get an EventTimeFilter
         event_time_filter = resolver.resolve_event_time_filter(target=target)
