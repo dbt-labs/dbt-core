@@ -40,7 +40,8 @@ class MicrobatchBuilder:
 
     def build_end_time(self):
         """Defaults the end_time to the current time in UTC unless a non `None` event_time_end was provided"""
-        return self.event_time_end or self.default_end_time
+        end_time = self.event_time_end or self.default_end_time
+        return MicrobatchBuilder.ceiling_timestamp(end_time, self.model.config.batch_size)
 
     def build_start_time(self, checkpoint: Optional[datetime]):
         """Create a start time based off the passed in checkpoint.
