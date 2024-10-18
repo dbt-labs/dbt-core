@@ -117,8 +117,9 @@ def track_model_run(index, num_nodes, run_model_result, adapter=BaseAdapter):
         versioned = False
         incremental_strategy = None
 
-    # Each adapter decides what adapter-specific fields will be included
-    # so this is a flexible dictionary.
+    # Each adapter returns a dataclass with a flexible dictionary for
+    # adapter-specific fields. Only the non-'adapter_details' fields
+    # are guaranteed cross adapter.
     adapter_info = adapter.get_adapter_run_info(run_model_result.node.config)
 
     tracking.track_model_run(
