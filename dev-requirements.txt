@@ -1,7 +1,8 @@
-git+https://github.com/dbt-labs/dbt-adapters.git@main
-git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-tests-adapter
-git+https://github.com/dbt-labs/dbt-common.git@main
-git+https://github.com/dbt-labs/dbt-postgres.git@main
+# We hardcode these two dependencies to ensure that we are testing against the correct versions of
+# released code to ensure we don't introduce any breaking changes
+dbt-tests-adapter<=1.10.2
+dbt-postgres<=1.9.0
+#
 black>=24.3.0,<25.0
 bumpversion
 ddtrace==2.3.0
