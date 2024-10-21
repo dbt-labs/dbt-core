@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Callable, Dict, List, Optional, Sequence, Union
+from typing import Any, Callable, Dict, List, Literal, Optional, Sequence, Union
 
 from dbt.contracts.graph.nodes import ResultNode
 from dbt_common.dataclass_schema import StrEnum, dbtClassMixin
@@ -10,7 +10,13 @@ from dbt_common.utils import cast_to_int, cast_to_str
 
 @dataclass
 class TimingInfo(dbtClassMixin):
-    name: str
+    """
+    Represents a step in the execution of a node.
+    `name` should be one of: compile, execute, or other
+    Do not call directly, use `collect_timing_info` instead.
+    """
+
+    name: Literal["compile", "execute", "other"]
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
 
@@ -21,7 +27,7 @@ class TimingInfo(dbtClassMixin):
         self.completed_at = datetime.utcnow()
 
     def to_msg_dict(self):
-        msg_dict = {"name": self.name}
+        msg_dict = {"name": str(self.name)}
         if self.started_at:
             msg_dict["started_at"] = datetime_to_json_string(self.started_at)
         if self.completed_at:
@@ -31,7 +37,9 @@ class TimingInfo(dbtClassMixin):
 
 # This is a context manager
 class collect_timing_info:
-    def __init__(self, name: str, callback: Callable[[TimingInfo], None]) -> None:
+    def __init__(
+        self, name: Literal["compile", "execute", "other"], callback: Callable[[TimingInfo], None]
+    ) -> None:
         self.timing_info = TimingInfo(name=name)
         self.callback = callback
 

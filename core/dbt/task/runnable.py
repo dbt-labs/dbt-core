@@ -512,7 +512,6 @@ class GraphRunnableTask(ConfiguredTask):
         self.started_at = time.time()
         try:
             before_run_status = self.before_run(adapter, selected_uids)
-
             if before_run_status == RunStatus.Success or (
                 not get_flags().skip_nodes_if_on_run_start_fails
             ):
