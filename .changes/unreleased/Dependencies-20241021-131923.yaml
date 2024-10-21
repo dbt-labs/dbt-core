@@ -1,0 +1,6 @@
+kind: Dependencies
+body: Pin dbt-common and dbt-adapters with upper bound.
+time: 2024-10-21T13:19:23.137466-05:00
+custom:
+  Author: emmyoop
+  Issue: "10895"
