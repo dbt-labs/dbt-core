@@ -16,7 +16,7 @@ class TimingInfo(dbtClassMixin):
     Do not call directly, use `collect_timing_info` instead.
     """
 
-    name: Literal["compile", "execute", "other"]
+    name: str
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
 
