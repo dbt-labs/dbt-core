@@ -15,11 +15,12 @@ sources:
 class TestSourceQuotingLegacy:
     @pytest.fixture(scope="class")
     def project_config_update(self):
+        # Postgres quoting configs are True by default -- turn them all to False to show they are not respected during source rendering
         return {
             "quoting": {
-                "database": True,
-                "schema": True,
-                "database": True,
+                "database": False,
+                "schema": False,
+                "database": False,
             },
         }
 
@@ -34,4 +35,4 @@ class TestSourceQuotingLegacy:
         run_dbt(["compile"])
 
         generated_sql = read_file("target", "compiled", "test", "models", "model.sql")
-        assert generated_sql == "select * from source_database.source_schema.customers"
+        assert generated_sql == 'select * from "source_database"."source_schema"."customers"'
