@@ -210,7 +210,6 @@ class BaseSnapshotDbtValidToCurrent:
 
         results = run_dbt(["snapshot"])
         assert len(results) == 1
-        manifest = get_manifest(project.project_root)
 
         original_snapshot = run_sql_with_adapter(
             project.adapter,
