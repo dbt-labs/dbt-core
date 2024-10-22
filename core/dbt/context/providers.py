@@ -686,7 +686,7 @@ class RuntimeSourceResolver(BaseSourceResolver):
             )
 
         class SourceQuotingConfig:
-            quoting: Dict[str, Any] = {"database": False, "schema": False, "identifier": False}
+            quoting: Dict[str, Any] = {}
 
         # Preserve legacy behaviour where sources do not consider quoting configuration from dbt_project.yml
         base_quoting_config = (
