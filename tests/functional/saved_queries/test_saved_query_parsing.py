@@ -66,6 +66,10 @@ class TestSavedQueryParsing:
         assert len(saved_query.query_params.group_by) == 1
         assert len(saved_query.query_params.where.where_filters) == 3
         assert len(saved_query.depends_on.nodes) == 1
+
+        assert len(saved_query.query_params.order_by) == 2
+        assert saved_query.query_params.limit is not None
+
         assert saved_query.description == "My SavedQuery Description"
         assert len(saved_query.exports) == 1
         assert saved_query.exports[0].name == "my_export"
