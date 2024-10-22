@@ -121,7 +121,9 @@ def track_model_run(index, num_nodes, run_model_result, adapter=None):
     # Each adapter returns a dataclass with a flexible dictionary for
     # adapter-specific fields. Only the non-'adapter_details' fields
     # are guaranteed cross adapter.
-    adapter_info = adapter.get_adapter_run_info(run_model_result.node.config) if adapter else {}
+    adapter_info = (
+        asdict(adapter.get_adapter_run_info(run_model_result.node.config)) if adapter else {}
+    )
 
     tracking.track_model_run(
         {
@@ -142,7 +144,7 @@ def track_model_run(index, num_nodes, run_model_result, adapter=None):
             "contract_enforced": contract_enforced,
             "access": access,
             "versioned": versioned,
-            "adapter_info": asdict(adapter_info),
+            "adapter_info": adapter_info,
         }
     )
 
