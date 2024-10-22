@@ -517,7 +517,7 @@ T = TypeVar("T")
 
 
 def test_date_serialization():
-    ti = TimingInfo("test")
+    ti = TimingInfo("compile")
     ti.begin()
     ti.end()
     ti_dict = ti.to_dict()

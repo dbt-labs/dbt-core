@@ -1,0 +1,6 @@
+kind: Fixes
+body: Exclude hook result from results in on-run-end context
+time: 2024-10-18T13:58:10.396884-07:00
+custom:
+  Author: ChenyuLInx
+  Issue: "7387"
