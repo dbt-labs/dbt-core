@@ -101,6 +101,13 @@ def get_execution_status(sql: str, adapter: BaseAdapter) -> Tuple[RunStatus, str
         return status, message
 
 
+def _get_adapter_info(adapter, run_model_result) -> Dict[str, Any]:
+    """Each adapter returns a dataclass with a flexible dictionary for
+    adapter-specific fields. Only the non-'adapter_details' fields
+    are guaranteed cross adapter."""
+    return asdict(adapter.get_adapter_run_info(run_model_result.node.config)) if adapter else {}
+
+
 def track_model_run(index, num_nodes, run_model_result, adapter=None):
     if tracking.active_user is None:
         raise DbtInternalError("cannot track model run with no active user")
@@ -117,13 +124,6 @@ def track_model_run(index, num_nodes, run_model_result, adapter=None):
         contract_enforced = False
         versioned = False
         incremental_strategy = None
-
-    # Each adapter returns a dataclass with a flexible dictionary for
-    # adapter-specific fields. Only the non-'adapter_details' fields
-    # are guaranteed cross adapter.
-    adapter_info = (
-        asdict(adapter.get_adapter_run_info(run_model_result.node.config)) if adapter else {}
-    )
 
     tracking.track_model_run(
         {
@@ -144,7 +144,7 @@ def track_model_run(index, num_nodes, run_model_result, adapter=None):
             "contract_enforced": contract_enforced,
             "access": access,
             "versioned": versioned,
-            "adapter_info": adapter_info,
+            "adapter_info": _get_adapter_info(adapter, run_model_result),
         }
     )
 
