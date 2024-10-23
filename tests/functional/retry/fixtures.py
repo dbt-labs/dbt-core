@@ -1,5 +1,6 @@
 models__sample_model = """select 1 as id, baz as foo"""
 models__second_model = """select 1 as id, 2 as bar"""
+models__thread_model = """select idx as id"""
 
 models__union_model = """
 select foo + bar as sum3 from {{ ref('sample_model') }}
@@ -57,4 +58,14 @@ models:
       - name: id
         data_tests:
           - not_null
+"""
+
+schema_test_thread_yml = """
+models:
+  - name: thread_model
+    columns:
+      - name: id
+        data_tests:
+          - not_null
+
 """
