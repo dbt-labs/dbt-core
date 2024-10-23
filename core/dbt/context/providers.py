@@ -691,14 +691,12 @@ class RuntimeSourceResolver(BaseSourceResolver):
         class SourceQuotingConfig:
             quoting: Dict[str, Any] = {}
 
-        relation = self.Relation.create_from(
+        return self.Relation.create_from(
             SourceQuotingConfig(),
             target_source,
             limit=self.resolve_limit,
             event_time_filter=self.resolve_event_time_filter(target_source),
         )
-
-        return relation
 
 
 class RuntimeUnitTestSourceResolver(BaseSourceResolver):
