@@ -688,15 +688,8 @@ class RuntimeSourceResolver(BaseSourceResolver):
         class SourceQuotingConfig:
             quoting: Dict[str, Any] = {}
 
-        # Preserve legacy behaviour where sources do not consider quoting configuration from dbt_project.yml
-        base_quoting_config = (
-            self.config
-            if self.config.args.source_quoting_respects_project_config
-            else SourceQuotingConfig()
-        )
-
         relation = self.Relation.create_from(
-            base_quoting_config,
+            SourceQuotingConfig(),
             target_source,
             limit=self.resolve_limit,
             event_time_filter=self.resolve_event_time_filter(target_source),

@@ -12,7 +12,7 @@ sources:
 """
 
 
-class TestSourceQuotingGlobalConfigsLegacy:
+class TestSourceQuotingGlobalConfigs:
     @pytest.fixture(scope="class")
     def project_config_update(self):
         # Postgres quoting configs are True by default -- turn them all to False to show they are not respected during source rendering
@@ -36,35 +36,6 @@ class TestSourceQuotingGlobalConfigsLegacy:
 
         generated_sql = read_file("target", "compiled", "test", "models", "model.sql")
         assert generated_sql == 'select * from "source_database"."source_schema"."customers"'
-
-
-class TestSourceQuotingGlobalConfigs:
-    @pytest.fixture(scope="class")
-    def project_config_update(self):
-        # Postgres quoting configs are True by default -- turn them all to False to show they are respected during source rendering
-        return {
-            "quoting": {
-                "database": False,
-                "schema": False,
-                "identifier": False,
-            },
-            "flags": {
-                "source_quoting_respects_project_config": True,
-            },
-        }
-
-    @pytest.fixture(scope="class")
-    def models(self):
-        return {
-            "sources.yml": _SOURCES_YML,
-            "model.sql": "select * from {{ source('source_name', 'customers') }}",
-        }
-
-    def test_sources_ignore_global_quoting_configs(self, project):
-        run_dbt(["compile"])
-
-        generated_sql = read_file("target", "compiled", "test", "models", "model.sql")
-        assert generated_sql == "select * from source_database.source_schema.customers"
 
 
 class TestModelQuoting:
