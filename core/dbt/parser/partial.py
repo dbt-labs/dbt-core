@@ -834,6 +834,8 @@ class PartialParsing:
         # remove elem node and remove unique_id from node_patches
         for elem_unique_id in elem_unique_ids:
             # might have been already removed
+            # For all-yaml snapshots, we don't do this, since the node
+            # should have already been removed.
             if (
                 elem_unique_id in self.saved_manifest.nodes
                 or elem_unique_id in self.saved_manifest.disabled
