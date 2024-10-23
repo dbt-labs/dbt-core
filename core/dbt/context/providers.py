@@ -685,6 +685,9 @@ class RuntimeSourceResolver(BaseSourceResolver):
                 disabled=(isinstance(target_source, Disabled)),
             )
 
+        # Source quoting does _not_ respect global configs in dbt_project.yml, as documented here:
+        # https://docs.getdbt.com/reference/project-configs/quoting
+        # Use an object with an empty quoting field to bypass any settings in self.
         class SourceQuotingConfig:
             quoting: Dict[str, Any] = {}
 
