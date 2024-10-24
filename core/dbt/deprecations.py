@@ -118,6 +118,11 @@ class SourceFreshnessProjectHooksNotRun(DBTDeprecation):
     _event = "SourceFreshnessProjectHooksNotRun"
 
 
+class MFTimespineWithoutYamlConfigurationDeprecation(DBTDeprecation):
+    _name = "mf-timespine-without-yaml-configuration"
+    _event = "MFTimespineWithoutYamlConfigurationDeprecation"
+
+
 def renamed_env_var(old_name: str, new_name: str):
     class EnvironmentVariableRenamed(DBTDeprecation):
         _name = f"environment-variable-renamed:{old_name}"
@@ -166,6 +171,7 @@ deprecations_list: List[DBTDeprecation] = [
     PackageMaterializationOverrideDeprecation(),
     ResourceNamesWithSpacesDeprecation(),
     SourceFreshnessProjectHooksNotRun(),
+    MFTimespineWithoutYamlConfigurationDeprecation(),
 ]
 
 deprecations: Dict[str, DBTDeprecation] = {d.name: d for d in deprecations_list}

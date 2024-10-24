@@ -466,6 +466,16 @@ class SourceFreshnessProjectHooksNotRun(WarnLevel):
         return line_wrap_message(warning_tag(description))
 
 
+class MFTimespineWithoutYamlConfigurationDeprecation(WarnLevel):
+    def code(self) -> str:
+        return "D018"
+
+    def message(self) -> str:
+        description = "Time spines without YAML configuration are in the process of deprecation. Please add YAML configuration for your 'metricflow_time_spine' model. See documentation on MetricFlow time spines: https://docs.getdbt.com/docs/build/metricflow-time-spine and behavior change documentation: https://docs.getdbt.com/reference/global-configs/behavior-changes."
+
+        return line_wrap_message(warning_tag(description))
+
+
 # =======================================================
 # I - Project parsing
 # =======================================================
