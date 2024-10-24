@@ -57,7 +57,7 @@ class TestModelQuoting:
             "model_downstream.sql": "select * from {{ ref('model') }}",
         }
 
-    def test_sources_ignore_global_quoting_configs(self, project):
+    def test_models_respect_global_quoting_configs(self, project):
         run_dbt(["compile"])
 
         generated_sql = read_file("target", "compiled", "test", "models", "model_downstream.sql")
