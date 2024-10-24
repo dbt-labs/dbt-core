@@ -320,6 +320,8 @@ sample_values = [
     core_types.DepsScrubbedPackageName(package_name=""),
     core_types.DepsUnpinned(revision="", git=""),
     core_types.NoNodesForSelectionCriteria(spec_raw=""),
+    # P - Artifacts ======================
+    core_types.ArtifactWritten(artifact_type="manifest", artifact_path="path/to/artifact.json"),
     # Q - Node execution ======================
     core_types.RunningOperationCaughtError(exc=""),
     core_types.CompileComplete(),

@@ -1228,6 +1228,19 @@ message DepsScrubbedPackageNameMsg{
     DepsScrubbedPackageName data = 2;
 }
 
+// P - Artifacts
+
+// P001
+message ArtifactWritten {
+    string artifact_type = 1;
+    string artifact_path = 2;
+}
+
+message ArtifactWrittenMsg {
+    CoreEventInfo info = 1;
+    ArtifactWritten data = 2;
+}
+
 // Q - Node execution
 
 // Q001
