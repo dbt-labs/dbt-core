@@ -1,0 +1,6 @@
+kind: Fixes
+body: Restore source quoting behaviour when quoting config provided in dbt_project.yml
+time: 2024-10-23T15:20:54.766893-04:00
+custom:
+  Author: michelleark
+  Issue: "10892"
