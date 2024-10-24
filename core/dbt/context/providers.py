@@ -688,11 +688,11 @@ class RuntimeSourceResolver(BaseSourceResolver):
         # Source quoting does _not_ respect global configs in dbt_project.yml, as documented here:
         # https://docs.getdbt.com/reference/project-configs/quoting
         # Use an object with an empty quoting field to bypass any settings in self.
-        class SourceQuotingConfig:
+        class SourceQuotingBaseConfig:
             quoting: Dict[str, Any] = {}
 
         return self.Relation.create_from(
-            SourceQuotingConfig(),
+            SourceQuotingBaseConfig(),
             target_source,
             limit=self.resolve_limit,
             event_time_filter=self.resolve_event_time_filter(target_source),
