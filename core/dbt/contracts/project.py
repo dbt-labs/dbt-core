@@ -345,6 +345,7 @@ class ProjectFlags(ExtensibleDbtClassMixin):
     state_modified_compare_more_unrendered_values: bool = False
     state_modified_compare_vars: bool = False
     allow_mf_time_spines_without_yaml_configuration: bool = False
+    allow_legacy_mf_cumulative_type_params: bool = False
 
     @property
     def project_only_flags(self) -> Dict[str, Any]:
@@ -356,6 +357,7 @@ class ProjectFlags(ExtensibleDbtClassMixin):
             "state_modified_compare_more_unrendered_values": self.state_modified_compare_more_unrendered_values,
             "state_modified_compare_vars": self.state_modified_compare_vars,
             "allow_mf_time_spines_without_yaml_configuration": self.allow_mf_time_spines_without_yaml_configuration,
+            "allow_legacy_mf_cumulative_type_params": self.allow_legacy_mf_cumulative_type_params,
         }
 
 

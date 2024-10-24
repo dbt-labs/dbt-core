@@ -476,6 +476,16 @@ class MFTimespineWithoutYamlConfigurationDeprecation(WarnLevel):
         return line_wrap_message(warning_tag(description))
 
 
+class MFCumulativeTypeParamsDeprecation(WarnLevel):
+    def code(self) -> str:
+        return "D019"
+
+    def message(self) -> str:
+        description = "Cumulative fields `type_params.window` and `type_params.grain_to_date` have been moved and will soon be deprecated. Please nest those values under `type_params.cumulative_type_params.window` and `type_params.cumulative_type_params.grain_to_date`. See documentation on behavior changes: https://docs.getdbt.com/reference/global-configs/behavior-changes."
+
+        return line_wrap_message(warning_tag(description))
+
+
 # =======================================================
 # I - Project parsing
 # =======================================================
