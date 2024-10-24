@@ -222,7 +222,6 @@ class ConfiguredParser(
             name = block.name
         if block.path.relative_path.endswith(".py"):
             language = ModelLanguage.python
-            config.add_config_call({"materialized": "table"})
         else:
             # this is not ideal but we have a lot of tests to adjust if don't do it
             language = ModelLanguage.sql
@@ -322,6 +321,15 @@ class ConfiguredParser(
         # build_config_dict takes the config_call_dict in the ContextConfig object
         # and calls calculate_node_config to combine dbt_project configs and
         # config calls from SQL files, plus patch configs (from schema files)
+        # This normalize the config for a model node due #8520; should be improved latter
+        if not patch_config_dict:
+            patch_config_dict = {}
+        if (
+            parsed_node.resource_type == NodeType.Model
+            and parsed_node.language == ModelLanguage.python
+        ):
+            if "materialized" not in patch_config_dict:
+                patch_config_dict["materialized"] = "table"
         config_dict = config.build_config_dict(patch_config_dict=patch_config_dict)
 
         # Set tags on node provided in config blocks. Tags are additive, so even if

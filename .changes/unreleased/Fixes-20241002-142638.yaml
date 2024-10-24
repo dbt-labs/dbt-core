@@ -1,0 +1,6 @@
+kind: Fixes
+body: ' override materialization python models'
+time: 2024-10-02T14:26:38.332191458-03:00
+custom:
+    Author: devmessias
+    Issue: "8520"
