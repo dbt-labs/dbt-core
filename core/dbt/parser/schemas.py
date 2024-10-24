@@ -309,8 +309,9 @@ class SchemaParser(SimpleParser[YamlBlock, ModelNode]):
                 snapshot_node.raw_code = "select * from {{ " + snapshot["relation"] + " }}"
 
                 # Add our new node to the manifest, and note that ref lookup collections
-                # will need to be rebuilt.
-                self.manifest.add_node_nofile(snapshot_node)
+                # will need to be rebuilt. This adds the node unique_id to the "snapshots"
+                # list in the SchemaSourceFile.
+                self.manifest.add_node(block.file, snapshot_node)
                 rebuild_refs = True
 
         if rebuild_refs:

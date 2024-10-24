@@ -59,6 +59,7 @@ from dbt.contracts.graph.nodes import (
     SeedNode,
     SemanticModel,
     SingularTestNode,
+    SnapshotNode,
     SourceDefinition,
     UnitTestDefinition,
     UnitTestFileFixture,
@@ -1600,12 +1601,14 @@ class Manifest(MacroMethods, dbtClassMixin):
             if isinstance(node, GenericTestNode):
                 assert test_from
                 source_file.add_test(node.unique_id, test_from)
-            if isinstance(node, Metric):
+            elif isinstance(node, Metric):
                 source_file.metrics.append(node.unique_id)
-            if isinstance(node, Exposure):
+            elif isinstance(node, Exposure):
                 source_file.exposures.append(node.unique_id)
-            if isinstance(node, Group):
+            elif isinstance(node, Group):
                 source_file.groups.append(node.unique_id)
+            elif isinstance(node, SnapshotNode):
+                source_file.snapshots.append(node.unique_id)
         elif isinstance(source_file, FixtureSourceFile):
             pass
         else:
