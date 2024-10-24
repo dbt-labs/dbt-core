@@ -309,6 +309,141 @@ class TestUnitTestIncrementalModelWithVersion:
         assert len(results) == 2
 
 
+schema_ref_with_version = """
+models:
+  - name: source
+    latest_version: {latest_version}
+    versions:
+        - v: 1
+        - v: 2
+  - name: model_to_test
+unit_tests:
+  - name: ref_versioned
+    model: 'model_to_test'
+    given:
+    - input: {input}
+      rows:
+        - {{result: 3}}
+    expect:
+      rows:
+        - {{result: 3}}
+
+"""
+
+
+class TestUnitTestRefWithVersion:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "model_to_test.sql": "select result from {{ ref('source')}}",
+            "source.sql": "select 2 as result",
+            "source_v2.sql": "select 2 as result",
+            "schema.yml": schema_ref_with_version.format(
+                **{"latest_version": 1, "input": "ref('source')"}
+            ),
+        }
+
+    def test_basic(self, project):
+        results = run_dbt(["run"])
+
+        results = run_dbt(["test", "--select", "model_to_test"], expect_pass=True)
+        assert len(results) == 1
+
+
+class TestUnitTestRefMissingVersionModel:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "model_to_test.sql": "select result from {{ ref('source')}}",
+            "source_v1.sql": "select 2 as result",
+            "source_v2.sql": "select 2 as result",
+            "schema.yml": schema_ref_with_version.format(
+                **{"latest_version": 1, "input": "ref('source', v=1)"}
+            ),
+        }
+
+    def test_basic(self, project):
+        results = run_dbt(["run"])
+
+        results = run_dbt(["test", "--select", "model_to_test"], expect_pass=True)
+        assert len(results) == 1
+
+
+class TestUnitTestRefWithMissingVersionRef:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "model_to_test.sql": "select result from {{ ref('source', v=1)}}",
+            "source_v1.sql": "select 2 as result",
+            "source_v2.sql": "select 2 as result",
+            "schema.yml": schema_ref_with_version.format(
+                **{"latest_version": 1, "input": "ref('source')"}
+            ),
+        }
+
+    def test_basic(self, project):
+        results = run_dbt(["run"])
+
+        results = run_dbt(["test", "--select", "model_to_test"], expect_pass=True)
+        assert len(results) == 1
+
+
+class TestUnitTestRefWithVersionLatestSecond:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "model_to_test.sql": "select result from {{ ref('source')}}",
+            "source_v1.sql": "select 2 as result",
+            "source_v2.sql": "select 2 as result",
+            "schema.yml": schema_ref_with_version.format(
+                **{"latest_version": 2, "input": "ref('source')"}
+            ),
+        }
+
+    def test_basic(self, project):
+        results = run_dbt(["run"])
+
+        results = run_dbt(["test", "--select", "model_to_test"], expect_pass=True)
+        assert len(results) == 1
+
+
+class TestUnitTestRefWithVersionMissingRefTest:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "model_to_test.sql": "select result from {{ ref('source', v=2)}}",
+            "source_v1.sql": "select 2 as result",
+            "source_v2.sql": "select 2 as result",
+            "schema.yml": schema_ref_with_version.format(
+                **{"latest_version": 1, "input": "ref('source')"}
+            ),
+        }
+
+    def test_basic(self, project):
+        results = run_dbt(["run"])
+        assert len(results) == 3
+        # TODO: How to capture an compilation Error? pytest.raises(CompilationError) not working
+        run_dbt(["test", "--select", "model_to_test"], expect_pass=False)
+
+
+class TestUnitTestRefWithVersionDiffLatest:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "model_to_test.sql": "select result from {{ ref('source', v=2)}}",
+            "source_v1.sql": "select 2 as result",
+            "source_v2.sql": "select 2 as result",
+            "schema.yml": schema_ref_with_version.format(
+                **{"latest_version": 1, "input": "ref('source', v=2)"}
+            ),
+        }
+
+    def test_basic(self, project):
+        results = run_dbt(["run"])
+        assert len(results) == 3
+        run_dbt(["test", "--select", "model_to_test"], expect_pass=True)
+
+
 class TestUnitTestExplicitSeed:
     @pytest.fixture(scope="class")
     def seeds(self):

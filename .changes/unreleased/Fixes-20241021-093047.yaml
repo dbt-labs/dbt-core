@@ -1,0 +1,6 @@
+kind: Fixes
+body: unit tests with versioned refs
+time: 2024-10-21T09:30:47.949023898-03:00
+custom:
+    Author: devmessias
+    Issue: 10880 10528 10623
