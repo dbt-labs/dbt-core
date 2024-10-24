@@ -550,6 +550,9 @@ class ModelRunner(CompileRunner):
                 # Update context vars for future batches
                 context["is_incremental"] = lambda: True
                 context["should_full_refresh"] = lambda: False
+            except (KeyboardInterrupt, SystemExit):
+                # reraise it for GraphRunnableTask.execute_nodes to handle
+                raise
             except Exception as e:
                 exception = e
                 batch_run_result = self._build_failed_run_batch_result(
