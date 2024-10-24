@@ -50,7 +50,7 @@ PROJECT_ID_SPEC = "iglu:com.dbt/project_id/jsonschema/1-0-1"
 RESOURCE_COUNTS = "iglu:com.dbt/resource_counts/jsonschema/1-0-1"
 RPC_REQUEST_SPEC = "iglu:com.dbt/rpc_request/jsonschema/1-0-1"
 RUNNABLE_TIMING = "iglu:com.dbt/runnable/jsonschema/1-0-0"
-RUN_MODEL_SPEC = "iglu:com.dbt/run_model/jsonschema/1-0-4"
+RUN_MODEL_SPEC = "iglu:com.dbt/run_model/jsonschema/1-1-0"
 PLUGIN_GET_NODES = "iglu:com.dbt/plugin_get_nodes/jsonschema/1-0-0"
 
 SNOWPLOW_TRACKER_VERSION = Version(snowplow_version)
