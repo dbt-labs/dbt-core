@@ -532,7 +532,7 @@ class ModelRunner(CompileRunner):
                         batch[0], model.config.batch_size
                     ),
                 )
-                context["model"] = model
+                context["model"] = model.to_dict()
                 context["sql"] = model.compiled_code
                 context["compiled_code"] = model.compiled_code
 
