@@ -2,6 +2,7 @@ import hashlib
 import os
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 from typing import (
     Any,
     Dict,
@@ -59,6 +60,7 @@ from dbt.artifacts.resources import SourceDefinition as SourceDefinitionResource
 from dbt.artifacts.resources import SqlOperation as SqlOperationResource
 from dbt.artifacts.resources import TimeSpine
 from dbt.artifacts.resources import UnitTestDefinition as UnitTestDefinitionResource
+from dbt.artifacts.schemas.batch_results import BatchResults
 from dbt.contracts.graph.model_config import UnitTestNodeConfig
 from dbt.contracts.graph.node_args import ModelNodeArgs
 from dbt.contracts.graph.unparsed import (
@@ -243,7 +245,9 @@ class NodeInfoMixin:
 
 @dataclass
 class ParsedNode(ParsedResource, NodeInfoMixin, ParsedNodeMandatory, SerializableType):
-    def get_target_write_path(self, target_path: str, subdirectory: str):
+    def get_target_write_path(
+        self, target_path: str, subdirectory: str, split_suffix: Optional[str] = None
+    ):
         # This is called for both the "compiled" subdirectory of "target" and the "run" subdirectory
         if os.path.basename(self.path) == os.path.basename(self.original_file_path):
             # One-to-one relationship of nodes to files.
@@ -251,6 +255,15 @@ class ParsedNode(ParsedResource, NodeInfoMixin, ParsedNodeMandatory, Serializabl
         else:
             #  Many-to-one relationship of nodes to files.
             path = os.path.join(self.original_file_path, self.path)
+
+        if split_suffix:
+            pathlib_path = Path(path)
+            path = str(
+                pathlib_path.parent
+                / pathlib_path.stem
+                / (pathlib_path.stem + f"_{split_suffix}" + pathlib_path.suffix)
+            )
+
         target_write_path = os.path.join(target_path, subdirectory, self.package_name, path)
         return target_write_path
 
@@ -430,6 +443,8 @@ class HookNode(HookNodeResource, CompiledNode):
 
 @dataclass
 class ModelNode(ModelResource, CompiledNode):
+    batch_info: Optional[BatchResults] = None
+
     @classmethod
     def resource_class(cls) -> Type[ModelResource]:
         return ModelResource
@@ -1210,12 +1225,16 @@ class SourceDefinition(
         return SourceDefinitionResource
 
     def same_database_representation(self, other: "SourceDefinition") -> bool:
-        return (
-            self.database == other.database
-            and self.schema == other.schema
-            and self.identifier == other.identifier
-            and True
-        )
+
+        # preserve legacy behaviour -- use potentially rendered database
+        if get_flags().state_modified_compare_more_unrendered_values is False:
+            same_database = self.database == other.database
+            same_schema = self.schema == other.schema
+        else:
+            same_database = self.unrendered_database == other.unrendered_database
+            same_schema = self.unrendered_schema == other.unrendered_schema
+
+        return same_database and same_schema and self.identifier == other.identifier and True
 
     def same_quoting(self, other: "SourceDefinition") -> bool:
         return self.quoting == other.quoting
@@ -1458,7 +1477,7 @@ class Group(GroupResource, BaseNode):
         return {
             "name": self.name,
             "package_name": self.package_name,
-            "owner": self.owner.to_dict(),
+            "owner": self.owner.to_dict(omit_none=True),
         }
 
 
@@ -1627,6 +1646,11 @@ class ParsedMacroPatch(ParsedPatch):
     arguments: List[MacroArgument] = field(default_factory=list)
 
 
+@dataclass
+class ParsedSingularTestPatch(ParsedPatch):
+    pass
+
+
 # ====================================
 # Node unions/categories
 # ====================================
@@ -1654,6 +1678,7 @@ ManifestNode = Union[
 ResultNode = Union[
     ManifestNode,
     SourceDefinition,
+    HookNode,
 ]
 
 # All nodes that can be in the DAG
@@ -1676,6 +1701,7 @@ Resource = Union[
 
 TestNode = Union[SingularTestNode, GenericTestNode]
 
+SemanticManifestNode = Union[SavedQuery, SemanticModel, Metric]
 
 RESOURCE_CLASS_TO_NODE_CLASS: Dict[Type[BaseResource], Type[BaseNode]] = {
     node_class.resource_class(): node_class

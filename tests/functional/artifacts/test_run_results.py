@@ -55,7 +55,7 @@ class TestRunResultsSerializableInContext:
 
     def test_results_serializable(self, project):
         results = run_dbt(["run"])
-        assert len(results.results) == 1
+        assert len(results.results) == 2
 
 
 # This test is failing due to the faulty assumptions that run_results.json would

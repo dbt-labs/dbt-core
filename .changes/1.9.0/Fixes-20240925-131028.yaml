@@ -1,0 +1,7 @@
+kind: Fixes
+body: Ignore rendered jinja in configs for state:modified, behind state_modified_compare_more_unrendered_values
+  behaviour flag
+time: 2024-09-25T13:10:28.490042+01:00
+custom:
+  Author: michelleark
+  Issue: "9564"

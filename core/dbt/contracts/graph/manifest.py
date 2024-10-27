@@ -58,6 +58,8 @@ from dbt.contracts.graph.nodes import (
     SavedQuery,
     SeedNode,
     SemanticModel,
+    SingularTestNode,
+    SnapshotNode,
     SourceDefinition,
     UnitTestDefinition,
     UnitTestFileFixture,
@@ -89,7 +91,7 @@ DocName = str
 RefName = str
 
 
-def find_unique_id_for_package(storage, key, package: Optional[PackageName]):
+def find_unique_id_for_package(storage, key, package: Optional[PackageName]) -> Optional[UniqueID]:
     if key not in storage:
         return None
 
@@ -468,6 +470,43 @@ class DisabledLookup(dbtClassMixin):
 class AnalysisLookup(RefableLookup):
     _lookup_types: ClassVar[set] = set([NodeType.Analysis])
     _versioned_types: ClassVar[set] = set()
+
+
+class SingularTestLookup(dbtClassMixin):
+    def __init__(self, manifest: "Manifest") -> None:
+        self.storage: Dict[str, Dict[PackageName, UniqueID]] = {}
+        self.populate(manifest)
+
+    def get_unique_id(self, search_name, package: Optional[PackageName]) -> Optional[UniqueID]:
+        return find_unique_id_for_package(self.storage, search_name, package)
+
+    def find(
+        self, search_name, package: Optional[PackageName], manifest: "Manifest"
+    ) -> Optional[SingularTestNode]:
+        unique_id = self.get_unique_id(search_name, package)
+        if unique_id is not None:
+            return self.perform_lookup(unique_id, manifest)
+        return None
+
+    def add_singular_test(self, source: SingularTestNode) -> None:
+        if source.search_name not in self.storage:
+            self.storage[source.search_name] = {}
+
+        self.storage[source.search_name][source.package_name] = source.unique_id
+
+    def populate(self, manifest: "Manifest") -> None:
+        for node in manifest.nodes.values():
+            if isinstance(node, SingularTestNode):
+                self.add_singular_test(node)
+
+    def perform_lookup(self, unique_id: UniqueID, manifest: "Manifest") -> SingularTestNode:
+        if unique_id not in manifest.nodes:
+            raise dbt_common.exceptions.DbtInternalError(
+                f"Singular test {unique_id} found in cache but not found in manifest"
+            )
+        node = manifest.nodes[unique_id]
+        assert isinstance(node, SingularTestNode)
+        return node
 
 
 def _packages_to_search(
@@ -869,6 +908,9 @@ class Manifest(MacroMethods, dbtClassMixin):
     _analysis_lookup: Optional[AnalysisLookup] = field(
         default=None, metadata={"serialize": lambda x: None, "deserialize": lambda x: None}
     )
+    _singular_test_lookup: Optional[SingularTestLookup] = field(
+        default=None, metadata={"serialize": lambda x: None, "deserialize": lambda x: None}
+    )
     _parsing_info: ParsingInfo = field(
         default_factory=ParsingInfo,
         metadata={"serialize": lambda x: None, "deserialize": lambda x: None},
@@ -1265,27 +1307,14 @@ class Manifest(MacroMethods, dbtClassMixin):
         return self._analysis_lookup
 
     @property
+    def singular_test_lookup(self) -> SingularTestLookup:
+        if self._singular_test_lookup is None:
+            self._singular_test_lookup = SingularTestLookup(self)
+        return self._singular_test_lookup
+
+    @property
     def external_node_unique_ids(self):
         return [node.unique_id for node in self.nodes.values() if node.is_external_node]
-
-    def resolve_refs(
-        self,
-        source_node: ModelNode,
-        current_project: str,  # TODO: ModelNode is overly restrictive typing
-    ) -> List[MaybeNonSource]:
-        resolved_refs: List[MaybeNonSource] = []
-        for ref in source_node.refs:
-            resolved = self.resolve_ref(
-                source_node,
-                ref.name,
-                ref.package,
-                ref.version,
-                current_project,
-                source_node.package_name,
-            )
-            resolved_refs.append(resolved)
-
-        return resolved_refs
 
     # Called by dbt.parser.manifest._process_refs & ManifestLoader.check_for_model_deprecations
     def resolve_ref(
@@ -1572,12 +1601,14 @@ class Manifest(MacroMethods, dbtClassMixin):
             if isinstance(node, GenericTestNode):
                 assert test_from
                 source_file.add_test(node.unique_id, test_from)
-            if isinstance(node, Metric):
+            elif isinstance(node, Metric):
                 source_file.metrics.append(node.unique_id)
-            if isinstance(node, Exposure):
+            elif isinstance(node, Exposure):
                 source_file.exposures.append(node.unique_id)
-            if isinstance(node, Group):
+            elif isinstance(node, Group):
                 source_file.groups.append(node.unique_id)
+            elif isinstance(node, SnapshotNode):
+                source_file.snapshots.append(node.unique_id)
         elif isinstance(source_file, FixtureSourceFile):
             pass
         else:
@@ -1708,6 +1739,7 @@ class Manifest(MacroMethods, dbtClassMixin):
             self._semantic_model_by_measure_lookup,
             self._disabled_lookup,
             self._analysis_lookup,
+            self._singular_test_lookup,
         )
         return self.__class__, args
 

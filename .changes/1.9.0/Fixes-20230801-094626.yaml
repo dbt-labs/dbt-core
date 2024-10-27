@@ -1,0 +1,6 @@
+kind: Fixes
+body: Test case for `merge_exclude_columns`
+time: 2023-08-01T09:46:26.829362-06:00
+custom:
+  Author: dbeatty10
+  Issue: "8267"

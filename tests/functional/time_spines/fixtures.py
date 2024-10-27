@@ -54,9 +54,16 @@ models:
   - name: metricflow_time_spine
     time_spine:
       standard_granularity_column: date_day
+      custom_granularities:
+        - name: retail_month
+        - name: martian_year
+          column_name: martian__year_xyz
     columns:
       - name: date_day
         granularity: day
+      - name: retail_month
+      - name: martian__year_xyz
+
 """
 
 missing_time_spine_yml = """
@@ -76,11 +83,23 @@ models:
       - name: ts_second
 """
 
-time_spine_missing_column_yml = """
+time_spine_missing_standard_column_yml = """
 models:
   - name: metricflow_time_spine_second
     time_spine:
       standard_granularity_column: ts_second
     columns:
       - name: date_day
+"""
+
+time_spine_missing_custom_column_yml = """
+models:
+  - name: metricflow_time_spine_second
+    time_spine:
+      standard_granularity_column: date_day
+      custom_granularities:
+        - name: retail_month
+    columns:
+      - name: date_day
+        granularity: day
 """

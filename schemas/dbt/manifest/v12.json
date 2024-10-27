@@ -13,7 +13,7 @@
         },
         "dbt_version": {
           "type": "string",
-          "default": "1.9.0a1"
+          "default": "1.9.0b2"
         },
         "generated_at": {
           "type": "string"
@@ -259,6 +259,15 @@
                     ],
                     "default": null
                   },
+                  "batch_size": {
+                    "default": null
+                  },
+                  "lookback": {
+                    "default": 1
+                  },
+                  "begin": {
+                    "default": null
+                  },
                   "persist_docs": {
                     "type": "object",
                     "propertyNames": {
@@ -433,6 +442,9 @@
                       }
                     },
                     "additionalProperties": false
+                  },
+                  "event_time": {
+                    "default": null
                   },
                   "delimiter": {
                     "type": "string",
@@ -694,6 +706,12 @@
                   "type": "string"
                 }
               },
+              "unrendered_config_call_dict": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                }
+              },
               "relation_name": {
                 "anyOf": [
                   {
@@ -909,6 +927,15 @@
                                 ],
                                 "default": null
                               },
+                              "batch_size": {
+                                "default": null
+                              },
+                              "lookback": {
+                                "default": 1
+                              },
+                              "begin": {
+                                "default": null
+                              },
                               "persist_docs": {
                                 "type": "object",
                                 "propertyNames": {
@@ -1083,6 +1110,9 @@
                                   }
                                 },
                                 "additionalProperties": false
+                              },
+                              "event_time": {
+                                "default": null
                               }
                             },
                             "additionalProperties": true
@@ -1283,6 +1313,15 @@
                     ],
                     "default": null
                   },
+                  "batch_size": {
+                    "default": null
+                  },
+                  "lookback": {
+                    "default": 1
+                  },
+                  "begin": {
+                    "default": null
+                  },
                   "persist_docs": {
                     "type": "object",
                     "propertyNames": {
@@ -1457,6 +1496,9 @@
                       }
                     },
                     "additionalProperties": false
+                  },
+                  "event_time": {
+                    "default": null
                   }
                 },
                 "additionalProperties": true
@@ -1698,6 +1740,12 @@
                 "type": "number"
               },
               "config_call_dict": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                }
+              },
+              "unrendered_config_call_dict": {
                 "type": "object",
                 "propertyNames": {
                   "type": "string"
@@ -2351,6 +2399,12 @@
                   "type": "string"
                 }
               },
+              "unrendered_config_call_dict": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                }
+              },
               "relation_name": {
                 "anyOf": [
                   {
@@ -2704,6 +2758,15 @@
                     ],
                     "default": null
                   },
+                  "batch_size": {
+                    "default": null
+                  },
+                  "lookback": {
+                    "default": 1
+                  },
+                  "begin": {
+                    "default": null
+                  },
                   "persist_docs": {
                     "type": "object",
                     "propertyNames": {
@@ -2878,6 +2941,9 @@
                       }
                     },
                     "additionalProperties": false
+                  },
+                  "event_time": {
+                    "default": null
                   }
                 },
                 "additionalProperties": true
@@ -3119,6 +3185,12 @@
                 "type": "number"
               },
               "config_call_dict": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                }
+              },
+              "unrendered_config_call_dict": {
                 "type": "object",
                 "propertyNames": {
                   "type": "string"
@@ -3488,6 +3560,15 @@
                     ],
                     "default": null
                   },
+                  "batch_size": {
+                    "default": null
+                  },
+                  "lookback": {
+                    "default": 1
+                  },
+                  "begin": {
+                    "default": null
+                  },
                   "persist_docs": {
                     "type": "object",
                     "propertyNames": {
@@ -3662,6 +3743,9 @@
                       }
                     },
                     "additionalProperties": false
+                  },
+                  "event_time": {
+                    "default": null
                   },
                   "access": {
                     "enum": [
@@ -3911,6 +3995,12 @@
                 "type": "number"
               },
               "config_call_dict": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                }
+              },
+              "unrendered_config_call_dict": {
                 "type": "object",
                 "propertyNames": {
                   "type": "string"
@@ -4399,6 +4489,15 @@
                                 ],
                                 "default": null
                               },
+                              "batch_size": {
+                                "default": null
+                              },
+                              "lookback": {
+                                "default": 1
+                              },
+                              "begin": {
+                                "default": null
+                              },
                               "persist_docs": {
                                 "type": "object",
                                 "propertyNames": {
@@ -4573,6 +4672,9 @@
                                   }
                                 },
                                 "additionalProperties": false
+                              },
+                              "event_time": {
+                                "default": null
                               }
                             },
                             "additionalProperties": true
@@ -4618,6 +4720,33 @@
                     "properties": {
                       "standard_granularity_column": {
                         "type": "string"
+                      },
+                      "custom_granularities": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "title": "CustomGranularity",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "column_name": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ],
+                              "default": null
+                            }
+                          },
+                          "additionalProperties": false,
+                          "required": [
+                            "name"
+                          ]
+                        }
                       }
                     },
                     "additionalProperties": false,
@@ -4800,6 +4929,15 @@
                     ],
                     "default": null
                   },
+                  "batch_size": {
+                    "default": null
+                  },
+                  "lookback": {
+                    "default": 1
+                  },
+                  "begin": {
+                    "default": null
+                  },
                   "persist_docs": {
                     "type": "object",
                     "propertyNames": {
@@ -4974,6 +5112,9 @@
                       }
                     },
                     "additionalProperties": false
+                  },
+                  "event_time": {
+                    "default": null
                   }
                 },
                 "additionalProperties": true
@@ -5215,6 +5356,12 @@
                 "type": "number"
               },
               "config_call_dict": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                }
+              },
+              "unrendered_config_call_dict": {
                 "type": "object",
                 "propertyNames": {
                   "type": "string"
@@ -5868,6 +6015,12 @@
                   "type": "string"
                 }
               },
+              "unrendered_config_call_dict": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                }
+              },
               "relation_name": {
                 "anyOf": [
                   {
@@ -6282,6 +6435,15 @@
                     ],
                     "default": null
                   },
+                  "batch_size": {
+                    "default": null
+                  },
+                  "lookback": {
+                    "default": 1
+                  },
+                  "begin": {
+                    "default": null
+                  },
                   "persist_docs": {
                     "type": "object",
                     "propertyNames": {
@@ -6379,6 +6541,12 @@
                         "type": "string"
                       },
                       {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      {
                         "type": "null"
                       }
                     ],
@@ -6451,6 +6619,9 @@
                     },
                     "additionalProperties": false
                   },
+                  "event_time": {
+                    "default": null
+                  },
                   "strategy": {
                     "anyOf": [
                       {
@@ -6505,6 +6676,68 @@
                         "items": {
                           "type": "string"
                         }
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "snapshot_meta_column_names": {
+                    "type": "object",
+                    "title": "SnapshotMetaColumnNames",
+                    "properties": {
+                      "dbt_valid_to": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null
+                      },
+                      "dbt_valid_from": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null
+                      },
+                      "dbt_scd_id": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null
+                      },
+                      "dbt_updated_at": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "dbt_valid_to_current": {
+                    "anyOf": [
+                      {
+                        "type": "string"
                       },
                       {
                         "type": "null"
@@ -6752,6 +6985,12 @@
                 "type": "number"
               },
               "config_call_dict": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                }
+              },
+              "unrendered_config_call_dict": {
                 "type": "object",
                 "propertyNames": {
                   "type": "string"
@@ -7117,6 +7356,15 @@
                                 ],
                                 "default": null
                               },
+                              "batch_size": {
+                                "default": null
+                              },
+                              "lookback": {
+                                "default": 1
+                              },
+                              "begin": {
+                                "default": null
+                              },
                               "persist_docs": {
                                 "type": "object",
                                 "propertyNames": {
@@ -7291,6 +7539,9 @@
                                   }
                                 },
                                 "additionalProperties": false
+                              },
+                              "event_time": {
+                                "default": null
                               }
                             },
                             "additionalProperties": true
@@ -7873,6 +8124,9 @@
               "enabled": {
                 "type": "boolean",
                 "default": true
+              },
+              "event_time": {
+                "default": null
               }
             },
             "additionalProperties": true
@@ -7907,6 +8161,28 @@
           },
           "created_at": {
             "type": "number"
+          },
+          "unrendered_database": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "unrendered_schema": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           }
         },
         "additionalProperties": false,
@@ -9874,6 +10150,15 @@
                           ],
                           "default": null
                         },
+                        "batch_size": {
+                          "default": null
+                        },
+                        "lookback": {
+                          "default": 1
+                        },
+                        "begin": {
+                          "default": null
+                        },
                         "persist_docs": {
                           "type": "object",
                           "propertyNames": {
@@ -10048,6 +10333,9 @@
                             }
                           },
                           "additionalProperties": false
+                        },
+                        "event_time": {
+                          "default": null
                         },
                         "delimiter": {
                           "type": "string",
@@ -10309,6 +10597,12 @@
                         "type": "string"
                       }
                     },
+                    "unrendered_config_call_dict": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      }
+                    },
                     "relation_name": {
                       "anyOf": [
                         {
@@ -10524,6 +10818,15 @@
                                       ],
                                       "default": null
                                     },
+                                    "batch_size": {
+                                      "default": null
+                                    },
+                                    "lookback": {
+                                      "default": 1
+                                    },
+                                    "begin": {
+                                      "default": null
+                                    },
                                     "persist_docs": {
                                       "type": "object",
                                       "propertyNames": {
@@ -10698,6 +11001,9 @@
                                         }
                                       },
                                       "additionalProperties": false
+                                    },
+                                    "event_time": {
+                                      "default": null
                                     }
                                   },
                                   "additionalProperties": true
@@ -10898,6 +11204,15 @@
                           ],
                           "default": null
                         },
+                        "batch_size": {
+                          "default": null
+                        },
+                        "lookback": {
+                          "default": 1
+                        },
+                        "begin": {
+                          "default": null
+                        },
                         "persist_docs": {
                           "type": "object",
                           "propertyNames": {
@@ -11072,6 +11387,9 @@
                             }
                           },
                           "additionalProperties": false
+                        },
+                        "event_time": {
+                          "default": null
                         }
                       },
                       "additionalProperties": true
@@ -11313,6 +11631,12 @@
                       "type": "number"
                     },
                     "config_call_dict": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      }
+                    },
+                    "unrendered_config_call_dict": {
                       "type": "object",
                       "propertyNames": {
                         "type": "string"
@@ -11966,6 +12290,12 @@
                         "type": "string"
                       }
                     },
+                    "unrendered_config_call_dict": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      }
+                    },
                     "relation_name": {
                       "anyOf": [
                         {
@@ -12319,6 +12649,15 @@
                           ],
                           "default": null
                         },
+                        "batch_size": {
+                          "default": null
+                        },
+                        "lookback": {
+                          "default": 1
+                        },
+                        "begin": {
+                          "default": null
+                        },
                         "persist_docs": {
                           "type": "object",
                           "propertyNames": {
@@ -12493,6 +12832,9 @@
                             }
                           },
                           "additionalProperties": false
+                        },
+                        "event_time": {
+                          "default": null
                         }
                       },
                       "additionalProperties": true
@@ -12734,6 +13076,12 @@
                       "type": "number"
                     },
                     "config_call_dict": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      }
+                    },
+                    "unrendered_config_call_dict": {
                       "type": "object",
                       "propertyNames": {
                         "type": "string"
@@ -13103,6 +13451,15 @@
                           ],
                           "default": null
                         },
+                        "batch_size": {
+                          "default": null
+                        },
+                        "lookback": {
+                          "default": 1
+                        },
+                        "begin": {
+                          "default": null
+                        },
                         "persist_docs": {
                           "type": "object",
                           "propertyNames": {
@@ -13277,6 +13634,9 @@
                             }
                           },
                           "additionalProperties": false
+                        },
+                        "event_time": {
+                          "default": null
                         },
                         "access": {
                           "enum": [
@@ -13526,6 +13886,12 @@
                       "type": "number"
                     },
                     "config_call_dict": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      }
+                    },
+                    "unrendered_config_call_dict": {
                       "type": "object",
                       "propertyNames": {
                         "type": "string"
@@ -14014,6 +14380,15 @@
                                       ],
                                       "default": null
                                     },
+                                    "batch_size": {
+                                      "default": null
+                                    },
+                                    "lookback": {
+                                      "default": 1
+                                    },
+                                    "begin": {
+                                      "default": null
+                                    },
                                     "persist_docs": {
                                       "type": "object",
                                       "propertyNames": {
@@ -14188,6 +14563,9 @@
                                         }
                                       },
                                       "additionalProperties": false
+                                    },
+                                    "event_time": {
+                                      "default": null
                                     }
                                   },
                                   "additionalProperties": true
@@ -14233,6 +14611,33 @@
                           "properties": {
                             "standard_granularity_column": {
                               "type": "string"
+                            },
+                            "custom_granularities": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "title": "CustomGranularity",
+                                "properties": {
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "column_name": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ],
+                                    "default": null
+                                  }
+                                },
+                                "additionalProperties": false,
+                                "required": [
+                                  "name"
+                                ]
+                              }
                             }
                           },
                           "additionalProperties": false,
@@ -14415,6 +14820,15 @@
                           ],
                           "default": null
                         },
+                        "batch_size": {
+                          "default": null
+                        },
+                        "lookback": {
+                          "default": 1
+                        },
+                        "begin": {
+                          "default": null
+                        },
                         "persist_docs": {
                           "type": "object",
                           "propertyNames": {
@@ -14589,6 +15003,9 @@
                             }
                           },
                           "additionalProperties": false
+                        },
+                        "event_time": {
+                          "default": null
                         }
                       },
                       "additionalProperties": true
@@ -14830,6 +15247,12 @@
                       "type": "number"
                     },
                     "config_call_dict": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      }
+                    },
+                    "unrendered_config_call_dict": {
                       "type": "object",
                       "propertyNames": {
                         "type": "string"
@@ -15483,6 +15906,12 @@
                         "type": "string"
                       }
                     },
+                    "unrendered_config_call_dict": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      }
+                    },
                     "relation_name": {
                       "anyOf": [
                         {
@@ -15897,6 +16326,15 @@
                           ],
                           "default": null
                         },
+                        "batch_size": {
+                          "default": null
+                        },
+                        "lookback": {
+                          "default": 1
+                        },
+                        "begin": {
+                          "default": null
+                        },
                         "persist_docs": {
                           "type": "object",
                           "propertyNames": {
@@ -15994,6 +16432,12 @@
                               "type": "string"
                             },
                             {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            {
                               "type": "null"
                             }
                           ],
@@ -16066,6 +16510,9 @@
                           },
                           "additionalProperties": false
                         },
+                        "event_time": {
+                          "default": null
+                        },
                         "strategy": {
                           "anyOf": [
                             {
@@ -16120,6 +16567,68 @@
                               "items": {
                                 "type": "string"
                               }
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null
+                        },
+                        "snapshot_meta_column_names": {
+                          "type": "object",
+                          "title": "SnapshotMetaColumnNames",
+                          "properties": {
+                            "dbt_valid_to": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ],
+                              "default": null
+                            },
+                            "dbt_valid_from": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ],
+                              "default": null
+                            },
+                            "dbt_scd_id": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ],
+                              "default": null
+                            },
+                            "dbt_updated_at": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ],
+                              "default": null
+                            }
+                          },
+                          "additionalProperties": false
+                        },
+                        "dbt_valid_to_current": {
+                          "anyOf": [
+                            {
+                              "type": "string"
                             },
                             {
                               "type": "null"
@@ -16367,6 +16876,12 @@
                       "type": "number"
                     },
                     "config_call_dict": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      }
+                    },
+                    "unrendered_config_call_dict": {
                       "type": "object",
                       "propertyNames": {
                         "type": "string"
@@ -16732,6 +17247,15 @@
                                       ],
                                       "default": null
                                     },
+                                    "batch_size": {
+                                      "default": null
+                                    },
+                                    "lookback": {
+                                      "default": 1
+                                    },
+                                    "begin": {
+                                      "default": null
+                                    },
                                     "persist_docs": {
                                       "type": "object",
                                       "propertyNames": {
@@ -16906,6 +17430,9 @@
                                         }
                                       },
                                       "additionalProperties": false
+                                    },
+                                    "event_time": {
+                                      "default": null
                                     }
                                   },
                                   "additionalProperties": true
@@ -17479,6 +18006,9 @@
                         "enabled": {
                           "type": "boolean",
                           "default": true
+                        },
+                        "event_time": {
+                          "default": null
                         }
                       },
                       "additionalProperties": true
@@ -17513,6 +18043,28 @@
                     },
                     "created_at": {
                       "type": "number"
+                    },
+                    "unrendered_database": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
+                    },
+                    "unrendered_schema": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
                     }
                   },
                   "additionalProperties": false,
@@ -19098,6 +19650,23 @@
                               "type": "null"
                             }
                           ]
+                        },
+                        "order_by": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "limit": {
+                          "anyOf": [
+                            {
+                              "type": "integer"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null
                         }
                       },
                       "additionalProperties": false,
@@ -20632,6 +21201,23 @@
                     "type": "null"
                   }
                 ]
+              },
+              "order_by": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "limit": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
               }
             },
             "additionalProperties": false,

@@ -91,6 +91,22 @@ empty = click.option(
     is_flag=True,
 )
 
+event_time_end = click.option(
+    "--event-time-end",
+    envvar="DBT_EVENT_TIME_END",
+    help="If specified, the end datetime dbt uses to filter microbatch model inputs (exclusive).",
+    type=click.DateTime(),
+    default=None,
+)
+
+event_time_start = click.option(
+    "--event-time-start",
+    envvar="DBT_EVENT_TIME_START",
+    help="If specified, the start datetime dbt uses to filter microbatch model inputs (inclusive).",
+    type=click.DateTime(),
+    default=None,
+)
+
 exclude = click.option(
     "--exclude",
     envvar=None,
@@ -469,6 +485,13 @@ inline = click.option(
     "--inline",
     envvar=None,
     help="Pass SQL inline to dbt compile and show",
+)
+
+inline_direct = click.option(
+    "--inline-direct",
+    envvar=None,
+    help="Internal flag to pass SQL inline to dbt show. Do not load the entire project or apply templating.",
+    hidden=True,
 )
 
 # `--select` and `--models` are analogous for most commands except `dbt list` for legacy reasons.

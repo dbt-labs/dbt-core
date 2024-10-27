@@ -1,0 +1,6 @@
+kind: Features
+body: Adds validations for custom_granularities to ensure unique naming.
+time: 2024-09-26T15:10:57.907694-07:00
+custom:
+  Author: courtneyholcomb
+  Issue: "9265"

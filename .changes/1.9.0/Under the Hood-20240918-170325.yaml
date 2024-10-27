@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Standardize returning `ResourceTypeSelector` instances in `dbt list` and `dbt
+  build`
+time: 2024-09-18T17:03:25.639516-06:00
+custom:
+  Author: dbeatty10
+  Issue: "10739"

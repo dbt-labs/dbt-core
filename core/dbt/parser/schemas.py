@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Generic, Iterable, List, Optional, Type, TypeVar
 
 from dbt.artifacts.resources import RefArgs
-from dbt.artifacts.resources.v1.model import TimeSpine
+from dbt.artifacts.resources.v1.model import CustomGranularity, TimeSpine
 from dbt.clients.jinja_static import statically_parse_ref_or_source
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.config import RuntimeConfig
@@ -17,6 +17,7 @@ from dbt.contracts.graph.nodes import (
     ModelNode,
     ParsedMacroPatch,
     ParsedNodePatch,
+    ParsedSingularTestPatch,
     UnpatchedSourceDefinition,
 )
 from dbt.contracts.graph.unparsed import (
@@ -27,6 +28,7 @@ from dbt.contracts.graph.unparsed import (
     UnparsedMacroUpdate,
     UnparsedModelUpdate,
     UnparsedNodeUpdate,
+    UnparsedSingularTestUpdate,
     UnparsedSourceDefinition,
 )
 from dbt.events.types import (
@@ -56,6 +58,7 @@ from dbt.parser.common import (
     TestBlock,
     VersionedTestBlock,
     YamlBlock,
+    schema_file_keys_to_resource_types,
     trimmed,
 )
 from dbt.parser.schema_generic_tests import SchemaGenericTestParser
@@ -64,25 +67,11 @@ from dbt.parser.search import FileBlock
 from dbt.utils import coerce_dict_str
 from dbt_common.contracts.constraints import ConstraintType, ModelLevelConstraint
 from dbt_common.dataclass_schema import ValidationError, dbtClassMixin
-from dbt_common.events.functions import warn_or_error
+from dbt_common.events import EventLevel
+from dbt_common.events.functions import fire_event, warn_or_error
+from dbt_common.events.types import Note
 from dbt_common.exceptions import DbtValidationError
 from dbt_common.utils import deep_merge
-
-schema_file_keys_to_resource_types = {
-    "models": NodeType.Model,
-    "seeds": NodeType.Seed,
-    "snapshots": NodeType.Snapshot,
-    "sources": NodeType.Source,
-    "macros": NodeType.Macro,
-    "analyses": NodeType.Analysis,
-    "exposures": NodeType.Exposure,
-    "metrics": NodeType.Metric,
-    "semantic_models": NodeType.SemanticModel,
-    "saved_queries": NodeType.SavedQuery,
-}
-
-schema_file_keys = list(schema_file_keys_to_resource_types.keys())
-
 
 # ===============================================================================
 #  Schema Parser classes
@@ -205,6 +194,7 @@ class SchemaParser(SimpleParser[YamlBlock, ModelNode]):
 
             # PatchParser.parse()
             if "snapshots" in dct:
+                self._add_yaml_snapshot_nodes_to_manifest(dct["snapshots"], block)
                 snapshot_parse_result = TestablePatchParser(self, yaml_block, "snapshots").parse()
                 for test_block in snapshot_parse_result.test_blocks:
                     self.generic_test_parser.parse_tests(test_block)
@@ -220,6 +210,18 @@ class SchemaParser(SimpleParser[YamlBlock, ModelNode]):
             if "macros" in dct:
                 parser = MacroPatchParser(self, yaml_block, "macros")
                 parser.parse()
+
+            if "data_tests" in dct:
+                parser = SingularTestPatchParser(self, yaml_block, "data_tests")
+                try:
+                    parser.parse()
+                except ParsingError as e:
+                    fire_event(
+                        Note(
+                            msg=f"Unable to parse 'data_tests' section of file '{block.path.original_file_path}'\n{e}",
+                        ),
+                        EventLevel.WARN,
+                    )
 
             # PatchParser.parse() (but never test_blocks)
             if "analyses" in dct:
@@ -265,8 +267,60 @@ class SchemaParser(SimpleParser[YamlBlock, ModelNode]):
                 saved_query_parser = SavedQueryParser(self, yaml_block)
                 saved_query_parser.parse()
 
+    def _add_yaml_snapshot_nodes_to_manifest(
+        self, snapshots: List[Dict[str, Any]], block: FileBlock
+    ) -> None:
+        """We support the creation of simple snapshots in yaml, without an
+        accompanying SQL definition. For such snapshots, the user must supply
+        a 'relation' property to indicate the target of the snapshot. This
+        function looks for such snapshots and adds a node to manifest for each
+        one we find, since they were not added during SQL parsing."""
 
-Parsed = TypeVar("Parsed", UnpatchedSourceDefinition, ParsedNodePatch, ParsedMacroPatch)
+        rebuild_refs = False
+        for snapshot in snapshots:
+            if "relation" in snapshot:
+                from dbt.parser import SnapshotParser
+
+                if "name" not in snapshot:
+                    raise ParsingError("A snapshot must define the 'name' property. ")
+
+                # Reuse the logic of SnapshotParser as far as possible to create
+                # a new node we can add to the manifest.
+                parser = SnapshotParser(self.project, self.manifest, self.root_project)
+                fqn = parser.get_fqn_prefix(block.path.relative_path)
+                fqn.append(snapshot["name"])
+                snapshot_node = parser._create_parsetime_node(
+                    block,
+                    self.get_compiled_path(block),
+                    parser.initial_config(fqn),
+                    fqn,
+                    snapshot["name"],
+                )
+
+                # Parse the expected ref() or source() expression given by
+                # 'relation' so that we know what we are snapshotting.
+                source_or_ref = statically_parse_ref_or_source(snapshot["relation"])
+                if isinstance(source_or_ref, RefArgs):
+                    snapshot_node.refs.append(source_or_ref)
+                else:
+                    snapshot_node.sources.append(source_or_ref)
+
+                # Implement the snapshot SQL as a simple select *
+                snapshot_node.raw_code = "select * from {{ " + snapshot["relation"] + " }}"
+
+                # Add our new node to the manifest, and note that ref lookup collections
+                # will need to be rebuilt. This adds the node unique_id to the "snapshots"
+                # list in the SchemaSourceFile.
+                self.manifest.add_node(block.file, snapshot_node)
+                rebuild_refs = True
+
+        if rebuild_refs:
+            self.manifest.rebuild_ref_lookup()
+
+
+Parsed = TypeVar(
+    "Parsed", UnpatchedSourceDefinition, ParsedNodePatch, ParsedMacroPatch, ParsedSingularTestPatch
+)
 NodeTarget = TypeVar("NodeTarget", UnparsedNodeUpdate, UnparsedAnalysisUpdate, UnparsedModelUpdate)
 NonSourceTarget = TypeVar(
     "NonSourceTarget",
@@ -274,6 +328,7 @@ NonSourceTarget = TypeVar(
     UnparsedAnalysisUpdate,
     UnparsedMacroUpdate,
     UnparsedModelUpdate,
+    UnparsedSingularTestUpdate,
 )
 
 
@@ -341,13 +396,42 @@ class YamlReader(metaclass=ABCMeta):
             if "name" not in entry and "model" not in entry:
                 raise ParsingError("Entry did not contain a name")
 
+            unrendered_config = {}
+            if "config" in entry:
+                unrendered_config = entry["config"]
+
+            unrendered_version_configs = {}
+            if "versions" in entry:
+                for version in entry["versions"]:
+                    if "v" in version:
+                        unrendered_version_configs[version["v"]] = version.get("config", {})
+
+            # For sources
+            unrendered_database = entry.get("database", None)
+            unrendered_schema = entry.get("schema", None)
+
             # Render the data (except for tests, data_tests and descriptions).
             # See the SchemaYamlRenderer
             entry = self.render_entry(entry)
+
+            schema_file = self.yaml.file
+            assert isinstance(schema_file, SchemaSourceFile)
+
+            if unrendered_config:
+                schema_file.add_unrendered_config(unrendered_config, self.key, entry["name"])
+
+            for version, unrendered_version_config in unrendered_version_configs.items():
+                schema_file.add_unrendered_config(
+                    unrendered_version_config, self.key, entry["name"], version
+                )
+
+            if unrendered_database:
+                schema_file.add_unrendered_database(self.key, entry["name"], unrendered_database)
+            if unrendered_schema:
+                schema_file.add_unrendered_schema(self.key, entry["name"], unrendered_schema)
+
             if self.schema_yaml_vars.env_vars:
                 self.schema_parser.manifest.env_vars.update(self.schema_yaml_vars.env_vars)
-                schema_file = self.yaml.file
-                assert isinstance(schema_file, SchemaSourceFile)
                 for var in self.schema_yaml_vars.env_vars.keys():
                     schema_file.add_env_var(var, self.key, entry["name"])
                 self.schema_yaml_vars.env_vars = {}
@@ -406,6 +490,15 @@ class SourceParser(YamlReader):
                 source_file.source_patches.append(key)
             else:
                 source = self._target_from_dict(UnparsedSourceDefinition, data)
+                # Store unrendered_database and unrendered_schema for state:modified comparisons
+                if isinstance(self.yaml.file, SchemaSourceFile):
+                    source.unrendered_database = self.yaml.file.get_unrendered_database(
+                        "sources", source.name
+                    )
+                    source.unrendered_schema = self.yaml.file.get_unrendered_schema(
+                        "sources", source.name
+                    )
+
                 self.add_source_definitions(source)
         return ParseResult()
 
@@ -604,7 +697,13 @@ class PatchParser(YamlReader, Generic[NonSourceTarget, Parsed]):
         )
         # We need to re-apply the config_call_dict after the patch config
         config._config_call_dict = node.config_call_dict
-        self.schema_parser.update_parsed_node_config(node, config, patch_config_dict=patch.config)
+        config._unrendered_config_call_dict = node.unrendered_config_call_dict
+        self.schema_parser.update_parsed_node_config(
+            node,
+            config,
+            patch_config_dict=patch.config,
+            patch_file_id=patch.file_id,
+        )
 
 
 # Subclasses of NodePatchParser: TestablePatchParser, ModelPatchParser, AnalysisPatchParser,
@@ -620,7 +719,14 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
             deprecation_date = block.target.deprecation_date
             time_spine = (
                 TimeSpine(
-                    standard_granularity_column=block.target.time_spine.standard_granularity_column
+                    standard_granularity_column=block.target.time_spine.standard_granularity_column,
+                    custom_granularities=[
+                        CustomGranularity(
+                            name=custom_granularity.name,
+                            column_name=custom_granularity.column_name,
+                        )
+                        for custom_granularity in block.target.time_spine.custom_granularities
+                    ],
                 )
                 if block.target.time_spine
                 else None
@@ -1046,6 +1152,55 @@ class AnalysisPatchParser(NodePatchParser[UnparsedAnalysisUpdate]):
 
     def _target_type(self) -> Type[UnparsedAnalysisUpdate]:
         return UnparsedAnalysisUpdate
+
+
+class SingularTestPatchParser(PatchParser[UnparsedSingularTestUpdate, ParsedSingularTestPatch]):
+    def get_block(self, node: UnparsedSingularTestUpdate) -> TargetBlock:
+        return TargetBlock.from_yaml_block(self.yaml, node)
+
+    def _target_type(self) -> Type[UnparsedSingularTestUpdate]:
+        return UnparsedSingularTestUpdate
+
+    def parse_patch(self, block: TargetBlock[UnparsedSingularTestUpdate], refs: ParserRef) -> None:
+        patch = ParsedSingularTestPatch(
+            name=block.target.name,
+            description=block.target.description,
+            meta=block.target.meta,
+            docs=block.target.docs,
+            config=block.target.config,
+            original_file_path=block.target.original_file_path,
+            yaml_key=block.target.yaml_key,
+            package_name=block.target.package_name,
+        )
+
+        assert isinstance(self.yaml.file, SchemaSourceFile)
+        source_file: SchemaSourceFile = self.yaml.file
+
+        unique_id = self.manifest.singular_test_lookup.get_unique_id(
+            block.name, block.target.package_name
+        )
+        if not unique_id:
+            warn_or_error(
+                NoNodeForYamlKey(
+                    patch_name=patch.name,
+                    yaml_key=patch.yaml_key,
+                    file_path=source_file.path.original_file_path,
+                )
+            )
+            return
+
+        node = self.manifest.nodes.get(unique_id)
+        assert node is not None
+
+        source_file.append_patch(patch.yaml_key, unique_id)
+        if patch.config:
+            self.patch_node_config(node, patch)
+
+        node.patch_path = patch.file_id
+        node.description = patch.description
+        node.created_at = time.time()
+        node.meta = patch.meta
+        node.docs = patch.docs
 
 
 class MacroPatchParser(PatchParser[UnparsedMacroUpdate, ParsedMacroPatch]):

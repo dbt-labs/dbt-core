@@ -96,6 +96,7 @@ class SchemaGenericTestParser(SimpleParser):
         test_metadata: Dict[str, Any],
         file_key_name: str,
         column_name: Optional[str],
+        description: str,
     ) -> GenericTestNode:
 
         HASH_LENGTH = 10
@@ -134,6 +135,7 @@ class SchemaGenericTestParser(SimpleParser):
             "column_name": column_name,
             "checksum": FileHash.empty().to_dict(omit_none=True),
             "file_key_name": file_key_name,
+            "description": description,
         }
         try:
             GenericTestNode.validate(dct)
@@ -200,7 +202,9 @@ class SchemaGenericTestParser(SimpleParser):
 
         # this is the ContextConfig that is used in render_update
         config: ContextConfig = self.initial_config(fqn)
-
+        # Adding the builder's config to the ContextConfig
+        # is needed to ensure the config makes it to the pre_model hook which dbt-snowflake needs
+        config.add_config_call(builder.config)
         # builder.args contains keyword args for the test macro,
         # not configs which have been separated out in the builder.
         # The keyword args are not completely rendered until compilation.
@@ -227,6 +231,7 @@ class SchemaGenericTestParser(SimpleParser):
             column_name=column_name,
             test_metadata=metadata,
             file_key_name=file_key_name,
+            description=builder.description,
         )
         self.render_test_update(node, config, builder, schema_file_id)
 

@@ -1296,6 +1296,9 @@ class LogModelResult(DynamicLevel):
         if self.status == "error":
             info = "ERROR creating"
             status = red(self.status.upper())
+        elif "PARTIAL SUCCESS" in self.status:
+            info = "PARTIALLY created"
+            status = yellow(self.status.upper())
         else:
             info = "OK created"
             status = green(self.status)
@@ -1513,10 +1516,20 @@ class LogHookEndLine(InfoLevel):
         return "Q033"
 
     def message(self) -> str:
-        msg = f"OK hook: {self.statement}"
+        if self.status == "success":
+            info = "OK"
+            status = green(info)
+        elif self.status == "skipped":
+            info = "SKIP"
+            status = yellow(info)
+        else:
+            info = "ERROR"
+            status = red(info)
+        msg = f"{info} hook: {self.statement}"
+
         return format_fancy_output_line(
             msg=msg,
-            status=green(self.status),
+            status=status,
             index=self.index,
             total=self.total,
             execution_time=self.execution_time,
@@ -1860,10 +1873,16 @@ class EndOfRunSummary(InfoLevel):
     def message(self) -> str:
         error_plural = pluralize(self.num_errors, "error")
         warn_plural = pluralize(self.num_warnings, "warning")
+        partial_success_plural = pluralize(self.num_partial_success, "partial success")
+
         if self.keyboard_interrupt:
             message = yellow("Exited because of keyboard interrupt")
         elif self.num_errors > 0:
-            message = red(f"Completed with {error_plural} and {warn_plural}:")
+            message = red(
+                f"Completed with {error_plural}, {partial_success_plural}, and {warn_plural}:"
+            )
+        elif self.num_partial_success > 0:
+            message = yellow(f"Completed with {partial_success_plural} and {warn_plural}")
         elif self.num_warnings > 0:
             message = yellow(f"Completed with {warn_plural}:")
         else:

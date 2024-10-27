@@ -517,7 +517,7 @@ T = TypeVar("T")
 
 
 def test_date_serialization():
-    ti = TimingInfo("test")
+    ti = TimingInfo("compile")
     ti.begin()
     ti.end()
     ti_dict = ti.to_dict()
@@ -537,10 +537,7 @@ def test_bad_serialization():
     with pytest.raises(Exception) as excinfo:
         types.Note(param_event_doesnt_have="This should break")
 
-    assert (
-        str(excinfo.value)
-        == "[Note]: Unable to parse dict {'param_event_doesnt_have': 'This should break'}"
-    )
+    assert 'has no field named "param_event_doesnt_have" at "Note"' in str(excinfo.value)
 
 
 def test_single_run_error():
@@ -558,7 +555,8 @@ def test_single_run_error():
             node=None,
             adapter_response=dict(),
             message="oh no!",
-            failures=[],
+            failures=1,
+            batch_results=None,
         )
 
         print_run_result_error(error_result)
