@@ -489,28 +489,29 @@ class ModelRunner(CompileRunner):
         materialization_macro: MacroProtocol,
     ) -> List[RunResult]:
         batch_results: List[RunResult] = []
+        microbatch_builder = MicrobatchBuilder(
+            model=model,
+            is_incremental=self._is_incremental(model),
+            event_time_start=getattr(self.config.args, "EVENT_TIME_START", None),
+            event_time_end=getattr(self.config.args, "EVENT_TIME_END", None),
+            default_end_time=self.config.invoked_at,
+        )
+        # Indicates whether current batch should be run incrementally
+        incremental_batch = False
 
         # Note currently (9/30/2024) model.batch_info is only ever _not_ `None`
         # IFF `dbt retry` is being run and the microbatch model had batches which
         # failed on the run of the model (which is being retried)
         if model.batch_info is None:
-            microbatch_builder = MicrobatchBuilder(
-                model=model,
-                is_incremental=self._is_incremental(model),
-                event_time_start=getattr(self.config.args, "EVENT_TIME_START", None),
-                event_time_end=getattr(self.config.args, "EVENT_TIME_END", None),
-                default_end_time=self.config.invoked_at,
-            )
             end = microbatch_builder.build_end_time()
             start = microbatch_builder.build_start_time(end)
             batches = microbatch_builder.build_batches(start, end)
         else:
             batches = model.batch_info.failed
-            # if there is batch info, then don't run as full_refresh and do force is_incremental
+            # If there is batch info, then don't run as full_refresh and do force is_incremental
             # not doing this risks blowing away the work that has already been done
             if self._has_relation(model=model):
-                context["is_incremental"] = lambda: True
-                context["should_full_refresh"] = lambda: False
+                incremental_batch = True
 
         # iterate over each batch, calling materialization_macro to get a batch-level run result
         for batch_idx, batch in enumerate(batches):
@@ -532,9 +533,11 @@ class ModelRunner(CompileRunner):
                         batch[0], model.config.batch_size
                     ),
                 )
-                context["model"] = model.to_dict()
-                context["sql"] = model.compiled_code
-                context["compiled_code"] = model.compiled_code
+                # Update jinja context with batch context members
+                batch_context = microbatch_builder.build_batch_context(
+                    incremental_batch=incremental_batch
+                )
+                context.update(batch_context)
 
                 # Materialize batch and cache any materialized relations
                 result = MacroGenerator(
@@ -547,9 +550,9 @@ class ModelRunner(CompileRunner):
                 batch_run_result = self._build_succesful_run_batch_result(
                     model, context, batch, time.perf_counter() - start_time
                 )
-                # Update context vars for future batches
-                context["is_incremental"] = lambda: True
-                context["should_full_refresh"] = lambda: False
+                # At least one batch has been inserted successfully!
+                incremental_batch = True
+
             except Exception as e:
                 exception = e
                 batch_run_result = self._build_failed_run_batch_result(

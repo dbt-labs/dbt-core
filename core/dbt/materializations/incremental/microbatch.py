@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 import pytz
 
@@ -98,6 +98,26 @@ class MicrobatchBuilder:
         batches[-1] = (batches[-1][0], end)
 
         return batches
+
+    def build_batch_context(self, incremental_batch: bool) -> Dict[str, Any]:
+        """
+        Create context with entries that reflect microbatch model + incremental execution state
+
+        Assumes self.model has been (re)-compiled with necessary batch filters applied.
+        """
+        batch_context: Dict[str, Any] = {}
+
+        # Microbatch model properties
+        batch_context["model"] = self.model.to_dict()
+        batch_context["sql"] = self.model.compiled_code
+        batch_context["compiled_code"] = self.model.compiled_code
+
+        # Add incremental context variables for batches running incrementally
+        if incremental_batch:
+            batch_context["is_incremental"] = lambda: True
+            batch_context["should_full_refresh"] = lambda: False
+
+        return batch_context
 
     @staticmethod
     def offset_timestamp(timestamp: datetime, batch_size: BatchSize, offset: int) -> datetime:
