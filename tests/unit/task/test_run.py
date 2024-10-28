@@ -2,6 +2,7 @@ import threading
 from argparse import Namespace
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from importlib import import_module
 from typing import Optional
 from unittest.mock import MagicMock, patch
 
@@ -18,7 +19,7 @@ from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import ModelNode
 from dbt.events.types import LogModelResult
 from dbt.flags import get_flags, set_from_args
-from dbt.task.run import ModelRunner, RunTask
+from dbt.task.run import ModelRunner, RunTask, _get_adapter_info
 from dbt.tests.util import safe_set_invocation_context
 from dbt_common.events.base_types import EventLevel
 from dbt_common.events.event_manager_client import add_callback_to_manager
@@ -66,6 +67,22 @@ def test_run_task_preserve_edges():
         task.get_graph_queue()
         # when we get the graph queue, preserve_edges is True
         mock_node_selector.get_graph_queue.assert_called_with(mock_spec, True)
+
+
+def test_tracking_fails_safely_for_missing_adapter():
+    assert {} == _get_adapter_info(None, {})
+
+
+def test_adapter_info_tracking():
+    mock_run_result = MagicMock()
+    mock_run_result.node = MagicMock()
+    mock_run_result.node.config = {}
+    assert _get_adapter_info(PostgresAdapter, mock_run_result) == {
+        "model_adapter_details": {},
+        "adapter_name": PostgresAdapter.__name__.split("Adapter")[0].lower(),
+        "adapter_version": import_module("dbt.adapters.postgres.__version__").version,
+        "base_adapter_version": import_module("dbt.adapters.__about__").version,
+    }
 
 
 class TestModelRunner:

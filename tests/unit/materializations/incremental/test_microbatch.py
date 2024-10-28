@@ -488,6 +488,33 @@ class TestMicrobatchBuilder:
         assert len(actual_batches) == len(expected_batches)
         assert actual_batches == expected_batches
 
+    def test_build_batch_context_incremental_batch(self, microbatch_model):
+        microbatch_builder = MicrobatchBuilder(
+            model=microbatch_model, is_incremental=True, event_time_start=None, event_time_end=None
+        )
+        context = microbatch_builder.build_batch_context(incremental_batch=True)
+
+        assert context["model"] == microbatch_model.to_dict()
+        assert context["sql"] == microbatch_model.compiled_code
+        assert context["compiled_code"] == microbatch_model.compiled_code
+
+        assert context["is_incremental"]() is True
+        assert context["should_full_refresh"]() is False
+
+    def test_build_batch_context_incremental_batch_false(self, microbatch_model):
+        microbatch_builder = MicrobatchBuilder(
+            model=microbatch_model, is_incremental=True, event_time_start=None, event_time_end=None
+        )
+        context = microbatch_builder.build_batch_context(incremental_batch=False)
+
+        assert context["model"] == microbatch_model.to_dict()
+        assert context["sql"] == microbatch_model.compiled_code
+        assert context["compiled_code"] == microbatch_model.compiled_code
+
+        # Only build is_incremental callables when not first batch
+        assert "is_incremental" not in context
+        assert "should_full_refresh" not in context
+
     @pytest.mark.parametrize(
         "timestamp,batch_size,offset,expected_timestamp",
         [
