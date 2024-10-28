@@ -125,7 +125,6 @@ def track_model_run(index, num_nodes, run_model_result, adapter=None):
         versioned = False
         incremental_strategy = None
 
-    breakpoint()
     tracking.track_model_run(
         {
             "invocation_id": invocation_id,
