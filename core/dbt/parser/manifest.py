@@ -66,6 +66,7 @@ from dbt.events.types import (
     DeprecatedModel,
     DeprecatedReference,
     InvalidDisabledTargetInTestNode,
+    MicrobatchModelNoEventTimeInputs,
     NodeNotFoundOrDisabled,
     ParsedFileLoadFailed,
     ParsePerfInfoPath,
@@ -1442,13 +1443,19 @@ class ManifestLoader:
                         )
 
                     # Validate upstream node event_time (if configured)
+                    has_input_with_event_time_config = False
                     for input_unique_id in node.depends_on.nodes:
                         input_node = self.manifest.expect(unique_id=input_unique_id)
                         input_event_time = input_node.config.event_time
-                        if input_event_time and not isinstance(input_event_time, str):
-                            raise dbt.exceptions.ParsingError(
-                                f"Microbatch model '{node.name}' depends on an input node '{input_node.name}' with an 'event_time' config of invalid (non-string) type: {type(input_event_time)}."
-                            )
+                        if input_event_time:
+                            if not isinstance(input_event_time, str):
+                                raise dbt.exceptions.ParsingError(
+                                    f"Microbatch model '{node.name}' depends on an input node '{input_node.name}' with an 'event_time' config of invalid (non-string) type: {type(input_event_time)}."
+                                )
+                            has_input_with_event_time_config = True
+
+                    if not has_input_with_event_time_config:
+                        fire_event(MicrobatchModelNoEventTimeInputs(model_name=node.name))
 
     def write_perf_info(self, target_path: str):
         path = os.path.join(target_path, PERF_INFO_FILE_NAME)

@@ -893,6 +893,17 @@ message FreshnessConfigProblemMsg {
 }
 
 
+// I074
+message MicrobatchModelNoEventTimeInputs {
+    string model_name = 1;
+}
+
+message MicrobatchModelNoEventTimeInputsMsg {
+    CoreEventInfo info = 1;
+    MicrobatchModelNoEventTimeInputs data = 2;
+}
+
+
 // M - Deps generation
 
 

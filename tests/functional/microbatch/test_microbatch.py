@@ -5,7 +5,7 @@ from unittest import mock
 import pytest
 import pytz
 
-from dbt.events.types import LogModelResult
+from dbt.events.types import LogModelResult, MicrobatchModelNoEventTimeInputs
 from dbt.tests.util import (
     get_artifact,
     patch_microbatch_end_time,
@@ -46,7 +46,6 @@ microbatch_model_downstream_sql = """
 {{ config(materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='day', begin=modules.datetime.datetime(2020, 1, 1, 0, 0, 0)) }}
 select * from {{ ref('microbatch_model') }}
 """
-
 
 microbatch_model_ref_render_sql = """
 {{ config(materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='day', begin=modules.datetime.datetime(2020, 1, 1, 0, 0, 0)) }}
@@ -290,9 +289,11 @@ class TestMicrobatchWithSource(BaseMicrobatchTest):
         run_dbt(["seed"])
 
         # initial run -- backfills all data
+        catcher = EventCatcher(event_to_catch=MicrobatchModelNoEventTimeInputs)
         with patch_microbatch_end_time("2020-01-03 13:57:00"):
-            run_dbt(["run"])
+            run_dbt(["run"], callbacks=[catcher.catch])
         self.assert_row_count(project, "microbatch_model", 3)
+        assert len(catcher.caught_events) == 0
 
         # our partition grain is "day" so running the same day without new data should produce the same results
         with patch_microbatch_end_time("2020-01-03 14:57:00"):
@@ -334,10 +335,13 @@ class TestMicrobatchWithInputWithoutEventTime(BaseMicrobatchTest):
 
     @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
     def test_run_with_event_time(self, project):
+        catcher = EventCatcher(event_to_catch=MicrobatchModelNoEventTimeInputs)
+
         # initial run -- backfills all data
         with patch_microbatch_end_time("2020-01-03 13:57:00"):
-            run_dbt(["run"])
+            run_dbt(["run"], callbacks=[catcher.catch])
         self.assert_row_count(project, "microbatch_model", 3)
+        assert len(catcher.caught_events) == 1
 
         # our partition grain is "day" so running the same day without new data should produce the same results
         with patch_microbatch_end_time("2020-01-03 14:57:00"):
