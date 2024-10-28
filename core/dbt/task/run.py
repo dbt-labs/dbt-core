@@ -103,7 +103,7 @@ def get_execution_status(sql: str, adapter: BaseAdapter) -> Tuple[RunStatus, str
 
 def _get_adapter_info(adapter, run_model_result) -> Dict[str, Any]:
     """Each adapter returns a dataclass with a flexible dictionary for
-    adapter-specific fields. Only the non-'adapter_details' fields
+    adapter-specific fields. Only the non-'model_adapter_details' fields
     are guaranteed cross adapter."""
     return asdict(adapter.get_adapter_run_info(run_model_result.node.config)) if adapter else {}
 
@@ -125,6 +125,7 @@ def track_model_run(index, num_nodes, run_model_result, adapter=None):
         versioned = False
         incremental_strategy = None
 
+    breakpoint()
     tracking.track_model_run(
         {
             "invocation_id": invocation_id,

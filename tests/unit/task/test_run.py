@@ -78,7 +78,7 @@ def test_adapter_info_tracking():
     mock_run_result.node = MagicMock()
     mock_run_result.node.config = {}
     assert _get_adapter_info(PostgresAdapter, mock_run_result) == {
-        "adapter_details": {},
+        "model_adapter_details": {},
         "adapter_name": PostgresAdapter.__name__.split("Adapter")[0].lower(),
         "adapter_version": import_module("dbt.adapters.postgres.__version__").version,
         "base_adapter_version": import_module("dbt.adapters.__about__").version,
