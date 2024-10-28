@@ -13,7 +13,6 @@ import dbt.utils
 import dbt_common.utils.formatting
 from dbt.adapters.base import BaseAdapter, BaseRelation
 from dbt.adapters.factory import get_adapter
-from dbt.artifacts.schemas.freshness.v3.freshness import FreshnessResult
 from dbt.artifacts.schemas.results import (
     BaseResult,
     NodeStatus,
@@ -430,7 +429,10 @@ class GraphRunnableTask(ConfiguredTask):
             if self.args.write_json and hasattr(run_result, "write"):
                 run_result.write(self.result_path())
                 fire_event(
-                    ArtifactWritten(artifact_type="run results", artifact_path=self.result_path())
+                    ArtifactWritten(
+                        artifact_type=run_result.__class__.__name__,
+                        artifact_path=self.result_path(),
+                    )
                 )
 
             self._cancel_connections(pool)
@@ -596,16 +598,10 @@ class GraphRunnableTask(ConfiguredTask):
             write_manifest(self.manifest, self.config.project_target_path)
             if hasattr(result, "write"):
                 result.write(self.result_path())
-
-                if isinstance(result, RunExecutionResult):
-                    event_type: str = "run results"
-                elif isinstance(result, FreshnessResult):
-                    event_type = "source freshness"
-                else:
-                    event_type = "unknown"
-
                 fire_event(
-                    ArtifactWritten(artifact_type=event_type, artifact_path=self.result_path())
+                    ArtifactWritten(
+                        artifact_type=result.__class__.__name__, artifact_path=self.result_path()
+                    )
                 )
 
         self.task_end_messages(result.results)

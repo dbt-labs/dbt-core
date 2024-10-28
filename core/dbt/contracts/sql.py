@@ -51,7 +51,7 @@ class RemoteExecutionResult(ExecutionResult):
             args=self.args,
         )
         writable.write(path)
-        fire_event(ArtifactWritten(artifact_type="run results", artifact_path=path))
+        fire_event(ArtifactWritten(artifact_type=writable.__class__.__name__, artifact_path=path))
 
     @classmethod
     def from_local_result(

@@ -131,7 +131,11 @@ class RunOperationTask(ConfiguredTask):
 
         if self.args.write_json:
             results.write(result_path)
-            fire_event(ArtifactWritten(artifact_type="run results", artifact_path=result_path))
+            fire_event(
+                ArtifactWritten(
+                    artifact_type=results.__class__.__name__, artifact_path=result_path
+                )
+            )
 
         return results
 

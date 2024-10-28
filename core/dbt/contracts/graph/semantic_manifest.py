@@ -71,7 +71,7 @@ class SemanticManifest:
         semantic_manifest = self._get_pydantic_semantic_manifest()
         json = semantic_manifest.json()
         write_file(file_path, json)
-        fire_event(ArtifactWritten(artifact_type="semantic manfiest", artifact_path=file_path))
+        fire_event(ArtifactWritten(artifact_type=self.__class__.__name__, artifact_path=file_path))
 
     def _get_pydantic_semantic_manifest(self) -> PydanticSemanticManifest:
         pydantic_time_spines: List[PydanticTimeSpine] = []

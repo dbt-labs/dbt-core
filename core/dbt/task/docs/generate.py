@@ -310,7 +310,9 @@ class GenerateTask(CompileTask):
 
         catalog_path = os.path.join(self.config.project_target_path, CATALOG_FILENAME)
         results.write(catalog_path)
-        fire_event(ArtifactWritten(artifact_type="catalog", artifact_path=catalog_path))
+        fire_event(
+            ArtifactWritten(artifact_type=results.__class__.__name__, artifact_path=catalog_path)
+        )
 
         if self.args.compile:
             write_manifest(self.manifest, self.config.project_target_path)
