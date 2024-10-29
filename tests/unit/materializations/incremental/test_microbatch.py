@@ -20,6 +20,7 @@ class TestMicrobatchBuilder:
         model.config.materialized = "incremental"
         model.config.incremental_strategy = "microbatch"
         model.config.begin = MODEL_CONFIG_BEGIN
+        model.config.batch_size = BatchSize.day
 
         return model
 
@@ -30,12 +31,12 @@ class TestMicrobatchBuilder:
             (
                 False,
                 None,
-                datetime(2024, 9, 5, 8, 56, 0, 0, pytz.UTC),
+                datetime(2024, 9, 6, 0, 0, 0, 0, pytz.UTC),
             ),
             (
                 True,
                 None,
-                datetime(2024, 9, 5, 8, 56, 0, 0, pytz.UTC),
+                datetime(2024, 9, 6, 0, 0, 0, 0, pytz.UTC),
             ),
             (
                 False,

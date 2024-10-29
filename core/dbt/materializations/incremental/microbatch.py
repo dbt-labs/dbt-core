@@ -162,7 +162,7 @@ class MicrobatchBuilder:
         return offset_timestamp
 
     @staticmethod
-    def truncate_timestamp(timestamp: datetime, batch_size: BatchSize):
+    def truncate_timestamp(timestamp: datetime, batch_size: BatchSize) -> datetime:
         """Truncates the passed in timestamp based on the batch_size.
 
         2024-09-17 16:06:00 + Batchsize.hour -> 2024-09-17 16:00:00
