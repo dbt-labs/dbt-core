@@ -931,7 +931,7 @@ class MicrobatchModelNoEventTimeInputs(WarnLevel):
     def message(self) -> str:
         msg = (
             f"The microbatch model '{self.model_name}' has no 'ref' or 'source' input with an 'event_time' configuration. "
-            "This can result in unexpected duplicate records in the resulting microbatch model."
+            "\nThis means no filtering can be applied and can result in unexpected duplicate records in the resulting microbatch model."
         )
 
         return warning_tag(msg)
