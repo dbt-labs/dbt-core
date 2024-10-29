@@ -3,6 +3,7 @@ import os
 import threading
 import time
 from copy import deepcopy
+from dataclasses import asdict
 from datetime import datetime
 from typing import AbstractSet, Any, Dict, Iterable, List, Optional, Set, Tuple, Type
 
@@ -100,7 +101,14 @@ def get_execution_status(sql: str, adapter: BaseAdapter) -> Tuple[RunStatus, str
         return status, message
 
 
-def track_model_run(index, num_nodes, run_model_result):
+def _get_adapter_info(adapter, run_model_result) -> Dict[str, Any]:
+    """Each adapter returns a dataclass with a flexible dictionary for
+    adapter-specific fields. Only the non-'model_adapter_details' fields
+    are guaranteed cross adapter."""
+    return asdict(adapter.get_adapter_run_info(run_model_result.node.config)) if adapter else {}
+
+
+def track_model_run(index, num_nodes, run_model_result, adapter=None):
     if tracking.active_user is None:
         raise DbtInternalError("cannot track model run with no active user")
     invocation_id = get_invocation_id()
@@ -116,6 +124,7 @@ def track_model_run(index, num_nodes, run_model_result):
         contract_enforced = False
         versioned = False
         incremental_strategy = None
+
     tracking.track_model_run(
         {
             "invocation_id": invocation_id,
@@ -135,6 +144,7 @@ def track_model_run(index, num_nodes, run_model_result):
             "contract_enforced": contract_enforced,
             "access": access,
             "versioned": versioned,
+            "adapter_info": _get_adapter_info(adapter, run_model_result),
         }
     )
 
@@ -283,7 +293,7 @@ class ModelRunner(CompileRunner):
         self.print_start_line()
 
     def after_execute(self, result) -> None:
-        track_model_run(self.node_index, self.num_nodes, result)
+        track_model_run(self.node_index, self.num_nodes, result, adapter=self.adapter)
         self.print_result_line(result)
 
     def _build_run_model_result(self, model, context, elapsed_time: float = 0.0):
@@ -489,28 +499,29 @@ class ModelRunner(CompileRunner):
         materialization_macro: MacroProtocol,
     ) -> List[RunResult]:
         batch_results: List[RunResult] = []
+        microbatch_builder = MicrobatchBuilder(
+            model=model,
+            is_incremental=self._is_incremental(model),
+            event_time_start=getattr(self.config.args, "EVENT_TIME_START", None),
+            event_time_end=getattr(self.config.args, "EVENT_TIME_END", None),
+            default_end_time=self.config.invoked_at,
+        )
+        # Indicates whether current batch should be run incrementally
+        incremental_batch = False
 
         # Note currently (9/30/2024) model.batch_info is only ever _not_ `None`
         # IFF `dbt retry` is being run and the microbatch model had batches which
         # failed on the run of the model (which is being retried)
         if model.batch_info is None:
-            microbatch_builder = MicrobatchBuilder(
-                model=model,
-                is_incremental=self._is_incremental(model),
-                event_time_start=getattr(self.config.args, "EVENT_TIME_START", None),
-                event_time_end=getattr(self.config.args, "EVENT_TIME_END", None),
-                default_end_time=self.config.invoked_at,
-            )
             end = microbatch_builder.build_end_time()
             start = microbatch_builder.build_start_time(end)
             batches = microbatch_builder.build_batches(start, end)
         else:
             batches = model.batch_info.failed
-            # if there is batch info, then don't run as full_refresh and do force is_incremental
+            # If there is batch info, then don't run as full_refresh and do force is_incremental
             # not doing this risks blowing away the work that has already been done
             if self._has_relation(model=model):
-                context["is_incremental"] = lambda: True
-                context["should_full_refresh"] = lambda: False
+                incremental_batch = True
 
         # iterate over each batch, calling materialization_macro to get a batch-level run result
         for batch_idx, batch in enumerate(batches):
@@ -532,9 +543,11 @@ class ModelRunner(CompileRunner):
                         batch[0], model.config.batch_size
                     ),
                 )
-                context["model"] = model
-                context["sql"] = model.compiled_code
-                context["compiled_code"] = model.compiled_code
+                # Update jinja context with batch context members
+                batch_context = microbatch_builder.build_batch_context(
+                    incremental_batch=incremental_batch
+                )
+                context.update(batch_context)
 
                 # Materialize batch and cache any materialized relations
                 result = MacroGenerator(
@@ -547,9 +560,9 @@ class ModelRunner(CompileRunner):
                 batch_run_result = self._build_succesful_run_batch_result(
                     model, context, batch, time.perf_counter() - start_time
                 )
-                # Update context vars for future batches
-                context["is_incremental"] = lambda: True
-                context["should_full_refresh"] = lambda: False
+                # At least one batch has been inserted successfully!
+                incremental_batch = True
+
             except Exception as e:
                 exception = e
                 batch_run_result = self._build_failed_run_batch_result(

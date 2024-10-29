@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Callable, Dict, List, Literal, Optional, Sequence, Union
+from typing import Any, Callable, Dict, List, Optional, Sequence, Union
 
 from dbt.contracts.graph.nodes import ResultNode
 from dbt_common.dataclass_schema import StrEnum, dbtClassMixin
@@ -16,7 +16,7 @@ class TimingInfo(dbtClassMixin):
     Do not call directly, use `collect_timing_info` instead.
     """
 
-    name: Literal["compile", "execute", "other"]
+    name: str
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
 
@@ -37,9 +37,7 @@ class TimingInfo(dbtClassMixin):
 
 # This is a context manager
 class collect_timing_info:
-    def __init__(
-        self, name: Literal["compile", "execute", "other"], callback: Callable[[TimingInfo], None]
-    ) -> None:
+    def __init__(self, name: str, callback: Callable[[TimingInfo], None]) -> None:
         self.timing_info = TimingInfo(name=name)
         self.callback = callback
 

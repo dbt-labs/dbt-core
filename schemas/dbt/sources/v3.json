@@ -211,11 +211,7 @@
                   "title": "TimingInfo",
                   "properties": {
                     "name": {
-                      "enum": [
-                        "compile",
-                        "execute",
-                        "other"
-                      ]
+                      "type": "string"
                     },
                     "started_at": {
                       "anyOf": [
