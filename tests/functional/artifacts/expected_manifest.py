@@ -40,7 +40,7 @@ def get_rendered_model_config(**updates):
         "contract": {"enforced": False, "alias_types": True},
         "access": "protected",
         "event_time": None,
-        "lookback": 0,
+        "lookback": 1,
         "batch_size": None,
         "begin": None,
     }
@@ -79,7 +79,7 @@ def get_rendered_seed_config(**updates):
         "docs": {"node_color": None, "show": True},
         "contract": {"enforced": False, "alias_types": True},
         "event_time": None,
-        "lookback": 0,
+        "lookback": 1,
         "batch_size": None,
         "begin": None,
     }
@@ -130,7 +130,7 @@ def get_rendered_snapshot_config(**updates):
         "docs": {"node_color": None, "show": True},
         "contract": {"enforced": False, "alias_types": True},
         "event_time": None,
-        "lookback": 0,
+        "lookback": 1,
         "batch_size": None,
         "begin": None,
     }

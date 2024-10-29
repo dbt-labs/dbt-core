@@ -7,6 +7,7 @@ from dbt.tests.util import run_dbt, run_dbt_and_capture, write_file
 from dbt_common.exceptions import EventCompilationError
 from tests.functional.deprecations.fixtures import (
     bad_name_yaml,
+    deprecated_model_exposure_yaml,
     models_trivial__model_sql,
 )
 
@@ -97,6 +98,18 @@ class TestPackageRedirectDeprecation:
         exc_str = " ".join(str(exc.value).split())  # flatten all whitespace
         expected_msg = "The `fishtown-analytics/dbt_utils` package is deprecated in favor of `dbt-labs/dbt_utils`"
         assert expected_msg in exc_str
+
+
+class TestDeprecatedModelExposure:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "model.sql": models_trivial__model_sql,
+            "exposure.yml": deprecated_model_exposure_yaml,
+        }
+
+    def test_exposure_with_deprecated_model(self, project):
+        run_dbt(["parse"])
 
 
 class TestExposureNameDeprecation:

@@ -192,6 +192,7 @@ class SchemaSourceFile(BaseSourceFile):
     sources: List[str] = field(default_factory=list)
     exposures: List[str] = field(default_factory=list)
     metrics: List[str] = field(default_factory=list)
+    snapshots: List[str] = field(default_factory=list)
     # The following field will no longer be used. Leaving
     # here to avoid breaking existing projects. To be removed
     # later if possible.

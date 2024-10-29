@@ -924,6 +924,19 @@ class FreshnessConfigProblem(WarnLevel):
         return self.msg
 
 
+class MicrobatchModelNoEventTimeInputs(WarnLevel):
+    def code(self) -> str:
+        return "I074"
+
+    def message(self) -> str:
+        msg = (
+            f"The microbatch model '{self.model_name}' has no 'ref' or 'source' input with an 'event_time' configuration. "
+            "\nThis means no filtering can be applied and can result in unexpected duplicate records in the resulting microbatch model."
+        )
+
+        return warning_tag(msg)
+
+
 # =======================================================
 # M - Deps generation
 # =======================================================
