@@ -797,8 +797,23 @@ class RunTask(CompileTask):
             ],  # exclude that didn't fail to preserve backwards compatibility
             "database_schemas": list(database_schema_set),
         }
-        with adapter.connection_named("master"):
-            self.safe_run_hooks(adapter, RunHookType.End, extras)
+
+        try:
+            with adapter.connection_named("master"):
+                self.safe_run_hooks(adapter, RunHookType.End, extras)
+        except (KeyboardInterrupt, SystemExit):
+            run_result = self.get_result(
+                results=self.node_results,
+                elapsed_time=time.time() - self.started_at,
+                generated_at=datetime.utcnow(),
+            )
+
+            if self.args.write_json and hasattr(run_result, "write"):
+                run_result.write(self.result_path())
+
+            print_run_end_messages(self.node_results, keyboard_interrupt=True)
+
+            raise
 
     def get_node_selector(self) -> ResourceTypeSelector:
         if self.manifest is None or self.graph is None:
