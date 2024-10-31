@@ -1211,6 +1211,19 @@ class DepsScrubbedPackageName(WarnLevel):
 
 
 # =======================================================
+# P - Artifacts
+# =======================================================
+
+
+class ArtifactWritten(DebugLevel):
+    def code(self):
+        return "P001"
+
+    def message(self) -> str:
+        return f"Wrote artifact {self.artifact_type} to {self.artifact_path}"
+
+
+# =======================================================
 # Q - Node execution
 # =======================================================
 

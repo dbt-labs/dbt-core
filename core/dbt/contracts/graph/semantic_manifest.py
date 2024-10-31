@@ -8,7 +8,7 @@ from dbt.constants import (
 )
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import ModelNode
-from dbt.events.types import SemanticValidationFailure
+from dbt.events.types import ArtifactWritten, SemanticValidationFailure
 from dbt.exceptions import ParsingError
 from dbt.flags import get_flags
 from dbt_common.clients.system import write_file
@@ -89,6 +89,7 @@ class SemanticManifest:
         semantic_manifest = self._get_pydantic_semantic_manifest()
         json = semantic_manifest.json()
         write_file(file_path, json)
+        fire_event(ArtifactWritten(artifact_type=self.__class__.__name__, artifact_path=file_path))
 
     def _get_pydantic_semantic_manifest(self) -> PydanticSemanticManifest:
         pydantic_time_spines: List[PydanticTimeSpine] = []

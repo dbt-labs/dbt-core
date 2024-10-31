@@ -67,7 +67,7 @@ from dbt.contracts.graph.nodes import (
 )
 from dbt.contracts.graph.unparsed import SourcePatch, UnparsedVersion
 from dbt.contracts.util import SourceKey
-from dbt.events.types import UnpinnedRefNewVersionAvailable
+from dbt.events.types import ArtifactWritten, UnpinnedRefNewVersionAvailable
 from dbt.exceptions import (
     AmbiguousResourceNameRefError,
     CompilationError,
@@ -1219,7 +1219,9 @@ class Manifest(MacroMethods, dbtClassMixin):
         )
 
     def write(self, path):
-        self.writable_manifest().write(path)
+        writable = self.writable_manifest()
+        writable.write(path)
+        fire_event(ArtifactWritten(artifact_type=writable.__class__.__name__, artifact_path=path))
 
     # Called in dbt.compilation.Linker.write_graph and
     # dbt.graph.queue.get and ._include_in_cost
