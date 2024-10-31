@@ -69,7 +69,7 @@ class SemanticManifest:
             c for c in time_spines if c.primary_column.time_granularity == TimeGranularity.DAY
         )
         if (
-            get_flags().allow_mf_time_spines_without_yaml_configuration is False
+            get_flags().require_yaml_configuration_for_mf_time_spines is False
             and legacy_time_spines
             and not time_spines_contain_day
         ):
