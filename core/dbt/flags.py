@@ -1,30 +1,8 @@
 # Do not import the os package because we expose this package in jinja
-from os import getenv as os_getenv
 from argparse import Namespace
-from multiprocessing import get_context
-from typing import Optional
 from pathlib import Path
 
-
-# for setting up logger for legacy logger
-def env_set_truthy(key: str) -> Optional[str]:
-    """Return the value if it was set to a "truthy" string value or None
-    otherwise.
-    """
-    value = os_getenv(key)
-    if not value or value.lower() in ("0", "false", "f"):
-        return None
-    return value
-
-
-# for setting up logger for legacy logger
-ENABLE_LEGACY_LOGGER = env_set_truthy("DBT_ENABLE_LEGACY_LOGGER")
-
-# This is not a flag, it's a place to store the lock
-MP_CONTEXT = get_context()
-
-
-# this roughly follows the patten of EVENT_MANAGER in dbt/events/functions.py
+# this roughly follows the patten of EVENT_MANAGER in dbt/common/events/functions.py
 # During de-globlization, we'll need to handle both similarly
 # Match USE_COLORS default with default in dbt.cli.params.use_colors for use in --version
 GLOBAL_FLAGS = Namespace(USE_COLORS=True)  # type: ignore
@@ -39,27 +17,29 @@ def get_flags():
     return GLOBAL_FLAGS
 
 
-def set_from_args(args: Namespace, user_config):
+def set_from_args(args: Namespace, project_flags):
     global GLOBAL_FLAGS
-    from dbt.cli.main import cli
     from dbt.cli.flags import Flags, convert_config
+    from dbt.cli.main import cli
 
-    # we set attributes of args after initialize the flags, but user_config
+    # we set attributes of args after initialize the flags, but project_flags
     # is being read in the Flags constructor, so we need to read it here and pass in
-    # to make sure we use the correct user_config
-    if (hasattr(args, "PROFILES_DIR") or hasattr(args, "profiles_dir")) and not user_config:
-        from dbt.config.profile import read_user_config
+    # to make sure we use the correct project_flags
+    profiles_dir = getattr(args, "PROFILES_DIR", None) or getattr(args, "profiles_dir", None)
+    project_dir = getattr(args, "PROJECT_DIR", None) or getattr(args, "project_dir", None)
+    if profiles_dir and project_dir:
+        from dbt.config.project import read_project_flags
 
-        profiles_dir = getattr(args, "PROFILES_DIR", None) or getattr(args, "profiles_dir")
-        user_config = read_user_config(profiles_dir)
+        project_flags = read_project_flags(project_dir, profiles_dir)
 
     # make a dummy context to get the flags, totally arbitrary
     ctx = cli.make_context("run", ["run"])
-    flags = Flags(ctx, user_config)
+    flags = Flags(ctx, project_flags)
     for arg_name, args_param_value in vars(args).items():
         args_param_value = convert_config(arg_name, args_param_value)
         object.__setattr__(flags, arg_name.upper(), args_param_value)
         object.__setattr__(flags, arg_name.lower(), args_param_value)
+    flags.set_common_global_flags()
     GLOBAL_FLAGS = flags  # type: ignore
 
 
@@ -88,6 +68,7 @@ def get_flag_dict():
         "target_path",
         "log_path",
         "invocation_command",
+        "empty",
     }
     return {key: getattr(GLOBAL_FLAGS, key.upper(), None) for key in flag_attr}
 

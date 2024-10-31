@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix over deletion of generated_metrics in partial parsing
+time: 2024-07-16T13:37:03.49651-04:00
+custom:
+  Author: gshank
+  Issue: "10450"

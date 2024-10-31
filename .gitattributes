@@ -1,4 +1,4 @@
-core/dbt/include/index.html binary
+core/dbt/task/docs/index.html binary
 tests/functional/artifacts/data/state/*/manifest.json binary
 core/dbt/docs/build/html/searchindex.js binary
 core/dbt/docs/build/html/index.html binary

@@ -1,7 +1,8 @@
 import itertools
 import os
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import (
     Any,
@@ -15,24 +16,32 @@ from typing import (
     Type,
 )
 
-from dbt.flags import get_flags
+import pytz
+
+from dbt import tracking
+from dbt.adapters.contracts.connection import (
+    AdapterRequiredConfig,
+    Credentials,
+    HasCredentials,
+)
+from dbt.adapters.contracts.relation import ComponentName
 from dbt.adapters.factory import get_include_paths, get_relation_class_by_name
 from dbt.config.project import load_raw_project
-from dbt.contracts.connection import AdapterRequiredConfig, Credentials, HasCredentials
 from dbt.contracts.graph.manifest import ManifestMetadata
-from dbt.contracts.project import Configuration, UserConfig
-from dbt.contracts.relation import ComponentName
-from dbt.dataclass_schema import ValidationError
-from dbt.events.functions import warn_or_error
+from dbt.contracts.project import Configuration
 from dbt.events.types import UnusedResourceConfigPath
 from dbt.exceptions import (
     ConfigContractBrokenError,
     DbtProjectError,
-    NonUniquePackageNameError,
     DbtRuntimeError,
+    NonUniquePackageNameError,
     UninstalledPackagesFoundError,
 )
-from dbt.helper_types import DictDefaultEmptyStr, FQNPath, PathSet
+from dbt.flags import get_flags
+from dbt_common.dataclass_schema import ValidationError
+from dbt_common.events.functions import warn_or_error
+from dbt_common.helper_types import DictDefaultEmptyStr, FQNPath, PathSet
+
 from .profile import Profile
 from .project import Project
 from .renderer import DbtProjectYamlRenderer, ProfileRenderer
@@ -92,6 +101,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
     profile_name: str
     cli_vars: Dict[str, Any]
     dependencies: Optional[Mapping[str, "RuntimeConfig"]] = None
+    invoked_at: datetime = field(default_factory=lambda: datetime.now(pytz.UTC))
 
     def __post_init__(self):
         self.validate()
@@ -134,6 +144,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
         ).to_dict(omit_none=True)
 
         cli_vars: Dict[str, Any] = getattr(args, "vars", {})
+        log_cache_events: bool = getattr(args, "log_cache_events", profile.log_cache_events)
 
         return cls(
             project_name=project.project_name,
@@ -165,9 +176,11 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             selectors=project.selectors,
             query_comment=project.query_comment,
             sources=project.sources,
-            tests=project.tests,
+            data_tests=project.data_tests,
+            unit_tests=project.unit_tests,
             metrics=project.metrics,
             semantic_models=project.semantic_models,
+            saved_queries=project.saved_queries,
             exposures=project.exposures,
             vars=project.vars,
             config_version=project.config_version,
@@ -177,13 +190,14 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             profile_env_vars=profile.profile_env_vars,
             profile_name=profile.profile_name,
             target_name=profile.target_name,
-            user_config=profile.user_config,
             threads=profile.threads,
             credentials=profile.credentials,
             args=args,
             cli_vars=cli_vars,
+            log_cache_events=log_cache_events,
             dependencies=dependencies,
             dbt_cloud=project.dbt_cloud,
+            flags=project.flags,
         )
 
     # Called by 'load_projects' in this class
@@ -280,6 +294,10 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
         return ManifestMetadata(
             project_name=self.project_name,
             project_id=self.hashed_name(),
+            user_id=tracking.active_user.id if tracking.active_user else None,
+            send_anonymous_usage_stats=(
+                get_flags().SEND_ANONYMOUS_USAGE_STATS if tracking.active_user else None
+            ),
             adapter_type=self.credentials.type,
         )
 
@@ -322,9 +340,11 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             "seeds": self._get_config_paths(self.seeds),
             "snapshots": self._get_config_paths(self.snapshots),
             "sources": self._get_config_paths(self.sources),
-            "tests": self._get_config_paths(self.tests),
+            "data_tests": self._get_config_paths(self.data_tests),
+            "unit_tests": self._get_config_paths(self.unit_tests),
             "metrics": self._get_config_paths(self.metrics),
             "semantic_models": self._get_config_paths(self.semantic_models),
+            "saved_queries": self._get_config_paths(self.saved_queries),
             "exposures": self._get_config_paths(self.exposures),
         }
 
@@ -430,7 +450,6 @@ class UnsetCredentials(Credentials):
 class UnsetProfile(Profile):
     def __init__(self):
         self.credentials = UnsetCredentials()
-        self.user_config = UserConfig()  # This will be read in _get_rendered_profile
         self.profile_name = ""
         self.target_name = ""
         self.threads = -1

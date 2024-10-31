@@ -1,25 +1,26 @@
-import re
 import os.path
+import re
 
-from dbt.clients.system import run_cmd, rmdir
-from dbt.events.functions import fire_event
+from packaging import version
+
 from dbt.events.types import (
-    GitSparseCheckoutSubdirectory,
-    GitProgressCheckoutRevision,
-    GitProgressUpdatingExistingDependency,
-    GitProgressPullingNewDependency,
     GitNothingToDo,
-    GitProgressUpdatedCheckoutRange,
     GitProgressCheckedOutAt,
+    GitProgressCheckoutRevision,
+    GitProgressPullingNewDependency,
+    GitProgressUpdatedCheckoutRange,
+    GitProgressUpdatingExistingDependency,
+    GitSparseCheckoutSubdirectory,
 )
 from dbt.exceptions import (
     CommandResultError,
+    DbtRuntimeError,
     GitCheckoutError,
     GitCloningError,
     UnknownGitCloningProblemError,
-    DbtRuntimeError,
 )
-from packaging import version
+from dbt_common.clients.system import rmdir, run_cmd
+from dbt_common.events.functions import fire_event
 
 
 def _is_commit(revision: str) -> bool:
@@ -111,7 +112,7 @@ def checkout(cwd, repo, revision=None):
 def get_current_sha(cwd):
     out, err = run_cmd(cwd, ["git", "rev-parse", "HEAD"], env={"LC_ALL": "C"})
 
-    return out.decode("utf-8")
+    return out.decode("utf-8").strip()
 
 
 def remove_remote(cwd):

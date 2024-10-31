@@ -1,7 +1,6 @@
 import pytest
 
 from dbt.tests.util import run_dbt
-
 from tests.functional.configs.fixtures import BaseConfigProject
 
 
@@ -9,7 +8,6 @@ class TestDisabledConfigs(BaseConfigProject):
     @pytest.fixture(scope="class")
     def dbt_profile_data(self, unique_schema):
         return {
-            "config": {"send_anonymous_usage_stats": False},
             "test": {
                 "outputs": {
                     "default": {
@@ -62,7 +60,7 @@ class TestDisabledConfigs(BaseConfigProject):
                     },
                 },
             },
-            "tests": {
+            "data_tests": {
                 "test": {
                     "enabled": "{{ (target.name == 'default') | as_bool }}",
                     "severity": "WARN",
@@ -90,3 +88,47 @@ class TestDisabledConfigs(BaseConfigProject):
         assert len(results) == 2
         results = run_dbt(["test"])
         assert len(results) == 5
+
+
+my_analysis_sql = """
+{{
+    config(enabled=False)
+}}
+select 1 as id
+"""
+
+
+schema_yml = """
+models:
+  - name: my_analysis
+    description: "A Sample model"
+    config:
+        meta:
+          owner: Joe
+
+analyses:
+  - name: my_analysis
+    description: "A sample analysis"
+    config:
+      enabled: false
+"""
+
+
+class TestDisabledConfigsSameName:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_analysis.sql": my_analysis_sql,
+            "schema.yml": schema_yml,
+        }
+
+    @pytest.fixture(scope="class")
+    def analyses(self):
+        return {
+            "my_analysis.sql": my_analysis_sql,
+        }
+
+    def test_disabled_analysis(self, project):
+        manifest = run_dbt(["parse"])
+        assert len(manifest.disabled) == 2
+        assert len(manifest.nodes) == 0

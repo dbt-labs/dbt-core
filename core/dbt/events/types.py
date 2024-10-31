@@ -2,24 +2,19 @@ import json
 
 from dbt.constants import MAXIMUM_SEED_SIZE_NAME, PIN_PACKAGE_URL
 from dbt.events.base_types import (
-    DynamicLevel,
     DebugLevel,
+    DynamicLevel,
+    ErrorLevel,
     InfoLevel,
     WarnLevel,
-    ErrorLevel,
-    EventLevel,
 )
-from dbt.events.format import format_fancy_output_line, pluralize, timestamp_to_datetime_string
-from dbt.node_types import NodeType
-from dbt.ui import line_wrap_message, warning_tag, red, green, yellow
-
-
-# The classes in this file represent the data necessary to describe a
-# particular event to both human readable logs, and machine reliable
-# event streams. classes extend superclasses that indicate what
-# destinations they are intended for, which mypy uses to enforce
-# that the necessary methods are defined.
-
+from dbt_common.events.base_types import EventLevel
+from dbt_common.events.format import (
+    format_fancy_output_line,
+    pluralize,
+    timestamp_to_datetime_string,
+)
+from dbt_common.ui import error_tag, green, line_wrap_message, red, warning_tag, yellow
 
 # Event codes have prefixes which follow this table
 #
@@ -37,14 +32,6 @@ from dbt.ui import line_wrap_message, warning_tag, red, green, yellow
 # | T    | Test only           |
 #
 # The basic idea is that event codes roughly translate to the natural order of running a dbt task
-
-
-def format_adapter_message(name, base_msg, args) -> str:
-    # only apply formatting if there are arguments to format.
-    # avoids issues like "dict: {k: v}".format() which results in `KeyError 'k'`
-    msg = base_msg if len(args) == 0 else base_msg.format(*args)
-    return f"{name} adapter: {msg}"
-
 
 # =======================================================
 # A - Pre-project loading
@@ -75,12 +62,7 @@ class MainTrackingUserState(DebugLevel):
         return f"Tracking: {self.user_state}"
 
 
-class MergedFromState(DebugLevel):
-    def code(self) -> str:
-        return "A004"
-
-    def message(self) -> str:
-        return f"Merged {self.num_merged} items from state (sample: {self.sample})"
+# Removed A004: MergedFromState
 
 
 class MissingProfileTarget(InfoLevel):
@@ -249,6 +231,19 @@ Happy modeling!
 # =======================================================
 
 
+class DeprecatedModel(WarnLevel):
+    def code(self) -> str:
+        return "I065"
+
+    def message(self) -> str:
+        version = ".v" + self.model_version if self.model_version else ""
+        msg = (
+            f"Model {self.model_name}{version} has passed its deprecation date of {self.deprecation_date}. "
+            "This model should be disabled or removed."
+        )
+        return warning_tag(msg)
+
+
 class PackageRedirectDeprecation(WarnLevel):
     def code(self) -> str:
         return "D001"
@@ -294,20 +289,6 @@ class ConfigDataPathDeprecation(WarnLevel):
         description = (
             f"The `{self.deprecated_path}` config has been renamed to `{self.exp_path}`. "
             "Please update your `dbt_project.yml` configuration to reflect this change."
-        )
-        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
-
-
-class AdapterDeprecationWarning(WarnLevel):
-    def code(self) -> str:
-        return "D005"
-
-    def message(self) -> str:
-        description = (
-            f"The adapter function `adapter.{self.old_name}` is deprecated and will be removed in "
-            f"a future release of dbt. Please use `adapter.{self.new_name}` instead. "
-            f"\n\nDocumentation for {self.new_name} can be found here:"
-            f"\n\nhttps://docs.getdbt.com/docs/adapter"
         )
         return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
 
@@ -407,393 +388,82 @@ class ConfigTargetPathDeprecation(WarnLevel):
         return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
 
 
-class CollectFreshnessReturnSignature(WarnLevel):
+# Note: this deprecation has been removed, but we are leaving
+# the event class here, because users may have specified it in
+# warn_error_options.
+class TestsConfigDeprecation(WarnLevel):
     def code(self) -> str:
         return "D012"
 
     def message(self) -> str:
         description = (
-            "The 'collect_freshness' macro signature has changed to return the full "
-            "query result, rather than just a table of values. See the v1.5 migration guide "
-            "for details on how to update your custom macro: https://docs.getdbt.com/guides/migration/versions/upgrading-to-v1.5"
+            f"The `{self.deprecated_path}` config has been renamed to `{self.exp_path}`. "
+            "Please see https://docs.getdbt.com/docs/build/data-tests#new-data_tests-syntax for more information."
         )
         return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
 
 
-# =======================================================
-# E - DB Adapter
-# =======================================================
-
-
-class AdapterEventDebug(DebugLevel):
+class ProjectFlagsMovedDeprecation(WarnLevel):
     def code(self) -> str:
-        return "E001"
+        return "D013"
 
     def message(self) -> str:
-        return format_adapter_message(self.name, self.base_msg, self.args)
-
-
-class AdapterEventInfo(InfoLevel):
-    def code(self) -> str:
-        return "E002"
-
-    def message(self) -> str:
-        return format_adapter_message(self.name, self.base_msg, self.args)
-
-
-class AdapterEventWarning(WarnLevel):
-    def code(self) -> str:
-        return "E003"
-
-    def message(self) -> str:
-        return format_adapter_message(self.name, self.base_msg, self.args)
-
-
-class AdapterEventError(ErrorLevel):
-    def code(self) -> str:
-        return "E004"
-
-    def message(self) -> str:
-        return format_adapter_message(self.name, self.base_msg, self.args)
-
-
-class NewConnection(DebugLevel):
-    def code(self) -> str:
-        return "E005"
-
-    def message(self) -> str:
-        return f"Acquiring new {self.conn_type} connection '{self.conn_name}'"
-
-
-class ConnectionReused(DebugLevel):
-    def code(self) -> str:
-        return "E006"
-
-    def message(self) -> str:
-        return f"Re-using an available connection from the pool (formerly {self.orig_conn_name}, now {self.conn_name})"
-
-
-class ConnectionLeftOpenInCleanup(DebugLevel):
-    def code(self) -> str:
-        return "E007"
-
-    def message(self) -> str:
-        return f"Connection '{self.conn_name}' was left open."
-
-
-class ConnectionClosedInCleanup(DebugLevel):
-    def code(self) -> str:
-        return "E008"
-
-    def message(self) -> str:
-        return f"Connection '{self.conn_name}' was properly closed."
-
-
-class RollbackFailed(DebugLevel):
-    def code(self) -> str:
-        return "E009"
-
-    def message(self) -> str:
-        return f"Failed to rollback '{self.conn_name}'"
-
-
-class ConnectionClosed(DebugLevel):
-    def code(self) -> str:
-        return "E010"
-
-    def message(self) -> str:
-        return f"On {self.conn_name}: Close"
-
-
-class ConnectionLeftOpen(DebugLevel):
-    def code(self) -> str:
-        return "E011"
-
-    def message(self) -> str:
-        return f"On {self.conn_name}: No close available on handle"
-
-
-class Rollback(DebugLevel):
-    def code(self) -> str:
-        return "E012"
-
-    def message(self) -> str:
-        return f"On {self.conn_name}: ROLLBACK"
-
-
-class CacheMiss(DebugLevel):
-    def code(self) -> str:
-        return "E013"
-
-    def message(self) -> str:
-        return (
-            f'On "{self.conn_name}": cache miss for schema '
-            f'"{self.database}.{self.schema}", this is inefficient'
+        description = (
+            "User config should be moved from the 'config' key in profiles.yml to the 'flags' "
+            "key in dbt_project.yml."
         )
+        # Can't use line_wrap_message here because flags.printer_width isn't available yet
+        return warning_tag(f"Deprecated functionality\n\n{description}")
 
 
-class ListRelations(DebugLevel):
+class SpacesInResourceNameDeprecation(DynamicLevel):
     def code(self) -> str:
-        return "E014"
+        return "D014"
 
     def message(self) -> str:
-        identifiers_str = ", ".join(r.identifier for r in self.relations)
-        return f"While listing relations in database={self.database}, schema={self.schema}, found: {identifiers_str}"
+        description = f"Found spaces in the name of `{self.unique_id}`"
+
+        if self.level == EventLevel.ERROR.value:
+            description = error_tag(description)
+        elif self.level == EventLevel.WARN.value:
+            description = warning_tag(description)
+
+        return line_wrap_message(description)
 
 
-class ConnectionUsed(DebugLevel):
+class ResourceNamesWithSpacesDeprecation(WarnLevel):
     def code(self) -> str:
-        return "E015"
+        return "D015"
 
     def message(self) -> str:
-        return f'Using {self.conn_type} connection "{self.conn_name}"'
+        description = f"Spaces found in {self.count_invalid_names} resource name(s). This is deprecated, and may lead to errors when using dbt."
+
+        if self.show_debug_hint:
+            description += " Run again with `--debug` to see them all."
+
+        description += " For more information: https://docs.getdbt.com/reference/global-configs/legacy-behaviors"
+
+        return line_wrap_message(warning_tag(description))
 
 
-class SQLQuery(DebugLevel):
+class PackageMaterializationOverrideDeprecation(WarnLevel):
     def code(self) -> str:
-        return "E016"
+        return "D016"
 
     def message(self) -> str:
-        return f"On {self.conn_name}: {self.sql}"
+        description = f"Installed package '{self.package_name}' is overriding the built-in materialization '{self.materialization_name}'. Overrides of built-in materializations from installed packages will be deprecated in future versions of dbt. For more information: https://docs.getdbt.com/reference/global-configs/legacy-behaviors"
+
+        return line_wrap_message(warning_tag(description))
 
 
-class SQLQueryStatus(DebugLevel):
+class SourceFreshnessProjectHooksNotRun(WarnLevel):
     def code(self) -> str:
-        return "E017"
+        return "D017"
 
     def message(self) -> str:
-        return f"SQL status: {self.status} in {self.elapsed} seconds"
+        description = "In a future version of dbt, the `source freshness` command will start running `on-run-start` and `on-run-end` hooks by default. For more information: https://docs.getdbt.com/reference/global-configs/legacy-behaviors"
 
-
-class SQLCommit(DebugLevel):
-    def code(self) -> str:
-        return "E018"
-
-    def message(self) -> str:
-        return f"On {self.conn_name}: COMMIT"
-
-
-class ColTypeChange(DebugLevel):
-    def code(self) -> str:
-        return "E019"
-
-    def message(self) -> str:
-        return f"Changing col type from {self.orig_type} to {self.new_type} in table {self.table}"
-
-
-class SchemaCreation(DebugLevel):
-    def code(self) -> str:
-        return "E020"
-
-    def message(self) -> str:
-        return f'Creating schema "{self.relation}"'
-
-
-class SchemaDrop(DebugLevel):
-    def code(self) -> str:
-        return "E021"
-
-    def message(self) -> str:
-        return f'Dropping schema "{self.relation}".'
-
-
-class CacheAction(DebugLevel):
-    def code(self) -> str:
-        return "E022"
-
-    def format_ref_key(self, ref_key) -> str:
-        return f"(database={ref_key.database}, schema={ref_key.schema}, identifier={ref_key.identifier})"
-
-    def message(self) -> str:
-        ref_key = self.format_ref_key(self.ref_key)
-        ref_key_2 = self.format_ref_key(self.ref_key_2)
-        ref_key_3 = self.format_ref_key(self.ref_key_3)
-        ref_list = []
-        for rfk in self.ref_list:
-            ref_list.append(self.format_ref_key(rfk))
-        if self.action == "add_link":
-            return f"adding link, {ref_key} references {ref_key_2}"
-        elif self.action == "add_relation":
-            return f"adding relation: {ref_key}"
-        elif self.action == "drop_missing_relation":
-            return f"dropped a nonexistent relationship: {ref_key}"
-        elif self.action == "drop_cascade":
-            return f"drop {ref_key} is cascading to {ref_list}"
-        elif self.action == "drop_relation":
-            return f"Dropping relation: {ref_key}"
-        elif self.action == "update_reference":
-            return (
-                f"updated reference from {ref_key} -> {ref_key_3} to "
-                f"{ref_key_2} -> {ref_key_3}"
-            )
-        elif self.action == "temporary_relation":
-            return f"old key {ref_key} not found in self.relations, assuming temporary"
-        elif self.action == "rename_relation":
-            return f"Renaming relation {ref_key} to {ref_key_2}"
-        elif self.action == "uncached_relation":
-            return (
-                f"{ref_key_2} references {ref_key} "
-                f"but {self.ref_key.database}.{self.ref_key.schema}"
-                "is not in the cache, skipping assumed external relation"
-            )
-        else:
-            return ref_key
-
-
-# Skipping E023, E024, E025, E026, E027, E028, E029, E030
-
-
-class CacheDumpGraph(DebugLevel):
-    def code(self) -> str:
-        return "E031"
-
-    def message(self) -> str:
-        return f"dump {self.before_after} {self.action} : {self.dump}"
-
-
-# Skipping E032, E033, E034
-
-
-class AdapterRegistered(InfoLevel):
-    def code(self) -> str:
-        return "E034"
-
-    def message(self) -> str:
-        return f"Registered adapter: {self.adapter_name}{self.adapter_version}"
-
-
-class AdapterImportError(InfoLevel):
-    def code(self) -> str:
-        return "E035"
-
-    def message(self) -> str:
-        return f"Error importing adapter: {self.exc}"
-
-
-class PluginLoadError(DebugLevel):
-    def code(self) -> str:
-        return "E036"
-
-    def message(self) -> str:
-        return f"{self.exc_info}"
-
-
-class NewConnectionOpening(DebugLevel):
-    def code(self) -> str:
-        return "E037"
-
-    def message(self) -> str:
-        return f"Opening a new connection, currently in state {self.connection_state}"
-
-
-class CodeExecution(DebugLevel):
-    def code(self) -> str:
-        return "E038"
-
-    def message(self) -> str:
-        return f"On {self.conn_name}: {self.code_content}"
-
-
-class CodeExecutionStatus(DebugLevel):
-    def code(self) -> str:
-        return "E039"
-
-    def message(self) -> str:
-        return f"Execution status: {self.status} in {self.elapsed} seconds"
-
-
-class CatalogGenerationError(WarnLevel):
-    def code(self) -> str:
-        return "E040"
-
-    def message(self) -> str:
-        return f"Encountered an error while generating catalog: {self.exc}"
-
-
-class WriteCatalogFailure(ErrorLevel):
-    def code(self) -> str:
-        return "E041"
-
-    def message(self) -> str:
-        return (
-            f"dbt encountered {self.num_exceptions} failure{(self.num_exceptions != 1) * 's'} "
-            "while writing the catalog"
-        )
-
-
-class CatalogWritten(InfoLevel):
-    def code(self) -> str:
-        return "E042"
-
-    def message(self) -> str:
-        return f"Catalog written to {self.path}"
-
-
-class CannotGenerateDocs(InfoLevel):
-    def code(self) -> str:
-        return "E043"
-
-    def message(self) -> str:
-        return "compile failed, cannot generate docs"
-
-
-class BuildingCatalog(InfoLevel):
-    def code(self) -> str:
-        return "E044"
-
-    def message(self) -> str:
-        return "Building catalog"
-
-
-class DatabaseErrorRunningHook(InfoLevel):
-    def code(self) -> str:
-        return "E045"
-
-    def message(self) -> str:
-        return f"Database error while running {self.hook_type}"
-
-
-class HooksRunning(InfoLevel):
-    def code(self) -> str:
-        return "E046"
-
-    def message(self) -> str:
-        plural = "hook" if self.num_hooks == 1 else "hooks"
-        return f"Running {self.num_hooks} {self.hook_type} {plural}"
-
-
-class FinishedRunningStats(InfoLevel):
-    def code(self) -> str:
-        return "E047"
-
-    def message(self) -> str:
-        return f"Finished running {self.stat_line}{self.execution} ({self.execution_time:0.2f}s)."
-
-
-class ConstraintNotEnforced(WarnLevel):
-    def code(self) -> str:
-        return "E048"
-
-    def message(self) -> str:
-        msg = (
-            f"The constraint type {self.constraint} is not enforced by {self.adapter}. "
-            "The constraint will be included in this model's DDL statement, but it will not "
-            "guarantee anything about the underlying data. Set 'warn_unenforced: false' on "
-            "this constraint to ignore this warning."
-        )
-        return line_wrap_message(warning_tag(msg))
-
-
-class ConstraintNotSupported(WarnLevel):
-    def code(self) -> str:
-        return "E049"
-
-    def message(self) -> str:
-        msg = (
-            f"The constraint type {self.constraint} is not supported by {self.adapter}, and will "
-            "be ignored. Set 'warn_unsupported: false' on this constraint to ignore this warning."
-        )
-        return line_wrap_message(warning_tag(msg))
+        return line_wrap_message(warning_tag(description))
 
 
 # =======================================================
@@ -1146,19 +816,6 @@ class UnpinnedRefNewVersionAvailable(InfoLevel):
         return msg
 
 
-class DeprecatedModel(WarnLevel):
-    def code(self) -> str:
-        return "I065"
-
-    def message(self) -> str:
-        version = ".v" + self.model_version if self.model_version else ""
-        msg = (
-            f"Model {self.model_name}{version} has passed its deprecation date of {self.deprecation_date}. "
-            "This model should be disabled or removed."
-        )
-        return warning_tag(msg)
-
-
 class UpcomingReferenceDeprecation(WarnLevel):
     def code(self) -> str:
         return "I066"
@@ -1239,15 +896,17 @@ class UnversionedBreakingChange(WarnLevel):
     def message(self) -> str:
         reasons = "\n  - ".join(self.breaking_changes)
 
-        return (
+        msg = (
             f"Breaking change to contracted, unversioned model {self.model_name} ({self.model_file_path})"
             "\nWhile comparing to previous project state, dbt detected a breaking change to an unversioned model."
             f"\n  - {reasons}\n"
         )
 
+        return warning_tag(msg)
+
 
 class WarnStateTargetEqual(WarnLevel):
-    def code(self):
+    def code(self) -> str:
         return "I072"
 
     def message(self) -> str:
@@ -1255,6 +914,27 @@ class WarnStateTargetEqual(WarnLevel):
             f"Warning: The state and target directories are the same: '{self.state_path}'. "
             f"This could lead to missing changes due to overwritten state including non-idempotent retries."
         )
+
+
+class FreshnessConfigProblem(WarnLevel):
+    def code(self) -> str:
+        return "I073"
+
+    def message(self) -> str:
+        return self.msg
+
+
+class MicrobatchModelNoEventTimeInputs(WarnLevel):
+    def code(self) -> str:
+        return "I074"
+
+    def message(self) -> str:
+        msg = (
+            f"The microbatch model '{self.model_name}' has no 'ref' or 'source' input with an 'event_time' configuration. "
+            "\nThis means no filtering can be applied and can result in unexpected duplicate records in the resulting microbatch model."
+        )
+
+        return warning_tag(msg)
 
 
 # =======================================================
@@ -1402,22 +1082,6 @@ class DepsNotifyUpdatesAvailable(InfoLevel):
                 \nUpdate your versions in packages.yml, then run dbt deps"
 
 
-class RetryExternalCall(DebugLevel):
-    def code(self) -> str:
-        return "M020"
-
-    def message(self) -> str:
-        return f"Retrying external call. Attempt: {self.attempt} Max attempts: {self.max}"
-
-
-class RecordRetryException(DebugLevel):
-    def code(self) -> str:
-        return "M021"
-
-    def message(self) -> str:
-        return f"External call exception: {self.exc}"
-
-
 class RegistryIndexProgressGETRequest(DebugLevel):
     def code(self) -> str:
         return "M022"
@@ -1501,7 +1165,39 @@ class NoNodesForSelectionCriteria(WarnLevel):
         return "M030"
 
     def message(self) -> str:
-        return f"The selection criterion '{self.spec_raw}' does not match any nodes"
+        return f"The selection criterion '{self.spec_raw}' does not match any enabled nodes"
+
+
+class DepsLockUpdating(InfoLevel):
+    def code(self):
+        return "M031"
+
+    def message(self) -> str:
+        return f"Updating lock file in file path: {self.lock_filepath}"
+
+
+class DepsAddPackage(InfoLevel):
+    def code(self):
+        return "M032"
+
+    def message(self) -> str:
+        return f"Added new package {self.package_name}@{self.version} to {self.packages_filepath}"
+
+
+class DepsFoundDuplicatePackage(InfoLevel):
+    def code(self):
+        return "M033"
+
+    def message(self) -> str:
+        return f"Found duplicate package in packages.yml, removing: {self.removed_package}"
+
+
+class DepsScrubbedPackageName(WarnLevel):
+    def code(self):
+        return "M035"
+
+    def message(self) -> str:
+        return f"Detected secret env var in {self.package_name}. dbt will write a scrubbed representation to the lock file. This will cause issues with subsequent 'dbt deps' using the lock file, requiring 'dbt deps --upgrade'"
 
 
 # =======================================================
@@ -1556,7 +1252,9 @@ class LogTestResult(DynamicLevel):
     def message(self) -> str:
         if self.status == "error":
             info = "ERROR"
-            status = red(info)
+            status = red(
+                info,
+            )
         elif self.status == "pass":
             info = "PASS"
             status = green(info)
@@ -1611,6 +1309,9 @@ class LogModelResult(DynamicLevel):
         if self.status == "error":
             info = "ERROR creating"
             status = red(self.status.upper())
+        elif "PARTIAL SUCCESS" in self.status:
+            info = "PARTIALLY created"
+            status = yellow(self.status.upper())
         else:
             info = "OK created"
             status = green(self.status)
@@ -1716,7 +1417,22 @@ class LogFreshnessResult(DynamicLevel):
             return EventLevel.INFO
 
 
-# Skipped Q019, Q020, Q021
+class LogNodeNoOpResult(InfoLevel):
+    def code(self) -> str:
+        return "Q019"
+
+    def message(self) -> str:
+        msg = f"NO-OP {self.description}"
+        return format_fancy_output_line(
+            msg=msg,
+            status=yellow("NO-OP"),
+            index=self.index,
+            total=self.total,
+            execution_time=self.execution_time,
+        )
+
+
+# Skipped Q020, Q021
 
 
 class LogCancelLine(ErrorLevel):
@@ -1813,10 +1529,20 @@ class LogHookEndLine(InfoLevel):
         return "Q033"
 
     def message(self) -> str:
-        msg = f"OK hook: {self.statement}"
+        if self.status == "success":
+            info = "OK"
+            status = green(info)
+        elif self.status == "skipped":
+            info = "SKIP"
+            status = yellow(info)
+        else:
+            info = "ERROR"
+            status = red(info)
+        msg = f"{info} hook: {self.statement}"
+
         return format_fancy_output_line(
             msg=msg,
-            status=green(self.status),
+            status=status,
             index=self.index,
             total=self.total,
             execution_time=self.execution_time,
@@ -1829,7 +1555,8 @@ class SkippingDetails(InfoLevel):
         return "Q034"
 
     def message(self) -> str:
-        if self.resource_type in NodeType.refable():
+        # ToDo: move to core or figure out NodeType
+        if self.resource_type in ["model", "seed", "snapshot"]:
             msg = f"SKIP relation {self.schema}.{self.node_name}"
         else:
             msg = f"SKIP {self.resource_type} {self.node_name}"
@@ -1914,6 +1641,18 @@ class CompiledNode(InfoLevel):
                 return f"Compiled inline node is:\n{self.compiled}"
             else:
                 return f"Compiled node '{self.node_name}' is:\n{self.compiled}"
+
+
+class SnapshotTimestampWarning(WarnLevel):
+    def code(self) -> str:
+        return "Q043"
+
+    def message(self) -> str:
+        return (
+            f"Data type of snapshot table timestamp columns ({self.snapshot_time_data_type}) "
+            f"doesn't match derived column 'updated_at' ({self.updated_at_data_type}). "
+            "Please update snapshot config 'updated_at'."
+        )
 
 
 # =======================================================
@@ -2005,49 +1744,6 @@ class MainStackTrace(ErrorLevel):
 # Skipped Z004
 
 
-class SystemCouldNotWrite(DebugLevel):
-    def code(self) -> str:
-        return "Z005"
-
-    def message(self) -> str:
-        return (
-            f"Could not write to path {self.path}({len(self.path)} characters): "
-            f"{self.reason}\nexception: {self.exc}"
-        )
-
-
-class SystemExecutingCmd(DebugLevel):
-    def code(self) -> str:
-        return "Z006"
-
-    def message(self) -> str:
-        return f'Executing "{" ".join(self.cmd)}"'
-
-
-class SystemStdOut(DebugLevel):
-    def code(self) -> str:
-        return "Z007"
-
-    def message(self) -> str:
-        return f'STDOUT: "{str(self.bmsg)}"'
-
-
-class SystemStdErr(DebugLevel):
-    def code(self) -> str:
-        return "Z008"
-
-    def message(self) -> str:
-        return f'STDERR: "{str(self.bmsg)}"'
-
-
-class SystemReportReturnCode(DebugLevel):
-    def code(self) -> str:
-        return "Z009"
-
-    def message(self) -> str:
-        return f"command return code={self.returncode}"
-
-
 class TimingInfoCollected(DebugLevel):
     def code(self) -> str:
         return "Z010"
@@ -2118,21 +1814,6 @@ class OpenCommand(InfoLevel):
         return msg
 
 
-# We use events to create console output, but also think of them as a sequence of important and
-# meaningful occurrences to be used for debugging and monitoring. The Formatting event helps eases
-# the tension between these two goals by allowing empty lines, heading separators, and other
-# formatting to be written to the console, while they can be ignored for other purposes. For
-# general information that isn't simple formatting, the Note event should be used instead.
-
-
-class Formatting(InfoLevel):
-    def code(self) -> str:
-        return "Z017"
-
-    def message(self) -> str:
-        return self.msg
-
-
 class RunResultWarning(WarnLevel):
     def code(self) -> str:
         return "Z021"
@@ -2182,7 +1863,7 @@ class SQLCompiledPath(InfoLevel):
         return "Z026"
 
     def message(self) -> str:
-        return f"  compiled Code at {self.path}"
+        return f"  compiled code at {self.path}"
 
 
 class CheckNodeTestFailure(InfoLevel):
@@ -2205,10 +1886,16 @@ class EndOfRunSummary(InfoLevel):
     def message(self) -> str:
         error_plural = pluralize(self.num_errors, "error")
         warn_plural = pluralize(self.num_warnings, "warning")
+        partial_success_plural = pluralize(self.num_partial_success, "partial success")
+
         if self.keyboard_interrupt:
             message = yellow("Exited because of keyboard interrupt")
         elif self.num_errors > 0:
-            message = red(f"Completed with {error_plural} and {warn_plural}:")
+            message = red(
+                f"Completed with {error_plural}, {partial_success_plural}, and {warn_plural}:"
+            )
+        elif self.num_partial_success > 0:
+            message = yellow(f"Completed with {partial_success_plural} and {warn_plural}")
         elif self.num_warnings > 0:
             message = yellow(f"Completed with {warn_plural}:")
         else:
@@ -2216,7 +1903,21 @@ class EndOfRunSummary(InfoLevel):
         return message
 
 
-# Skipped Z031, Z032, Z033
+# Skipped Z031, Z032
+
+
+class MarkSkippedChildren(DebugLevel):
+    def code(self) -> str:
+        return "Z033"
+
+    def message(self) -> str:
+        msg = (
+            f"Marking all children of '{self.unique_id}' to be skipped "
+            f"because of status '{self.status}'. "
+        )
+        if self.run_result.message:
+            msg = msg + f" Reason: {self.run_result.message}."
+        return msg
 
 
 class LogSkipBecauseError(ErrorLevel):
@@ -2224,7 +1925,7 @@ class LogSkipBecauseError(ErrorLevel):
         return "Z034"
 
     def message(self) -> str:
-        msg = f"SKIP relation {self.schema}.{self.relation} due to ephemeral model error"
+        msg = f"SKIP relation {self.schema}.{self.relation} due to ephemeral model status '{self.status}'"
         return format_fancy_output_line(
             msg=msg, status=red("ERROR SKIP"), index=self.index, total=self.total
         )
@@ -2342,20 +2043,9 @@ class DebugCmdResult(InfoLevel):
 
 
 class ListCmdOut(InfoLevel):
+    # No longer in use, switching to Z051 PrintEvent in dbt-common
     def code(self) -> str:
         return "Z049"
-
-    def message(self) -> str:
-        return self.msg
-
-
-class Note(InfoLevel):
-    """The Note event provides a way to log messages which aren't likely to be
-    useful as more structured events. For console formatting text like empty
-    lines and separator bars, use the Formatting event instead."""
-
-    def code(self) -> str:
-        return "Z050"
 
     def message(self) -> str:
         return self.msg

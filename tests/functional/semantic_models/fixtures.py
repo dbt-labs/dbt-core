@@ -86,6 +86,39 @@ semantic_models:
       agg_time_dimension: created_at
 """
 
+semantic_model_people_diff_name_yml = """
+version: 2
+
+semantic_models:
+  - name: semantic_people_diff_name
+    label: "Semantic People"
+    model: ref('people')
+    dimensions:
+      - name: favorite_color
+        label: "Favorite Color"
+        type: categorical
+      - name: created_at
+        label: "Created At"
+        type: TIME
+        type_params:
+          time_granularity: day
+    measures:
+      - name: years_tenure
+        label: "Years Tenure"
+        agg: SUM
+        expr: tenure
+      - name: people
+        label: "People"
+        agg: count
+        expr: id
+    entities:
+      - name: id
+        label: "Primary ID"
+        type: primary
+    defaults:
+      agg_time_dimension: created_at
+"""
+
 semantic_model_descriptions = """
 {% docs semantic_model_description %} foo {% enddocs %}
 {% docs dimension_description %} bar {% enddocs %}
@@ -134,6 +167,9 @@ semantic_models:
     config:
       enabled: true
       group: some_group
+      meta:
+        my_meta: 'testing'
+        my_other_meta: 'testing more'
     dimensions:
       - name: favorite_color
         type: categorical
@@ -185,6 +221,7 @@ semantic_models:
       agg_time_dimension: created_at
 """
 
+
 schema_yml = """models:
   - name: fct_revenue
     description: This is the model fct_revenue. It should be able to use doc blocks
@@ -199,6 +236,12 @@ semantic_models:
 
     measures:
       - name: txn_revenue
+        expr: revenue
+        agg: sum
+        agg_time_dimension: ds
+        create_metric: true
+      - name: txn_revenue_with_label
+        label: "Transaction Revenue with label"
         expr: revenue
         agg: sum
         agg_time_dimension: ds
@@ -281,4 +324,82 @@ final as (
 
 select *
 from final
+"""
+
+multi_sm_schema_yml = """
+models:
+  - name: fct_revenue
+    description: This is the model fct_revenue.
+
+semantic_models:
+  - name: revenue
+    description: This is the first semantic model.
+    model: ref('fct_revenue')
+
+    defaults:
+      agg_time_dimension: ds
+
+    measures:
+      - name: txn_revenue
+        expr: revenue
+        agg: sum
+        agg_time_dimension: ds
+        create_metric: true
+      - name: sum_of_things
+        expr: 2
+        agg: sum
+        agg_time_dimension: ds
+
+    dimensions:
+      - name: ds
+        type: time
+        expr: created_at
+        type_params:
+          time_granularity: day
+
+    entities:
+      - name: user
+        type: foreign
+        expr: user_id
+      - name: id
+        type: primary
+
+  - name: alt_revenue
+    description: This is the second revenue semantic model.
+    model: ref('fct_revenue')
+
+    defaults:
+      agg_time_dimension: ads
+
+    measures:
+      - name: alt_txn_revenue
+        expr: revenue
+        agg: sum
+        agg_time_dimension: ads
+        create_metric: true
+      - name: alt_sum_of_things
+        expr: 2
+        agg: sum
+        agg_time_dimension: ads
+
+    dimensions:
+      - name: ads
+        type: time
+        expr: created_at
+        type_params:
+          time_granularity: day
+
+    entities:
+      - name: user
+        type: foreign
+        expr: user_id
+      - name: id
+        type: primary
+
+metrics:
+  - name: simple_metric
+    label: Simple Metric
+    type: simple
+    type_params:
+      measure: sum_of_things
 """

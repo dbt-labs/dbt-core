@@ -1,0 +1,6 @@
+kind: Features
+body: Emit warning when microbatch model has no input with `event_time` config
+time: 2024-10-28T17:34:19.195209-04:00
+custom:
+  Author: michelleark
+  Issue: "10926"

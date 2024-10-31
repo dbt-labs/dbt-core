@@ -1,6 +1,6 @@
 import pytest
-from dbt.tests.util import run_dbt, get_manifest
 
+from dbt.tests.util import get_manifest, run_dbt
 
 model_sql = """
   select 1 as id
@@ -16,7 +16,6 @@ def models():
 def dbt_profile_data(unique_schema):
 
     return {
-        "config": {"send_anonymous_usage_stats": False},
         "test": {
             "outputs": {
                 "default": {

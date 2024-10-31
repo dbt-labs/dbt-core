@@ -1,0 +1,6 @@
+kind: Features
+body: Add --host flag to dbt docs serve, defaulting to '127.0.0.1'
+time: 2024-05-27T12:44:05.040843-04:00
+custom:
+  Author: michelleark
+  Issue: "10229"

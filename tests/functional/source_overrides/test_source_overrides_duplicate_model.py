@@ -1,12 +1,13 @@
 import os
-from dbt.exceptions import CompilationError
+
 import pytest
 
-from dbt.tests.util import run_dbt
+from dbt.exceptions import CompilationError
 from dbt.tests.fixtures.project import write_project_files
+from dbt.tests.util import run_dbt
 from tests.functional.source_overrides.fixtures import (  # noqa: F401
-    dupe_models__schema2_yml,
     dupe_models__schema1_yml,
+    dupe_models__schema2_yml,
     local_dependency,
 )
 

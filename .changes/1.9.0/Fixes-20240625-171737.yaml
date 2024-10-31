@@ -1,0 +1,7 @@
+kind: Fixes
+body: Attempt to provide test fixture tables with all values to set types correctly
+  for comparisong with source tables
+time: 2024-06-25T17:17:37.514619-07:00
+custom:
+  Author: versusfacit
+  Issue: "10365"

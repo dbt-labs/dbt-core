@@ -1,15 +1,13 @@
 import shutil
+from typing import Dict
 
-from dbt.clients import system
-from dbt.deps.base import PinnedPackage, UnpinnedPackage
-from dbt.contracts.project import (
-    ProjectPackageMetadata,
-    LocalPackage,
-)
-from dbt.events.functions import fire_event
-from dbt.events.types import DepsCreatingLocalSymlink, DepsSymlinkNotAvailable
 from dbt.config.project import PartialProject, Project
 from dbt.config.renderer import PackageRenderer
+from dbt.contracts.project import LocalPackage, ProjectPackageMetadata
+from dbt.deps.base import PinnedPackage, UnpinnedPackage
+from dbt.events.types import DepsCreatingLocalSymlink, DepsSymlinkNotAvailable
+from dbt_common.clients import system
+from dbt_common.events.functions import fire_event
 
 
 class LocalPackageMixin:
@@ -28,6 +26,11 @@ class LocalPackageMixin:
 class LocalPinnedPackage(LocalPackageMixin, PinnedPackage):
     def __init__(self, local: str) -> None:
         super().__init__(local)
+
+    def to_dict(self) -> Dict[str, str]:
+        return {
+            "local": self.local,
+        }
 
     def get_version(self):
         return None

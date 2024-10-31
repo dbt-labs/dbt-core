@@ -1,0 +1,6 @@
+kind: Features
+body: Support new semantic layer time spine configs to enable sub-daily granularity.
+time: 2024-07-22T20:22:38.258249-07:00
+custom:
+  Author: courtneyholcomb
+  Issue: "10475"

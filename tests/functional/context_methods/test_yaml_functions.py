@@ -2,7 +2,6 @@ import pytest
 
 from dbt.tests.util import run_dbt
 
-
 tests__from_yaml_sql = """
 {% set simplest = (fromyaml('a: 1') == {'a': 1}) %}
 {% set nested_data %}

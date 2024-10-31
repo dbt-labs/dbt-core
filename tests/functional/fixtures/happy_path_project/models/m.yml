@@ -1,0 +1,7 @@
+metrics:
+  - name: total_outer
+    type: simple
+    description: The total count of outer
+    label: Total Outer
+    type_params:
+      measure: total_outer_count

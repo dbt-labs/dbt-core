@@ -1,6 +1,7 @@
 ignore:
   - ".github"
   - ".changes"
+
 coverage:
   status:
     project:
@@ -11,3 +12,28 @@ coverage:
       default:
         target: auto
         threshold: 80%
+
+comment:
+  layout: "header, diff, flags, components"  # show component info in the PR comment
+
+component_management:
+  default_rules:  # default rules that will be inherited by all components
+    statuses:
+      - type: project # in this case every component that doens't have a status defined will have a project type one
+        target: auto
+        threshold: 0.1%
+      - type: patch
+        target: 80%
+  individual_components:
+    - component_id: unittests
+      name: "Unit Tests"
+      flag_regexes:
+        - "unit"
+      statuses:
+        - type: patch
+          target: 80%
+          threshold: 5%
+    - component_id: integrationtests
+      name: "Integration Tests"
+      flag_regexes:
+        - "integration"

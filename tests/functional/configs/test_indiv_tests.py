@@ -1,7 +1,6 @@
 import pytest
 
 from dbt.tests.util import run_dbt
-
 from tests.functional.configs.fixtures import BaseConfigProject
 
 
@@ -17,7 +16,7 @@ class TestConfigIndivTests(BaseConfigProject):
                     "seed_name": "seed",
                 }
             },
-            "tests": {"test": {"enabled": True, "severity": "WARN"}},
+            "data_tests": {"test": {"enabled": True, "severity": "WARN"}},
         }
 
     def test_configuring_individual_tests(

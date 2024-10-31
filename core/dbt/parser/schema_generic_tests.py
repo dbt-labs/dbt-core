@@ -1,37 +1,43 @@
-import pathlib
 import itertools
 import os
+import pathlib
+from typing import Any, Dict, List, Optional, Union
 
-from typing import List, Dict, Optional, Union, Any
+from dbt.adapters.factory import get_adapter, get_adapter_package_names
+from dbt.artifacts.resources import NodeVersion, RefArgs
+from dbt.clients.jinja import add_rendered_test_kwargs, get_rendered
+from dbt.context.configured import SchemaYamlVars, generate_schema_yml_context
+from dbt.context.context_config import ContextConfig
+from dbt.context.macro_resolver import MacroResolver
+from dbt.context.providers import generate_test_context
+from dbt.contracts.files import FileHash
+from dbt.contracts.graph.nodes import (
+    GenericTestNode,
+    GraphMemberNode,
+    ManifestNode,
+    UnpatchedSourceDefinition,
+)
+from dbt.contracts.graph.unparsed import UnparsedColumn, UnparsedNodeUpdate
+from dbt.exceptions import (
+    CompilationError,
+    ParsingError,
+    SchemaConfigError,
+    TestConfigError,
+)
+from dbt.node_types import NodeType
 from dbt.parser.base import SimpleParser
-from dbt.parser.generic_test_builders import TestBuilder
-from dbt.parser.search import FileBlock
-from dbt.context.providers import RefArgs, generate_test_context
 from dbt.parser.common import (
-    TestBlock,
-    Testable,
-    TestDef,
     GenericTestBlock,
+    Testable,
+    TestBlock,
+    TestDef,
     VersionedTestBlock,
     trimmed,
 )
-from dbt.contracts.graph.unparsed import UnparsedNodeUpdate, NodeVersion, UnparsedColumn
-from dbt.contracts.graph.nodes import (
-    GenericTestNode,
-    UnpatchedSourceDefinition,
-    ManifestNode,
-    GraphMemberNode,
-)
-from dbt.context.context_config import ContextConfig
-from dbt.context.configured import generate_schema_yml_context, SchemaYamlVars
-from dbt.dataclass_schema import ValidationError
-from dbt.exceptions import SchemaConfigError, CompilationError, ParsingError, TestConfigError
-from dbt.contracts.files import FileHash
-from dbt.utils import md5, get_pseudo_test_path
-from dbt.clients.jinja import get_rendered, add_rendered_test_kwargs
-from dbt.adapters.factory import get_adapter, get_adapter_package_names
-from dbt.node_types import NodeType
-from dbt.context.macro_resolver import MacroResolver
+from dbt.parser.generic_test_builders import TestBuilder
+from dbt.parser.search import FileBlock
+from dbt.utils import get_pseudo_test_path, md5
+from dbt_common.dataclass_schema import ValidationError
 
 
 # This parser handles the tests that are defined in "schema" (yaml) files, on models,
@@ -72,11 +78,11 @@ class SchemaGenericTestParser(SimpleParser):
     def parse_column_tests(
         self, block: TestBlock, column: UnparsedColumn, version: Optional[NodeVersion]
     ) -> None:
-        if not column.tests:
+        if not column.data_tests:
             return
 
-        for test in column.tests:
-            self.parse_test(block, test, column, version)
+        for data_test in column.data_tests:
+            self.parse_test(block, data_test, column, version)
 
     def create_test_node(
         self,
@@ -90,6 +96,7 @@ class SchemaGenericTestParser(SimpleParser):
         test_metadata: Dict[str, Any],
         file_key_name: str,
         column_name: Optional[str],
+        description: str,
     ) -> GenericTestNode:
 
         HASH_LENGTH = 10
@@ -128,6 +135,7 @@ class SchemaGenericTestParser(SimpleParser):
             "column_name": column_name,
             "checksum": FileHash.empty().to_dict(omit_none=True),
             "file_key_name": file_key_name,
+            "description": description,
         }
         try:
             GenericTestNode.validate(dct)
@@ -148,7 +156,7 @@ class SchemaGenericTestParser(SimpleParser):
     def parse_generic_test(
         self,
         target: Testable,
-        test: Dict[str, Any],
+        data_test: Dict[str, Any],
         tags: List[str],
         column_name: Optional[str],
         schema_file_id: str,
@@ -156,7 +164,7 @@ class SchemaGenericTestParser(SimpleParser):
     ) -> GenericTestNode:
         try:
             builder = TestBuilder(
-                test=test,
+                data_test=data_test,
                 target=target,
                 column_name=column_name,
                 version=version,
@@ -194,7 +202,9 @@ class SchemaGenericTestParser(SimpleParser):
 
         # this is the ContextConfig that is used in render_update
         config: ContextConfig = self.initial_config(fqn)
-
+        # Adding the builder's config to the ContextConfig
+        # is needed to ensure the config makes it to the pre_model hook which dbt-snowflake needs
+        config.add_config_call(builder.config)
         # builder.args contains keyword args for the test macro,
         # not configs which have been separated out in the builder.
         # The keyword args are not completely rendered until compilation.
@@ -221,6 +231,7 @@ class SchemaGenericTestParser(SimpleParser):
             column_name=column_name,
             test_metadata=metadata,
             file_key_name=file_key_name,
+            description=builder.description,
         )
         self.render_test_update(node, config, builder, schema_file_id)
 
@@ -321,7 +332,7 @@ class SchemaGenericTestParser(SimpleParser):
         """
         node = self.parse_generic_test(
             target=block.target,
-            test=block.test,
+            data_test=block.data_test,
             tags=block.tags,
             column_name=block.column_name,
             schema_file_id=block.file.file_id,
@@ -357,12 +368,12 @@ class SchemaGenericTestParser(SimpleParser):
     def parse_test(
         self,
         target_block: TestBlock,
-        test: TestDef,
+        data_test: TestDef,
         column: Optional[UnparsedColumn],
         version: Optional[NodeVersion],
     ) -> None:
-        if isinstance(test, str):
-            test = {test: {}}
+        if isinstance(data_test, str):
+            data_test = {data_test: {}}
 
         if column is None:
             column_name: Optional[str] = None
@@ -376,7 +387,7 @@ class SchemaGenericTestParser(SimpleParser):
 
         block = GenericTestBlock.from_test_block(
             src=target_block,
-            test=test,
+            data_test=data_test,
             column_name=column_name,
             tags=column_tags,
             version=version,
@@ -387,8 +398,8 @@ class SchemaGenericTestParser(SimpleParser):
         for column in block.columns:
             self.parse_column_tests(block, column, None)
 
-        for test in block.tests:
-            self.parse_test(block, test, None, None)
+        for data_test in block.data_tests:
+            self.parse_test(block, data_test, None, None)
 
     def parse_versioned_tests(self, block: VersionedTestBlock) -> None:
         if not block.target.versions:

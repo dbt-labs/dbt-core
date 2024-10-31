@@ -1,14 +1,14 @@
 import pytest
 
-from dbt.tests.util import run_dbt, get_manifest
+from dbt.tests.util import get_manifest, run_dbt
 from tests.functional.exposures.fixtures import (
+    metricflow_time_spine_sql,
+    metrics_schema_yml,
     models_sql,
     second_model_sql,
+    semantic_models_schema_yml,
     simple_exposure_yml,
     source_schema_yml,
-    metrics_schema_yml,
-    semantic_models_schema_yml,
-    metricflow_time_spine_sql,
 )
 
 

@@ -1,6 +1,4 @@
-from dbt.tests.util import run_dbt, get_manifest, run_dbt_and_capture, write_file
-
-
+from dbt.tests.util import get_manifest, run_dbt, run_dbt_and_capture, write_file
 from tests.fixtures.jaffle_shop import JaffleShopProject
 
 

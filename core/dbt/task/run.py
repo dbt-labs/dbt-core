@@ -1,73 +1,55 @@
 import functools
+import os
 import threading
 import time
-from typing import List, Dict, Any, Iterable, Set, Tuple, Optional, AbstractSet
-
-from dbt.dataclass_schema import dbtClassMixin
-
-from .compile import CompileRunner, CompileTask
-
-from .printer import (
-    print_run_end_messages,
-    get_counts,
-)
+from copy import deepcopy
+from dataclasses import asdict
 from datetime import datetime
-from dbt import tracking
-from dbt import utils
-from dbt.adapters.base import BaseRelation
-from dbt.clients.jinja import MacroGenerator
-from dbt.context.providers import generate_runtime_model_context
-from dbt.contracts.graph.model_config import Hook
-from dbt.contracts.graph.nodes import HookNode, ResultNode
-from dbt.contracts.results import NodeStatus, RunResult, RunStatus, RunningStatus, BaseResult
-from dbt.exceptions import (
-    CompilationError,
-    DbtInternalError,
-    MissingMaterializationError,
-    DbtRuntimeError,
-    DbtValidationError,
+from typing import AbstractSet, Any, Dict, Iterable, List, Optional, Set, Tuple, Type
+
+from dbt import tracking, utils
+from dbt.adapters.base import BaseAdapter, BaseRelation
+from dbt.adapters.events.types import FinishedRunningStats
+from dbt.adapters.exceptions import MissingMaterializationError
+from dbt.artifacts.resources import Hook
+from dbt.artifacts.schemas.batch_results import BatchResults, BatchType
+from dbt.artifacts.schemas.results import (
+    NodeStatus,
+    RunningStatus,
+    RunStatus,
+    TimingInfo,
+    collect_timing_info,
 )
-from dbt.events.functions import fire_event, get_invocation_id
+from dbt.artifacts.schemas.run import RunResult
+from dbt.cli.flags import Flags
+from dbt.clients.jinja import MacroGenerator
+from dbt.config import RuntimeConfig
+from dbt.context.providers import generate_runtime_model_context
+from dbt.contracts.graph.manifest import Manifest
+from dbt.contracts.graph.nodes import HookNode, ModelNode, ResultNode
 from dbt.events.types import (
-    DatabaseErrorRunningHook,
-    Formatting,
-    HooksRunning,
-    FinishedRunningStats,
-    LogModelResult,
-    LogStartLine,
     LogHookEndLine,
     LogHookStartLine,
+    LogModelResult,
+    LogStartLine,
+    RunningOperationCaughtError,
 )
-from dbt.events.base_types import EventLevel
-from dbt.logger import (
-    TextOnly,
-    HookMetadata,
-    UniqueID,
-    TimestampNamed,
-    DbtModelState,
-)
+from dbt.exceptions import CompilationError, DbtInternalError, DbtRuntimeError
 from dbt.graph import ResourceTypeSelector
 from dbt.hooks import get_hook_dict
+from dbt.materializations.incremental.microbatch import MicrobatchBuilder
 from dbt.node_types import NodeType, RunHookType
-
-
-class Timer:
-    def __init__(self) -> None:
-        self.start = None
-        self.end = None
-
-    @property
-    def elapsed(self):
-        if self.start is None or self.end is None:
-            return None
-        return self.end - self.start
-
-    def __enter__(self):
-        self.start = time.time()
-        return self
-
-    def __exit__(self, exc_type, exc_value, exc_tracebck):
-        self.end = time.time()
+from dbt.task import group_lookup
+from dbt.task.base import BaseRunner
+from dbt.task.compile import CompileRunner, CompileTask
+from dbt.task.printer import get_counts, print_run_end_messages
+from dbt_common.clients.jinja import MacroProtocol
+from dbt_common.dataclass_schema import dbtClassMixin
+from dbt_common.events.base_types import EventLevel
+from dbt_common.events.contextvars import log_contextvars
+from dbt_common.events.functions import fire_event, get_invocation_id
+from dbt_common.events.types import Formatting
+from dbt_common.exceptions import DbtValidationError
 
 
 @functools.total_ordering
@@ -104,7 +86,29 @@ def get_hook(source, index):
     return Hook.from_dict(hook_dict)
 
 
-def track_model_run(index, num_nodes, run_model_result):
+def get_execution_status(sql: str, adapter: BaseAdapter) -> Tuple[RunStatus, str]:
+    if not sql.strip():
+        return RunStatus.Success, "OK"
+
+    try:
+        response, _ = adapter.execute(sql, auto_begin=False, fetch=False)
+        status = RunStatus.Success
+        message = response._message
+    except DbtRuntimeError as exc:
+        status = RunStatus.Error
+        message = exc.msg
+    finally:
+        return status, message
+
+
+def _get_adapter_info(adapter, run_model_result) -> Dict[str, Any]:
+    """Each adapter returns a dataclass with a flexible dictionary for
+    adapter-specific fields. Only the non-'model_adapter_details' fields
+    are guaranteed cross adapter."""
+    return asdict(adapter.get_adapter_run_info(run_model_result.node.config)) if adapter else {}
+
+
+def track_model_run(index, num_nodes, run_model_result, adapter=None):
     if tracking.active_user is None:
         raise DbtInternalError("cannot track model run with no active user")
     invocation_id = get_invocation_id()
@@ -114,10 +118,13 @@ def track_model_run(index, num_nodes, run_model_result):
         access = node.access.value if node.access is not None else None
         contract_enforced = node.contract.enforced
         versioned = True if node.version else False
+        incremental_strategy = node.config.incremental_strategy
     else:
         access = None
         contract_enforced = False
         versioned = False
+        incremental_strategy = None
+
     tracking.track_model_run(
         {
             "invocation_id": invocation_id,
@@ -128,6 +135,7 @@ def track_model_run(index, num_nodes, run_model_result):
             "run_skipped": run_model_result.status == NodeStatus.Skipped,
             "run_error": run_model_result.status == NodeStatus.Error,
             "model_materialization": node.get_materialization(),
+            "model_incremental_strategy": incremental_strategy,
             "model_id": utils.get_hash(node),
             "hashed_contents": utils.get_hashed_contents(node),
             "timing": [t.to_dict(omit_none=True) for t in run_model_result.timing],
@@ -136,6 +144,7 @@ def track_model_run(index, num_nodes, run_model_result):
             "contract_enforced": contract_enforced,
             "access": access,
             "versioned": versioned,
+            "adapter_info": _get_adapter_info(adapter, run_model_result),
         }
     )
 
@@ -183,9 +192,23 @@ class ModelRunner(CompileRunner):
             relation = relation.include(database=False)
         return str(relation)
 
-    def describe_node(self):
+    def describe_node(self) -> str:
         # TODO CL 'language' will be moved to node level when we change representation
-        return f"{self.node.language} {self.node.get_materialization()} model {self.get_node_representation()}"
+        materialization_strategy = self.node.config.get("incremental_strategy")
+        materialization = (
+            "microbatch"
+            if materialization_strategy == "microbatch"
+            else self.node.get_materialization()
+        )
+        return f"{self.node.language} {materialization} model {self.get_node_representation()}"
+
+    def describe_batch(self, batch_start: Optional[datetime]) -> str:
+        # Only visualize date if batch_start year/month/day
+        formatted_batch_start = MicrobatchBuilder.format_batch_start(
+            batch_start, self.node.config.batch_size
+        )
+
+        return f"batch {formatted_batch_start} of {self.get_node_representation()}"
 
     def print_start_line(self):
         fire_event(
@@ -199,6 +222,7 @@ class ModelRunner(CompileRunner):
 
     def print_result_line(self, result):
         description = self.describe_node()
+        group = group_lookup.get(self.node.unique_id)
         if result.status == NodeStatus.Error:
             status = result.status
             level = EventLevel.ERROR
@@ -213,18 +237,66 @@ class ModelRunner(CompileRunner):
                 total=self.num_nodes,
                 execution_time=result.execution_time,
                 node_info=self.node.node_info,
+                group=group,
             ),
             level=level,
         )
 
-    def before_execute(self):
+    def print_batch_result_line(
+        self,
+        result: RunResult,
+        batch_start: Optional[datetime],
+        batch_idx: int,
+        batch_total: int,
+        exception: Optional[Exception],
+    ):
+        description = self.describe_batch(batch_start)
+        group = group_lookup.get(self.node.unique_id)
+        if result.status == NodeStatus.Error:
+            status = result.status
+            level = EventLevel.ERROR
+        else:
+            status = result.message
+            level = EventLevel.INFO
+        fire_event(
+            LogModelResult(
+                description=description,
+                status=status,
+                index=batch_idx,
+                total=batch_total,
+                execution_time=result.execution_time,
+                node_info=self.node.node_info,
+                group=group,
+            ),
+            level=level,
+        )
+        if exception:
+            fire_event(RunningOperationCaughtError(exc=str(exception)))
+
+    def print_batch_start_line(
+        self, batch_start: Optional[datetime], batch_idx: int, batch_total: int
+    ) -> None:
+        if batch_start is None:
+            return
+
+        batch_description = self.describe_batch(batch_start)
+        fire_event(
+            LogStartLine(
+                description=batch_description,
+                index=batch_idx,
+                total=batch_total,
+                node_info=self.node.node_info,
+            )
+        )
+
+    def before_execute(self) -> None:
         self.print_start_line()
 
-    def after_execute(self, result):
-        track_model_run(self.node_index, self.num_nodes, result)
+    def after_execute(self, result) -> None:
+        track_model_run(self.node_index, self.num_nodes, result, adapter=self.adapter)
         self.print_result_line(result)
 
-    def _build_run_model_result(self, model, context):
+    def _build_run_model_result(self, model, context, elapsed_time: float = 0.0):
         result = context["load_result"]("main")
         if not result:
             raise DbtRuntimeError("main is not being called during running model")
@@ -236,10 +308,86 @@ class ModelRunner(CompileRunner):
             status=RunStatus.Success,
             timing=[],
             thread_id=threading.current_thread().name,
-            execution_time=0,
+            execution_time=elapsed_time,
             message=str(result.response),
             adapter_response=adapter_response,
             failures=result.get("failures"),
+            batch_results=None,
+        )
+
+    def _build_run_microbatch_model_result(
+        self, model: ModelNode, batch_run_results: List[RunResult]
+    ) -> RunResult:
+        batch_results = BatchResults()
+        for result in batch_run_results:
+            if result.batch_results is not None:
+                batch_results += result.batch_results
+            else:
+                raise DbtInternalError(
+                    "Got a run result without batch results for a batch run, this should be impossible"
+                )
+
+        num_successes = len(batch_results.successful)
+        num_failures = len(batch_results.failed)
+
+        if num_failures == 0:
+            status = RunStatus.Success
+            msg = "SUCCESS"
+        elif num_successes == 0:
+            status = RunStatus.Error
+            msg = "ERROR"
+        else:
+            status = RunStatus.PartialSuccess
+            msg = f"PARTIAL SUCCESS ({num_successes}/{num_successes + num_failures})"
+
+        if model.batch_info is not None:
+            new_batch_results = deepcopy(model.batch_info)
+            new_batch_results.failed = []
+            new_batch_results = new_batch_results + batch_results
+        else:
+            new_batch_results = batch_results
+
+        return RunResult(
+            node=model,
+            status=status,
+            timing=[],
+            thread_id=threading.current_thread().name,
+            # The execution_time here doesn't get propagated to logs because
+            # `safe_run_hooks` handles the elapsed time at the node level
+            execution_time=0,
+            message=msg,
+            adapter_response={},
+            failures=num_failures,
+            batch_results=new_batch_results,
+        )
+
+    def _build_succesful_run_batch_result(
+        self,
+        model: ModelNode,
+        context: Dict[str, Any],
+        batch: BatchType,
+        elapsed_time: float = 0.0,
+    ) -> RunResult:
+        run_result = self._build_run_model_result(model, context, elapsed_time)
+        run_result.batch_results = BatchResults(successful=[batch])
+        return run_result
+
+    def _build_failed_run_batch_result(
+        self,
+        model: ModelNode,
+        batch: BatchType,
+        elapsed_time: float = 0.0,
+    ) -> RunResult:
+        return RunResult(
+            node=model,
+            status=RunStatus.Error,
+            timing=[],
+            thread_id=threading.current_thread().name,
+            execution_time=elapsed_time,
+            message="ERROR",
+            adapter_response={},
+            failures=1,
+            batch_results=BatchResults(failed=[batch]),
         )
 
     def _materialization_relations(self, result: Any, model) -> List[BaseRelation]:
@@ -258,6 +406,48 @@ class ModelRunner(CompileRunner):
             'with key "relations", got: {}'.format(str(result))
         )
         raise CompilationError(msg, node=model)
+
+    def _execute_model(
+        self,
+        hook_ctx: Any,
+        context_config: Any,
+        model: ModelNode,
+        context: Dict[str, Any],
+        materialization_macro: MacroProtocol,
+    ) -> RunResult:
+        try:
+            result = MacroGenerator(
+                materialization_macro, context, stack=context["context_macro_stack"]
+            )()
+        finally:
+            self.adapter.post_model_hook(context_config, hook_ctx)
+
+        for relation in self._materialization_relations(result, model):
+            self.adapter.cache_added(relation.incorporate(dbt_created=True))
+
+        return self._build_run_model_result(model, context)
+
+    def _execute_microbatch_model(
+        self,
+        hook_ctx: Any,
+        context_config: Any,
+        model: ModelNode,
+        manifest: Manifest,
+        context: Dict[str, Any],
+        materialization_macro: MacroProtocol,
+    ) -> RunResult:
+        batch_results = None
+        try:
+            batch_results = self._execute_microbatch_materialization(
+                model, manifest, context, materialization_macro
+            )
+        finally:
+            self.adapter.post_model_hook(context_config, hook_ctx)
+
+        if batch_results is not None:
+            return self._build_run_microbatch_model_result(model, batch_results)
+        else:
+            return self._build_run_model_result(model, context)
 
     def execute(self, model, manifest):
         context = generate_runtime_model_context(model, self.config, manifest)
@@ -287,34 +477,151 @@ class ModelRunner(CompileRunner):
             )
 
         hook_ctx = self.adapter.pre_model_hook(context_config)
-        try:
-            result = MacroGenerator(
-                materialization_macro, context, stack=context["context_macro_stack"]
-            )()
-        finally:
-            self.adapter.post_model_hook(context_config, hook_ctx)
 
-        for relation in self._materialization_relations(result, model):
-            self.adapter.cache_added(relation.incorporate(dbt_created=True))
+        if (
+            os.environ.get("DBT_EXPERIMENTAL_MICROBATCH")
+            and model.config.materialized == "incremental"
+            and model.config.incremental_strategy == "microbatch"
+        ):
+            return self._execute_microbatch_model(
+                hook_ctx, context_config, model, manifest, context, materialization_macro
+            )
+        else:
+            return self._execute_model(
+                hook_ctx, context_config, model, context, materialization_macro
+            )
 
-        return self._build_run_model_result(model, context)
+    def _execute_microbatch_materialization(
+        self,
+        model: ModelNode,
+        manifest: Manifest,
+        context: Dict[str, Any],
+        materialization_macro: MacroProtocol,
+    ) -> List[RunResult]:
+        batch_results: List[RunResult] = []
+        microbatch_builder = MicrobatchBuilder(
+            model=model,
+            is_incremental=self._is_incremental(model),
+            event_time_start=getattr(self.config.args, "EVENT_TIME_START", None),
+            event_time_end=getattr(self.config.args, "EVENT_TIME_END", None),
+            default_end_time=self.config.invoked_at,
+        )
+        # Indicates whether current batch should be run incrementally
+        incremental_batch = False
+
+        # Note currently (9/30/2024) model.batch_info is only ever _not_ `None`
+        # IFF `dbt retry` is being run and the microbatch model had batches which
+        # failed on the run of the model (which is being retried)
+        if model.batch_info is None:
+            end = microbatch_builder.build_end_time()
+            start = microbatch_builder.build_start_time(end)
+            batches = microbatch_builder.build_batches(start, end)
+        else:
+            batches = model.batch_info.failed
+            # If there is batch info, then don't run as full_refresh and do force is_incremental
+            # not doing this risks blowing away the work that has already been done
+            if self._has_relation(model=model):
+                incremental_batch = True
+
+        # iterate over each batch, calling materialization_macro to get a batch-level run result
+        for batch_idx, batch in enumerate(batches):
+            self.print_batch_start_line(batch[0], batch_idx + 1, len(batches))
+
+            exception = None
+            start_time = time.perf_counter()
+            try:
+                # Set start/end in context prior to re-compiling
+                model.config["__dbt_internal_microbatch_event_time_start"] = batch[0]
+                model.config["__dbt_internal_microbatch_event_time_end"] = batch[1]
+
+                # Recompile node to re-resolve refs with event time filters rendered, update context
+                self.compiler.compile_node(
+                    model,
+                    manifest,
+                    {},
+                    split_suffix=MicrobatchBuilder.format_batch_start(
+                        batch[0], model.config.batch_size
+                    ),
+                )
+                # Update jinja context with batch context members
+                batch_context = microbatch_builder.build_batch_context(
+                    incremental_batch=incremental_batch
+                )
+                context.update(batch_context)
+
+                # Materialize batch and cache any materialized relations
+                result = MacroGenerator(
+                    materialization_macro, context, stack=context["context_macro_stack"]
+                )()
+                for relation in self._materialization_relations(result, model):
+                    self.adapter.cache_added(relation.incorporate(dbt_created=True))
+
+                # Build result of executed batch
+                batch_run_result = self._build_succesful_run_batch_result(
+                    model, context, batch, time.perf_counter() - start_time
+                )
+                # At least one batch has been inserted successfully!
+                incremental_batch = True
+
+            except Exception as e:
+                exception = e
+                batch_run_result = self._build_failed_run_batch_result(
+                    model, batch, time.perf_counter() - start_time
+                )
+
+            self.print_batch_result_line(
+                batch_run_result, batch[0], batch_idx + 1, len(batches), exception
+            )
+            batch_results.append(batch_run_result)
+
+        return batch_results
+
+    def _has_relation(self, model) -> bool:
+        relation_info = self.adapter.Relation.create_from(self.config, model)
+        relation = self.adapter.get_relation(
+            relation_info.database, relation_info.schema, relation_info.name
+        )
+        return relation is not None
+
+    def _is_incremental(self, model) -> bool:
+        # TODO: Remove. This is a temporary method. We're working with adapters on
+        # a strategy to ensure we can access the `is_incremental` logic without drift
+        relation_info = self.adapter.Relation.create_from(self.config, model)
+        relation = self.adapter.get_relation(
+            relation_info.database, relation_info.schema, relation_info.name
+        )
+        if (
+            relation is not None
+            and relation.type == "table"
+            and model.config.materialized == "incremental"
+        ):
+            if model.config.full_refresh is not None:
+                return not model.config.full_refresh
+            else:
+                return not getattr(self.config.args, "FULL_REFRESH", False)
+        else:
+            return False
 
 
 class RunTask(CompileTask):
-    def __init__(self, args, config, manifest) -> None:
+    def __init__(
+        self,
+        args: Flags,
+        config: RuntimeConfig,
+        manifest: Manifest,
+        batch_map: Optional[Dict[str, BatchResults]] = None,
+    ) -> None:
         super().__init__(args, config, manifest)
-        self.ran_hooks: List[HookNode] = []
-        self._total_executed = 0
-
-    def index_offset(self, value: int) -> int:
-        return self._total_executed + value
+        self.batch_map = batch_map
 
     def raise_on_first_error(self) -> bool:
         return False
 
     def get_hook_sql(self, adapter, hook, idx, num_hooks, extra_context) -> str:
-        compiler = adapter.get_compiler()
-        compiled = compiler.compile_node(hook, self.manifest, extra_context)
+        if self.manifest is None:
+            raise DbtInternalError("compile_node called before manifest was loaded")
+
+        compiled = self.compiler.compile_node(hook, self.manifest, extra_context)
         statement = compiled.compiled_code
         hook_index = hook.index or num_hooks
         hook_obj = get_hook(statement, index=hook_index)
@@ -337,94 +644,101 @@ class RunTask(CompileTask):
         hooks.sort(key=self._hook_keyfunc)
         return hooks
 
-    def run_hooks(self, adapter, hook_type: RunHookType, extra_context) -> None:
+    def safe_run_hooks(
+        self, adapter: BaseAdapter, hook_type: RunHookType, extra_context: Dict[str, Any]
+    ) -> RunStatus:
         ordered_hooks = self.get_hooks_by_type(hook_type)
 
-        # on-run-* hooks should run outside of a transaction. This happens
-        # b/c psycopg2 automatically begins a transaction when a connection
-        # is created.
+        if hook_type == RunHookType.End and ordered_hooks:
+            fire_event(Formatting(""))
+
+        # on-run-* hooks should run outside a transaction. This happens because psycopg2 automatically begins a transaction when a connection is created.
         adapter.clear_transaction()
         if not ordered_hooks:
-            return
+            return RunStatus.Success
+
+        status = RunStatus.Success
+        failed = False
         num_hooks = len(ordered_hooks)
 
-        with TextOnly():
-            fire_event(Formatting(""))
-        fire_event(HooksRunning(num_hooks=num_hooks, hook_type=hook_type))
+        for idx, hook in enumerate(ordered_hooks, 1):
+            with log_contextvars(node_info=hook.node_info):
+                hook.index = idx
+                hook_name = f"{hook.package_name}.{hook_type}.{hook.index - 1}"
+                execution_time = 0.0
+                timing: List[TimingInfo] = []
+                failures = 1
 
-        startctx = TimestampNamed("node_started_at")
-        finishctx = TimestampNamed("node_finished_at")
+                if not failed:
+                    with collect_timing_info("compile", timing.append):
+                        sql = self.get_hook_sql(
+                            adapter, hook, hook.index, num_hooks, extra_context
+                        )
 
-        for idx, hook in enumerate(ordered_hooks, start=1):
-            hook.update_event_status(
-                started_at=datetime.utcnow().isoformat(), node_status=RunningStatus.Started
-            )
-            sql = self.get_hook_sql(adapter, hook, idx, num_hooks, extra_context)
+                    started_at = timing[0].started_at or datetime.utcnow()
+                    hook.update_event_status(
+                        started_at=started_at.isoformat(), node_status=RunningStatus.Started
+                    )
 
-            hook_text = "{}.{}.{}".format(hook.package_name, hook_type, hook.index)
-            hook_meta_ctx = HookMetadata(hook, self.index_offset(idx))
-            with UniqueID(hook.unique_id):
-                with hook_meta_ctx, startctx:
                     fire_event(
                         LogHookStartLine(
-                            statement=hook_text,
-                            index=idx,
+                            statement=hook_name,
+                            index=hook.index,
                             total=num_hooks,
                             node_info=hook.node_info,
                         )
                     )
 
-                with Timer() as timer:
-                    if len(sql.strip()) > 0:
-                        response, _ = adapter.execute(sql, auto_begin=False, fetch=False)
-                        status = response._message
+                    with collect_timing_info("execute", timing.append):
+                        status, message = get_execution_status(sql, adapter)
+
+                    finished_at = timing[1].completed_at or datetime.utcnow()
+                    hook.update_event_status(finished_at=finished_at.isoformat())
+                    execution_time = (finished_at - started_at).total_seconds()
+                    failures = 0 if status == RunStatus.Success else 1
+
+                    if status == RunStatus.Success:
+                        message = f"{hook_name} passed"
                     else:
-                        status = "OK"
+                        message = f"{hook_name} failed, error:\n {message}"
+                        failed = True
+                else:
+                    status = RunStatus.Skipped
+                    message = f"{hook_name} skipped"
 
-                self.ran_hooks.append(hook)
-                hook.update_event_status(finished_at=datetime.utcnow().isoformat())
-                with finishctx, DbtModelState({"node_status": "passed"}):
-                    hook.update_event_status(node_status=RunStatus.Success)
-                    fire_event(
-                        LogHookEndLine(
-                            statement=hook_text,
-                            status=status,
-                            index=idx,
-                            total=num_hooks,
-                            execution_time=timer.elapsed,
-                            node_info=hook.node_info,
-                        )
+                hook.update_event_status(node_status=status)
+
+                self.node_results.append(
+                    RunResult(
+                        status=status,
+                        thread_id="main",
+                        timing=timing,
+                        message=message,
+                        adapter_response={},
+                        execution_time=execution_time,
+                        failures=failures,
+                        node=hook,
                     )
-            # `_event_status` dict is only used for logging.  Make sure
-            # it gets deleted when we're done with it
-            hook.clear_event_status()
+                )
 
-        self._total_executed += len(ordered_hooks)
+                fire_event(
+                    LogHookEndLine(
+                        statement=hook_name,
+                        status=status,
+                        index=hook.index,
+                        total=num_hooks,
+                        execution_time=execution_time,
+                        node_info=hook.node_info,
+                    )
+                )
 
-        with TextOnly():
+        if hook_type == RunHookType.Start and ordered_hooks:
             fire_event(Formatting(""))
 
-    def safe_run_hooks(
-        self, adapter, hook_type: RunHookType, extra_context: Dict[str, Any]
-    ) -> None:
-        try:
-            self.run_hooks(adapter, hook_type, extra_context)
-        except DbtRuntimeError as exc:
-            fire_event(DatabaseErrorRunningHook(hook_type=hook_type.value))
-            self.node_results.append(
-                BaseResult(
-                    status=RunStatus.Error,
-                    thread_id="main",
-                    timing=[],
-                    message=f"{hook_type.value} failed, error:\n {exc.msg}",
-                    adapter_response={},
-                    execution_time=0,
-                    failures=1,
-                )
-            )
+        return status
 
     def print_results_line(self, results, execution_time) -> None:
-        nodes = [r.node for r in results if hasattr(r, "node")] + self.ran_hooks
+        nodes = [r.node for r in results if hasattr(r, "node")]
         stat_line = get_counts(nodes)
 
         execution = ""
@@ -432,21 +746,31 @@ class RunTask(CompileTask):
         if execution_time is not None:
             execution = utils.humanize_execution_time(execution_time=execution_time)
 
-        with TextOnly():
-            fire_event(Formatting(""))
+        fire_event(Formatting(""))
         fire_event(
             FinishedRunningStats(
                 stat_line=stat_line, execution=execution, execution_time=execution_time
             )
         )
 
-    def before_run(self, adapter, selected_uids: AbstractSet[str]) -> None:
+    def populate_microbatch_batches(self, selected_uids: AbstractSet[str]):
+        if self.batch_map is not None and self.manifest is not None:
+            for uid in selected_uids:
+                if uid in self.batch_map:
+                    node = self.manifest.ref_lookup.perform_lookup(uid, self.manifest)
+                    if isinstance(node, ModelNode):
+                        node.batch_info = self.batch_map[uid]
+
+    def before_run(self, adapter: BaseAdapter, selected_uids: AbstractSet[str]) -> RunStatus:
         with adapter.connection_named("master"):
+            self.defer_to_manifest()
             required_schemas = self.get_model_schemas(adapter, selected_uids)
             self.create_schemas(adapter, required_schemas)
             self.populate_adapter_cache(adapter, required_schemas)
-            self.defer_to_manifest(adapter, selected_uids)
-            self.safe_run_hooks(adapter, RunHookType.Start, {})
+            self.populate_microbatch_batches(selected_uids)
+            group_lookup.init(self.manifest, selected_uids)
+            run_hooks_status = self.safe_run_hooks(adapter, RunHookType.Start, {})
+            return run_hooks_status
 
     def after_run(self, adapter, results) -> None:
         # in on-run-end hooks, provide the value 'database_schemas', which is a
@@ -461,11 +785,11 @@ class RunTask(CompileTask):
             and r.status not in (NodeStatus.Error, NodeStatus.Fail, NodeStatus.Skipped)
         }
 
-        self._total_executed += len(results)
-
         extras = {
             "schemas": list({s for _, s in database_schema_set}),
-            "results": results,
+            "results": [
+                r for r in results if r.thread_id != "main" or r.status == RunStatus.Error
+            ],  # exclude that didn't fail to preserve backwards compatibility
             "database_schemas": list(database_schema_set),
         }
         with adapter.connection_named("master"):
@@ -481,7 +805,7 @@ class RunTask(CompileTask):
             resource_types=[NodeType.Model],
         )
 
-    def get_runner_type(self, _):
+    def get_runner_type(self, _) -> Optional[Type[BaseRunner]]:
         return ModelRunner
 
     def task_end_messages(self, results) -> None:

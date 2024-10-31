@@ -3,31 +3,28 @@ import importlib
 import os
 import platform
 import sys
-
 from collections import namedtuple
 from enum import Flag
 from pathlib import Path
-from typing import Optional, Dict, Any, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
-from dbt.events.functions import fire_event
-from dbt.events.types import (
-    OpenCommand,
-    DebugCmdOut,
-    DebugCmdResult,
-)
-import dbt.clients.system
 import dbt.exceptions
+import dbt_common.clients.system
+import dbt_common.exceptions
 from dbt.adapters.factory import get_adapter, register_adapter
-from dbt.config import PartialProject, Project, Profile
-from dbt.config.renderer import DbtProjectYamlRenderer, ProfileRenderer
-from dbt.contracts.results import RunStatus
+from dbt.artifacts.schemas.results import RunStatus
+from dbt.cli.flags import Flags
 from dbt.clients.yaml_helper import load_yaml_text
+from dbt.config import PartialProject, Profile, Project
+from dbt.config.renderer import DbtProjectYamlRenderer, ProfileRenderer
+from dbt.events.types import DebugCmdOut, DebugCmdResult, OpenCommand
 from dbt.links import ProfileConfigDocs
-from dbt.ui import green, red
-from dbt.events.format import pluralize
-from dbt.version import get_installed_version
-
+from dbt.mp_context import get_mp_context
 from dbt.task.base import BaseTask, get_nearest_project_dir
+from dbt.version import get_installed_version
+from dbt_common.events.format import pluralize
+from dbt_common.events.functions import fire_event
+from dbt_common.ui import green, red
 
 ONLY_PROFILE_MESSAGE = """
 A `dbt_project.yml` file was not found in this directory.
@@ -75,13 +72,13 @@ class DebugRunStatus(Flag):
 
 
 class DebugTask(BaseTask):
-    def __init__(self, args, config) -> None:
-        super().__init__(args, config)
+    def __init__(self, args: Flags) -> None:
+        super().__init__(args)
         self.profiles_dir = args.PROFILES_DIR
         self.profile_path = os.path.join(self.profiles_dir, "profiles.yml")
         try:
             self.project_dir = get_nearest_project_dir(self.args.project_dir)
-        except dbt.exceptions.Exception:
+        except dbt_common.exceptions.DbtBaseException:
             # we probably couldn't find a project directory. Set project dir
             # to whatever was given, or default to the current directory.
             if args.project_dir:
@@ -95,20 +92,14 @@ class DebugTask(BaseTask):
         self.profile: Optional[Profile] = None
         self.raw_profile_data: Optional[Dict[str, Any]] = None
         self.profile_name: Optional[str] = None
-        self.project: Optional[Project] = None
-
-    @property
-    def project_profile(self):
-        if self.project is None:
-            return None
-        return self.project.profile_name
 
     def run(self) -> bool:
         # WARN: this is a legacy workflow that is not compatible with other runtime flags
         if self.args.config_dir:
             fire_event(
                 OpenCommand(
-                    open_cmd=dbt.clients.system.open_dir_cmd(), profiles_dir=str(self.profiles_dir)
+                    open_cmd=dbt_common.clients.system.open_dir_cmd(),
+                    profiles_dir=str(self.profiles_dir),
                 )
             )
             return DebugRunStatus.SUCCESS.value
@@ -126,7 +117,7 @@ class DebugTask(BaseTask):
         fire_event(DebugCmdOut(msg="Using dbt_project.yml file at {}".format(self.project_path)))
         if load_profile_status.run_status == RunStatus.Success:
             if self.profile is None:
-                raise dbt.exceptions.DbtInternalError(
+                raise dbt_common.exceptions.DbtInternalError(
                     "Profile should not be None if loading profile completed"
                 )
             else:
@@ -200,7 +191,9 @@ class DebugTask(BaseTask):
                 ),
             )
 
-        raw_profile_data = load_yaml_text(dbt.clients.system.load_file_contents(self.profile_path))
+        raw_profile_data = load_yaml_text(
+            dbt_common.clients.system.load_file_contents(self.profile_path)
+        )
         if isinstance(raw_profile_data, dict):
             self.raw_profile_data = raw_profile_data
 
@@ -218,7 +211,7 @@ class DebugTask(BaseTask):
                     # https://github.com/dbt-labs/dbt-core/issues/6259
                     getattr(self.args, "threads", None),
                 )
-            except dbt.exceptions.DbtConfigError as exc:
+            except dbt_common.exceptions.DbtConfigError as exc:
                 profile_errors.append(str(exc))
             else:
                 if len(profile_names) == 1:
@@ -263,7 +256,7 @@ class DebugTask(BaseTask):
 
         try:
             return [Profile.pick_profile_name(args_profile, project_profile)], ""
-        except dbt.exceptions.DbtConfigError:
+        except dbt_common.exceptions.DbtConfigError:
             pass
         # try to guess
 
@@ -345,7 +338,7 @@ class DebugTask(BaseTask):
                 renderer,
                 verify_version=self.args.VERSION_CHECK,
             )
-        except dbt.exceptions.DbtConfigError as exc:
+        except dbt_common.exceptions.DbtConfigError as exc:
             return SubtaskStatus(
                 log_msg=red("ERROR invalid"),
                 run_status=RunStatus.Error,
@@ -393,8 +386,8 @@ class DebugTask(BaseTask):
 
     def test_git(self) -> SubtaskStatus:
         try:
-            dbt.clients.system.run_cmd(os.getcwd(), ["git", "--help"])
-        except dbt.exceptions.ExecutableError as exc:
+            dbt_common.clients.system.run_cmd(os.getcwd(), ["git", "--help"])
+        except dbt_common.exceptions.ExecutableError as exc:
             return SubtaskStatus(
                 log_msg=red("ERROR"),
                 run_status=RunStatus.Error,
@@ -442,7 +435,7 @@ class DebugTask(BaseTask):
     @staticmethod
     def attempt_connection(profile) -> Optional[str]:
         """Return a string containing the error message, or None if there was no error."""
-        register_adapter(profile)
+        register_adapter(profile, get_mp_context())
         adapter = get_adapter(profile)
         try:
             with adapter.connection_named("debug"):
@@ -488,7 +481,7 @@ class DebugTask(BaseTask):
         return status
 
     @classmethod
-    def validate_connection(cls, target_dict):
+    def validate_connection(cls, target_dict) -> None:
         """Validate a connection dictionary. On error, raises a DbtConfigError."""
         target_name = "test"
         # make a fake profile that we can parse

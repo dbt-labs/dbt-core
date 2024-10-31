@@ -1,9 +1,9 @@
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional, List
+from typing import List, Optional
 
-from dbt.contracts.graph.unparsed import NodeVersion
-from dbt.node_types import NodeType, AccessType
+from dbt.artifacts.resources import NodeVersion
+from dbt.node_types import AccessType, NodeType
 
 
 @dataclass
@@ -33,7 +33,8 @@ class ModelNodeArgs:
     @property
     def fqn(self) -> List[str]:
         fqn = [self.package_name, self.name]
-        if self.version:
+        # Test for None explicitly because version can be 0
+        if self.version is not None:
             fqn.append(f"v{self.version}")
 
         return fqn

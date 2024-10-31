@@ -1,0 +1,6 @@
+kind: Fixes
+body: respect --quiet and --warn-error-options for flag deprecations
+time: 2024-08-06T19:48:43.399453-04:00
+custom:
+  Author: michelleark
+  Issue: "10105"

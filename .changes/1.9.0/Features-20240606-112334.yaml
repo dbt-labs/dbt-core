@@ -1,0 +1,6 @@
+kind: Features
+body: add pre_model and post_model hook calls to data and unit tests to be able to provide extra config options
+time: 2024-06-06T11:23:34.758675-05:00
+custom:
+    Author: McKnight-42
+    Issue: "10198"

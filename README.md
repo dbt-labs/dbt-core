@@ -21,7 +21,7 @@ These select statements, or "models", form a dbt project. Models frequently buil
 
 ## Getting started
 
-- [Install dbt](https://docs.getdbt.com/docs/get-started/installation)
+- [Install dbt Core](https://docs.getdbt.com/docs/get-started/installation) or explore the [dbt Cloud CLI](https://docs.getdbt.com/docs/cloud/cloud-cli-installation), a command-line interface powered by [dbt Cloud](https://docs.getdbt.com/docs/cloud/about-cloud/dbt-cloud-features) that enhances collaboration.
 - Read the [introduction](https://docs.getdbt.com/docs/introduction/) and [viewpoint](https://docs.getdbt.com/docs/about/viewpoint/)
 
 ## Join the dbt Community
@@ -31,7 +31,7 @@ These select statements, or "models", form a dbt project. Models frequently buil
 
 ## Reporting bugs and contributing code
 
-- Want to report a bug or request a feature? Let us know on [Slack](http://community.getdbt.com/), or open [an issue](https://github.com/dbt-labs/dbt-core/issues/new)
+- Want to report a bug or request a feature? Let us know and open [an issue](https://github.com/dbt-labs/dbt-core/issues/new/choose)
 - Want to help us build dbt? Check out the [Contributing Guide](https://github.com/dbt-labs/dbt-core/blob/HEAD/CONTRIBUTING.md)
 
 ## Code of Conduct

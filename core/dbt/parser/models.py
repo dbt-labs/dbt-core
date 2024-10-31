@@ -1,32 +1,31 @@
-from copy import deepcopy
-from dbt.context.context_config import ContextConfig
-from dbt.contracts.graph.nodes import ModelNode, RefArgs
-from dbt.events.base_types import EventLevel
-from dbt.events.types import Note
-from dbt.events.functions import fire_event_if_test
-from dbt.flags import get_flags
-from dbt.node_types import NodeType, ModelLanguage
-from dbt.parser.base import SimpleSQLParser
-from dbt.parser.search import FileBlock
-from dbt.clients.jinja import get_rendered
-import dbt.tracking as tracking
-from dbt import utils
-from dbt_extractor import ExtractionError, py_extract_from_source  # type: ignore
-from functools import reduce
-from itertools import chain
-import random
-from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
-
 # New for Python models :p
 import ast
-from dbt.dataclass_schema import ValidationError
+import random
+from copy import deepcopy
+from functools import reduce
+from itertools import chain
+from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
+
+import dbt.tracking as tracking
+from dbt import utils
+from dbt.artifacts.resources import RefArgs
+from dbt.clients.jinja import get_rendered
+from dbt.context.context_config import ContextConfig
+from dbt.contracts.graph.nodes import ModelNode
 from dbt.exceptions import (
     ModelConfigError,
     ParsingError,
     PythonLiteralEvalError,
     PythonParsingError,
-    UndefinedMacroError,
 )
+from dbt.flags import get_flags
+from dbt.node_types import ModelLanguage, NodeType
+from dbt.parser.base import SimpleSQLParser
+from dbt.parser.search import FileBlock
+from dbt_common.contracts.config.base import merge_config_dicts
+from dbt_common.dataclass_schema import ValidationError
+from dbt_common.exceptions.macros import UndefinedMacroError
+from dbt_extractor import ExtractionError, py_extract_from_source  # type: ignore
 
 dbt_function_key_words = set(["ref", "source", "config", "get"])
 dbt_function_full_names = set(["dbt.ref", "dbt.source", "dbt.config", "dbt.config.get"])
@@ -133,6 +132,12 @@ class PythonParseVisitor(ast.NodeVisitor):
                 for value in obj.values:
                     if isinstance(value, ast.Call):
                         self.visit_Call(value)
+            # support dbt function calls in f-strings
+            elif isinstance(obj, ast.JoinedStr):
+                for value in obj.values:
+                    if isinstance(value, ast.FormattedValue) and isinstance(value.value, ast.Call):
+                        self.visit_Call(value.value)
+
         # visit node.func.value if we are at an call attr
         if isinstance(node.func, ast.Attribute):
             self.attribute_helper(node.func)
@@ -200,7 +205,7 @@ class ModelParser(SimpleSQLParser[ModelNode]):
             dbt_parser = PythonParseVisitor(node)
             dbt_parser.visit(tree)
 
-            for (func, args, kwargs) in dbt_parser.dbt_function_calls:
+            for func, args, kwargs in dbt_parser.dbt_function_calls:
                 if func == "get":
                     num_args = len(args)
                     if num_args == 0:
@@ -246,12 +251,6 @@ class ModelParser(SimpleSQLParser[ModelNode]):
         elif not flags.STATIC_PARSER:
             # jinja rendering
             super().render_update(node, config)
-            fire_event_if_test(
-                lambda: Note(
-                    msg=f"1605: jinja rendering because of STATIC_PARSER flag. file: {node.path}"
-                ),
-                EventLevel.DEBUG,
-            )
             return
 
         # only sample for experimental parser correctness on normal runs,
@@ -285,10 +284,6 @@ class ModelParser(SimpleSQLParser[ModelNode]):
 
         # sample the experimental parser only during a normal run
         if exp_sample and not flags.USE_EXPERIMENTAL_PARSER:
-            fire_event_if_test(
-                lambda: Note(msg=f"1610: conducting experimental parser sample on {node.path}"),
-                EventLevel.DEBUG,
-            )
             experimental_sample = self.run_experimental_parser(node)
             # if the experimental parser succeeded, make a full copy of model parser
             # and populate _everything_ into it so it can be compared apples-to-apples
@@ -318,12 +313,6 @@ class ModelParser(SimpleSQLParser[ModelNode]):
             # sampling rng here, but the effect would be the same since we would only roll
             # it 40% of the time. So I've opted to keep all the rng code colocated above.
             if stable_sample and not flags.USE_EXPERIMENTAL_PARSER:
-                fire_event_if_test(
-                    lambda: Note(
-                        msg=f"1611: conducting full jinja rendering sample on {node.path}"
-                    ),
-                    EventLevel.DEBUG,
-                )
                 # if this will _never_ mutate anything `self` we could avoid these deep copies,
                 # but we can't really guarantee that going forward.
                 model_parser_copy = self.partial_deepcopy()
@@ -358,11 +347,6 @@ class ModelParser(SimpleSQLParser[ModelNode]):
         else:
             # jinja rendering
             super().render_update(node, config)
-            # only for test purposes
-            fire_event_if_test(
-                lambda: Note(msg=f"1602: parser fallback to jinja rendering on {node.path}"),
-                EventLevel.DEBUG,
-            )
 
             # if sampling, add the correct messages for tracking
             if exp_sample and isinstance(experimental_sample, str):
@@ -395,33 +379,16 @@ class ModelParser(SimpleSQLParser[ModelNode]):
     def run_static_parser(self, node: ModelNode) -> Optional[Union[str, Dict[str, List[Any]]]]:
         # if any banned macros have been overridden by the user, we cannot use the static parser.
         if self._has_banned_macro(node):
-            # this log line is used for integration testing. If you change
-            # the code at the beginning of the line change the tests in
-            # test/integration/072_experimental_parser_tests/test_all_experimental_parser.py
-            fire_event_if_test(
-                lambda: Note(
-                    msg=f"1601: detected macro override of ref/source/config in the scope of {node.path}"
-                ),
-                EventLevel.DEBUG,
-            )
             return "has_banned_macro"
 
         # run the stable static parser and return the results
         try:
             statically_parsed = py_extract_from_source(node.raw_code)
-            fire_event_if_test(
-                lambda: Note(msg=f"1699: static parser successfully parsed {node.path}"),
-                EventLevel.DEBUG,
-            )
             return _shift_sources(statically_parsed)
         # if we want information on what features are barring the static
         # parser from reading model files, this is where we would add that
         # since that information is stored in the `ExtractionError`.
         except ExtractionError:
-            fire_event_if_test(
-                lambda: Note(msg=f"1603: static parser failed on {node.path}"),
-                EventLevel.DEBUG,
-            )
             return "cannot_parse"
 
     def run_experimental_parser(
@@ -429,15 +396,6 @@ class ModelParser(SimpleSQLParser[ModelNode]):
     ) -> Optional[Union[str, Dict[str, List[Any]]]]:
         # if any banned macros have been overridden by the user, we cannot use the static parser.
         if self._has_banned_macro(node):
-            # this log line is used for integration testing. If you change
-            # the code at the beginning of the line change the tests in
-            # test/integration/072_experimental_parser_tests/test_all_experimental_parser.py
-            fire_event_if_test(
-                lambda: Note(
-                    msg=f"1601: detected macro override of ref/source/config in the scope of {node.path}"
-                ),
-                EventLevel.DEBUG,
-            )
             return "has_banned_macro"
 
         # run the experimental parser and return the results
@@ -446,19 +404,11 @@ class ModelParser(SimpleSQLParser[ModelNode]):
             # experimental features. Change `py_extract_from_source` to the new
             # experimental call when we add additional features.
             experimentally_parsed = py_extract_from_source(node.raw_code)
-            fire_event_if_test(
-                lambda: Note(msg=f"1698: experimental parser successfully parsed {node.path}"),
-                EventLevel.DEBUG,
-            )
             return _shift_sources(experimentally_parsed)
         # if we want information on what features are barring the experimental
         # parser from reading model files, this is where we would add that
         # since that information is stored in the `ExtractionError`.
         except ExtractionError:
-            fire_event_if_test(
-                lambda: Note(msg=f"1604: experimental parser failed on {node.path}"),
-                EventLevel.DEBUG,
-            )
             return "cannot_parse"
 
     # checks for banned macros
@@ -518,7 +468,7 @@ def _get_config_call_dict(static_parser_result: Dict[str, Any]) -> Dict[str, Any
     config_call_dict: Dict[str, Any] = {}
 
     for c in static_parser_result["configs"]:
-        ContextConfig._add_config_call(config_call_dict, {c[0]: c[1]})
+        merge_config_dicts(config_call_dict, {c[0]: c[1]})
 
     return config_call_dict
 

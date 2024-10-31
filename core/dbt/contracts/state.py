@@ -1,12 +1,23 @@
 from pathlib import Path
 from typing import Optional
 
-from dbt.contracts.graph.manifest import WritableManifest
-from dbt.contracts.results import FreshnessExecutionResultArtifact
-from dbt.contracts.results import RunResultsArtifact
-from dbt.events.functions import fire_event
+from dbt.artifacts.exceptions import IncompatibleSchemaError
+from dbt.artifacts.schemas.freshness import FreshnessExecutionResultArtifact
+from dbt.artifacts.schemas.manifest import WritableManifest
+from dbt.artifacts.schemas.run import RunResultsArtifact
+from dbt.contracts.graph.manifest import Manifest
 from dbt.events.types import WarnStateTargetEqual
-from dbt.exceptions import IncompatibleSchemaError
+from dbt_common.events.functions import fire_event
+
+
+def load_result_state(results_path) -> Optional[RunResultsArtifact]:
+    if results_path.exists() and results_path.is_file():
+        try:
+            return RunResultsArtifact.read_and_check_versions(str(results_path))
+        except IncompatibleSchemaError as exc:
+            exc.add_filename(str(results_path))
+            raise
+    return None
 
 
 class PreviousState:
@@ -14,7 +25,7 @@ class PreviousState:
         self.state_path: Path = state_path
         self.target_path: Path = target_path
         self.project_root: Path = project_root
-        self.manifest: Optional[WritableManifest] = None
+        self.manifest: Optional[Manifest] = None
         self.results: Optional[RunResultsArtifact] = None
         self.sources: Optional[FreshnessExecutionResultArtifact] = None
         self.sources_current: Optional[FreshnessExecutionResultArtifact] = None
@@ -26,18 +37,14 @@ class PreviousState:
         manifest_path = self.project_root / self.state_path / "manifest.json"
         if manifest_path.exists() and manifest_path.is_file():
             try:
-                self.manifest = WritableManifest.read_and_check_versions(str(manifest_path))
+                writable_manifest = WritableManifest.read_and_check_versions(str(manifest_path))
+                self.manifest = Manifest.from_writable_manifest(writable_manifest)
             except IncompatibleSchemaError as exc:
                 exc.add_filename(str(manifest_path))
                 raise
 
         results_path = self.project_root / self.state_path / "run_results.json"
-        if results_path.exists() and results_path.is_file():
-            try:
-                self.results = RunResultsArtifact.read_and_check_versions(str(results_path))
-            except IncompatibleSchemaError as exc:
-                exc.add_filename(str(results_path))
-                raise
+        self.results = load_result_state(results_path)
 
         sources_path = self.project_root / self.state_path / "sources.json"
         if sources_path.exists() and sources_path.is_file():

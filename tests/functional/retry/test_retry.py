@@ -1,14 +1,17 @@
+from pathlib import Path
+from shutil import copytree, move
+
 import pytest
 
 from dbt.contracts.results import RunStatus, TestStatus
 from dbt.exceptions import DbtRuntimeError, TargetNotFoundError
-from dbt.tests.util import run_dbt, write_file, rm_file
+from dbt.tests.util import rm_file, run_dbt, update_config_file, write_file
 from tests.functional.retry.fixtures import (
+    macros__alter_timezone_sql,
     models__sample_model,
+    models__second_model,
     models__union_model,
     schema_yml,
-    models__second_model,
-    macros__alter_timezone_sql,
     simple_model,
     simple_schema,
 )
@@ -124,7 +127,10 @@ class TestRetry:
         write_file(models__sample_model, "models", "sample_model.sql")
 
     def test_warn_error(self, project):
-        # Regular build
+        # Our test command should succeed when run normally...
+        results = run_dbt(["build", "--select", "second_model"])
+
+        # ...but it should fail when run with warn-error, due to a warning...
         results = run_dbt(["--warn-error", "build", "--select", "second_model"], expect_pass=False)
 
         expected_statuses = {
@@ -271,3 +277,180 @@ class TestRetryResourceType:
         # nothing to do
         results = run_dbt(["retry"])
         assert len(results) == 0
+
+
+class TestRetryOverridePath:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "sample_model.sql": models__sample_model,
+        }
+
+    def test_retry(self, project):
+        project_root = project.project_root
+        proj_location_1 = project_root / "proj_location_1"
+        proj_location_2 = project_root / "proj_location_2"
+
+        copytree(project_root, proj_location_1)
+        run_dbt(["run", "--project-dir", "proj_location_1"], expect_pass=False)
+        move(proj_location_1, proj_location_2)
+        run_dbt(["retry", "--project-dir", "proj_location_2"], expect_pass=False)
+
+
+class TestRetryVars:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "sample_model.sql": "select {{ var('myvar_a', '1') + var('myvar_b', '2') }} as mycol",
+        }
+
+    def test_retry(self, project):
+        # pass because default vars works
+        run_dbt(["run"])
+        run_dbt(["run", "--vars", '{"myvar_a": "12", "myvar_b": "3 4"}'], expect_pass=False)
+        # fail because vars are invalid, this shows that the last passed vars are being used
+        # instead of using the default vars
+        run_dbt(["retry"], expect_pass=False)
+        results = run_dbt(["retry", "--vars", '{"myvar_a": "12", "myvar_b": "34"}'])
+        assert len(results) == 1
+
+
+class TestRetryFullRefresh:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "sample_model.sql": "{% if flags.FULL_REFRESH %} this is invalid sql {% else %} select 1 as mycol {% endif %}",
+        }
+
+    def test_retry(self, project):
+        # This run should fail with invalid sql...
+        run_dbt(["run", "--full-refresh"], expect_pass=False)
+        # ...and so should this one, since the effect of the full-refresh parameter should persist.
+        results = run_dbt(["retry"], expect_pass=False)
+        assert len(results) == 1
+
+
+class TestRetryTargetPathEnvVar:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "sample_model.sql": models__sample_model,
+        }
+
+    def test_retry_target_path_env_var(self, project, monkeypatch):
+        monkeypatch.setenv("DBT_TARGET_PATH", "artifacts")
+        run_dbt(["run"], expect_pass=False)
+
+        write_file(models__second_model, "models", "sample_model.sql")
+
+        results = run_dbt(["retry"])
+        assert len(results) == 1
+
+
+class TestRetryTargetPathFlag:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "sample_model.sql": models__sample_model,
+        }
+
+    def test_retry_target_path_flag(self, project):
+        run_dbt(["run", "--target-path", "target"], expect_pass=False)
+
+        project_root = project.project_root
+        move(project_root / "target", project_root / "artifacts")
+
+        write_file(models__second_model, "models", "sample_model.sql")
+
+        results = run_dbt(["retry", "--state", "artifacts", "--target-path", "my_target_path"])
+        assert len(results) == 1
+        assert Path("my_target_path").is_dir()
+
+
+class TestRetryHooksAlwaysRun:
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "on-run-start": ["select 1;"],
+            "on-run-end": ["select 2;"],
+        }
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "sample_model.sql": models__sample_model,
+        }
+
+    def test_retry_hooks_always_run(self, project):
+        res = run_dbt(["run", "--target-path", "target"], expect_pass=False)
+        assert len(res) == 3
+
+        write_file(models__second_model, "models", "sample_model.sql")
+        res = run_dbt(["retry", "--state", "target"])
+        assert len(res) == 3
+
+
+class TestFixRetryHook:
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "flags": {
+                "skip_nodes_if_on_run_start_fails": True,
+            },
+            "on-run-start": [
+                "select 1 as id",
+                "select column_does_not_exist",
+                "select 2 as id",
+            ],
+        }
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "sample_model.sql": "select 1 as id, 1 as foo",
+            "second_model.sql": models__second_model,
+            "union_model.sql": models__union_model,
+        }
+
+    def test_fix_retry_hook(self, project):
+        res = run_dbt(["run"], expect_pass=False)
+        assert {r.node.unique_id: r.status for r in res.results} == {
+            "operation.test.test-on-run-start-0": RunStatus.Success,
+            "operation.test.test-on-run-start-1": RunStatus.Error,
+            "operation.test.test-on-run-start-2": RunStatus.Skipped,
+            "model.test.sample_model": RunStatus.Skipped,
+            "model.test.second_model": RunStatus.Skipped,
+            "model.test.union_model": RunStatus.Skipped,
+        }
+
+        res = run_dbt(["retry"], expect_pass=False)
+        assert {r.node.unique_id: r.status for r in res.results} == {
+            "operation.test.test-on-run-start-0": RunStatus.Success,
+            "operation.test.test-on-run-start-1": RunStatus.Error,
+            "operation.test.test-on-run-start-2": RunStatus.Skipped,
+            "model.test.sample_model": RunStatus.Skipped,
+            "model.test.second_model": RunStatus.Skipped,
+            "model.test.union_model": RunStatus.Skipped,
+        }
+
+        new_dbt_project_yml = {
+            "flags": {
+                "skip_nodes_if_on_run_start_fails": True,
+            },
+            "on-run-start": [
+                "select 1 as id",
+                "select 3 as id",
+                "select 2 as id",
+            ],
+        }
+
+        update_config_file(new_dbt_project_yml, project.project_root, "dbt_project.yml")
+        res = run_dbt(["retry"])
+        assert {r.node.unique_id: r.status for r in res.results} == {
+            "operation.test.test-on-run-start-0": RunStatus.Success,
+            "operation.test.test-on-run-start-1": RunStatus.Success,
+            "operation.test.test-on-run-start-2": RunStatus.Success,
+            "model.test.sample_model": RunStatus.Success,
+            "model.test.second_model": RunStatus.Success,
+            "model.test.union_model": RunStatus.Success,
+        }

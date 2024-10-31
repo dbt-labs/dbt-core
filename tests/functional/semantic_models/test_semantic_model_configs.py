@@ -1,18 +1,17 @@
 import pytest
+
+from dbt.artifacts.resources import SemanticModelConfig
 from dbt.exceptions import ParsingError
-from dbt.contracts.graph.model_config import SemanticModelConfig
-
-from dbt.tests.util import run_dbt, update_config_file, get_manifest
-
+from dbt.tests.util import get_manifest, run_dbt, update_config_file
 from tests.functional.semantic_models.fixtures import (
-    models_people_sql,
-    metricflow_time_spine_sql,
-    semantic_model_people_yml,
     disabled_models_people_metrics_yml,
-    models_people_metrics_yml,
     disabled_semantic_model_people_yml,
     enabled_semantic_model_people_yml,
     groups_yml,
+    metricflow_time_spine_sql,
+    models_people_metrics_yml,
+    models_people_sql,
+    semantic_model_people_yml,
 )
 
 
@@ -204,3 +203,25 @@ class TestConfigsInheritence:
         ).config
 
         assert isinstance(config_test_table, SemanticModelConfig)
+
+
+# test setting meta attributes in semantic model config
+class TestMetaConfig:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "people.sql": models_people_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+            "semantic_models.yml": enabled_semantic_model_people_yml,
+            "people_metrics.yml": models_people_metrics_yml,
+            "groups.yml": groups_yml,
+        }
+
+    def test_meta_config(self, project):
+        run_dbt(["parse"])
+        manifest = get_manifest(project.project_root)
+        sm_id = "semantic_model.test.semantic_people"
+        assert sm_id in manifest.semantic_models
+        sm_node = manifest.semantic_models[sm_id]
+        meta_expected = {"my_meta": "testing", "my_other_meta": "testing more"}
+        assert sm_node.config.meta == meta_expected

@@ -1,8 +1,7 @@
 import pytest
 
-from dbt.tests.util import run_dbt, get_manifest, check_relations_equal, write_file
-
 from dbt.exceptions import CompilationError, ParsingError
+from dbt.tests.util import check_relations_equal, get_manifest, run_dbt, write_file
 
 models_alt__schema_yml = """
 version: 2
@@ -27,7 +26,7 @@ models:
 
     columns:
       - name: id
-        tests:
+        data_tests:
           - not_null:
               meta:
                   owner: 'Simple Simon'
@@ -102,7 +101,7 @@ version: 2
 models:
   - name: untagged
     description: "This is a model description"
-    tests:
+    data_tests:
       - not_null:
           error_if: ">2"
           config:
@@ -111,6 +110,15 @@ models:
 
 
 class TestSchemaFileConfigs:
+    @pytest.fixture(scope="class")
+    def expected_unrendered_config(self):
+        # my_attr is unrendered when state_modified_compare_more_unrendered_values: True
+        return {
+            "materialized": "view",
+            "meta": {"my_attr": "{{ var('my_var') }}", "owner": "Julie Smith"},
+            "tags": ["tag_1_in_model", "tag_2_in_model"],
+        }
+
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -126,6 +134,9 @@ class TestSchemaFileConfigs:
     @pytest.fixture(scope="class")
     def project_config_update(self):
         return {
+            "flags": {
+                "state_modified_compare_more_unrendered_values": True,
+            },
             "models": {
                 "+meta": {
                     "company": "NuMade",
@@ -161,6 +172,7 @@ class TestSchemaFileConfigs:
     def test_config_layering(
         self,
         project,
+        expected_unrendered_config,
     ):
 
         # run seed
@@ -220,11 +232,7 @@ class TestSchemaFileConfigs:
         model_node = manifest.nodes[model_id]
 
         assert model_node.config.materialized == "view"
-        model_unrendered_config = {
-            "materialized": "view",
-            "meta": {"my_attr": "TESTING", "owner": "Julie Smith"},
-            "tags": ["tag_1_in_model", "tag_2_in_model"],
-        }
+        model_unrendered_config = expected_unrendered_config
         assert model_node.unrendered_config == model_unrendered_config
 
         # look for test meta
@@ -250,3 +258,74 @@ class TestSchemaFileConfigs:
         write_file(extra_alt__untagged2_yml, project.project_root, "models", "untagged.yml")
         with pytest.raises(CompilationError):
             run_dbt(["run"])
+
+
+class TestLegacySchemaFileConfigs(TestSchemaFileConfigs):
+    @pytest.fixture(scope="class")
+    def expected_unrendered_config(self):
+        # my_attr is rendered ("TESTING") when state_modified_compare_more_unrendered_values: False
+        return {
+            "materialized": "view",
+            "meta": {"my_attr": "TESTING", "owner": "Julie Smith"},
+            "tags": ["tag_1_in_model", "tag_2_in_model"],
+        }
+
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            # The uncommented below lines can be removed once the default behaviour is flipped.
+            # state_modified_compare_more_unrendered_values defaults to false currently
+            # "flags": {
+            #     "state_modified_compare_more_unrendered_values": False,
+            # },
+            "models": {
+                "+meta": {
+                    "company": "NuMade",
+                },
+                "test": {
+                    "+meta": {
+                        "project": "test",
+                    },
+                    "tagged": {
+                        "+meta": {
+                            "team": "Core Team",
+                        },
+                        "tags": ["tag_in_project"],
+                        "model": {
+                            "materialized": "table",
+                            "+meta": {
+                                "owner": "Julie Dent",
+                            },
+                        },
+                    },
+                },
+            },
+            "vars": {
+                "test": {
+                    "my_var": "TESTING",
+                }
+            },
+            "seeds": {
+                "quote_columns": False,
+            },
+        }
+
+
+list_schema_yml = """
+- name: my_name
+- name: alt_name
+"""
+
+
+class TestListSchemaFile:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_model.sql": "select 1 as id",
+            "schema.yml": list_schema_yml,
+        }
+
+    def test_list_schema(self, project):
+        with pytest.raises(ParsingError) as excinfo:
+            run_dbt(["run"])
+        assert "Dictionary expected" in str(excinfo.value)

@@ -1,17 +1,18 @@
 import pytest
 
-from dbt.exceptions import DbtRuntimeError, Exception as DbtException
-from dbt.tests.util import run_dbt_and_capture, run_dbt
+from dbt.tests.util import run_dbt, run_dbt_and_capture
+from dbt_common.exceptions import DbtBaseException as DbtException
+from dbt_common.exceptions import DbtRuntimeError
 from tests.functional.show.fixtures import (
-    models__second_ephemeral_model,
-    seeds__sample_seed,
+    models__ephemeral_model,
     models__sample_model,
     models__sample_number_model,
     models__sample_number_model_with_nulls,
+    models__second_ephemeral_model,
     models__second_model,
-    models__ephemeral_model,
-    schema_yml,
     private_model_yml,
+    schema_yml,
+    seeds__sample_seed,
 )
 
 
@@ -129,6 +130,33 @@ class TestShowInlineFailDB(ShowBase):
     def test_inline_fail_database_error(self, project):
         with pytest.raises(DbtRuntimeError, match="Database Error"):
             run_dbt(["show", "--inline", "slect asdlkjfsld;j"])
+
+
+class TestShowInlineDirect(ShowBase):
+
+    def test_inline_direct_pass(self, project):
+        query = f"select * from {project.test_schema}.sample_seed"
+        (_, log_output) = run_dbt_and_capture(["show", "--inline-direct", query])
+        assert "Previewing inline node" in log_output
+        assert "sample_num" in log_output
+        assert "sample_bool" in log_output
+
+        # This is a bit of a hack. Unfortunately, the test teardown code
+        # expects that dbt loaded an adapter with a macro context the last
+        # time it was called. The '--inline-direct' parameter used on the
+        # previous run explicitly disables macros. So now we call 'dbt seed',
+        # which will load the adapter fully and satisfy the teardown code.
+        run_dbt(["seed"])
+
+
+class TestShowInlineDirectFail(ShowBase):
+
+    def test_inline_fail_database_error(self, project):
+        with pytest.raises(DbtRuntimeError, match="Database Error"):
+            run_dbt(["show", "--inline-direct", "slect asdlkjfsld;j"])
+
+        # See prior test for explanation of why this is here
+        run_dbt(["seed"])
 
 
 class TestShowEphemeral(ShowBase):

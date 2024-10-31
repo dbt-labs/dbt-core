@@ -1,37 +1,45 @@
 from __future__ import annotations
 
+import datetime
+import itertools
 import json
 import os
-from typing import Any, Callable, Dict, NoReturn, Optional, Mapping, Iterable, Set, List
+import re
 import threading
-
-from dbt.flags import get_flags
-import dbt.flags as flags_module
-from dbt import tracking
-from dbt import utils
-from dbt.clients.jinja import get_rendered
-from dbt.clients.yaml_helper import yaml, safe_load, SafeLoader, Loader, Dumper  # noqa: F401
-from dbt.constants import SECRET_ENV_PREFIX, DEFAULT_ENV_PLACEHOLDER
-from dbt.contracts.graph.nodes import Resource
-from dbt.exceptions import (
-    SecretEnvVarLocationError,
-    EnvVarMissingError,
-    MacroReturn,
-    RequiredVarNotFoundError,
-    SetStrictWrongTypeError,
-    ZipStrictWrongTypeError,
-)
-from dbt.events.functions import fire_event, get_invocation_id
-from dbt.events.types import JinjaLogInfo, JinjaLogDebug
-from dbt.events.contextvars import get_node_info
-from dbt.version import __version__ as dbt_version
+from typing import Any, Callable, Dict, Iterable, List, Mapping, NoReturn, Optional, Set
 
 # These modules are added to the context. Consider alternative
 # approaches which will extend well to potentially many modules
 import pytz
-import datetime
-import re
-import itertools
+
+import dbt.flags as flags_module
+from dbt import tracking, utils
+from dbt.clients.jinja import get_rendered
+from dbt.clients.yaml_helper import (  # noqa: F401
+    Dumper,
+    Loader,
+    SafeLoader,
+    safe_load,
+    yaml,
+)
+from dbt.constants import DEFAULT_ENV_PLACEHOLDER, SECRET_PLACEHOLDER
+from dbt.contracts.graph.nodes import Resource
+from dbt.events.types import JinjaLogDebug, JinjaLogInfo
+from dbt.exceptions import (
+    EnvVarMissingError,
+    RequiredVarNotFoundError,
+    SecretEnvVarLocationError,
+    SetStrictWrongTypeError,
+    ZipStrictWrongTypeError,
+)
+from dbt.flags import get_flags
+from dbt.version import __version__ as dbt_version
+from dbt_common.constants import SECRET_ENV_PREFIX
+from dbt_common.context import get_invocation_context
+from dbt_common.events.contextvars import get_node_info
+from dbt_common.events.functions import fire_event, get_invocation_id
+from dbt_common.events.types import PrintEvent
+from dbt_common.exceptions.macros import MacroReturn
 
 # See the `contexts` module README for more information on how contexts work
 
@@ -303,8 +311,9 @@ class BaseContext(metaclass=ContextMeta):
         return_value = None
         if var.startswith(SECRET_ENV_PREFIX):
             raise SecretEnvVarLocationError(var)
-        if var in os.environ:
-            return_value = os.environ[var]
+        env = get_invocation_context().env
+        if var in env:
+            return_value = env[var]
         elif default is not None:
             return_value = default
 
@@ -313,7 +322,7 @@ class BaseContext(metaclass=ContextMeta):
             # that so we can skip partial parsing.  Otherwise the file will be scheduled for
             # reparsing. If the default changes, the file will have been updated and therefore
             # will be scheduled for reparsing anyways.
-            self.env_vars[var] = return_value if var in os.environ else DEFAULT_ENV_PLACEHOLDER
+            self.env_vars[var] = return_value if var in env else DEFAULT_ENV_PLACEHOLDER
 
             return return_value
         else:
@@ -326,6 +335,7 @@ class BaseContext(metaclass=ContextMeta):
         def debug():
             """Enter a debugger at this line in the compiled jinja code."""
             import sys
+
             import ipdb  # type: ignore
 
             frame = sys._getframe(3)
@@ -559,6 +569,18 @@ class BaseContext(metaclass=ContextMeta):
               {{ log("Running some_macro: " ~ arg1 ~ ", " ~ arg2) }}
             {% endmacro %}"
         """
+        # Detect instances of the placeholder value ($$$DBT_SECRET_START...DBT_SECRET_END$$$)
+        # and replace it with the standard mask '*****'
+        if "DBT_SECRET_START" in str(msg):
+            search_group = f"({SECRET_ENV_PREFIX}(.*))"
+            pattern = SECRET_PLACEHOLDER.format(search_group).replace("$", r"\$")
+            m = re.search(
+                pattern,
+                msg,
+            )
+            if m:
+                msg = re.sub(pattern, "*****", msg)
+
         if info:
             fire_event(JinjaLogInfo(msg=msg, node_info=get_node_info()))
         else:
@@ -662,7 +684,8 @@ class BaseContext(metaclass=ContextMeta):
         """
 
         if get_flags().PRINT:
-            print(msg)
+            # No formatting, still get to stdout when --quiet is used
+            fire_event(PrintEvent(msg=msg))
         return ""
 
     @contextmember()

@@ -1,224 +1,24 @@
-import builtins
-import json
-import os
-import re
 import io
-import agate
-from typing import Any, Dict, List, Mapping, Optional, Union
+import json
+import re
+from typing import TYPE_CHECKING, Any, Dict, List, Mapping, Optional, Union
 
-from dbt.constants import SECRET_ENV_PREFIX
-from dbt.dataclass_schema import ValidationError
-from dbt.node_types import NodeType, AccessType
-from dbt.ui import line_wrap_message
+from dbt.node_types import REFABLE_NODE_TYPES, AccessType, NodeType
+from dbt_common.constants import SECRET_ENV_PREFIX
+from dbt_common.dataclass_schema import ValidationError
+from dbt_common.exceptions import (
+    CommandResultError,
+    CompilationError,
+    DbtConfigError,
+    DbtInternalError,
+    DbtRuntimeError,
+    DbtValidationError,
+    env_secrets,
+    scrub_secrets,
+)
 
-import dbt.dataclass_schema
-
-
-def env_secrets() -> List[str]:
-    return [v for k, v in os.environ.items() if k.startswith(SECRET_ENV_PREFIX) and v.strip()]
-
-
-def scrub_secrets(msg: str, secrets: List[str]) -> str:
-    scrubbed = str(msg)
-
-    for secret in secrets:
-        scrubbed = scrubbed.replace(secret, "*****")
-
-    return scrubbed
-
-
-class MacroReturn(builtins.BaseException):
-    """
-    Hack of all hacks
-    This is not actually an exception.
-    It's how we return a value from a macro.
-    """
-
-    def __init__(self, value) -> None:
-        self.value = value
-
-
-class Exception(builtins.Exception):
-    CODE = -32000
-    MESSAGE = "Server Error"
-
-    def data(self):
-        # if overriding, make sure the result is json-serializable.
-        return {
-            "type": self.__class__.__name__,
-            "message": str(self),
-        }
-
-
-class DbtInternalError(Exception):
-    def __init__(self, msg: str) -> None:
-        self.stack: List = []
-        self.msg = scrub_secrets(msg, env_secrets())
-
-    @property
-    def type(self):
-        return "Internal"
-
-    def process_stack(self):
-        lines = []
-        stack = self.stack
-        first = True
-
-        if len(stack) > 1:
-            lines.append("")
-
-            for item in stack:
-                msg = "called by"
-
-                if first:
-                    msg = "in"
-                    first = False
-
-                lines.append(f"> {msg}")
-
-        return lines
-
-    def __str__(self):
-        if hasattr(self.msg, "split"):
-            split_msg = self.msg.split("\n")
-        else:
-            split_msg = str(self.msg).split("\n")
-
-        lines = ["{}".format(self.type + " Error")] + split_msg
-
-        lines += self.process_stack()
-
-        return lines[0] + "\n" + "\n".join(["  " + line for line in lines[1:]])
-
-
-class DbtRuntimeError(RuntimeError, Exception):
-    CODE = 10001
-    MESSAGE = "Runtime error"
-
-    def __init__(self, msg: str, node=None) -> None:
-        self.stack: List = []
-        self.node = node
-        self.msg = scrub_secrets(msg, env_secrets())
-
-    def add_node(self, node=None):
-        if node is not None and node is not self.node:
-            if self.node is not None:
-                self.stack.append(self.node)
-            self.node = node
-
-    @property
-    def type(self):
-        return "Runtime"
-
-    def node_to_string(self, node):
-        if node is None:
-            return "<Unknown>"
-        if not hasattr(node, "name"):
-            # we probably failed to parse a block, so we can't know the name
-            return f"{node.resource_type} ({node.original_file_path})"
-
-        if hasattr(node, "contents"):
-            # handle FileBlocks. They aren't really nodes but we want to render
-            # out the path we know at least. This indicates an error during
-            # block parsing.
-            return f"{node.path.original_file_path}"
-        return f"{node.resource_type} {node.name} ({node.original_file_path})"
-
-    def process_stack(self):
-        lines = []
-        stack = self.stack + [self.node]
-        first = True
-
-        if len(stack) > 1:
-            lines.append("")
-
-            for item in stack:
-                msg = "called by"
-
-                if first:
-                    msg = "in"
-                    first = False
-
-                lines.append(f"> {msg} {self.node_to_string(item)}")
-
-        return lines
-
-    def validator_error_message(self, exc: builtins.Exception):
-        """Given a dbt.dataclass_schema.ValidationError (which is basically a
-        jsonschema.ValidationError), return the relevant parts as a string
-        """
-        if not isinstance(exc, dbt.dataclass_schema.ValidationError):
-            return str(exc)
-        path = "[%s]" % "][".join(map(repr, exc.relative_path))
-        return f"at path {path}: {exc.message}"
-
-    def __str__(self, prefix: str = "! "):
-        node_string = ""
-
-        if self.node is not None:
-            node_string = f" in {self.node_to_string(self.node)}"
-
-        if hasattr(self.msg, "split"):
-            split_msg = self.msg.split("\n")
-        else:
-            split_msg = str(self.msg).split("\n")
-
-        lines = ["{}{}".format(self.type + " Error", node_string)] + split_msg
-
-        lines += self.process_stack()
-
-        return lines[0] + "\n" + "\n".join(["  " + line for line in lines[1:]])
-
-    def data(self):
-        result = Exception.data(self)
-        if self.node is None:
-            return result
-
-        result.update(
-            {
-                "raw_code": self.node.raw_code,
-                # the node isn't always compiled, but if it is, include that!
-                "compiled_code": getattr(self.node, "compiled_code", None),
-            }
-        )
-        return result
-
-
-class DbtDatabaseError(DbtRuntimeError):
-    CODE = 10003
-    MESSAGE = "Database Error"
-
-    def process_stack(self):
-        lines = []
-
-        if hasattr(self.node, "build_path") and self.node.build_path:
-            lines.append(f"compiled Code at {self.node.build_path}")
-
-        return lines + DbtRuntimeError.process_stack(self)
-
-    @property
-    def type(self):
-        return "Database"
-
-
-class CompilationError(DbtRuntimeError):
-    CODE = 10004
-    MESSAGE = "Compilation Error"
-
-    @property
-    def type(self):
-        return "Compilation"
-
-    def _fix_dupe_msg(self, path_1: str, path_2: str, name: str, type_name: str) -> str:
-        if path_1 == path_2:
-            return (
-                f"remove one of the {type_name} entries for {name} in this file:\n - {path_1!s}\n"
-            )
-        else:
-            return (
-                f"remove the {type_name} entry for {name} in one of these files:\n"
-                f" - {path_1!s}\n{path_2!s}"
-            )
+if TYPE_CHECKING:
+    import agate
 
 
 class ContractBreakingChangeError(DbtRuntimeError):
@@ -246,15 +46,6 @@ class ContractBreakingChangeError(DbtRuntimeError):
             "Consider making an additive (non-breaking) change instead, if possible.\n"
             "Otherwise, create a new model version: https://docs.getdbt.com/docs/collaborate/govern/model-versions"
         )
-
-
-class RecursionError(DbtRuntimeError):
-    pass
-
-
-class DbtValidationError(DbtRuntimeError):
-    CODE = 10005
-    MESSAGE = "Validation Error"
 
 
 class ParsingError(DbtRuntimeError):
@@ -285,48 +76,6 @@ class JSONValidationError(DbtValidationError):
         return (JSONValidationError, (self.typename, self.errors))
 
 
-class IncompatibleSchemaError(DbtRuntimeError):
-    def __init__(self, expected: str, found: Optional[str] = None) -> None:
-        self.expected = expected
-        self.found = found
-        self.filename = "input file"
-
-        super().__init__(msg=self.get_message())
-
-    def add_filename(self, filename: str):
-        self.filename = filename
-        self.msg = self.get_message()
-
-    def get_message(self) -> str:
-        found_str = "nothing"
-        if self.found is not None:
-            found_str = f'"{self.found}"'
-
-        msg = (
-            f'Expected a schema version of "{self.expected}" in '
-            f"{self.filename}, but found {found_str}. Are you running with a "
-            f"different version of dbt?"
-        )
-        return msg
-
-    CODE = 10014
-    MESSAGE = "Incompatible Schema"
-
-
-class JinjaRenderingError(CompilationError):
-    pass
-
-
-class UndefinedMacroError(CompilationError):
-    def __str__(self, prefix: str = "! ") -> str:
-        msg = super().__str__(prefix)
-        return (
-            f"{msg}. This can happen when calling a macro that does "
-            "not exist. Check for typos and/or install package dependencies "
-            'with "dbt deps".'
-        )
-
-
 class AliasError(DbtValidationError):
     pass
 
@@ -334,24 +83,6 @@ class AliasError(DbtValidationError):
 class DependencyError(Exception):
     CODE = 10006
     MESSAGE = "Dependency Error"
-
-
-class DbtConfigError(DbtRuntimeError):
-    CODE = 10007
-    MESSAGE = "DBT Configuration Error"
-
-    def __init__(self, msg: str, project=None, result_type="invalid_project", path=None) -> None:
-        self.project = project
-        super().__init__(msg)
-        self.result_type = result_type
-        self.path = path
-
-    def __str__(self, prefix="! ") -> str:
-        msg = super().__str__(prefix)
-        if self.path is None:
-            return msg
-        else:
-            return f"{msg}\n\nError encountered in {self.path}"
 
 
 class FailFastError(DbtRuntimeError):
@@ -379,84 +110,8 @@ class DbtProfileError(DbtConfigError):
     pass
 
 
-class SemverError(Exception):
-    def __init__(self, msg: Optional[str] = None) -> None:
-        self.msg = msg
-        if msg is not None:
-            super().__init__(msg)
-        else:
-            super().__init__()
-
-
-class VersionsNotCompatibleError(SemverError):
+class DbtExclusivePropertyUseError(DbtConfigError):
     pass
-
-
-class NotImplementedError(Exception):
-    def __init__(self, msg: str) -> None:
-        self.msg = msg
-        self.formatted_msg = f"ERROR: {self.msg}"
-        super().__init__(self.formatted_msg)
-
-
-class FailedToConnectError(DbtDatabaseError):
-    pass
-
-
-class CommandError(DbtRuntimeError):
-    def __init__(self, cwd: str, cmd: List[str], msg: str = "Error running command") -> None:
-        cmd_scrubbed = list(scrub_secrets(cmd_txt, env_secrets()) for cmd_txt in cmd)
-        super().__init__(msg)
-        self.cwd = cwd
-        self.cmd = cmd_scrubbed
-        self.args = (cwd, cmd_scrubbed, msg)
-
-    def __str__(self):
-        if len(self.cmd) == 0:
-            return f"{self.msg}: No arguments given"
-        return f'{self.msg}: "{self.cmd[0]}"'
-
-
-class ExecutableError(CommandError):
-    def __init__(self, cwd: str, cmd: List[str], msg: str) -> None:
-        super().__init__(cwd, cmd, msg)
-
-
-class WorkingDirectoryError(CommandError):
-    def __init__(self, cwd: str, cmd: List[str], msg: str) -> None:
-        super().__init__(cwd, cmd, msg)
-
-    def __str__(self):
-        return f'{self.msg}: "{self.cwd}"'
-
-
-class CommandResultError(CommandError):
-    def __init__(
-        self,
-        cwd: str,
-        cmd: List[str],
-        returncode: Union[int, Any],
-        stdout: bytes,
-        stderr: bytes,
-        msg: str = "Got a non-zero returncode",
-    ) -> None:
-        super().__init__(cwd, cmd, msg)
-        self.returncode = returncode
-        self.stdout = scrub_secrets(stdout.decode("utf-8"), env_secrets())
-        self.stderr = scrub_secrets(stderr.decode("utf-8"), env_secrets())
-        self.args = (cwd, self.cmd, returncode, self.stdout, self.stderr, msg)
-
-    def __str__(self):
-        return f"{self.msg} running: {self.cmd}"
-
-
-class InvalidConnectionError(DbtRuntimeError):
-    def __init__(self, thread_id, known: List) -> None:
-        self.thread_id = thread_id
-        self.known = known
-        super().__init__(
-            msg=f"connection never acquired for thread {self.thread_id}, have {self.known}"
-        )
 
 
 class InvalidSelectorError(DbtRuntimeError):
@@ -469,23 +124,6 @@ class DuplicateYamlKeyError(CompilationError):
     pass
 
 
-class ConnectionError(Exception):
-    """
-    There was a problem with the connection that returned a bad response,
-    timed out, or resulted in a file that is corrupt.
-    """
-
-    pass
-
-
-# event level exception
-class EventCompilationError(CompilationError):
-    def __init__(self, msg: str, node) -> None:
-        self.msg = scrub_secrets(msg, env_secrets())
-        self.node = node
-        super().__init__(msg=self.msg)
-
-
 # compilation level exceptions
 class GraphDependencyNotFoundError(CompilationError):
     def __init__(self, node, dependency: str) -> None:
@@ -495,6 +133,18 @@ class GraphDependencyNotFoundError(CompilationError):
 
     def get_message(self) -> str:
         msg = f"'{self.node.unique_id}' depends on '{self.dependency}' which is not in the graph!"
+        return msg
+
+
+class ForeignKeyConstraintToSyntaxError(CompilationError):
+    def __init__(self, node, expression: str) -> None:
+        self.expression = expression
+        self.node = node
+        super().__init__(msg=self.get_message())
+
+    def get_message(self) -> str:
+        msg = f"'{self.node.unique_id}' defines a foreign key constraint 'to' expression which is not valid 'ref' or 'source' syntax: {self.expression}."
+
         return msg
 
 
@@ -515,83 +165,6 @@ class MaterializtionMacroNotUsedError(CompilationError):
         super().__init__(msg=self.msg)
 
 
-class UndefinedCompilationError(CompilationError):
-    def __init__(self, name: str, node) -> None:
-        self.name = name
-        self.node = node
-        self.msg = f"{self.name} is undefined"
-        super().__init__(msg=self.msg)
-
-
-class CaughtMacroErrorWithNodeError(CompilationError):
-    def __init__(self, exc, node) -> None:
-        self.exc = exc
-        self.node = node
-        super().__init__(msg=str(exc))
-
-
-class CaughtMacroError(CompilationError):
-    def __init__(self, exc) -> None:
-        self.exc = exc
-        super().__init__(msg=str(exc))
-
-
-class MacroNameNotStringError(CompilationError):
-    def __init__(self, kwarg_value) -> None:
-        self.kwarg_value = kwarg_value
-        super().__init__(msg=self.get_message())
-
-    def get_message(self) -> str:
-        msg = (
-            f"The macro_name parameter ({self.kwarg_value}) "
-            "to adapter.dispatch was not a string"
-        )
-        return msg
-
-
-class MissingControlFlowStartTagError(CompilationError):
-    def __init__(self, tag, expected_tag: str, tag_parser) -> None:
-        self.tag = tag
-        self.expected_tag = expected_tag
-        self.tag_parser = tag_parser
-        super().__init__(msg=self.get_message())
-
-    def get_message(self) -> str:
-        linepos = self.tag_parser.linepos(self.tag.start)
-        msg = (
-            f"Got an unexpected control flow end tag, got {self.tag.block_type_name} but "
-            f"expected {self.expected_tag} next (@ {linepos})"
-        )
-        return msg
-
-
-class UnexpectedControlFlowEndTagError(CompilationError):
-    def __init__(self, tag, expected_tag: str, tag_parser) -> None:
-        self.tag = tag
-        self.expected_tag = expected_tag
-        self.tag_parser = tag_parser
-        super().__init__(msg=self.get_message())
-
-    def get_message(self) -> str:
-        linepos = self.tag_parser.linepos(self.tag.start)
-        msg = (
-            f"Got an unexpected control flow end tag, got {self.tag.block_type_name} but "
-            f"never saw a preceeding {self.expected_tag} (@ {linepos})"
-        )
-        return msg
-
-
-class UnexpectedMacroEOFError(CompilationError):
-    def __init__(self, expected_name: str, actual_name: str) -> None:
-        self.expected_name = expected_name
-        self.actual_name = actual_name
-        super().__init__(msg=self.get_message())
-
-    def get_message(self) -> str:
-        msg = f'unexpected EOF, expected {self.expected_name}, got "{self.actual_name}"'
-        return msg
-
-
 class MacroNamespaceNotStringError(CompilationError):
     def __init__(self, kwarg_type: Any) -> None:
         self.kwarg_type = kwarg_type
@@ -602,47 +175,6 @@ class MacroNamespaceNotStringError(CompilationError):
             "The macro_namespace parameter to adapter.dispatch "
             f"is a {self.kwarg_type}, not a string"
         )
-        return msg
-
-
-class NestedTagsError(CompilationError):
-    def __init__(self, outer, inner) -> None:
-        self.outer = outer
-        self.inner = inner
-        super().__init__(msg=self.get_message())
-
-    def get_message(self) -> str:
-        msg = (
-            f"Got nested tags: {self.outer.block_type_name} (started at {self.outer.start}) did "
-            f"not have a matching {{{{% end{self.outer.block_type_name} %}}}} before a "
-            f"subsequent {self.inner.block_type_name} was found (started at {self.inner.start})"
-        )
-        return msg
-
-
-class BlockDefinitionNotAtTopError(CompilationError):
-    def __init__(self, tag_parser, tag_start) -> None:
-        self.tag_parser = tag_parser
-        self.tag_start = tag_start
-        super().__init__(msg=self.get_message())
-
-    def get_message(self) -> str:
-        position = self.tag_parser.linepos(self.tag_start)
-        msg = (
-            f"Got a block definition inside control flow at {position}. "
-            "All dbt block definitions must be at the top level"
-        )
-        return msg
-
-
-class MissingCloseTagError(CompilationError):
-    def __init__(self, block_type_name: str, linecount: int) -> None:
-        self.block_type_name = block_type_name
-        self.linecount = linecount
-        super().__init__(msg=self.get_message())
-
-    def get_message(self) -> str:
-        msg = f"Reached EOF without finding a close tag for {self.block_type_name} (searched from line {self.linecount})"
         return msg
 
 
@@ -703,17 +235,6 @@ class GitCheckoutError(BadSpecError):
     pass
 
 
-class MaterializationArgError(CompilationError):
-    def __init__(self, name: str, argument: str) -> None:
-        self.name = name
-        self.argument = argument
-        super().__init__(msg=self.get_message())
-
-    def get_message(self) -> str:
-        msg = f"materialization '{self.name}' received unknown argument '{self.argument}'."
-        return msg
-
-
 class OperationError(CompilationError):
     def __init__(self, operation_name) -> None:
         self.operation_name = operation_name
@@ -722,20 +243,6 @@ class OperationError(CompilationError):
     def get_message(self) -> str:
         msg = (
             f"dbt encountered an error when attempting to create a {self.operation_name}. "
-            "If this error persists, please create an issue at: \n\n"
-            "https://github.com/dbt-labs/dbt-core"
-        )
-
-        return msg
-
-
-class SymbolicLinkError(CompilationError):
-    def __init__(self) -> None:
-        super().__init__(msg=self.get_message())
-
-    def get_message(self) -> str:
-        msg = (
-            "dbt encountered an error when attempting to create a symbolic link. "
             "If this error persists, please create an issue at: \n\n"
             "https://github.com/dbt-labs/dbt-core"
         )
@@ -771,13 +278,6 @@ class LoadAgateTableNotSeedError(CompilationError):
         self.resource_type = resource_type
         self.node = node
         msg = f"can only load_agate_table for seeds (got a {self.resource_type})"
-        super().__init__(msg=msg)
-
-
-class MacrosSourcesUnWriteableError(CompilationError):
-    def __init__(self, node) -> None:
-        self.node = node
-        msg = 'cannot "write" macros or sources'
         super().__init__(msg=msg)
 
 
@@ -848,7 +348,10 @@ class RequiredVarNotFoundError(CompilationError):
         pretty_vars = json.dumps(dct, sort_keys=True, indent=4)
 
         msg = f"Required var '{self.var_name}' not found in config:\nVars supplied to {node_name} = {pretty_vars}"
-        return msg
+        return scrub_secrets(msg, self.var_secrets())
+
+    def var_secrets(self) -> List[str]:
+        return [v for k, v in self.merged.items() if k.startswith(SECRET_ENV_PREFIX) and v.strip()]
 
 
 class PackageNotFoundForMacroError(CompilationError):
@@ -867,24 +370,6 @@ class SecretEnvVarLocationError(ParsingError):
         msg = (
             "Secret env vars are allowed only in profiles.yml or packages.yml. "
             f"Found '{self.env_var_name}' referenced elsewhere."
-        )
-        return msg
-
-
-class MacroArgTypeError(CompilationError):
-    def __init__(self, method_name: str, arg_name: str, got_value: Any, expected_type) -> None:
-        self.method_name = method_name
-        self.arg_name = arg_name
-        self.got_value = got_value
-        self.expected_type = expected_type
-        super().__init__(msg=self.get_message())
-
-    def get_message(self) -> str:
-        got_type = type(self.got_value)
-        msg = (
-            f"'adapter.{self.method_name}' expects argument "
-            f"'{self.arg_name}' to be of type '{self.expected_type}', instead got "
-            f"{self.got_value} ({got_type})"
         )
         return msg
 
@@ -986,7 +471,7 @@ class DocTargetNotFoundError(CompilationError):
     def get_message(self) -> str:
         target_package_string = ""
         if self.target_doc_package is not None:
-            target_package_string = f"in package '{self. target_doc_package}' "
+            target_package_string = f"in package '{self.target_doc_package}' "
         msg = f"Documentation for '{self.node.unique_id}' depends on doc '{self.target_doc_name}' {target_package_string} which was not found"
         return msg
 
@@ -1220,6 +705,12 @@ class InvalidAccessTypeError(ParsingError):
         super().__init__(msg=msg)
 
 
+class InvalidUnitTestGivenInput(ParsingError):
+    def __init__(self, input: str) -> None:
+        msg = f"Unit test given inputs must be either a 'ref', 'source' or 'this' call. Got: '{input}'."
+        super().__init__(msg=msg)
+
+
 class SameKeyNestedError(CompilationError):
     def __init__(self) -> None:
         msg = "Test cannot have the same key at the top-level and in config"
@@ -1296,7 +787,6 @@ class TestNameNotStringError(ParsingError):
         super().__init__(msg=self.get_message())
 
     def get_message(self) -> str:
-
         msg = f"test name must be a str, got {type(self.test_name)} (value {self.test_name})"
         return msg
 
@@ -1307,7 +797,6 @@ class TestArgsNotDictError(ParsingError):
         super().__init__(msg=self.get_message())
 
     def get_message(self) -> str:
-
         msg = f"test arguments must be a dict, got {type(self.test_args)} (value {self.test_args})"
         return msg
 
@@ -1318,7 +807,6 @@ class TestDefinitionDictLengthError(ParsingError):
         super().__init__(msg=self.get_message())
 
     def get_message(self) -> str:
-
         msg = (
             "test definition dictionary must have exactly one key, got"
             f" {self.test} instead ({len(self.test)} keys)"
@@ -1449,216 +937,6 @@ class DuplicateAliasError(AliasError):
         )
         msg = f'Got duplicate keys: ({key_names}) all map to "{self.canonical_key}"'
         return msg
-
-
-# Postgres Exceptions
-class UnexpectedDbReferenceError(NotImplementedError):
-    def __init__(self, adapter, database, expected):
-        self.adapter = adapter
-        self.database = database
-        self.expected = expected
-        super().__init__(msg=self.get_message())
-
-    def get_message(self) -> str:
-        msg = f"Cross-db references not allowed in {self.adapter} ({self.database} vs {self.expected})"
-        return msg
-
-
-class CrossDbReferenceProhibitedError(CompilationError):
-    def __init__(self, adapter, exc_msg: str):
-        self.adapter = adapter
-        self.exc_msg = exc_msg
-        super().__init__(msg=self.get_message())
-
-    def get_message(self) -> str:
-        msg = f"Cross-db references not allowed in adapter {self.adapter}: Got {self.exc_msg}"
-        return msg
-
-
-class IndexConfigNotDictError(CompilationError):
-    def __init__(self, raw_index: Any):
-        self.raw_index = raw_index
-        super().__init__(msg=self.get_message())
-
-    def get_message(self) -> str:
-        msg = (
-            f"Invalid index config:\n"
-            f"  Got: {self.raw_index}\n"
-            f'  Expected a dictionary with at minimum a "columns" key'
-        )
-        return msg
-
-
-class IndexConfigError(CompilationError):
-    def __init__(self, exc: TypeError):
-        self.exc = exc
-        super().__init__(msg=self.get_message())
-
-    def get_message(self) -> str:
-        validator_msg = self.validator_error_message(self.exc)
-        msg = f"Could not parse index config: {validator_msg}"
-        return msg
-
-
-# adapters exceptions
-class MacroResultError(CompilationError):
-    def __init__(self, freshness_macro_name: str, table):
-        self.freshness_macro_name = freshness_macro_name
-        self.table = table
-        super().__init__(msg=self.get_message())
-
-    def get_message(self) -> str:
-        msg = f'Got an invalid result from "{self.freshness_macro_name}" macro: {[tuple(r) for r in self.table]}'
-
-        return msg
-
-
-class SnapshotTargetNotSnapshotTableError(CompilationError):
-    def __init__(self, missing: List):
-        self.missing = missing
-        super().__init__(msg=self.get_message())
-
-    def get_message(self) -> str:
-        msg = 'Snapshot target is not a snapshot table (missing "{}")'.format(
-            '", "'.join(self.missing)
-        )
-        return msg
-
-
-class SnapshotTargetIncompleteError(CompilationError):
-    def __init__(self, extra: List, missing: List):
-        self.extra = extra
-        self.missing = missing
-        super().__init__(msg=self.get_message())
-
-    def get_message(self) -> str:
-        msg = (
-            'Snapshot target has ("{}") but not ("{}") - is it an '
-            "unmigrated previous version archive?".format(
-                '", "'.join(self.extra), '", "'.join(self.missing)
-            )
-        )
-        return msg
-
-
-class RenameToNoneAttemptedError(CompilationError):
-    def __init__(self, src_name: str, dst_name: str, name: str):
-        self.src_name = src_name
-        self.dst_name = dst_name
-        self.name = name
-        self.msg = f"Attempted to rename {self.src_name} to {self.dst_name} for {self.name}"
-        super().__init__(msg=self.msg)
-
-
-class NullRelationDropAttemptedError(CompilationError):
-    def __init__(self, name: str):
-        self.name = name
-        self.msg = f"Attempted to drop a null relation for {self.name}"
-        super().__init__(msg=self.msg)
-
-
-class NullRelationCacheAttemptedError(CompilationError):
-    def __init__(self, name: str):
-        self.name = name
-        self.msg = f"Attempted to cache a null relation for {self.name}"
-        super().__init__(msg=self.msg)
-
-
-class QuoteConfigTypeError(CompilationError):
-    def __init__(self, quote_config: Any):
-        self.quote_config = quote_config
-        super().__init__(msg=self.get_message())
-
-    def get_message(self) -> str:
-        msg = (
-            'The seed configuration value of "quote_columns" has an '
-            f"invalid type {type(self.quote_config)}"
-        )
-        return msg
-
-
-class MultipleDatabasesNotAllowedError(CompilationError):
-    def __init__(self, databases):
-        self.databases = databases
-        super().__init__(msg=self.get_message())
-
-    def get_message(self) -> str:
-        msg = str(self.databases)
-        return msg
-
-
-class RelationTypeNullError(CompilationError):
-    def __init__(self, relation):
-        self.relation = relation
-        self.msg = f"Tried to drop relation {self.relation}, but its type is null."
-        super().__init__(msg=self.msg)
-
-
-class MaterializationNotAvailableError(CompilationError):
-    def __init__(self, materialization, adapter_type: str):
-        self.materialization = materialization
-        self.adapter_type = adapter_type
-        super().__init__(msg=self.get_message())
-
-    def get_message(self) -> str:
-        msg = f"Materialization '{self.materialization}' is not available for {self.adapter_type}!"
-        return msg
-
-
-class RelationReturnedMultipleResultsError(CompilationError):
-    def __init__(self, kwargs: Mapping[str, Any], matches: List):
-        self.kwargs = kwargs
-        self.matches = matches
-        super().__init__(msg=self.get_message())
-
-    def get_message(self) -> str:
-        msg = (
-            "get_relation returned more than one relation with the given args. "
-            "Please specify a database or schema to narrow down the result set."
-            f"\n{self.kwargs}\n\n{self.matches}"
-        )
-        return msg
-
-
-class ApproximateMatchError(CompilationError):
-    def __init__(self, target, relation):
-        self.target = target
-        self.relation = relation
-        super().__init__(msg=self.get_message())
-
-    def get_message(self) -> str:
-
-        msg = (
-            "When searching for a relation, dbt found an approximate match. "
-            "Instead of guessing \nwhich relation to use, dbt will move on. "
-            f"Please delete {self.relation}, or rename it to be less ambiguous."
-            f"\nSearched for: {self.target}\nFound: {self.relation}"
-        )
-
-        return msg
-
-
-class UnexpectedNullError(DbtDatabaseError):
-    def __init__(self, field_name: str, source):
-        self.field_name = field_name
-        self.source = source
-        msg = (
-            f"Expected a non-null value when querying field '{self.field_name}' of table "
-            f" {self.source} but received value 'null' instead"
-        )
-        super().__init__(msg)
-
-
-class UnexpectedNonTimestampError(DbtDatabaseError):
-    def __init__(self, field_name: str, source, dt: Any):
-        self.field_name = field_name
-        self.source = source
-        self.type_name = type(dt).__name__
-        msg = (
-            f"Expected a timestamp value when querying field '{self.field_name}' of table "
-            f"{self.source} but received value of type '{self.type_name}' instead"
-        )
-        super().__init__(msg)
 
 
 # deps exceptions
@@ -1844,67 +1122,7 @@ class UnrecognizedCredentialTypeError(CompilationError):
         return msg
 
 
-class DuplicateMacroInPackageError(CompilationError):
-    def __init__(self, macro, macro_mapping: Mapping):
-        self.macro = macro
-        self.macro_mapping = macro_mapping
-        super().__init__(msg=self.get_message())
-
-    def get_message(self) -> str:
-        other_path = self.macro_mapping[self.macro.unique_id].original_file_path
-        # subtract 2 for the "Compilation Error" indent
-        # note that the line wrap eats newlines, so if you want newlines,
-        # this is the result :(
-        msg = line_wrap_message(
-            f"""\
-            dbt found two macros named "{self.macro.name}" in the project
-            "{self.macro.package_name}".
-
-
-            To fix this error, rename or remove one of the following
-            macros:
-
-                - {self.macro.original_file_path}
-
-                - {other_path}
-            """,
-            subtract=2,
-        )
-        return msg
-
-
-class DuplicateMaterializationNameError(CompilationError):
-    def __init__(self, macro, other_macro):
-        self.macro = macro
-        self.other_macro = other_macro
-        super().__init__(msg=self.get_message())
-
-    def get_message(self) -> str:
-        macro_name = self.macro.name
-        macro_package_name = self.macro.package_name
-        other_package_name = self.other_macro.macro.package_name
-
-        msg = (
-            f"Found two materializations with the name {macro_name} (packages "
-            f"{macro_package_name} and {other_package_name}). dbt cannot resolve "
-            "this ambiguity"
-        )
-        return msg
-
-
 # jinja exceptions
-class ColumnTypeMissingError(CompilationError):
-    def __init__(self, column_names: List):
-        self.column_names = column_names
-        super().__init__(msg=self.get_message())
-
-    def get_message(self) -> str:
-        msg = (
-            "Contracted models require data_type to be defined for each column. "
-            "Please ensure that the column name and data_type are defined within "
-            f"the YAML configuration for the {self.column_names} column(s)."
-        )
-        return msg
 
 
 class PatchTargetNotFoundError(CompilationError):
@@ -1918,42 +1136,6 @@ class PatchTargetNotFoundError(CompilationError):
             for p in self.patches.values()
         )
         msg = f"dbt could not find models for the following patches:\n\t{patch_list}"
-        return msg
-
-
-class MacroNotFoundError(CompilationError):
-    def __init__(self, node, target_macro_id: str):
-        self.node = node
-        self.target_macro_id = target_macro_id
-        msg = f"'{self.node.unique_id}' references macro '{self.target_macro_id}' which is not defined!"
-
-        super().__init__(msg=msg)
-
-
-class MissingConfigError(CompilationError):
-    def __init__(self, unique_id: str, name: str):
-        self.unique_id = unique_id
-        self.name = name
-        msg = (
-            f"Model '{self.unique_id}' does not define a required config parameter '{self.name}'."
-        )
-        super().__init__(msg=msg)
-
-
-class MissingMaterializationError(CompilationError):
-    def __init__(self, materialization, adapter_type):
-        self.materialization = materialization
-        self.adapter_type = adapter_type
-        super().__init__(msg=self.get_message())
-
-    def get_message(self) -> str:
-
-        valid_types = "'default'"
-
-        if self.adapter_type != "default":
-            valid_types = f"'default' and '{self.adapter_type}'"
-
-        msg = f"No materialization '{self.materialization}' was found for adapter {self.adapter_type}! (searched types {valid_types})"
         return msg
 
 
@@ -2027,85 +1209,6 @@ class AmbiguousCatalogMatchError(CompilationError):
         return msg
 
 
-class CacheInconsistencyError(DbtInternalError):
-    def __init__(self, msg: str):
-        self.msg = msg
-        formatted_msg = f"Cache inconsistency detected: {self.msg}"
-        super().__init__(msg=formatted_msg)
-
-
-class NewNameAlreadyInCacheError(CacheInconsistencyError):
-    def __init__(self, old_key: str, new_key: str):
-        self.old_key = old_key
-        self.new_key = new_key
-        msg = (
-            f'in rename of "{self.old_key}" -> "{self.new_key}", new name is in the cache already'
-        )
-        super().__init__(msg)
-
-
-class ReferencedLinkNotCachedError(CacheInconsistencyError):
-    def __init__(self, referenced_key: str):
-        self.referenced_key = referenced_key
-        msg = f"in add_link, referenced link key {self.referenced_key} not in cache!"
-        super().__init__(msg)
-
-
-class DependentLinkNotCachedError(CacheInconsistencyError):
-    def __init__(self, dependent_key: str):
-        self.dependent_key = dependent_key
-        msg = f"in add_link, dependent link key {self.dependent_key} not in cache!"
-        super().__init__(msg)
-
-
-class TruncatedModelNameCausedCollisionError(CacheInconsistencyError):
-    def __init__(self, new_key, relations: Dict):
-        self.new_key = new_key
-        self.relations = relations
-        super().__init__(self.get_message())
-
-    def get_message(self) -> str:
-        # Tell user when collision caused by model names truncated during
-        # materialization.
-        match = re.search("__dbt_backup|__dbt_tmp$", self.new_key.identifier)
-        if match:
-            truncated_model_name_prefix = self.new_key.identifier[: match.start()]
-            message_addendum = (
-                "\n\nName collisions can occur when the length of two "
-                "models' names approach your database's builtin limit. "
-                "Try restructuring your project such that no two models "
-                f"share the prefix '{truncated_model_name_prefix}'. "
-                "Then, clean your warehouse of any removed models."
-            )
-        else:
-            message_addendum = ""
-
-        msg = f"in rename, new key {self.new_key} already in cache: {list(self.relations.keys())}{message_addendum}"
-
-        return msg
-
-
-class NoneRelationFoundError(CacheInconsistencyError):
-    def __init__(self):
-        msg = "in get_relations, a None relation was found in the cache!"
-        super().__init__(msg)
-
-
-# this is part of the context and also raised in dbt.contracts.relation.py
-class DataclassNotDictError(CompilationError):
-    def __init__(self, obj: Any):
-        self.obj = obj
-        super().__init__(msg=self.get_message())
-
-    def get_message(self) -> str:
-        msg = (
-            f'The object ("{self.obj}") was used as a dictionary. This '
-            "capability has been removed from objects of this type."
-        )
-
-        return msg
-
-
 class DependencyNotFoundError(CompilationError):
     def __init__(self, node, node_description, required_pkg):
         self.node = node
@@ -2163,7 +1266,7 @@ class DuplicateResourceNameError(CompilationError):
 
         action = "looking for"
         # duplicate 'ref' targets
-        if node_type in NodeType.refable():
+        if node_type in REFABLE_NODE_TYPES:
             formatted_name = f'ref("{duped_name}")'
         # duplicate sources
         elif node_type == NodeType.Source:
@@ -2233,33 +1336,15 @@ class PropertyYMLError(CompilationError):
         return msg
 
 
-class RelationWrongTypeError(CompilationError):
-    def __init__(self, relation, expected_type, model=None):
-        self.relation = relation
-        self.expected_type = expected_type
-        self.model = model
-        super().__init__(msg=self.get_message())
-
-    def get_message(self) -> str:
-        msg = (
-            f"Trying to create {self.expected_type} {self.relation}, "
-            f"but it currently exists as a {self.relation.type}. Either "
-            f"drop {self.relation} manually, or run dbt with "
-            "`--full-refresh` and dbt will drop it for you."
-        )
-
-        return msg
-
-
 class ContractError(CompilationError):
     def __init__(self, yaml_columns, sql_columns):
         self.yaml_columns = yaml_columns
         self.sql_columns = sql_columns
         super().__init__(msg=self.get_message())
 
-    def get_mismatches(self) -> agate.Table:
+    def get_mismatches(self) -> "agate.Table":
         # avoid a circular import
-        from dbt.clients.agate_helper import table_from_data_flat
+        from dbt_common.clients.agate_helper import table_from_data_flat
 
         column_names = ["column_name", "definition_type", "contract_type", "mismatch_reason"]
         # list of mismatches
@@ -2308,7 +1393,7 @@ class ContractError(CompilationError):
                 "This model has an enforced contract, and its 'columns' specification is missing"
             )
 
-        table: agate.Table = self.get_mismatches()
+        table: "agate.Table" = self.get_mismatches()
         # Hack to get Agate table output as string
         output = io.StringIO()
         table.print_table(output=output, max_rows=None, max_column_width=50)  # type: ignore

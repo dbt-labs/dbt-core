@@ -1,10 +1,11 @@
 import pytest
+
 from dbt.tests.util import run_dbt
 from tests.functional.selected_resources.fixtures import (
-    on_run_start_macro_assert_selected_models_expected_list,
     my_model1,
     my_model2,
     my_snapshot,
+    on_run_start_macro_assert_selected_models_expected_list,
 )
 
 

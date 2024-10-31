@@ -1,6 +1,0 @@
-kind: Fixes
-body: Fix snapshot success message
-time: 2023-08-30T15:08:03.429373-04:00
-custom:
-  Author: gshank
-  Issue: "7583"

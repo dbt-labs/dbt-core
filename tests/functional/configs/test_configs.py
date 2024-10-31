@@ -1,9 +1,15 @@
-from dbt.dataclass_schema import ValidationError
-import pytest
 import os
 
-from dbt.exceptions import ParsingError
-from dbt.tests.util import run_dbt, update_config_file, write_file, check_relations_equal
+import pytest
+
+from dbt.exceptions import SchemaConfigError
+from dbt.tests.util import (
+    check_relations_equal,
+    run_dbt,
+    update_config_file,
+    write_file,
+)
+from dbt_common.dataclass_schema import ValidationError
 from tests.functional.configs.fixtures import BaseConfigProject, simple_snapshot
 
 
@@ -71,12 +77,12 @@ class TestTargetConfigs(BaseConfigProject):
 
 class TestInvalidTestsMaterializationProj(object):
     def test_tests_materialization_proj_config(self, project):
-        config_patch = {"tests": {"materialized": "table"}}
+        config_patch = {"data_tests": {"materialized": "table"}}
         update_config_file(config_patch, project.project_root, "dbt_project.yml")
         tests_dir = os.path.join(project.project_root, "tests")
         write_file("select * from foo", tests_dir, "test.sql")
 
-        with pytest.raises(ValidationError):
+        with pytest.raises(SchemaConfigError):
             run_dbt()
 
 
@@ -88,7 +94,7 @@ class TestInvalidSeedsMaterializationProj(object):
         seeds_dir = os.path.join(project.project_root, "seeds")
         write_file("id1, id2\n1, 2", seeds_dir, "seed.csv")
 
-        with pytest.raises(ValidationError):
+        with pytest.raises(SchemaConfigError):
             run_dbt()
 
 
@@ -102,7 +108,7 @@ class TestInvalidSeedsMaterializationSchema(object):
         )
         write_file("id1, id2\n1, 2", seeds_dir, "myseed.csv")
 
-        with pytest.raises(ValidationError):
+        with pytest.raises(SchemaConfigError):
             run_dbt()
 
 
@@ -114,7 +120,7 @@ class TestInvalidSnapshotsMaterializationProj(object):
         snapshots_dir = os.path.join(project.project_root, "snapshots")
         write_file(simple_snapshot, snapshots_dir, "mysnapshot.sql")
 
-        with pytest.raises(ParsingError):
+        with pytest.raises(ValidationError):
             run_dbt()
 
 

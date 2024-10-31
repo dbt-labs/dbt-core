@@ -47,12 +47,12 @@ jobs:
 
     steps:
       - name: Check out the repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.8'
+          python-version: '3.9'
 
       - name: Install python dependencies
         run: |
@@ -74,17 +74,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11"]
+        python-version: [ "3.9", "3.10", "3.11", "3.12" ]
 
     env:
       TOXENV: "unit"
 
     steps:
       - name: Check out the repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -95,8 +95,12 @@ jobs:
           python -m pip install tox
           tox --version
 
-      - name: Run tox
-        run: tox
+      - name: Run unit tests
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          command: tox -e unit
 
       - name: Get current date
         if: always()
@@ -107,7 +111,7 @@ jobs:
 
       - name: Upload Unit Test Coverage to Codecov
         if: ${{ matrix.python-version == '3.11' }}
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           flags: unit
@@ -135,7 +139,7 @@ jobs:
       - name: generate include
         id: generate-include
         run: |
-          INCLUDE=('"python-version":"3.8","os":"windows-latest"' '"python-version":"3.8","os":"macos-latest"' )
+          INCLUDE=('"python-version":"3.9","os":"windows-latest"' '"python-version":"3.9","os":"macos-12"' )
           INCLUDE_GROUPS="["
           for include in ${INCLUDE[@]}; do
               for group in $(seq 1 ${{ env.PYTHON_INTEGRATION_TEST_WORKERS }}); do
@@ -157,7 +161,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11"]
+        python-version: [ "3.9", "3.10", "3.11", "3.12" ]
         os: [ubuntu-20.04]
         split-group: ${{ fromJson(needs.integration-metadata.outputs.split-groups) }}
         include: ${{ fromJson(needs.integration-metadata.outputs.include) }}
@@ -175,10 +179,10 @@ jobs:
 
     steps:
       - name: Check out the repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -201,8 +205,12 @@ jobs:
           python -m pip install tox
           tox --version
 
-      - name: Run tests
-        run: tox -- --ddtrace
+      - name: Run integration tests
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 30
+          max_attempts: 3
+          command: tox -- --ddtrace
         env:
           PYTEST_ADDOPTS: ${{ format('--splits {0} --group {1}', env.PYTHON_INTEGRATION_TEST_WORKERS, matrix.split-group) }}
 
@@ -213,15 +221,15 @@ jobs:
           CURRENT_DATE=$(date +'%Y-%m-%dT%H_%M_%S') # no colons allowed for artifacts
           echo "date=$CURRENT_DATE" >> $GITHUB_OUTPUT
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: logs_${{ matrix.python-version }}_${{ matrix.os }}_${{ steps.date.outputs.date }}
+          name: logs_${{ matrix.python-version }}_${{ matrix.os }}_${{ matrix.split-group }}_${{ steps.date.outputs.date }}
           path: ./logs
 
       - name: Upload Integration Test Coverage to Codecov
         if: ${{ matrix.python-version == '3.11' }}
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           flags: integration
@@ -250,12 +258,12 @@ jobs:
 
     steps:
       - name: Check out the repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.8'
+          python-version: '3.9'
 
       - name: Install python dependencies
         run: |
@@ -288,7 +296,7 @@ jobs:
       - name: Install source distributions
         # ignore dbt-1.0.0, which intentionally raises an error when installed from source
         run: |
-          find ./dist/dbt-[a-z]*.gz -maxdepth 1 -type f | xargs python -m pip install --force-reinstall --find-links=dist/
+          find ./dist/*.gz -maxdepth 1 -type f | xargs python -m pip install --force-reinstall --find-links=dist/
 
       - name: Check source distributions
         run: |

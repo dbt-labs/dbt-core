@@ -1,21 +1,13 @@
+import string
 from unittest import mock
 
+import networkx as nx
 import pytest
 
-import string
-import dbt.exceptions
-import dbt.graph.selector as graph_selector
 import dbt.graph.cli as graph_cli
+import dbt.graph.selector as graph_selector
+import dbt_common.exceptions
 from dbt.node_types import NodeType
-
-import networkx as nx
-
-from dbt import flags
-
-from argparse import Namespace
-from dbt.contracts.project import UserConfig
-
-flags.set_from_args(Namespace(), UserConfig())
 
 
 def _get_graph():
@@ -58,7 +50,7 @@ def _get_manifest(graph):
 
 @pytest.fixture
 def graph():
-    return graph_selector.Graph(_get_graph())
+    return _get_graph()
 
 
 @pytest.fixture
@@ -123,16 +115,9 @@ run_specs = [
 
 
 @pytest.mark.parametrize("include,exclude,expected", run_specs, ids=id_macro)
-def test_run_specs(include, exclude, expected):
-    graph = _get_graph()
-    manifest = _get_manifest(graph)
+def test_run_specs(include, exclude, expected, graph, manifest):
     selector = graph_selector.NodeSelector(graph, manifest)
-    # TODO:  The "eager" string below needs to be replaced with programatic access
-    #  to the default value for the indirect selection parameter in
-    # dbt.cli.params.indirect_selection
-    #
-    # Doing that is actually a little tricky, so I'm punting it to a new ticket GH #6397
-    spec = graph_cli.parse_difference(include, exclude, "eager")
+    spec = graph_cli.parse_difference(include, exclude)
     selected, _ = selector.select_nodes(spec)
 
     assert selected == expected
@@ -220,5 +205,5 @@ invalid_specs = [
 
 @pytest.mark.parametrize("invalid", invalid_specs, ids=lambda k: str(k))
 def test_invalid_specs(invalid):
-    with pytest.raises(dbt.exceptions.DbtRuntimeError):
+    with pytest.raises(dbt_common.exceptions.DbtRuntimeError):
         graph_selector.SelectionCriteria.from_single_spec(invalid)

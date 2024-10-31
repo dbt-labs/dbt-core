@@ -1,10 +1,13 @@
 from argparse import Namespace
+
 import pytest
 
 import dbt.flags as flags
-from dbt.events.functions import msg_to_dict, warn_or_error, setup_event_logger
-from dbt.events.types import InfoLevel, NoNodesForSelectionCriteria
-from dbt.exceptions import EventCompilationError
+from dbt.adapters.events.types import AdapterDeprecationWarning
+from dbt.events.types import NoNodesForSelectionCriteria
+from dbt_common.events.functions import msg_to_dict, warn_or_error
+from dbt_common.events.types import InfoLevel, RetryExternalCall
+from dbt_common.exceptions import EventCompilationError
 
 
 @pytest.mark.parametrize(
@@ -26,6 +29,25 @@ def test_warn_or_error_warn_error_options(warn_error_options, expect_compilation
             warn_or_error(NoNodesForSelectionCriteria())
     else:
         warn_or_error(NoNodesForSelectionCriteria())
+
+
+@pytest.mark.parametrize(
+    "error_cls",
+    [
+        NoNodesForSelectionCriteria,  # core event
+        AdapterDeprecationWarning,  # adapter event
+        RetryExternalCall,  # common event
+    ],
+)
+def test_warn_error_options_captures_all_events(error_cls):
+    args = Namespace(warn_error_options={"include": [error_cls.__name__]})
+    flags.set_from_args(args, {})
+    with pytest.raises(EventCompilationError):
+        warn_or_error(error_cls())
+
+    args = Namespace(warn_error_options={"include": "*", "exclude": [error_cls.__name__]})
+    flags.set_from_args(args, {})
+    warn_or_error(error_cls())
 
 
 @pytest.mark.parametrize(
@@ -59,13 +81,3 @@ def test_msg_to_dict_handles_exceptions_gracefully():
         assert (
             False
         ), f"We expect `msg_to_dict` to gracefully handle exceptions, but it raised {exc}"
-
-
-def test_setup_event_logger_specify_max_bytes(mocker):
-    patched_file_handler = mocker.patch("dbt.events.logger.RotatingFileHandler")
-    args = Namespace(log_file_max_bytes=1234567)
-    flags.set_from_args(args, {})
-    setup_event_logger(flags.get_flags())
-    patched_file_handler.assert_called_once_with(
-        filename="logs/dbt.log", encoding="utf8", maxBytes=1234567, backupCount=5
-    )

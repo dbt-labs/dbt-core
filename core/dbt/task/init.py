@@ -1,42 +1,35 @@
 import copy
 import os
-from pathlib import Path
 import re
 import shutil
+from pathlib import Path
 from typing import Optional
 
-import yaml
 import click
+import yaml
 
 import dbt.config
-import dbt.clients.system
+import dbt_common.clients.system
+from dbt.adapters.factory import get_include_paths, load_plugin
 from dbt.config.profile import read_profile
-from dbt.exceptions import DbtRuntimeError
-from dbt.flags import get_flags
-from dbt.version import _get_adapter_plugin_names
-from dbt.adapters.factory import load_plugin, get_include_paths
-
 from dbt.contracts.util import Identifier as ProjectName
-
-from dbt.events.functions import fire_event
 from dbt.events.types import (
-    StarterProjectPath,
     ConfigFolderDirectory,
+    InvalidProfileTemplateYAML,
     NoSampleProfileFound,
+    ProfileWrittenWithProjectTemplateYAML,
     ProfileWrittenWithSample,
     ProfileWrittenWithTargetTemplateYAML,
-    ProfileWrittenWithProjectTemplateYAML,
-    SettingUpProfile,
-    InvalidProfileTemplateYAML,
-    ProjectNameAlreadyExists,
     ProjectCreated,
+    ProjectNameAlreadyExists,
+    SettingUpProfile,
+    StarterProjectPath,
 )
-
-from dbt.include.starter_project import PACKAGE_PATH as starter_project_directory
-
-from dbt.include.global_project import PROJECT_NAME as GLOBAL_PROJECT_NAME
-
+from dbt.flags import get_flags
 from dbt.task.base import BaseTask, move_to_nearest_project_dir
+from dbt.version import _get_adapter_plugin_names
+from dbt_common.events.functions import fire_event
+from dbt_common.exceptions import DbtRuntimeError
 
 DOCS_URL = "https://docs.getdbt.com/docs/configure-your-profile"
 SLACK_URL = "https://community.getdbt.com/"
@@ -57,7 +50,12 @@ click_type_mapping = {
 
 
 class InitTask(BaseTask):
-    def copy_starter_repo(self, project_name):
+    def copy_starter_repo(self, project_name: str) -> None:
+        # Lazy import to avoid ModuleNotFoundError
+        from dbt.include.starter_project import (
+            PACKAGE_PATH as starter_project_directory,
+        )
+
         fire_event(StarterProjectPath(dir=starter_project_directory))
         shutil.copytree(
             starter_project_directory, project_name, ignore=shutil.ignore_patterns(*IGNORE_FILES)
@@ -68,7 +66,7 @@ class InitTask(BaseTask):
         profiles_path = Path(profiles_dir)
         if not profiles_path.exists():
             fire_event(ConfigFolderDirectory(dir=profiles_dir))
-            dbt.clients.system.make_directory(profiles_dir)
+            dbt_common.clients.system.make_directory(profiles_dir)
             return True
         return False
 
@@ -265,6 +263,10 @@ class InitTask(BaseTask):
 
     def get_valid_project_name(self) -> str:
         """Returns a valid project name, either from CLI arg or user prompt."""
+
+        # Lazy import to avoid ModuleNotFoundError
+        from dbt.include.global_project import PROJECT_NAME as GLOBAL_PROJECT_NAME
+
         name = self.args.project_name
         internal_package_names = {GLOBAL_PROJECT_NAME}
         available_adapters = list(_get_adapter_plugin_names())
@@ -300,7 +302,7 @@ class InitTask(BaseTask):
         try:
             move_to_nearest_project_dir(self.args.project_dir)
             in_project = True
-        except dbt.exceptions.DbtRuntimeError:
+        except dbt_common.exceptions.DbtRuntimeError:
             in_project = False
 
         if in_project:
