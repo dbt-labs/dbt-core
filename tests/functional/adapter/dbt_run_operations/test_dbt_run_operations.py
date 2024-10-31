@@ -23,7 +23,6 @@ class BaseRunOperationResult:
         results = self.run_operation("select_something", name="world")
         assert results.results[0].agate_table is None
 
-    @pytest.mark.xfail
     def test_result_with_return(self, project):
         results = self.run_operation("select_something_with_return", name="world")
         assert len(results.results[0].agate_table) == 1

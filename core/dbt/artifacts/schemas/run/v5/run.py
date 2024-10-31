@@ -72,6 +72,9 @@ class RunResultOutput(BaseResult):
     compiled: Optional[bool]
     compiled_code: Optional[str]
     relation_name: Optional[str]
+    agate_table: Optional["agate.Table"] = field(
+        default=None, metadata={"serialize": lambda x: None, "deserialize": lambda x: None}
+    )
     batch_results: Optional[BatchResults] = None
 
 
@@ -88,6 +91,7 @@ def process_run_result(result: RunResult) -> RunResultOutput:
         message=result.message,
         adapter_response=result.adapter_response,
         failures=result.failures,
+        agate_table=result.agate_table,
         batch_results=result.batch_results,
         compiled=result.node.compiled if compiled else None,  # type:ignore
         compiled_code=result.node.compiled_code if compiled else None,  # type:ignore
