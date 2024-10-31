@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Set
 
 from dbt import deprecations
 from dbt.constants import (
@@ -58,8 +58,20 @@ class SemanticManifest:
             return True
 
         semantic_manifest = self._get_pydantic_semantic_manifest()
-        validator = SemanticManifestValidator[PydanticSemanticManifest]()
-        validation_results = validator.validate_semantic_manifest(semantic_manifest)
+
+        if get_flags().require_nested_cumulative_type_params is False:
+            metrics_using_old_params: Set[str] = set()
+            for metric in semantic_manifest.metrics or []:
+                for field in ("window", "grain_to_date"):
+                    type_params_field_value = getattr(metric.type_params, field)
+                    # Warn that the old type_params structure has been deprecated.
+                    if type_params_field_value:
+                        metrics_using_old_params.add(metric.name)
+            if metrics_using_old_params:
+                deprecations.warn(
+                    "mf-cumulative-type-params-deprecation",
+                )
+
         time_spines = semantic_manifest.project_configuration.time_spines
         legacy_time_spines = (
             semantic_manifest.project_configuration.time_spine_table_configurations
@@ -76,6 +88,9 @@ class SemanticManifest:
             deprecations.warn(
                 "mf-timespine-without-yaml-configuration",
             )
+
+        validator = SemanticManifestValidator[PydanticSemanticManifest]()
+        validation_results = validator.validate_semantic_manifest(semantic_manifest)
 
         for warning in validation_results.warnings:
             fire_event(SemanticValidationFailure(msg=warning.message))
