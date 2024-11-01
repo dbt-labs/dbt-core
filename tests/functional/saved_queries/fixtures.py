@@ -16,6 +16,10 @@ saved_queries:
             - "{{ TimeDimension('id__ds', 'DAY') }} <= now()"
             - "{{ TimeDimension('id__ds', 'DAY') }} >= '2023-01-01'"
             - "{{ Metric('txn_revenue', ['id']) }} > 1"
+        order_by:
+            - "Metric('simple_metric')"
+            - "Dimension('id__ds')"
+        limit: 10
     exports:
         - name: my_export
           config:

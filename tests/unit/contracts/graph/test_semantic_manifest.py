@@ -1,5 +1,9 @@
+from unittest.mock import patch
+
 import pytest
 
+from core.dbt.contracts.graph.manifest import Manifest
+from core.dbt.contracts.graph.nodes import ModelNode
 from dbt.contracts.graph.semantic_manifest import SemanticManifest
 
 
@@ -24,6 +28,21 @@ def metrics(
 
 
 class TestSemanticManifest:
+
     def test_validate(self, manifest):
-        sm_manifest = SemanticManifest(manifest)
-        assert sm_manifest.validate()
+        with patch("dbt.contracts.graph.semantic_manifest.get_flags") as patched_get_flags:
+            patched_get_flags.return_value.require_yaml_configuration_for_mf_time_spines = True
+            sm_manifest = SemanticManifest(manifest)
+            assert sm_manifest.validate()
+
+    def test_require_yaml_configuration_for_mf_time_spines(
+        self, manifest: Manifest, metricflow_time_spine_model: ModelNode
+    ):
+        with patch("dbt.contracts.graph.semantic_manifest.get_flags") as patched_get_flags, patch(
+            "dbt.contracts.graph.semantic_manifest.deprecations"
+        ) as patched_deprecations:
+            patched_get_flags.return_value.require_yaml_configuration_for_mf_time_spines = False
+            manifest.nodes[metricflow_time_spine_model.unique_id] = metricflow_time_spine_model
+            sm_manifest = SemanticManifest(manifest)
+            assert sm_manifest.validate()
+            assert patched_deprecations.warn.call_count == 1

@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 import pytz
 
@@ -18,6 +18,7 @@ class MicrobatchBuilder:
         is_incremental: bool,
         event_time_start: Optional[datetime],
         event_time_end: Optional[datetime],
+        default_end_time: Optional[datetime] = None,
     ):
         if model.config.incremental_strategy != "microbatch":
             raise DbtInternalError(
@@ -35,10 +36,12 @@ class MicrobatchBuilder:
             event_time_start.replace(tzinfo=pytz.UTC) if event_time_start else None
         )
         self.event_time_end = event_time_end.replace(tzinfo=pytz.UTC) if event_time_end else None
+        self.default_end_time = default_end_time or datetime.now(pytz.UTC)
 
     def build_end_time(self):
         """Defaults the end_time to the current time in UTC unless a non `None` event_time_end was provided"""
-        return self.event_time_end or datetime.now(tz=pytz.utc)
+        end_time = self.event_time_end or self.default_end_time
+        return MicrobatchBuilder.ceiling_timestamp(end_time, self.model.config.batch_size)
 
     def build_start_time(self, checkpoint: Optional[datetime]):
         """Create a start time based off the passed in checkpoint.
@@ -97,6 +100,26 @@ class MicrobatchBuilder:
 
         return batches
 
+    def build_batch_context(self, incremental_batch: bool) -> Dict[str, Any]:
+        """
+        Create context with entries that reflect microbatch model + incremental execution state
+
+        Assumes self.model has been (re)-compiled with necessary batch filters applied.
+        """
+        batch_context: Dict[str, Any] = {}
+
+        # Microbatch model properties
+        batch_context["model"] = self.model.to_dict()
+        batch_context["sql"] = self.model.compiled_code
+        batch_context["compiled_code"] = self.model.compiled_code
+
+        # Add incremental context variables for batches running incrementally
+        if incremental_batch:
+            batch_context["is_incremental"] = lambda: True
+            batch_context["should_full_refresh"] = lambda: False
+
+        return batch_context
+
     @staticmethod
     def offset_timestamp(timestamp: datetime, batch_size: BatchSize, offset: int) -> datetime:
         """Truncates the passed in timestamp based on the batch_size and then applies the offset by the batch_size.
@@ -139,7 +162,7 @@ class MicrobatchBuilder:
         return offset_timestamp
 
     @staticmethod
-    def truncate_timestamp(timestamp: datetime, batch_size: BatchSize):
+    def truncate_timestamp(timestamp: datetime, batch_size: BatchSize) -> datetime:
         """Truncates the passed in timestamp based on the batch_size.
 
         2024-09-17 16:06:00 + Batchsize.hour -> 2024-09-17 16:00:00
@@ -179,3 +202,23 @@ class MicrobatchBuilder:
         return str(
             batch_start.date() if (batch_start and batch_size != BatchSize.hour) else batch_start
         )
+
+    @staticmethod
+    def ceiling_timestamp(timestamp: datetime, batch_size: BatchSize) -> datetime:
+        """Takes the given timestamp and moves it to the ceiling for the given batch size
+
+        Note, if the timestamp is already the batch size ceiling, that is returned
+        2024-09-17 16:06:00 + BatchSize.hour -> 2024-09-17 17:00:00
+        2024-09-17 16:00:00 + BatchSize.hour -> 2024-09-17 16:00:00
+        2024-09-17 16:06:00 + BatchSize.day -> 2024-09-18 00:00:00
+        2024-09-17 00:00:00 + BatchSize.day -> 2024-09-17 00:00:00
+        2024-09-17 16:06:00 + BatchSize.month -> 2024-10-01 00:00:00
+        2024-09-01 00:00:00 + BatchSize.month -> 2024-09-01 00:00:00
+        2024-09-17 16:06:00 + BatchSize.year -> 2025-01-01 00:00:00
+        2024-01-01 00:00:00 + BatchSize.year -> 2024-01-01 00:00:00
+
+        """
+        ceiling = truncated = MicrobatchBuilder.truncate_timestamp(timestamp, batch_size)
+        if truncated != timestamp:
+            ceiling = MicrobatchBuilder.offset_timestamp(truncated, batch_size, 1)
+        return ceiling

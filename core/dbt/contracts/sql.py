@@ -7,7 +7,9 @@ from dbt.artifacts.schemas.base import VersionedSchema, schema_version
 from dbt.artifacts.schemas.results import ExecutionResult, TimingInfo
 from dbt.artifacts.schemas.run import RunExecutionResult, RunResult, RunResultsArtifact
 from dbt.contracts.graph.nodes import ResultNode
+from dbt.events.types import ArtifactWritten
 from dbt_common.dataclass_schema import dbtClassMixin
+from dbt_common.events.functions import fire_event
 
 TaskTags = Optional[Dict[str, Any]]
 TaskID = uuid.UUID
@@ -49,6 +51,7 @@ class RemoteExecutionResult(ExecutionResult):
             args=self.args,
         )
         writable.write(path)
+        fire_event(ArtifactWritten(artifact_type=writable.__class__.__name__, artifact_path=path))
 
     @classmethod
     def from_local_result(

@@ -59,6 +59,7 @@ from dbt.contracts.graph.nodes import (
     SeedNode,
     SemanticModel,
     SingularTestNode,
+    SnapshotNode,
     SourceDefinition,
     UnitTestDefinition,
     UnitTestFileFixture,
@@ -66,7 +67,7 @@ from dbt.contracts.graph.nodes import (
 )
 from dbt.contracts.graph.unparsed import SourcePatch, UnparsedVersion
 from dbt.contracts.util import SourceKey
-from dbt.events.types import UnpinnedRefNewVersionAvailable
+from dbt.events.types import ArtifactWritten, UnpinnedRefNewVersionAvailable
 from dbt.exceptions import (
     AmbiguousResourceNameRefError,
     CompilationError,
@@ -1218,7 +1219,9 @@ class Manifest(MacroMethods, dbtClassMixin):
         )
 
     def write(self, path):
-        self.writable_manifest().write(path)
+        writable = self.writable_manifest()
+        writable.write(path)
+        fire_event(ArtifactWritten(artifact_type=writable.__class__.__name__, artifact_path=path))
 
     # Called in dbt.compilation.Linker.write_graph and
     # dbt.graph.queue.get and ._include_in_cost
@@ -1314,25 +1317,6 @@ class Manifest(MacroMethods, dbtClassMixin):
     @property
     def external_node_unique_ids(self):
         return [node.unique_id for node in self.nodes.values() if node.is_external_node]
-
-    def resolve_refs(
-        self,
-        source_node: ModelNode,
-        current_project: str,  # TODO: ModelNode is overly restrictive typing
-    ) -> List[MaybeNonSource]:
-        resolved_refs: List[MaybeNonSource] = []
-        for ref in source_node.refs:
-            resolved = self.resolve_ref(
-                source_node,
-                ref.name,
-                ref.package,
-                ref.version,
-                current_project,
-                source_node.package_name,
-            )
-            resolved_refs.append(resolved)
-
-        return resolved_refs
 
     # Called by dbt.parser.manifest._process_refs & ManifestLoader.check_for_model_deprecations
     def resolve_ref(
@@ -1619,12 +1603,14 @@ class Manifest(MacroMethods, dbtClassMixin):
             if isinstance(node, GenericTestNode):
                 assert test_from
                 source_file.add_test(node.unique_id, test_from)
-            if isinstance(node, Metric):
+            elif isinstance(node, Metric):
                 source_file.metrics.append(node.unique_id)
-            if isinstance(node, Exposure):
+            elif isinstance(node, Exposure):
                 source_file.exposures.append(node.unique_id)
-            if isinstance(node, Group):
+            elif isinstance(node, Group):
                 source_file.groups.append(node.unique_id)
+            elif isinstance(node, SnapshotNode):
+                source_file.snapshots.append(node.unique_id)
         elif isinstance(source_file, FixtureSourceFile):
             pass
         else:

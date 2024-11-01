@@ -157,6 +157,7 @@ sample_values = [
         package_name="my_package", materialization_name="view"
     ),
     core_types.SourceFreshnessProjectHooksNotRun(),
+    core_types.MFTimespineWithoutYamlConfigurationDeprecation(),
     # E - DB Adapter ======================
     adapter_types.AdapterEventDebug(),
     adapter_types.AdapterEventInfo(),
@@ -286,6 +287,7 @@ sample_values = [
     core_types.WarnStateTargetEqual(state_path=""),
     core_types.FreshnessConfigProblem(msg=""),
     core_types.SemanticValidationFailure(msg=""),
+    core_types.MicrobatchModelNoEventTimeInputs(model_name=""),
     # M - Deps generation ======================
     core_types.GitSparseCheckoutSubdirectory(subdir=""),
     core_types.GitProgressCheckoutRevision(revision=""),
@@ -319,6 +321,8 @@ sample_values = [
     core_types.DepsScrubbedPackageName(package_name=""),
     core_types.DepsUnpinned(revision="", git=""),
     core_types.NoNodesForSelectionCriteria(spec_raw=""),
+    # P - Artifacts ======================
+    core_types.ArtifactWritten(artifact_type="manifest", artifact_path="path/to/artifact.json"),
     # Q - Node execution ======================
     core_types.RunningOperationCaughtError(exc=""),
     core_types.CompileComplete(),
@@ -517,7 +521,7 @@ T = TypeVar("T")
 
 
 def test_date_serialization():
-    ti = TimingInfo("test")
+    ti = TimingInfo("compile")
     ti.begin()
     ti.end()
     ti_dict = ti.to_dict()
