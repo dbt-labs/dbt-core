@@ -40,7 +40,8 @@ class MicrobatchBuilder:
 
     def build_end_time(self):
         """Defaults the end_time to the current time in UTC unless a non `None` event_time_end was provided"""
-        return self.event_time_end or self.default_end_time
+        end_time = self.event_time_end or self.default_end_time
+        return MicrobatchBuilder.ceiling_timestamp(end_time, self.model.config.batch_size)
 
     def build_start_time(self, checkpoint: Optional[datetime]):
         """Create a start time based off the passed in checkpoint.
@@ -161,7 +162,7 @@ class MicrobatchBuilder:
         return offset_timestamp
 
     @staticmethod
-    def truncate_timestamp(timestamp: datetime, batch_size: BatchSize):
+    def truncate_timestamp(timestamp: datetime, batch_size: BatchSize) -> datetime:
         """Truncates the passed in timestamp based on the batch_size.
 
         2024-09-17 16:06:00 + Batchsize.hour -> 2024-09-17 16:00:00
@@ -201,3 +202,23 @@ class MicrobatchBuilder:
         return str(
             batch_start.date() if (batch_start and batch_size != BatchSize.hour) else batch_start
         )
+
+    @staticmethod
+    def ceiling_timestamp(timestamp: datetime, batch_size: BatchSize) -> datetime:
+        """Takes the given timestamp and moves it to the ceiling for the given batch size
+
+        Note, if the timestamp is already the batch size ceiling, that is returned
+        2024-09-17 16:06:00 + BatchSize.hour -> 2024-09-17 17:00:00
+        2024-09-17 16:00:00 + BatchSize.hour -> 2024-09-17 16:00:00
+        2024-09-17 16:06:00 + BatchSize.day -> 2024-09-18 00:00:00
+        2024-09-17 00:00:00 + BatchSize.day -> 2024-09-17 00:00:00
+        2024-09-17 16:06:00 + BatchSize.month -> 2024-10-01 00:00:00
+        2024-09-01 00:00:00 + BatchSize.month -> 2024-09-01 00:00:00
+        2024-09-17 16:06:00 + BatchSize.year -> 2025-01-01 00:00:00
+        2024-01-01 00:00:00 + BatchSize.year -> 2024-01-01 00:00:00
+
+        """
+        ceiling = truncated = MicrobatchBuilder.truncate_timestamp(timestamp, batch_size)
+        if truncated != timestamp:
+            ceiling = MicrobatchBuilder.offset_timestamp(truncated, batch_size, 1)
+        return ceiling

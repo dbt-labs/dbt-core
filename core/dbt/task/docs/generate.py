@@ -33,6 +33,7 @@ from dbt.artifacts.schemas.results import NodeStatus
 from dbt.constants import MANIFEST_FILE_NAME
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import ResultNode
+from dbt.events.types import ArtifactWritten
 from dbt.exceptions import AmbiguousCatalogMatchError
 from dbt.graph import ResourceTypeSelector
 from dbt.graph.graph import UniqueId
@@ -309,6 +310,10 @@ class GenerateTask(CompileTask):
 
         catalog_path = os.path.join(self.config.project_target_path, CATALOG_FILENAME)
         results.write(catalog_path)
+        fire_event(
+            ArtifactWritten(artifact_type=results.__class__.__name__, artifact_path=catalog_path)
+        )
+
         if self.args.compile:
             write_manifest(self.manifest, self.config.project_target_path)
 

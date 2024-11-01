@@ -63,6 +63,7 @@ from dbt.contracts.graph.nodes import (
 )
 from dbt.contracts.graph.semantic_manifest import SemanticManifest
 from dbt.events.types import (
+    ArtifactWritten,
     DeprecatedModel,
     DeprecatedReference,
     InvalidDisabledTargetInTestNode,
@@ -2019,4 +2020,9 @@ def parse_manifest(
         plugin_artifacts = pm.get_manifest_artifacts(manifest)
         for path, plugin_artifact in plugin_artifacts.items():
             plugin_artifact.write(path)
+            fire_event(
+                ArtifactWritten(
+                    artifact_type=plugin_artifact.__class__.__name__, artifact_path=path
+                )
+            )
     return manifest

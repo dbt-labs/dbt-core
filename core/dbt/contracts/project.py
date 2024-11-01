@@ -344,6 +344,7 @@ class ProjectFlags(ExtensibleDbtClassMixin):
     skip_nodes_if_on_run_start_fails: bool = False
     state_modified_compare_more_unrendered_values: bool = False
     state_modified_compare_vars: bool = False
+    require_yaml_configuration_for_mf_time_spines: bool = False
 
     @property
     def project_only_flags(self) -> Dict[str, Any]:
@@ -354,6 +355,7 @@ class ProjectFlags(ExtensibleDbtClassMixin):
             "skip_nodes_if_on_run_start_fails": self.skip_nodes_if_on_run_start_fails,
             "state_modified_compare_more_unrendered_values": self.state_modified_compare_more_unrendered_values,
             "state_modified_compare_vars": self.state_modified_compare_vars,
+            "require_yaml_configuration_for_mf_time_spines": self.require_yaml_configuration_for_mf_time_spines,
         }
 
 
