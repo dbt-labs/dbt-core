@@ -44,7 +44,7 @@ class Model(CompiledResource):
     latest_version: Optional[NodeVersion] = None
     deprecation_date: Optional[datetime] = None
     defer_relation: Optional[DeferRelation] = None
-    primary_key: List[str] = field(default_factory=list)
+    primary_key: Optional[List[str]] = None
     time_spine: Optional[TimeSpine] = None
 
     def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
