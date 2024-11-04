@@ -108,11 +108,8 @@ class ShowTask(CompileTask):
                 quiet=get_flags().QUIET,
             )
 
-            if get_flags().LOG_FORMAT == "json":
-                fire_event(show_node_event)
-            else:
-                # No formatting, still get to stdout when --quiet is used
-                fire_event(PrintEvent(msg=show_node_event.message()))
+            # No formatting, still get to stdout when --quiet is used
+            fire_event(PrintEvent(msg=show_node_event.message()))
 
     def _handle_result(self, result):
         super()._handle_result(result)

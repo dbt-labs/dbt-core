@@ -97,11 +97,8 @@ class CompileTask(GraphRunnableTask):
                 quiet=get_flags().QUIET,
             )
 
-            if get_flags().LOG_FORMAT == "json":
-                fire_event(compiled_node_event)
-            else:
-                # No formatting, still get to stdout when --quiet is used
-                fire_event(PrintEvent(msg=compiled_node_event.message()))
+            # No formatting, still get to stdout when --quiet is used
+            fire_event(PrintEvent(msg=compiled_node_event.message()))
 
     def _runtime_initialize(self):
         if getattr(self.args, "inline", None):
