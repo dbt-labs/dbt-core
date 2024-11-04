@@ -378,7 +378,6 @@ class TestMicrobatchJinjaContext(BaseMicrobatchTest):
             "microbatch_model.sql": microbatch_model_with_context_checks_sql,
         }
 
-    @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
     def test_run_with_event_time(self, project):
         # initial run -- backfills all data
         with patch_microbatch_end_time("2020-01-03 13:57:00"):
@@ -751,7 +750,6 @@ class TestMicrbobatchModelsRunWithSameCurrentTime(BaseMicrobatchTest):
             "second_microbatch_model.sql": microbatch_yearly_model_downstream_sql,
         }
 
-    @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
     def test_microbatch(self, project) -> None:
         run_dbt(["run"])
 
