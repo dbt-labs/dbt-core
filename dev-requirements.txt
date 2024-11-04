@@ -1,6 +1,6 @@
 git+https://github.com/dbt-labs/dbt-adapters.git@main
 git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-tests-adapter
-git+https://github.com/dbt-labs/dbt-common.git@main
+git+https://github.com/dbt-labs/dbt-common.git@upgrade_protobuf_to_5.27
 git+https://github.com/dbt-labs/dbt-postgres.git@main
 # black must match what's in .pre-commit-config.yaml to be sure local env matches CI
 black==24.3.0
@@ -32,7 +32,7 @@ types-docutils
 types-PyYAML
 types-Jinja2
 types-mock
-types-protobuf>=4.0.0,<5.0.0
+types-protobuf>=5.0,<6.0
 types-pytz
 types-requests
 types-setuptools
