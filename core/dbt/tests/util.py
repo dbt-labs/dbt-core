@@ -5,16 +5,19 @@ from contextlib import contextmanager
 from contextvars import ContextVar, copy_context
 from datetime import datetime
 from io import StringIO
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
+from unittest import mock
 
+import pytz
 import yaml
 
 from dbt.adapters.base.relation import BaseRelation
 from dbt.adapters.factory import Adapter
 from dbt.cli.main import dbtRunner
 from dbt.contracts.graph.manifest import Manifest
+from dbt.materializations.incremental.microbatch import MicrobatchBuilder
 from dbt_common.context import _INVOCATION_CONTEXT_VAR, InvocationContext
-from dbt_common.events.base_types import EventLevel
+from dbt_common.events.base_types import EventLevel, EventMsg
 from dbt_common.events.functions import (
     capture_stdout_logs,
     fire_event,
@@ -73,6 +76,7 @@ from dbt_common.events.types import Note
 def run_dbt(
     args: Optional[List[str]] = None,
     expect_pass: bool = True,
+    callbacks: Optional[List[Callable[[EventMsg], None]]] = None,
 ):
     # reset global vars
     reset_metadata_vars()
@@ -90,7 +94,8 @@ def run_dbt(
         args.extend(["--project-dir", project_dir])
     if profiles_dir and "--profiles-dir" not in args:
         args.extend(["--profiles-dir", profiles_dir])
-    dbt = dbtRunner()
+    dbt = dbtRunner(callbacks=callbacks)
+
     res = dbt.invoke(args)
 
     # the exception is immediately raised to be caught in tests
@@ -148,7 +153,7 @@ def get_manifest(project_root) -> Optional[Manifest]:
     if os.path.exists(path):
         with open(path, "rb") as fp:
             manifest_mp = fp.read()
-        manifest: Manifest = Manifest.from_msgpack(manifest_mp)
+        manifest: Manifest = Manifest.from_msgpack(manifest_mp)  # type: ignore[attr-defined]
         return manifest
     else:
         return None
@@ -639,3 +644,8 @@ def safe_set_invocation_context():
     if invocation_var is None:
         invocation_var = _INVOCATION_CONTEXT_VAR
     invocation_var.set(InvocationContext(os.environ))
+
+
+def patch_microbatch_end_time(dt_str: str):
+    dt = datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=pytz.UTC)
+    return mock.patch.object(MicrobatchBuilder, "build_end_time", return_value=dt)

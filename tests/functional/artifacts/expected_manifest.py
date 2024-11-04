@@ -39,6 +39,10 @@ def get_rendered_model_config(**updates):
         "docs": {"node_color": None, "show": True},
         "contract": {"enforced": False, "alias_types": True},
         "access": "protected",
+        "event_time": None,
+        "lookback": 1,
+        "batch_size": None,
+        "begin": None,
     }
     result.update(updates)
     return result
@@ -74,6 +78,10 @@ def get_rendered_seed_config(**updates):
         "incremental_strategy": None,
         "docs": {"node_color": None, "show": True},
         "contract": {"enforced": False, "alias_types": True},
+        "event_time": None,
+        "lookback": 1,
+        "batch_size": None,
+        "begin": None,
     }
     result.update(updates)
     return result
@@ -97,6 +105,13 @@ def get_rendered_snapshot_config(**updates):
         "post-hook": [],
         "column_types": {},
         "quoting": {},
+        "snapshot_meta_column_names": {
+            "dbt_valid_to": None,
+            "dbt_valid_from": None,
+            "dbt_updated_at": None,
+            "dbt_scd_id": None,
+        },
+        "dbt_valid_to_current": None,
         "tags": [],
         "persist_docs": {},
         "full_refresh": None,
@@ -114,6 +129,10 @@ def get_rendered_snapshot_config(**updates):
         "incremental_strategy": None,
         "docs": {"node_color": None, "show": True},
         "contract": {"enforced": False, "alias_types": True},
+        "event_time": None,
+        "lookback": 1,
+        "batch_size": None,
+        "begin": None,
     }
     result.update(updates)
     return result
@@ -292,6 +311,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                         "quote": None,
                         "tags": [],
                         "constraints": [],
+                        "granularity": None,
                     },
                     "first_name": {
                         "name": "first_name",
@@ -301,6 +321,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                         "quote": None,
                         "tags": [],
                         "constraints": [],
+                        "granularity": None,
                     },
                     "email": {
                         "name": "email",
@@ -310,6 +331,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                         "quote": None,
                         "tags": [],
                         "constraints": [],
+                        "granularity": None,
                     },
                     "ip_address": {
                         "name": "ip_address",
@@ -319,6 +341,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                         "quote": None,
                         "tags": [],
                         "constraints": [],
+                        "granularity": None,
                     },
                     "updated_at": {
                         "name": "updated_at",
@@ -328,6 +351,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                         "quote": None,
                         "tags": [],
                         "constraints": [],
+                        "granularity": None,
                     },
                 },
                 "contract": {"checksum": None, "enforced": False, "alias_types": True},
@@ -343,6 +367,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "access": "protected",
                 "version": None,
                 "latest_version": None,
+                "time_spine": None,
             },
             "model.test.second_model": {
                 "compiled_path": os.path.join(compiled_model_path, "second_model.sql"),
@@ -385,6 +410,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                         "quote": None,
                         "tags": [],
                         "constraints": [],
+                        "granularity": None,
                     },
                     "first_name": {
                         "name": "first_name",
@@ -394,6 +420,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                         "quote": None,
                         "tags": [],
                         "constraints": [],
+                        "granularity": None,
                     },
                     "email": {
                         "name": "email",
@@ -403,6 +430,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                         "quote": None,
                         "tags": [],
                         "constraints": [],
+                        "granularity": None,
                     },
                     "ip_address": {
                         "name": "ip_address",
@@ -412,6 +440,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                         "quote": None,
                         "tags": [],
                         "constraints": [],
+                        "granularity": None,
                     },
                     "updated_at": {
                         "name": "updated_at",
@@ -421,6 +450,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                         "quote": None,
                         "tags": [],
                         "constraints": [],
+                        "granularity": None,
                     },
                 },
                 "contract": {"checksum": None, "enforced": False, "alias_types": True},
@@ -436,6 +466,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "access": "protected",
                 "version": None,
                 "latest_version": None,
+                "time_spine": None,
             },
             "seed.test.seed": {
                 "build_path": None,
@@ -468,6 +499,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                         "quote": None,
                         "tags": [],
                         "constraints": [],
+                        "granularity": None,
                     },
                     "first_name": {
                         "name": "first_name",
@@ -477,6 +509,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                         "quote": None,
                         "tags": [],
                         "constraints": [],
+                        "granularity": None,
                     },
                     "email": {
                         "name": "email",
@@ -486,6 +519,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                         "quote": None,
                         "tags": [],
                         "constraints": [],
+                        "granularity": None,
                     },
                     "ip_address": {
                         "name": "ip_address",
@@ -495,6 +529,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                         "quote": None,
                         "tags": [],
                         "constraints": [],
+                        "granularity": None,
                     },
                     "updated_at": {
                         "name": "updated_at",
@@ -504,6 +539,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                         "quote": None,
                         "tags": [],
                         "constraints": [],
+                        "granularity": None,
                     },
                 },
                 "docs": {"node_color": None, "show": True},
@@ -730,10 +766,12 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                         "quote": None,
                         "tags": [],
                         "constraints": [],
+                        "granularity": None,
                     }
                 },
                 "config": {
                     "enabled": True,
+                    "event_time": None,
                 },
                 "quoting": {
                     "database": None,
@@ -770,6 +808,8 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "unique_id": "source.test.my_source.my_table",
                 "fqn": ["test", "my_source", "my_table"],
                 "unrendered_config": {},
+                "unrendered_database": None,
+                "unrendered_schema": "{{ var('test_schema') }}",
             },
         },
         "exposures": {
@@ -957,6 +997,7 @@ def expected_references_manifest(project):
                 "version": None,
                 "latest_version": None,
                 "constraints": [],
+                "time_spine": None,
             },
             "model.test.ephemeral_summary": {
                 "alias": "ephemeral_summary",
@@ -972,6 +1013,7 @@ def expected_references_manifest(project):
                         "quote": None,
                         "tags": [],
                         "constraints": [],
+                        "granularity": None,
                     },
                     "ct": {
                         "description": "The number of instances of the first name",
@@ -981,6 +1023,7 @@ def expected_references_manifest(project):
                         "quote": None,
                         "tags": [],
                         "constraints": [],
+                        "granularity": None,
                     },
                 },
                 "config": get_rendered_model_config(materialized="table", group="test_group"),
@@ -1026,6 +1069,7 @@ def expected_references_manifest(project):
                 "version": None,
                 "latest_version": None,
                 "constraints": [],
+                "time_spine": None,
             },
             "model.test.view_summary": {
                 "alias": "view_summary",
@@ -1041,6 +1085,7 @@ def expected_references_manifest(project):
                         "quote": None,
                         "tags": [],
                         "constraints": [],
+                        "granularity": None,
                     },
                     "ct": {
                         "description": "The number of instances of the first name",
@@ -1050,6 +1095,7 @@ def expected_references_manifest(project):
                         "quote": None,
                         "tags": [],
                         "constraints": [],
+                        "granularity": None,
                     },
                 },
                 "config": get_rendered_model_config(),
@@ -1091,6 +1137,7 @@ def expected_references_manifest(project):
                 "version": None,
                 "latest_version": None,
                 "constraints": [],
+                "time_spine": None,
             },
             "seed.test.seed": {
                 "alias": "seed",
@@ -1105,6 +1152,7 @@ def expected_references_manifest(project):
                         "quote": None,
                         "tags": [],
                         "constraints": [],
+                        "granularity": None,
                     },
                     "first_name": {
                         "name": "first_name",
@@ -1114,6 +1162,7 @@ def expected_references_manifest(project):
                         "quote": None,
                         "tags": [],
                         "constraints": [],
+                        "granularity": None,
                     },
                     "email": {
                         "name": "email",
@@ -1123,6 +1172,7 @@ def expected_references_manifest(project):
                         "quote": None,
                         "tags": [],
                         "constraints": [],
+                        "granularity": None,
                     },
                     "ip_address": {
                         "name": "ip_address",
@@ -1132,6 +1182,7 @@ def expected_references_manifest(project):
                         "quote": None,
                         "tags": [],
                         "constraints": [],
+                        "granularity": None,
                     },
                     "updated_at": {
                         "name": "updated_at",
@@ -1141,6 +1192,7 @@ def expected_references_manifest(project):
                         "quote": None,
                         "tags": [],
                         "constraints": [],
+                        "granularity": None,
                     },
                 },
                 "config": get_rendered_seed_config(),
@@ -1219,10 +1271,12 @@ def expected_references_manifest(project):
                         "quote": None,
                         "tags": [],
                         "constraints": [],
+                        "granularity": None,
                     }
                 },
                 "config": {
                     "enabled": True,
+                    "event_time": None,
                 },
                 "quoting": {
                     "database": False,
@@ -1258,6 +1312,8 @@ def expected_references_manifest(project):
                 "unique_id": "source.test.my_source.my_table",
                 "fqn": ["test", "my_source", "my_table"],
                 "unrendered_config": {},
+                "unrendered_database": None,
+                "unrendered_schema": "{{ var('test_schema') }}",
             },
         },
         "exposures": {
@@ -1487,6 +1543,7 @@ def expected_versions_manifest(project):
                         "quote": None,
                         "tags": [],
                         "constraints": [],
+                        "granularity": None,
                     },
                     "ct": {
                         "description": "The number of instances of the first name",
@@ -1496,6 +1553,7 @@ def expected_versions_manifest(project):
                         "quote": None,
                         "tags": [],
                         "constraints": [],
+                        "granularity": None,
                     },
                 },
                 "config": get_rendered_model_config(
@@ -1544,6 +1602,7 @@ def expected_versions_manifest(project):
                 "access": "protected",
                 "version": 1,
                 "latest_version": 2,
+                "time_spine": None,
             },
             "model.test.versioned_model.v2": {
                 "alias": "versioned_model_v2",
@@ -1559,6 +1618,7 @@ def expected_versions_manifest(project):
                         "quote": None,
                         "tags": [],
                         "constraints": [],
+                        "granularity": None,
                     },
                     "extra": {
                         "description": "",
@@ -1568,6 +1628,7 @@ def expected_versions_manifest(project):
                         "quote": None,
                         "tags": [],
                         "constraints": [],
+                        "granularity": None,
                     },
                 },
                 "config": get_rendered_model_config(
@@ -1612,6 +1673,7 @@ def expected_versions_manifest(project):
                 "access": "protected",
                 "version": 2,
                 "latest_version": 2,
+                "time_spine": None,
             },
             "model.test.ref_versioned_model": {
                 "alias": "ref_versioned_model",
@@ -1669,6 +1731,7 @@ def expected_versions_manifest(project):
                 "access": "protected",
                 "version": None,
                 "latest_version": None,
+                "time_spine": None,
             },
             "test.test.unique_versioned_model_v1_first_name.6138195dec": {
                 "alias": "unique_versioned_model_v1_first_name",

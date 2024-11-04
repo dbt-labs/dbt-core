@@ -1,5 +1,6 @@
 import pickle
 import re
+from argparse import Namespace
 from dataclasses import replace
 
 import pytest
@@ -22,6 +23,11 @@ from tests.unit.utils import (
     assert_symmetric,
     replace_config,
 )
+
+
+@pytest.fixture
+def args_for_flags() -> Namespace:
+    return Namespace(state_modified_compare_vars=False)
 
 
 def norm_whitespace(string):
@@ -139,6 +145,7 @@ def basic_uncompiled_dict():
             "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         },
         "unrendered_config": {},
+        "unrendered_config_call_dict": {},
         "config_call_dict": {},
     }
 
@@ -183,6 +190,7 @@ def basic_compiled_dict():
             "contract": {"enforced": False, "alias_types": True},
             "docs": {"show": True},
             "access": "protected",
+            "lookback": 1,
         },
         "docs": {"show": True},
         "columns": {},
@@ -197,6 +205,7 @@ def basic_compiled_dict():
             "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         },
         "unrendered_config": {},
+        "unrendered_config_call_dict": {},
         "config_call_dict": {},
         "access": "protected",
         "constraints": [],
@@ -458,6 +467,7 @@ def basic_uncompiled_schema_test_dict():
             "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         },
         "unrendered_config": {},
+        "unrendered_config_call_dict": {},
         "config_call_dict": {},
     }
 
@@ -515,6 +525,7 @@ def basic_compiled_schema_test_dict():
         "unrendered_config": {
             "severity": "warn",
         },
+        "unrendered_config_call_dict": {},
         "config_call_dict": {},
     }
 

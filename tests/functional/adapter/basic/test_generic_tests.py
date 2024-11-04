@@ -1,6 +1,6 @@
 import pytest
 
-from dbt.tests.util import run_dbt
+from dbt.tests.util import run_dbt, run_dbt_and_capture
 from tests.functional.adapter.basic.files import (
     base_table_sql,
     base_view_sql,
@@ -58,8 +58,16 @@ class BaseGenericTests:
         assert len(results) == 2
 
         # test command, all tests
-        results = run_dbt(["test"])
+        results, log_output = run_dbt_and_capture(["test", "--log-format", "json"])
         assert len(results) == 3
+
+        result_log_lines = [
+            line for line in log_output.split("\n") if "LogTestResult" in line and "group" in line
+        ]
+        assert len(result_log_lines) == 1
+        assert "my_group" in result_log_lines[0]
+        assert "group_owner" in result_log_lines[0]
+        assert "model.generic_tests.view_model" in result_log_lines[0]
 
 
 class TestGenericTests(BaseGenericTests):

@@ -193,3 +193,36 @@ class TestEnvVars:
         assert not ("secret_variable" in log_output)
         assert "regular_variable" in log_output
         del os.environ["DBT_DEBUG"]
+
+
+class TestEnvVarInCreateSchema:
+    """Test that the env_var() method works in overrides of the create_schema
+    macro, which is called during a different phase of execution than most
+    macros, causing problems."""
+
+    @pytest.fixture(scope="class", autouse=True)
+    def setup(self):
+        os.environ["DBT_TEST_ENV_VAR"] = "1"
+
+    @pytest.fixture(scope="class")
+    def macros(self):
+        return {
+            "macros.sql": """
+                {% macro create_schema(relation) %}
+                  {%- call statement('create_schema') -%}
+                     SELECT {{ env_var('DBT_TEST_ENV_VAR') }} as TEST
+                  {% endcall %}
+                {% endmacro %}%
+            """
+        }
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "mymodel.sql": """
+            SELECT 1 as TEST -- {%- do adapter.create_schema(this) -%}
+        """
+        }
+
+    def test_env_var_in_create_schema(self, project):
+        run_dbt(["run"])

@@ -8,12 +8,15 @@ from click.exceptions import BadOptionUsage
 from click.exceptions import Exit as ClickExit
 from click.exceptions import NoSuchOption, UsageError
 
+from dbt.adapters.factory import register_adapter
 from dbt.artifacts.schemas.catalog import CatalogArtifact
 from dbt.artifacts.schemas.run import RunExecutionResult
 from dbt.cli import params as p
 from dbt.cli import requires
 from dbt.cli.exceptions import DbtInternalException, DbtUsageException
+from dbt.cli.requires import setup_manifest
 from dbt.contracts.graph.manifest import Manifest
+from dbt.mp_context import get_mp_context
 from dbt_common.events.base_types import EventMsg
 
 
@@ -165,6 +168,8 @@ def cli(ctx, **kwargs):
 @click.pass_context
 @global_flags
 @p.empty
+@p.event_time_start
+@p.event_time_end
 @p.exclude
 @p.export_saved_queries
 @p.full_refresh
@@ -218,10 +223,9 @@ def clean(ctx, **kwargs):
     """Delete all folders in the clean-targets list (usually the dbt_packages and target directories.)"""
     from dbt.task.clean import CleanTask
 
-    task = CleanTask(ctx.obj["flags"], ctx.obj["project"])
-
-    results = task.run()
-    success = task.interpret_results(results)
+    with CleanTask(ctx.obj["flags"], ctx.obj["project"]) as task:
+        results = task.run()
+        success = task.interpret_results(results)
     return results, success
 
 
@@ -353,6 +357,7 @@ def compile(ctx, **kwargs):
 @p.select
 @p.selector
 @p.inline
+@p.inline_direct
 @p.target_path
 @p.threads
 @p.vars
@@ -361,17 +366,26 @@ def compile(ctx, **kwargs):
 @requires.profile
 @requires.project
 @requires.runtime_config
-@requires.manifest
 def show(ctx, **kwargs):
     """Generates executable SQL for a named resource or inline query, runs that SQL, and returns a preview of the
     results. Does not materialize anything to the warehouse."""
-    from dbt.task.show import ShowTask
+    from dbt.task.show import ShowTask, ShowTaskDirect
 
-    task = ShowTask(
-        ctx.obj["flags"],
-        ctx.obj["runtime_config"],
-        ctx.obj["manifest"],
-    )
+    if ctx.obj["flags"].inline_direct:
+        # Issue the inline query directly, with no templating. Does not require
+        # loading the manifest.
+        register_adapter(ctx.obj["runtime_config"], get_mp_context())
+        task = ShowTaskDirect(
+            ctx.obj["flags"],
+            ctx.obj["runtime_config"],
+        )
+    else:
+        setup_manifest(ctx)
+        task = ShowTask(
+            ctx.obj["flags"],
+            ctx.obj["runtime_config"],
+            ctx.obj["manifest"],
+        )
 
     results = task.run()
     success = task.interpret_results(results)
@@ -437,9 +451,9 @@ def deps(ctx, **kwargs):
                 message=f"Version is required in --add-package when a package when source is {flags.SOURCE}",
                 option_name="--add-package",
             )
-    task = DepsTask(flags, ctx.obj["project"])
-    results = task.run()
-    success = task.interpret_results(results)
+    with DepsTask(flags, ctx.obj["project"]) as task:
+        results = task.run()
+        success = task.interpret_results(results)
     return results, success
 
 
@@ -459,10 +473,9 @@ def init(ctx, **kwargs):
     """Initialize a new dbt project."""
     from dbt.task.init import InitTask
 
-    task = InitTask(ctx.obj["flags"])
-
-    results = task.run()
-    success = task.interpret_results(results)
+    with InitTask(ctx.obj["flags"]) as task:
+        results = task.run()
+        success = task.interpret_results(results)
     return results, success
 
 
@@ -539,6 +552,8 @@ def parse(ctx, **kwargs):
 @p.profiles_dir
 @p.project_dir
 @p.empty
+@p.event_time_start
+@p.event_time_end
 @p.select
 @p.selector
 @p.target_path
@@ -701,6 +716,7 @@ def seed(ctx, **kwargs):
 @cli.command("snapshot")
 @click.pass_context
 @global_flags
+@p.empty
 @p.exclude
 @p.profiles_dir
 @p.project_dir
@@ -783,6 +799,8 @@ cli.commands["source"].add_command(snapshot_freshness, "snapshot-freshness")  # 
 @click.pass_context
 @global_flags
 @p.exclude
+@p.resource_type
+@p.exclude_resource_type
 @p.profiles_dir
 @p.project_dir
 @p.select

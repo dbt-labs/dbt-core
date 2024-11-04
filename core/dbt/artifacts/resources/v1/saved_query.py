@@ -34,6 +34,7 @@ class Export(dbtClassMixin):
 
     name: str
     config: ExportConfig
+    unrendered_config: Dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -43,6 +44,8 @@ class QueryParams(dbtClassMixin):
     metrics: List[str]
     group_by: List[str]
     where: Optional[WhereFilterIntersection]
+    order_by: List[str] = field(default_factory=list)
+    limit: Optional[int] = None
 
 
 @dataclass

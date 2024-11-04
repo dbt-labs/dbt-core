@@ -5,7 +5,6 @@ from mashumaro.jsonschema.annotations import Pattern
 from mashumaro.types import SerializableType
 from typing_extensions import Annotated
 
-from dbt import deprecations
 from dbt.adapters.contracts.connection import QueryComment
 from dbt.contracts.util import Identifier, list_str
 from dbt_common.contracts.util import Mergeable
@@ -259,6 +258,7 @@ class Project(dbtClassMixin):
     query_comment: Optional[Union[QueryComment, NoValue, str]] = field(default_factory=NoValue)
     restrict_access: bool = False
     dbt_cloud: Optional[Dict[str, Any]] = None
+    flags: Dict[str, Any] = field(default_factory=dict)
 
     class Config(dbtMashConfig):
         # These tell mashumaro to use aliases for jsonschema and for "from_dict"
@@ -312,10 +312,6 @@ class Project(dbtClassMixin):
             raise ValidationError(
                 "Invalid project config: cannot have both 'tests' and 'data_tests' defined"
             )
-        if "tests" in data:
-            deprecations.warn(
-                "project-test-config", deprecated_path="tests", exp_path="data_tests"
-            )
 
 
 @dataclass
@@ -341,10 +337,14 @@ class ProjectFlags(ExtensibleDbtClassMixin):
     warn_error_options: Optional[Dict[str, Union[str, List[str]]]] = None
     write_json: Optional[bool] = None
 
-    # legacy behaviors
+    # legacy behaviors - https://github.com/dbt-labs/dbt-core/blob/main/docs/guides/behavior-change-flags.md
     require_explicit_package_overrides_for_builtin_materializations: bool = True
     require_resource_names_without_spaces: bool = False
     source_freshness_run_project_hooks: bool = False
+    skip_nodes_if_on_run_start_fails: bool = False
+    state_modified_compare_more_unrendered_values: bool = False
+    state_modified_compare_vars: bool = False
+    require_yaml_configuration_for_mf_time_spines: bool = False
 
     @property
     def project_only_flags(self) -> Dict[str, Any]:
@@ -352,6 +352,10 @@ class ProjectFlags(ExtensibleDbtClassMixin):
             "require_explicit_package_overrides_for_builtin_materializations": self.require_explicit_package_overrides_for_builtin_materializations,
             "require_resource_names_without_spaces": self.require_resource_names_without_spaces,
             "source_freshness_run_project_hooks": self.source_freshness_run_project_hooks,
+            "skip_nodes_if_on_run_start_fails": self.skip_nodes_if_on_run_start_fails,
+            "state_modified_compare_more_unrendered_values": self.state_modified_compare_more_unrendered_values,
+            "state_modified_compare_vars": self.state_modified_compare_vars,
+            "require_yaml_configuration_for_mf_time_spines": self.require_yaml_configuration_for_mf_time_spines,
         }
 
 

@@ -11,11 +11,15 @@ saved_queries:
         metrics:
             - simple_metric
         group_by:
-            - "Dimension('user__ds')"
+            - "Dimension('id__ds')"
         where:
-            - "{{ Dimension('user__ds', 'DAY') }} <= now()"
-            - "{{ Dimension('user__ds', 'DAY') }} >= '2023-01-01'"
+            - "{{ TimeDimension('id__ds', 'DAY') }} <= now()"
+            - "{{ TimeDimension('id__ds', 'DAY') }} >= '2023-01-01'"
             - "{{ Metric('txn_revenue', ['id']) }} > 1"
+        order_by:
+            - "Metric('simple_metric')"
+            - "Dimension('id__ds')"
+        limit: 10
     exports:
         - name: my_export
           config:
@@ -33,10 +37,10 @@ saved_queries:
         metrics:
             - simple_metric
         group_by:
-            - "Dimension('user__ds')"
+            - "Dimension('id__ds')"
         where:
-            - "{{ Dimension('user__ds', 'DAY') }} <= now()"
-            - "{{ Dimension('user__ds', 'DAY') }} >= '2023-01-01'"
+            - "{{ TimeDimension('id__ds', 'DAY') }} <= now()"
+            - "{{ TimeDimension('id__ds', 'DAY') }} >= '2023-01-01'"
             - "{{ Metric('txn_revenue', ['id']) }} > 1"
     exports:
         - name: my_export
@@ -54,10 +58,10 @@ saved_queries:
         metrics:
             - simple_metric
         group_by:
-            - "Dimension('user__ds')"
+            - "Dimension('id__ds')"
         where:
-            - "{{ Dimension('user__ds', 'DAY') }} <= now()"
-            - "{{ Dimension('user__ds', 'DAY') }} >= '2023-01-01'"
+            - "{{ TimeDimension('id__ds', 'DAY') }} <= now()"
+            - "{{ TimeDimension('id__ds', 'DAY') }} >= '2023-01-01'"
     exports:
         - name: my_export
           config:
@@ -72,8 +76,8 @@ saved_queries:
       metrics:
         - simple_metric
       group_by:
-        - "Dimension('user__ds')"
-      where: "{{ Dimension('user__ds', 'DAY') }} <= now()"
+        - "Dimension('id__ds')"
+      where: "{{ TimeDimension('id__ds', 'DAY') }} <= now()"
 """
 
 saved_query_with_extra_config_attributes_yml = """
@@ -85,10 +89,10 @@ saved_queries:
         metrics:
             - simple_metric
         group_by:
-            - "Dimension('user__ds')"
+            - "Dimension('id__ds')"
         where:
-            - "{{ Dimension('user__ds', 'DAY') }} <= now()"
-            - "{{ Dimension('user__ds', 'DAY') }} >= '2023-01-01'"
+            - "{{ TimeDimension('id__ds', 'DAY') }} <= now()"
+            - "{{ TimeDimension('id__ds', 'DAY') }} >= '2023-01-01'"
     exports:
         - name: my_export
           config:
@@ -108,10 +112,10 @@ saved_queries:
         metrics:
             - simple_metric
         group_by:
-            - "Dimension('user__ds')"
+            - "Dimension('id__ds')"
         where:
-            - "{{ Dimension('user__ds', 'DAY') }} <= now()"
-            - "{{ Dimension('user__ds', 'DAY') }} >= '2023-01-01'"
+            - "{{ TimeDimension('id__ds', 'DAY') }} <= now()"
+            - "{{ TimeDimension('id__ds', 'DAY') }} >= '2023-01-01'"
     exports:
         - name: my_export
           config:
@@ -129,10 +133,10 @@ saved_queries:
         metrics:
             - simple_metric
         group_by:
-            - "Dimension('user__ds')"
+            - "Dimension('id__ds')"
         where:
-            - "{{ Dimension('user__ds', 'DAY') }} <= now()"
-            - "{{ Dimension('user__ds', 'DAY') }} >= '2023-01-01'"
+            - "{{ TimeDimension('id__ds', 'DAY') }} <= now()"
+            - "{{ TimeDimension('id__ds', 'DAY') }} >= '2023-01-01'"
     exports:
         - name: my_export
 """
@@ -149,10 +153,10 @@ saved_queries:
         metrics:
             - simple_metric
         group_by:
-            - "Dimension('user__ds')"
+            - "Dimension('id__ds')"
         where:
-            - "{{ Dimension('user__ds', 'DAY') }} <= now()"
-            - "{{ Dimension('user__ds', 'DAY') }} >= '2023-01-01'"
+            - "{{ TimeDimension('id__ds', 'DAY') }} <= now()"
+            - "{{ TimeDimension('id__ds', 'DAY') }} >= '2023-01-01'"
     exports:
         - name: my_export
           config:

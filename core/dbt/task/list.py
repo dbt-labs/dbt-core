@@ -1,4 +1,5 @@
 import json
+from typing import Iterator, List
 
 from dbt.cli.flags import Flags
 from dbt.config.runtime import RuntimeConfig
@@ -16,7 +17,6 @@ from dbt.graph import ResourceTypeSelector
 from dbt.node_types import NodeType
 from dbt.task.base import resource_types_from_args
 from dbt.task.runnable import GraphRunnableTask
-from dbt.task.test import TestSelector
 from dbt_common.events.contextvars import task_contextvars
 from dbt_common.events.functions import fire_event, warn_or_error
 from dbt_common.events.types import PrintEvent
@@ -145,7 +145,7 @@ class ListTask(GraphRunnableTask):
                 }
             )
 
-    def generate_paths(self):
+    def generate_paths(self) -> Iterator[str]:
         for node in self._iterate_selected_nodes():
             yield node.original_file_path
 
@@ -177,7 +177,7 @@ class ListTask(GraphRunnableTask):
         return self.node_results
 
     @property
-    def resource_types(self):
+    def resource_types(self) -> List[NodeType]:
         if self.args.models:
             return [NodeType.Model]
 
@@ -196,23 +196,16 @@ class ListTask(GraphRunnableTask):
         else:
             return self.args.select
 
-    def get_node_selector(self):
+    def get_node_selector(self) -> ResourceTypeSelector:
         if self.manifest is None or self.graph is None:
             raise DbtInternalError("manifest and graph must be set to get perform node selection")
-        if self.resource_types == [NodeType.Test]:
-            return TestSelector(
-                graph=self.graph,
-                manifest=self.manifest,
-                previous_state=self.previous_state,
-            )
-        else:
-            return ResourceTypeSelector(
-                graph=self.graph,
-                manifest=self.manifest,
-                previous_state=self.previous_state,
-                resource_types=self.resource_types,
-                include_empty_nodes=True,
-            )
+        return ResourceTypeSelector(
+            graph=self.graph,
+            manifest=self.manifest,
+            previous_state=self.previous_state,
+            resource_types=self.resource_types,
+            include_empty_nodes=True,
+        )
 
     def interpret_results(self, results):
         # list command should always return 0 as exit code

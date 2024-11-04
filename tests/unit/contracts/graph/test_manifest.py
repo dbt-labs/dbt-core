@@ -26,7 +26,7 @@ from dbt.artifacts.resources import (
     WhereFilterIntersection,
 )
 from dbt.contracts.files import FileHash
-from dbt.contracts.graph.manifest import Manifest, ManifestMetadata
+from dbt.contracts.graph.manifest import DisabledLookup, Manifest, ManifestMetadata
 from dbt.contracts.graph.nodes import (
     DependsOn,
     Exposure,
@@ -37,7 +37,7 @@ from dbt.contracts.graph.nodes import (
     SeedNode,
     SourceDefinition,
 )
-from dbt.exceptions import AmbiguousResourceNameRefError
+from dbt.exceptions import AmbiguousResourceNameRefError, ParsingError
 from dbt.flags import set_from_args
 from dbt.node_types import NodeType
 from dbt_common.events.functions import reset_metadata_vars
@@ -84,6 +84,7 @@ REQUIRED_PARSED_NODE_KEYS = frozenset(
         "docs",
         "checksum",
         "unrendered_config",
+        "unrendered_config_call_dict",
         "created_at",
         "config_call_dict",
         "relation_name",
@@ -94,6 +95,8 @@ REQUIRED_PARSED_NODE_KEYS = frozenset(
         "constraints",
         "deprecation_date",
         "defer_relation",
+        "time_spine",
+        "batch_info",
     }
 )
 
@@ -1962,3 +1965,176 @@ def test_resolve_doc(docs, package, expected):
         expected_package, expected_name = expected
         assert result.name == expected_name
         assert result.package_name == expected_package
+
+
+class TestManifestFindNodeFromRefOrSource:
+    @pytest.fixture
+    def mock_node(self):
+        return MockNode("my_package", "my_model")
+
+    @pytest.fixture
+    def mock_disabled_node(self):
+        return MockNode("my_package", "disabled_node", config={"enabled": False})
+
+    @pytest.fixture
+    def mock_source(self):
+        return MockSource("root", "my_source", "source_table")
+
+    @pytest.fixture
+    def mock_disabled_source(self):
+        return MockSource("root", "my_source", "disabled_source_table", config={"enabled": False})
+
+    @pytest.fixture
+    def mock_manifest(self, mock_node, mock_source, mock_disabled_node, mock_disabled_source):
+        return make_manifest(
+            nodes=[mock_node, mock_disabled_node], sources=[mock_source, mock_disabled_source]
+        )
+
+    @pytest.mark.parametrize(
+        "expression,expected_node",
+        [
+            ("ref('my_package', 'my_model')", "mock_node"),
+            ("ref('my_package', 'doesnt_exist')", None),
+            ("ref('my_package', 'disabled_node')", "mock_disabled_node"),
+            ("source('my_source', 'source_table')", "mock_source"),
+            ("source('my_source', 'doesnt_exist')", None),
+            ("source('my_source', 'disabled_source_table')", "mock_disabled_source"),
+        ],
+    )
+    def test_find_node_from_ref_or_source(self, expression, expected_node, mock_manifest, request):
+        node = mock_manifest.find_node_from_ref_or_source(expression)
+
+        if expected_node is None:
+            assert node is None
+        else:
+            assert node == request.getfixturevalue(expected_node)
+
+    @pytest.mark.parametrize("invalid_expression", ["invalid", "ref(')"])
+    def test_find_node_from_ref_or_source_invalid_expression(
+        self, invalid_expression, mock_manifest
+    ):
+        with pytest.raises(ParsingError):
+            mock_manifest.find_node_from_ref_or_source(invalid_expression)
+
+
+class TestDisabledLookup:
+    @pytest.fixture(scope="class")
+    def manifest(self):
+        return Manifest(
+            nodes={},
+            sources={},
+            macros={},
+            docs={},
+            disabled={},
+            files={},
+            exposures={},
+            selectors={},
+        )
+
+    @pytest.fixture(scope="class")
+    def mock_model(self):
+        return MockNode("package", "name", NodeType.Model)
+
+    @pytest.fixture(scope="class")
+    def mock_model_with_version(self):
+        return MockNode("package", "name", NodeType.Model, version=3)
+
+    @pytest.fixture(scope="class")
+    def mock_seed(self):
+        return MockNode("package", "name", NodeType.Seed)
+
+    def test_find(self, manifest, mock_model):
+        manifest.disabled = {"model.package.name": [mock_model]}
+        lookup = DisabledLookup(manifest)
+
+        assert lookup.find("name", "package") == [mock_model]
+
+    def test_find_wrong_name(self, manifest, mock_model):
+        manifest.disabled = {"model.package.name": [mock_model]}
+        lookup = DisabledLookup(manifest)
+
+        assert lookup.find("missing_name", "package") is None
+
+    def test_find_wrong_package(self, manifest, mock_model):
+        manifest.disabled = {"model.package.name": [mock_model]}
+        lookup = DisabledLookup(manifest)
+
+        assert lookup.find("name", "missing_package") is None
+
+    def test_find_wrong_version(self, manifest, mock_model):
+        manifest.disabled = {"model.package.name": [mock_model]}
+        lookup = DisabledLookup(manifest)
+
+        assert lookup.find("name", "package", version=3) is None
+
+    def test_find_wrong_resource_types(self, manifest, mock_model):
+        manifest.disabled = {"model.package.name": [mock_model]}
+        lookup = DisabledLookup(manifest)
+
+        assert lookup.find("name", "package", resource_types=[NodeType.Analysis]) is None
+
+    def test_find_no_package(self, manifest, mock_model):
+        manifest.disabled = {"model.package.name": [mock_model]}
+        lookup = DisabledLookup(manifest)
+
+        assert lookup.find("name", None) == [mock_model]
+
+    def test_find_versioned_node(self, manifest, mock_model_with_version):
+        manifest.disabled = {"model.package.name": [mock_model_with_version]}
+        lookup = DisabledLookup(manifest)
+
+        assert lookup.find("name", "package", version=3) == [mock_model_with_version]
+
+    def test_find_versioned_node_no_package(self, manifest, mock_model_with_version):
+        manifest.disabled = {"model.package.name": [mock_model_with_version]}
+        lookup = DisabledLookup(manifest)
+
+        assert lookup.find("name", None, version=3) == [mock_model_with_version]
+
+    def test_find_versioned_node_no_version(self, manifest, mock_model_with_version):
+        manifest.disabled = {"model.package.name": [mock_model_with_version]}
+        lookup = DisabledLookup(manifest)
+
+        assert lookup.find("name", "package") is None
+
+    def test_find_versioned_node_wrong_version(self, manifest, mock_model_with_version):
+        manifest.disabled = {"model.package.name": [mock_model_with_version]}
+        lookup = DisabledLookup(manifest)
+
+        assert lookup.find("name", "package", version=2) is None
+
+    def test_find_versioned_node_wrong_name(self, manifest, mock_model_with_version):
+        manifest.disabled = {"model.package.name": [mock_model_with_version]}
+        lookup = DisabledLookup(manifest)
+
+        assert lookup.find("wrong_name", "package", version=3) is None
+
+    def test_find_versioned_node_wrong_package(self, manifest, mock_model_with_version):
+        manifest.disabled = {"model.package.name": [mock_model_with_version]}
+        lookup = DisabledLookup(manifest)
+
+        assert lookup.find("name", "wrong_package", version=3) is None
+
+    def test_find_multiple_nodes(self, manifest, mock_model, mock_seed):
+        manifest.disabled = {"model.package.name": [mock_model, mock_seed]}
+        lookup = DisabledLookup(manifest)
+
+        assert lookup.find("name", "package") == [mock_model, mock_seed]
+
+    def test_find_multiple_nodes_with_resource_types(self, manifest, mock_model, mock_seed):
+        manifest.disabled = {"model.package.name": [mock_model, mock_seed]}
+        lookup = DisabledLookup(manifest)
+
+        assert lookup.find("name", "package", resource_types=[NodeType.Model]) == [mock_model]
+
+    def test_find_multiple_nodes_with_wrong_resource_types(self, manifest, mock_model, mock_seed):
+        manifest.disabled = {"model.package.name": [mock_model, mock_seed]}
+        lookup = DisabledLookup(manifest)
+
+        assert lookup.find("name", "package", resource_types=[NodeType.Analysis]) is None
+
+    def test_find_multiple_nodes_with_resource_types_empty(self, manifest, mock_model, mock_seed):
+        manifest.disabled = {"model.package.name": [mock_model, mock_seed]}
+        lookup = DisabledLookup(manifest)
+
+        assert lookup.find("name", "package", resource_types=[]) is None

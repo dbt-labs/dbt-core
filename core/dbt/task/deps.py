@@ -96,8 +96,6 @@ class DepsTask(BaseTask):
         # See GH-7615
         project.project_root = str(Path(project.project_root).resolve())
         self.project = project
-
-        move_to_nearest_project_dir(project.project_root)
         self.cli_vars = args.vars
 
     def track_package_install(
@@ -202,6 +200,7 @@ class DepsTask(BaseTask):
         fire_event(DepsLockUpdating(lock_filepath=lock_filepath))
 
     def run(self) -> None:
+        move_to_nearest_project_dir(self.args.project_dir)
         if self.args.add_package:
             self.add()
 

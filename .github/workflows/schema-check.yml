@@ -30,14 +30,14 @@ env:
 
 jobs:
   checking-schemas:
-    name: "Checking schemas"
+    name: "Post-merge schema changes required"
     runs-on: ubuntu-latest
 
     steps:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: 3.8
+          python-version: 3.9
 
       - name: Checkout dbt repo
         uses: actions/checkout@v4

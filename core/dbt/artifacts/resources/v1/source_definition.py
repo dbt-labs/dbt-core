@@ -19,6 +19,7 @@ from dbt_common.exceptions import CompilationError
 @dataclass
 class SourceConfig(BaseConfig):
     enabled: bool = True
+    event_time: Any = None
 
 
 @dataclass
@@ -70,3 +71,5 @@ class SourceDefinition(ParsedSourceMandatory):
     unrendered_config: Dict[str, Any] = field(default_factory=dict)
     relation_name: Optional[str] = None
     created_at: float = field(default_factory=lambda: time.time())
+    unrendered_database: Optional[str] = None
+    unrendered_schema: Optional[str] = None

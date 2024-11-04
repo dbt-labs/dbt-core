@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Dict, Optional, Union
 
 from dbt.artifacts.schemas.results import NodeStatus
 from dbt.events.types import (
@@ -13,6 +13,7 @@ from dbt.events.types import (
     StatsLine,
 )
 from dbt.node_types import NodeType
+from dbt.task import group_lookup
 from dbt_common.events.base_types import EventLevel
 from dbt_common.events.format import pluralize
 from dbt_common.events.functions import fire_event
@@ -32,13 +33,14 @@ def get_counts(flat_nodes) -> str:
 
         counts[t] = counts.get(t, 0) + 1
 
-    stat_line = ", ".join([pluralize(v, k).replace("_", " ") for k, v in counts.items()])
+    sorted_items = sorted(counts.items(), key=lambda x: x[0])
+    stat_line = ", ".join([pluralize(v, k).replace("_", " ") for k, v in sorted_items])
 
     return stat_line
 
 
 def interpret_run_result(result) -> str:
-    if result.status in (NodeStatus.Error, NodeStatus.Fail):
+    if result.status in (NodeStatus.Error, NodeStatus.Fail, NodeStatus.PartialSuccess):
         return "error"
     elif result.status == NodeStatus.Skipped:
         return "skip"
@@ -68,7 +70,12 @@ def print_run_status_line(results) -> None:
     fire_event(StatsLine(stats=stats))
 
 
-def print_run_result_error(result, newline: bool = True, is_warning: bool = False) -> None:
+def print_run_result_error(
+    result,
+    newline: bool = True,
+    is_warning: bool = False,
+    group: Optional[Dict[str, Union[str, Dict[str, str]]]] = None,
+) -> None:
     # set node_info for logging events
     node_info = None
     if hasattr(result, "node") and result.node:
@@ -83,6 +90,7 @@ def print_run_result_error(result, newline: bool = True, is_warning: bool = Fals
                     node_name=result.node.name,
                     path=result.node.original_file_path,
                     node_info=node_info,
+                    group=group,
                 )
             )
         else:
@@ -92,6 +100,7 @@ def print_run_result_error(result, newline: bool = True, is_warning: bool = Fals
                     node_name=result.node.name,
                     path=result.node.original_file_path,
                     node_info=node_info,
+                    group=group,
                 )
             )
 
@@ -99,7 +108,7 @@ def print_run_result_error(result, newline: bool = True, is_warning: bool = Fals
             if is_warning:
                 fire_event(RunResultWarningMessage(msg=result.message, node_info=node_info))
             else:
-                fire_event(RunResultError(msg=result.message, node_info=node_info))
+                fire_event(RunResultError(msg=result.message, node_info=node_info, group=group))
         else:
             fire_event(RunResultErrorNoMessage(status=result.status, node_info=node_info))
 
@@ -119,11 +128,11 @@ def print_run_result_error(result, newline: bool = True, is_warning: bool = Fals
     elif result.message is not None:
         if newline:
             fire_event(Formatting(""))
-        fire_event(RunResultError(msg=result.message, node_info=node_info))
+        fire_event(RunResultError(msg=result.message, node_info=node_info, group=group))
 
 
 def print_run_end_messages(results, keyboard_interrupt: bool = False) -> None:
-    errors, warnings = [], []
+    errors, warnings, partial_successes = [], [], []
     for r in results:
         if r.status in (NodeStatus.RuntimeErr, NodeStatus.Error, NodeStatus.Fail):
             errors.append(r)
@@ -133,20 +142,25 @@ def print_run_end_messages(results, keyboard_interrupt: bool = False) -> None:
             errors.append(r)
         elif r.status == NodeStatus.Warn:
             warnings.append(r)
+        elif r.status == NodeStatus.PartialSuccess:
+            partial_successes.append(r)
 
     fire_event(Formatting(""))
     fire_event(
         EndOfRunSummary(
             num_errors=len(errors),
             num_warnings=len(warnings),
+            num_partial_success=len(partial_successes),
             keyboard_interrupt=keyboard_interrupt,
         )
     )
 
     for error in errors:
-        print_run_result_error(error, is_warning=False)
+        group = group_lookup.get(error.node.unique_id) if hasattr(error, "node") else None
+        print_run_result_error(error, is_warning=False, group=group)
 
     for warning in warnings:
-        print_run_result_error(warning, is_warning=True)
+        group = group_lookup.get(warning.node.unique_id) if hasattr(warning, "node") else None
+        print_run_result_error(warning, is_warning=True, group=group)
 
     print_run_status_line(results)

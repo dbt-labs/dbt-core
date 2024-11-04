@@ -1,11 +1,15 @@
+import os
 from unittest import mock
 
 import pytest
+from pytest_mock import MockerFixture
 
 from dbt.adapters.base import BaseRelation
-from dbt.artifacts.resources import Quoting
+from dbt.artifacts.resources import NodeConfig, Quoting
+from dbt.artifacts.resources.types import BatchSize
 from dbt.context.providers import (
     BaseResolver,
+    EventTimeFilter,
     RuntimeRefResolver,
     RuntimeSourceResolver,
 )
@@ -33,6 +37,49 @@ class TestBaseResolver:
         resolver.config.args.EMPTY = empty
 
         assert resolver.resolve_limit == expected_resolve_limit
+
+    @pytest.mark.parametrize(
+        "dbt_experimental_microbatch,materialized,incremental_strategy,expect_filter",
+        [
+            (True, "incremental", "microbatch", True),
+            (False, "incremental", "microbatch", False),
+            (True, "table", "microbatch", False),
+            (True, "incremental", "merge", False),
+        ],
+    )
+    def test_resolve_event_time_filter(
+        self,
+        mocker: MockerFixture,
+        resolver: ResolverSubclass,
+        dbt_experimental_microbatch: bool,
+        materialized: str,
+        incremental_strategy: str,
+        expect_filter: bool,
+    ) -> None:
+        if dbt_experimental_microbatch:
+            mocker.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
+
+        # Target mocking
+        target = mock.Mock()
+        target.config = mock.MagicMock(NodeConfig)
+        target.config.event_time = "created_at"
+
+        # Resolver mocking
+        resolver.config.args.EVENT_TIME_END = None
+        resolver.config.args.EVENT_TIME_START = None
+        resolver.model.config = mock.MagicMock(NodeConfig)
+        resolver.model.config.materialized = materialized
+        resolver.model.config.incremental_strategy = incremental_strategy
+        resolver.model.config.batch_size = BatchSize.day
+        resolver.model.config.lookback = 1
+
+        # Try to get an EventTimeFilter
+        event_time_filter = resolver.resolve_event_time_filter(target=target)
+
+        if expect_filter:
+            assert isinstance(event_time_filter, EventTimeFilter)
+        else:
+            assert event_time_filter is None
 
 
 class TestRuntimeRefResolver:

@@ -2,6 +2,7 @@ import hashlib
 import os
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 from typing import (
     Any,
     Dict,
@@ -18,7 +19,6 @@ from typing import (
 
 from mashumaro.types import SerializableType
 
-from dbt import deprecations
 from dbt.adapters.base import ConstraintSupport
 from dbt.adapters.factory import get_adapter_constraint_support
 from dbt.artifacts.resources import Analysis as AnalysisResource
@@ -58,7 +58,9 @@ from dbt.artifacts.resources import SingularTest as SingularTestResource
 from dbt.artifacts.resources import Snapshot as SnapshotResource
 from dbt.artifacts.resources import SourceDefinition as SourceDefinitionResource
 from dbt.artifacts.resources import SqlOperation as SqlOperationResource
+from dbt.artifacts.resources import TimeSpine
 from dbt.artifacts.resources import UnitTestDefinition as UnitTestDefinitionResource
+from dbt.artifacts.schemas.batch_results import BatchResults
 from dbt.contracts.graph.model_config import UnitTestNodeConfig
 from dbt.contracts.graph.node_args import ModelNodeArgs
 from dbt.contracts.graph.unparsed import (
@@ -85,7 +87,11 @@ from dbt.node_types import (
     NodeType,
 )
 from dbt_common.clients.system import write_file
-from dbt_common.contracts.constraints import ConstraintType
+from dbt_common.contracts.constraints import (
+    ColumnLevelConstraint,
+    ConstraintType,
+    ModelLevelConstraint,
+)
 from dbt_common.events.contextvars import set_log_contextvars
 from dbt_common.events.functions import warn_or_error
 
@@ -239,7 +245,9 @@ class NodeInfoMixin:
 
 @dataclass
 class ParsedNode(ParsedResource, NodeInfoMixin, ParsedNodeMandatory, SerializableType):
-    def get_target_write_path(self, target_path: str, subdirectory: str):
+    def get_target_write_path(
+        self, target_path: str, subdirectory: str, split_suffix: Optional[str] = None
+    ):
         # This is called for both the "compiled" subdirectory of "target" and the "run" subdirectory
         if os.path.basename(self.path) == os.path.basename(self.original_file_path):
             # One-to-one relationship of nodes to files.
@@ -247,6 +255,15 @@ class ParsedNode(ParsedResource, NodeInfoMixin, ParsedNodeMandatory, Serializabl
         else:
             #  Many-to-one relationship of nodes to files.
             path = os.path.join(self.original_file_path, self.path)
+
+        if split_suffix:
+            pathlib_path = Path(path)
+            path = str(
+                pathlib_path.parent
+                / pathlib_path.stem
+                / (pathlib_path.stem + f"_{split_suffix}" + pathlib_path.suffix)
+            )
+
         target_write_path = os.path.join(target_path, subdirectory, self.package_name, path)
         return target_write_path
 
@@ -426,6 +443,8 @@ class HookNode(HookNodeResource, CompiledNode):
 
 @dataclass
 class ModelNode(ModelResource, CompiledNode):
+    batch_info: Optional[BatchResults] = None
+
     @classmethod
     def resource_class(cls) -> Type[ModelResource]:
         return ModelResource
@@ -488,6 +507,18 @@ class ModelNode(ModelResource, CompiledNode):
     @property
     def materialization_enforces_constraints(self) -> bool:
         return self.config.materialized in ["table", "incremental"]
+
+    @property
+    def all_constraints(self) -> List[Union[ModelLevelConstraint, ColumnLevelConstraint]]:
+        constraints: List[Union[ModelLevelConstraint, ColumnLevelConstraint]] = []
+        for model_level_constraint in self.constraints:
+            constraints.append(model_level_constraint)
+
+        for column in self.columns.values():
+            for column_level_constraint in column.constraints:
+                constraints.append(column_level_constraint)
+
+        return constraints
 
     def infer_primary_key(self, data_tests: List["GenericTestNode"]) -> List[str]:
         """
@@ -1131,12 +1162,6 @@ class UnpatchedSourceDefinition(BaseNode):
                 "Invalid test config: cannot have both 'tests' and 'data_tests' defined"
             )
         if self.tests:
-            if is_root_project:
-                deprecations.warn(
-                    "project-test-config",
-                    deprecated_path="tests",
-                    exp_path="data_tests",
-                )
             self.data_tests.extend(self.tests)
             self.tests.clear()
 
@@ -1147,12 +1172,6 @@ class UnpatchedSourceDefinition(BaseNode):
                     "Invalid test config: cannot have both 'tests' and 'data_tests' defined"
                 )
             if column.tests:
-                if is_root_project:
-                    deprecations.warn(
-                        "project-test-config",
-                        deprecated_path="tests",
-                        exp_path="data_tests",
-                    )
                 column.data_tests.extend(column.tests)
                 column.tests.clear()
 
@@ -1206,12 +1225,16 @@ class SourceDefinition(
         return SourceDefinitionResource
 
     def same_database_representation(self, other: "SourceDefinition") -> bool:
-        return (
-            self.database == other.database
-            and self.schema == other.schema
-            and self.identifier == other.identifier
-            and True
-        )
+
+        # preserve legacy behaviour -- use potentially rendered database
+        if get_flags().state_modified_compare_more_unrendered_values is False:
+            same_database = self.database == other.database
+            same_schema = self.schema == other.schema
+        else:
+            same_database = self.unrendered_database == other.unrendered_database
+            same_schema = self.unrendered_schema == other.unrendered_schema
+
+        return same_database and same_schema and self.identifier == other.identifier and True
 
     def same_quoting(self, other: "SourceDefinition") -> bool:
         return self.quoting == other.quoting
@@ -1450,6 +1473,13 @@ class Group(GroupResource, BaseNode):
     def resource_class(cls) -> Type[GroupResource]:
         return GroupResource
 
+    def to_logging_dict(self) -> Dict[str, Union[str, Dict[str, str]]]:
+        return {
+            "name": self.name,
+            "package_name": self.package_name,
+            "owner": self.owner.to_dict(omit_none=True),
+        }
+
 
 # ====================================
 # SemanticModel node
@@ -1555,13 +1585,12 @@ class SavedQuery(NodeInfoMixin, GraphNode, SavedQueryResource):
 
         # exports should be in the same order, so we zip them for easy iteration
         for old_export, new_export in zip(old.exports, self.exports):
-            if not (
-                old_export.name == new_export.name
-                and old_export.config.export_as == new_export.config.export_as
-                and old_export.config.schema_name == new_export.config.schema_name
-                and old_export.config.alias == new_export.config.alias
-            ):
+            if not (old_export.name == new_export.name):
                 return False
+            keys = ["export_as", "schema", "alias"]
+            for key in keys:
+                if old_export.unrendered_config.get(key) != new_export.unrendered_config.get(key):
+                    return False
 
         return True
 
@@ -1609,11 +1638,17 @@ class ParsedNodePatch(ParsedPatch):
     latest_version: Optional[NodeVersion]
     constraints: List[Dict[str, Any]]
     deprecation_date: Optional[datetime]
+    time_spine: Optional[TimeSpine] = None
 
 
 @dataclass
 class ParsedMacroPatch(ParsedPatch):
     arguments: List[MacroArgument] = field(default_factory=list)
+
+
+@dataclass
+class ParsedSingularTestPatch(ParsedPatch):
+    pass
 
 
 # ====================================
@@ -1643,6 +1678,7 @@ ManifestNode = Union[
 ResultNode = Union[
     ManifestNode,
     SourceDefinition,
+    HookNode,
 ]
 
 # All nodes that can be in the DAG
@@ -1665,6 +1701,7 @@ Resource = Union[
 
 TestNode = Union[SingularTestNode, GenericTestNode]
 
+SemanticManifestNode = Union[SavedQuery, SemanticModel, Metric]
 
 RESOURCE_CLASS_TO_NODE_CLASS: Dict[Type[BaseResource], Type[BaseNode]] = {
     node_class.resource_class(): node_class

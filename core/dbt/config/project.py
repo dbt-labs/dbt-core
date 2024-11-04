@@ -158,14 +158,8 @@ def _parse_versions(versions: Union[List[str], str]) -> List[VersionSpecifier]:
     return [VersionSpecifier.from_version_string(v) for v in versions]
 
 
-def _all_source_paths(
-    model_paths: List[str],
-    seed_paths: List[str],
-    snapshot_paths: List[str],
-    analysis_paths: List[str],
-    macro_paths: List[str],
-) -> List[str]:
-    paths = chain(model_paths, seed_paths, snapshot_paths, analysis_paths, macro_paths)
+def _all_source_paths(*args: List[str]) -> List[str]:
+    paths = chain(*args)
     # Strip trailing slashes since the path is the same even though the name is not
     stripped_paths = map(lambda s: s.rstrip("/"), paths)
     return list(set(stripped_paths))
@@ -409,7 +403,7 @@ class PartialProject(RenderComponents):
         snapshot_paths: List[str] = value_or(cfg.snapshot_paths, ["snapshots"])
 
         all_source_paths: List[str] = _all_source_paths(
-            model_paths, seed_paths, snapshot_paths, analysis_paths, macro_paths
+            model_paths, seed_paths, snapshot_paths, analysis_paths, macro_paths, test_paths
         )
 
         docs_paths: List[str] = value_or(cfg.docs_paths, all_source_paths)
@@ -480,6 +474,7 @@ class PartialProject(RenderComponents):
                 rendered.selectors_dict["selectors"]
             )
         dbt_cloud = cfg.dbt_cloud
+        flags: Dict[str, Any] = cfg.flags
 
         project = Project(
             project_name=name,
@@ -524,6 +519,7 @@ class PartialProject(RenderComponents):
             project_env_vars=project_env_vars,
             restrict_access=cfg.restrict_access,
             dbt_cloud=dbt_cloud,
+            flags=flags,
         )
         # sanity check - this means an internal issue
         project.validate()
@@ -567,11 +563,6 @@ class PartialProject(RenderComponents):
             packages_specified_path,
         ) = package_and_project_data_from_root(project_root)
         selectors_dict = selector_data_from_root(project_root)
-
-        if "flags" in project_dict:
-            # We don't want to include "flags" in the Project,
-            # it goes in ProjectFlags
-            project_dict.pop("flags")
 
         return cls.from_dicts(
             project_root=project_root,
@@ -645,6 +636,7 @@ class Project:
     project_env_vars: Dict[str, Any]
     restrict_access: bool
     dbt_cloud: Dict[str, Any]
+    flags: Dict[str, Any]
 
     @property
     def all_source_paths(self) -> List[str]:
@@ -654,6 +646,7 @@ class Project:
             self.snapshot_paths,
             self.analysis_paths,
             self.macro_paths,
+            self.test_paths,
         )
 
     @property
@@ -724,6 +717,7 @@ class Project:
                 "require-dbt-version": [v.to_version_string() for v in self.dbt_version],
                 "restrict-access": self.restrict_access,
                 "dbt-cloud": self.dbt_cloud,
+                "flags": self.flags,
             }
         )
         if self.query_comment:
@@ -821,8 +815,8 @@ def read_project_flags(project_dir: str, profiles_dir: str) -> ProjectFlags:
 
         if profile_project_flags:
             # This can't use WARN_ERROR or WARN_ERROR_OPTIONS because they're in
-            # the config that we're loading. Uses special "warn" method.
-            deprecations.warn("project-flags-moved")
+            # the config that we're loading. Uses special "buffer" method and fired after flags are initialized in preflight.
+            deprecations.buffer("project-flags-moved")
             project_flags = profile_project_flags
 
         if project_flags is not None:

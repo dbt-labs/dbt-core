@@ -428,6 +428,8 @@ def test_config():
 # from the pytest fixtures that may be needed in the test functions, including
 # a 'run_sql' method.
 class TestProjInfo:
+    __test__ = False
+
     def __init__(
         self,
         project_root,

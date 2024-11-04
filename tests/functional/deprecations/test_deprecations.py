@@ -3,9 +3,11 @@ import yaml
 
 import dbt_common
 from dbt import deprecations
-from dbt.tests.util import run_dbt, write_file
+from dbt.tests.util import run_dbt, run_dbt_and_capture, write_file
+from dbt_common.exceptions import EventCompilationError
 from tests.functional.deprecations.fixtures import (
     bad_name_yaml,
+    deprecated_model_exposure_yaml,
     models_trivial__model_sql,
 )
 
@@ -98,6 +100,18 @@ class TestPackageRedirectDeprecation:
         assert expected_msg in exc_str
 
 
+class TestDeprecatedModelExposure:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "model.sql": models_trivial__model_sql,
+            "exposure.yml": deprecated_model_exposure_yaml,
+        }
+
+    def test_exposure_with_deprecated_model(self, project):
+        run_dbt(["parse"])
+
+
 class TestExposureNameDeprecation:
     @pytest.fixture(scope="class")
     def models(self):
@@ -143,6 +157,45 @@ class TestProjectFlagsMovedDeprecation:
     def test_profile_config_deprecation(self, project):
         deprecations.reset_deprecations()
         assert deprecations.active_deprecations == set()
-        run_dbt(["parse"])
-        expected = {"project-flags-moved"}
-        assert expected == deprecations.active_deprecations
+
+        _, logs = run_dbt_and_capture(["parse"])
+
+        assert (
+            "User config should be moved from the 'config' key in profiles.yml to the 'flags' key in dbt_project.yml."
+            in logs
+        )
+        assert deprecations.active_deprecations == {"project-flags-moved"}
+
+
+class TestProjectFlagsMovedDeprecationQuiet(TestProjectFlagsMovedDeprecation):
+    def test_profile_config_deprecation(self, project):
+        deprecations.reset_deprecations()
+        assert deprecations.active_deprecations == set()
+
+        _, logs = run_dbt_and_capture(["--quiet", "parse"])
+
+        assert (
+            "User config should be moved from the 'config' key in profiles.yml to the 'flags' key in dbt_project.yml."
+            not in logs
+        )
+        assert deprecations.active_deprecations == {"project-flags-moved"}
+
+
+class TestProjectFlagsMovedDeprecationWarnErrorOptions(TestProjectFlagsMovedDeprecation):
+    def test_profile_config_deprecation(self, project):
+        deprecations.reset_deprecations()
+        with pytest.raises(EventCompilationError):
+            run_dbt(["--warn-error-options", "{'include': 'all'}", "parse"])
+
+        with pytest.raises(EventCompilationError):
+            run_dbt(
+                ["--warn-error-options", "{'include': ['ProjectFlagsMovedDeprecation']}", "parse"]
+            )
+
+        _, logs = run_dbt_and_capture(
+            ["--warn-error-options", "{'silence': ['ProjectFlagsMovedDeprecation']}", "parse"]
+        )
+        assert (
+            "User config should be moved from the 'config' key in profiles.yml to the 'flags' key in dbt_project.yml."
+            not in logs
+        )

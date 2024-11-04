@@ -1,9 +1,10 @@
 import os
 import threading
 import time
-from typing import AbstractSet, Dict, List, Optional
+from typing import AbstractSet, Dict, List, Optional, Type
 
 from dbt import deprecations
+from dbt.adapters.base import BaseAdapter
 from dbt.adapters.base.impl import FreshnessResponse
 from dbt.adapters.base.relation import BaseRelation
 from dbt.adapters.capability import Capability
@@ -14,6 +15,7 @@ from dbt.artifacts.schemas.freshness import (
     PartialSourceFreshnessResult,
     SourceFreshnessResult,
 )
+from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import HookNode, SourceDefinition
 from dbt.contracts.results import RunStatus
 from dbt.events.types import FreshnessCheckComplete, LogFreshnessResult, LogStartLine
@@ -44,7 +46,7 @@ class FreshnessRunner(BaseRunner):
     def on_skip(self):
         raise DbtRuntimeError("Freshness: nodes cannot be skipped!")
 
-    def before_execute(self):
+    def before_execute(self) -> None:
         description = "freshness of {0.source_name}.{0.name}".format(self.node)
         fire_event(
             LogStartLine(
@@ -55,7 +57,7 @@ class FreshnessRunner(BaseRunner):
             )
         )
 
-    def after_execute(self, result):
+    def after_execute(self, result) -> None:
         if hasattr(result, "node"):
             source_name = result.node.source_name
             table_name = result.node.name
@@ -162,7 +164,7 @@ class FreshnessRunner(BaseRunner):
             **freshness,
         )
 
-    def compile(self, manifest):
+    def compile(self, manifest: Manifest):
         if self.node.resource_type != NodeType.Source:
             # should be unreachable...
             raise DbtRuntimeError("freshness runner: got a non-Source")
@@ -184,13 +186,13 @@ class FreshnessTask(RunTask):
         super().__init__(args, config, manifest)
         self._metadata_freshness_cache: Dict[BaseRelation, FreshnessResult] = {}
 
-    def result_path(self):
+    def result_path(self) -> str:
         if self.args.output:
             return os.path.realpath(self.args.output)
         else:
             return os.path.join(self.config.project_target_path, RESULT_FILE_NAME)
 
-    def raise_on_first_error(self):
+    def raise_on_first_error(self) -> bool:
         return False
 
     def get_node_selector(self):
@@ -203,10 +205,25 @@ class FreshnessTask(RunTask):
             resource_types=[NodeType.Source],
         )
 
-    def before_run(self, adapter, selected_uids: AbstractSet[str]) -> None:
-        super().before_run(adapter, selected_uids)
-        if adapter.supports(Capability.TableLastModifiedMetadataBatch):
-            self.populate_metadata_freshness_cache(adapter, selected_uids)
+    def before_run(self, adapter: BaseAdapter, selected_uids: AbstractSet[str]) -> RunStatus:
+        populate_metadata_freshness_cache_status = RunStatus.Success
+
+        before_run_status = super().before_run(adapter, selected_uids)
+
+        if before_run_status == RunStatus.Success and adapter.supports(
+            Capability.TableLastModifiedMetadataBatch
+        ):
+            populate_metadata_freshness_cache_status = self.populate_metadata_freshness_cache(
+                adapter, selected_uids
+            )
+
+        if (
+            before_run_status == RunStatus.Success
+            and populate_metadata_freshness_cache_status == RunStatus.Success
+        ):
+            return RunStatus.Success
+        else:
+            return RunStatus.Error
 
     def get_runner(self, node) -> BaseRunner:
         freshness_runner = super().get_runner(node)
@@ -214,7 +231,7 @@ class FreshnessTask(RunTask):
         freshness_runner.set_metadata_freshness_cache(self._metadata_freshness_cache)
         return freshness_runner
 
-    def get_runner_type(self, _):
+    def get_runner_type(self, _) -> Optional[Type[BaseRunner]]:
         return FreshnessRunner
 
     def get_result(self, results, elapsed_time, generated_at):
@@ -222,7 +239,7 @@ class FreshnessTask(RunTask):
             elapsed_time=elapsed_time, generated_at=generated_at, results=results
         )
 
-    def task_end_messages(self, results):
+    def task_end_messages(self, results) -> None:
         for result in results:
             if result.status in (
                 FreshnessStatus.Error,
@@ -242,7 +259,9 @@ class FreshnessTask(RunTask):
                 deprecations.warn("source-freshness-project-hooks")
             return []
 
-    def populate_metadata_freshness_cache(self, adapter, selected_uids: AbstractSet[str]) -> None:
+    def populate_metadata_freshness_cache(
+        self, adapter, selected_uids: AbstractSet[str]
+    ) -> RunStatus:
         if self.manifest is None:
             raise DbtInternalError("Manifest must be set to populate metadata freshness cache")
 
@@ -265,6 +284,7 @@ class FreshnessTask(RunTask):
                 batch_metadata_sources
             )
             self._metadata_freshness_cache.update(metadata_freshness_results)
+            return RunStatus.Success
         except Exception as e:
             # This error handling is intentionally very coarse.
             # If anything goes wrong during batch metadata calculation, we can safely
@@ -275,6 +295,7 @@ class FreshnessTask(RunTask):
                 Note(msg=f"Metadata freshness could not be computed in batch: {e}"),
                 EventLevel.WARN,
             )
+            return RunStatus.Error
 
     def get_freshness_metadata_cache(self) -> Dict[BaseRelation, FreshnessResult]:
         return self._metadata_freshness_cache

@@ -46,9 +46,9 @@ These types of minor, non-breaking changes are tested by [tests/unit/artifacts/t
 
 #### Updating [schemas.getdbt.com](https://schemas.getdbt.com)
 Non-breaking changes to artifact schemas require an update to the corresponding jsonschemas published to [schemas.getdbt.com](https://schemas.getdbt.com), which are defined in https://github.com/dbt-labs/schemas.getdbt.com. To do so: 
+Note this must be done AFTER the core pull request is merged, otherwise we may end up with unresolvable conflicts and schemas that are invalid prior to base pull request merge. You may create the schemas.getdbt.com pull request prior to merging the base pull request, but do not merge until afterward.
 1. Create a PR in https://github.com/dbt-labs/schemas.getdbt.com which reflects the schema changes to the artifact. The schema can be updated in-place for non-breaking changes. Example PR: https://github.com/dbt-labs/schemas.getdbt.com/pull/39
 2. Merge the https://github.com/dbt-labs/schemas.getdbt.com PR
-3. Observe the `Artifact Schema Check` CI check pass on the `dbt-core` PR that updates the artifact schemas, and merge the `dbt-core` PR!
 
 Note: Although `jsonschema` validation using the schemas in [schemas.getdbt.com](https://schemas.getdbt.com) is not encouraged or formally supported, `jsonschema` validation should still continue to work once the schemas are updated because they are forward-compatible and can therefore be used to validate previous minor versions of the schema.
 

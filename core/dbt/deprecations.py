@@ -1,9 +1,9 @@
 import abc
-from typing import ClassVar, Dict, List, Optional, Set
+from typing import Callable, ClassVar, Dict, List, Optional, Set
 
 import dbt.tracking
 from dbt.events import types as core_types
-from dbt_common.events.functions import fire_event, warn_or_error
+from dbt_common.events.functions import warn_or_error
 
 
 class DBTDeprecation:
@@ -98,23 +98,9 @@ class CollectFreshnessReturnSignature(DBTDeprecation):
     _event = "CollectFreshnessReturnSignature"
 
 
-class TestsConfigDeprecation(DBTDeprecation):
-    _name = "project-test-config"
-    _event = "TestsConfigDeprecation"
-
-
 class ProjectFlagsMovedDeprecation(DBTDeprecation):
     _name = "project-flags-moved"
     _event = "ProjectFlagsMovedDeprecation"
-
-    def show(self, *args, **kwargs) -> None:
-        if self.name not in active_deprecations:
-            event = self.event(**kwargs)
-            # We can't do warn_or_error because the ProjectFlags
-            # is where that is set up and we're just reading it.
-            fire_event(event)
-            self.track_deprecation_warn()
-            active_deprecations.add(self.name)
 
 
 class PackageMaterializationOverrideDeprecation(DBTDeprecation):
@@ -132,6 +118,11 @@ class SourceFreshnessProjectHooksNotRun(DBTDeprecation):
     _event = "SourceFreshnessProjectHooksNotRun"
 
 
+class MFTimespineWithoutYamlConfigurationDeprecation(DBTDeprecation):
+    _name = "mf-timespine-without-yaml-configuration"
+    _event = "MFTimespineWithoutYamlConfigurationDeprecation"
+
+
 def renamed_env_var(old_name: str, new_name: str):
     class EnvironmentVariableRenamed(DBTDeprecation):
         _name = f"environment-variable-renamed:{old_name}"
@@ -147,12 +138,19 @@ def renamed_env_var(old_name: str, new_name: str):
     return cb
 
 
-def warn(name, *args, **kwargs):
+def warn(name: str, *args, **kwargs) -> None:
     if name not in deprecations:
         # this should (hopefully) never happen
         raise RuntimeError("Error showing deprecation warning: {}".format(name))
 
     deprecations[name].show(*args, **kwargs)
+
+
+def buffer(name: str, *args, **kwargs):
+    def show_callback():
+        deprecations[name].show(*args, **kwargs)
+
+    buffered_deprecations.append(show_callback)
 
 
 # these are globally available
@@ -169,15 +167,22 @@ deprecations_list: List[DBTDeprecation] = [
     ConfigLogPathDeprecation(),
     ConfigTargetPathDeprecation(),
     CollectFreshnessReturnSignature(),
-    TestsConfigDeprecation(),
     ProjectFlagsMovedDeprecation(),
     PackageMaterializationOverrideDeprecation(),
     ResourceNamesWithSpacesDeprecation(),
     SourceFreshnessProjectHooksNotRun(),
+    MFTimespineWithoutYamlConfigurationDeprecation(),
 ]
 
 deprecations: Dict[str, DBTDeprecation] = {d.name: d for d in deprecations_list}
 
+buffered_deprecations: List[Callable] = []
+
 
 def reset_deprecations():
     active_deprecations.clear()
+
+
+def fire_buffered_deprecations():
+    [dep_fn() for dep_fn in buffered_deprecations]
+    buffered_deprecations.clear()

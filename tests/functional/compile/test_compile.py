@@ -10,10 +10,12 @@ from dbt_common.exceptions import DbtRuntimeError
 from tests.functional.assertions.test_runner import dbtTestRunner
 from tests.functional.compile.fixtures import (
     first_ephemeral_model_sql,
+    first_ephemeral_model_with_alias_sql,
     first_model_sql,
     model_multiline_jinja,
     schema_yml,
     second_ephemeral_model_sql,
+    second_ephemeral_model_with_alias_sql,
     second_model_sql,
     third_ephemeral_model_sql,
     with_recursive_model_sql,
@@ -125,6 +127,24 @@ class TestEphemeralModels:
             "    select n+1 from t where n < 100",
             ")",
             "select sum(n) from t;",
+        ]
+
+
+class TestEphemeralModelWithAlias:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "first_ephemeral_model_with_alias.sql": first_ephemeral_model_with_alias_sql,
+            "second_ephemeral_model_with_alias.sql": second_ephemeral_model_with_alias_sql,
+        }
+
+    def test_compile(self, project):
+        run_dbt(["compile"])
+
+        assert get_lines("second_ephemeral_model_with_alias") == [
+            "with __dbt__cte__first_alias as (",
+            "select 1 as fun",
+            ") select * from __dbt__cte__first_alias",
         ]
 
 

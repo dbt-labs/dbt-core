@@ -20,6 +20,7 @@ from typing_extensions import Protocol
 
 from dbt import selected_resources
 from dbt.adapters.base.column import Column
+from dbt.adapters.base.relation import EventTimeFilter
 from dbt.adapters.contracts.connection import AdapterResponse
 from dbt.adapters.exceptions import MissingConfigError
 from dbt.adapters.factory import (
@@ -27,13 +28,14 @@ from dbt.adapters.factory import (
     get_adapter_package_names,
     get_adapter_type_names,
 )
-from dbt.artifacts.resources import NodeVersion, RefArgs
+from dbt.artifacts.resources import NodeConfig, NodeVersion, RefArgs, SourceConfig
 from dbt.clients.jinja import (
     MacroGenerator,
     MacroStack,
     UnitTestMacroGenerator,
     get_rendered,
 )
+from dbt.clients.jinja_static import statically_parse_unrendered_config
 from dbt.config import IsFQNResource, Project, RuntimeConfig
 from dbt.constants import DEFAULT_ENV_PLACEHOLDER
 from dbt.context.base import Var, contextmember, contextproperty
@@ -50,6 +52,7 @@ from dbt.contracts.graph.nodes import (
     Exposure,
     Macro,
     ManifestNode,
+    ModelNode,
     Resource,
     SeedNode,
     SemanticModel,
@@ -76,6 +79,8 @@ from dbt.exceptions import (
     SecretEnvVarLocationError,
     TargetNotFoundError,
 )
+from dbt.flags import get_flags
+from dbt.materializations.incremental.microbatch import MicrobatchBuilder
 from dbt.node_types import ModelLanguage, NodeType
 from dbt.utils import MultiDict, args_to_dict
 from dbt_common.clients.jinja import MacroProtocol
@@ -230,6 +235,27 @@ class BaseResolver(metaclass=abc.ABCMeta):
     def resolve_limit(self) -> Optional[int]:
         return 0 if getattr(self.config.args, "EMPTY", False) else None
 
+    def resolve_event_time_filter(self, target: ManifestNode) -> Optional[EventTimeFilter]:
+        event_time_filter = None
+        if (
+            os.environ.get("DBT_EXPERIMENTAL_MICROBATCH")
+            and (isinstance(target.config, NodeConfig) or isinstance(target.config, SourceConfig))
+            and target.config.event_time
+            and self.model.config.materialized == "incremental"
+            and self.model.config.incremental_strategy == "microbatch"
+        ):
+            start = self.model.config.get("__dbt_internal_microbatch_event_time_start")
+            end = self.model.config.get("__dbt_internal_microbatch_event_time_end")
+
+            if start is not None or end is not None:
+                event_time_filter = EventTimeFilter(
+                    field_name=target.config.event_time,
+                    start=start,
+                    end=end,
+                )
+
+        return event_time_filter
+
     @abc.abstractmethod
     def __call__(self, *args: str) -> Union[str, RelationProxy, MetricReference]:
         pass
@@ -371,6 +397,14 @@ class ParseConfigObject(Config):
         # not call it!
         if self.context_config is None:
             raise DbtRuntimeError("At parse time, did not receive a context config")
+
+        # Track unrendered opts to build parsed node unrendered_config later on
+        if get_flags().state_modified_compare_more_unrendered_values:
+            unrendered_config = statically_parse_unrendered_config(self.model.raw_code)
+            if unrendered_config:
+                self.context_config.add_unrendered_config_call(unrendered_config)
+
+        # Use rendered opts to populate context_config
         self.context_config.add_config_call(opts)
         return ""
 
@@ -545,7 +579,11 @@ class RuntimeRefResolver(BaseRefResolver):
     def create_relation(self, target_model: ManifestNode) -> RelationProxy:
         if target_model.is_ephemeral_model:
             self.model.set_cte(target_model.unique_id, None)
-            return self.Relation.create_ephemeral_from(target_model, limit=self.resolve_limit)
+            return self.Relation.create_ephemeral_from(
+                target_model,
+                limit=self.resolve_limit,
+                event_time_filter=self.resolve_event_time_filter(target_model),
+            )
         elif (
             hasattr(target_model, "defer_relation")
             and target_model.defer_relation
@@ -563,10 +601,18 @@ class RuntimeRefResolver(BaseRefResolver):
             )
         ):
             return self.Relation.create_from(
-                self.config, target_model.defer_relation, limit=self.resolve_limit
+                self.config,
+                target_model.defer_relation,
+                limit=self.resolve_limit,
+                event_time_filter=self.resolve_event_time_filter(target_model),
             )
         else:
-            return self.Relation.create_from(self.config, target_model, limit=self.resolve_limit)
+            return self.Relation.create_from(
+                self.config,
+                target_model,
+                limit=self.resolve_limit,
+                event_time_filter=self.resolve_event_time_filter(target_model),
+            )
 
     def validate(
         self,
@@ -600,6 +646,11 @@ class OperationRefResolver(RuntimeRefResolver):
 
 
 class RuntimeUnitTestRefResolver(RuntimeRefResolver):
+    @property
+    def resolve_limit(self) -> Optional[int]:
+        # Unit tests should never respect --empty flag or provide a limit since they are based on fake data.
+        return None
+
     def resolve(
         self,
         target_name: str,
@@ -633,10 +684,27 @@ class RuntimeSourceResolver(BaseSourceResolver):
                 target_kind="source",
                 disabled=(isinstance(target_source, Disabled)),
             )
-        return self.Relation.create_from(self.config, target_source, limit=self.resolve_limit)
+
+        # Source quoting does _not_ respect global configs in dbt_project.yml, as documented here:
+        # https://docs.getdbt.com/reference/project-configs/quoting
+        # Use an object with an empty quoting field to bypass any settings in self.
+        class SourceQuotingBaseConfig:
+            quoting: Dict[str, Any] = {}
+
+        return self.Relation.create_from(
+            SourceQuotingBaseConfig(),
+            target_source,
+            limit=self.resolve_limit,
+            event_time_filter=self.resolve_event_time_filter(target_source),
+        )
 
 
 class RuntimeUnitTestSourceResolver(BaseSourceResolver):
+    @property
+    def resolve_limit(self) -> Optional[int]:
+        # Unit tests should never respect --empty flag or provide a limit since they are based on fake data.
+        return None
+
     def resolve(self, source_name: str, table_name: str):
         target_source = self.manifest.resolve_source(
             source_name,
@@ -933,7 +1001,20 @@ class ProviderContext(ManifestContext):
         # macros/source defs aren't 'writeable'.
         if isinstance(self.model, (Macro, SourceDefinition)):
             raise MacrosSourcesUnWriteableError(node=self.model)
-        self.model.build_path = self.model.get_target_write_path(self.config.target_path, "run")
+
+        split_suffix = None
+        if (
+            isinstance(self.model, ModelNode)
+            and self.model.config.get("incremental_strategy") == "microbatch"
+        ):
+            split_suffix = MicrobatchBuilder.format_batch_start(
+                self.model.config.get("__dbt_internal_microbatch_event_time_start"),
+                self.model.config.batch_size,
+            )
+
+        self.model.build_path = self.model.get_target_write_path(
+            self.config.target_path, "run", split_suffix=split_suffix
+        )
         self.model.write_node(self.config.project_root, self.model.build_path, payload)
         return ""
 
@@ -974,7 +1055,8 @@ class ProviderContext(ManifestContext):
             table = agate_helper.from_csv(path, text_columns=column_types, delimiter=delimiter)
         except ValueError as e:
             raise LoadAgateTableValueError(e, node=self.model)
-        table.original_abspath = os.path.abspath(path)
+        # this is used by some adapters
+        table.original_abspath = os.path.abspath(path)  # type: ignore
         return table
 
     @contextproperty()
@@ -1596,7 +1678,7 @@ class UnitTestContext(ModelContext):
         if self.model.this_input_node_unique_id:
             this_node = self.manifest.expect(self.model.this_input_node_unique_id)
             self.model.set_cte(this_node.unique_id, None)  # type: ignore
-            return self.adapter.Relation.add_ephemeral_prefix(this_node.name)
+            return self.adapter.Relation.add_ephemeral_prefix(this_node.identifier)  # type: ignore
         return None
 
 

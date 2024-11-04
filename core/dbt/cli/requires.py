@@ -324,28 +324,7 @@ def manifest(*args0, write=True, write_perf_info=False):
             ctx = args[0]
             assert isinstance(ctx, Context)
 
-            req_strs = ["profile", "project", "runtime_config"]
-            reqs = [ctx.obj.get(dep) for dep in req_strs]
-
-            if None in reqs:
-                raise DbtProjectError("profile, project, and runtime_config required for manifest")
-
-            runtime_config = ctx.obj["runtime_config"]
-
-            # if a manifest has already been set on the context, don't overwrite it
-            if ctx.obj.get("manifest") is None:
-                ctx.obj["manifest"] = parse_manifest(
-                    runtime_config, write_perf_info, write, ctx.obj["flags"].write_json
-                )
-            else:
-                register_adapter(runtime_config, get_mp_context())
-                adapter = get_adapter(runtime_config)
-                adapter.set_macro_context_generator(generate_runtime_macro_context)
-                adapter.set_macro_resolver(ctx.obj["manifest"])
-                query_header_context = generate_query_header_context(
-                    adapter.config, ctx.obj["manifest"]
-                )
-                adapter.connections.set_query_header(query_header_context)
+            setup_manifest(ctx, write=write, write_perf_info=write_perf_info)
             return func(*args, **kwargs)
 
         return update_wrapper(wrapper, func)
@@ -355,3 +334,27 @@ def manifest(*args0, write=True, write_perf_info=False):
     if len(args0) == 0:
         return outer_wrapper
     return outer_wrapper(args0[0])
+
+
+def setup_manifest(ctx: Context, write: bool = True, write_perf_info: bool = False):
+    """Load the manifest and add it to the context."""
+    req_strs = ["profile", "project", "runtime_config"]
+    reqs = [ctx.obj.get(dep) for dep in req_strs]
+
+    if None in reqs:
+        raise DbtProjectError("profile, project, and runtime_config required for manifest")
+
+    runtime_config = ctx.obj["runtime_config"]
+
+    # if a manifest has already been set on the context, don't overwrite it
+    if ctx.obj.get("manifest") is None:
+        ctx.obj["manifest"] = parse_manifest(
+            runtime_config, write_perf_info, write, ctx.obj["flags"].write_json
+        )
+    else:
+        register_adapter(runtime_config, get_mp_context())
+        adapter = get_adapter(runtime_config)
+        adapter.set_macro_context_generator(generate_runtime_macro_context)  # type: ignore[arg-type]
+        adapter.set_macro_resolver(ctx.obj["manifest"])
+        query_header_context = generate_query_header_context(adapter.config, ctx.obj["manifest"])  # type: ignore[attr-defined]
+        adapter.connections.set_query_header(query_header_context)

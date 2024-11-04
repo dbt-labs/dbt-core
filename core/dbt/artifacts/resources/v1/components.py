@@ -10,6 +10,7 @@ from dbt_common.contracts.config.properties import AdditionalPropertiesMixin
 from dbt_common.contracts.constraints import ColumnLevelConstraint
 from dbt_common.contracts.util import Mergeable
 from dbt_common.dataclass_schema import ExtensibleDbtClassMixin, dbtClassMixin
+from dbt_semantic_interfaces.type_enums import TimeGranularity
 
 NodeVersion = Union[str, float]
 
@@ -66,6 +67,7 @@ class ColumnInfo(AdditionalPropertiesMixin, ExtensibleDbtClassMixin):
     quote: Optional[bool] = None
     tags: List[str] = field(default_factory=list)
     _extra: Dict[str, Any] = field(default_factory=dict)
+    granularity: Optional[TimeGranularity] = None
 
 
 @dataclass
@@ -192,6 +194,7 @@ class ParsedResource(ParsedResourceMandatory):
     unrendered_config: Dict[str, Any] = field(default_factory=dict)
     created_at: float = field(default_factory=lambda: time.time())
     config_call_dict: Dict[str, Any] = field(default_factory=dict)
+    unrendered_config_call_dict: Dict[str, Any] = field(default_factory=dict)
     relation_name: Optional[str] = None
     raw_code: str = ""
 
@@ -199,6 +202,8 @@ class ParsedResource(ParsedResourceMandatory):
         dct = super().__post_serialize__(dct, context)
         if context and context.get("artifact") and "config_call_dict" in dct:
             del dct["config_call_dict"]
+        if context and context.get("artifact") and "unrendered_config_call_dict" in dct:
+            del dct["unrendered_config_call_dict"]
         return dct
 
 
