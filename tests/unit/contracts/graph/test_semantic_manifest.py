@@ -56,14 +56,21 @@ class TestSemanticManifest:
             assert patched_deprecations.warn.call_count == 1
 
     @pytest.mark.parametrize(
-        "metric_type_params, num_warns",
+        "metric_type_params, num_warns, should_error, flag_value",
         [
-            (MetricTypeParams(grain_to_date=TimeGranularity.MONTH), 1),
+            (
+                MetricTypeParams(grain_to_date=TimeGranularity.MONTH),
+                1,
+                False,
+                False,
+            ),
             (
                 MetricTypeParams(
                     window=MetricTimeWindow(count=1, granularity=TimeGranularity.MONTH)
                 ),
                 1,
+                False,
+                False,
             ),
             (
                 MetricTypeParams(
@@ -72,6 +79,8 @@ class TestSemanticManifest:
                     )
                 ),
                 0,
+                False,
+                False,
             ),
             (
                 MetricTypeParams(
@@ -80,16 +89,57 @@ class TestSemanticManifest:
                     )
                 ),
                 0,
+                False,
+                False,
+            ),
+            (
+                MetricTypeParams(grain_to_date=TimeGranularity.MONTH),
+                0,
+                True,
+                True,
+            ),
+            (
+                MetricTypeParams(
+                    window=MetricTimeWindow(count=1, granularity=TimeGranularity.MONTH)
+                ),
+                0,
+                True,
+                True,
+            ),
+            (
+                MetricTypeParams(
+                    cumulative_type_params=CumulativeTypeParams(
+                        grain_to_date=TimeGranularity.MONTH,
+                    )
+                ),
+                0,
+                False,
+                True,
+            ),
+            (
+                MetricTypeParams(
+                    cumulative_type_params=CumulativeTypeParams(
+                        window=MetricTimeWindow(count=1, granularity=TimeGranularity.MONTH),
+                    )
+                ),
+                0,
+                False,
+                True,
             ),
         ],
     )
     def test_deprecate_cumulative_type_params(
-        self, manifest: Manifest, metric_type_params: MetricTypeParams, num_warns: int
+        self,
+        manifest: Manifest,
+        metric_type_params: MetricTypeParams,
+        num_warns: int,
+        should_error: bool,
+        flag_value: bool,
     ):
         with patch("dbt.contracts.graph.semantic_manifest.get_flags") as patched_get_flags, patch(
             "dbt.contracts.graph.semantic_manifest.deprecations"
         ) as patched_deprecations:
-            patched_get_flags.return_value.require_nested_cumulative_type_params = False
+            patched_get_flags.return_value.require_nested_cumulative_type_params = flag_value
             manifest.metrics["metric.test.my_metric"] = Metric(
                 name="my_metric",
                 type=MetricType.CUMULATIVE,
@@ -104,5 +154,5 @@ class TestSemanticManifest:
                 label="My Metric",
             )
             sm_manifest = SemanticManifest(manifest)
-            assert sm_manifest.validate()
+            assert sm_manifest.validate() != should_error
             assert patched_deprecations.warn.call_count == num_warns
