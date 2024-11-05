@@ -1390,7 +1390,10 @@ class ManifestLoader:
             node.config.final_validate()
 
     def check_valid_microbatch_config(self):
-        if get_flags().require_builtin_microbatch_strategy:
+        if self.manifest.use_microbatch_batches(
+            project_name=self.root_project.project_name,
+            adapter_type=self.root_project.credentials.type,
+        ):
             for node in self.manifest.nodes.values():
                 if (
                     node.config.materialized == "incremental"
