@@ -87,7 +87,7 @@ class BaseMicrobatchTestParseError:
     def project_config_update(self):
         return {
             "flags": {
-                "require_builtin_microbatch_strategy": True,
+                "require_batched_execution_for_custom_microbatch_strategy": True,
             }
         }
 
@@ -105,7 +105,7 @@ class BaseMicrobatchTestNoError:
     def project_config_update(self):
         return {
             "flags": {
-                "require_builtin_microbatch_strategy": True,
+                "require_batched_execution_for_custom_microbatch_strategy": True,
             }
         }
 

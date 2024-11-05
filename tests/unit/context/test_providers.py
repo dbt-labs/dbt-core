@@ -58,7 +58,10 @@ class TestBaseResolver:
         expect_filter: bool,
     ) -> None:
         set_from_args(
-            Namespace(require_builtin_microbatch_strategy=dbt_experimental_microbatch), None
+            Namespace(
+                require_batched_execution_for_custom_microbatch_strategy=dbt_experimental_microbatch
+            ),
+            None,
         )
 
         # Target mocking
@@ -119,7 +122,9 @@ class TestRuntimeRefResolver:
         mock_node.is_ephemeral_model = is_ephemeral_model
         mock_node.defer_relation = None
 
-        set_from_args(Namespace(require_builtin_microbatch_strategy=False), None)
+        set_from_args(
+            Namespace(require_batched_execution_for_custom_microbatch_strategy=False), None
+        )
 
         # create limited relation
         with mock.patch("dbt.contracts.graph.nodes.ParsedNode", new=mock.Mock):
@@ -160,7 +165,9 @@ class TestRuntimeSourceResolver:
         mock_source.quoting_dict = {}
         resolver.manifest.resolve_source.return_value = mock_source
 
-        set_from_args(Namespace(require_builtin_microbatch_strategy=False), None)
+        set_from_args(
+            Namespace(require_batched_execution_for_custom_microbatch_strategy=False), None
+        )
 
         # create limited relation
         relation = resolver.resolve("test", "test")

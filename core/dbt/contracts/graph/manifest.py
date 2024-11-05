@@ -1765,8 +1765,9 @@ class Manifest(MacroMethods, dbtClassMixin):
         return microbatch_is_root
 
     def use_microbatch_batches(self, project_name: str, adapter_type: str) -> bool:
-        return get_flags().require_builtin_microbatch_strategy or self._microbatch_macro_is_root(
-            project_name=project_name, adapter_type=adapter_type
+        return (
+            get_flags().require_batched_execution_for_custom_microbatch_strategy
+            or self._microbatch_macro_is_root(project_name=project_name, adapter_type=adapter_type)
         )
 
 

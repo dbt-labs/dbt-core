@@ -155,7 +155,7 @@ class BaseMicrobatchCustomUserStrategy:
     def project_config_update(self):
         return {
             "flags": {
-                "require_builtin_microbatch_strategy": True,
+                "require_batched_execution_for_custom_microbatch_strategy": True,
             }
         }
 
@@ -165,7 +165,7 @@ class TestMicrobatchCustomUserStrategyDefault(BaseMicrobatchCustomUserStrategy):
     def project_config_update(self):
         return {
             "flags": {
-                "require_builtin_microbatch_strategy": False,
+                "require_batched_execution_for_custom_microbatch_strategy": False,
             }
         }
 
@@ -224,7 +224,7 @@ class BaseMicrobatchTest:
     def project_config_update(self):
         return {
             "flags": {
-                "require_builtin_microbatch_strategy": True,
+                "require_batched_execution_for_custom_microbatch_strategy": True,
             }
         }
 
