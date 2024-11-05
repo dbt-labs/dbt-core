@@ -32,15 +32,14 @@ from dbt_semantic_interfaces.implementations.time_spine import (
 from dbt_semantic_interfaces.implementations.time_spine_table_configuration import (
     PydanticTimeSpineTableConfiguration as LegacyTimeSpine,
 )
-from dbt_semantic_interfaces.references import MetricModelReference
 from dbt_semantic_interfaces.type_enums import TimeGranularity
 from dbt_semantic_interfaces.validations.semantic_manifest_validator import (
     SemanticManifestValidator,
 )
 from dbt_semantic_interfaces.validations.validator_helpers import (
     FileContext,
-    MetricContext,
     ValidationError,
+    ValidationIssueContext,
 )
 
 
@@ -81,18 +80,17 @@ class SemanticManifest:
                     "mf-cumulative-type-params-deprecation",
                 )
             else:
-                validation_result_errors.extend(
-                    [
-                        ValidationError(
-                            context=MetricContext(
-                                # We don't have the file context at this point.
-                                file_context=FileContext(),
-                                metric=MetricModelReference(metric_name=m),
-                            ),
-                            message=f"Cumulative metric {m} fields `type_params.window` and `type_params.grain_to_date` should be nested under `type_params.cumulative_type_params.window` and `type_params.cumulative_type_params.grain_to_date`. See documentation on behavior changes: https://docs.getdbt.com/reference/global-configs/behavior-changes.",
-                        )
-                        for m in metrics_using_old_params
-                    ]
+                names = ", ".join(metrics_using_old_params)
+                validation_result_errors.append(
+                    ValidationError(
+                        context=ValidationIssueContext(
+                            # We don't have the file context at this point.
+                            file_context=FileContext(),
+                            object_name=names,
+                            object_type="metric",
+                        ),
+                        message=f"Cumulative fields `type_params.window` and `type_params.grain_to_date` should be nested under `type_params.cumulative_type_params.window` and `type_params.cumulative_type_params.grain_to_date`. Invalid metrics: {names}. See documentation on behavior changes: https://docs.getdbt.com/reference/global-configs/behavior-changes.",
+                    )
                 )
 
         time_spines = semantic_manifest.project_configuration.time_spines
