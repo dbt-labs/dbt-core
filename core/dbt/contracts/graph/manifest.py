@@ -994,9 +994,9 @@ class Manifest(MacroMethods, dbtClassMixin):
             for m in self._find_macros_by_name(full_name, project_name)
         )
 
-    def find_materialization_macro_by_name(
+    def find_materialization_macro_candidate_by_name(
         self, project_name: str, materialization_name: str, adapter_type: str
-    ) -> Optional[Macro]:
+    ) -> Optional[MacroCandidate]:
         candidates: CandidateList = CandidateList(
             chain.from_iterable(
                 self._materialization_candidates_for(
@@ -1034,6 +1034,16 @@ class Manifest(MacroMethods, dbtClassMixin):
                     valid_localities=[Locality.Core, Locality.Root]
                 )
 
+        return materialization_candidate
+
+    def find_materialization_macro_by_name(
+        self, project_name: str, materialization_name: str, adapter_type: str
+    ) -> Optional[Macro]:
+        materialization_candidate = self.find_materialization_macro_candidate_by_name(
+            project_name=project_name,
+            materialization_name=materialization_name,
+            adapter_type=adapter_type,
+        )
         return materialization_candidate.macro if materialization_candidate else None
 
     def get_resource_fqns(self) -> Mapping[str, PathSet]:
