@@ -32,9 +32,15 @@ from dbt_semantic_interfaces.implementations.time_spine import (
 from dbt_semantic_interfaces.implementations.time_spine_table_configuration import (
     PydanticTimeSpineTableConfiguration as LegacyTimeSpine,
 )
+from dbt_semantic_interfaces.references import MetricModelReference
 from dbt_semantic_interfaces.type_enums import TimeGranularity
 from dbt_semantic_interfaces.validations.semantic_manifest_validator import (
     SemanticManifestValidator,
+)
+from dbt_semantic_interfaces.validations.validator_helpers import (
+    FileContext,
+    MetricContext,
+    ValidationError,
 )
 
 
@@ -58,18 +64,35 @@ class SemanticManifest:
             return True
 
         semantic_manifest = self._get_pydantic_semantic_manifest()
+        validator = SemanticManifestValidator[PydanticSemanticManifest]()
+        validation_results = validator.validate_semantic_manifest(semantic_manifest)
+        validation_result_errors = list(validation_results.errors)
 
-        if get_flags().require_nested_cumulative_type_params is False:
-            metrics_using_old_params: Set[str] = set()
-            for metric in semantic_manifest.metrics or []:
-                for field in ("window", "grain_to_date"):
-                    type_params_field_value = getattr(metric.type_params, field)
-                    # Warn that the old type_params structure has been deprecated.
-                    if type_params_field_value:
-                        metrics_using_old_params.add(metric.name)
-            if metrics_using_old_params:
+        metrics_using_old_params: Set[str] = set()
+        for metric in semantic_manifest.metrics or []:
+            for field in ("window", "grain_to_date"):
+                type_params_field_value = getattr(metric.type_params, field)
+                # Warn that the old type_params structure has been deprecated.
+                if type_params_field_value:
+                    metrics_using_old_params.add(metric.name)
+        if metrics_using_old_params:
+            if get_flags().require_nested_cumulative_type_params is False:
                 deprecations.warn(
                     "mf-cumulative-type-params-deprecation",
+                )
+            else:
+                validation_result_errors.extend(
+                    [
+                        ValidationError(
+                            context=MetricContext(
+                                # We don't have the file context at this point.
+                                file_context=FileContext(),
+                                metric=MetricModelReference(metric_name=m),
+                            ),
+                            message=f"Cumulative metric {m} fields `type_params.window` and `type_params.grain_to_date` should be nested under `type_params.cumulative_type_params.window` and `type_params.cumulative_type_params.grain_to_date`. See documentation on behavior changes: https://docs.getdbt.com/reference/global-configs/behavior-changes.",
+                        )
+                        for m in metrics_using_old_params
+                    ]
                 )
 
         time_spines = semantic_manifest.project_configuration.time_spines
@@ -89,16 +112,13 @@ class SemanticManifest:
                 "mf-timespine-without-yaml-configuration",
             )
 
-        validator = SemanticManifestValidator[PydanticSemanticManifest]()
-        validation_results = validator.validate_semantic_manifest(semantic_manifest)
-
         for warning in validation_results.warnings:
             fire_event(SemanticValidationFailure(msg=warning.message))
 
-        for error in validation_results.errors:
+        for error in validation_result_errors:
             fire_event(SemanticValidationFailure(msg=error.message), EventLevel.ERROR)
 
-        return not validation_results.errors
+        return not validation_result_errors
 
     def write_json_to_file(self, file_path: str):
         semantic_manifest = self._get_pydantic_semantic_manifest()
