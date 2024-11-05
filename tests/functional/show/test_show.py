@@ -171,6 +171,16 @@ class TestShowInlineDirect(ShowBase):
         # which will load the adapter fully and satisfy the teardown code.
         run_dbt(["seed"])
 
+    def test_inline_direct_pass_quiet(self, project):
+        query = f"select * from {project.test_schema}.sample_seed"
+        (_, log_output) = run_dbt_and_capture(["show", "--quiet", "--inline-direct", query])
+        assert "Previewing inline node" not in log_output
+        assert "sample_num" in log_output
+        assert "sample_bool" in log_output
+
+        # See prior test for explanation of why this is here
+        run_dbt(["seed"])
+
 
 class TestShowInlineDirectFail(ShowBase):
 
