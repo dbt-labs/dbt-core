@@ -145,5 +145,6 @@ class ShowTaskDirect(ConfiguredTask):
                     is_inline=True,
                     output_format=self.args.output,
                     unique_id="direct-query",
+                    quiet=get_flags().QUIET,
                 )
             )
