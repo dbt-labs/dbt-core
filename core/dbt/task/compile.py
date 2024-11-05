@@ -90,7 +90,6 @@ class CompileTask(GraphRunnableTask):
             matched_results = []
 
         for result in matched_results:
-
             fire_event(
                 CompiledNode(
                     node_name=result.node.name,
