@@ -13,6 +13,7 @@ from dbt.context.providers import (
     RuntimeRefResolver,
     RuntimeSourceResolver,
 )
+from dbt.contracts.graph.nodes import ModelNode
 
 
 class TestBaseResolver:
@@ -39,12 +40,13 @@ class TestBaseResolver:
         assert resolver.resolve_limit == expected_resolve_limit
 
     @pytest.mark.parametrize(
-        "dbt_experimental_microbatch,materialized,incremental_strategy,expect_filter",
+        "dbt_experimental_microbatch,materialized,incremental_strategy,resolver_model_node,expect_filter",
         [
-            (True, "incremental", "microbatch", True),
-            (False, "incremental", "microbatch", False),
-            (True, "table", "microbatch", False),
-            (True, "incremental", "merge", False),
+            (True, "incremental", "microbatch", True, True),
+            (True, "incremental", "microbatch", False, False),
+            (False, "incremental", "microbatch", True, False),
+            (True, "table", "microbatch", True, False),
+            (True, "incremental", "merge", True, False),
         ],
     )
     def test_resolve_event_time_filter(
@@ -54,6 +56,7 @@ class TestBaseResolver:
         dbt_experimental_microbatch: bool,
         materialized: str,
         incremental_strategy: str,
+        resolver_model_node: bool,
         expect_filter: bool,
     ) -> None:
         if dbt_experimental_microbatch:
@@ -67,6 +70,8 @@ class TestBaseResolver:
         # Resolver mocking
         resolver.config.args.EVENT_TIME_END = None
         resolver.config.args.EVENT_TIME_START = None
+        if resolver_model_node:
+            resolver.model = mock.MagicMock(spec=ModelNode)
         resolver.model.config = mock.MagicMock(NodeConfig)
         resolver.model.config.materialized = materialized
         resolver.model.config.incremental_strategy = incremental_strategy
