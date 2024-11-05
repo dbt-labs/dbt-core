@@ -13,7 +13,7 @@ from dbt.task.compile import CompileRunner, CompileTask
 from dbt.task.seed import SeedRunner
 from dbt_common.events.base_types import EventLevel
 from dbt_common.events.functions import fire_event
-from dbt_common.events.types import Note, PrintEvent
+from dbt_common.events.types import Note
 from dbt_common.exceptions import DbtRuntimeError
 
 
@@ -102,17 +102,16 @@ class ShowTask(CompileTask):
             if hasattr(result.node, "version") and result.node.version:
                 node_name += f".v{result.node.version}"
 
-            show_node_event = ShowNode(
-                node_name=node_name,
-                preview=output.getvalue(),
-                is_inline=is_inline,
-                output_format=self.args.output,
-                unique_id=result.node.unique_id,
-                quiet=get_flags().QUIET,
+            fire_event(
+                ShowNode(
+                    node_name=node_name,
+                    preview=output.getvalue(),
+                    is_inline=is_inline,
+                    output_format=self.args.output,
+                    unique_id=result.node.unique_id,
+                    quiet=get_flags().QUIET,
+                )
             )
-
-            # No formatting, still get to stdout when --quiet is used
-            fire_event(PrintEvent(msg=show_node_event.message()))
 
     def _handle_result(self, result) -> None:
         super()._handle_result(result)
