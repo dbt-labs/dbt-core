@@ -1,6 +1,7 @@
 import os
 import sys
 from dataclasses import dataclass
+from datetime import datetime
 from importlib import import_module
 from pathlib import Path
 from pprint import pformat as pf
@@ -313,6 +314,9 @@ class Flags:
         self._assert_mutually_exclusive(params_assigned_from_default, ["SELECT", "INLINE"])
         self._assert_mutually_exclusive(params_assigned_from_default, ["SELECTOR", "INLINE"])
 
+        # Check event_time configs for validity
+        self._validate_event_time_configs()
+
         # Support lower cased access for legacy code.
         params = set(
             x for x in dir(self) if not callable(getattr(self, x)) and not x.startswith("__")
@@ -348,6 +352,36 @@ class Flags:
                 )
             elif flag_set_by_user:
                 set_flag = flag
+
+    def _validate_event_time_configs(self) -> None:
+        event_time_start: datetime = (
+            getattr(self, "EVENT_TIME_START") if hasattr(self, "EVENT_TIME_START") else None
+        )
+        event_time_end: datetime = (
+            getattr(self, "EVENT_TIME_END") if hasattr(self, "EVENT_TIME_END") else None
+        )
+
+        # only do validations if at least one of `event_time_start` or `event_time_end` are specified
+        if event_time_start is not None or event_time_end is not None:
+
+            # These `ifs`, combined with the parent `if` make it so that `event_time_start` and
+            # `event_time_end` are mutually required
+            if event_time_start is None:
+                raise DbtUsageException(
+                    "The flag `--event-time-end` was specified, but `--event-time-start` was not. "
+                    "When specifying `--event-time-end`, `--event-time-start` must also be present."
+                )
+            if event_time_end is None:
+                raise DbtUsageException(
+                    "The flag `--event-time-start` was specified, but `--event-time-end` was not. "
+                    "When specifying `--event-time-start`, `--event-time-end` must also be present."
+                )
+
+            # This `if` just is a sanity check that `event_time_start` is before `event_time_end`
+            if event_time_start >= event_time_end:
+                raise DbtUsageException(
+                    "Value for `--event-time-start` must be less than `--event-time-end`"
+                )
 
     def fire_deprecations(self):
         """Fires events for deprecated env_var usage."""

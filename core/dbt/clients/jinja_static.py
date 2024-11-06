@@ -1,10 +1,10 @@
 import dataclasses
-from typing import Any, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
 import jinja2
 from events.functions import fire_event
 from events.types import Note
-from jinja2.nodes import Const, Name, Call, Getattr
+from jinja2.nodes import Call, Const, Getattr, Name
 
 from dbt.artifacts.resources import RefArgs
 from dbt.exceptions import MacroNamespaceNotStringError, ParsingError
@@ -13,7 +13,12 @@ from dbt_common.exceptions.macros import MacroNameNotStringError
 from dbt_common.tests import test_caching_enabled
 from dbt_extractor import ExtractionError, py_extract_from_source  # type: ignore
 
+if TYPE_CHECKING:
+    from dbt.context.providers import ParseDatabaseWrapper
+
+
 _TESTING_MACRO_CACHE: Dict[str, Any] = {}
+
 
 @dataclasses.dataclass
 class DbtMacroCall:
@@ -34,13 +39,13 @@ class DbtMacroCall:
     @classmethod
     def get_type(cls, param: Any) -> str:
         if isinstance(param, Name):
-            return "" # TODO: infer types from variable names
+            return ""  # TODO: infer types from variable names
 
         if isinstance(param, Call):
-            return "" # TODO: infer types from function/macro calls
+            return ""  # TODO: infer types from function/macro calls
 
         if isinstance(param, Getattr):
-            return "" # TODO: infer types from . operator?
+            return ""  # TODO: infer types from . operator?
 
         if isinstance(param, jinja2.nodes.Concat):
             return "Dict"
@@ -70,28 +75,34 @@ class DbtMacroCall:
             jinja_macro = template.body[0]
             if len(self.arg_types) > 0 and len(jinja_macro.arg_types) > 0:
                 for got_type, expected_type in zip(self.arg_types, jinja_macro.arg_types):
-                    if got_type != '' and expected_type != '' and got_type != expected_type:
-                        fire_event(Note(msg=f"Error in call to macro {macro.name}. Expected type {expected_type} got {got_type}"))
+                    if got_type != "" and expected_type != "" and got_type != expected_type:
+                        fire_event(
+                            Note(
+                                msg=f"Error in call to macro {macro.name}. Expected type {expected_type} got {got_type}"
+                            )
+                        )
 
             if len(self.arg_types) + len(self.kwarg_types) > len(jinja_macro.args):
-                pass # fire_event(Note(msg=f"Too many arguments in call to {macro.name}."))
+                pass  # fire_event(Note(msg=f"Too many arguments in call to {macro.name}."))
         pass
 
 
-def statically_extract_macro_calls(text: str, ctx: Dict[str, Any], db_wrapper=None) -> List[DbtMacroCall]:
+def statically_extract_macro_calls(
+    source: str, ctx: Dict[str, Any], db_wrapper: Optional["ParseDatabaseWrapper"] = None
+) -> List[str]:
     # set 'capture_macros' to capture undefined
     env = get_environment(None, capture_macros=True)
 
     global _TESTING_MACRO_CACHE
-    if test_caching_enabled() and text in _TESTING_MACRO_CACHE:
-        parsed = _TESTING_MACRO_CACHE.get(text, None)
+    if test_caching_enabled() and source in _TESTING_MACRO_CACHE:
+        parsed = _TESTING_MACRO_CACHE.get(source, None)
         func_calls = getattr(parsed, "_dbt_cached_calls")
     else:
-        parsed = env.parse(text)
+        parsed = env.parse(source)
         func_calls = tuple(parsed.find_all(jinja2.nodes.Call))
 
         if test_caching_enabled():
-            _TESTING_MACRO_CACHE[text] = parsed
+            _TESTING_MACRO_CACHE[source] = parsed
             setattr(parsed, "_dbt_cached_calls", func_calls)
 
     standard_calls = ["source", "ref", "config"]
@@ -133,12 +144,12 @@ def statically_extract_macro_calls(text: str, ctx: Dict[str, Any], db_wrapper=No
             possible_macro_calls.append(macro_call)
 
     for pmc in possible_macro_calls:
-        pmc.source = text
+        pmc.source = source
 
     return possible_macro_calls
 
 
-def statically_parse_adapter_dispatch(func_call, ctx, db_wrapper) -> List[DbtMacroCall]:
+def statically_parse_adapter_dispatch(func_call, ctx, db_wrapper) -> List[str]:
     possible_macro_calls: List[DbtMacroCall] = []
     # This captures an adapter.dispatch('<macro_name>') call.
 
@@ -198,7 +209,9 @@ def statically_parse_adapter_dispatch(func_call, ctx, db_wrapper) -> List[DbtMac
         else:
             packages = []
         for package_name in packages:
-            possible_macro_calls.append(DbtMacroCall.from_call(func_call, f"{package_name}.{func_name}"))
+            possible_macro_calls.append(
+                DbtMacroCall.from_call(func_call, f"{package_name}.{func_name}")
+            )
 
     return possible_macro_calls
 
@@ -286,8 +299,8 @@ def statically_parse_unrendered_config(string: str) -> Optional[Dict[str, Any]]:
     return unrendered_config
 
 
-def construct_static_kwarg_value(kwarg):
-    # Instead of trying to re-assemble complex kwarg value, simply stringify the value
+def construct_static_kwarg_value(kwarg) -> str:
+    # Instead of trying to re-assemble complex kwarg value, simply stringify the value.
     # This is still useful to be able to detect changes in unrendered configs, even if it is
     # not an exact representation of the user input.
     return str(kwarg)

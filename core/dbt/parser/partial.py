@@ -658,10 +658,14 @@ class PartialParsing:
             key_diff = self.get_diff_for(dict_key, saved_yaml_dict, new_yaml_dict)
             if key_diff["changed"]:
                 for elem in key_diff["changed"]:
+                    if dict_key == "snapshots" and "relation" in elem:
+                        self.delete_yaml_snapshot(schema_file, elem)
                     self.delete_schema_mssa_links(schema_file, dict_key, elem)
                     self.merge_patch(schema_file, dict_key, elem, True)
             if key_diff["deleted"]:
                 for elem in key_diff["deleted"]:
+                    if dict_key == "snapshots" and "relation" in elem:
+                        self.delete_yaml_snapshot(schema_file, elem)
                     self.delete_schema_mssa_links(schema_file, dict_key, elem)
             if key_diff["added"]:
                 for elem in key_diff["added"]:
@@ -673,6 +677,8 @@ class PartialParsing:
                         continue
                     elem = self.get_schema_element(new_yaml_dict[dict_key], name)
                     if elem:
+                        if dict_key == "snapshots" and "relation" in elem:
+                            self.delete_yaml_snapshot(schema_file, elem)
                         self.delete_schema_mssa_links(schema_file, dict_key, elem)
                         self.merge_patch(schema_file, dict_key, elem, True)
 
@@ -828,6 +834,8 @@ class PartialParsing:
         # remove elem node and remove unique_id from node_patches
         for elem_unique_id in elem_unique_ids:
             # might have been already removed
+            # For all-yaml snapshots, we don't do this, since the node
+            # should have already been removed.
             if (
                 elem_unique_id in self.saved_manifest.nodes
                 or elem_unique_id in self.saved_manifest.disabled
@@ -867,6 +875,19 @@ class PartialParsing:
             if test_unique_id in self.saved_manifest.nodes:
                 self.saved_manifest.nodes.pop(test_unique_id)
         schema_file.remove_tests(dict_key, name)
+
+    def delete_yaml_snapshot(self, schema_file, snapshot_dict):
+        snapshot_name = snapshot_dict["name"]
+        snapshots = schema_file.snapshots.copy()
+        for unique_id in snapshots:
+            if unique_id in self.saved_manifest.nodes:
+                snapshot = self.saved_manifest.nodes[unique_id]
+                if snapshot.name == snapshot_name:
+                    self.saved_manifest.nodes.pop(unique_id)
+                    schema_file.snapshots.remove(unique_id)
+            elif unique_id in self.saved_manifest.disabled:
+                self.delete_disabled(unique_id, schema_file.file_id)
+                schema_file.snapshots.remove(unique_id)
 
     def delete_schema_source(self, schema_file, source_dict):
         # both patches, tests, and source nodes

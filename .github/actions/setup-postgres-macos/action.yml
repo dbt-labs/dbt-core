@@ -6,6 +6,7 @@ runs:
     - shell: bash
       run: |
         brew install postgresql@16
+        brew link postgresql@16 --force
         brew services start postgresql@16
         echo "Check PostgreSQL service is running"
         i=10

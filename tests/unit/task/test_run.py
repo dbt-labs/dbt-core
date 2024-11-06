@@ -2,23 +2,33 @@ import threading
 from argparse import Namespace
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Optional
+from importlib import import_module
+from typing import Optional, Type, Union
+from unittest import mock
 from unittest.mock import MagicMock, patch
 
 import pytest
+from psycopg2 import DatabaseError
 from pytest_mock import MockerFixture
 
+from dbt.adapters.contracts.connection import AdapterResponse
 from dbt.adapters.postgres import PostgresAdapter
+from dbt.artifacts.resources.base import FileHash
+from dbt.artifacts.resources.types import BatchSize, NodeType, RunHookType
+from dbt.artifacts.resources.v1.components import DependsOn
+from dbt.artifacts.resources.v1.config import NodeConfig
 from dbt.artifacts.resources.v1.model import ModelConfig
 from dbt.artifacts.schemas.batch_results import BatchResults
 from dbt.artifacts.schemas.results import RunStatus
 from dbt.artifacts.schemas.run import RunResult
 from dbt.config.runtime import RuntimeConfig
 from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.graph.nodes import ModelNode
+from dbt.contracts.graph.nodes import HookNode, ModelNode
 from dbt.events.types import LogModelResult
+from dbt.exceptions import DbtRuntimeError
 from dbt.flags import get_flags, set_from_args
-from dbt.task.run import ModelRunner, RunTask
+from dbt.materializations.incremental.microbatch import MicrobatchBuilder
+from dbt.task.run import ModelRunner, RunTask, _get_adapter_info
 from dbt.tests.util import safe_set_invocation_context
 from dbt_common.events.base_types import EventLevel
 from dbt_common.events.event_manager_client import add_callback_to_manager
@@ -66,6 +76,22 @@ def test_run_task_preserve_edges():
         task.get_graph_queue()
         # when we get the graph queue, preserve_edges is True
         mock_node_selector.get_graph_queue.assert_called_with(mock_spec, True)
+
+
+def test_tracking_fails_safely_for_missing_adapter():
+    assert {} == _get_adapter_info(None, {})
+
+
+def test_adapter_info_tracking():
+    mock_run_result = MagicMock()
+    mock_run_result.node = MagicMock()
+    mock_run_result.node.config = {}
+    assert _get_adapter_info(PostgresAdapter, mock_run_result) == {
+        "model_adapter_details": {},
+        "adapter_name": PostgresAdapter.__name__.split("Adapter")[0].lower(),
+        "adapter_version": import_module("dbt.adapters.postgres.__version__").version,
+        "base_adapter_version": import_module("dbt.adapters.__about__").version,
+    }
 
 
 class TestModelRunner:
@@ -239,3 +265,112 @@ class TestModelRunner:
 
         # Assert result of _is_incremental
         assert model_runner._is_incremental(model) == expectation
+
+    def test_keyboard_breaks__execute_microbatch_materialization(
+        self,
+        table_model: ModelNode,
+        manifest: Manifest,
+        model_runner: ModelRunner,
+    ) -> None:
+        def mock_build_batch_context(*args, **kwargs):
+            raise KeyboardInterrupt("Test exception")
+
+        def mock_is_incremental(*args, **kwargs):
+            return True
+
+        table_model.config.materialized = "incremental"
+        table_model.config.incremental_strategy = "microbatch"
+        table_model.config.batch_size = BatchSize.day
+
+        with patch.object(
+            MicrobatchBuilder, "build_batch_context", mock_build_batch_context
+        ), patch.object(ModelRunner, "_is_incremental", mock_is_incremental):
+            try:
+                model_runner._execute_microbatch_materialization(
+                    table_model, manifest, {}, MagicMock()
+                )
+                assert False, "KeybaordInterrupt failed to escape"
+            except KeyboardInterrupt:
+                assert True
+
+
+class TestRunTask:
+    @pytest.fixture
+    def hook_node(self) -> HookNode:
+        return HookNode(
+            package_name="test",
+            path="/root/x/path.sql",
+            original_file_path="/root/path.sql",
+            language="sql",
+            raw_code="select * from wherever",
+            name="foo",
+            resource_type=NodeType.Operation,
+            unique_id="model.test.foo",
+            fqn=["test", "models", "foo"],
+            refs=[],
+            sources=[],
+            metrics=[],
+            depends_on=DependsOn(),
+            description="",
+            database="test_db",
+            schema="test_schema",
+            alias="bar",
+            tags=[],
+            config=NodeConfig(),
+            index=None,
+            checksum=FileHash.from_contents(""),
+            unrendered_config={},
+        )
+
+    @pytest.mark.parametrize(
+        "error_to_raise,expected_result",
+        [
+            (None, RunStatus.Success),
+            (DbtRuntimeError, RunStatus.Error),
+            (DatabaseError, RunStatus.Error),
+            (KeyboardInterrupt, KeyboardInterrupt),
+        ],
+    )
+    def test_safe_run_hooks(
+        self,
+        mocker: MockerFixture,
+        runtime_config: RuntimeConfig,
+        manifest: Manifest,
+        hook_node: HookNode,
+        error_to_raise: Optional[Type[Exception]],
+        expected_result: Union[RunStatus, Type[Exception]],
+    ):
+        mocker.patch("dbt.task.run.RunTask.get_hooks_by_type").return_value = [hook_node]
+        mocker.patch("dbt.task.run.RunTask.get_hook_sql").return_value = hook_node.raw_code
+
+        flags = mock.Mock()
+        flags.state = None
+        flags.defer_state = None
+
+        run_task = RunTask(
+            args=flags,
+            config=runtime_config,
+            manifest=manifest,
+        )
+
+        adapter = mock.Mock()
+        adapter_execute = mock.Mock()
+        adapter_execute.return_value = (AdapterResponse(_message="Success"), None)
+
+        if error_to_raise:
+            adapter_execute.side_effect = error_to_raise("Oh no!")
+
+        adapter.execute = adapter_execute
+
+        try:
+            result = run_task.safe_run_hooks(
+                adapter=adapter,
+                hook_type=RunHookType.End,
+                extra_context={},
+            )
+            assert isinstance(expected_result, RunStatus)
+            assert result == expected_result
+        except BaseException as e:
+            assert not isinstance(expected_result, RunStatus)
+            assert issubclass(expected_result, BaseException)
+            assert type(e) == expected_result

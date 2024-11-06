@@ -1,0 +1,6 @@
+kind: Fixes
+body: Allow instances of generic data tests to be documented
+time: 2024-10-14T21:21:35.767115+01:00
+custom:
+    Author: aranke
+    Issue: "2578"

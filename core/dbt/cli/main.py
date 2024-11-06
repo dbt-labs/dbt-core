@@ -716,6 +716,7 @@ def seed(ctx, **kwargs):
 @cli.command("snapshot")
 @click.pass_context
 @global_flags
+@p.empty
 @p.exclude
 @p.profiles_dir
 @p.project_dir

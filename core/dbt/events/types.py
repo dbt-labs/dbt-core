@@ -466,6 +466,26 @@ class SourceFreshnessProjectHooksNotRun(WarnLevel):
         return line_wrap_message(warning_tag(description))
 
 
+class MFTimespineWithoutYamlConfigurationDeprecation(WarnLevel):
+    def code(self) -> str:
+        return "D018"
+
+    def message(self) -> str:
+        description = "Time spines without YAML configuration are in the process of deprecation. Please add YAML configuration for your 'metricflow_time_spine' model. See documentation on MetricFlow time spines: https://docs.getdbt.com/docs/build/metricflow-time-spine and behavior change documentation: https://docs.getdbt.com/reference/global-configs/behavior-changes."
+
+        return line_wrap_message(warning_tag(description))
+
+
+class MFCumulativeTypeParamsDeprecation(WarnLevel):
+    def code(self) -> str:
+        return "D019"
+
+    def message(self) -> str:
+        description = "Cumulative fields `type_params.window` and `type_params.grain_to_date` have been moved and will soon be deprecated. Please nest those values under `type_params.cumulative_type_params.window` and `type_params.cumulative_type_params.grain_to_date`. See documentation on behavior changes: https://docs.getdbt.com/reference/global-configs/behavior-changes."
+
+        return line_wrap_message(warning_tag(description))
+
+
 # =======================================================
 # I - Project parsing
 # =======================================================
@@ -924,6 +944,19 @@ class FreshnessConfigProblem(WarnLevel):
         return self.msg
 
 
+class MicrobatchModelNoEventTimeInputs(WarnLevel):
+    def code(self) -> str:
+        return "I074"
+
+    def message(self) -> str:
+        msg = (
+            f"The microbatch model '{self.model_name}' has no 'ref' or 'source' input with an 'event_time' configuration. "
+            "\nThis means no filtering can be applied and can result in unexpected duplicate records in the resulting microbatch model."
+        )
+
+        return warning_tag(msg)
+
+
 # =======================================================
 # M - Deps generation
 # =======================================================
@@ -1185,6 +1218,19 @@ class DepsScrubbedPackageName(WarnLevel):
 
     def message(self) -> str:
         return f"Detected secret env var in {self.package_name}. dbt will write a scrubbed representation to the lock file. This will cause issues with subsequent 'dbt deps' using the lock file, requiring 'dbt deps --upgrade'"
+
+
+# =======================================================
+# P - Artifacts
+# =======================================================
+
+
+class ArtifactWritten(DebugLevel):
+    def code(self):
+        return "P001"
+
+    def message(self) -> str:
+        return f"Wrote artifact {self.artifact_type} to {self.artifact_path}"
 
 
 # =======================================================

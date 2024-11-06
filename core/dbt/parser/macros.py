@@ -94,6 +94,9 @@ class MacroParser(BaseParser[Macro]):
 
             name: str = macro.name.replace(MACRO_PREFIX, "")
             node = self.parse_macro(block, base_node, name)
+            node.meta["args"] = [a.name for a in macro.args]
+            node.meta["arg_types"] = getattr(macro, "arg_types", None)
+            node.meta["arg_defaults"] = []  # macro.defaults
             # get supported_languages for materialization macro
             if block.block_type_name == "materialization":
                 node.supported_languages = get_supported_languages(macro)
