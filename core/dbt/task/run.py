@@ -482,9 +482,7 @@ class ModelRunner(CompileRunner):
 
         hook_ctx = self.adapter.pre_model_hook(context_config)
         if (
-            manifest.use_microbatch_batches(
-                project_name=self.config.project_name, adapter_type=self.config.credentials.type
-            )
+            manifest.use_microbatch_batches(project_name=self.config.project_name)
             and model.config.materialized == "incremental"
             and model.config.incremental_strategy == "microbatch"
         ):

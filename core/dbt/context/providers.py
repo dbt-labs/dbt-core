@@ -238,9 +238,7 @@ class BaseResolver(metaclass=abc.ABCMeta):
     def resolve_event_time_filter(self, target: ManifestNode) -> Optional[EventTimeFilter]:
         event_time_filter = None
         if (
-            self.manifest.use_microbatch_batches(
-                project_name=self.config.project_name, adapter_type=self.config.credentials.type
-            )
+            self.manifest.use_microbatch_batches(project_name=self.config.project_name)
             and (isinstance(target.config, NodeConfig) or isinstance(target.config, SourceConfig))
             and target.config.event_time
             and self.model.config.materialized == "incremental"

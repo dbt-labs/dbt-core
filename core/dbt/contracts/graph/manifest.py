@@ -1763,19 +1763,19 @@ class Manifest(MacroMethods, dbtClassMixin):
         )
         return self.__class__, args
 
-    def _microbatch_macro_is_root(self, project_name: str, adapter_type: str) -> bool:
+    def _microbatch_macro_is_root(self, project_name: str) -> bool:
         microbatch_is_root = False
-        candidate = self.find_materialization_macro_candidate_by_name(
-            project_name, "microbatch", adapter_type
+        candidate = self.find_macro_candidate_by_name(
+            name="get_incremental_microbatch_sql", root_project_name=project_name, package=None
         )
         if candidate is not None and candidate.locality == Locality.Root:
             microbatch_is_root = True
         return microbatch_is_root
 
-    def use_microbatch_batches(self, project_name: str, adapter_type: str) -> bool:
+    def use_microbatch_batches(self, project_name: str) -> bool:
         return (
             get_flags().require_batched_execution_for_custom_microbatch_strategy
-            or self._microbatch_macro_is_root(project_name=project_name, adapter_type=adapter_type)
+            or self._microbatch_macro_is_root(project_name=project_name)
         )
 
 
