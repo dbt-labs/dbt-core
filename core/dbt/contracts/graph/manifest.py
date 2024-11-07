@@ -1753,19 +1753,22 @@ class Manifest(MacroMethods, dbtClassMixin):
         )
         return self.__class__, args
 
-    def _microbatch_macro_is_root(self, project_name: str) -> bool:
-        microbatch_is_root = False
+    def _microbatch_macro_is_core(self, project_name: str) -> bool:
+        microbatch_is_core = False
         candidate = self.find_macro_candidate_by_name(
             name="get_incremental_microbatch_sql", root_project_name=project_name, package=None
         )
-        if candidate is not None and candidate.locality == Locality.Root:
-            microbatch_is_root = True
-        return microbatch_is_root
+
+        # We want to check for "Core", because "Core" basically means "builtin"
+        if candidate is not None and candidate.locality == Locality.Core:
+            microbatch_is_core = True
+
+        return microbatch_is_core
 
     def use_microbatch_batches(self, project_name: str) -> bool:
         return (
             get_flags().require_batched_execution_for_custom_microbatch_strategy
-            or self._microbatch_macro_is_root(project_name=project_name)
+            or self._microbatch_macro_is_core(project_name=project_name)
         )
 
 
