@@ -426,11 +426,30 @@ class MicrobatchModelRunner(ModelRunner):
             self.print_batch_start_line()
 
     def after_execute(self, result) -> None:
-        if len(self.batches) == len(result.batch_results):
-            track_model_run(self.node_index, self.num_nodes, result, adapter=self.adapter)
-            self.print_result_line(result)
-        elif self.batch_idx is not None:
+        if self.batch_idx is not None:
             self.print_batch_result_line(result)
+
+    def merge_batch_results(self, result):
+        num_successes = len(result.batch_results.successful)
+        num_failures = len(result.batch_results.failed)
+        if num_failures == 0:
+            status = RunStatus.Success
+            msg = "SUCCESS"
+        elif num_successes == 0:
+            status = RunStatus.Error
+            msg = "ERROR"
+        else:
+            status = RunStatus.PartialSuccess
+            msg = f"PARTIAL SUCCESS ({num_successes}/{num_successes + num_failures})"
+        result.status = status
+        result.message = msg
+
+        result.batch_results.successful = sorted(result.batch_results.successful)
+        result.batch_results.failed = sorted(result.batch_results.failed)
+
+        # # If retrying, propagate previously successful batches into final result, even thoguh they were not run in this invocation
+        if self.node.batch_info is not None:
+            result.batch_results.successful += self.node.batch_info.successful
 
     def _build_succesful_run_batch_result(
         self,
@@ -653,25 +672,11 @@ class RunTask(CompileTask):
 
                 # All batches are complete!
                 if len(runner.batches) == len(result.batch_results):
-                    num_successes = len(result.batch_results.successful)
-                    num_failures = len(result.batch_results.failed)
-                    if num_failures == 0:
-                        status = RunStatus.Success
-                        msg = "SUCCESS"
-                    elif num_successes == 0:
-                        status = RunStatus.Error
-                        msg = "ERROR"
-                    else:
-                        status = RunStatus.PartialSuccess
-                        msg = f"PARTIAL SUCCESS ({num_successes}/{num_successes + num_failures})"
-                    result.status = status
-                    result.message = msg
-
-                    # If retrying, propagate previously successful batches into final result, even thoguh they were not run in this invocation
-                    if runner.node.batch_info is not None:
-                        result.batch_results.successful += runner.node.batch_info.successful
-
-                    runner.after_execute(result)
+                    runner.merge_batch_results(result)
+                    track_model_run(
+                        runner.node_index, runner.num_nodes, result, adapter=runner.adapter
+                    )
+                    runner.print_result_line(result)
                     callback(result)
 
             batch_idx = 0
@@ -682,7 +687,9 @@ class RunTask(CompileTask):
                 batch_idx += 1
 
             while batch_idx < len(runner.batches):
-                batch_runner = self.get_runner(deepcopy(node))
+                batch_runner = MicrobatchModelRunner(
+                    self.config, runner.adapter, deepcopy(node), self.run_count, self.num_nodes
+                )
                 batch_runner.set_batch_idx(batch_idx)
                 batch_runner.set_relation_exists(runner.relation_exists)
                 batch_runner.set_batches(runner.batches)
