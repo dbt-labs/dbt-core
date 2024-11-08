@@ -41,7 +41,7 @@ class TestBaseResolver:
         assert resolver.resolve_limit == expected_resolve_limit
 
     @pytest.mark.parametrize(
-        "dbt_experimental_microbatch,materialized,incremental_strategy,resolver_model_node,expect_filter",
+        "use_microbatch_batches,materialized,incremental_strategy,resolver_model_node,expect_filter",
         [
             (True, "incremental", "microbatch", True, True),
             (True, "incremental", "microbatch", False, False),
@@ -54,19 +54,12 @@ class TestBaseResolver:
         self,
         mocker: MockerFixture,
         resolver: ResolverSubclass,
-        dbt_experimental_microbatch: bool,
+        use_microbatch_batches: bool,
         materialized: str,
         incremental_strategy: str,
         resolver_model_node: bool,
         expect_filter: bool,
     ) -> None:
-        set_from_args(
-            Namespace(
-                require_batched_execution_for_custom_microbatch_strategy=dbt_experimental_microbatch
-            ),
-            None,
-        )
-
         # Target mocking
         target = mock.Mock()
         target.config = mock.MagicMock(NodeConfig)
@@ -82,6 +75,8 @@ class TestBaseResolver:
         resolver.model.config.incremental_strategy = incremental_strategy
         resolver.model.config.batch_size = BatchSize.day
         resolver.model.config.lookback = 1
+        resolver.manifest.use_microbatch_batches = mock.Mock()
+        resolver.manifest.use_microbatch_batches.return_value = use_microbatch_batches
 
         # Try to get an EventTimeFilter
         event_time_filter = resolver.resolve_event_time_filter(target=target)
