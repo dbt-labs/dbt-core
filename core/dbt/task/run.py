@@ -670,6 +670,10 @@ class RunTask(CompileTask):
                     result.status = status
                     result.message = msg
 
+                    # If retrying, propagate previously successful batches into final result, even thoguh they were not run in this invocation
+                    if runner.node.batch_info is not None:
+                        result.batch_results.successful += runner.node.batch_info.successful
+
                     runner.print_result_line(result)
                     # TODO: track model run
                     callback(result)
