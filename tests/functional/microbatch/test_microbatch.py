@@ -181,8 +181,8 @@ class TestMicrobatchCustomUserStrategyDefault(BaseMicrobatchCustomUserStrategy):
             assert "custom microbatch strategy" in logs
 
 
-class TestMicrobatchCustomUserStrategyEnvVarTrueValid(BaseMicrobatchCustomUserStrategy):
-    def test_use_custom_microbatch_strategy_env_var_true_invalid_incremental_strategy(
+class TestMicrobatchCustomUserStrategyProjectFlagTrueValid(BaseMicrobatchCustomUserStrategy):
+    def test_use_custom_microbatch_strategy_project_flag_true_invalid_incremental_strategy(
         self, project
     ):
         with mock.patch.object(
@@ -198,8 +198,8 @@ class TestMicrobatchCustomUserStrategyEnvVarTrueValid(BaseMicrobatchCustomUserSt
             assert "custom microbatch strategy" in logs
 
 
-class TestMicrobatchCustomUserStrategyEnvVarTrueInvalid(BaseMicrobatchCustomUserStrategy):
-    def test_use_custom_microbatch_strategy_env_var_true_invalid_incremental_strategy(
+class TestMicrobatchCustomUserStrategyProjectFlagTrueInvalid(BaseMicrobatchCustomUserStrategy):
+    def test_use_custom_microbatch_strategy_project_flag_true_invalid_incremental_strategy(
         self, project
     ):
         with mock.patch.object(
