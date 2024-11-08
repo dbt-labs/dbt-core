@@ -426,7 +426,10 @@ class MicrobatchModelRunner(ModelRunner):
             self.print_batch_start_line()
 
     def after_execute(self, result) -> None:
-        if self.batch_idx is not None:
+        if len(self.batches) == len(result.batch_results):
+            track_model_run(self.node_index, self.num_nodes, result, adapter=self.adapter)
+            self.print_result_line(result)
+        elif self.batch_idx is not None:
             self.print_batch_result_line(result)
 
     def _build_succesful_run_batch_result(
@@ -668,8 +671,7 @@ class RunTask(CompileTask):
                     if runner.node.batch_info is not None:
                         result.batch_results.successful += runner.node.batch_info.successful
 
-                    runner.print_result_line(result)
-                    # TODO: track model run
+                    runner.after_execute(result)
                     callback(result)
 
             batch_idx = 0
