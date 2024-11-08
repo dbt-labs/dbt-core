@@ -350,8 +350,6 @@ class MicrobatchModelRunner(ModelRunner):
     batch_idx: Optional[int] = None
     batches: Dict[int, BatchType] = field(default_factory=dict)
     relation_exists: bool = False
-    # TODO: enum
-    execution_mode: str = "serial"
 
     def set_batch_idx(self, batch_idx: int) -> None:
         self.batch_idx = batch_idx
@@ -361,9 +359,6 @@ class MicrobatchModelRunner(ModelRunner):
 
     def set_batches(self, batches: Dict[int, BatchType]) -> None:
         self.batches = batches
-
-    def set_parallel_execution_mode(self):
-        self.execution_mode = "parallel"
 
     def describe_node(self) -> str:
         return f"{self.node.language} microbatch model {self.get_node_representation()}"
@@ -536,7 +531,6 @@ class MicrobatchModelRunner(ModelRunner):
                 # At least one batch has been inserted successfully!
                 # Can proceed incrementally + in parallel
                 self.relation_exists = True
-                self.set_parallel_execution_mode()
 
             except (KeyboardInterrupt, SystemExit):
                 # reraise it for GraphRunnableTask.execute_nodes to handle
@@ -679,9 +673,8 @@ class RunTask(CompileTask):
                     callback(result)
 
             batch_idx = 0
-            # execute batches serially until it is safe to fire in parallel
-            # TODO: ensure this loop does not cause hanging
-            while runner.execution_mode == "serial" and batch_idx < len(runner.batches):
+            # execute batches serially until a relation exists
+            while not runner.relation_exists and batch_idx < len(runner.batches):
                 runner.set_batch_idx(batch_idx)
                 batch_callback(self.call_runner(runner))
                 batch_idx += 1
