@@ -220,14 +220,6 @@ class BaseMicrobatchTest:
             "microbatch_model.sql": microbatch_model_sql,
         }
 
-    @pytest.fixture(scope="class")
-    def project_config_update(self):
-        return {
-            "flags": {
-                "require_batched_execution_for_custom_microbatch_strategy": True,
-            }
-        }
-
     def assert_row_count(self, project, relation_name: str, expected_row_count: int):
         relation = relation_from_name(project.adapter, relation_name)
         result = project.run_sql(f"select count(*) as num_rows from {relation}", fetch="one")
