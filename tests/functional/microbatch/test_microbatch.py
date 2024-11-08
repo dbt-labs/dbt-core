@@ -179,6 +179,8 @@ class TestMicrobatchCustomUserStrategyDefault(BaseMicrobatchCustomUserStrategy):
             # Incremental run uses custom strategy
             _, logs = run_dbt_and_capture(["run"])
             assert "custom microbatch strategy" in logs
+            # The custom strategy wasn't used with batch functionality
+            assert "START batch" not in logs
 
 
 class TestMicrobatchCustomUserStrategyProjectFlagTrueValid(BaseMicrobatchCustomUserStrategy):
@@ -196,6 +198,8 @@ class TestMicrobatchCustomUserStrategyProjectFlagTrueValid(BaseMicrobatchCustomU
             with patch_microbatch_end_time("2020-01-03 13:57:00"):
                 _, logs = run_dbt_and_capture(["run"])
             assert "custom microbatch strategy" in logs
+            # The custom strategy was used with batch functionality
+            assert "START batch" in logs
 
 
 class TestMicrobatchCustomUserStrategyProjectFlagTrueInvalid(BaseMicrobatchCustomUserStrategy):
