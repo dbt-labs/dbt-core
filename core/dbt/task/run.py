@@ -672,7 +672,6 @@ class RunTask(CompileTask):
 
                     runner.print_result_line(result)
                     # TODO: track model run
-                    self._handle_result(result)
                     callback(result)
 
             batch_idx = 0
