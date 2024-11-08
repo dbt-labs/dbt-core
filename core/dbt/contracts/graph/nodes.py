@@ -447,7 +447,6 @@ class ModelNode(ModelResource, CompiledNode):
     batch_info: Optional[BatchResults] = None
     # Indicates whether current batch should be run incrementally
     # TODO: consider whether these can go on runner instead of node
-    microbatch_execution_is_incremental: bool = False
     batches: Dict[int, BatchType] = field(default_factory=dict)
 
     @classmethod

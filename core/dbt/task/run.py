@@ -348,11 +348,15 @@ class ModelRunner(CompileRunner):
 
 class MicrobatchModelRunner(ModelRunner):
     batch_idx: Optional[int] = None
+    relation_exists: bool = False
     # TODO: enum
     execution_mode: str = "serial"
 
-    def set_batch_idx(self, batch_idx: int):
+    def set_batch_idx(self, batch_idx: int) -> None:
         self.batch_idx = batch_idx
+
+    def set_relation_exists(self, relation_exists: bool) -> None:
+        self.relation_exists = relation_exists
 
     def set_parallel_execution_mode(self):
         self.execution_mode = "parallel"
@@ -483,7 +487,7 @@ class MicrobatchModelRunner(ModelRunner):
                 # If there is batch info, then don't run as full_refresh and do force is_incremental
                 # not doing this risks blowing away the work that has already been done
                 if self._has_relation(model=model):
-                    model.microbatch_execution_is_incremental = True
+                    self.relation_exists = True
 
             batch_result = self._build_run_microbatch_model_result(model)
             model.batches = {batch_idx: batches[batch_idx] for batch_idx in range(len(batches))}
@@ -508,7 +512,7 @@ class MicrobatchModelRunner(ModelRunner):
                 )
                 # Update jinja context with batch context members
                 batch_context = microbatch_builder.build_batch_context(
-                    incremental_batch=model.microbatch_execution_is_incremental
+                    incremental_batch=self.relation_exists
                 )
                 context.update(batch_context)
 
@@ -527,7 +531,7 @@ class MicrobatchModelRunner(ModelRunner):
 
                 # At least one batch has been inserted successfully!
                 # Can proceed incrementally + in parallel
-                model.microbatch_execution_is_incremental = True
+                self.relation_exists = True
                 self.set_parallel_execution_mode()
 
             except (KeyboardInterrupt, SystemExit):
@@ -678,6 +682,7 @@ class RunTask(CompileTask):
             while batch_idx < len(runner.node.batches):
                 batch_runner = self.get_runner(deepcopy(node))
                 batch_runner.set_batch_idx(batch_idx)
+                batch_runner.set_relation_exists(runner.relation_exists)
                 self._submit(pool, [batch_runner], batch_callback)
                 batch_idx += 1
         else:
