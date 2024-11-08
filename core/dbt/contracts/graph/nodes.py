@@ -60,7 +60,7 @@ from dbt.artifacts.resources import SourceDefinition as SourceDefinitionResource
 from dbt.artifacts.resources import SqlOperation as SqlOperationResource
 from dbt.artifacts.resources import TimeSpine
 from dbt.artifacts.resources import UnitTestDefinition as UnitTestDefinitionResource
-from dbt.artifacts.schemas.batch_results import BatchResults, BatchType
+from dbt.artifacts.schemas.batch_results import BatchResults
 from dbt.contracts.graph.model_config import UnitTestNodeConfig
 from dbt.contracts.graph.node_args import ModelNodeArgs
 from dbt.contracts.graph.unparsed import (
@@ -443,11 +443,7 @@ class HookNode(HookNodeResource, CompiledNode):
 
 @dataclass
 class ModelNode(ModelResource, CompiledNode):
-    # TODO: rename to indicate relation to retry / previous run
     batch_info: Optional[BatchResults] = None
-    # Indicates whether current batch should be run incrementally
-    # TODO: consider whether these can go on runner instead of node
-    batches: Dict[int, BatchType] = field(default_factory=dict)
 
     @classmethod
     def resource_class(cls) -> Type[ModelResource]:

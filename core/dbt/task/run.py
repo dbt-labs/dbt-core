@@ -3,7 +3,7 @@ import os
 import threading
 import time
 from copy import deepcopy
-from dataclasses import asdict
+from dataclasses import asdict, field
 from datetime import datetime
 from typing import AbstractSet, Any, Dict, Iterable, List, Optional, Set, Tuple, Type
 
@@ -348,6 +348,7 @@ class ModelRunner(CompileRunner):
 
 class MicrobatchModelRunner(ModelRunner):
     batch_idx: Optional[int] = None
+    batches: Dict[int, BatchType] = field(default_factory=dict)
     relation_exists: bool = False
     # TODO: enum
     execution_mode: str = "serial"
@@ -357,6 +358,9 @@ class MicrobatchModelRunner(ModelRunner):
 
     def set_relation_exists(self, relation_exists: bool) -> None:
         self.relation_exists = relation_exists
+
+    def set_batches(self, batches: Dict[int, BatchType]) -> None:
+        self.batches = batches
 
     def set_parallel_execution_mode(self):
         self.execution_mode = "parallel"
@@ -380,7 +384,7 @@ class MicrobatchModelRunner(ModelRunner):
         if self.batch_idx is None:
             return
 
-        batch_start = self.node.batches[self.batch_idx][0]
+        batch_start = self.batches[self.batch_idx][0]
         description = self.describe_batch(batch_start)
         group = group_lookup.get(self.node.unique_id)
         if result.status == NodeStatus.Error:
@@ -394,7 +398,7 @@ class MicrobatchModelRunner(ModelRunner):
                 description=description,
                 status=status,
                 index=self.batch_idx + 1,
-                total=len(self.node.batches),
+                total=len(self.batches),
                 execution_time=result.execution_time,
                 node_info=self.node.node_info,
                 group=group,
@@ -406,7 +410,7 @@ class MicrobatchModelRunner(ModelRunner):
         if self.batch_idx is None:
             return
 
-        batch_start = self.node.batches[self.batch_idx][0]
+        batch_start = self.batches[self.batch_idx][0]
         if batch_start is None:
             return
 
@@ -415,7 +419,7 @@ class MicrobatchModelRunner(ModelRunner):
             LogStartLine(
                 description=batch_description,
                 index=self.batch_idx + 1,
-                total=len(self.node.batches),
+                total=len(self.batches),
                 node_info=self.node.node_info,
             )
         )
@@ -490,10 +494,10 @@ class MicrobatchModelRunner(ModelRunner):
                     self.relation_exists = True
 
             batch_result = self._build_run_microbatch_model_result(model)
-            model.batches = {batch_idx: batches[batch_idx] for batch_idx in range(len(batches))}
+            self.batches = {batch_idx: batches[batch_idx] for batch_idx in range(len(batches))}
 
         else:
-            batch = model.batches[self.batch_idx]
+            batch = self.batches[self.batch_idx]
             # call materialization_macro to get a batch-level run result
             start_time = time.perf_counter()
             try:
@@ -651,7 +655,7 @@ class RunTask(CompileTask):
                 result.execution_time += batch_result.execution_time
 
                 # All batches are complete!
-                if len(runner.node.batches) == len(result.batch_results):
+                if len(runner.batches) == len(result.batch_results):
                     num_successes = len(result.batch_results.successful)
                     num_failures = len(result.batch_results.failed)
                     if num_failures == 0:
@@ -674,15 +678,16 @@ class RunTask(CompileTask):
             batch_idx = 0
             # execute batches serially until it is safe to fire in parallel
             # TODO: ensure this loop does not cause hanging
-            while runner.execution_mode == "serial" and batch_idx < len(runner.node.batches):
+            while runner.execution_mode == "serial" and batch_idx < len(runner.batches):
                 runner.set_batch_idx(batch_idx)
                 batch_callback(self.call_runner(runner))
                 batch_idx += 1
 
-            while batch_idx < len(runner.node.batches):
+            while batch_idx < len(runner.batches):
                 batch_runner = self.get_runner(deepcopy(node))
                 batch_runner.set_batch_idx(batch_idx)
                 batch_runner.set_relation_exists(runner.relation_exists)
+                batch_runner.set_batches(runner.batches)
                 self._submit(pool, [batch_runner], batch_callback)
                 batch_idx += 1
         else:
