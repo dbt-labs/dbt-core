@@ -2,7 +2,11 @@ from unittest import mock
 
 import pytest
 
-from dbt.events.types import LogModelResult, MicrobatchModelNoEventTimeInputs
+from dbt.events.types import (
+    LogModelResult,
+    MicrobatchMacroOutsideOfBatchesDeprecation,
+    MicrobatchModelNoEventTimeInputs,
+)
 from dbt.tests.util import (
     get_artifact,
     patch_microbatch_end_time,
@@ -159,6 +163,10 @@ class BaseMicrobatchCustomUserStrategy:
             }
         }
 
+    @pytest.fixture(scope="class")
+    def deprecation_catcher(self) -> EventCatcher:
+        return EventCatcher(MicrobatchMacroOutsideOfBatchesDeprecation)
+
 
 class TestMicrobatchCustomUserStrategyDefault(BaseMicrobatchCustomUserStrategy):
     @pytest.fixture(scope="class")
@@ -169,7 +177,11 @@ class TestMicrobatchCustomUserStrategyDefault(BaseMicrobatchCustomUserStrategy):
             }
         }
 
-    def test_use_custom_microbatch_strategy_by_default(self, project):
+    def test_use_custom_microbatch_strategy_by_default(
+        self,
+        project,
+        deprecation_catcher: EventCatcher,
+    ):
         with mock.patch.object(
             type(project.adapter), "valid_incremental_strategies", lambda _: []
         ):
@@ -181,11 +193,15 @@ class TestMicrobatchCustomUserStrategyDefault(BaseMicrobatchCustomUserStrategy):
             assert "custom microbatch strategy" in logs
             # The custom strategy wasn't used with batch functionality
             assert "START batch" not in logs
+            # Deprecation warning about custom microbatch macro fired
+            assert len(deprecation_catcher.caught_events) == 0
 
 
 class TestMicrobatchCustomUserStrategyProjectFlagTrueValid(BaseMicrobatchCustomUserStrategy):
     def test_use_custom_microbatch_strategy_project_flag_true_invalid_incremental_strategy(
-        self, project
+        self,
+        project,
+        deprecation_catcher: EventCatcher,
     ):
         with mock.patch.object(
             type(project.adapter), "valid_incremental_strategies", lambda _: ["microbatch"]
@@ -200,6 +216,8 @@ class TestMicrobatchCustomUserStrategyProjectFlagTrueValid(BaseMicrobatchCustomU
             assert "custom microbatch strategy" in logs
             # The custom strategy was used with batch functionality
             assert "START batch" in logs
+            # Deprecation warning about custom microbatch macro not fired
+            assert len(deprecation_catcher.caught_events) == 0
 
 
 class TestMicrobatchCustomUserStrategyProjectFlagTrueInvalid(BaseMicrobatchCustomUserStrategy):
