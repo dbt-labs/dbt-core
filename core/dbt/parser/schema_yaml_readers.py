@@ -799,6 +799,18 @@ class SavedQueryParser(YamlReader):
             rendered=False,
         )
 
+        # The parser handles plain strings just fine, but we need to be able
+        # to join two lists, remove duplicates, and sort, so we have to wrap things here.
+        def wrap_tags(s: Union[List[str], str]) -> List[str]:
+            if s is None:
+                return []
+            return [s] if isinstance(s, str) else s
+
+        config_tags = wrap_tags(config.get("tags"))
+        unparsed_tags = wrap_tags(unparsed.tags)
+        tags = list(set([*unparsed_tags, *config_tags]))
+        tags.sort()
+
         parsed = SavedQuery(
             description=unparsed.description,
             label=unparsed.label,
@@ -814,6 +826,7 @@ class SavedQueryParser(YamlReader):
             config=config,
             unrendered_config=unrendered_config,
             group=config.group,
+            tags=tags,
         )
 
         for export in parsed.exports:
