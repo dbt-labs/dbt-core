@@ -123,6 +123,16 @@ class MFTimespineWithoutYamlConfigurationDeprecation(DBTDeprecation):
     _event = "MFTimespineWithoutYamlConfigurationDeprecation"
 
 
+class MFCumulativeTypeParamsDeprecation(DBTDeprecation):
+    _name = "mf-cumulative-type-params-deprecation"
+    _event = "MFCumulativeTypeParamsDeprecation"
+
+
+class MicrobatchMacroOutsideOfBatchesDeprecation(DBTDeprecation):
+    _name = "microbatch-macro-outside-of-batches-deprecation"
+    _event = "MicrobatchMacroOutsideOfBatchesDeprecation"
+
+
 def renamed_env_var(old_name: str, new_name: str):
     class EnvironmentVariableRenamed(DBTDeprecation):
         _name = f"environment-variable-renamed:{old_name}"
@@ -172,6 +182,8 @@ deprecations_list: List[DBTDeprecation] = [
     ResourceNamesWithSpacesDeprecation(),
     SourceFreshnessProjectHooksNotRun(),
     MFTimespineWithoutYamlConfigurationDeprecation(),
+    MFCumulativeTypeParamsDeprecation(),
+    MicrobatchMacroOutsideOfBatchesDeprecation(),
 ]
 
 deprecations: Dict[str, DBTDeprecation] = {d.name: d for d in deprecations_list}

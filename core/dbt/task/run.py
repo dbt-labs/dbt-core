@@ -1,5 +1,4 @@
 import functools
-import os
 import threading
 import time
 from copy import deepcopy
@@ -893,10 +892,13 @@ class RunTask(CompileTask):
         )
 
     def get_runner_type(self, node) -> Optional[Type[BaseRunner]]:
+        if self.manifest is None:
+            raise DbtInternalError("manifest must be set prior to calling get_runner_type")
+
         if (
-            os.environ.get("DBT_EXPERIMENTAL_MICROBATCH")
-            and node.config.materialized == "incremental"
+            node.config.materialized == "incremental"
             and node.config.incremental_strategy == "microbatch"
+            and self.manifest.use_microbatch_batches(project_name=self.config.project_name)
         ):
             return MicrobatchModelRunner
         else:

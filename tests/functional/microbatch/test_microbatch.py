@@ -1,9 +1,12 @@
-import os
 from unittest import mock
 
 import pytest
 
-from dbt.events.types import LogModelResult, MicrobatchModelNoEventTimeInputs
+from dbt.events.types import (
+    LogModelResult,
+    MicrobatchMacroOutsideOfBatchesDeprecation,
+    MicrobatchModelNoEventTimeInputs,
+)
 from dbt.tests.util import (
     get_artifact,
     patch_microbatch_end_time,
@@ -152,9 +155,33 @@ class BaseMicrobatchCustomUserStrategy:
     def macros(self):
         return {"microbatch.sql": custom_microbatch_strategy}
 
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "flags": {
+                "require_batched_execution_for_custom_microbatch_strategy": True,
+            }
+        }
+
+    @pytest.fixture(scope="class")
+    def deprecation_catcher(self) -> EventCatcher:
+        return EventCatcher(MicrobatchMacroOutsideOfBatchesDeprecation)
+
 
 class TestMicrobatchCustomUserStrategyDefault(BaseMicrobatchCustomUserStrategy):
-    def test_use_custom_microbatch_strategy_by_default(self, project):
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "flags": {
+                "require_batched_execution_for_custom_microbatch_strategy": False,
+            }
+        }
+
+    def test_use_custom_microbatch_strategy_by_default(
+        self,
+        project,
+        deprecation_catcher: EventCatcher,
+    ):
         with mock.patch.object(
             type(project.adapter), "valid_incremental_strategies", lambda _: []
         ):
@@ -164,12 +191,17 @@ class TestMicrobatchCustomUserStrategyDefault(BaseMicrobatchCustomUserStrategy):
             # Incremental run uses custom strategy
             _, logs = run_dbt_and_capture(["run"])
             assert "custom microbatch strategy" in logs
+            # The custom strategy wasn't used with batch functionality
+            assert "START batch" not in logs
+            # Deprecation warning about custom microbatch macro fired
+            assert len(deprecation_catcher.caught_events) == 0
 
 
-class TestMicrobatchCustomUserStrategyEnvVarTrueValid(BaseMicrobatchCustomUserStrategy):
-    @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
-    def test_use_custom_microbatch_strategy_env_var_true_invalid_incremental_strategy(
-        self, project
+class TestMicrobatchCustomUserStrategyProjectFlagTrueValid(BaseMicrobatchCustomUserStrategy):
+    def test_use_custom_microbatch_strategy_project_flag_true_invalid_incremental_strategy(
+        self,
+        project,
+        deprecation_catcher: EventCatcher,
     ):
         with mock.patch.object(
             type(project.adapter), "valid_incremental_strategies", lambda _: ["microbatch"]
@@ -182,13 +214,14 @@ class TestMicrobatchCustomUserStrategyEnvVarTrueValid(BaseMicrobatchCustomUserSt
             with patch_microbatch_end_time("2020-01-03 13:57:00"):
                 _, logs = run_dbt_and_capture(["run"])
             assert "custom microbatch strategy" in logs
+            # The custom strategy was used with batch functionality
+            assert "START batch" in logs
+            # Deprecation warning about custom microbatch macro not fired
+            assert len(deprecation_catcher.caught_events) == 0
 
 
-# TODO: Consider a behaviour flag here if DBT_EXPERIMENTAL_MICROBATCH is removed
-# Since this causes an exception prior to using an override
-class TestMicrobatchCustomUserStrategyEnvVarTrueInvalid(BaseMicrobatchCustomUserStrategy):
-    @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
-    def test_use_custom_microbatch_strategy_env_var_true_invalid_incremental_strategy(
+class TestMicrobatchCustomUserStrategyProjectFlagTrueInvalid(BaseMicrobatchCustomUserStrategy):
+    def test_use_custom_microbatch_strategy_project_flag_true_invalid_incremental_strategy(
         self, project
     ):
         with mock.patch.object(
@@ -221,7 +254,6 @@ class BaseMicrobatchTest:
 
 
 class TestMicrobatchCLI(BaseMicrobatchTest):
-    @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
     def test_run_with_event_time(self, project):
         # run without --event-time-start or --event-time-end - 3 expected rows in output
         catcher = EventCatcher(event_to_catch=LogModelResult)
@@ -255,7 +287,6 @@ class TestMicrobatchCLI(BaseMicrobatchTest):
 
 
 class TestMicroBatchBoundsDefault(BaseMicrobatchTest):
-    @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
     def test_run_with_event_time(self, project):
         # initial run -- backfills all data
         with patch_microbatch_end_time("2020-01-03 13:57:00"):
@@ -307,7 +338,6 @@ class TestMicrobatchWithSource(BaseMicrobatchTest):
             "seeds.yml": seeds_yaml,
         }
 
-    @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
     def test_run_with_event_time(self, project):
         # ensure seed is created for source
         run_dbt(["seed"])
@@ -362,7 +392,6 @@ class TestMicrobatchJinjaContext(BaseMicrobatchTest):
             "microbatch_model.sql": microbatch_model_with_context_checks_sql,
         }
 
-    @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
     def test_run_with_event_time(self, project):
         # initial run -- backfills all data
         with patch_microbatch_end_time("2020-01-03 13:57:00"):
@@ -378,7 +407,6 @@ class TestMicrobatchWithInputWithoutEventTime(BaseMicrobatchTest):
             "microbatch_model.sql": microbatch_model_sql,
         }
 
-    @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
     def test_run_with_event_time(self, project):
         catcher = EventCatcher(event_to_catch=MicrobatchModelNoEventTimeInputs)
 
@@ -409,7 +437,6 @@ class TestMicrobatchWithInputWithoutEventTime(BaseMicrobatchTest):
 
 
 class TestMicrobatchUsingRefRenderSkipsFilter(BaseMicrobatchTest):
-    @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
     def test_run_with_event_time(self, project):
         # initial run -- backfills all data
         with patch_microbatch_end_time("2020-01-03 13:57:00"):
@@ -462,7 +489,6 @@ class TestMicrobatchJinjaContextVarsAvailable(BaseMicrobatchTest):
             "microbatch_model.sql": microbatch_model_context_vars,
         }
 
-    @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
     def test_run_with_event_time_logs(self, project):
         with patch_microbatch_end_time("2020-01-03 13:57:00"):
             _, logs = run_dbt_and_capture(["run"])
@@ -495,7 +521,6 @@ class TestMicrobatchIncrementalPartitionFailure(BaseMicrobatchTest):
             "downstream_model.sql": downstream_model_of_microbatch_sql,
         }
 
-    @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
     def test_run_with_event_time(self, project):
         # run all partitions from start - 2 expected rows in output, one failed
         with patch_microbatch_end_time("2020-01-03 13:57:00"):
@@ -520,7 +545,6 @@ class TestMicrobatchRetriesPartialSuccesses(BaseMicrobatchTest):
             "microbatch_model.sql": microbatch_model_failing_incremental_partition_sql,
         }
 
-    @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
     def test_run_with_event_time(self, project):
         # run all partitions from start - 2 expected rows in output, one failed
         with patch_microbatch_end_time("2020-01-03 13:57:00"):
@@ -560,7 +584,6 @@ class TestMicrobatchMultipleRetries(BaseMicrobatchTest):
             "microbatch_model.sql": microbatch_model_failing_incremental_partition_sql,
         }
 
-    @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
     def test_run_with_event_time(self, project):
         # run all partitions from start - 2 expected rows in output, one failed
         with patch_microbatch_end_time("2020-01-03 13:57:00"):
@@ -607,7 +630,6 @@ class TestMicrobatchInitialPartitionFailure(BaseMicrobatchTest):
             "microbatch_model.sql": microbatch_model_first_partition_failing_sql,
         }
 
-    @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
     def test_run_with_event_time(self, project):
         # run all partitions from start - 2 expected rows in output, one failed
         with patch_microbatch_end_time("2020-01-03 13:57:00"):
@@ -616,7 +638,6 @@ class TestMicrobatchInitialPartitionFailure(BaseMicrobatchTest):
 
 
 class TestMicrobatchCompiledRunPaths(BaseMicrobatchTest):
-    @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
     def test_run_with_event_time(self, project):
         # run all partitions from start - 2 expected rows in output, one failed
         with patch_microbatch_end_time("2020-01-03 13:57:00"):
@@ -699,7 +720,6 @@ class TestMicrobatchFullRefreshConfigFalse(BaseMicrobatchTest):
             "downstream_model.sql": downstream_model_of_microbatch_sql,
         }
 
-    @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
     def test_run_with_event_time(self, project):
         # run all partitions from 2020-01-02 to spoofed "now" - 2 expected rows in output
         with patch_microbatch_end_time("2020-01-03 13:57:00"):
@@ -744,7 +764,6 @@ class TestMicrbobatchModelsRunWithSameCurrentTime(BaseMicrobatchTest):
             "second_microbatch_model.sql": microbatch_yearly_model_downstream_sql,
         }
 
-    @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
     def test_microbatch(self, project) -> None:
         run_dbt(["run"])
 
