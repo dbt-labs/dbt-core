@@ -20935,6 +20935,10 @@
                           "propertyNames": {
                             "type": "string"
                           }
+                        },
+                        "enabled": {
+                          "type": "boolean",
+                          "default": true
                         }
                       },
                       "additionalProperties": true
@@ -22500,6 +22504,10 @@
                 "propertyNames": {
                   "type": "string"
                 }
+              },
+              "enabled": {
+                "type": "boolean",
+                "default": true
               }
             },
             "additionalProperties": true

@@ -158,6 +158,7 @@ sample_values = [
     ),
     core_types.SourceFreshnessProjectHooksNotRun(),
     core_types.MFTimespineWithoutYamlConfigurationDeprecation(),
+    core_types.MFCumulativeTypeParamsDeprecation(),
     # E - DB Adapter ======================
     adapter_types.AdapterEventDebug(),
     adapter_types.AdapterEventInfo(),

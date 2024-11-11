@@ -453,6 +453,14 @@ message MFTimespineWithoutYamlConfigurationDeprecationMsg {
     MFTimespineWithoutYamlConfigurationDeprecation data = 2;
 }
 
+// D019
+message MFCumulativeTypeParamsDeprecation {}
+
+message MFCumulativeTypeParamsDeprecationMsg {
+    CoreEventInfo info = 1;
+    MFCumulativeTypeParamsDeprecation data = 2;
+}
+
 // I065
 message DeprecatedModel {
     string model_name = 1;

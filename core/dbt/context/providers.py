@@ -241,6 +241,7 @@ class BaseResolver(metaclass=abc.ABCMeta):
             os.environ.get("DBT_EXPERIMENTAL_MICROBATCH")
             and (isinstance(target.config, NodeConfig) or isinstance(target.config, SourceConfig))
             and target.config.event_time
+            and isinstance(self.model, ModelNode)
             and self.model.config.materialized == "incremental"
             and self.model.config.incremental_strategy == "microbatch"
         ):

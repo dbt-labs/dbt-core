@@ -1657,6 +1657,8 @@ class Manifest(MacroMethods, dbtClassMixin):
                 source_file.semantic_models.append(node.unique_id)
             if isinstance(node, Exposure):
                 source_file.exposures.append(node.unique_id)
+            if isinstance(node, UnitTestDefinition):
+                source_file.unit_tests.append(node.unique_id)
         elif isinstance(source_file, FixtureSourceFile):
             pass
         else:

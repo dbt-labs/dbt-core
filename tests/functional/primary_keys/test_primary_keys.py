@@ -2,6 +2,8 @@ import pytest
 
 from dbt.tests.util import get_manifest, run_dbt
 from tests.functional.primary_keys.fixtures import (
+    invalid_model_unique_combo_of_columns,
+    invalid_model_unique_test,
     simple_model_constraints,
     simple_model_disabled_unique_test,
     simple_model_sql,
@@ -155,3 +157,57 @@ class TestSimpleModelCombinationOfColumns:
         manifest = get_manifest(project.project_root)
         node = manifest.nodes["model.test.simple_model"]
         assert node.primary_key == ["color", "id"]
+
+
+class TestInvalidModelCombinationOfColumns:
+    @pytest.fixture(scope="class")
+    def packages(self):
+        return {
+            "packages": [
+                {
+                    "git": "https://github.com/dbt-labs/dbt-utils.git",
+                    "revision": "1.1.0",
+                },
+            ]
+        }
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "simple_model.sql": simple_model_sql,
+            "schema.yml": invalid_model_unique_combo_of_columns,
+        }
+
+    def test_invalid_combo_of_columns(self, project):
+        run_dbt(["deps"])
+        run_dbt(["run"])
+        manifest = get_manifest(project.project_root)
+        node = manifest.nodes["model.test.simple_model"]
+        assert node.primary_key == []
+
+
+class TestInvalidModelUniqueTest:
+    @pytest.fixture(scope="class")
+    def packages(self):
+        return {
+            "packages": [
+                {
+                    "git": "https://github.com/dbt-labs/dbt-utils.git",
+                    "revision": "1.1.0",
+                },
+            ]
+        }
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "simple_model.sql": simple_model_sql,
+            "schema.yml": invalid_model_unique_test,
+        }
+
+    def test_invalid_combo_of_columns(self, project):
+        run_dbt(["deps"])
+        run_dbt(["run"])
+        manifest = get_manifest(project.project_root)
+        node = manifest.nodes["model.test.simple_model"]
+        assert node.primary_key == []

@@ -541,11 +541,20 @@ class ModelNode(ModelResource, CompiledNode):
         columns_with_disabled_unique_tests = set()
         columns_with_not_null_tests = set()
         for test in data_tests:
-            columns = []
-            if "column_name" in test.test_metadata.kwargs:
+            columns: List[str] = []
+            # extract columns from test kwargs, ensuring columns is a List[str] given tests can have custom (user or pacakge-defined) kwarg types
+            if "column_name" in test.test_metadata.kwargs and isinstance(
+                test.test_metadata.kwargs["column_name"], str
+            ):
                 columns = [test.test_metadata.kwargs["column_name"]]
-            elif "combination_of_columns" in test.test_metadata.kwargs:
-                columns = test.test_metadata.kwargs["combination_of_columns"]
+            elif "combination_of_columns" in test.test_metadata.kwargs and isinstance(
+                test.test_metadata.kwargs["combination_of_columns"], list
+            ):
+                columns = [
+                    column
+                    for column in test.test_metadata.kwargs["combination_of_columns"]
+                    if isinstance(column, str)
+                ]
 
             for column in columns:
                 if test.test_metadata.name in ["unique", "unique_combination_of_columns"]:
