@@ -673,21 +673,23 @@ class RunTask(CompileTask):
             result = self.call_runner(runner)
             batch_results: List[RunResult] = []
 
-            batch_idx = 0
             # execute batches serially until a relation exists
-            while not runner.relation_exists and batch_idx < len(runner.batches):
-                runner.set_batch_idx(batch_idx)
-                batch_results.append(self.call_runner(runner))
-                batch_idx += 1
-
+            relation_exists = runner.relation_exists
+            batch_idx = 0
             while batch_idx < len(runner.batches):
                 batch_runner = MicrobatchModelRunner(
                     self.config, runner.adapter, deepcopy(node), self.run_count, self.num_nodes
                 )
                 batch_runner.set_batch_idx(batch_idx)
-                batch_runner.set_relation_exists(runner.relation_exists)
+                batch_runner.set_relation_exists(relation_exists)
                 batch_runner.set_batches(runner.batches)
-                self._submit(pool, [batch_runner], batch_results.append)
+
+                if relation_exists:
+                    self._submit(pool, [batch_runner], batch_results.append)
+                else:
+                    batch_results.append(self.call_runner(batch_runner))
+                    relation_exists = batch_runner.relation_exists
+
                 batch_idx += 1
 
             # wait until all batches have completed
