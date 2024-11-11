@@ -428,7 +428,16 @@ class MicrobatchModelRunner(ModelRunner):
         if self.batch_idx is not None:
             self.print_batch_result_line(result)
 
-    def merge_batch_results(self, result):
+    def merge_batch_results(self, result: RunResult, batch_results: List[RunResult]):
+        """merge batch_results into result"""
+        if result.batch_results is None:
+            result.batch_results = BatchResults()
+
+        for batch_result in batch_results:
+            if batch_result.batch_results is not None:
+                result.batch_results += batch_result.batch_results
+            result.execution_time += batch_result.execution_time
+
         num_successes = len(result.batch_results.successful)
         num_failures = len(result.batch_results.failed)
         if num_failures == 0:
@@ -662,27 +671,13 @@ class RunTask(CompileTask):
         if isinstance(runner, MicrobatchModelRunner):
             # Initial run computes batch metadata
             result = self.call_runner(runner)
-
-            def batch_callback(batch_result):
-                nonlocal result
-                nonlocal runner
-                result.batch_results += batch_result.batch_results
-                result.execution_time += batch_result.execution_time
-
-                # All batches are complete!
-                if len(runner.batches) == len(result.batch_results):
-                    runner.merge_batch_results(result)
-                    track_model_run(
-                        runner.node_index, runner.num_nodes, result, adapter=runner.adapter
-                    )
-                    runner.print_result_line(result)
-                    callback(result)
+            batch_results: List[RunResult] = []
 
             batch_idx = 0
             # execute batches serially until a relation exists
             while not runner.relation_exists and batch_idx < len(runner.batches):
                 runner.set_batch_idx(batch_idx)
-                batch_callback(self.call_runner(runner))
+                batch_results.append(self.call_runner(runner))
                 batch_idx += 1
 
             while batch_idx < len(runner.batches):
@@ -692,8 +687,17 @@ class RunTask(CompileTask):
                 batch_runner.set_batch_idx(batch_idx)
                 batch_runner.set_relation_exists(runner.relation_exists)
                 batch_runner.set_batches(runner.batches)
-                self._submit(pool, [batch_runner], batch_callback)
+                self._submit(pool, [batch_runner], batch_results.append)
                 batch_idx += 1
+
+            # wait until all batches have completed
+            while len(batch_results) != len(runner.batches):
+                pass
+
+            runner.merge_batch_results(result, batch_results)
+            track_model_run(runner.node_index, runner.num_nodes, result, adapter=runner.adapter)
+            runner.print_result_line(result)
+            callback(result)
         else:
             args = [runner]
             self._submit(pool, args, callback)
