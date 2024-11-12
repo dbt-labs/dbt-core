@@ -225,7 +225,7 @@ class TestMicrobatchCustomUserStrategyProjectFlagTrueInvalid(BaseMicrobatchCusto
             type(project.adapter), "valid_incremental_strategies", lambda _: []
         ):
             # Run of microbatch model while adapter doesn't have a "valid"
-            # microbatch strategy causes an error to be raised
+            # microbatch strategy causes no error raised when behaviour flag set to true
             with patch_microbatch_end_time("2020-01-03 13:57:00"):
                 _, logs = run_dbt_and_capture(["run"], expect_pass=False)
             assert "'microbatch' is not valid" not in logs
