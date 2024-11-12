@@ -48,6 +48,14 @@ class MetricTimeWindow(dbtClassMixin):
     count: int
     granularity: str
 
+    @property
+    def window_string(self) -> str:  # noqa: D
+        return f"{self.count} {self.granularity}"
+
+    @property
+    def is_standard_granularity(self) -> bool:  # noqa: D
+        return self.granularity.casefold() in {item.value.casefold() for item in TimeGranularity}
+
 
 @dataclass
 class MetricInput(dbtClassMixin):

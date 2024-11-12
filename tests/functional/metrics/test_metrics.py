@@ -85,7 +85,7 @@ class TestSimpleMetrics:
         )
         assert (
             manifest.metrics["metric.test.number_of_people"].time_granularity
-            == TimeGranularity.MONTH
+            == TimeGranularity.MONTH.value
         )
         assert manifest.metrics["metric.test.collective_tenure"].time_granularity is None
 
@@ -436,25 +436,25 @@ class TestCumulativeMetric:
         metric_ids = set(manifest.metrics.keys())
         expected_metric_ids_to_cumulative_type_params = {
             "metric.test.weekly_visits": CumulativeTypeParams(
-                window=MetricTimeWindow(count=7, granularity=TimeGranularity.DAY),
+                window=MetricTimeWindow(count=7, granularity=TimeGranularity.DAY.value),
                 period_agg=PeriodAggregation.AVERAGE,
             ),
             "metric.test.cumulative_orders": CumulativeTypeParams(
                 period_agg=PeriodAggregation.LAST
             ),
             "metric.test.orders_ytd": CumulativeTypeParams(
-                grain_to_date=TimeGranularity.YEAR, period_agg=PeriodAggregation.FIRST
+                grain_to_date=TimeGranularity.YEAR.value, period_agg=PeriodAggregation.FIRST
             ),
             "metric.test.monthly_orders": CumulativeTypeParams(
-                window=MetricTimeWindow(count=1, granularity=TimeGranularity.MONTH),
+                window=MetricTimeWindow(count=1, granularity=TimeGranularity.MONTH.value),
                 period_agg=PeriodAggregation.AVERAGE,
             ),
             "metric.test.yearly_orders": CumulativeTypeParams(
-                window=MetricTimeWindow(count=1, granularity=TimeGranularity.YEAR),
+                window=MetricTimeWindow(count=1, granularity=TimeGranularity.YEAR.value),
                 period_agg=PeriodAggregation.FIRST,
             ),
             "metric.test.visits_mtd": CumulativeTypeParams(
-                grain_to_date=TimeGranularity.MONTH, period_agg=PeriodAggregation.FIRST
+                grain_to_date=TimeGranularity.MONTH.value, period_agg=PeriodAggregation.FIRST
             ),
             "metric.test.cumulative_visits": CumulativeTypeParams(
                 period_agg=PeriodAggregation.FIRST
