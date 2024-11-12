@@ -1,5 +1,4 @@
 import functools
-import os
 import threading
 import time
 from copy import deepcopy
@@ -482,11 +481,10 @@ class ModelRunner(CompileRunner):
             )
 
         hook_ctx = self.adapter.pre_model_hook(context_config)
-
         if (
-            os.environ.get("DBT_EXPERIMENTAL_MICROBATCH")
-            and model.config.materialized == "incremental"
+            model.config.materialized == "incremental"
             and model.config.incremental_strategy == "microbatch"
+            and manifest.use_microbatch_batches(project_name=self.config.project_name)
         ):
             return self._execute_microbatch_model(
                 hook_ctx, context_config, model, manifest, context, materialization_macro
@@ -568,6 +566,9 @@ class ModelRunner(CompileRunner):
                 # At least one batch has been inserted successfully!
                 incremental_batch = True
 
+            except (KeyboardInterrupt, SystemExit):
+                # reraise it for GraphRunnableTask.execute_nodes to handle
+                raise
             except Exception as e:
                 exception = e
                 batch_run_result = self._build_failed_run_batch_result(

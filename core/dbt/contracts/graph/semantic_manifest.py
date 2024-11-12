@@ -1,5 +1,6 @@
-from typing import List, Optional
+from typing import List, Optional, Set
 
+from dbt import deprecations
 from dbt.constants import (
     LEGACY_TIME_SPINE_GRANULARITY,
     LEGACY_TIME_SPINE_MODEL_NAME,
@@ -9,6 +10,7 @@ from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import ModelNode
 from dbt.events.types import ArtifactWritten, SemanticValidationFailure
 from dbt.exceptions import ParsingError
+from dbt.flags import get_flags
 from dbt_common.clients.system import write_file
 from dbt_common.events.base_types import EventLevel
 from dbt_common.events.functions import fire_event
@@ -34,6 +36,11 @@ from dbt_semantic_interfaces.type_enums import TimeGranularity
 from dbt_semantic_interfaces.validations.semantic_manifest_validator import (
     SemanticManifestValidator,
 )
+from dbt_semantic_interfaces.validations.validator_helpers import (
+    FileContext,
+    ValidationError,
+    ValidationIssueContext,
+)
 
 
 class SemanticManifest:
@@ -58,14 +65,58 @@ class SemanticManifest:
         semantic_manifest = self._get_pydantic_semantic_manifest()
         validator = SemanticManifestValidator[PydanticSemanticManifest]()
         validation_results = validator.validate_semantic_manifest(semantic_manifest)
+        validation_result_errors = list(validation_results.errors)
+
+        metrics_using_old_params: Set[str] = set()
+        for metric in semantic_manifest.metrics or []:
+            for field in ("window", "grain_to_date"):
+                type_params_field_value = getattr(metric.type_params, field)
+                # Warn that the old type_params structure has been deprecated.
+                if type_params_field_value:
+                    metrics_using_old_params.add(metric.name)
+        if metrics_using_old_params:
+            if get_flags().require_nested_cumulative_type_params is False:
+                deprecations.warn(
+                    "mf-cumulative-type-params-deprecation",
+                )
+            else:
+                names = ", ".join(metrics_using_old_params)
+                validation_result_errors.append(
+                    ValidationError(
+                        context=ValidationIssueContext(
+                            # We don't have the file context at this point.
+                            file_context=FileContext(),
+                            object_name=names,
+                            object_type="metric",
+                        ),
+                        message=f"Cumulative fields `type_params.window` and `type_params.grain_to_date` should be nested under `type_params.cumulative_type_params.window` and `type_params.cumulative_type_params.grain_to_date`. Invalid metrics: {names}. See documentation on behavior changes: https://docs.getdbt.com/reference/global-configs/behavior-changes.",
+                    )
+                )
+
+        time_spines = semantic_manifest.project_configuration.time_spines
+        legacy_time_spines = (
+            semantic_manifest.project_configuration.time_spine_table_configurations
+        )
+        # If the time spine contains a day grain then it is functionally equivalent to the legacy time spine.
+        time_spines_contain_day = any(
+            c for c in time_spines if c.primary_column.time_granularity == TimeGranularity.DAY
+        )
+        if (
+            get_flags().require_yaml_configuration_for_mf_time_spines is False
+            and legacy_time_spines
+            and not time_spines_contain_day
+        ):
+            deprecations.warn(
+                "mf-timespine-without-yaml-configuration",
+            )
 
         for warning in validation_results.warnings:
             fire_event(SemanticValidationFailure(msg=warning.message))
 
-        for error in validation_results.errors:
+        for error in validation_result_errors:
             fire_event(SemanticValidationFailure(msg=error.message), EventLevel.ERROR)
 
-        return not validation_results.errors
+        return not validation_result_errors
 
     def write_json_to_file(self, file_path: str):
         semantic_manifest = self._get_pydantic_semantic_manifest()

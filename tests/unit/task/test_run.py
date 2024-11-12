@@ -14,7 +14,7 @@ from pytest_mock import MockerFixture
 from dbt.adapters.contracts.connection import AdapterResponse
 from dbt.adapters.postgres import PostgresAdapter
 from dbt.artifacts.resources.base import FileHash
-from dbt.artifacts.resources.types import NodeType, RunHookType
+from dbt.artifacts.resources.types import BatchSize, NodeType, RunHookType
 from dbt.artifacts.resources.v1.components import DependsOn
 from dbt.artifacts.resources.v1.config import NodeConfig
 from dbt.artifacts.resources.v1.model import ModelConfig
@@ -27,6 +27,7 @@ from dbt.contracts.graph.nodes import HookNode, ModelNode
 from dbt.events.types import LogModelResult
 from dbt.exceptions import DbtRuntimeError
 from dbt.flags import get_flags, set_from_args
+from dbt.materializations.incremental.microbatch import MicrobatchBuilder
 from dbt.task.run import ModelRunner, RunTask, _get_adapter_info
 from dbt.tests.util import safe_set_invocation_context
 from dbt_common.events.base_types import EventLevel
@@ -264,6 +265,33 @@ class TestModelRunner:
 
         # Assert result of _is_incremental
         assert model_runner._is_incremental(model) == expectation
+
+    def test_keyboard_breaks__execute_microbatch_materialization(
+        self,
+        table_model: ModelNode,
+        manifest: Manifest,
+        model_runner: ModelRunner,
+    ) -> None:
+        def mock_build_batch_context(*args, **kwargs):
+            raise KeyboardInterrupt("Test exception")
+
+        def mock_is_incremental(*args, **kwargs):
+            return True
+
+        table_model.config.materialized = "incremental"
+        table_model.config.incremental_strategy = "microbatch"
+        table_model.config.batch_size = BatchSize.day
+
+        with patch.object(
+            MicrobatchBuilder, "build_batch_context", mock_build_batch_context
+        ), patch.object(ModelRunner, "_is_incremental", mock_is_incremental):
+            try:
+                model_runner._execute_microbatch_materialization(
+                    table_model, manifest, {}, MagicMock()
+                )
+                assert False, "KeybaordInterrupt failed to escape"
+            except KeyboardInterrupt:
+                assert True
 
 
 class TestRunTask:

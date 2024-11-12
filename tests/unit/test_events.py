@@ -157,6 +157,9 @@ sample_values = [
         package_name="my_package", materialization_name="view"
     ),
     core_types.SourceFreshnessProjectHooksNotRun(),
+    core_types.MFTimespineWithoutYamlConfigurationDeprecation(),
+    core_types.MFCumulativeTypeParamsDeprecation(),
+    core_types.MicrobatchMacroOutsideOfBatchesDeprecation(),
     # E - DB Adapter ======================
     adapter_types.AdapterEventDebug(),
     adapter_types.AdapterEventInfo(),

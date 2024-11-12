@@ -466,6 +466,36 @@ class SourceFreshnessProjectHooksNotRun(WarnLevel):
         return line_wrap_message(warning_tag(description))
 
 
+class MFTimespineWithoutYamlConfigurationDeprecation(WarnLevel):
+    def code(self) -> str:
+        return "D018"
+
+    def message(self) -> str:
+        description = "Time spines without YAML configuration are in the process of deprecation. Please add YAML configuration for your 'metricflow_time_spine' model. See documentation on MetricFlow time spines: https://docs.getdbt.com/docs/build/metricflow-time-spine and behavior change documentation: https://docs.getdbt.com/reference/global-configs/behavior-changes."
+
+        return line_wrap_message(warning_tag(description))
+
+
+class MFCumulativeTypeParamsDeprecation(WarnLevel):
+    def code(self) -> str:
+        return "D019"
+
+    def message(self) -> str:
+        description = "Cumulative fields `type_params.window` and `type_params.grain_to_date` have been moved and will soon be deprecated. Please nest those values under `type_params.cumulative_type_params.window` and `type_params.cumulative_type_params.grain_to_date`. See documentation on behavior changes: https://docs.getdbt.com/reference/global-configs/behavior-changes."
+
+        return line_wrap_message(warning_tag(description))
+
+
+class MicrobatchMacroOutsideOfBatchesDeprecation(WarnLevel):
+    def code(self) -> str:
+        return "D020"
+
+    def message(self) -> str:
+        description = "The use of a custom microbatch macro outside of batched execution is deprecated. To use it with batched execution, set `flags.require_batched_execution_for_custom_microbatch_strategy` to `True` in `dbt_project.yml`. In the future this will be the default behavior."
+
+        return line_wrap_message(warning_tag(description))
+
+
 # =======================================================
 # I - Project parsing
 # =======================================================
