@@ -34,6 +34,7 @@ from tests.functional.metrics.fixtures import (
     semantic_model_people_yml,
     semantic_model_purchasing_yml,
 )
+from tests.functional.time_spines.fixtures import time_spine_yml
 
 
 class TestSimpleMetrics:
@@ -361,6 +362,7 @@ class TestConversionMetric:
             "metricflow_time_spine.sql": metricflow_time_spine_sql,
             "semantic_models.yml": conversion_semantic_model_purchasing_yml,
             "conversion_metric.yml": conversion_metric_yml,
+            "time_spine.yml": time_spine_yml,
         }
 
     @pytest.fixture(scope="class")
@@ -382,10 +384,16 @@ class TestConversionMetric:
         # make sure the metric is in the manifest
         manifest = get_manifest(project.project_root)
         metric_ids = list(manifest.metrics.keys())
-        expected_metric_ids = [
-            "metric.test.converted_orders_over_visits",
-        ]
-        assert metric_ids == expected_metric_ids
+        expected_metric_ids = {
+            "metric.test.converted_orders_over_visits": None,
+            "metric.test.converted_orders_over_visits_with_window": MetricTimeWindow(
+                count=4, granularity=TimeGranularity.DAY.value
+            ),
+            "metric.test.converted_orders_over_visits_with_custom_window": MetricTimeWindow(
+                count=4, granularity="martian_day"
+            ),
+        }
+        assert set(metric_ids) == set(expected_metric_ids.keys())
         assert manifest.metrics[
             "metric.test.converted_orders_over_visits"
         ].type_params.conversion_type_params
@@ -409,6 +417,14 @@ class TestConversionMetric:
             ].type_params.conversion_type_params.entity
             == "purchase"
         )
+        for (
+            metric_id,
+            expected_window,
+        ) in expected_metric_ids.items():
+            assert (
+                manifest.metrics[metric_id].type_params.conversion_type_params.window
+                == expected_window
+            ), f"Found unexpected conversion window for {metric_id}"
 
 
 class TestCumulativeMetric:
@@ -418,7 +434,8 @@ class TestCumulativeMetric:
             "purchasing.sql": purchasing_model_sql,
             "metricflow_time_spine.sql": metricflow_time_spine_sql,
             "semantic_models.yml": conversion_semantic_model_purchasing_yml,
-            "conversion_metric.yml": cumulative_metric_yml,
+            "cumulative_metric.yml": cumulative_metric_yml,
+            "time_spine.yml": time_spine_yml,
         }
 
     @pytest.fixture(scope="class")
@@ -458,6 +475,10 @@ class TestCumulativeMetric:
             ),
             "metric.test.cumulative_visits": CumulativeTypeParams(
                 period_agg=PeriodAggregation.FIRST
+            ),
+            "metric.test.visits_martian_day": CumulativeTypeParams(grain_to_date="martian_day"),
+            "metric.test.visits_martian_day_window": CumulativeTypeParams(
+                window=MetricTimeWindow(count=1, granularity="martian_day"),
             ),
         }
         assert metric_ids == set(expected_metric_ids_to_cumulative_type_params.keys())

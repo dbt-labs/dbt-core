@@ -462,6 +462,8 @@ semantic_models:
     dimensions:
       - name: purchased_at
         type: TIME
+        type_params:
+          time_granularity: day
     entities:
       - name: purchase
         type: primary
@@ -736,6 +738,8 @@ semantic_models:
     dimensions:
       - name: purchased_at
         type: TIME
+        type_params:
+          time_granularity: day
     entities:
       - name: purchase
         type: primary
@@ -796,6 +800,20 @@ metrics:
       type: cumulative
       type_params:
         measure: num_visits
+    - name: visits_martian_day
+      label: Visits since start of martian_day
+      type: cumulative
+      type_params:
+        measure: num_visits
+        cumulative_type_params:
+          grain_to_date: martian_day
+    - name: visits_martian_day_window
+      label: Visits since start of martian_day window
+      type: cumulative
+      type_params:
+        measure: num_visits
+        cumulative_type_params:
+          window: 1 martian_day
 """
 
 conversion_metric_yml = """
@@ -809,6 +827,24 @@ metrics:
           base_measure: num_visits
           conversion_measure: num_orders
           entity: purchase
+    - name: converted_orders_over_visits_with_window
+      label: Number of orders converted from visits with window
+      type: conversion
+      type_params:
+        conversion_type_params:
+          base_measure: num_visits
+          conversion_measure: num_orders
+          entity: purchase
+          window: 4 day
+    - name: converted_orders_over_visits_with_custom_window
+      label: Number of orders converted from visits with custom window
+      type: conversion
+      type_params:
+        conversion_type_params:
+          base_measure: num_visits
+          conversion_measure: num_orders
+          entity: purchase
+          window: 4 martian_day
 """
 
 filtered_metrics_yml = """
