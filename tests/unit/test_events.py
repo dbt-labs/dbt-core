@@ -157,6 +157,9 @@ sample_values = [
         package_name="my_package", materialization_name="view"
     ),
     core_types.SourceFreshnessProjectHooksNotRun(),
+    core_types.MFTimespineWithoutYamlConfigurationDeprecation(),
+    core_types.MFCumulativeTypeParamsDeprecation(),
+    core_types.MicrobatchMacroOutsideOfBatchesDeprecation(),
     # E - DB Adapter ======================
     adapter_types.AdapterEventDebug(),
     adapter_types.AdapterEventInfo(),
@@ -286,6 +289,7 @@ sample_values = [
     core_types.WarnStateTargetEqual(state_path=""),
     core_types.FreshnessConfigProblem(msg=""),
     core_types.SemanticValidationFailure(msg=""),
+    core_types.MicrobatchModelNoEventTimeInputs(model_name=""),
     # M - Deps generation ======================
     core_types.GitSparseCheckoutSubdirectory(subdir=""),
     core_types.GitProgressCheckoutRevision(revision=""),
@@ -319,6 +323,8 @@ sample_values = [
     core_types.DepsScrubbedPackageName(package_name=""),
     core_types.DepsUnpinned(revision="", git=""),
     core_types.NoNodesForSelectionCriteria(spec_raw=""),
+    # P - Artifacts ======================
+    core_types.ArtifactWritten(artifact_type="manifest", artifact_path="path/to/artifact.json"),
     # Q - Node execution ======================
     core_types.RunningOperationCaughtError(exc=""),
     core_types.CompileComplete(),
@@ -517,7 +523,7 @@ T = TypeVar("T")
 
 
 def test_date_serialization():
-    ti = TimingInfo("test")
+    ti = TimingInfo("compile")
     ti.begin()
     ti.end()
     ti_dict = ti.to_dict()
@@ -537,10 +543,7 @@ def test_bad_serialization():
     with pytest.raises(Exception) as excinfo:
         types.Note(param_event_doesnt_have="This should break")
 
-    assert (
-        str(excinfo.value)
-        == "[Note]: Unable to parse dict {'param_event_doesnt_have': 'This should break'}"
-    )
+    assert 'has no field named "param_event_doesnt_have" at "Note"' in str(excinfo.value)
 
 
 def test_single_run_error():
@@ -558,7 +561,8 @@ def test_single_run_error():
             node=None,
             adapter_response=dict(),
             message="oh no!",
-            failures=[],
+            failures=1,
+            batch_results=None,
         )
 
         print_run_result_error(error_result)

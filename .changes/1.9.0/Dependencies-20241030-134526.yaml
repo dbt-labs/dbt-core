@@ -1,0 +1,6 @@
+kind: Dependencies
+body: Bump minimnum allowed dbt-adapters version to 1.8.0
+time: 2024-10-30T13:45:26.144328-05:00
+custom:
+  Author: QMalcolm
+  Issue: N/A

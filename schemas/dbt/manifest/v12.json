@@ -13,7 +13,7 @@
         },
         "dbt_version": {
           "type": "string",
-          "default": "1.9.0a1"
+          "default": "1.9.0b2"
         },
         "generated_at": {
           "type": "string"
@@ -263,7 +263,10 @@
                     "default": null
                   },
                   "lookback": {
-                    "default": 0
+                    "default": 1
+                  },
+                  "begin": {
+                    "default": null
                   },
                   "persist_docs": {
                     "type": "object",
@@ -703,6 +706,12 @@
                   "type": "string"
                 }
               },
+              "unrendered_config_call_dict": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                }
+              },
               "relation_name": {
                 "anyOf": [
                   {
@@ -922,7 +931,10 @@
                                 "default": null
                               },
                               "lookback": {
-                                "default": 0
+                                "default": 1
+                              },
+                              "begin": {
+                                "default": null
                               },
                               "persist_docs": {
                                 "type": "object",
@@ -1305,7 +1317,10 @@
                     "default": null
                   },
                   "lookback": {
-                    "default": 0
+                    "default": 1
+                  },
+                  "begin": {
+                    "default": null
                   },
                   "persist_docs": {
                     "type": "object",
@@ -1725,6 +1740,12 @@
                 "type": "number"
               },
               "config_call_dict": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                }
+              },
+              "unrendered_config_call_dict": {
                 "type": "object",
                 "propertyNames": {
                   "type": "string"
@@ -2378,6 +2399,12 @@
                   "type": "string"
                 }
               },
+              "unrendered_config_call_dict": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                }
+              },
               "relation_name": {
                 "anyOf": [
                   {
@@ -2735,7 +2762,10 @@
                     "default": null
                   },
                   "lookback": {
-                    "default": 0
+                    "default": 1
+                  },
+                  "begin": {
+                    "default": null
                   },
                   "persist_docs": {
                     "type": "object",
@@ -3160,6 +3190,12 @@
                   "type": "string"
                 }
               },
+              "unrendered_config_call_dict": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                }
+              },
               "relation_name": {
                 "anyOf": [
                   {
@@ -3528,7 +3564,10 @@
                     "default": null
                   },
                   "lookback": {
-                    "default": 0
+                    "default": 1
+                  },
+                  "begin": {
+                    "default": null
                   },
                   "persist_docs": {
                     "type": "object",
@@ -3956,6 +3995,12 @@
                 "type": "number"
               },
               "config_call_dict": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                }
+              },
+              "unrendered_config_call_dict": {
                 "type": "object",
                 "propertyNames": {
                   "type": "string"
@@ -4448,7 +4493,10 @@
                                 "default": null
                               },
                               "lookback": {
-                                "default": 0
+                                "default": 1
+                              },
+                              "begin": {
+                                "default": null
                               },
                               "persist_docs": {
                                 "type": "object",
@@ -4885,7 +4933,10 @@
                     "default": null
                   },
                   "lookback": {
-                    "default": 0
+                    "default": 1
+                  },
+                  "begin": {
+                    "default": null
                   },
                   "persist_docs": {
                     "type": "object",
@@ -5305,6 +5356,12 @@
                 "type": "number"
               },
               "config_call_dict": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                }
+              },
+              "unrendered_config_call_dict": {
                 "type": "object",
                 "propertyNames": {
                   "type": "string"
@@ -5958,6 +6015,12 @@
                   "type": "string"
                 }
               },
+              "unrendered_config_call_dict": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                }
+              },
               "relation_name": {
                 "anyOf": [
                   {
@@ -6376,7 +6439,10 @@
                     "default": null
                   },
                   "lookback": {
-                    "default": 0
+                    "default": 1
+                  },
+                  "begin": {
+                    "default": null
                   },
                   "persist_docs": {
                     "type": "object",
@@ -6473,6 +6539,12 @@
                     "anyOf": [
                       {
                         "type": "string"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
                       },
                       {
                         "type": "null"
@@ -6604,6 +6676,68 @@
                         "items": {
                           "type": "string"
                         }
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "snapshot_meta_column_names": {
+                    "type": "object",
+                    "title": "SnapshotMetaColumnNames",
+                    "properties": {
+                      "dbt_valid_to": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null
+                      },
+                      "dbt_valid_from": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null
+                      },
+                      "dbt_scd_id": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null
+                      },
+                      "dbt_updated_at": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "dbt_valid_to_current": {
+                    "anyOf": [
+                      {
+                        "type": "string"
                       },
                       {
                         "type": "null"
@@ -6851,6 +6985,12 @@
                 "type": "number"
               },
               "config_call_dict": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                }
+              },
+              "unrendered_config_call_dict": {
                 "type": "object",
                 "propertyNames": {
                   "type": "string"
@@ -7220,7 +7360,10 @@
                                 "default": null
                               },
                               "lookback": {
-                                "default": 0
+                                "default": 1
+                              },
+                              "begin": {
+                                "default": null
                               },
                               "persist_docs": {
                                 "type": "object",
@@ -8018,6 +8161,28 @@
           },
           "created_at": {
             "type": "number"
+          },
+          "unrendered_database": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "unrendered_schema": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           }
         },
         "additionalProperties": false,
@@ -9989,7 +10154,10 @@
                           "default": null
                         },
                         "lookback": {
-                          "default": 0
+                          "default": 1
+                        },
+                        "begin": {
+                          "default": null
                         },
                         "persist_docs": {
                           "type": "object",
@@ -10429,6 +10597,12 @@
                         "type": "string"
                       }
                     },
+                    "unrendered_config_call_dict": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      }
+                    },
                     "relation_name": {
                       "anyOf": [
                         {
@@ -10648,7 +10822,10 @@
                                       "default": null
                                     },
                                     "lookback": {
-                                      "default": 0
+                                      "default": 1
+                                    },
+                                    "begin": {
+                                      "default": null
                                     },
                                     "persist_docs": {
                                       "type": "object",
@@ -11031,7 +11208,10 @@
                           "default": null
                         },
                         "lookback": {
-                          "default": 0
+                          "default": 1
+                        },
+                        "begin": {
+                          "default": null
                         },
                         "persist_docs": {
                           "type": "object",
@@ -11451,6 +11631,12 @@
                       "type": "number"
                     },
                     "config_call_dict": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      }
+                    },
+                    "unrendered_config_call_dict": {
                       "type": "object",
                       "propertyNames": {
                         "type": "string"
@@ -12104,6 +12290,12 @@
                         "type": "string"
                       }
                     },
+                    "unrendered_config_call_dict": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      }
+                    },
                     "relation_name": {
                       "anyOf": [
                         {
@@ -12461,7 +12653,10 @@
                           "default": null
                         },
                         "lookback": {
-                          "default": 0
+                          "default": 1
+                        },
+                        "begin": {
+                          "default": null
                         },
                         "persist_docs": {
                           "type": "object",
@@ -12886,6 +13081,12 @@
                         "type": "string"
                       }
                     },
+                    "unrendered_config_call_dict": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      }
+                    },
                     "relation_name": {
                       "anyOf": [
                         {
@@ -13254,7 +13455,10 @@
                           "default": null
                         },
                         "lookback": {
-                          "default": 0
+                          "default": 1
+                        },
+                        "begin": {
+                          "default": null
                         },
                         "persist_docs": {
                           "type": "object",
@@ -13682,6 +13886,12 @@
                       "type": "number"
                     },
                     "config_call_dict": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      }
+                    },
+                    "unrendered_config_call_dict": {
                       "type": "object",
                       "propertyNames": {
                         "type": "string"
@@ -14174,7 +14384,10 @@
                                       "default": null
                                     },
                                     "lookback": {
-                                      "default": 0
+                                      "default": 1
+                                    },
+                                    "begin": {
+                                      "default": null
                                     },
                                     "persist_docs": {
                                       "type": "object",
@@ -14611,7 +14824,10 @@
                           "default": null
                         },
                         "lookback": {
-                          "default": 0
+                          "default": 1
+                        },
+                        "begin": {
+                          "default": null
                         },
                         "persist_docs": {
                           "type": "object",
@@ -15031,6 +15247,12 @@
                       "type": "number"
                     },
                     "config_call_dict": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      }
+                    },
+                    "unrendered_config_call_dict": {
                       "type": "object",
                       "propertyNames": {
                         "type": "string"
@@ -15684,6 +15906,12 @@
                         "type": "string"
                       }
                     },
+                    "unrendered_config_call_dict": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      }
+                    },
                     "relation_name": {
                       "anyOf": [
                         {
@@ -16102,7 +16330,10 @@
                           "default": null
                         },
                         "lookback": {
-                          "default": 0
+                          "default": 1
+                        },
+                        "begin": {
+                          "default": null
                         },
                         "persist_docs": {
                           "type": "object",
@@ -16199,6 +16430,12 @@
                           "anyOf": [
                             {
                               "type": "string"
+                            },
+                            {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
                             },
                             {
                               "type": "null"
@@ -16330,6 +16567,68 @@
                               "items": {
                                 "type": "string"
                               }
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null
+                        },
+                        "snapshot_meta_column_names": {
+                          "type": "object",
+                          "title": "SnapshotMetaColumnNames",
+                          "properties": {
+                            "dbt_valid_to": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ],
+                              "default": null
+                            },
+                            "dbt_valid_from": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ],
+                              "default": null
+                            },
+                            "dbt_scd_id": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ],
+                              "default": null
+                            },
+                            "dbt_updated_at": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ],
+                              "default": null
+                            }
+                          },
+                          "additionalProperties": false
+                        },
+                        "dbt_valid_to_current": {
+                          "anyOf": [
+                            {
+                              "type": "string"
                             },
                             {
                               "type": "null"
@@ -16577,6 +16876,12 @@
                       "type": "number"
                     },
                     "config_call_dict": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      }
+                    },
+                    "unrendered_config_call_dict": {
                       "type": "object",
                       "propertyNames": {
                         "type": "string"
@@ -16946,7 +17251,10 @@
                                       "default": null
                                     },
                                     "lookback": {
-                                      "default": 0
+                                      "default": 1
+                                    },
+                                    "begin": {
+                                      "default": null
                                     },
                                     "persist_docs": {
                                       "type": "object",
@@ -17735,6 +18043,28 @@
                     },
                     "created_at": {
                       "type": "number"
+                    },
+                    "unrendered_database": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
+                    },
+                    "unrendered_schema": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
                     }
                   },
                   "additionalProperties": false,
@@ -19320,6 +19650,23 @@
                               "type": "null"
                             }
                           ]
+                        },
+                        "order_by": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "limit": {
+                          "anyOf": [
+                            {
+                              "type": "integer"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null
                         }
                       },
                       "additionalProperties": false,
@@ -20588,6 +20935,10 @@
                           "propertyNames": {
                             "type": "string"
                           }
+                        },
+                        "enabled": {
+                          "type": "boolean",
+                          "default": true
                         }
                       },
                       "additionalProperties": true
@@ -20854,6 +21205,23 @@
                     "type": "null"
                   }
                 ]
+              },
+              "order_by": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "limit": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
               }
             },
             "additionalProperties": false,
@@ -22136,6 +22504,10 @@
                 "propertyNames": {
                   "type": "string"
                 }
+              },
+              "enabled": {
+                "type": "boolean",
+                "default": true
               }
             },
             "additionalProperties": true

@@ -1,0 +1,6 @@
+kind: Fixes
+body: Pass test user config to adapter pre_hook by explicitly adding test builder config to node
+time: 2024-09-25T15:45:14.459598-07:00
+custom:
+  Author: colin-rogers-dbt
+  Issue: "10484"

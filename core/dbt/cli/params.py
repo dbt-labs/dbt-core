@@ -487,6 +487,13 @@ inline = click.option(
     help="Pass SQL inline to dbt compile and show",
 )
 
+inline_direct = click.option(
+    "--inline-direct",
+    envvar=None,
+    help="Internal flag to pass SQL inline to dbt show. Do not load the entire project or apply templating.",
+    hidden=True,
+)
+
 # `--select` and `--models` are analogous for most commands except `dbt list` for legacy reasons.
 # Most CLI arguments should use the combined `select` option that aliases `--models` to `--select`.
 # However, if you need to split out these separators (like `dbt ls`), use the `models` and `raw_select` options instead.

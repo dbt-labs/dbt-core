@@ -466,6 +466,36 @@ class SourceFreshnessProjectHooksNotRun(WarnLevel):
         return line_wrap_message(warning_tag(description))
 
 
+class MFTimespineWithoutYamlConfigurationDeprecation(WarnLevel):
+    def code(self) -> str:
+        return "D018"
+
+    def message(self) -> str:
+        description = "Time spines without YAML configuration are in the process of deprecation. Please add YAML configuration for your 'metricflow_time_spine' model. See documentation on MetricFlow time spines: https://docs.getdbt.com/docs/build/metricflow-time-spine and behavior change documentation: https://docs.getdbt.com/reference/global-configs/behavior-changes."
+
+        return line_wrap_message(warning_tag(description))
+
+
+class MFCumulativeTypeParamsDeprecation(WarnLevel):
+    def code(self) -> str:
+        return "D019"
+
+    def message(self) -> str:
+        description = "Cumulative fields `type_params.window` and `type_params.grain_to_date` have been moved and will soon be deprecated. Please nest those values under `type_params.cumulative_type_params.window` and `type_params.cumulative_type_params.grain_to_date`. See documentation on behavior changes: https://docs.getdbt.com/reference/global-configs/behavior-changes."
+
+        return line_wrap_message(warning_tag(description))
+
+
+class MicrobatchMacroOutsideOfBatchesDeprecation(WarnLevel):
+    def code(self) -> str:
+        return "D020"
+
+    def message(self) -> str:
+        description = "The use of a custom microbatch macro outside of batched execution is deprecated. To use it with batched execution, set `flags.require_batched_execution_for_custom_microbatch_strategy` to `True` in `dbt_project.yml`. In the future this will be the default behavior."
+
+        return line_wrap_message(warning_tag(description))
+
+
 # =======================================================
 # I - Project parsing
 # =======================================================
@@ -924,6 +954,19 @@ class FreshnessConfigProblem(WarnLevel):
         return self.msg
 
 
+class MicrobatchModelNoEventTimeInputs(WarnLevel):
+    def code(self) -> str:
+        return "I074"
+
+    def message(self) -> str:
+        msg = (
+            f"The microbatch model '{self.model_name}' has no 'ref' or 'source' input with an 'event_time' configuration. "
+            "\nThis means no filtering can be applied and can result in unexpected duplicate records in the resulting microbatch model."
+        )
+
+        return warning_tag(msg)
+
+
 # =======================================================
 # M - Deps generation
 # =======================================================
@@ -1188,6 +1231,19 @@ class DepsScrubbedPackageName(WarnLevel):
 
 
 # =======================================================
+# P - Artifacts
+# =======================================================
+
+
+class ArtifactWritten(DebugLevel):
+    def code(self):
+        return "P001"
+
+    def message(self) -> str:
+        return f"Wrote artifact {self.artifact_type} to {self.artifact_path}"
+
+
+# =======================================================
 # Q - Node execution
 # =======================================================
 
@@ -1296,6 +1352,9 @@ class LogModelResult(DynamicLevel):
         if self.status == "error":
             info = "ERROR creating"
             status = red(self.status.upper())
+        elif "PARTIAL SUCCESS" in self.status:
+            info = "PARTIALLY created"
+            status = yellow(self.status.upper())
         else:
             info = "OK created"
             status = green(self.status)
@@ -1513,10 +1572,20 @@ class LogHookEndLine(InfoLevel):
         return "Q033"
 
     def message(self) -> str:
-        msg = f"OK hook: {self.statement}"
+        if self.status == "success":
+            info = "OK"
+            status = green(info)
+        elif self.status == "skipped":
+            info = "SKIP"
+            status = yellow(info)
+        else:
+            info = "ERROR"
+            status = red(info)
+        msg = f"{info} hook: {self.statement}"
+
         return format_fancy_output_line(
             msg=msg,
-            status=green(self.status),
+            status=status,
             index=self.index,
             total=self.total,
             execution_time=self.execution_time,
@@ -1860,10 +1929,16 @@ class EndOfRunSummary(InfoLevel):
     def message(self) -> str:
         error_plural = pluralize(self.num_errors, "error")
         warn_plural = pluralize(self.num_warnings, "warning")
+        partial_success_plural = pluralize(self.num_partial_success, "partial success")
+
         if self.keyboard_interrupt:
             message = yellow("Exited because of keyboard interrupt")
         elif self.num_errors > 0:
-            message = red(f"Completed with {error_plural} and {warn_plural}:")
+            message = red(
+                f"Completed with {error_plural}, {partial_success_plural}, and {warn_plural}:"
+            )
+        elif self.num_partial_success > 0:
+            message = yellow(f"Completed with {partial_success_plural} and {warn_plural}")
         elif self.num_warnings > 0:
             message = yellow(f"Completed with {warn_plural}:")
         else:

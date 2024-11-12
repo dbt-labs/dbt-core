@@ -4,6 +4,7 @@ from dbt.artifacts.resources import RefArgs
 from dbt.clients.jinja_static import (
     statically_extract_macro_calls,
     statically_parse_ref_or_source,
+    statically_parse_unrendered_config,
 )
 from dbt.context.base import generate_base_context
 from dbt.exceptions import ParsingError
@@ -77,3 +78,43 @@ class TestStaticallyParseRefOrSource:
     def test_valid_ref_expression(self, expression, expected_ref_or_source):
         ref_or_source = statically_parse_ref_or_source(expression)
         assert ref_or_source == expected_ref_or_source
+
+
+class TestStaticallyParseUnrenderedConfig:
+    @pytest.mark.parametrize(
+        "expression,expected_unrendered_config",
+        [
+            (
+                "{{ config(materialized='view') }}",
+                {"materialized": "Keyword(key='materialized', value=Const(value='view'))"},
+            ),
+            (
+                "{{ config(materialized='view', enabled=True) }}",
+                {
+                    "materialized": "Keyword(key='materialized', value=Const(value='view'))",
+                    "enabled": "Keyword(key='enabled', value=Const(value=True))",
+                },
+            ),
+            (
+                "{{ config(materialized=env_var('test')) }}",
+                {
+                    "materialized": "Keyword(key='materialized', value=Call(node=Name(name='env_var', ctx='load'), args=[Const(value='test')], kwargs=[], dyn_args=None, dyn_kwargs=None))"
+                },
+            ),
+            (
+                "{{ config(materialized=env_var('test', default='default')) }}",
+                {
+                    "materialized": "Keyword(key='materialized', value=Call(node=Name(name='env_var', ctx='load'), args=[Const(value='test')], kwargs=[Keyword(key='default', value=Const(value='default'))], dyn_args=None, dyn_kwargs=None))"
+                },
+            ),
+            (
+                "{{ config(materialized=env_var('test', default=env_var('default'))) }}",
+                {
+                    "materialized": "Keyword(key='materialized', value=Call(node=Name(name='env_var', ctx='load'), args=[Const(value='test')], kwargs=[Keyword(key='default', value=Call(node=Name(name='env_var', ctx='load'), args=[Const(value='default')], kwargs=[], dyn_args=None, dyn_kwargs=None))], dyn_args=None, dyn_kwargs=None))"
+                },
+            ),
+        ],
+    )
+    def test_statically_parse_unrendered_config(self, expression, expected_unrendered_config):
+        unrendered_config = statically_parse_unrendered_config(expression)
+        assert unrendered_config == expected_unrendered_config

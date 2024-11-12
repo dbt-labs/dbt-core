@@ -1,9 +1,10 @@
 from datetime import datetime, timedelta
-from typing import List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 import pytz
 
 from dbt.artifacts.resources.types import BatchSize
+from dbt.artifacts.schemas.batch_results import BatchType
 from dbt.contracts.graph.nodes import ModelNode, NodeConfig
 from dbt.exceptions import DbtInternalError, DbtRuntimeError
 
@@ -17,6 +18,7 @@ class MicrobatchBuilder:
         is_incremental: bool,
         event_time_start: Optional[datetime],
         event_time_end: Optional[datetime],
+        default_end_time: Optional[datetime] = None,
     ):
         if model.config.incremental_strategy != "microbatch":
             raise DbtInternalError(
@@ -34,54 +36,61 @@ class MicrobatchBuilder:
             event_time_start.replace(tzinfo=pytz.UTC) if event_time_start else None
         )
         self.event_time_end = event_time_end.replace(tzinfo=pytz.UTC) if event_time_end else None
+        self.default_end_time = default_end_time or datetime.now(pytz.UTC)
 
     def build_end_time(self):
         """Defaults the end_time to the current time in UTC unless a non `None` event_time_end was provided"""
-        return self.event_time_end or datetime.now(tz=pytz.utc)
+        end_time = self.event_time_end or self.default_end_time
+        return MicrobatchBuilder.ceiling_timestamp(end_time, self.model.config.batch_size)
 
     def build_start_time(self, checkpoint: Optional[datetime]):
         """Create a start time based off the passed in checkpoint.
 
-        If the checkpoint is `None`, then `None` will be returned as a checkpoint is necessary
+        If the checkpoint is `None`, or this is the first run of a microbatch model, then the
+        model's configured `begin` value will be returned as a checkpoint is necessary
         to build a start time. This is because we build the start time relative to the checkpoint
         via the batchsize and offset, and we cannot offset a checkpoint if there is no checkpoint.
         """
-
-        if self.event_time_start:
-            return MicrobatchBuilder.truncate_timestamp(
-                self.event_time_start, self.model.config.batch_size
-            )
-
-        if not self.is_incremental or checkpoint is None:
-            # TODO: return new model-level configuration or raise error
-            return None
-
         assert isinstance(self.model.config, NodeConfig)
         batch_size = self.model.config.batch_size
 
+        # Use event_time_start if it is provided.
+        if self.event_time_start:
+            return MicrobatchBuilder.truncate_timestamp(self.event_time_start, batch_size)
+
+        # First run, use model's configured 'begin' as start.
+        if not self.is_incremental or checkpoint is None:
+            if not self.model.config.begin:
+                raise DbtRuntimeError(
+                    f"Microbatch model '{self.model.name}' requires a 'begin' configuration."
+                )
+
+            return MicrobatchBuilder.truncate_timestamp(self.model.config.begin, batch_size)
+
         lookback = self.model.config.lookback
-        start = MicrobatchBuilder.offset_timestamp(checkpoint, batch_size, -1 * lookback)
 
-        return start
+        # If the checkpoint is equivalent to itself truncated then the checkpoint stradles
+        # the batch line. In this case the last batch will end with the checkpoint, but start
+        # should be the previous hour/day/month/year. Thus we need to increase the lookback by
+        # 1 to get this affect properly.
+        if checkpoint == MicrobatchBuilder.truncate_timestamp(checkpoint, batch_size):
+            lookback += 1
 
-    def build_batches(
-        self, start: Optional[datetime], end: datetime
-    ) -> List[Tuple[Optional[datetime], datetime]]:
+        return MicrobatchBuilder.offset_timestamp(checkpoint, batch_size, -1 * lookback)
+
+    def build_batches(self, start: datetime, end: datetime) -> List[BatchType]:
         """
         Given a start and end datetime, builds a list of batches where each batch is
         the size of the model's batch_size.
         """
-        if start is None:
-            return [(start, end)]
-
         batch_size = self.model.config.batch_size
         curr_batch_start: datetime = start
         curr_batch_end: datetime = MicrobatchBuilder.offset_timestamp(
             curr_batch_start, batch_size, 1
         )
 
-        batches: List[Tuple[Optional[datetime], datetime]] = [(curr_batch_start, curr_batch_end)]
-        while curr_batch_end <= end:
+        batches: List[BatchType] = [(curr_batch_start, curr_batch_end)]
+        while curr_batch_end < end:
             curr_batch_start = curr_batch_end
             curr_batch_end = MicrobatchBuilder.offset_timestamp(curr_batch_start, batch_size, 1)
             batches.append((curr_batch_start, curr_batch_end))
@@ -90,6 +99,26 @@ class MicrobatchBuilder:
         batches[-1] = (batches[-1][0], end)
 
         return batches
+
+    def build_batch_context(self, incremental_batch: bool) -> Dict[str, Any]:
+        """
+        Create context with entries that reflect microbatch model + incremental execution state
+
+        Assumes self.model has been (re)-compiled with necessary batch filters applied.
+        """
+        batch_context: Dict[str, Any] = {}
+
+        # Microbatch model properties
+        batch_context["model"] = self.model.to_dict()
+        batch_context["sql"] = self.model.compiled_code
+        batch_context["compiled_code"] = self.model.compiled_code
+
+        # Add incremental context variables for batches running incrementally
+        if incremental_batch:
+            batch_context["is_incremental"] = lambda: True
+            batch_context["should_full_refresh"] = lambda: False
+
+        return batch_context
 
     @staticmethod
     def offset_timestamp(timestamp: datetime, batch_size: BatchSize, offset: int) -> datetime:
@@ -133,7 +162,7 @@ class MicrobatchBuilder:
         return offset_timestamp
 
     @staticmethod
-    def truncate_timestamp(timestamp: datetime, batch_size: BatchSize):
+    def truncate_timestamp(timestamp: datetime, batch_size: BatchSize) -> datetime:
         """Truncates the passed in timestamp based on the batch_size.
 
         2024-09-17 16:06:00 + Batchsize.hour -> 2024-09-17 16:00:00
@@ -162,3 +191,34 @@ class MicrobatchBuilder:
             truncated = datetime(timestamp.year, 1, 1, 0, 0, 0, 0, pytz.utc)
 
         return truncated
+
+    @staticmethod
+    def format_batch_start(
+        batch_start: Optional[datetime], batch_size: BatchSize
+    ) -> Optional[str]:
+        if batch_start is None:
+            return batch_start
+
+        return str(
+            batch_start.date() if (batch_start and batch_size != BatchSize.hour) else batch_start
+        )
+
+    @staticmethod
+    def ceiling_timestamp(timestamp: datetime, batch_size: BatchSize) -> datetime:
+        """Takes the given timestamp and moves it to the ceiling for the given batch size
+
+        Note, if the timestamp is already the batch size ceiling, that is returned
+        2024-09-17 16:06:00 + BatchSize.hour -> 2024-09-17 17:00:00
+        2024-09-17 16:00:00 + BatchSize.hour -> 2024-09-17 16:00:00
+        2024-09-17 16:06:00 + BatchSize.day -> 2024-09-18 00:00:00
+        2024-09-17 00:00:00 + BatchSize.day -> 2024-09-17 00:00:00
+        2024-09-17 16:06:00 + BatchSize.month -> 2024-10-01 00:00:00
+        2024-09-01 00:00:00 + BatchSize.month -> 2024-09-01 00:00:00
+        2024-09-17 16:06:00 + BatchSize.year -> 2025-01-01 00:00:00
+        2024-01-01 00:00:00 + BatchSize.year -> 2024-01-01 00:00:00
+
+        """
+        ceiling = truncated = MicrobatchBuilder.truncate_timestamp(timestamp, batch_size)
+        if truncated != timestamp:
+            ceiling = MicrobatchBuilder.offset_timestamp(truncated, batch_size, 1)
+        return ceiling

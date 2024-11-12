@@ -4,6 +4,7 @@ import time
 from typing import AbstractSet, Dict, List, Optional, Type
 
 from dbt import deprecations
+from dbt.adapters.base import BaseAdapter
 from dbt.adapters.base.impl import FreshnessResponse
 from dbt.adapters.base.relation import BaseRelation
 from dbt.adapters.capability import Capability
@@ -204,10 +205,25 @@ class FreshnessTask(RunTask):
             resource_types=[NodeType.Source],
         )
 
-    def before_run(self, adapter, selected_uids: AbstractSet[str]) -> None:
-        super().before_run(adapter, selected_uids)
-        if adapter.supports(Capability.TableLastModifiedMetadataBatch):
-            self.populate_metadata_freshness_cache(adapter, selected_uids)
+    def before_run(self, adapter: BaseAdapter, selected_uids: AbstractSet[str]) -> RunStatus:
+        populate_metadata_freshness_cache_status = RunStatus.Success
+
+        before_run_status = super().before_run(adapter, selected_uids)
+
+        if before_run_status == RunStatus.Success and adapter.supports(
+            Capability.TableLastModifiedMetadataBatch
+        ):
+            populate_metadata_freshness_cache_status = self.populate_metadata_freshness_cache(
+                adapter, selected_uids
+            )
+
+        if (
+            before_run_status == RunStatus.Success
+            and populate_metadata_freshness_cache_status == RunStatus.Success
+        ):
+            return RunStatus.Success
+        else:
+            return RunStatus.Error
 
     def get_runner(self, node) -> BaseRunner:
         freshness_runner = super().get_runner(node)
@@ -243,7 +259,9 @@ class FreshnessTask(RunTask):
                 deprecations.warn("source-freshness-project-hooks")
             return []
 
-    def populate_metadata_freshness_cache(self, adapter, selected_uids: AbstractSet[str]) -> None:
+    def populate_metadata_freshness_cache(
+        self, adapter, selected_uids: AbstractSet[str]
+    ) -> RunStatus:
         if self.manifest is None:
             raise DbtInternalError("Manifest must be set to populate metadata freshness cache")
 
@@ -266,6 +284,7 @@ class FreshnessTask(RunTask):
                 batch_metadata_sources
             )
             self._metadata_freshness_cache.update(metadata_freshness_results)
+            return RunStatus.Success
         except Exception as e:
             # This error handling is intentionally very coarse.
             # If anything goes wrong during batch metadata calculation, we can safely
@@ -276,6 +295,7 @@ class FreshnessTask(RunTask):
                 Note(msg=f"Metadata freshness could not be computed in batch: {e}"),
                 EventLevel.WARN,
             )
+            return RunStatus.Error
 
     def get_freshness_metadata_cache(self) -> Dict[BaseRelation, FreshnessResult]:
         return self._metadata_freshness_cache

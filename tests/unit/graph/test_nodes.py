@@ -15,7 +15,7 @@ from dbt.artifacts.resources import (
 )
 from dbt.artifacts.resources.v1.semantic_model import NodeRelation
 from dbt.contracts.graph.model_config import TestConfig
-from dbt.contracts.graph.nodes import ColumnInfo, ModelNode, SemanticModel
+from dbt.contracts.graph.nodes import ColumnInfo, ModelNode, ParsedNode, SemanticModel
 from dbt.node_types import NodeType
 from dbt_common.contracts.constraints import (
     ColumnLevelConstraint,
@@ -391,3 +391,35 @@ def test_disabled_unique_combo_multiple():
 
 def assertSameContents(list1, list2):
     assert sorted(list1) == sorted(list2)
+
+
+class TestParsedNode:
+    @pytest.fixture(scope="class")
+    def parsed_node(self) -> ParsedNode:
+        return ParsedNode(
+            resource_type=NodeType.Model,
+            unique_id="model.test_package.test_name",
+            name="test_name",
+            package_name="test_package",
+            schema="test_schema",
+            alias="test_alias",
+            fqn=["models", "test_name"],
+            original_file_path="test_original_file_path",
+            checksum=FileHash.from_contents("checksum"),
+            path="test_path.sql",
+            database=None,
+        )
+
+    def test_get_target_write_path(self, parsed_node):
+        write_path = parsed_node.get_target_write_path("target_path", "subdirectory")
+        assert (
+            write_path
+            == "target_path/subdirectory/test_package/test_original_file_path/test_path.sql"
+        )
+
+    def test_get_target_write_path_split(self, parsed_node):
+        write_path = parsed_node.get_target_write_path("target_path", "subdirectory", "split")
+        assert (
+            write_path
+            == "target_path/subdirectory/test_package/test_original_file_path/test_path/test_path_split.sql"
+        )

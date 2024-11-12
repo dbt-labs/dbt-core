@@ -1,7 +1,8 @@
 import itertools
 import os
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import (
     Any,
@@ -14,6 +15,8 @@ from typing import (
     Tuple,
     Type,
 )
+
+import pytz
 
 from dbt import tracking
 from dbt.adapters.contracts.connection import (
@@ -98,6 +101,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
     profile_name: str
     cli_vars: Dict[str, Any]
     dependencies: Optional[Mapping[str, "RuntimeConfig"]] = None
+    invoked_at: datetime = field(default_factory=lambda: datetime.now(pytz.UTC))
 
     def __post_init__(self):
         self.validate()

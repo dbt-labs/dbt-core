@@ -9,6 +9,8 @@ from dbt.artifacts.resources import NodeConfig
 from dbt.artifacts.resources.types import BatchSize
 from dbt.materializations.incremental.microbatch import MicrobatchBuilder
 
+MODEL_CONFIG_BEGIN = datetime(2024, 1, 1, 0, 0, 0, 0, pytz.UTC)
+
 
 class TestMicrobatchBuilder:
     @pytest.fixture(scope="class")
@@ -17,6 +19,8 @@ class TestMicrobatchBuilder:
         model.config = mock.MagicMock(NodeConfig)
         model.config.materialized = "incremental"
         model.config.incremental_strategy = "microbatch"
+        model.config.begin = MODEL_CONFIG_BEGIN
+        model.config.batch_size = BatchSize.day
 
         return model
 
@@ -27,12 +31,12 @@ class TestMicrobatchBuilder:
             (
                 False,
                 None,
-                datetime(2024, 9, 5, 8, 56, 0, 0, pytz.UTC),
+                datetime(2024, 9, 6, 0, 0, 0, 0, pytz.UTC),
             ),
             (
                 True,
                 None,
-                datetime(2024, 9, 5, 8, 56, 0, 0, pytz.UTC),
+                datetime(2024, 9, 6, 0, 0, 0, 0, pytz.UTC),
             ),
             (
                 False,
@@ -67,7 +71,8 @@ class TestMicrobatchBuilder:
                 datetime(2024, 9, 5, 8, 56, 0, 0, pytz.UTC),
                 BatchSize.day,
                 0,
-                None,
+                # is_incremental: False => model.config.begin
+                MODEL_CONFIG_BEGIN,
             ),
             # BatchSize.year
             (
@@ -93,8 +98,8 @@ class TestMicrobatchBuilder:
                 datetime(2024, 9, 5, 8, 56, 0, 0, pytz.UTC),
                 BatchSize.year,
                 0,
-                # is_incremental=False + no start_time -> None
-                None,
+                # is_incremental=False + no start_time -> model.config.begin
+                MODEL_CONFIG_BEGIN,
             ),
             (
                 True,
@@ -136,8 +141,8 @@ class TestMicrobatchBuilder:
                 datetime(2024, 9, 5, 8, 56, 0, 0, pytz.UTC),
                 BatchSize.month,
                 0,
-                # is_incremental=False + no start_time -> None
-                None,
+                # is_incremental=False + no start_time -> model.config.begin
+                MODEL_CONFIG_BEGIN,
             ),
             (
                 True,
@@ -179,8 +184,8 @@ class TestMicrobatchBuilder:
                 datetime(2024, 9, 5, 8, 56, 0, 0, pytz.UTC),
                 BatchSize.day,
                 0,
-                # is_incremental=False + no start_time -> None
-                None,
+                # is_incremental=False + no start_time -> model.config.begin
+                MODEL_CONFIG_BEGIN,
             ),
             (
                 True,
@@ -222,8 +227,8 @@ class TestMicrobatchBuilder:
                 datetime(2024, 9, 5, 8, 56, 0, 0, pytz.UTC),
                 BatchSize.hour,
                 0,
-                # is_incremental=False + no start_time -> None
-                None,
+                # is_incremental=False + no start_time -> model.config.begin
+                MODEL_CONFIG_BEGIN,
             ),
             (
                 True,
@@ -240,6 +245,70 @@ class TestMicrobatchBuilder:
                 BatchSize.hour,
                 1,
                 datetime(2024, 9, 5, 7, 0, 0, 0, pytz.UTC),
+            ),
+            (
+                True,
+                None,
+                datetime(2024, 9, 5, 0, 0, 0, 0, pytz.UTC),
+                BatchSize.hour,
+                0,
+                datetime(2024, 9, 4, 23, 0, 0, 0, pytz.UTC),
+            ),
+            (
+                True,
+                None,
+                datetime(2024, 9, 5, 0, 0, 0, 0, pytz.UTC),
+                BatchSize.hour,
+                1,
+                datetime(2024, 9, 4, 22, 0, 0, 0, pytz.UTC),
+            ),
+            (
+                True,
+                None,
+                datetime(2024, 9, 5, 0, 0, 0, 0, pytz.UTC),
+                BatchSize.day,
+                0,
+                datetime(2024, 9, 4, 0, 0, 0, 0, pytz.UTC),
+            ),
+            (
+                True,
+                None,
+                datetime(2024, 9, 5, 0, 0, 0, 0, pytz.UTC),
+                BatchSize.day,
+                1,
+                datetime(2024, 9, 3, 0, 0, 0, 0, pytz.UTC),
+            ),
+            (
+                True,
+                None,
+                datetime(2024, 9, 1, 0, 0, 0, 0, pytz.UTC),
+                BatchSize.month,
+                0,
+                datetime(2024, 8, 1, 0, 0, 0, 0, pytz.UTC),
+            ),
+            (
+                True,
+                None,
+                datetime(2024, 9, 1, 0, 0, 0, 0, pytz.UTC),
+                BatchSize.month,
+                1,
+                datetime(2024, 7, 1, 0, 0, 0, 0, pytz.UTC),
+            ),
+            (
+                True,
+                None,
+                datetime(2024, 1, 1, 0, 0, 0, 0, pytz.UTC),
+                BatchSize.year,
+                0,
+                datetime(2023, 1, 1, 0, 0, 0, 0, pytz.UTC),
+            ),
+            (
+                True,
+                None,
+                datetime(2024, 1, 1, 0, 0, 0, 0, pytz.UTC),
+                BatchSize.year,
+                1,
+                datetime(2022, 1, 1, 0, 0, 0, 0, pytz.UTC),
             ),
         ],
     )
@@ -347,6 +416,67 @@ class TestMicrobatchBuilder:
                     ),
                 ],
             ),
+            # Test when event_time_end matches the truncated batch size
+            (
+                datetime(2024, 1, 1, 0, 0, 0, 0, pytz.UTC),
+                datetime(2026, 1, 1, 0, 0, 0, 0, pytz.UTC),
+                BatchSize.year,
+                [
+                    (
+                        datetime(2024, 1, 1, 0, 0, 0, 0, pytz.UTC),
+                        datetime(2025, 1, 1, 0, 0, 0, 0, pytz.UTC),
+                    ),
+                    (
+                        datetime(2025, 1, 1, 0, 0, 0, 0, pytz.UTC),
+                        datetime(2026, 1, 1, 0, 0, 0, 0, pytz.UTC),
+                    ),
+                ],
+            ),
+            (
+                datetime(2024, 9, 1, 0, 0, 0, 0, pytz.UTC),
+                datetime(2024, 11, 1, 0, 0, 0, 0, pytz.UTC),
+                BatchSize.month,
+                [
+                    (
+                        datetime(2024, 9, 1, 0, 0, 0, 0, pytz.UTC),
+                        datetime(2024, 10, 1, 0, 0, 0, 0, pytz.UTC),
+                    ),
+                    (
+                        datetime(2024, 10, 1, 0, 0, 0, 0, pytz.UTC),
+                        datetime(2024, 11, 1, 0, 0, 0, 0, pytz.UTC),
+                    ),
+                ],
+            ),
+            (
+                datetime(2024, 9, 5, 0, 0, 0, 0, pytz.UTC),
+                datetime(2024, 9, 7, 0, 0, 0, 0, pytz.UTC),
+                BatchSize.day,
+                [
+                    (
+                        datetime(2024, 9, 5, 0, 0, 0, 0, pytz.UTC),
+                        datetime(2024, 9, 6, 0, 0, 0, 0, pytz.UTC),
+                    ),
+                    (
+                        datetime(2024, 9, 6, 0, 0, 0, 0, pytz.UTC),
+                        datetime(2024, 9, 7, 0, 0, 0, 0, pytz.UTC),
+                    ),
+                ],
+            ),
+            (
+                datetime(2024, 9, 5, 1, 0, 0, 0, pytz.UTC),
+                datetime(2024, 9, 5, 3, 0, 0, 0, pytz.UTC),
+                BatchSize.hour,
+                [
+                    (
+                        datetime(2024, 9, 5, 1, 0, 0, 0, pytz.UTC),
+                        datetime(2024, 9, 5, 2, 0, 0, 0, pytz.UTC),
+                    ),
+                    (
+                        datetime(2024, 9, 5, 2, 0, 0, 0, pytz.UTC),
+                        datetime(2024, 9, 5, 3, 0, 0, 0, pytz.UTC),
+                    ),
+                ],
+            ),
         ],
     )
     def test_build_batches(self, microbatch_model, start, end, batch_size, expected_batches):
@@ -358,6 +488,33 @@ class TestMicrobatchBuilder:
         actual_batches = microbatch_builder.build_batches(start, end)
         assert len(actual_batches) == len(expected_batches)
         assert actual_batches == expected_batches
+
+    def test_build_batch_context_incremental_batch(self, microbatch_model):
+        microbatch_builder = MicrobatchBuilder(
+            model=microbatch_model, is_incremental=True, event_time_start=None, event_time_end=None
+        )
+        context = microbatch_builder.build_batch_context(incremental_batch=True)
+
+        assert context["model"] == microbatch_model.to_dict()
+        assert context["sql"] == microbatch_model.compiled_code
+        assert context["compiled_code"] == microbatch_model.compiled_code
+
+        assert context["is_incremental"]() is True
+        assert context["should_full_refresh"]() is False
+
+    def test_build_batch_context_incremental_batch_false(self, microbatch_model):
+        microbatch_builder = MicrobatchBuilder(
+            model=microbatch_model, is_incremental=True, event_time_start=None, event_time_end=None
+        )
+        context = microbatch_builder.build_batch_context(incremental_batch=False)
+
+        assert context["model"] == microbatch_model.to_dict()
+        assert context["sql"] == microbatch_model.compiled_code
+        assert context["compiled_code"] == microbatch_model.compiled_code
+
+        # Only build is_incremental callables when not first batch
+        assert "is_incremental" not in context
+        assert "should_full_refresh" not in context
 
     @pytest.mark.parametrize(
         "timestamp,batch_size,offset,expected_timestamp",
@@ -444,3 +601,70 @@ class TestMicrobatchBuilder:
     )
     def test_truncate_timestamp(self, timestamp, batch_size, expected_timestamp):
         assert MicrobatchBuilder.truncate_timestamp(timestamp, batch_size) == expected_timestamp
+
+    @pytest.mark.parametrize(
+        "batch_size,batch_start,expected_formatted_batch_start",
+        [
+            (None, None, None),
+            (BatchSize.year, datetime(2020, 1, 1, 1), "2020-01-01"),
+            (BatchSize.month, datetime(2020, 1, 1, 1), "2020-01-01"),
+            (BatchSize.day, datetime(2020, 1, 1, 1), "2020-01-01"),
+            (BatchSize.hour, datetime(2020, 1, 1, 1), "2020-01-01 01:00:00"),
+        ],
+    )
+    def test_format_batch_start(self, batch_size, batch_start, expected_formatted_batch_start):
+        assert (
+            MicrobatchBuilder.format_batch_start(batch_start, batch_size)
+            == expected_formatted_batch_start
+        )
+
+    @pytest.mark.parametrize(
+        "timestamp,batch_size,expected_datetime",
+        [
+            (
+                datetime(2024, 9, 17, 16, 6, 0, 0, pytz.UTC),
+                BatchSize.hour,
+                datetime(2024, 9, 17, 17, 0, 0, 0, pytz.UTC),
+            ),
+            (
+                datetime(2024, 9, 17, 16, 0, 0, 0, pytz.UTC),
+                BatchSize.hour,
+                datetime(2024, 9, 17, 16, 0, 0, 0, pytz.UTC),
+            ),
+            (
+                datetime(2024, 9, 17, 16, 6, 0, 0, pytz.UTC),
+                BatchSize.day,
+                datetime(2024, 9, 18, 0, 0, 0, 0, pytz.UTC),
+            ),
+            (
+                datetime(2024, 9, 17, 0, 0, 0, 0, pytz.UTC),
+                BatchSize.day,
+                datetime(2024, 9, 17, 0, 0, 0, 0, pytz.UTC),
+            ),
+            (
+                datetime(2024, 9, 17, 16, 6, 0, 0, pytz.UTC),
+                BatchSize.month,
+                datetime(2024, 10, 1, 0, 0, 0, 0, pytz.UTC),
+            ),
+            (
+                datetime(2024, 9, 1, 0, 0, 0, 0, pytz.UTC),
+                BatchSize.month,
+                datetime(2024, 9, 1, 0, 0, 0, 0, pytz.UTC),
+            ),
+            (
+                datetime(2024, 9, 17, 16, 6, 0, 0, pytz.UTC),
+                BatchSize.year,
+                datetime(2025, 1, 1, 0, 0, 0, 0, pytz.UTC),
+            ),
+            (
+                datetime(2024, 1, 1, 0, 0, 0, 0, pytz.UTC),
+                BatchSize.year,
+                datetime(2024, 1, 1, 0, 0, 0, 0, pytz.UTC),
+            ),
+        ],
+    )
+    def test_ceiling_timestamp(
+        self, timestamp: datetime, batch_size: BatchSize, expected_datetime: datetime
+    ) -> None:
+        ceilinged = MicrobatchBuilder.ceiling_timestamp(timestamp, batch_size)
+        assert ceilinged == expected_datetime

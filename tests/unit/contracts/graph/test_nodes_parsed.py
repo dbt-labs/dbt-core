@@ -65,8 +65,12 @@ from tests.unit.utils import (
 
 
 @pytest.fixture
-def flags_for_args() -> Namespace:
-    return Namespace(SEND_ANONYMOUS_USAGE_STATS=False)
+def args_for_flags() -> Namespace:
+    return Namespace(
+        send_anonymous_usage_stats=False,
+        state_modified_compare_more_unrendered_values=False,
+        state_modified_compare_vars=False,
+    )
 
 
 @pytest.fixture
@@ -100,7 +104,7 @@ def populated_node_config_dict():
         "docs": {"show": True},
         "contract": {"enforced": False, "alias_types": True},
         "access": "protected",
-        "lookback": 0,
+        "lookback": 1,
     }
 
 
@@ -188,7 +192,7 @@ def base_parsed_model_dict():
             "contract": {"enforced": False, "alias_types": True},
             "packages": [],
             "access": "protected",
-            "lookback": 0,
+            "lookback": 1,
         },
         "docs": {"show": True},
         "contract": {"enforced": False, "alias_types": True},
@@ -199,6 +203,7 @@ def base_parsed_model_dict():
             "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         },
         "unrendered_config": {},
+        "unrendered_config_call_dict": {},
         "config_call_dict": {},
         "access": AccessType.Protected.value,
         "constraints": [],
@@ -299,7 +304,7 @@ def complex_parsed_model_dict():
             "contract": {"enforced": False, "alias_types": True},
             "packages": [],
             "access": "protected",
-            "lookback": 0,
+            "lookback": 1,
         },
         "docs": {"show": True},
         "contract": {"enforced": False, "alias_types": True},
@@ -321,6 +326,7 @@ def complex_parsed_model_dict():
             "materialized": "ephemeral",
             "post_hook": ['insert into blah(a, b) select "1", 1'],
         },
+        "unrendered_config_call_dict": {},
         "config_call_dict": {},
         "access": AccessType.Protected.value,
         "constraints": [],
@@ -523,13 +529,14 @@ def basic_parsed_seed_dict():
             "docs": {"show": True},
             "contract": {"enforced": False, "alias_types": True},
             "packages": [],
-            "lookback": 0,
+            "lookback": 1,
         },
         "docs": {"show": True},
         "columns": {},
         "meta": {},
         "checksum": {"name": "path", "checksum": "seeds/seed.csv"},
         "unrendered_config": {},
+        "unrendered_config_call_dict": {},
         "config_call_dict": {},
     }
 
@@ -615,7 +622,7 @@ def complex_parsed_seed_dict():
             "docs": {"show": True},
             "contract": {"enforced": False, "alias_types": True},
             "packages": [],
-            "lookback": 0,
+            "lookback": 1,
         },
         "docs": {"show": True},
         "columns": {
@@ -635,6 +642,7 @@ def complex_parsed_seed_dict():
         "unrendered_config": {
             "persist_docs": {"relation": True, "columns": True},
         },
+        "unrendered_config_call_dict": {},
         "config_call_dict": {},
     }
 
@@ -823,7 +831,7 @@ def base_parsed_hook_dict():
             "docs": {"show": True},
             "contract": {"enforced": False, "alias_types": True},
             "packages": [],
-            "lookback": 0,
+            "lookback": 1,
         },
         "docs": {"show": True},
         "contract": {"enforced": False, "alias_types": True},
@@ -834,6 +842,7 @@ def base_parsed_hook_dict():
             "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         },
         "unrendered_config": {},
+        "unrendered_config_call_dict": {},
         "config_call_dict": {},
     }
 
@@ -905,7 +914,7 @@ def complex_parsed_hook_dict():
             "docs": {"show": True},
             "contract": {"enforced": False, "alias_types": True},
             "packages": [],
-            "lookback": 0,
+            "lookback": 1,
         },
         "docs": {"show": True},
         "contract": {"enforced": False, "alias_types": True},
@@ -927,6 +936,7 @@ def complex_parsed_hook_dict():
             "column_types": {"a": "text"},
             "materialized": "table",
         },
+        "unrendered_config_call_dict": {},
         "config_call_dict": {},
     }
 
@@ -1020,6 +1030,7 @@ def minimal_parsed_schema_test_dict():
             "name": "sha256",
             "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         },
+        "unrendered_config_call_dict": {},
         "config_call_dict": {},
     }
 
@@ -1070,6 +1081,7 @@ def basic_parsed_schema_test_dict():
             "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         },
         "unrendered_config": {},
+        "unrendered_config_call_dict": {},
         "config_call_dict": {},
     }
 
@@ -1158,6 +1170,7 @@ def complex_parsed_schema_test_dict():
             "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         },
         "unrendered_config": {"materialized": "table", "severity": "WARN"},
+        "unrendered_config_call_dict": {},
         "config_call_dict": {},
     }
 
@@ -1249,6 +1262,7 @@ def basic_timestamp_snapshot_config_dict():
         "quoting": {},
         "tags": [],
         "unique_key": "id",
+        "snapshot_meta_column_names": {},
         "strategy": "timestamp",
         "updated_at": "last_update",
         "target_database": "some_snapshot_db",
@@ -1260,7 +1274,7 @@ def basic_timestamp_snapshot_config_dict():
         "packages": [],
         "docs": {"show": True},
         "contract": {"enforced": False, "alias_types": True},
-        "lookback": 0,
+        "lookback": 1,
     }
 
 
@@ -1285,6 +1299,7 @@ def complex_timestamp_snapshot_config_dict():
         "post-hook": [{"sql": 'insert into blah(a, b) select "1", 1', "transaction": True}],
         "pre-hook": [],
         "quoting": {},
+        "snapshot_meta_column_names": {},
         "tags": [],
         "target_database": "some_snapshot_db",
         "target_schema": "some_snapshot_schema",
@@ -1299,7 +1314,7 @@ def complex_timestamp_snapshot_config_dict():
         "packages": [],
         "docs": {"show": True},
         "contract": {"enforced": False, "alias_types": True},
-        "lookback": 0,
+        "lookback": 1,
     }
 
 
@@ -1353,6 +1368,7 @@ def basic_check_snapshot_config_dict():
         "post-hook": [],
         "pre-hook": [],
         "quoting": {},
+        "snapshot_meta_column_names": {},
         "tags": [],
         "target_database": "some_snapshot_db",
         "target_schema": "some_snapshot_schema",
@@ -1366,7 +1382,7 @@ def basic_check_snapshot_config_dict():
         "packages": [],
         "docs": {"show": True},
         "contract": {"enforced": False, "alias_types": True},
-        "lookback": 0,
+        "lookback": 1,
     }
 
 
@@ -1391,6 +1407,7 @@ def complex_set_snapshot_config_dict():
         "post-hook": [{"sql": 'insert into blah(a, b) select "1", 1', "transaction": True}],
         "pre-hook": [],
         "quoting": {},
+        "snapshot_meta_column_names": {},
         "tags": [],
         "target_database": "some_snapshot_db",
         "target_schema": "some_snapshot_schema",
@@ -1405,7 +1422,7 @@ def complex_set_snapshot_config_dict():
         "packages": [],
         "docs": {"show": True},
         "contract": {"enforced": False, "alias_types": True},
-        "lookback": 0,
+        "lookback": 1,
     }
 
 
@@ -1527,6 +1544,7 @@ def basic_timestamp_snapshot_dict():
             "post-hook": [],
             "pre-hook": [],
             "quoting": {},
+            "snapshot_meta_column_names": {},
             "tags": [],
             "target_database": "some_snapshot_db",
             "target_schema": "some_snapshot_schema",
@@ -1540,7 +1558,7 @@ def basic_timestamp_snapshot_dict():
             "docs": {"show": True},
             "contract": {"enforced": False, "alias_types": True},
             "packages": [],
-            "lookback": 0,
+            "lookback": 1,
         },
         "docs": {"show": True},
         "contract": {"enforced": False, "alias_types": True},
@@ -1557,6 +1575,7 @@ def basic_timestamp_snapshot_dict():
             "target_database": "some_snapshot_db",
             "target_schema": "some_snapshot_schema",
         },
+        "unrendered_config_call_dict": {},
         "config_call_dict": {},
     }
 
@@ -1630,6 +1649,7 @@ def basic_check_snapshot_dict():
             "post-hook": [],
             "pre-hook": [],
             "quoting": {},
+            "snapshot_meta_column_names": {},
             "tags": [],
             "target_database": "some_snapshot_db",
             "target_schema": "some_snapshot_schema",
@@ -1643,7 +1663,7 @@ def basic_check_snapshot_dict():
             "docs": {"show": True},
             "contract": {"enforced": False, "alias_types": True},
             "packages": [],
-            "lookback": 0,
+            "lookback": 1,
         },
         "docs": {"show": True},
         "contract": {"enforced": False, "alias_types": True},
@@ -1660,6 +1680,7 @@ def basic_check_snapshot_dict():
             "strategy": "check",
             "check_cols": "all",
         },
+        "unrendered_config_call_dict": {},
         "config_call_dict": {},
     }
 

@@ -1,0 +1,6 @@
+kind: Fixes
+body: Change `lookback` default from `0` to `1` to ensure better data completeness
+time: 2024-10-17T13:48:57.805205-07:00
+custom:
+  Author: QMalcolm
+  Issue: "10867"
