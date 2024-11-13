@@ -665,7 +665,6 @@ class ManifestLoader:
             if has_microbatch_model and not self.manifest._microbatch_macro_is_core(
                 self.root_project.project_name
             ):
-                breakpoint()
                 dbt.deprecations.warn("microbatch-macro-outside-of-batches-deprecation")
 
     def load_and_parse_macros(self, project_parser_files):
