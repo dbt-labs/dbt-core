@@ -217,7 +217,9 @@ class TestMicrobatchCustomUserStrategyProjectFlagTrueValid(BaseMicrobatchCustomU
             assert "START batch" in logs
 
 
-class TestMicrobatchCustomUserStrategyProjectFlagTrueInvalid(BaseMicrobatchCustomUserStrategy):
+class TestMicrobatchCustomUserStrategyProjectFlagTrueNoValidBuiltin(
+    BaseMicrobatchCustomUserStrategy
+):
     def test_use_custom_microbatch_strategy_project_flag_true_invalid_incremental_strategy(
         self, project
     ):
@@ -225,10 +227,15 @@ class TestMicrobatchCustomUserStrategyProjectFlagTrueInvalid(BaseMicrobatchCusto
             type(project.adapter), "valid_incremental_strategies", lambda _: []
         ):
             # Run of microbatch model while adapter doesn't have a "valid"
-            # microbatch strategy causes no error raised when behaviour flag set to true
+            # microbatch strategy causes no error when behaviour flag set to true
+            # and there is a custom microbatch macro
             with patch_microbatch_end_time("2020-01-03 13:57:00"):
-                _, logs = run_dbt_and_capture(["run"], expect_pass=False)
+                _, logs = run_dbt_and_capture(["run"])
             assert "'microbatch' is not valid" not in logs
+            assert (
+                "The use of a custom microbatch macro outside of batched execution is deprecated"
+                not in logs
+            )
 
 
 class BaseMicrobatchTest:
