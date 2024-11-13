@@ -3,6 +3,7 @@ from unittest import mock
 import pytest
 
 from dbt.events.types import (
+    GenericExceptionOnRun,
     LogModelResult,
     MicrobatchMacroOutsideOfBatchesDeprecation,
     MicrobatchModelNoEventTimeInputs,
@@ -526,9 +527,15 @@ class TestMicrobatchIncrementalPartitionFailure(BaseMicrobatchTest):
         }
 
     def test_run_with_event_time(self, project):
-        # run all partitions from start - 2 expected rows in output, one failed
+        event_catcher = EventCatcher(
+            GenericExceptionOnRun, predicate=lambda event: event.data.node_info is not None
+        )
+
         with patch_microbatch_end_time("2020-01-03 13:57:00"):
-            run_dbt(["run"], expect_pass=False)
+            run_dbt(["run"], callbacks=[event_catcher.catch], expect_pass=False)
+
+        assert len(event_catcher.caught_events) == 1
+        # run all partitions from start - 2 expected rows in output, one failed
         self.assert_row_count(project, "microbatch_model", 2)
 
         run_results = get_artifact(project.project_root, "target", "run_results.json")
