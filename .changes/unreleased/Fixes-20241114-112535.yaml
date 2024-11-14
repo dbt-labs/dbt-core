@@ -1,0 +1,6 @@
+kind: Fixes
+body: Emit batch-level exception with node_info on microbatch batch run failure
+time: 2024-11-14T11:25:35.050914-05:00
+custom:
+  Author: michelleark
+  Issue: "10840"
