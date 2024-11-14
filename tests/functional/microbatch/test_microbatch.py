@@ -3,6 +3,7 @@ from unittest import mock
 import pytest
 
 from dbt.events.types import (
+    GenericExceptionOnRun,
     LogModelResult,
     MicrobatchMacroOutsideOfBatchesDeprecation,
     MicrobatchModelNoEventTimeInputs,
@@ -182,19 +183,16 @@ class TestMicrobatchCustomUserStrategyDefault(BaseMicrobatchCustomUserStrategy):
         project,
         deprecation_catcher: EventCatcher,
     ):
-        with mock.patch.object(
-            type(project.adapter), "valid_incremental_strategies", lambda _: []
-        ):
-            # Initial run
-            run_dbt(["run"])
+        # Initial run fires deprecation
+        run_dbt(["run"], callbacks=[deprecation_catcher.catch])
+        # Deprecation warning about custom microbatch macro fired
+        assert len(deprecation_catcher.caught_events) == 1
 
-            # Incremental run uses custom strategy
-            _, logs = run_dbt_and_capture(["run"])
-            assert "custom microbatch strategy" in logs
-            # The custom strategy wasn't used with batch functionality
-            assert "START batch" not in logs
-            # Deprecation warning about custom microbatch macro fired
-            assert len(deprecation_catcher.caught_events) == 0
+        # Incremental run uses custom strategy
+        _, logs = run_dbt_and_capture(["run"])
+        assert "custom microbatch strategy" in logs
+        # The custom strategy wasn't used with batch functionality
+        assert "START batch" not in logs
 
 
 class TestMicrobatchCustomUserStrategyProjectFlagTrueValid(BaseMicrobatchCustomUserStrategy):
@@ -208,7 +206,9 @@ class TestMicrobatchCustomUserStrategyProjectFlagTrueValid(BaseMicrobatchCustomU
         ):
             # Initial run
             with patch_microbatch_end_time("2020-01-03 13:57:00"):
-                run_dbt(["run"])
+                run_dbt(["run"], callbacks=[deprecation_catcher.catch])
+            # Deprecation warning about custom microbatch macro not fired
+            assert len(deprecation_catcher.caught_events) == 0
 
             # Incremental run uses custom strategy
             with patch_microbatch_end_time("2020-01-03 13:57:00"):
@@ -216,11 +216,11 @@ class TestMicrobatchCustomUserStrategyProjectFlagTrueValid(BaseMicrobatchCustomU
             assert "custom microbatch strategy" in logs
             # The custom strategy was used with batch functionality
             assert "START batch" in logs
-            # Deprecation warning about custom microbatch macro not fired
-            assert len(deprecation_catcher.caught_events) == 0
 
 
-class TestMicrobatchCustomUserStrategyProjectFlagTrueInvalid(BaseMicrobatchCustomUserStrategy):
+class TestMicrobatchCustomUserStrategyProjectFlagTrueNoValidBuiltin(
+    BaseMicrobatchCustomUserStrategy
+):
     def test_use_custom_microbatch_strategy_project_flag_true_invalid_incremental_strategy(
         self, project
     ):
@@ -228,10 +228,15 @@ class TestMicrobatchCustomUserStrategyProjectFlagTrueInvalid(BaseMicrobatchCusto
             type(project.adapter), "valid_incremental_strategies", lambda _: []
         ):
             # Run of microbatch model while adapter doesn't have a "valid"
-            # microbatch strategy causes an error to be raised
+            # microbatch strategy causes no error when behaviour flag set to true
+            # and there is a custom microbatch macro
             with patch_microbatch_end_time("2020-01-03 13:57:00"):
-                _, logs = run_dbt_and_capture(["run"], expect_pass=False)
-            assert "'microbatch' is not valid" in logs
+                _, logs = run_dbt_and_capture(["run"])
+            assert "'microbatch' is not valid" not in logs
+            assert (
+                "The use of a custom microbatch macro outside of batched execution is deprecated"
+                not in logs
+            )
 
 
 class BaseMicrobatchTest:
@@ -512,7 +517,7 @@ select * from {{ ref('input_model') }}
 """
 
 
-class TestMicrobatchIncrementalPartitionFailure(BaseMicrobatchTest):
+class TestMicrobatchIncrementalBatchFailure(BaseMicrobatchTest):
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -522,9 +527,15 @@ class TestMicrobatchIncrementalPartitionFailure(BaseMicrobatchTest):
         }
 
     def test_run_with_event_time(self, project):
+        event_catcher = EventCatcher(
+            GenericExceptionOnRun, predicate=lambda event: event.data.node_info is not None
+        )
+
         # run all partitions from start - 2 expected rows in output, one failed
         with patch_microbatch_end_time("2020-01-03 13:57:00"):
-            run_dbt(["run"], expect_pass=False)
+            run_dbt(["run"], callbacks=[event_catcher.catch], expect_pass=False)
+
+        assert len(event_catcher.caught_events) == 1
         self.assert_row_count(project, "microbatch_model", 2)
 
         run_results = get_artifact(project.project_root, "target", "run_results.json")
@@ -622,7 +633,7 @@ select * from {{ ref('input_model') }}
 """
 
 
-class TestMicrobatchInitialPartitionFailure(BaseMicrobatchTest):
+class TestMicrobatchInitialBatchFailure(BaseMicrobatchTest):
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -631,9 +642,14 @@ class TestMicrobatchInitialPartitionFailure(BaseMicrobatchTest):
         }
 
     def test_run_with_event_time(self, project):
+        event_catcher = EventCatcher(
+            GenericExceptionOnRun, predicate=lambda event: event.data.node_info is not None
+        )
+
         # run all partitions from start - 2 expected rows in output, one failed
         with patch_microbatch_end_time("2020-01-03 13:57:00"):
-            run_dbt(["run"])
+            run_dbt(["run"], callbacks=[event_catcher.catch])
+        assert len(event_catcher.caught_events) == 1
         self.assert_row_count(project, "microbatch_model", 2)
 
 

@@ -662,7 +662,7 @@ class ManifestLoader:
                     has_microbatch_model = True
                     break
 
-            if has_microbatch_model and self.manifest._microbatch_macro_is_core(
+            if has_microbatch_model and not self.manifest._microbatch_macro_is_core(
                 self.root_project.project_name
             ):
                 dbt.deprecations.warn("microbatch-macro-outside-of-batches-deprecation")

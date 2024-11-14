@@ -110,7 +110,6 @@ class UnitTestManifestLoader:
         # unit_test_node now has a populated refs/sources
 
         self.unit_test_manifest.nodes[unit_test_node.unique_id] = unit_test_node
-
         # Now create input_nodes for the test inputs
         """
         given:
@@ -132,7 +131,6 @@ class UnitTestManifestLoader:
                 given.input, tested_node, test_case.name
             )
             input_name = original_input_node.name
-
             common_fields = {
                 "resource_type": NodeType.Model,
                 # root directory for input and output fixtures
@@ -149,23 +147,25 @@ class UnitTestManifestLoader:
                 "name": input_name,
                 "path": f"{input_name}.sql",
             }
+            resource_type = original_input_node.resource_type
 
-            if original_input_node.resource_type in (
+            if resource_type in (
                 NodeType.Model,
                 NodeType.Seed,
                 NodeType.Snapshot,
             ):
+
                 input_node = ModelNode(
                     **common_fields,
                     defer_relation=original_input_node.defer_relation,
                 )
-                if (
-                    original_input_node.resource_type == NodeType.Model
-                    and original_input_node.version
-                ):
-                    input_node.version = original_input_node.version
+                if resource_type == NodeType.Model:
+                    if original_input_node.version:
+                        input_node.version = original_input_node.version
+                    if original_input_node.latest_version:
+                        input_node.latest_version = original_input_node.latest_version
 
-            elif original_input_node.resource_type == NodeType.Source:
+            elif resource_type == NodeType.Source:
                 # We are reusing the database/schema/identifier from the original source,
                 # but that shouldn't matter since this acts as an ephemeral model which just
                 # wraps a CTE around the unit test node.
