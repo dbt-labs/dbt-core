@@ -1927,9 +1927,17 @@ class EndOfRunSummary(InfoLevel):
         return "Z030"
 
     def message(self) -> str:
+
+        class PartialSuccess:
+            def __str__(self) -> str:
+                return "partial success"
+
+            def pluralize(self) -> str:
+                return f"{self}es"
+
         error_plural = pluralize(self.num_errors, "error")
         warn_plural = pluralize(self.num_warnings, "warning")
-        partial_success_plural = pluralize(self.num_partial_success, "partial success")
+        partial_success_plural = pluralize(self.num_partial_success, PartialSuccess())
 
         if self.keyboard_interrupt:
             message = yellow("Exited because of keyboard interrupt")
