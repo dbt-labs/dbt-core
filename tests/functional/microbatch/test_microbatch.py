@@ -517,7 +517,7 @@ select * from {{ ref('input_model') }}
 """
 
 
-class TestMicrobatchIncrementalPartitionFailure(BaseMicrobatchTest):
+class TestMicrobatchIncrementalBatchFailure(BaseMicrobatchTest):
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -531,11 +531,11 @@ class TestMicrobatchIncrementalPartitionFailure(BaseMicrobatchTest):
             GenericExceptionOnRun, predicate=lambda event: event.data.node_info is not None
         )
 
+        # run all partitions from start - 2 expected rows in output, one failed
         with patch_microbatch_end_time("2020-01-03 13:57:00"):
             run_dbt(["run"], callbacks=[event_catcher.catch], expect_pass=False)
 
         assert len(event_catcher.caught_events) == 1
-        # run all partitions from start - 2 expected rows in output, one failed
         self.assert_row_count(project, "microbatch_model", 2)
 
         run_results = get_artifact(project.project_root, "target", "run_results.json")
@@ -633,7 +633,7 @@ select * from {{ ref('input_model') }}
 """
 
 
-class TestMicrobatchInitialPartitionFailure(BaseMicrobatchTest):
+class TestMicrobatchInitialBatchFailure(BaseMicrobatchTest):
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -642,9 +642,14 @@ class TestMicrobatchInitialPartitionFailure(BaseMicrobatchTest):
         }
 
     def test_run_with_event_time(self, project):
+        event_catcher = EventCatcher(
+            GenericExceptionOnRun, predicate=lambda event: event.data.node_info is not None
+        )
+
         # run all partitions from start - 2 expected rows in output, one failed
         with patch_microbatch_end_time("2020-01-03 13:57:00"):
-            run_dbt(["run"])
+            run_dbt(["run"], callbacks=[event_catcher.catch])
+        assert len(event_catcher.caught_events) == 1
         self.assert_row_count(project, "microbatch_model", 2)
 
 
