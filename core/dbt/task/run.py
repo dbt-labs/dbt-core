@@ -700,7 +700,7 @@ class RunTask(CompileTask):
             batch_runner.set_relation_exists(relation_exists)
             batch_runner.set_batches(runner.batches)
 
-            if relation_exists:
+            if relation_exists and not runner.node.has_this:
                 self._submit(pool, [batch_runner], batch_results.append)
             else:
                 batch_results.append(self.call_runner(batch_runner))

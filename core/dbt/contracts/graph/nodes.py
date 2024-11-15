@@ -61,6 +61,7 @@ from dbt.artifacts.resources import SqlOperation as SqlOperationResource
 from dbt.artifacts.resources import TimeSpine
 from dbt.artifacts.resources import UnitTestDefinition as UnitTestDefinitionResource
 from dbt.artifacts.schemas.batch_results import BatchResults
+from dbt.clients.jinja_static import statically_extract_has_name_this
 from dbt.contracts.graph.model_config import UnitTestNodeConfig
 from dbt.contracts.graph.node_args import ModelNodeArgs
 from dbt.contracts.graph.unparsed import (
@@ -444,6 +445,7 @@ class HookNode(HookNodeResource, CompiledNode):
 @dataclass
 class ModelNode(ModelResource, CompiledNode):
     batch_info: Optional[BatchResults] = None
+    _has_this: Optional[bool] = None
 
     @classmethod
     def resource_class(cls) -> Type[ModelResource]:
@@ -519,6 +521,12 @@ class ModelNode(ModelResource, CompiledNode):
                 constraints.append(column_level_constraint)
 
         return constraints
+
+    @property
+    def has_this(self) -> bool:
+        if self._has_this is None:
+            self._has_this = statically_extract_has_name_this(self.raw_code)
+        return self._has_this
 
     def infer_primary_key(self, data_tests: List["GenericTestNode"]) -> List[str]:
         """
