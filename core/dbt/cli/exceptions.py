@@ -16,6 +16,9 @@ class DbtInternalException(Exception):
     pass
 
 
+# change that doesn't matter
+
+
 class CliException(ClickException):
     """The base exception class for our implementation of the click CLI.
     The exit_code attribute is used by click to determine which exit code to produce
