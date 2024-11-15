@@ -101,7 +101,7 @@ def test_invalid_event_value(project, logs_dir):
     with pytest.raises(Exception) as excinfo:
         fire_event(InvalidOptionYAML(option_name=1))
 
-    assert str(excinfo.value) == "[InvalidOptionYAML]: Unable to parse dict {'option_name': 1}"
+    assert "[InvalidOptionYAML]: Unable to parse logging event dictionary." in str(excinfo.value)
 
 
 groups_yml = """
@@ -277,3 +277,15 @@ class TestRunResultWarningGroup:
                 run_result_warning_count += 1
 
         assert run_result_warning_count == 1
+
+
+class TestRunResultNoGroup:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_model.sql": "select 1 as id",
+        }
+
+    def test_node_info_on_results(self, project, logs_dir):
+        results = run_dbt(["--no-write-json", "run"])
+        assert len(results) == 1

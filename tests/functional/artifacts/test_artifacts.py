@@ -8,6 +8,7 @@ import dbt
 from dbt.artifacts.schemas.results import RunStatus
 from dbt.artifacts.schemas.run import RunResultsArtifact
 from dbt.contracts.graph.manifest import WritableManifest
+from dbt.events.types import ArtifactWritten
 from dbt.tests.util import (
     check_datetime_between,
     get_artifact,
@@ -24,6 +25,7 @@ from tests.functional.artifacts.expected_run_results import (
     expected_run_results,
     expected_versions_run_results,
 )
+from tests.utils import EventCatcher
 
 models__schema_yml = """
 version: 2
@@ -617,8 +619,9 @@ class TestVerifyArtifacts(BaseVerifyProject):
 
     # Test generic "docs generate" command
     def test_run_and_generate(self, project, manifest_schema_path, run_results_schema_path):
+        catcher = EventCatcher(ArtifactWritten)
         start_time = datetime.utcnow()
-        results = run_dbt(["compile"])
+        results = run_dbt(args=["compile"], callbacks=[catcher.catch])
         assert len(results) == 7
         verify_manifest(
             project,
@@ -627,6 +630,38 @@ class TestVerifyArtifacts(BaseVerifyProject):
             manifest_schema_path,
         )
         verify_run_results(project, expected_run_results(), start_time, run_results_schema_path)
+        # manifest written twice, semantic manifest written twice, run results written once
+        assert len(catcher.caught_events) == 5
+        assert (
+            len(
+                [
+                    event
+                    for event in catcher.caught_events
+                    if event.data.artifact_type == "WritableManifest"
+                ]
+            )
+            > 0
+        )
+        assert (
+            len(
+                [
+                    event
+                    for event in catcher.caught_events
+                    if event.data.artifact_type == "SemanticManifest"
+                ]
+            )
+            > 0
+        )
+        assert (
+            len(
+                [
+                    event
+                    for event in catcher.caught_events
+                    if event.data.artifact_type == "RunExecutionResult"
+                ]
+            )
+            > 0
+        )
 
 
 class TestVerifyArtifactsReferences(BaseVerifyProject):

@@ -66,7 +66,11 @@ from tests.unit.utils import (
 
 @pytest.fixture
 def args_for_flags() -> Namespace:
-    return Namespace(send_anonymous_usage_stats=False, state_modified_compare_vars=False)
+    return Namespace(
+        send_anonymous_usage_stats=False,
+        state_modified_compare_more_unrendered_values=False,
+        state_modified_compare_vars=False,
+    )
 
 
 @pytest.fixture
@@ -100,7 +104,7 @@ def populated_node_config_dict():
         "docs": {"show": True},
         "contract": {"enforced": False, "alias_types": True},
         "access": "protected",
-        "lookback": 0,
+        "lookback": 1,
     }
 
 
@@ -188,7 +192,7 @@ def base_parsed_model_dict():
             "contract": {"enforced": False, "alias_types": True},
             "packages": [],
             "access": "protected",
-            "lookback": 0,
+            "lookback": 1,
         },
         "docs": {"show": True},
         "contract": {"enforced": False, "alias_types": True},
@@ -302,7 +306,7 @@ def complex_parsed_model_dict():
             "contract": {"enforced": False, "alias_types": True},
             "packages": [],
             "access": "protected",
-            "lookback": 0,
+            "lookback": 1,
         },
         "docs": {"show": True},
         "contract": {"enforced": False, "alias_types": True},
@@ -528,7 +532,7 @@ def basic_parsed_seed_dict():
             "docs": {"show": True},
             "contract": {"enforced": False, "alias_types": True},
             "packages": [],
-            "lookback": 0,
+            "lookback": 1,
         },
         "docs": {"show": True},
         "columns": {},
@@ -622,7 +626,7 @@ def complex_parsed_seed_dict():
             "docs": {"show": True},
             "contract": {"enforced": False, "alias_types": True},
             "packages": [],
-            "lookback": 0,
+            "lookback": 1,
         },
         "docs": {"show": True},
         "columns": {
@@ -832,7 +836,7 @@ def base_parsed_hook_dict():
             "docs": {"show": True},
             "contract": {"enforced": False, "alias_types": True},
             "packages": [],
-            "lookback": 0,
+            "lookback": 1,
         },
         "docs": {"show": True},
         "contract": {"enforced": False, "alias_types": True},
@@ -916,7 +920,7 @@ def complex_parsed_hook_dict():
             "docs": {"show": True},
             "contract": {"enforced": False, "alias_types": True},
             "packages": [],
-            "lookback": 0,
+            "lookback": 1,
         },
         "docs": {"show": True},
         "contract": {"enforced": False, "alias_types": True},
@@ -1279,7 +1283,7 @@ def basic_timestamp_snapshot_config_dict():
         "packages": [],
         "docs": {"show": True},
         "contract": {"enforced": False, "alias_types": True},
-        "lookback": 0,
+        "lookback": 1,
     }
 
 
@@ -1319,7 +1323,7 @@ def complex_timestamp_snapshot_config_dict():
         "packages": [],
         "docs": {"show": True},
         "contract": {"enforced": False, "alias_types": True},
-        "lookback": 0,
+        "lookback": 1,
     }
 
 
@@ -1387,7 +1391,7 @@ def basic_check_snapshot_config_dict():
         "packages": [],
         "docs": {"show": True},
         "contract": {"enforced": False, "alias_types": True},
-        "lookback": 0,
+        "lookback": 1,
     }
 
 
@@ -1427,7 +1431,7 @@ def complex_set_snapshot_config_dict():
         "packages": [],
         "docs": {"show": True},
         "contract": {"enforced": False, "alias_types": True},
-        "lookback": 0,
+        "lookback": 1,
     }
 
 
@@ -1553,7 +1557,7 @@ def basic_timestamp_snapshot_dict():
             "docs": {"show": True},
             "contract": {"enforced": False, "alias_types": True},
             "packages": [],
-            "lookback": 0,
+            "lookback": 1,
         },
         "docs": {"show": True},
         "contract": {"enforced": False, "alias_types": True},
@@ -1659,7 +1663,7 @@ def basic_check_snapshot_dict():
             "docs": {"show": True},
             "contract": {"enforced": False, "alias_types": True},
             "packages": [],
-            "lookback": 0,
+            "lookback": 1,
         },
         "docs": {"show": True},
         "contract": {"enforced": False, "alias_types": True},

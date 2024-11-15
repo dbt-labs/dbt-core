@@ -192,6 +192,7 @@ class SchemaSourceFile(BaseSourceFile):
     sources: List[str] = field(default_factory=list)
     exposures: List[str] = field(default_factory=list)
     metrics: List[str] = field(default_factory=list)
+    snapshots: List[str] = field(default_factory=list)
     # The following field will no longer be used. Leaving
     # here to avoid breaking existing projects. To be removed
     # later if possible.
@@ -213,6 +214,8 @@ class SchemaSourceFile(BaseSourceFile):
     sop: List[SourceKey] = field(default_factory=list)
     env_vars: Dict[str, Any] = field(default_factory=dict)
     unrendered_configs: Dict[str, Any] = field(default_factory=dict)
+    unrendered_databases: Dict[str, Any] = field(default_factory=dict)
+    unrendered_schemas: Dict[str, Any] = field(default_factory=dict)
     vars: Dict[str, Any] = field(default_factory=dict)
     pp_dict: Optional[Dict[str, Any]] = None
     pp_test_index: Optional[Dict[str, Any]] = None
@@ -385,6 +388,30 @@ class SchemaSourceFile(BaseSourceFile):
             del self.env_vars[yaml_key][name]
             if not self.env_vars[yaml_key]:
                 del self.env_vars[yaml_key]
+
+    def add_unrendered_database(self, yaml_key: str, name: str, unrendered_database: str) -> None:
+        if yaml_key not in self.unrendered_databases:
+            self.unrendered_databases[yaml_key] = {}
+
+        self.unrendered_databases[yaml_key][name] = unrendered_database
+
+    def get_unrendered_database(self, yaml_key: str, name: str) -> Optional[str]:
+        if yaml_key not in self.unrendered_databases:
+            return None
+
+        return self.unrendered_databases[yaml_key].get(name)
+
+    def add_unrendered_schema(self, yaml_key: str, name: str, unrendered_schema: str) -> None:
+        if yaml_key not in self.unrendered_schemas:
+            self.unrendered_schemas[yaml_key] = {}
+
+        self.unrendered_schemas[yaml_key][name] = unrendered_schema
+
+    def get_unrendered_schema(self, yaml_key: str, name: str) -> Optional[str]:
+        if yaml_key not in self.unrendered_schemas:
+            return None
+
+        return self.unrendered_schemas[yaml_key].get(name)
 
 
 @dataclass

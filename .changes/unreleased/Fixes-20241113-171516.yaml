@@ -1,0 +1,6 @@
+kind: Fixes
+body: Validate manifest has group_map during group_lookup init
+time: 2024-11-13T17:15:16.176082Z
+custom:
+    Author: aranke
+    Issue: "10988"

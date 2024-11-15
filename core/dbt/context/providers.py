@@ -238,11 +238,12 @@ class BaseResolver(metaclass=abc.ABCMeta):
     def resolve_event_time_filter(self, target: ManifestNode) -> Optional[EventTimeFilter]:
         event_time_filter = None
         if (
-            os.environ.get("DBT_EXPERIMENTAL_MICROBATCH")
-            and (isinstance(target.config, NodeConfig) or isinstance(target.config, SourceConfig))
+            (isinstance(target.config, NodeConfig) or isinstance(target.config, SourceConfig))
             and target.config.event_time
+            and isinstance(self.model, ModelNode)
             and self.model.config.materialized == "incremental"
             and self.model.config.incremental_strategy == "microbatch"
+            and self.manifest.use_microbatch_batches(project_name=self.config.project_name)
         ):
             start = self.model.config.get("__dbt_internal_microbatch_event_time_start")
             end = self.model.config.get("__dbt_internal_microbatch_event_time_end")
@@ -684,8 +685,15 @@ class RuntimeSourceResolver(BaseSourceResolver):
                 target_kind="source",
                 disabled=(isinstance(target_source, Disabled)),
             )
+
+        # Source quoting does _not_ respect global configs in dbt_project.yml, as documented here:
+        # https://docs.getdbt.com/reference/project-configs/quoting
+        # Use an object with an empty quoting field to bypass any settings in self.
+        class SourceQuotingBaseConfig:
+            quoting: Dict[str, Any] = {}
+
         return self.Relation.create_from(
-            self.config,
+            SourceQuotingBaseConfig(),
             target_source,
             limit=self.resolve_limit,
             event_time_filter=self.resolve_event_time_filter(target_source),

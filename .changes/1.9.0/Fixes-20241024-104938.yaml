@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix bug when referencing deprecated models
+time: 2024-10-24T10:49:38.352328-06:00
+custom:
+  Author: dbeatty10 danlsn
+  Issue: "10915"

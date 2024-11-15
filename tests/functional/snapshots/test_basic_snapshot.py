@@ -8,6 +8,7 @@ from dbt.tests.util import (
     check_relations_equal,
     relation_from_name,
     run_dbt,
+    update_config_file,
     write_file,
 )
 from tests.functional.snapshots.fixtures import (
@@ -18,6 +19,7 @@ from tests.functional.snapshots.fixtures import (
     models__schema_yml,
     seeds__seed_csv,
     seeds__seed_newcol_csv,
+    snapshots_pg__snapshot_mod_yml,
     snapshots_pg__snapshot_no_target_schema_sql,
     snapshots_pg__snapshot_sql,
     snapshots_pg__snapshot_yml,
@@ -394,3 +396,34 @@ class BasicYaml(Basic):
 class TestBasicSnapshotYaml(BasicYaml):
     def test_basic_snapshot_yaml(self, project):
         snapshot_setup(project, num_snapshot_models=1)
+
+
+class TestYamlSnapshotPartialParsing(BasicYaml):
+    def test_snapshot_partial_parsing(self, project):
+        manifest = run_dbt(["parse"])
+        snapshot_id = "snapshot.test.snapshot_actual"
+        assert snapshot_id in manifest.nodes
+        snapshot = manifest.nodes[snapshot_id]
+        assert snapshot.meta["owner"] == "a_owner"
+
+        # change snapshot yml file and re-parse
+        write_file(snapshots_pg__snapshot_mod_yml, "snapshots", "snapshot.yml")
+        manifest = run_dbt(["parse"])
+        snapshot = manifest.nodes[snapshot_id]
+        assert snapshot.meta["owner"] == "b_owner"
+
+        # modify dbt_project.yml and re-parse
+        config_updates = {
+            "snapshots": {
+                "test": {
+                    "+snapshot_meta_column_names": {
+                        "dbt_valid_to": "test_valid_to",
+                        "dbt_valid_from": "test_valid_from",
+                    },
+                }
+            }
+        }
+        update_config_file(config_updates, "dbt_project.yml")
+        manifest = run_dbt(["parse"])
+        snapshot = manifest.nodes[snapshot_id]
+        assert snapshot.config.snapshot_meta_column_names.dbt_valid_to == "test_valid_to"

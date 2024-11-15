@@ -63,9 +63,11 @@ from dbt.contracts.graph.nodes import (
 )
 from dbt.contracts.graph.semantic_manifest import SemanticManifest
 from dbt.events.types import (
+    ArtifactWritten,
     DeprecatedModel,
     DeprecatedReference,
     InvalidDisabledTargetInTestNode,
+    MicrobatchModelNoEventTimeInputs,
     NodeNotFoundOrDisabled,
     ParsedFileLoadFailed,
     ParsePerfInfoPath,
@@ -507,6 +509,7 @@ class ManifestLoader:
 
         self.check_for_model_deprecations()
         self.check_for_spaces_in_resource_names()
+        self.check_for_microbatch_deprecations()
 
         return self.manifest
 
@@ -573,36 +576,41 @@ class ManifestLoader:
         return project_parser_files
 
     def check_for_model_deprecations(self):
+        # build parent and child_maps
+        self.manifest.build_parent_and_child_maps()
         for node in self.manifest.nodes.values():
-            if isinstance(node, ModelNode) and node.is_past_deprecation_date:
-                warn_or_error(
-                    DeprecatedModel(
-                        model_name=node.name,
-                        model_version=version_to_str(node.version),
-                        deprecation_date=node.deprecation_date.isoformat(),
-                    )
-                )
-
-                resolved_refs = self.manifest.resolve_refs(node, self.root_project.project_name)
-                resolved_model_refs = [r for r in resolved_refs if isinstance(r, ModelNode)]
-                node.depends_on
-                for resolved_ref in resolved_model_refs:
-                    if resolved_ref.deprecation_date:
-                        if resolved_ref.is_past_deprecation_date:
-                            event_cls = DeprecatedReference
-                        else:
-                            event_cls = UpcomingReferenceDeprecation
-
-                        warn_or_error(
-                            event_cls(
-                                model_name=node.name,
-                                ref_model_package=resolved_ref.package_name,
-                                ref_model_name=resolved_ref.name,
-                                ref_model_version=version_to_str(resolved_ref.version),
-                                ref_model_latest_version=str(resolved_ref.latest_version),
-                                ref_model_deprecation_date=resolved_ref.deprecation_date.isoformat(),
-                            )
+            if isinstance(node, ModelNode) and node.deprecation_date:
+                if node.is_past_deprecation_date:
+                    warn_or_error(
+                        DeprecatedModel(
+                            model_name=node.name,
+                            model_version=version_to_str(node.version),
+                            deprecation_date=node.deprecation_date.isoformat(),
                         )
+                    )
+                # At this point _process_refs should already have been called, and
+                # we just rebuilt the parent and child maps.
+                # Get the child_nodes and check for deprecations.
+                child_nodes = self.manifest.child_map[node.unique_id]
+                for child_unique_id in child_nodes:
+                    child_node = self.manifest.nodes.get(child_unique_id)
+                    if not isinstance(child_node, ModelNode):
+                        continue
+                    if node.is_past_deprecation_date:
+                        event_cls = DeprecatedReference
+                    else:
+                        event_cls = UpcomingReferenceDeprecation
+
+                    warn_or_error(
+                        event_cls(
+                            model_name=child_node.name,
+                            ref_model_package=node.package_name,
+                            ref_model_name=node.name,
+                            ref_model_version=version_to_str(node.version),
+                            ref_model_latest_version=str(node.latest_version),
+                            ref_model_deprecation_date=node.deprecation_date.isoformat(),
+                        )
+                    )
 
     def check_for_spaces_in_resource_names(self):
         """Validates that resource names do not contain spaces
@@ -641,6 +649,23 @@ class ManifestLoader:
                 )
             else:  # ERROR level
                 raise DbtValidationError("Resource names cannot contain spaces")
+
+    def check_for_microbatch_deprecations(self) -> None:
+        if not get_flags().require_batched_execution_for_custom_microbatch_strategy:
+            has_microbatch_model = False
+            for _, node in self.manifest.nodes.items():
+                if (
+                    isinstance(node, ModelNode)
+                    and node.config.materialized == "incremental"
+                    and node.config.incremental_strategy == "microbatch"
+                ):
+                    has_microbatch_model = True
+                    break
+
+            if has_microbatch_model and not self.manifest._microbatch_macro_is_core(
+                self.root_project.project_name
+            ):
+                dbt.deprecations.warn("microbatch-macro-outside-of-batches-deprecation")
 
     def load_and_parse_macros(self, project_parser_files):
         for project in self.all_projects.values():
@@ -1383,7 +1408,7 @@ class ManifestLoader:
             node.config.final_validate()
 
     def check_valid_microbatch_config(self):
-        if os.environ.get("DBT_EXPERIMENTAL_MICROBATCH"):
+        if self.manifest.use_microbatch_batches(project_name=self.root_project.project_name):
             for node in self.manifest.nodes.values():
                 if (
                     node.config.materialized == "incremental"
@@ -1437,13 +1462,19 @@ class ManifestLoader:
                         )
 
                     # Validate upstream node event_time (if configured)
+                    has_input_with_event_time_config = False
                     for input_unique_id in node.depends_on.nodes:
                         input_node = self.manifest.expect(unique_id=input_unique_id)
                         input_event_time = input_node.config.event_time
-                        if input_event_time and not isinstance(input_event_time, str):
-                            raise dbt.exceptions.ParsingError(
-                                f"Microbatch model '{node.name}' depends on an input node '{input_node.name}' with an 'event_time' config of invalid (non-string) type: {type(input_event_time)}."
-                            )
+                        if input_event_time:
+                            if not isinstance(input_event_time, str):
+                                raise dbt.exceptions.ParsingError(
+                                    f"Microbatch model '{node.name}' depends on an input node '{input_node.name}' with an 'event_time' config of invalid (non-string) type: {type(input_event_time)}."
+                                )
+                            has_input_with_event_time_config = True
+
+                    if not has_input_with_event_time_config:
+                        fire_event(MicrobatchModelNoEventTimeInputs(model_name=node.name))
 
     def write_perf_info(self, target_path: str):
         path = os.path.join(target_path, PERF_INFO_FILE_NAME)
@@ -2007,4 +2038,9 @@ def parse_manifest(
         plugin_artifacts = pm.get_manifest_artifacts(manifest)
         for path, plugin_artifact in plugin_artifacts.items():
             plugin_artifact.write(path)
+            fire_event(
+                ArtifactWritten(
+                    artifact_type=plugin_artifact.__class__.__name__, artifact_path=path
+                )
+            )
     return manifest

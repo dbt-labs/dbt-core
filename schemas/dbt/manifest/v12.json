@@ -13,7 +13,7 @@
         },
         "dbt_version": {
           "type": "string",
-          "default": "1.9.0a1"
+          "default": "1.9.0b2"
         },
         "generated_at": {
           "type": "string"
@@ -263,7 +263,7 @@
                     "default": null
                   },
                   "lookback": {
-                    "default": 0
+                    "default": 1
                   },
                   "begin": {
                     "default": null
@@ -937,7 +937,7 @@
                                 "default": null
                               },
                               "lookback": {
-                                "default": 0
+                                "default": 1
                               },
                               "begin": {
                                 "default": null
@@ -1323,7 +1323,7 @@
                     "default": null
                   },
                   "lookback": {
-                    "default": 0
+                    "default": 1
                   },
                   "begin": {
                     "default": null
@@ -2780,7 +2780,7 @@
                     "default": null
                   },
                   "lookback": {
-                    "default": 0
+                    "default": 1
                   },
                   "begin": {
                     "default": null
@@ -3588,7 +3588,7 @@
                     "default": null
                   },
                   "lookback": {
-                    "default": 0
+                    "default": 1
                   },
                   "begin": {
                     "default": null
@@ -4523,7 +4523,7 @@
                                 "default": null
                               },
                               "lookback": {
-                                "default": 0
+                                "default": 1
                               },
                               "begin": {
                                 "default": null
@@ -4963,7 +4963,7 @@
                     "default": null
                   },
                   "lookback": {
-                    "default": 0
+                    "default": 1
                   },
                   "begin": {
                     "default": null
@@ -6481,7 +6481,7 @@
                     "default": null
                   },
                   "lookback": {
-                    "default": 0
+                    "default": 1
                   },
                   "begin": {
                     "default": null
@@ -6581,6 +6581,12 @@
                     "anyOf": [
                       {
                         "type": "string"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
                       },
                       {
                         "type": "null"
@@ -6769,6 +6775,17 @@
                       }
                     },
                     "additionalProperties": false
+                  },
+                  "dbt_valid_to_current": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
                   }
                 },
                 "additionalProperties": true
@@ -7391,7 +7408,7 @@
                                 "default": null
                               },
                               "lookback": {
-                                "default": 0
+                                "default": 1
                               },
                               "begin": {
                                 "default": null
@@ -8198,6 +8215,28 @@
           },
           "created_at": {
             "type": "number"
+          },
+          "unrendered_database": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "unrendered_schema": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           }
         },
         "additionalProperties": false,
@@ -10175,7 +10214,7 @@
                           "default": null
                         },
                         "lookback": {
-                          "default": 0
+                          "default": 1
                         },
                         "begin": {
                           "default": null
@@ -10849,7 +10888,7 @@
                                       "default": null
                                     },
                                     "lookback": {
-                                      "default": 0
+                                      "default": 1
                                     },
                                     "begin": {
                                       "default": null
@@ -11235,7 +11274,7 @@
                           "default": null
                         },
                         "lookback": {
-                          "default": 0
+                          "default": 1
                         },
                         "begin": {
                           "default": null
@@ -12692,7 +12731,7 @@
                           "default": null
                         },
                         "lookback": {
-                          "default": 0
+                          "default": 1
                         },
                         "begin": {
                           "default": null
@@ -13500,7 +13539,7 @@
                           "default": null
                         },
                         "lookback": {
-                          "default": 0
+                          "default": 1
                         },
                         "begin": {
                           "default": null
@@ -14435,7 +14474,7 @@
                                       "default": null
                                     },
                                     "lookback": {
-                                      "default": 0
+                                      "default": 1
                                     },
                                     "begin": {
                                       "default": null
@@ -14875,7 +14914,7 @@
                           "default": null
                         },
                         "lookback": {
-                          "default": 0
+                          "default": 1
                         },
                         "begin": {
                           "default": null
@@ -16393,7 +16432,7 @@
                           "default": null
                         },
                         "lookback": {
-                          "default": 0
+                          "default": 1
                         },
                         "begin": {
                           "default": null
@@ -16493,6 +16532,12 @@
                           "anyOf": [
                             {
                               "type": "string"
+                            },
+                            {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
                             },
                             {
                               "type": "null"
@@ -16681,6 +16726,17 @@
                             }
                           },
                           "additionalProperties": false
+                        },
+                        "dbt_valid_to_current": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null
                         }
                       },
                       "additionalProperties": true
@@ -17303,7 +17359,7 @@
                                       "default": null
                                     },
                                     "lookback": {
-                                      "default": 0
+                                      "default": 1
                                     },
                                     "begin": {
                                       "default": null
@@ -18101,6 +18157,28 @@
                     },
                     "created_at": {
                       "type": "number"
+                    },
+                    "unrendered_database": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
+                    },
+                    "unrendered_schema": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
                     }
                   },
                   "additionalProperties": false,
@@ -19692,6 +19770,23 @@
                               "type": "null"
                             }
                           ]
+                        },
+                        "order_by": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "limit": {
+                          "anyOf": [
+                            {
+                              "type": "integer"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null
                         }
                       },
                       "additionalProperties": false,
@@ -20960,6 +21055,10 @@
                           "propertyNames": {
                             "type": "string"
                           }
+                        },
+                        "enabled": {
+                          "type": "boolean",
+                          "default": true
                         }
                       },
                       "additionalProperties": true
@@ -21226,6 +21325,23 @@
                     "type": "null"
                   }
                 ]
+              },
+              "order_by": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "limit": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
               }
             },
             "additionalProperties": false,
@@ -22508,6 +22624,10 @@
                 "propertyNames": {
                   "type": "string"
                 }
+              },
+              "enabled": {
+                "type": "boolean",
+                "default": true
               }
             },
             "additionalProperties": true

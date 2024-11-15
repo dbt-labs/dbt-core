@@ -1,8 +1,7 @@
 import pytest
 
-from dbt.exceptions import CompilationError, ParsingError
+from dbt.exceptions import CompilationError, ParsingError, SchemaConfigError
 from dbt.tests.util import get_manifest, run_dbt
-from dbt_common.dataclass_schema import ValidationError
 from tests.functional.configs.fixtures import (
     my_model,
     my_model_2,
@@ -394,8 +393,8 @@ class TestInvalidEnabledConfig:
             "my_model.sql": my_model,
         }
 
-    def test_invalis_config(self, project):
-        with pytest.raises(ValidationError) as exc:
+    def test_invalid_config(self, project):
+        with pytest.raises(SchemaConfigError) as exc:
             run_dbt(["parse"])
         exc_str = " ".join(str(exc.value).split())  # flatten all whitespace
         expected_msg = "'True and False' is not of type 'boolean'"

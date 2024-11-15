@@ -31,7 +31,7 @@ class TestProjectMethods:
     def test_all_source_paths(self, project: Project):
         assert (
             project.all_source_paths.sort()
-            == ["models", "seeds", "snapshots", "analyses", "macros"].sort()
+            == ["models", "seeds", "snapshots", "analyses", "macros", "tests"].sort()
         )
 
     def test_generic_test_paths(self, project: Project):
@@ -99,7 +99,8 @@ class TestProjectInitialization(BaseConfigTest):
         self.assertEqual(project.test_paths, ["tests"])
         self.assertEqual(project.analysis_paths, ["analyses"])
         self.assertEqual(
-            set(project.docs_paths), set(["models", "seeds", "snapshots", "analyses", "macros"])
+            set(project.docs_paths),
+            {"models", "seeds", "snapshots", "analyses", "macros", "tests"},
         )
         self.assertEqual(project.asset_paths, [])
         self.assertEqual(project.target_path, "target")
@@ -128,7 +129,7 @@ class TestProjectInitialization(BaseConfigTest):
         )
         self.assertEqual(
             set(project.docs_paths),
-            set(["other-models", "seeds", "snapshots", "analyses", "macros"]),
+            {"other-models", "seeds", "snapshots", "analyses", "macros", "tests"},
         )
 
     def test_all_overrides(self):

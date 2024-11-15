@@ -203,6 +203,11 @@ class UnparsedAnalysisUpdate(HasConfig, HasColumnDocs, HasColumnProps, HasYamlMe
 
 
 @dataclass
+class UnparsedSingularTestUpdate(HasConfig, HasColumnProps, HasYamlMetadata):
+    pass
+
+
+@dataclass
 class UnparsedNodeUpdate(HasConfig, HasColumnTests, HasColumnAndTestProps, HasYamlMetadata):
     quote_columns: Optional[bool] = None
     access: Optional[str] = None
@@ -340,6 +345,8 @@ class UnparsedSourceDefinition(dbtClassMixin):
     tables: List[UnparsedSourceTableDefinition] = field(default_factory=list)
     tags: List[str] = field(default_factory=list)
     config: Dict[str, Any] = field(default_factory=dict)
+    unrendered_database: Optional[str] = None
+    unrendered_schema: Optional[str] = None
 
     @classmethod
     def validate(cls, data):
@@ -713,6 +720,8 @@ class UnparsedQueryParams(dbtClassMixin):
     group_by: List[str] = field(default_factory=list)
     # Note: `Union` must be the outermost part of the type annotation for serialization to work properly.
     where: Union[str, List[str], None] = None
+    order_by: List[str] = field(default_factory=list)
+    limit: Optional[int] = None
 
 
 @dataclass

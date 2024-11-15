@@ -30,6 +30,23 @@ exposures:
       email: something@example.com
 """
 
+
+deprecated_model_exposure_yaml = """
+version: 2
+
+models:
+  - name: model
+    deprecation_date: 1999-01-01 00:00:00.00+00:00
+
+exposures:
+  - name: simple_exposure
+    type: dashboard
+    depends_on:
+      - ref('model')
+    owner:
+      email: something@example.com
+"""
+
 # deprecated test config fixtures
 data_tests_yaml = """
 models:

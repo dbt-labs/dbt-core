@@ -646,7 +646,9 @@ def previous_state(manifest):
 
 @pytest.fixture
 def args_for_flags():
-    return Namespace(state_modified_compare_vars=False)
+    return Namespace(
+        state_modified_compare_more_unrendered_values=False, state_modified_compare_vars=False
+    )
 
 
 def add_node(manifest, node):

@@ -1,3 +1,4 @@
+import typing
 from typing import Any, Dict, List, Optional, Union
 
 import jinja2
@@ -9,23 +10,29 @@ from dbt_common.exceptions.macros import MacroNameNotStringError
 from dbt_common.tests import test_caching_enabled
 from dbt_extractor import ExtractionError, py_extract_from_source  # type: ignore
 
-_TESTING_MACRO_CACHE: Optional[Dict[str, Any]] = {}
+if typing.TYPE_CHECKING:
+    from dbt.context.providers import ParseDatabaseWrapper
 
 
-def statically_extract_macro_calls(string, ctx, db_wrapper=None):
+_TESTING_MACRO_CACHE: Dict[str, Any] = {}
+
+
+def statically_extract_macro_calls(
+    source: str, ctx: Dict[str, Any], db_wrapper: Optional["ParseDatabaseWrapper"] = None
+) -> List[str]:
     # set 'capture_macros' to capture undefined
     env = get_environment(None, capture_macros=True)
 
     global _TESTING_MACRO_CACHE
-    if test_caching_enabled() and string in _TESTING_MACRO_CACHE:
-        parsed = _TESTING_MACRO_CACHE.get(string, None)
+    if test_caching_enabled() and source in _TESTING_MACRO_CACHE:
+        parsed = _TESTING_MACRO_CACHE.get(source, None)
         func_calls = getattr(parsed, "_dbt_cached_calls")
     else:
-        parsed = env.parse(string)
+        parsed = env.parse(source)
         func_calls = tuple(parsed.find_all(jinja2.nodes.Call))
 
         if test_caching_enabled():
-            _TESTING_MACRO_CACHE[string] = parsed
+            _TESTING_MACRO_CACHE[source] = parsed
             setattr(parsed, "_dbt_cached_calls", func_calls)
 
     standard_calls = ["source", "ref", "config"]
@@ -69,30 +76,9 @@ def statically_extract_macro_calls(string, ctx, db_wrapper=None):
     return possible_macro_calls
 
 
-# Call(
-#   node=Getattr(
-#     node=Name(
-#       name='adapter',
-#       ctx='load'
-#     ),
-#     attr='dispatch',
-#     ctx='load'
-#   ),
-#   args=[
-#     Const(value='test_pkg_and_dispatch')
-#   ],
-#   kwargs=[
-#     Keyword(
-#       key='packages',
-#       value=Call(node=Getattr(node=Name(name='local_utils', ctx='load'),
-#          attr='_get_utils_namespaces', ctx='load'), args=[], kwargs=[],
-#          dyn_args=None, dyn_kwargs=None)
-#     )
-#   ],
-#   dyn_args=None,
-#   dyn_kwargs=None
-# )
-def statically_parse_adapter_dispatch(func_call, ctx, db_wrapper):
+def statically_parse_adapter_dispatch(
+    func_call, ctx: Dict[str, Any], db_wrapper: Optional["ParseDatabaseWrapper"]
+) -> List[str]:
     possible_macro_calls = []
     # This captures an adapter.dispatch('<macro_name>') call.
 
@@ -144,7 +130,7 @@ def statically_parse_adapter_dispatch(func_call, ctx, db_wrapper):
 
     if db_wrapper:
         macro = db_wrapper.dispatch(func_name, macro_namespace=macro_namespace).macro
-        func_name = f"{macro.package_name}.{macro.name}"
+        func_name = f"{macro.package_name}.{macro.name}"  # type: ignore[attr-defined]
         possible_macro_calls.append(func_name)
     else:  # this is only for tests/unit/test_macro_calls.py
         if macro_namespace:
@@ -240,8 +226,8 @@ def statically_parse_unrendered_config(string: str) -> Optional[Dict[str, Any]]:
     return unrendered_config
 
 
-def construct_static_kwarg_value(kwarg):
-    # Instead of trying to re-assemble complex kwarg value, simply stringify the value
+def construct_static_kwarg_value(kwarg) -> str:
+    # Instead of trying to re-assemble complex kwarg value, simply stringify the value.
     # This is still useful to be able to detect changes in unrendered configs, even if it is
     # not an exact representation of the user input.
     return str(kwarg)

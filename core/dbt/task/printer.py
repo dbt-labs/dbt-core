@@ -33,7 +33,8 @@ def get_counts(flat_nodes) -> str:
 
         counts[t] = counts.get(t, 0) + 1
 
-    stat_line = ", ".join([pluralize(v, k).replace("_", " ") for k, v in counts.items()])
+    sorted_items = sorted(counts.items(), key=lambda x: x[0])
+    stat_line = ", ".join([pluralize(v, k).replace("_", " ") for k, v in sorted_items])
 
     return stat_line
 

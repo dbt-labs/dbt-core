@@ -173,7 +173,9 @@ class SourcePatcher:
         parsed_source = SourceDefinition(
             package_name=target.package_name,
             database=(source.database or default_database),
+            unrendered_database=source.unrendered_database,
             schema=(source.schema or source.name),
+            unrendered_schema=source.unrendered_schema,
             identifier=(table.identifier or table.name),
             path=target.path,
             original_file_path=target.original_file_path,

@@ -13,6 +13,7 @@ from dbt.contracts.graph.unparsed import (
     UnparsedMacroUpdate,
     UnparsedModelUpdate,
     UnparsedNodeUpdate,
+    UnparsedSingularTestUpdate,
 )
 from dbt.exceptions import ParsingError
 from dbt.node_types import NodeType
@@ -58,6 +59,7 @@ Target = TypeVar(
     UnpatchedSourceDefinition,
     UnparsedExposure,
     UnparsedModelUpdate,
+    UnparsedSingularTestUpdate,
 )
 
 

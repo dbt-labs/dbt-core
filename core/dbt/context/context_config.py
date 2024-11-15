@@ -6,10 +6,12 @@ from typing import Any, Dict, Generic, Iterator, List, Optional, TypeVar
 from dbt.adapters.factory import get_config_class_by_name
 from dbt.config import IsFQNResource, Project, RuntimeConfig
 from dbt.contracts.graph.model_config import get_config_for
+from dbt.exceptions import SchemaConfigError
 from dbt.flags import get_flags
 from dbt.node_types import NodeType
 from dbt.utils import fqn_search
 from dbt_common.contracts.config.base import BaseConfig, merge_config_dicts
+from dbt_common.dataclass_schema import ValidationError
 from dbt_common.exceptions import DbtInternalError
 
 
@@ -237,8 +239,12 @@ class ContextConfigGenerator(BaseContextConfigGenerator[C]):
             base=base,
             patch_config_dict=patch_config_dict,
         )
-        finalized = config.finalize_and_validate()
-        return finalized.to_dict(omit_none=True)
+        try:
+            finalized = config.finalize_and_validate()
+            return finalized.to_dict(omit_none=True)
+        except ValidationError as exc:
+            # we got a ValidationError - probably bad types in config()
+            raise SchemaConfigError(exc, node=config) from exc
 
 
 class UnrenderedConfigGenerator(BaseContextConfigGenerator[Dict[str, Any]]):
