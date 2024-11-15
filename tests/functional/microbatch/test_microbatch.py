@@ -259,12 +259,14 @@ class BaseMicrobatchTest:
 
 
 class TestMicrobatchCLI(BaseMicrobatchTest):
+    CLI_COMMAND_NAME = "run"
+
     def test_run_with_event_time(self, project):
         # run without --event-time-start or --event-time-end - 3 expected rows in output
         catcher = EventCatcher(event_to_catch=LogModelResult)
 
         with patch_microbatch_end_time("2020-01-03 13:57:00"):
-            run_dbt(["run"], callbacks=[catcher.catch])
+            run_dbt([self.CLI_COMMAND_NAME], callbacks=[catcher.catch])
         self.assert_row_count(project, "microbatch_model", 3)
 
         assert len(catcher.caught_events) == 5
@@ -280,7 +282,7 @@ class TestMicrobatchCLI(BaseMicrobatchTest):
         # build model between 2020-01-02 >= event_time < 2020-01-03
         run_dbt(
             [
-                "run",
+                self.CLI_COMMAND_NAME,
                 "--event-time-start",
                 "2020-01-02",
                 "--event-time-end",
@@ -289,6 +291,10 @@ class TestMicrobatchCLI(BaseMicrobatchTest):
             ]
         )
         self.assert_row_count(project, "microbatch_model", 1)
+
+
+class TestMicrobatchCLIBuild(TestMicrobatchCLI):
+    CLI_COMMAND_NAME = "build"
 
 
 class TestMicroBatchBoundsDefault(BaseMicrobatchTest):

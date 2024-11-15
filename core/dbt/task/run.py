@@ -5,18 +5,7 @@ from copy import deepcopy
 from dataclasses import asdict, field
 from datetime import datetime
 from multiprocessing.pool import ThreadPool
-from typing import (
-    AbstractSet,
-    Any,
-    Callable,
-    Dict,
-    Iterable,
-    List,
-    Optional,
-    Set,
-    Tuple,
-    Type,
-)
+from typing import AbstractSet, Any, Dict, Iterable, List, Optional, Set, Tuple, Type
 
 from dbt import tracking, utils
 from dbt.adapters.base import BaseAdapter, BaseRelation
@@ -686,14 +675,16 @@ class RunTask(CompileTask):
             runner.do_skip(cause=cause)
 
         if isinstance(runner, MicrobatchModelRunner):
-            self.handle_microbatch_model(runner, pool, callback)
+            callback(self.handle_microbatch_model(runner, pool))
         else:
             args = [runner]
             self._submit(pool, args, callback)
 
     def handle_microbatch_model(
-        self, runner: MicrobatchModelRunner, pool: ThreadPool, callback: Callable
-    ):
+        self,
+        runner: MicrobatchModelRunner,
+        pool: ThreadPool,
+    ) -> RunResult:
         # Initial run computes batch metadata
         result = self.call_runner(runner)
         batch_results: List[RunResult] = []
@@ -725,7 +716,7 @@ class RunTask(CompileTask):
         track_model_run(runner.node_index, runner.num_nodes, result, adapter=runner.adapter)
         runner.print_result_line(result)
 
-        callback(result)
+        return result
 
     def _hook_keyfunc(self, hook: HookNode) -> Tuple[str, Optional[int]]:
         package_name = hook.package_name
