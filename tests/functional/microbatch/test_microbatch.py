@@ -832,3 +832,26 @@ class TestMicrobatchModelStoppedByKeyboardInterrupt(BaseMicrobatchTest):
             assert len(catch_eors.caught_events) == 1
             assert "Exited because of keyboard interrupt" in catch_eors.caught_events[0].info.msg
             assert len(catch_aw.caught_events) == 1
+
+
+class TestMicrobatchCanRunParallelOrSequential(BaseMicrobatchTest):
+    def test_microbatch(
+        self,
+        mocker: MockerFixture,
+        project,
+    ) -> None:
+        mocked_srip = mocker.patch("dbt.task.run.MicrobatchModelRunner._should_run_in_parallel")
+
+        # Should run in parallel
+        mocked_srip.return_value = True
+        with patch_microbatch_end_time("2020-01-03 13:57:00"):
+            _, logs = run_dbt_and_capture(["run"])
+            assert "on Thread-" in logs
+            assert "on MainThread" not in logs
+
+        # Should _not_ run in parallel
+        mocked_srip.return_value = False
+        with patch_microbatch_end_time("2020-01-03 13:57:00"):
+            _, logs = run_dbt_and_capture(["run"])
+            assert "on Thread-" not in logs
+            assert "on MainThread" in logs
