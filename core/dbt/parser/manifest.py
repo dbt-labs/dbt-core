@@ -1461,6 +1461,13 @@ class ManifestLoader:
                             f"Microbatch model '{node.name}' must provide the optional 'lookback' config as type int, but got: {type(lookback)})."
                         )
 
+                    # optional config: parallel_batches (bool)
+                    parallel_batches = node.config.parallel_batches
+                    if not isinstance(parallel_batches, bool) and parallel_batches is not None:
+                        raise dbt.exceptions.ParsingError(
+                            f"Microbatch model '{node.name}' optional 'parallel_batches' config must be of type `bool` if specified, but got: {type(parallel_batches)})."
+                        )
+
                     # Validate upstream node event_time (if configured)
                     has_input_with_event_time_config = False
                     for input_unique_id in node.depends_on.nodes:
