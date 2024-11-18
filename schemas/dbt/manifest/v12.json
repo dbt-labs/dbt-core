@@ -446,7 +446,7 @@
                   "event_time": {
                     "default": null
                   },
-                  "parallel_batches": {
+                  "concurrent_batches": {
                     "default": null
                   },
                   "delimiter": {
@@ -1117,7 +1117,7 @@
                               "event_time": {
                                 "default": null
                               },
-                              "parallel_batches": {
+                              "concurrent_batches": {
                                 "default": null
                               }
                             },
@@ -1506,7 +1506,7 @@
                   "event_time": {
                     "default": null
                   },
-                  "parallel_batches": {
+                  "concurrent_batches": {
                     "default": null
                   }
                 },
@@ -2954,7 +2954,7 @@
                   "event_time": {
                     "default": null
                   },
-                  "parallel_batches": {
+                  "concurrent_batches": {
                     "default": null
                   }
                 },
@@ -3759,7 +3759,7 @@
                   "event_time": {
                     "default": null
                   },
-                  "parallel_batches": {
+                  "concurrent_batches": {
                     "default": null
                   },
                   "access": {
@@ -4691,7 +4691,7 @@
                               "event_time": {
                                 "default": null
                               },
-                              "parallel_batches": {
+                              "concurrent_batches": {
                                 "default": null
                               }
                             },
@@ -5134,7 +5134,7 @@
                   "event_time": {
                     "default": null
                   },
-                  "parallel_batches": {
+                  "concurrent_batches": {
                     "default": null
                   }
                 },
@@ -6643,7 +6643,7 @@
                   "event_time": {
                     "default": null
                   },
-                  "parallel_batches": {
+                  "concurrent_batches": {
                     "default": null
                   },
                   "strategy": {
@@ -7567,7 +7567,7 @@
                               "event_time": {
                                 "default": null
                               },
-                              "parallel_batches": {
+                              "concurrent_batches": {
                                 "default": null
                               }
                             },
@@ -10364,7 +10364,7 @@
                         "event_time": {
                           "default": null
                         },
-                        "parallel_batches": {
+                        "concurrent_batches": {
                           "default": null
                         },
                         "delimiter": {
@@ -11035,7 +11035,7 @@
                                     "event_time": {
                                       "default": null
                                     },
-                                    "parallel_batches": {
+                                    "concurrent_batches": {
                                       "default": null
                                     }
                                   },
@@ -11424,7 +11424,7 @@
                         "event_time": {
                           "default": null
                         },
-                        "parallel_batches": {
+                        "concurrent_batches": {
                           "default": null
                         }
                       },
@@ -12872,7 +12872,7 @@
                         "event_time": {
                           "default": null
                         },
-                        "parallel_batches": {
+                        "concurrent_batches": {
                           "default": null
                         }
                       },
@@ -13677,7 +13677,7 @@
                         "event_time": {
                           "default": null
                         },
-                        "parallel_batches": {
+                        "concurrent_batches": {
                           "default": null
                         },
                         "access": {
@@ -14609,7 +14609,7 @@
                                     "event_time": {
                                       "default": null
                                     },
-                                    "parallel_batches": {
+                                    "concurrent_batches": {
                                       "default": null
                                     }
                                   },
@@ -15052,7 +15052,7 @@
                         "event_time": {
                           "default": null
                         },
-                        "parallel_batches": {
+                        "concurrent_batches": {
                           "default": null
                         }
                       },
@@ -16561,7 +16561,7 @@
                         "event_time": {
                           "default": null
                         },
-                        "parallel_batches": {
+                        "concurrent_batches": {
                           "default": null
                         },
                         "strategy": {
@@ -17485,7 +17485,7 @@
                                     "event_time": {
                                       "default": null
                                     },
-                                    "parallel_batches": {
+                                    "concurrent_batches": {
                                       "default": null
                                     }
                                   },

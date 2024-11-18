@@ -236,7 +236,7 @@ class TestMicrobatchModelRunner:
         assert model_runner._is_incremental(model) == expectation
 
     @pytest.mark.parametrize(
-        "has_relation,parallel_batches,has_this,expectation",
+        "has_relation,concurrent_batches,has_this,expectation",
         [
             (True, None, False, True),
             (True, None, True, False),
@@ -256,12 +256,12 @@ class TestMicrobatchModelRunner:
         self,
         model_runner: MicrobatchModelRunner,
         has_relation: bool,
-        parallel_batches: Optional[bool],
+        concurrent_batches: Optional[bool],
         has_this: bool,
         expectation: bool,
     ) -> None:
         model_runner.node._has_this = has_this
-        model_runner.node.config = ModelConfig(parallel_batches=parallel_batches)
+        model_runner.node.config = ModelConfig(concurrent_batches=concurrent_batches)
 
         # Assert result of _should_run_in_parallel
         assert model_runner._should_run_in_parallel(has_relation) == expectation

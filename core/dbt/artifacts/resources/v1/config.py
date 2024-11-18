@@ -126,7 +126,7 @@ class NodeConfig(NodeAndTestConfig):
         metadata=MergeBehavior.Update.meta(),
     )
     event_time: Any = None
-    parallel_batches: Any = None
+    concurrent_batches: Any = None
 
     def __post_init__(self):
         # we validate that node_color has a suitable value to prevent dbt-docs from crashing
