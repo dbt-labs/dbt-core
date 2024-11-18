@@ -13,7 +13,7 @@
         },
         "dbt_version": {
           "type": "string",
-          "default": "1.9.0b2"
+          "default": "1.9.0b4"
         },
         "generated_at": {
           "type": "string"
@@ -444,6 +444,9 @@
                     "additionalProperties": false
                   },
                   "event_time": {
+                    "default": null
+                  },
+                  "parallel_batches": {
                     "default": null
                   },
                   "delimiter": {
@@ -1113,6 +1116,9 @@
                               },
                               "event_time": {
                                 "default": null
+                              },
+                              "parallel_batches": {
+                                "default": null
                               }
                             },
                             "additionalProperties": true
@@ -1498,6 +1504,9 @@
                     "additionalProperties": false
                   },
                   "event_time": {
+                    "default": null
+                  },
+                  "parallel_batches": {
                     "default": null
                   }
                 },
@@ -2944,6 +2953,9 @@
                   },
                   "event_time": {
                     "default": null
+                  },
+                  "parallel_batches": {
+                    "default": null
                   }
                 },
                 "additionalProperties": true
@@ -3745,6 +3757,9 @@
                     "additionalProperties": false
                   },
                   "event_time": {
+                    "default": null
+                  },
+                  "parallel_batches": {
                     "default": null
                   },
                   "access": {
@@ -4675,6 +4690,9 @@
                               },
                               "event_time": {
                                 "default": null
+                              },
+                              "parallel_batches": {
+                                "default": null
                               }
                             },
                             "additionalProperties": true
@@ -5114,6 +5132,9 @@
                     "additionalProperties": false
                   },
                   "event_time": {
+                    "default": null
+                  },
+                  "parallel_batches": {
                     "default": null
                   }
                 },
@@ -6622,6 +6643,9 @@
                   "event_time": {
                     "default": null
                   },
+                  "parallel_batches": {
+                    "default": null
+                  },
                   "strategy": {
                     "anyOf": [
                       {
@@ -7541,6 +7565,9 @@
                                 "additionalProperties": false
                               },
                               "event_time": {
+                                "default": null
+                              },
+                              "parallel_batches": {
                                 "default": null
                               }
                             },
@@ -10337,6 +10364,9 @@
                         "event_time": {
                           "default": null
                         },
+                        "parallel_batches": {
+                          "default": null
+                        },
                         "delimiter": {
                           "type": "string",
                           "default": ","
@@ -11004,6 +11034,9 @@
                                     },
                                     "event_time": {
                                       "default": null
+                                    },
+                                    "parallel_batches": {
+                                      "default": null
                                     }
                                   },
                                   "additionalProperties": true
@@ -11389,6 +11422,9 @@
                           "additionalProperties": false
                         },
                         "event_time": {
+                          "default": null
+                        },
+                        "parallel_batches": {
                           "default": null
                         }
                       },
@@ -12835,6 +12871,9 @@
                         },
                         "event_time": {
                           "default": null
+                        },
+                        "parallel_batches": {
+                          "default": null
                         }
                       },
                       "additionalProperties": true
@@ -13636,6 +13675,9 @@
                           "additionalProperties": false
                         },
                         "event_time": {
+                          "default": null
+                        },
+                        "parallel_batches": {
                           "default": null
                         },
                         "access": {
@@ -14566,6 +14608,9 @@
                                     },
                                     "event_time": {
                                       "default": null
+                                    },
+                                    "parallel_batches": {
+                                      "default": null
                                     }
                                   },
                                   "additionalProperties": true
@@ -15005,6 +15050,9 @@
                           "additionalProperties": false
                         },
                         "event_time": {
+                          "default": null
+                        },
+                        "parallel_batches": {
                           "default": null
                         }
                       },
@@ -16513,6 +16561,9 @@
                         "event_time": {
                           "default": null
                         },
+                        "parallel_batches": {
+                          "default": null
+                        },
                         "strategy": {
                           "anyOf": [
                             {
@@ -17432,6 +17483,9 @@
                                       "additionalProperties": false
                                     },
                                     "event_time": {
+                                      "default": null
+                                    },
+                                    "parallel_batches": {
                                       "default": null
                                     }
                                   },
