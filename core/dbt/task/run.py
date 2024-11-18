@@ -589,6 +589,23 @@ class MicrobatchModelRunner(ModelRunner):
         )
         return relation is not None
 
+    def _should_run_in_parallel(
+        self,
+        relation_exists: bool,
+    ) -> bool:
+        if not relation_exists:
+            # If the relation doesn't exist, we can't run in parallel
+            run_in_parallel = False
+        elif self.node.config.parallel_batches is not None:
+            # If the relation exists and the `parallel_batches` config isn't None, use the config value
+            run_in_parallel = self.node.config.parallel_batches
+        else:
+            # If the relation exists, the `parallel_batches` config is None, check if the model self references `this`.
+            # If the model self references `this` then we assume the model batches _can't_ be run in parallel
+            run_in_parallel = not self.node.has_this
+
+        return run_in_parallel
+
     def _is_incremental(self, model) -> bool:
         # TODO: Remove. This is a temporary method. We're working with adapters on
         # a strategy to ensure we can access the `is_incremental` logic without drift
@@ -680,22 +697,6 @@ class RunTask(CompileTask):
             args = [runner]
             self._submit(pool, args, callback)
 
-    def _should_run_in_parallel(
-        self, relation_exists: bool, runner: MicrobatchModelRunner
-    ) -> bool:
-        if not relation_exists:
-            # If the relation doesn't exist, we can't run in parallel
-            run_in_parallel = False
-        elif runner.node.config.parallel_batches is not None:
-            # If the relation exists and the `parallel_batches` config isn't None, use the config value
-            run_in_parallel = runner.node.config.parallel_batches
-        else:
-            # If the relation exists, the `parallel_batches` config is None, check if the model self references `this`.
-            # If the model self references `this` then we assume the model batches _can't_ be run in parallel
-            run_in_parallel = not runner.node.has_this
-
-        return run_in_parallel
-
     def handle_microbatch_model(
         self,
         runner: MicrobatchModelRunner,
@@ -716,7 +717,7 @@ class RunTask(CompileTask):
             batch_runner.set_relation_exists(relation_exists)
             batch_runner.set_batches(runner.batches)
 
-            if self._should_run_in_parallel(relation_exists, runner):
+            if runner._should_run_in_parallel(relation_exists):
                 self._submit(pool, [batch_runner], batch_results.append)
             else:
                 batch_results.append(self.call_runner(batch_runner))
