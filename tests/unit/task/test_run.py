@@ -12,7 +12,7 @@ from pytest_mock import MockerFixture
 from dbt.adapters.contracts.connection import AdapterResponse
 from dbt.adapters.postgres import PostgresAdapter
 from dbt.artifacts.resources.base import FileHash
-from dbt.artifacts.resources.types import BatchSize, NodeType, RunHookType
+from dbt.artifacts.resources.types import NodeType, RunHookType
 from dbt.artifacts.resources.v1.components import DependsOn
 from dbt.artifacts.resources.v1.config import NodeConfig
 from dbt.artifacts.resources.v1.model import ModelConfig
@@ -234,33 +234,6 @@ class TestMicrobatchModelRunner:
 
         # Assert result of _is_incremental
         assert model_runner._is_incremental(model) == expectation
-
-    def test_keyboard_breaks__execute_microbatch_materialization(
-        self,
-        table_model: ModelNode,
-        manifest: Manifest,
-        model_runner: MicrobatchModelRunner,
-    ) -> None:
-        def mock_build_batch_context(*args, **kwargs):
-            raise KeyboardInterrupt("Test exception")
-
-        def mock_is_incremental(*args, **kwargs):
-            return True
-
-        table_model.config.materialized = "incremental"
-        table_model.config.incremental_strategy = "microbatch"
-        table_model.config.batch_size = BatchSize.day
-
-        model_runner.compiler = mock.Mock()
-        model_runner.compiler.compile_node.side_effect = KeyboardInterrupt
-        with patch.object(MicrobatchModelRunner, "_is_incremental", mock_is_incremental):
-            try:
-                model_runner._execute_microbatch_materialization(
-                    table_model, manifest, {}, MagicMock()
-                )
-                assert False, "KeyboardInterrupt failed to escape"
-            except KeyboardInterrupt:
-                assert True
 
 
 class TestRunTask:

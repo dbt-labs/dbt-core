@@ -1,8 +1,11 @@
 from unittest import mock
 
 import pytest
+from pytest_mock import MockerFixture
 
 from dbt.events.types import (
+    ArtifactWritten,
+    EndOfRunSummary,
     GenericExceptionOnRun,
     LogModelResult,
     MicrobatchMacroOutsideOfBatchesDeprecation,
@@ -797,3 +800,35 @@ class TestMicrbobatchModelsRunWithSameCurrentTime(BaseMicrobatchTest):
 
         # they should have the same last batch because they are using the _same_ "current_time"
         assert microbatch_model_last_batch == second_microbatch_model_last_batch
+
+
+class TestMicrobatchModelStoppedByKeyboardInterrupt(BaseMicrobatchTest):
+    @pytest.fixture
+    def catch_eors(self) -> EventCatcher:
+        return EventCatcher(EndOfRunSummary)
+
+    @pytest.fixture
+    def catch_aw(self) -> EventCatcher:
+        return EventCatcher(
+            event_to_catch=ArtifactWritten,
+            predicate=lambda event: event.data.artifact_type == "RunExecutionResult",
+        )
+
+    def test_microbatch(
+        self,
+        mocker: MockerFixture,
+        project,
+        catch_eors: EventCatcher,
+        catch_aw: EventCatcher,
+    ) -> None:
+        mocked_fbs = mocker.patch(
+            "dbt.materializations.incremental.microbatch.MicrobatchBuilder.format_batch_start"
+        )
+        mocked_fbs.side_effect = KeyboardInterrupt
+        try:
+            run_dbt(["run"], callbacks=[catch_eors.catch, catch_aw.catch])
+            assert False, "KeyboardInterrupt failed to stop batch execution"
+        except KeyboardInterrupt:
+            assert len(catch_eors.caught_events) == 1
+            assert "Exited because of keyboard interrupt" in catch_eors.caught_events[0].info.msg
+            assert len(catch_aw.caught_events) == 1
