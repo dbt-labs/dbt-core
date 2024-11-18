@@ -690,6 +690,7 @@ class StateSelectorMethod(SelectorMethod):
             different_contents = not new.same_contents(old, adapter_type)  # type: ignore
 
         upstream_macro_change = self.check_macros_modified(new)
+        check_modified_contract = new.check_modified_contract(old)
         return different_contents or upstream_macro_change
 
     def check_unmodified_content(
