@@ -486,10 +486,15 @@ models:
         tests:
           - not_null
           - unique
+
+groups:
+  - name: sales
+    owner:
+      name: sales_owner
 """
 
 accounts_sql = """
-select "Jane" as name
+select 'Jane' as name
 """
 
 

@@ -1505,8 +1505,10 @@ class Manifest(MacroMethods, dbtClassMixin):
         return is_private_ref and (
             not hasattr(node, "group")
             or not node.group
+            # Invalid reference because group does not match
             or node.group != target_model.group
-            or restrict_package_access
+            # Or, invalid because these are different namespaces (project/package) and restrict-access is enforced
+            or (node.package_name != target_model.package_name and restrict_package_access)
         )
 
     def is_invalid_protected_ref(
