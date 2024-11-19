@@ -714,10 +714,10 @@ class MacroMethods:
         self._macros_by_name = {}
         self._macros_by_package = {}
 
-    def find_macro_by_name(
+    def find_macro_candidate_by_name(
         self, name: str, root_project_name: str, package: Optional[str]
-    ) -> Optional[Macro]:
-        """Find a macro in the graph by its name and package name, or None for
+    ) -> Optional[MacroCandidate]:
+        """Find a MacroCandidate in the graph by its name and package name, or None for
         any package. The root project name is used to determine priority:
          - locally defined macros come first
          - then imported macros
@@ -735,7 +735,15 @@ class MacroMethods:
             filter=filter,
         )
 
-        return candidates.last()
+        return candidates.last_candidate()
+
+    def find_macro_by_name(
+        self, name: str, root_project_name: str, package: Optional[str]
+    ) -> Optional[Macro]:
+        macro_candidate = self.find_macro_candidate_by_name(
+            name=name, root_project_name=root_project_name, package=package
+        )
+        return macro_candidate.macro if macro_candidate else None
 
     def find_generate_macro_by_name(
         self, component: str, root_project_name: str, imported_package: Optional[str] = None
@@ -1746,6 +1754,24 @@ class Manifest(MacroMethods, dbtClassMixin):
             self._singular_test_lookup,
         )
         return self.__class__, args
+
+    def _microbatch_macro_is_core(self, project_name: str) -> bool:
+        microbatch_is_core = False
+        candidate = self.find_macro_candidate_by_name(
+            name="get_incremental_microbatch_sql", root_project_name=project_name, package=None
+        )
+
+        # We want to check for "Core", because "Core" basically means "builtin"
+        if candidate is not None and candidate.locality == Locality.Core:
+            microbatch_is_core = True
+
+        return microbatch_is_core
+
+    def use_microbatch_batches(self, project_name: str) -> bool:
+        return (
+            get_flags().require_batched_execution_for_custom_microbatch_strategy
+            or self._microbatch_macro_is_core(project_name=project_name)
+        )
 
 
 class MacroManifest(MacroMethods):

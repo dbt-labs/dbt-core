@@ -1,6 +1,3 @@
-import os
-from unittest import mock
-
 import pytest
 
 from dbt.exceptions import ParsingError
@@ -86,7 +83,14 @@ class BaseMicrobatchTestParseError:
     def models(self):
         return {}
 
-    @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "flags": {
+                "require_batched_execution_for_custom_microbatch_strategy": True,
+            }
+        }
+
     def test_parsing_error_raised(self, project):
         with pytest.raises(ParsingError):
             run_dbt(["parse"])
@@ -97,7 +101,14 @@ class BaseMicrobatchTestNoError:
     def models(self):
         return {}
 
-    @mock.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "flags": {
+                "require_batched_execution_for_custom_microbatch_strategy": True,
+            }
+        }
+
     def test_parsing_error_not_raised(self, project):
         run_dbt(["parse"])
 

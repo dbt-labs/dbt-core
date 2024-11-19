@@ -1,4 +1,4 @@
-import os
+from argparse import Namespace
 from unittest import mock
 
 import pytest
@@ -14,6 +14,7 @@ from dbt.context.providers import (
     RuntimeSourceResolver,
 )
 from dbt.contracts.graph.nodes import ModelNode
+from dbt.flags import set_from_args
 
 
 class TestBaseResolver:
@@ -40,7 +41,7 @@ class TestBaseResolver:
         assert resolver.resolve_limit == expected_resolve_limit
 
     @pytest.mark.parametrize(
-        "dbt_experimental_microbatch,materialized,incremental_strategy,resolver_model_node,expect_filter",
+        "use_microbatch_batches,materialized,incremental_strategy,resolver_model_node,expect_filter",
         [
             (True, "incremental", "microbatch", True, True),
             (True, "incremental", "microbatch", False, False),
@@ -53,15 +54,12 @@ class TestBaseResolver:
         self,
         mocker: MockerFixture,
         resolver: ResolverSubclass,
-        dbt_experimental_microbatch: bool,
+        use_microbatch_batches: bool,
         materialized: str,
         incremental_strategy: str,
         resolver_model_node: bool,
         expect_filter: bool,
     ) -> None:
-        if dbt_experimental_microbatch:
-            mocker.patch.dict(os.environ, {"DBT_EXPERIMENTAL_MICROBATCH": "True"})
-
         # Target mocking
         target = mock.Mock()
         target.config = mock.MagicMock(NodeConfig)
@@ -77,6 +75,8 @@ class TestBaseResolver:
         resolver.model.config.incremental_strategy = incremental_strategy
         resolver.model.config.batch_size = BatchSize.day
         resolver.model.config.lookback = 1
+        resolver.manifest.use_microbatch_batches = mock.Mock()
+        resolver.manifest.use_microbatch_batches.return_value = use_microbatch_batches
 
         # Try to get an EventTimeFilter
         event_time_filter = resolver.resolve_event_time_filter(target=target)
@@ -122,6 +122,10 @@ class TestRuntimeRefResolver:
         mock_node.is_ephemeral_model = is_ephemeral_model
         mock_node.defer_relation = None
 
+        set_from_args(
+            Namespace(require_batched_execution_for_custom_microbatch_strategy=False), None
+        )
+
         # create limited relation
         with mock.patch("dbt.contracts.graph.nodes.ParsedNode", new=mock.Mock):
             relation = resolver.create_relation(mock_node)
@@ -160,6 +164,10 @@ class TestRuntimeSourceResolver:
         mock_source.quoting = Quoting()
         mock_source.quoting_dict = {}
         resolver.manifest.resolve_source.return_value = mock_source
+
+        set_from_args(
+            Namespace(require_batched_execution_for_custom_microbatch_strategy=False), None
+        )
 
         # create limited relation
         relation = resolver.resolve("test", "test")
