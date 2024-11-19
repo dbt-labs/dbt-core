@@ -447,6 +447,12 @@ class ModelNode(ModelResource, CompiledNode):
     batch_info: Optional[BatchResults] = None
     _has_this: Optional[bool] = None
 
+    def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
+        dct = super().__post_serialize__(dct, context)
+        if "_has_this" in dct:
+            del dct["_has_this"]
+        return dct
+
     @classmethod
     def resource_class(cls) -> Type[ModelResource]:
         return ModelResource
