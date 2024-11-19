@@ -4,6 +4,7 @@ from typing import Optional, Type
 from dbt.artifacts.schemas.run import RunResult, RunStatus
 from dbt.contracts.graph.manifest import Manifest
 from dbt.events.types import CompiledNode, ParseInlineNodeError
+from dbt.flags import get_flags
 from dbt.graph import ResourceTypeSelector
 from dbt.node_types import EXECUTABLE_NODE_TYPES, NodeType
 from dbt.parser.manifest import process_node
@@ -96,6 +97,7 @@ class CompileTask(GraphRunnableTask):
                     is_inline=is_inline,
                     output_format=output_format,
                     unique_id=result.node.unique_id,
+                    quiet=get_flags().QUIET,
                 )
             )
 

@@ -169,10 +169,24 @@ class TestCompile:
         assert len(results) == 1
         assert "Compiled inline node is:" in log_output
 
+    def test_inline_pass_quiet(self, project):
+        (results, log_output) = run_dbt_and_capture(
+            ["compile", "--quiet", "--inline", "select * from {{ ref('first_model') }}"]
+        )
+        assert len(results) == 1
+        assert "Compiled inline node is:" not in log_output
+
     def test_select_pass(self, project):
         (results, log_output) = run_dbt_and_capture(["compile", "--select", "second_model"])
         assert len(results) == 3
         assert "Compiled node 'second_model' is:" in log_output
+
+    def test_select_pass_quiet(self, project):
+        (results, log_output) = run_dbt_and_capture(
+            ["compile", "--quiet", "--select", "second_model"]
+        )
+        assert len(results) == 3
+        assert "Compiled node 'second_model' is:" not in log_output
 
     def test_select_pass_empty(self, project):
         (results, log_output) = run_dbt_and_capture(
@@ -201,6 +215,17 @@ class TestCompile:
         assert len(results) == 3
         assert "node" in log_output
         assert "compiled" in log_output
+        with pytest.raises(json.JSONDecodeError):
+            json.loads(log_output)
+
+    def test_output_json_select_quiet(self, project):
+        (results, log_output) = run_dbt_and_capture(
+            ["compile", "--quiet", "--select", "second_model", "--output", "json"]
+        )
+        assert len(results) == 3
+        assert "node" in log_output
+        assert "compiled" in log_output
+        json.loads(log_output)
 
     def test_output_json_inline(self, project):
         (results, log_output) = run_dbt_and_capture(
@@ -209,6 +234,24 @@ class TestCompile:
         assert len(results) == 1
         assert '"node"' not in log_output
         assert '"compiled"' in log_output
+        with pytest.raises(json.JSONDecodeError):
+            json.loads(log_output)
+
+    def test_output_json_inline_quiet(self, project):
+        (results, log_output) = run_dbt_and_capture(
+            [
+                "compile",
+                "--quiet",
+                "--inline",
+                "select * from {{ ref('second_model') }}",
+                "--output",
+                "json",
+            ]
+        )
+        assert len(results) == 1
+        assert '"node"' not in log_output
+        assert '"compiled"' in log_output
+        json.loads(log_output)
 
     def test_compile_inline_not_add_node(self, project):
         dbt = dbtTestRunner()

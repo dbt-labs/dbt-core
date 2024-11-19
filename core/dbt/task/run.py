@@ -27,11 +27,11 @@ from dbt.context.providers import generate_runtime_model_context
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import HookNode, ModelNode, ResultNode
 from dbt.events.types import (
+    GenericExceptionOnRun,
     LogHookEndLine,
     LogHookStartLine,
     LogModelResult,
     LogStartLine,
-    RunningOperationCaughtError,
 )
 from dbt.exceptions import CompilationError, DbtInternalError, DbtRuntimeError
 from dbt.graph import ResourceTypeSelector
@@ -275,7 +275,13 @@ class ModelRunner(CompileRunner):
             level=level,
         )
         if exception:
-            fire_event(RunningOperationCaughtError(exc=str(exception)))
+            fire_event(
+                GenericExceptionOnRun(
+                    unique_id=self.node.unique_id,
+                    exc=f"Exception on worker thread. {str(exception)}",
+                    node_info=self.node.node_info,
+                )
+            )
 
     def print_batch_start_line(
         self, batch_start: Optional[datetime], batch_idx: int, batch_total: int

@@ -57,6 +57,9 @@ test.env
 makefile.test.env
 *.pytest_cache/
 
+# Unit test artifacts
+index.html
+
 
 # Translations
 *.mo
