@@ -43,6 +43,7 @@ def get_rendered_model_config(**updates):
         "lookback": 1,
         "batch_size": None,
         "begin": None,
+        "concurrent_batches": None,
     }
     result.update(updates)
     return result
@@ -82,6 +83,7 @@ def get_rendered_seed_config(**updates):
         "lookback": 1,
         "batch_size": None,
         "begin": None,
+        "concurrent_batches": None,
     }
     result.update(updates)
     return result
@@ -133,6 +135,7 @@ def get_rendered_snapshot_config(**updates):
         "lookback": 1,
         "batch_size": None,
         "begin": None,
+        "concurrent_batches": None,
     }
     result.update(updates)
     return result
