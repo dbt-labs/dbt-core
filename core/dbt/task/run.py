@@ -9,6 +9,7 @@ from typing import AbstractSet, Any, Dict, Iterable, List, Optional, Set, Tuple,
 
 from dbt import tracking, utils
 from dbt.adapters.base import BaseAdapter, BaseRelation
+from dbt.adapters.capability import Capability
 from dbt.adapters.events.types import FinishedRunningStats
 from dbt.adapters.exceptions import MissingMaterializationError
 from dbt.artifacts.resources import Hook
@@ -593,7 +594,9 @@ class MicrobatchModelRunner(ModelRunner):
         self,
         relation_exists: bool,
     ) -> bool:
-        if not relation_exists:
+        if not self.adapter.supports(Capability.MicrobatchConcurrency):
+            run_in_parallel = False
+        elif not relation_exists:
             # If the relation doesn't exist, we can't run in parallel
             run_in_parallel = False
         elif self.node.config.concurrent_batches is not None:
