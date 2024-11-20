@@ -19,6 +19,7 @@ isort==5.13.2
 mypy==1.4.1
 pip-tools
 pre-commit
+protobuf>=5.0,<6.0
 pytest>=7.4,<8.0
 pytest-cov
 pytest-csv>=3.0,<4.0
@@ -32,7 +33,7 @@ types-docutils
 types-PyYAML
 types-Jinja2
 types-mock
-types-protobuf>=4.0.0,<5.0.0
+types-protobuf>=5.0,<6.0
 types-pytz
 types-requests
 types-setuptools

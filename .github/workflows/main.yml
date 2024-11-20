@@ -59,6 +59,7 @@ jobs:
           python -m pip install --user --upgrade pip
           python -m pip --version
           make dev
+          make dev_req
           mypy --version
           dbt --version
 
