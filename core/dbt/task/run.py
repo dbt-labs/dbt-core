@@ -34,6 +34,7 @@ from dbt.events.types import (
     LogHookStartLine,
     LogModelResult,
     LogStartLine,
+    MicrobatchExecutionDebug,
 )
 from dbt.exceptions import CompilationError, DbtInternalError, DbtRuntimeError
 from dbt.graph import ResourceTypeSelector
@@ -719,8 +720,18 @@ class RunTask(CompileTask):
             batch_runner.set_batches(runner.batches)
 
             if runner._should_run_in_parallel(relation_exists):
+                fire_event(
+                    MicrobatchExecutionDebug(
+                        msg=f"{batch_runner.describe_batch} is being run concurrently"
+                    )
+                )
                 self._submit(pool, [batch_runner], batch_results.append)
             else:
+                fire_event(
+                    MicrobatchExecutionDebug(
+                        msg=f"{batch_runner.describe_batch} is being run sequentially"
+                    )
+                )
                 batch_results.append(self.call_runner(batch_runner))
                 relation_exists = batch_runner.relation_exists
 

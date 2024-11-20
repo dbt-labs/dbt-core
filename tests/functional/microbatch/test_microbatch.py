@@ -8,6 +8,7 @@ from dbt.events.types import (
     EndOfRunSummary,
     GenericExceptionOnRun,
     LogModelResult,
+    MicrobatchExecutionDebug,
     MicrobatchMacroOutsideOfBatchesDeprecation,
     MicrobatchModelNoEventTimeInputs,
 )
@@ -835,23 +836,40 @@ class TestMicrobatchModelStoppedByKeyboardInterrupt(BaseMicrobatchTest):
 
 
 class TestMicrobatchCanRunParallelOrSequential(BaseMicrobatchTest):
+    @pytest.fixture
+    def batch_exc_catcher(self) -> EventCatcher:
+        return EventCatcher(MicrobatchExecutionDebug)  # type: ignore
+
     def test_microbatch(
-        self,
-        mocker: MockerFixture,
-        project,
+        self, mocker: MockerFixture, project, batch_exc_catcher: EventCatcher
     ) -> None:
         mocked_srip = mocker.patch("dbt.task.run.MicrobatchModelRunner._should_run_in_parallel")
 
-        # Should run in parallel
+        # Should be run in parallel
         mocked_srip.return_value = True
         with patch_microbatch_end_time("2020-01-03 13:57:00"):
-            _, logs = run_dbt_and_capture(["run"])
-            assert "on Thread-" in logs
-            assert "on MainThread" not in logs
+            _ = run_dbt(["run"], callbacks=[batch_exc_catcher.catch])
+
+        assert len(batch_exc_catcher.caught_events) > 1
+        some_batches_run_concurrently = False
+        for caugh_event in batch_exc_catcher.caught_events:
+            if "is being run concurrently" in caugh_event.data.msg:  # type: ignore
+                some_batches_run_concurrently = True
+                break
+        assert some_batches_run_concurrently, "Found no batches being run concurrently!"
+
+        # reset caught events
+        batch_exc_catcher.caught_events = []
 
         # Should _not_ run in parallel
         mocked_srip.return_value = False
         with patch_microbatch_end_time("2020-01-03 13:57:00"):
-            _, logs = run_dbt_and_capture(["run"])
-            assert "on Thread-" not in logs
-            assert "on MainThread" in logs
+            _ = run_dbt(["run"], callbacks=[batch_exc_catcher.catch])
+
+        assert len(batch_exc_catcher.caught_events) > 1
+        some_batches_run_concurrently = False
+        for caugh_event in batch_exc_catcher.caught_events:
+            if "is being run concurrently" in caugh_event.data.msg:  # type: ignore
+                some_batches_run_concurrently = True
+                break
+        assert not some_batches_run_concurrently, "Found a batch being run concurrently!"
