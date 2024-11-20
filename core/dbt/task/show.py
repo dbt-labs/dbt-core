@@ -7,6 +7,7 @@ from dbt.artifacts.schemas.run import RunResult, RunStatus
 from dbt.context.providers import generate_runtime_model_context
 from dbt.contracts.graph.nodes import SeedNode
 from dbt.events.types import ShowNode
+from dbt.flags import get_flags
 from dbt.task.base import ConfiguredTask
 from dbt.task.compile import CompileRunner, CompileTask
 from dbt.task.seed import SeedRunner
@@ -108,6 +109,7 @@ class ShowTask(CompileTask):
                     is_inline=is_inline,
                     output_format=self.args.output,
                     unique_id=result.node.unique_id,
+                    quiet=get_flags().QUIET,
                 )
             )
 
@@ -143,5 +145,6 @@ class ShowTaskDirect(ConfiguredTask):
                     is_inline=True,
                     output_format=self.args.output,
                     unique_id="direct-query",
+                    quiet=get_flags().QUIET,
                 )
             )

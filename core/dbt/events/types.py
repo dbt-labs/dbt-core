@@ -1663,7 +1663,9 @@ class ShowNode(InfoLevel):
                     {"node": self.node_name, "show": json.loads(self.preview)}, indent=2
                 )
         else:
-            if self.is_inline:
+            if self.quiet:
+                return self.preview
+            elif self.is_inline:
                 return f"Previewing inline node:\n{self.preview}"
             else:
                 return f"Previewing node '{self.node_name}':\n{self.preview}"
@@ -1680,7 +1682,9 @@ class CompiledNode(InfoLevel):
             else:
                 return json.dumps({"node": self.node_name, "compiled": self.compiled}, indent=2)
         else:
-            if self.is_inline:
+            if self.quiet:
+                return self.compiled
+            elif self.is_inline:
                 return f"Compiled inline node is:\n{self.compiled}"
             else:
                 return f"Compiled node '{self.node_name}' is:\n{self.compiled}"
