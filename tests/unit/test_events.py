@@ -421,6 +421,7 @@ sample_values = [
     core_types.SnapshotTimestampWarning(
         snapshot_time_data_type="DATETIME", updated_at_data_type="DATETIMEZ"
     ),
+    core_types.MicrobatchExecutionDebug(msg=""),
     # W - Node testing ======================
     core_types.CatchableExceptionOnRun(exc=""),
     core_types.InternalErrorOnRun(build_path="", exc=""),

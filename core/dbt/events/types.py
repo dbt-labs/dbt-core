@@ -1702,6 +1702,14 @@ class SnapshotTimestampWarning(WarnLevel):
         )
 
 
+class MicrobatchExecutionDebug(DebugLevel):
+    def code(self) -> str:
+        return "Q044"
+
+    def message(self) -> str:
+        return self.msg
+
+
 # =======================================================
 # W - Node testing
 # =======================================================

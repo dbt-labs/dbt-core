@@ -1680,6 +1680,16 @@ message SnapshotTimestampWarningMsg {
     SnapshotTimestampWarning data = 2;
 }
 
+// Q044
+message MicrobatchExecutionDebug {
+    string msg = 1;
+}
+
+message MicrobatchExecutionDebugMsg {
+    CoreEventInfo info = 1;
+    MicrobatchExecutionDebug data = 2;
+}
+
 // W - Node testing
 
 // Skipped W001
