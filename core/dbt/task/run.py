@@ -369,9 +369,7 @@ class MicrobatchModelRunner(ModelRunner):
         formatted_batch_start = MicrobatchBuilder.format_batch_start(
             batch_start, self.node.config.batch_size
         )
-        import threading
-
-        return f"batch {formatted_batch_start} of {self.get_node_representation()} on {threading.current_thread().name}"
+        return f"batch {formatted_batch_start} of {self.get_node_representation()}"
 
     def print_batch_result_line(
         self,
