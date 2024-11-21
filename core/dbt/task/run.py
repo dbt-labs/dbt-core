@@ -545,7 +545,8 @@ class MicrobatchModelRunner(ModelRunner):
                 )
                 # Update jinja context with batch context members
                 batch_context = microbatch_builder.build_batch_context(
-                    incremental_batch=self.relation_exists
+                    incremental_batch=self.relation_exists,
+                    start_time=batch[0],
                 )
                 context.update(batch_context)
 
