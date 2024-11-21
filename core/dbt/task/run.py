@@ -334,9 +334,12 @@ class ModelRunner(CompileRunner):
 
 
 class MicrobatchModelRunner(ModelRunner):
-    batch_idx: Optional[int] = None
-    batches: Dict[int, BatchType] = {}
-    relation_exists: bool = False
+    def __init__(self, config, adapter, node, node_index: int, num_nodes: int):
+        super().__init__(config, adapter, node, node_index, num_nodes)
+
+        self.batch_idx: Optional[int] = None
+        self.batches: Dict[int, BatchType] = {}
+        self.relation_exists: bool = False
 
     def set_batch_idx(self, batch_idx: int) -> None:
         self.batch_idx = batch_idx
