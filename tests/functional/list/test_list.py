@@ -69,6 +69,7 @@ class TestList:
                         "dbt_updated_at": None,
                         "dbt_valid_from": None,
                         "dbt_valid_to": None,
+                        "dbt_is_deleted": None,
                     },
                     "unique_key": "id",
                     "strategy": "timestamp",

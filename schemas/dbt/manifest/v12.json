@@ -6754,6 +6754,17 @@
                           }
                         ],
                         "default": null
+                      },
+                      "dbt_is_deleted": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null
                       }
                     },
                     "additionalProperties": false
@@ -16663,6 +16674,17 @@
                               "default": null
                             },
                             "dbt_updated_at": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ],
+                              "default": null
+                            },
+                            "dbt_is_deleted": {
                               "anyOf": [
                                 {
                                   "type": "string"
