@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: Pin dbt-common and dbt-adapters with upper bound of 2.0.
-time: 2024-11-21T10:53:50.051757-06:00
-custom:
-  Author: emmyoop
-  Issue: "11024"
