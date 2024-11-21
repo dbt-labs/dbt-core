@@ -2,7 +2,8 @@ import pytest
 
 from dbt.artifacts.schemas.results import RunStatus
 from dbt.contracts.graph.nodes import HookNode
-from dbt.tests.util import get_artifact, run_dbt_and_capture
+from dbt.tests.util import get_artifact, run_dbt, run_dbt_and_capture
+from dbt_common.exceptions import CompilationError
 
 
 class Test__StartHookFail__FlagIsNone__ModelFail:
@@ -242,3 +243,36 @@ class Test__HookContext__HookFail:
         assert "Thread ID: main" in log_output
         assert results[0].thread_id == "main"
         assert "Num Results in context: 2" in log_output  # failed hook and model
+
+
+class Test__HookCompilationError:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"my_model.sql": "select 1 as id"}
+
+    @pytest.fixture(scope="class")
+    def macros(self):
+        return {
+            "rce.sql": """
+{% macro rce(relation) %}
+    {% if execute %}
+        {{ exceptions.raise_compiler_error("Always raise a compiler error in execute") }}
+    {% endif %}
+{% endmacro %}
+    """
+        }
+
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "on-run-end": ["{{ rce() }}"],
+        }
+
+    def test_results(self, project):
+        with pytest.raises(CompilationError, match="Always raise a compiler error in execute"):
+            run_dbt(["run"], expect_pass=False)
+
+        run_results = get_artifact(project.project_root, "target", "run_results.json")
+        assert [(result["unique_id"], result["status"]) for result in run_results["results"]] == [
+            ("model.test.my_model", RunStatus.Success)
+        ]
