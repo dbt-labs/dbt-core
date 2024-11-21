@@ -1,6 +1,0 @@
-kind: Fixes
-body: Correct when custom microbatch macro deprecation warning is fired
-time: 2024-11-12T21:08:39.866837-06:00
-custom:
-  Author: QMalcolm MichelleArk
-  Issue: "10994"

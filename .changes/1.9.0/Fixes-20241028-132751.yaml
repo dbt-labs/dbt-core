@@ -1,6 +1,0 @@
-kind: Fixes
-body: 'Fix ''model'' jinja context variable type to dict '
-time: 2024-10-28T13:27:51.604093-04:00
-custom:
-  Author: michelleark
-  Issue: "10927"

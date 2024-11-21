@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: Behavior change for mf timespine without yaml configuration
-time: 2024-10-31T09:32:51.166594-05:00
-custom:
-    Author: DevonFulcher
-    Issue: "10959"

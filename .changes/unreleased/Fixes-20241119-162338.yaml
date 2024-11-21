@@ -1,6 +1,0 @@
-kind: Fixes
-body: Fix restrict-access to not apply within a package
-time: 2024-11-19T16:23:38.144589-05:00
-custom:
-  Author: gshank
-  Issue: "10134"

@@ -1,6 +1,0 @@
-kind: Features
-body: Enable use of multi-column unique key in snapshots
-time: 2024-10-01T13:40:51.297529-04:00
-custom:
-  Author: gshank
-  Issue: "9992"

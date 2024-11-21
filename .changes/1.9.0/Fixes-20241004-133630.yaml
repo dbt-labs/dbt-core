@@ -1,7 +1,0 @@
-kind: Fixes
-body: Handle edge cases when a specified `--event-time-end` is equivalent to the batch
-  size truncated batch start time
-time: 2024-10-04T13:36:30.357936-05:00
-custom:
-  Author: QMalcolm
-  Issue: "10824"

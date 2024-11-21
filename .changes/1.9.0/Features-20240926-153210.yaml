@@ -1,6 +1,0 @@
-kind: Features
-body: Ensure microbatch models respect `full_refresh` model config
-time: 2024-09-26T15:32:10.202789-05:00
-custom:
-  Author: QMalcolm
-  Issue: "10785"

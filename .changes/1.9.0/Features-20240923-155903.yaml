@@ -1,6 +1,0 @@
-kind: Features
-body: Support required 'begin' config for microbatch models
-time: 2024-09-23T15:59:03.924079+01:00
-custom:
-  Author: michelleark
-  Issue: "10701"

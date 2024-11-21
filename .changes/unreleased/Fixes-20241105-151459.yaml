@@ -1,7 +1,0 @@
-kind: Fixes
-body: Fix 'no attribute .config' error when ref-ing a microbatch model from non-Model
-  context
-time: 2024-11-05T15:14:59.002236-05:00
-custom:
-  Author: michelleark
-  Issue: "10928"

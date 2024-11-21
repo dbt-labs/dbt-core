@@ -1,6 +1,0 @@
-kind: Fixes
-body: Propagate measure label when using create_metrics
-time: 2024-08-06T17:21:10.265494-07:00
-custom:
-    Author: aliceliu
-    Issue: "10536"

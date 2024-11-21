@@ -1,7 +1,0 @@
-kind: Fixes
-body: Take `end_time` for batches to the ceiling to handle edge case where `event_time`
-  column is a date
-time: 2024-10-29T16:16:15.714993-05:00
-custom:
-  Author: QMalcolm MichelleArk
-  Issue: "10868"

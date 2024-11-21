@@ -1,6 +1,0 @@
-kind: Fixes
-body: Ignore --empty in unit test ref/source rendering
-time: 2024-09-23T20:20:24.151285+01:00
-custom:
-  Author: michelleark
-  Issue: "10516"

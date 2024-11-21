@@ -1,6 +1,0 @@
-kind: Fixes
-body: Attempt to skip saved query processing when no semantic manifest changes
-time: 2024-09-26T10:12:20.193453-04:00
-custom:
-  Author: gshank
-  Issue: "10563"

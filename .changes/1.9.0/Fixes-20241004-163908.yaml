@@ -1,6 +1,0 @@
-kind: Fixes
-body: Begin tracking execution time of microbatch model batches
-time: 2024-10-04T16:39:08.464064-05:00
-custom:
-  Author: QMalcolm
-  Issue: "10825"

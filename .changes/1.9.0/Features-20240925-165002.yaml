@@ -1,6 +1,0 @@
-kind: Features
-body: Enable `retry` support for microbatch models
-time: 2024-09-25T16:50:02.105069-05:00
-custom:
-  Author: QMalcolm MichelleArk
-  Issue: 10715 10729

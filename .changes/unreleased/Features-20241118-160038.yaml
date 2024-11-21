@@ -1,6 +1,0 @@
-kind: Features
-body: Allow microbatch batches to run in parallel
-time: 2024-11-18T16:00:38.895449-06:00
-custom:
-  Author: QMalcolm MichelleArk
-  Issue: 10853 10855

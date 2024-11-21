@@ -1,6 +1,0 @@
-kind: Fixes
-body: Fix `--resource-type test` for `dbt list` and `dbt build`
-time: 2024-09-17T17:44:46.121032-06:00
-custom:
-  Author: dbeatty10
-  Issue: "10730"

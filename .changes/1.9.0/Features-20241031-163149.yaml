@@ -1,6 +1,0 @@
-kind: Features
-body: Support --empty for snapshots
-time: 2024-10-31T16:31:49.926164-04:00
-custom:
-  Author: gshank
-  Issue: "10372"

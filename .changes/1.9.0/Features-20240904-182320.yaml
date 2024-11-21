@@ -1,6 +1,0 @@
-kind: Features
-body: Add custom_granularities to YAML spec for time spines.
-time: 2024-09-04T18:23:20.234952-07:00
-custom:
-  Author: courtneyholcomb
-  Issue: "9265"

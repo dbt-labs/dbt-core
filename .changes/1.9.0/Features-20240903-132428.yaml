@@ -1,6 +1,0 @@
-kind: Features
-body: Enable `--resource-type` and `--exclude-resource-type` CLI flags and environment variables for `dbt test`
-time: 2024-09-03T13:24:28.592837+01:00
-custom:
-    Author: TowardOliver dbeatty10
-    Issue: "10656"

@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: Behavior change for cumulative metric type param
-time: 2024-10-31T09:46:09.757879-05:00
-custom:
-    Author: DevonFulcher
-    Issue: "10960"

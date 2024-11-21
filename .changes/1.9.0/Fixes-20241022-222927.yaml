@@ -1,6 +1,0 @@
-kind: Fixes
-body: Implement partial parsing for all-yaml snapshots
-time: 2024-10-22T22:29:27.396378-04:00
-custom:
-  Author: gshank
-  Issue: "10903"

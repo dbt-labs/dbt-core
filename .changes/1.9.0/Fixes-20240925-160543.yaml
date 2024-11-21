@@ -1,6 +1,0 @@
-kind: Fixes
-body: Improve performance of infer primary key
-time: 2024-09-25T16:05:43.59536-04:00
-custom:
-  Author: gshank
-  Issue: "10781"

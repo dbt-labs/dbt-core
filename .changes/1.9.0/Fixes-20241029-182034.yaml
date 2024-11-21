@@ -1,7 +1,0 @@
-kind: Fixes
-body: Handle exceptions in `get_execution_status` more broadly to better ensure `run_results.json`
-  gets written
-time: 2024-10-29T18:20:34.782845-05:00
-custom:
-  Author: QMalcolm
-  Issue: "10934"

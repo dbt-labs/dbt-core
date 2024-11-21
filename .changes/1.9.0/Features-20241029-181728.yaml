@@ -1,6 +1,0 @@
-kind: Features
-body: Emit debug logging event whenever artifacts are written
-time: 2024-10-29T18:17:28.321188-05:00
-custom:
-  Author: QMalcolm
-  Issue: 10937

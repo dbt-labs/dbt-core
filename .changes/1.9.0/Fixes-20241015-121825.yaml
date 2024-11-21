@@ -1,6 +1,0 @@
-kind: Fixes
-body: Fix warnings for models referring to a deprecated model
-time: 2024-10-15T12:18:25.14525-04:00
-custom:
-  Author: gshank
-  Issue: "10833"

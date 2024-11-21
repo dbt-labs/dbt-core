@@ -1,6 +1,0 @@
-kind: Fixes
-body: Ensure dbt retry of microbatch models doesn't lose prior successful state
-time: 2024-09-30T15:31:58.541656-05:00
-custom:
-  Author: QMalcolm
-  Issue: "10800"

@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: Fix typing issues in core/dbt/contracts/sql.py
-time: 2024-08-27T11:31:23.749912-05:00
-custom:
-  Author: QMalcolm
-  Issue: "10614"

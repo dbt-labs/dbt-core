@@ -1,6 +1,0 @@
-kind: Fixes
-body: Fix plural of 'partial success' in log message
-time: 2024-11-14T17:03:28.888232+01:00
-custom:
-    Author: jtcohen6
-    Issue: "10999"

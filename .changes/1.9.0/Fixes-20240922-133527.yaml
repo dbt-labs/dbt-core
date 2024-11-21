@@ -1,6 +1,0 @@
-kind: Fixes
-body: Fix unit tests for incremental model with alias
-time: 2024-09-22T13:35:27.991398741Z
-custom:
-    Author: katsugeneration
-    Issue: "10754"

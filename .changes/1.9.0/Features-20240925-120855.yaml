@@ -1,6 +1,0 @@
-kind: Features
-body: Enable specification of dbt_valid_to for current records
-time: 2024-09-25T12:08:55.926848-04:00
-custom:
-  Author: gshank
-  Issue: "10187"

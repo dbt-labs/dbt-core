@@ -1,6 +1,0 @@
-kind: Features
-body: Ensure `--event-time-start` is before `--event-time-end`
-time: 2024-10-03T17:05:29.984398-05:00
-custom:
-  Author: QMalcolm
-  Issue: "10786"

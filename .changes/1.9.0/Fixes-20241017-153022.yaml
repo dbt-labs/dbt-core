@@ -1,6 +1,0 @@
-kind: Fixes
-body: Ensure KeyboardInterrupt/SystemExit halts microbatch model execution
-time: 2024-10-17T15:30:22.781854-07:00
-custom:
-  Author: QMalcolm
-  Issue: "10862"
