@@ -569,7 +569,6 @@ def test_single_run_error():
         )
         results = [error_result]
         print_run_end_messages(results)
-        events = [e for e in event_mgr.event_history]
 
         summary_event = [
             e for e in event_mgr.event_history if isinstance(e[0], core_types.EndOfRunSummary)
