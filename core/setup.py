@@ -61,7 +61,7 @@ setup(
         # with major versions in each new minor version of dbt-core.
         "click>=8.0.2,<9.0",
         "networkx>=2.3,<4.0",
-        "protobuf>=4.0.0,<5",
+        "protobuf>=5.0,<6.0",
         "requests<3.0.0",  # should match dbt-common
         # ----
         # These packages are major-version-0. Keep upper bounds on upcoming minor versions (which could have breaking changes)
@@ -75,8 +75,8 @@ setup(
         "minimal-snowplow-tracker>=0.0.2,<0.1",
         "dbt-semantic-interfaces>=0.5.1,<0.6",
         # Minor versions for these are expected to be backwards-compatible
-        "dbt-common>=1.0.4,<1.11.0",
-        "dbt-adapters>=1.1.1,<1.7.1",
+        "dbt-common>=1.0.4,<2.0",
+        "dbt-adapters>=1.1.1,<2.0",
         # ----
         # Expect compatibility with all new versions of these packages, so lower bounds only.
         "packaging>20.9",
