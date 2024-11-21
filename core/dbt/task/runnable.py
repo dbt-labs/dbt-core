@@ -26,6 +26,7 @@ from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import ResultNode
 from dbt.contracts.state import PreviousState
 from dbt.events.types import (
+    ArtifactWritten,
     ConcurrencyLine,
     DefaultSelector,
     EndRunResult,
@@ -231,7 +232,12 @@ class GraphRunnableTask(ConfiguredTask):
             )
             try:
                 result = runner.run_with_hooks(self.manifest)
+            except (KeyboardInterrupt, SystemExit) as exe:
+                result = None
+                thread_exception: Union[KeyboardInterrupt, SystemExit, Exception] = exe
+                raise
             except Exception as e:
+                result = None
                 thread_exception = e
             finally:
                 if result is not None:
@@ -427,6 +433,12 @@ class GraphRunnableTask(ConfiguredTask):
 
             if self.args.write_json and hasattr(run_result, "write"):
                 run_result.write(self.result_path())
+                fire_event(
+                    ArtifactWritten(
+                        artifact_type=run_result.__class__.__name__,
+                        artifact_path=self.result_path(),
+                    )
+                )
 
             self._cancel_connections(pool)
             print_run_end_messages(self.node_results, keyboard_interrupt=True)
@@ -591,6 +603,11 @@ class GraphRunnableTask(ConfiguredTask):
             write_manifest(self.manifest, self.config.project_target_path)
             if hasattr(result, "write"):
                 result.write(self.result_path())
+                fire_event(
+                    ArtifactWritten(
+                        artifact_type=result.__class__.__name__, artifact_path=self.result_path()
+                    )
+                )
 
         self.task_end_messages(result.results)
         return result

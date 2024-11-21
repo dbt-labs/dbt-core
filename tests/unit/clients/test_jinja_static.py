@@ -2,6 +2,7 @@ import pytest
 
 from dbt.artifacts.resources import RefArgs
 from dbt.clients.jinja_static import (
+    statically_extract_has_name_this,
     statically_extract_macro_calls,
     statically_parse_ref_or_source,
     statically_parse_unrendered_config,
@@ -118,3 +119,18 @@ class TestStaticallyParseUnrenderedConfig:
     def test_statically_parse_unrendered_config(self, expression, expected_unrendered_config):
         unrendered_config = statically_parse_unrendered_config(expression)
         assert unrendered_config == expected_unrendered_config
+
+
+@pytest.mark.parametrize(
+    "raw_code,expected_result",
+    [
+        ("{{ this }}", True),
+        ("{{ this.variable }}", True),
+        ("{{ log(this) }}", True),
+        ("{{ some_other_this }}", False),
+        ("this", False),
+        ("{{ some_object.this }}", False),
+    ],
+)
+def test_statically_extract_has_name_this(raw_code: str, expected_result: bool) -> None:
+    assert statically_extract_has_name_this(raw_code) == expected_result

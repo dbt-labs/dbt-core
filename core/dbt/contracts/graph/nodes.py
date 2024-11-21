@@ -61,6 +61,7 @@ from dbt.artifacts.resources import SqlOperation as SqlOperationResource
 from dbt.artifacts.resources import TimeSpine
 from dbt.artifacts.resources import UnitTestDefinition as UnitTestDefinitionResource
 from dbt.artifacts.schemas.batch_results import BatchResults
+from dbt.clients.jinja_static import statically_extract_has_name_this
 from dbt.contracts.graph.model_config import UnitTestNodeConfig
 from dbt.contracts.graph.node_args import ModelNodeArgs
 from dbt.contracts.graph.unparsed import (
@@ -444,6 +445,13 @@ class HookNode(HookNodeResource, CompiledNode):
 @dataclass
 class ModelNode(ModelResource, CompiledNode):
     batch_info: Optional[BatchResults] = None
+    _has_this: Optional[bool] = None
+
+    def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
+        dct = super().__post_serialize__(dct, context)
+        if "_has_this" in dct:
+            del dct["_has_this"]
+        return dct
 
     @classmethod
     def resource_class(cls) -> Type[ModelResource]:
@@ -520,6 +528,12 @@ class ModelNode(ModelResource, CompiledNode):
 
         return constraints
 
+    @property
+    def has_this(self) -> bool:
+        if self._has_this is None:
+            self._has_this = statically_extract_has_name_this(self.raw_code)
+        return self._has_this
+
     def infer_primary_key(self, data_tests: List["GenericTestNode"]) -> List[str]:
         """
         Infers the columns that can be used as primary key of a model in the following order:
@@ -541,11 +555,20 @@ class ModelNode(ModelResource, CompiledNode):
         columns_with_disabled_unique_tests = set()
         columns_with_not_null_tests = set()
         for test in data_tests:
-            columns = []
-            if "column_name" in test.test_metadata.kwargs:
+            columns: List[str] = []
+            # extract columns from test kwargs, ensuring columns is a List[str] given tests can have custom (user or pacakge-defined) kwarg types
+            if "column_name" in test.test_metadata.kwargs and isinstance(
+                test.test_metadata.kwargs["column_name"], str
+            ):
                 columns = [test.test_metadata.kwargs["column_name"]]
-            elif "combination_of_columns" in test.test_metadata.kwargs:
-                columns = test.test_metadata.kwargs["combination_of_columns"]
+            elif "combination_of_columns" in test.test_metadata.kwargs and isinstance(
+                test.test_metadata.kwargs["combination_of_columns"], list
+            ):
+                columns = [
+                    column
+                    for column in test.test_metadata.kwargs["combination_of_columns"]
+                    if isinstance(column, str)
+                ]
 
             for column in columns:
                 if test.test_metadata.name in ["unique", "unique_combination_of_columns"]:

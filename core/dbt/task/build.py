@@ -11,6 +11,7 @@ from dbt.exceptions import DbtInternalError
 from dbt.graph import Graph, GraphQueue, ResourceTypeSelector
 from dbt.node_types import NodeType
 from dbt.task.base import BaseRunner, resource_types_from_args
+from dbt.task.run import MicrobatchModelRunner
 from dbt_common.events.functions import fire_event
 
 from .run import ModelRunner as run_model_runner
@@ -141,13 +142,13 @@ class BuildTask(RunTask):
 
     def handle_model_with_unit_tests_node(self, node, pool, callback):
         self._raise_set_error()
-        args = [node]
+        args = [node, pool]
         if self.config.args.single_threaded:
             callback(self.call_model_and_unit_tests_runner(*args))
         else:
             pool.apply_async(self.call_model_and_unit_tests_runner, args=args, callback=callback)
 
-    def call_model_and_unit_tests_runner(self, node) -> RunResult:
+    def call_model_and_unit_tests_runner(self, node, pool) -> RunResult:
         assert self.manifest
         for unit_test_unique_id in self.model_to_unit_test_map[node.unique_id]:
             unit_test_node = self.manifest.unit_tests[unit_test_unique_id]
@@ -166,6 +167,10 @@ class BuildTask(RunTask):
         if runner.node.unique_id in self._skipped_children:
             cause = self._skipped_children.pop(runner.node.unique_id)
             runner.do_skip(cause=cause)
+
+        if isinstance(runner, MicrobatchModelRunner):
+            return self.handle_microbatch_model(runner, pool)
+
         return self.call_runner(runner)
 
     # handle non-model-plus-unit-tests nodes
@@ -177,11 +182,12 @@ class BuildTask(RunTask):
         if runner.node.unique_id in self._skipped_children:
             cause = self._skipped_children.pop(runner.node.unique_id)
             runner.do_skip(cause=cause)
-        args = [runner]
-        if self.config.args.single_threaded:
-            callback(self.call_runner(*args))
+
+        if isinstance(runner, MicrobatchModelRunner):
+            callback(self.handle_microbatch_model(runner, pool))
         else:
-            pool.apply_async(self.call_runner, args=args, callback=callback)
+            args = [runner]
+            self._submit(pool, args, callback)
 
     # Make a map of model unique_ids to selected unit test unique_ids,
     # for processing before the model.
@@ -210,6 +216,12 @@ class BuildTask(RunTask):
         )
 
     def get_runner_type(self, node) -> Optional[Type[BaseRunner]]:
+        if (
+            node.resource_type == NodeType.Model
+            and super().get_runner_type(node) == MicrobatchModelRunner
+        ):
+            return MicrobatchModelRunner
+
         return self.RUNNER_MAP.get(node.resource_type)
 
     # Special build compile_manifest method to pass add_test_edges to the compiler

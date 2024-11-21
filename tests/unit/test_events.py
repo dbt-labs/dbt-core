@@ -18,8 +18,7 @@ from dbt.events.base_types import (
     TestLevel,
     WarnLevel,
 )
-from dbt.events.types import RunResultError
-from dbt.task.printer import print_run_result_error
+from dbt.task.printer import print_run_end_messages
 from dbt_common.events import types
 from dbt_common.events.base_types import msg_from_base_event
 from dbt_common.events.event_manager import EventManager, TestEventManager
@@ -157,6 +156,9 @@ sample_values = [
         package_name="my_package", materialization_name="view"
     ),
     core_types.SourceFreshnessProjectHooksNotRun(),
+    core_types.MFTimespineWithoutYamlConfigurationDeprecation(),
+    core_types.MFCumulativeTypeParamsDeprecation(),
+    core_types.MicrobatchMacroOutsideOfBatchesDeprecation(),
     # E - DB Adapter ======================
     adapter_types.AdapterEventDebug(),
     adapter_types.AdapterEventInfo(),
@@ -320,6 +322,8 @@ sample_values = [
     core_types.DepsScrubbedPackageName(package_name=""),
     core_types.DepsUnpinned(revision="", git=""),
     core_types.NoNodesForSelectionCriteria(spec_raw=""),
+    # P - Artifacts ======================
+    core_types.ArtifactWritten(artifact_type="manifest", artifact_path="path/to/artifact.json"),
     # Q - Node execution ======================
     core_types.RunningOperationCaughtError(exc=""),
     core_types.CompileComplete(),
@@ -416,6 +420,7 @@ sample_values = [
     core_types.SnapshotTimestampWarning(
         snapshot_time_data_type="DATETIME", updated_at_data_type="DATETIMEZ"
     ),
+    core_types.MicrobatchExecutionDebug(msg=""),
     # W - Node testing ======================
     core_types.CatchableExceptionOnRun(exc=""),
     core_types.InternalErrorOnRun(build_path="", exc=""),
@@ -548,23 +553,37 @@ def test_single_run_error():
         event_mgr = TestEventManager()
         ctx_set_event_manager(event_mgr)
 
+        class MockNode:
+            unique_id: str = ""
+            node_info = None
+
         error_result = RunResult(
             status=RunStatus.Error,
             timing=[],
             thread_id="",
             execution_time=0.0,
-            node=None,
+            node=MockNode(),
             adapter_response=dict(),
             message="oh no!",
             failures=1,
             batch_results=None,
         )
+        results = [error_result]
+        print_run_end_messages(results)
 
-        print_run_result_error(error_result)
-        events = [e for e in event_mgr.event_history if isinstance(e[0], RunResultError)]
+        summary_event = [
+            e for e in event_mgr.event_history if isinstance(e[0], core_types.EndOfRunSummary)
+        ]
+        run_result_error_events = [
+            e for e in event_mgr.event_history if isinstance(e[0], core_types.RunResultError)
+        ]
 
-        assert len(events) == 1
-        assert events[0][0].msg == "oh no!"
+        # expect correct plural
+        assert "partial successes" in summary_event[0][0].message()
+
+        # expect one error to show up
+        assert len(run_result_error_events) == 1
+        assert run_result_error_events[0][0].msg == "oh no!"
 
     finally:
         # Set an empty event manager unconditionally on exit. This is an early

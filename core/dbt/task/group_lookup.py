@@ -11,6 +11,12 @@ def init(manifest: Optional[Manifest], selected_ids: AbstractSet[str]) -> None:
     if not manifest:
         return
 
+    if not manifest.groups:
+        return
+
+    if not hasattr(manifest, "group_map"):
+        manifest.build_group_map()
+
     _every_group_name_to_group_map = {v.name: v for v in manifest.groups.values()}
 
     for group_name, node_ids in manifest.group_map.items():

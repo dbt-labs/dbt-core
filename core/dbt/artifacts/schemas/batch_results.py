@@ -19,3 +19,6 @@ class BatchResults(dbtClassMixin):
             successful=self.successful + other.successful,
             failed=self.failed + other.failed,
         )
+
+    def __len__(self):
+        return len(self.successful) + len(self.failed)

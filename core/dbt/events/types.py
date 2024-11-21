@@ -466,6 +466,36 @@ class SourceFreshnessProjectHooksNotRun(WarnLevel):
         return line_wrap_message(warning_tag(description))
 
 
+class MFTimespineWithoutYamlConfigurationDeprecation(WarnLevel):
+    def code(self) -> str:
+        return "D018"
+
+    def message(self) -> str:
+        description = "Time spines without YAML configuration are in the process of deprecation. Please add YAML configuration for your 'metricflow_time_spine' model. See documentation on MetricFlow time spines: https://docs.getdbt.com/docs/build/metricflow-time-spine and behavior change documentation: https://docs.getdbt.com/reference/global-configs/behavior-changes."
+
+        return line_wrap_message(warning_tag(description))
+
+
+class MFCumulativeTypeParamsDeprecation(WarnLevel):
+    def code(self) -> str:
+        return "D019"
+
+    def message(self) -> str:
+        description = "Cumulative fields `type_params.window` and `type_params.grain_to_date` have been moved and will soon be deprecated. Please nest those values under `type_params.cumulative_type_params.window` and `type_params.cumulative_type_params.grain_to_date`. See documentation on behavior changes: https://docs.getdbt.com/reference/global-configs/behavior-changes."
+
+        return line_wrap_message(warning_tag(description))
+
+
+class MicrobatchMacroOutsideOfBatchesDeprecation(WarnLevel):
+    def code(self) -> str:
+        return "D020"
+
+    def message(self) -> str:
+        description = "The use of a custom microbatch macro outside of batched execution is deprecated. To use it with batched execution, set `flags.require_batched_execution_for_custom_microbatch_strategy` to `True` in `dbt_project.yml`. In the future this will be the default behavior."
+
+        return line_wrap_message(warning_tag(description))
+
+
 # =======================================================
 # I - Project parsing
 # =======================================================
@@ -1201,6 +1231,19 @@ class DepsScrubbedPackageName(WarnLevel):
 
 
 # =======================================================
+# P - Artifacts
+# =======================================================
+
+
+class ArtifactWritten(DebugLevel):
+    def code(self):
+        return "P001"
+
+    def message(self) -> str:
+        return f"Wrote artifact {self.artifact_type} to {self.artifact_path}"
+
+
+# =======================================================
 # Q - Node execution
 # =======================================================
 
@@ -1620,7 +1663,9 @@ class ShowNode(InfoLevel):
                     {"node": self.node_name, "show": json.loads(self.preview)}, indent=2
                 )
         else:
-            if self.is_inline:
+            if self.quiet:
+                return self.preview
+            elif self.is_inline:
                 return f"Previewing inline node:\n{self.preview}"
             else:
                 return f"Previewing node '{self.node_name}':\n{self.preview}"
@@ -1637,7 +1682,9 @@ class CompiledNode(InfoLevel):
             else:
                 return json.dumps({"node": self.node_name, "compiled": self.compiled}, indent=2)
         else:
-            if self.is_inline:
+            if self.quiet:
+                return self.compiled
+            elif self.is_inline:
                 return f"Compiled inline node is:\n{self.compiled}"
             else:
                 return f"Compiled node '{self.node_name}' is:\n{self.compiled}"
@@ -1653,6 +1700,14 @@ class SnapshotTimestampWarning(WarnLevel):
             f"doesn't match derived column 'updated_at' ({self.updated_at_data_type}). "
             "Please update snapshot config 'updated_at'."
         )
+
+
+class MicrobatchExecutionDebug(DebugLevel):
+    def code(self) -> str:
+        return "Q044"
+
+    def message(self) -> str:
+        return self.msg
 
 
 # =======================================================
@@ -1886,7 +1941,7 @@ class EndOfRunSummary(InfoLevel):
     def message(self) -> str:
         error_plural = pluralize(self.num_errors, "error")
         warn_plural = pluralize(self.num_warnings, "warning")
-        partial_success_plural = pluralize(self.num_partial_success, "partial success")
+        partial_success_plural = f"""{self.num_partial_success} partial {"success" if self.num_partial_success == 1 else "successes"}"""
 
         if self.keyboard_interrupt:
             message = yellow("Exited because of keyboard interrupt")

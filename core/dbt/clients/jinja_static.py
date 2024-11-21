@@ -17,6 +17,18 @@ if typing.TYPE_CHECKING:
 _TESTING_MACRO_CACHE: Dict[str, Any] = {}
 
 
+def statically_extract_has_name_this(source: str) -> bool:
+    """Checks whether the raw jinja has any references to `this`"""
+    env = get_environment(None, capture_macros=True)
+    parsed = env.parse(source)
+    names = tuple(parsed.find_all(jinja2.nodes.Name))
+
+    for name in names:
+        if hasattr(name, "name") and name.name == "this":
+            return True
+    return False
+
+
 def statically_extract_macro_calls(
     source: str, ctx: Dict[str, Any], db_wrapper: Optional["ParseDatabaseWrapper"] = None
 ) -> List[str]:

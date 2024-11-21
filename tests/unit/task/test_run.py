@@ -1,25 +1,30 @@
-import threading
 from argparse import Namespace
 from dataclasses import dataclass
-from datetime import datetime, timedelta
 from importlib import import_module
-from typing import Optional
+from typing import Optional, Type, Union
+from unittest import mock
 from unittest.mock import MagicMock, patch
 
 import pytest
+from psycopg2 import DatabaseError
 from pytest_mock import MockerFixture
 
+from dbt.adapters.contracts.connection import AdapterResponse
 from dbt.adapters.postgres import PostgresAdapter
+from dbt.artifacts.resources.base import FileHash
+from dbt.artifacts.resources.types import NodeType, RunHookType
+from dbt.artifacts.resources.v1.components import DependsOn
+from dbt.artifacts.resources.v1.config import NodeConfig
 from dbt.artifacts.resources.v1.model import ModelConfig
-from dbt.artifacts.schemas.batch_results import BatchResults
 from dbt.artifacts.schemas.results import RunStatus
 from dbt.artifacts.schemas.run import RunResult
 from dbt.config.runtime import RuntimeConfig
 from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.graph.nodes import ModelNode
+from dbt.contracts.graph.nodes import HookNode, ModelNode
 from dbt.events.types import LogModelResult
+from dbt.exceptions import DbtRuntimeError
 from dbt.flags import get_flags, set_from_args
-from dbt.task.run import ModelRunner, RunTask, _get_adapter_info
+from dbt.task.run import MicrobatchModelRunner, ModelRunner, RunTask, _get_adapter_info
 from dbt.tests.util import safe_set_invocation_context
 from dbt_common.events.base_types import EventLevel
 from dbt_common.events.event_manager_client import add_callback_to_manager
@@ -152,49 +157,22 @@ class TestModelRunner:
         model_runner.execute(model=table_model, manifest=manifest)
         # TODO: Assert that the model was executed
 
-    def test__build_run_microbatch_model_result(
-        self, table_model: ModelNode, model_runner: ModelRunner
-    ) -> None:
-        batch = (datetime.now() - timedelta(days=1), datetime.now())
-        only_successes = [
-            RunResult(
-                node=table_model,
-                status=RunStatus.Success,
-                timing=[],
-                thread_id=threading.current_thread().name,
-                execution_time=0,
-                message="SUCCESS",
-                adapter_response={},
-                failures=0,
-                batch_results=BatchResults(successful=[batch]),
-            )
-        ]
-        only_failures = [
-            RunResult(
-                node=table_model,
-                status=RunStatus.Error,
-                timing=[],
-                thread_id=threading.current_thread().name,
-                execution_time=0,
-                message="ERROR",
-                adapter_response={},
-                failures=1,
-                batch_results=BatchResults(failed=[batch]),
-            )
-        ]
-        mixed_results = only_failures + only_successes
 
-        expect_success = model_runner._build_run_microbatch_model_result(
-            table_model, only_successes
+class TestMicrobatchModelRunner:
+    @pytest.fixture
+    def model_runner(
+        self,
+        postgres_adapter: PostgresAdapter,
+        table_model: ModelNode,
+        runtime_config: RuntimeConfig,
+    ) -> MicrobatchModelRunner:
+        return MicrobatchModelRunner(
+            config=runtime_config,
+            adapter=postgres_adapter,
+            node=table_model,
+            node_index=1,
+            num_nodes=1,
         )
-        expect_error = model_runner._build_run_microbatch_model_result(table_model, only_failures)
-        expect_partial_success = model_runner._build_run_microbatch_model_result(
-            table_model, mixed_results
-        )
-
-        assert expect_success.status == RunStatus.Success
-        assert expect_error.status == RunStatus.Error
-        assert expect_partial_success.status == RunStatus.PartialSuccess
 
     @pytest.mark.parametrize(
         "has_relation,relation_type,materialized,full_refresh_config,full_refresh_flag,expectation",
@@ -219,7 +197,7 @@ class TestModelRunner:
     def test__is_incremental(
         self,
         mocker: MockerFixture,
-        model_runner: ModelRunner,
+        model_runner: MicrobatchModelRunner,
         has_relation: bool,
         relation_type: str,
         materialized: str,
@@ -256,3 +234,132 @@ class TestModelRunner:
 
         # Assert result of _is_incremental
         assert model_runner._is_incremental(model) == expectation
+
+    @pytest.mark.parametrize(
+        "adapter_microbatch_concurrency,has_relation,concurrent_batches,has_this,expectation",
+        [
+            (True, True, None, False, True),
+            (True, True, None, True, False),
+            (True, True, True, False, True),
+            (True, True, True, True, True),
+            (True, True, False, False, False),
+            (True, True, False, True, False),
+            (True, False, None, False, False),
+            (True, False, None, True, False),
+            (True, False, True, False, False),
+            (True, False, True, True, False),
+            (True, False, False, False, False),
+            (True, False, False, True, False),
+            (False, True, None, False, False),
+            (False, True, None, True, False),
+            (False, True, True, False, False),
+            (False, True, True, True, False),
+            (False, True, False, False, False),
+            (False, True, False, True, False),
+            (False, False, None, False, False),
+            (False, False, None, True, False),
+            (False, False, True, False, False),
+            (False, False, True, True, False),
+            (False, False, False, False, False),
+            (False, False, False, True, False),
+        ],
+    )
+    def test__should_run_in_parallel(
+        self,
+        mocker: MockerFixture,
+        model_runner: MicrobatchModelRunner,
+        adapter_microbatch_concurrency: bool,
+        has_relation: bool,
+        concurrent_batches: Optional[bool],
+        has_this: bool,
+        expectation: bool,
+    ) -> None:
+        model_runner.node._has_this = has_this
+        model_runner.node.config = ModelConfig(concurrent_batches=concurrent_batches)
+        mocked_supports = mocker.patch.object(model_runner.adapter, "supports")
+        mocked_supports.return_value = adapter_microbatch_concurrency
+
+        # Assert result of _should_run_in_parallel
+        assert model_runner._should_run_in_parallel(has_relation) == expectation
+
+
+class TestRunTask:
+    @pytest.fixture
+    def hook_node(self) -> HookNode:
+        return HookNode(
+            package_name="test",
+            path="/root/x/path.sql",
+            original_file_path="/root/path.sql",
+            language="sql",
+            raw_code="select * from wherever",
+            name="foo",
+            resource_type=NodeType.Operation,
+            unique_id="model.test.foo",
+            fqn=["test", "models", "foo"],
+            refs=[],
+            sources=[],
+            metrics=[],
+            depends_on=DependsOn(),
+            description="",
+            database="test_db",
+            schema="test_schema",
+            alias="bar",
+            tags=[],
+            config=NodeConfig(),
+            index=None,
+            checksum=FileHash.from_contents(""),
+            unrendered_config={},
+        )
+
+    @pytest.mark.parametrize(
+        "error_to_raise,expected_result",
+        [
+            (None, RunStatus.Success),
+            (DbtRuntimeError, RunStatus.Error),
+            (DatabaseError, RunStatus.Error),
+            (KeyboardInterrupt, KeyboardInterrupt),
+        ],
+    )
+    def test_safe_run_hooks(
+        self,
+        mocker: MockerFixture,
+        runtime_config: RuntimeConfig,
+        manifest: Manifest,
+        hook_node: HookNode,
+        error_to_raise: Optional[Type[Exception]],
+        expected_result: Union[RunStatus, Type[Exception]],
+    ):
+        mocker.patch("dbt.task.run.RunTask.get_hooks_by_type").return_value = [hook_node]
+        mocker.patch("dbt.task.run.RunTask.get_hook_sql").return_value = hook_node.raw_code
+
+        flags = mock.Mock()
+        flags.state = None
+        flags.defer_state = None
+
+        run_task = RunTask(
+            args=flags,
+            config=runtime_config,
+            manifest=manifest,
+        )
+
+        adapter = mock.Mock()
+        adapter_execute = mock.Mock()
+        adapter_execute.return_value = (AdapterResponse(_message="Success"), None)
+
+        if error_to_raise:
+            adapter_execute.side_effect = error_to_raise("Oh no!")
+
+        adapter.execute = adapter_execute
+
+        try:
+            result = run_task.safe_run_hooks(
+                adapter=adapter,
+                hook_type=RunHookType.End,
+                extra_context={},
+            )
+            assert isinstance(expected_result, RunStatus)
+            assert result == expected_result
+        except BaseException as e:
+            assert not isinstance(expected_result, RunStatus)
+            assert issubclass(expected_result, BaseException)
+            assert type(e) == expected_result

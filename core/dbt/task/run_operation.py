@@ -11,6 +11,7 @@ from dbt.artifacts.schemas.run import RunResult, RunResultsArtifact
 from dbt.contracts.files import FileHash
 from dbt.contracts.graph.nodes import HookNode
 from dbt.events.types import (
+    ArtifactWritten,
     LogDebugStackTrace,
     RunningOperationCaughtError,
     RunningOperationUncaughtError,
@@ -130,6 +131,11 @@ class RunOperationTask(ConfiguredTask):
 
         if self.args.write_json:
             results.write(result_path)
+            fire_event(
+                ArtifactWritten(
+                    artifact_type=results.__class__.__name__, artifact_path=result_path
+                )
+            )
 
         return results
 

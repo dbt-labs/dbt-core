@@ -63,6 +63,7 @@ from dbt.contracts.graph.nodes import (
 )
 from dbt.contracts.graph.semantic_manifest import SemanticManifest
 from dbt.events.types import (
+    ArtifactWritten,
     DeprecatedModel,
     DeprecatedReference,
     InvalidDisabledTargetInTestNode,
@@ -508,6 +509,7 @@ class ManifestLoader:
 
         self.check_for_model_deprecations()
         self.check_for_spaces_in_resource_names()
+        self.check_for_microbatch_deprecations()
 
         return self.manifest
 
@@ -647,6 +649,23 @@ class ManifestLoader:
                 )
             else:  # ERROR level
                 raise DbtValidationError("Resource names cannot contain spaces")
+
+    def check_for_microbatch_deprecations(self) -> None:
+        if not get_flags().require_batched_execution_for_custom_microbatch_strategy:
+            has_microbatch_model = False
+            for _, node in self.manifest.nodes.items():
+                if (
+                    isinstance(node, ModelNode)
+                    and node.config.materialized == "incremental"
+                    and node.config.incremental_strategy == "microbatch"
+                ):
+                    has_microbatch_model = True
+                    break
+
+            if has_microbatch_model and not self.manifest._microbatch_macro_is_core(
+                self.root_project.project_name
+            ):
+                dbt.deprecations.warn("microbatch-macro-outside-of-batches-deprecation")
 
     def load_and_parse_macros(self, project_parser_files):
         for project in self.all_projects.values():
@@ -1389,7 +1408,7 @@ class ManifestLoader:
             node.config.final_validate()
 
     def check_valid_microbatch_config(self):
-        if os.environ.get("DBT_EXPERIMENTAL_MICROBATCH"):
+        if self.manifest.use_microbatch_batches(project_name=self.root_project.project_name):
             for node in self.manifest.nodes.values():
                 if (
                     node.config.materialized == "incremental"
@@ -1440,6 +1459,13 @@ class ManifestLoader:
                     if not isinstance(lookback, int) and lookback is not None:
                         raise dbt.exceptions.ParsingError(
                             f"Microbatch model '{node.name}' must provide the optional 'lookback' config as type int, but got: {type(lookback)})."
+                        )
+
+                    # optional config: concurrent_batches (bool)
+                    concurrent_batches = node.config.concurrent_batches
+                    if not isinstance(concurrent_batches, bool) and concurrent_batches is not None:
+                        raise dbt.exceptions.ParsingError(
+                            f"Microbatch model '{node.name}' optional 'concurrent_batches' config must be of type `bool` if specified, but got: {type(concurrent_batches)})."
                         )
 
                     # Validate upstream node event_time (if configured)
@@ -2019,4 +2045,9 @@ def parse_manifest(
         plugin_artifacts = pm.get_manifest_artifacts(manifest)
         for path, plugin_artifact in plugin_artifacts.items():
             plugin_artifact.write(path)
+            fire_event(
+                ArtifactWritten(
+                    artifact_type=plugin_artifact.__class__.__name__, artifact_path=path
+                )
+            )
     return manifest

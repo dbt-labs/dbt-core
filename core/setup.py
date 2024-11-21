@@ -25,7 +25,7 @@ with open(os.path.join(this_directory, "README.md")) as f:
 
 
 package_name = "dbt-core"
-package_version = "1.9.0b2"
+package_version = "1.9.0b4"
 description = """With dbt, data analysts and engineers can build analytics \
 the way engineers build applications."""
 
@@ -57,7 +57,7 @@ setup(
         # with major versions in each new minor version of dbt-core.
         "click>=8.0.2,<9.0",
         "networkx>=2.3,<4.0",
-        "protobuf>=4.0.0,<5",
+        "protobuf>=5.0,<6.0",
         "requests<3.0.0",  # should match dbt-common
         "snowplow-tracker>=1.0.2,<2.0",
         # ----
@@ -69,10 +69,10 @@ setup(
         # These are major-version-0 packages also maintained by dbt-labs.
         # Accept patches but avoid automatically updating past a set minor version range.
         "dbt-extractor>=0.5.0,<=0.6",
-        "dbt-semantic-interfaces>=0.7.3,<0.8",
+        "dbt-semantic-interfaces>=0.7.4,<0.8",
         # Minor versions for these are expected to be backwards-compatible
-        "dbt-common>=1.11.0,<2.0",
-        "dbt-adapters>=1.7.0,<2.0",
+        "dbt-common>=1.13.0,<2.0",
+        "dbt-adapters>=1.10.1,<2.0",
         # ----
         # Expect compatibility with all new versions of these packages, so lower bounds only.
         "packaging>20.9",

@@ -67,7 +67,7 @@ from dbt.contracts.graph.nodes import (
 )
 from dbt.contracts.graph.unparsed import SourcePatch, UnparsedVersion
 from dbt.contracts.util import SourceKey
-from dbt.events.types import UnpinnedRefNewVersionAvailable
+from dbt.events.types import ArtifactWritten, UnpinnedRefNewVersionAvailable
 from dbt.exceptions import (
     AmbiguousResourceNameRefError,
     CompilationError,
@@ -714,10 +714,10 @@ class MacroMethods:
         self._macros_by_name = {}
         self._macros_by_package = {}
 
-    def find_macro_by_name(
+    def find_macro_candidate_by_name(
         self, name: str, root_project_name: str, package: Optional[str]
-    ) -> Optional[Macro]:
-        """Find a macro in the graph by its name and package name, or None for
+    ) -> Optional[MacroCandidate]:
+        """Find a MacroCandidate in the graph by its name and package name, or None for
         any package. The root project name is used to determine priority:
          - locally defined macros come first
          - then imported macros
@@ -735,7 +735,15 @@ class MacroMethods:
             filter=filter,
         )
 
-        return candidates.last()
+        return candidates.last_candidate()
+
+    def find_macro_by_name(
+        self, name: str, root_project_name: str, package: Optional[str]
+    ) -> Optional[Macro]:
+        macro_candidate = self.find_macro_candidate_by_name(
+            name=name, root_project_name=root_project_name, package=package
+        )
+        return macro_candidate.macro if macro_candidate else None
 
     def find_generate_macro_by_name(
         self, component: str, root_project_name: str, imported_package: Optional[str] = None
@@ -1219,7 +1227,9 @@ class Manifest(MacroMethods, dbtClassMixin):
         )
 
     def write(self, path):
-        self.writable_manifest().write(path)
+        writable = self.writable_manifest()
+        writable.write(path)
+        fire_event(ArtifactWritten(artifact_type=writable.__class__.__name__, artifact_path=path))
 
     # Called in dbt.compilation.Linker.write_graph and
     # dbt.graph.queue.get and ._include_in_cost
@@ -1495,8 +1505,10 @@ class Manifest(MacroMethods, dbtClassMixin):
         return is_private_ref and (
             not hasattr(node, "group")
             or not node.group
+            # Invalid reference because group does not match
             or node.group != target_model.group
-            or restrict_package_access
+            # Or, invalid because these are different namespaces (project/package) and restrict-access is enforced
+            or (node.package_name != target_model.package_name and restrict_package_access)
         )
 
     def is_invalid_protected_ref(
@@ -1655,6 +1667,8 @@ class Manifest(MacroMethods, dbtClassMixin):
                 source_file.semantic_models.append(node.unique_id)
             if isinstance(node, Exposure):
                 source_file.exposures.append(node.unique_id)
+            if isinstance(node, UnitTestDefinition):
+                source_file.unit_tests.append(node.unique_id)
         elif isinstance(source_file, FixtureSourceFile):
             pass
         else:
@@ -1742,6 +1756,24 @@ class Manifest(MacroMethods, dbtClassMixin):
             self._singular_test_lookup,
         )
         return self.__class__, args
+
+    def _microbatch_macro_is_core(self, project_name: str) -> bool:
+        microbatch_is_core = False
+        candidate = self.find_macro_candidate_by_name(
+            name="get_incremental_microbatch_sql", root_project_name=project_name, package=None
+        )
+
+        # We want to check for "Core", because "Core" basically means "builtin"
+        if candidate is not None and candidate.locality == Locality.Core:
+            microbatch_is_core = True
+
+        return microbatch_is_core
+
+    def use_microbatch_batches(self, project_name: str) -> bool:
+        return (
+            get_flags().require_batched_execution_for_custom_microbatch_strategy
+            or self._microbatch_macro_is_core(project_name=project_name)
+        )
 
 
 class MacroManifest(MacroMethods):

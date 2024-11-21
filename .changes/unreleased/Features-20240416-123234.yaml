@@ -1,0 +1,6 @@
+kind: Features
+body: Parseable JSON and text output in quiet mode for `dbt show` and `dbt compile`
+time: 2024-04-16T12:32:34.764394-06:00
+custom:
+  Author: dbeatty10
+  Issue: "9840"
