@@ -33,6 +33,12 @@ union all
 select 3 as id, TIMESTAMP '2020-01-03 00:00:00-0' as event_time
 """
 
+input_model_invalid_sql = """
+{{ config(materialized='table', event_time='event_time') }}
+
+select invalid as event_time
+"""
+
 input_model_without_event_time_sql = """
 {{ config(materialized='table') }}
 
@@ -833,6 +839,24 @@ class TestMicrobatchModelStoppedByKeyboardInterrupt(BaseMicrobatchTest):
             assert len(catch_eors.caught_events) == 1
             assert "Exited because of keyboard interrupt" in catch_eors.caught_events[0].info.msg
             assert len(catch_aw.caught_events) == 1
+
+
+class TestMicrobatchModelSkipped(BaseMicrobatchTest):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "input_model.sql": input_model_invalid_sql,
+            "microbatch_model.sql": microbatch_model_sql,
+        }
+
+    def test_microbatch_model_skipped(self, project) -> None:
+        run_dbt(["run"], expect_pass=False)
+
+        run_results = get_artifact(project.project_root, "target", "run_results.json")
+
+        microbatch_result = run_results["results"][1]
+        assert microbatch_result["status"] == "skipped"
+        assert microbatch_result["batch_results"] is None
 
 
 class TestMicrobatchCanRunParallelOrSequential(BaseMicrobatchTest):
