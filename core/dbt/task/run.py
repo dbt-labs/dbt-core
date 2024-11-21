@@ -922,7 +922,7 @@ class RunTask(CompileTask):
         try:
             with adapter.connection_named("master"):
                 self.safe_run_hooks(adapter, RunHookType.End, extras)
-        except (KeyboardInterrupt, SystemExit):
+        except (KeyboardInterrupt, SystemExit, DbtRuntimeError):
             run_result = self.get_result(
                 results=self.node_results,
                 elapsed_time=time.time() - self.started_at,
