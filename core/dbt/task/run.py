@@ -261,21 +261,6 @@ class ModelRunner(CompileRunner):
             batch_results=None,
         )
 
-    def _build_run_microbatch_model_result(self, model: ModelNode) -> RunResult:
-        return RunResult(
-            node=model,
-            status=RunStatus.Success,
-            timing=[],
-            thread_id=threading.current_thread().name,
-            # The execution_time here doesn't get propagated to logs because
-            # `safe_run_hooks` handles the elapsed time at the node level
-            execution_time=0,
-            message="",
-            adapter_response={},
-            failures=0,
-            batch_results=BatchResults(),
-        )
-
     def _materialization_relations(self, result: Any, model) -> List[BaseRelation]:
         if isinstance(result, str):
             msg = (
@@ -487,6 +472,21 @@ class MicrobatchModelRunner(ModelRunner):
             adapter_response={},
             failures=1,
             batch_results=BatchResults(failed=[batch]),
+        )
+
+    def _build_run_microbatch_model_result(self, model: ModelNode) -> RunResult:
+        return RunResult(
+            node=model,
+            status=RunStatus.Success,
+            timing=[],
+            thread_id=threading.current_thread().name,
+            # The execution_time here doesn't get propagated to logs because
+            # `safe_run_hooks` handles the elapsed time at the node level
+            execution_time=0,
+            message="",
+            adapter_response={},
+            failures=0,
+            batch_results=BatchResults(),
         )
 
     def _execute_microbatch_materialization(
