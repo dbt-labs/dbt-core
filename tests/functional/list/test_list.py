@@ -69,6 +69,7 @@ class TestList:
                         "dbt_updated_at": None,
                         "dbt_valid_from": None,
                         "dbt_valid_to": None,
+                        "dbt_is_deleted": None,
                     },
                     "unique_key": "id",
                     "strategy": "timestamp",
@@ -923,12 +924,4 @@ class TestList:
 
 
 def normalize(path):
-    """On windows, neither is enough on its own:
-    >>> normcase('C:\\documents/ALL CAPS/subdir\\..')
-    'c:\\documents\\all caps\\subdir\\..'
-    >>> normpath('C:\\documents/ALL CAPS/subdir\\..')
-    'C:\\documents\\ALL CAPS'
-    >>> normpath(normcase('C:\\documents/ALL CAPS/subdir\\..'))
-    'c:\\documents\\all caps'
-    """
     return os.path.normcase(os.path.normpath(path))
