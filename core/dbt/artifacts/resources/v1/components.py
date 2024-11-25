@@ -12,7 +12,7 @@ from dbt_common.contracts.util import Mergeable
 from dbt_common.dataclass_schema import ExtensibleDbtClassMixin, dbtClassMixin
 from dbt_semantic_interfaces.type_enums import TimeGranularity
 
-NodeVersion = Union[str, float]
+NodeVersion = Union[int, float, str]
 
 
 @dataclass
