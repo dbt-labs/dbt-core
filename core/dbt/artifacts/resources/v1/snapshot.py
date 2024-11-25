@@ -13,6 +13,7 @@ class SnapshotMetaColumnNames(dbtClassMixin):
     dbt_valid_from: Optional[str] = None
     dbt_scd_id: Optional[str] = None
     dbt_updated_at: Optional[str] = None
+    dbt_is_deleted: Optional[str] = None
 
 
 @dataclass
@@ -37,6 +38,7 @@ class SnapshotConfig(NodeConfig):
             "dbt_valid_to": self.snapshot_meta_column_names.dbt_valid_to or "dbt_valid_to",
             "dbt_scd_id": self.snapshot_meta_column_names.dbt_scd_id or "dbt_scd_id",
             "dbt_updated_at": self.snapshot_meta_column_names.dbt_updated_at or "dbt_updated_at",
+            "dbt_is_deleted": self.snapshot_meta_column_names.dbt_is_deleted or "dbt_is_deleted",
         }
 
     def final_validate(self):
