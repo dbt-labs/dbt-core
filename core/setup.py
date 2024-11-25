@@ -51,7 +51,7 @@ setup(
         # Pin to the patch or minor version, and bump in each new minor version of dbt-core.
         "agate>=1.7.0,<1.10",
         "Jinja2>=3.1.3,<4",
-        "mashumaro[msgpack]>=3.9,<4.0",
+        "mashumaro[msgpack]>=3.9,<3.15",
         # ----
         # dbt-core uses these packages in standard ways. Pin to the major version, and check compatibility
         # with major versions in each new minor version of dbt-core.
