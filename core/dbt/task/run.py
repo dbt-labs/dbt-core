@@ -27,7 +27,7 @@ from dbt.clients.jinja import MacroGenerator
 from dbt.config import RuntimeConfig
 from dbt.context.providers import generate_runtime_model_context
 from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.graph.nodes import HookNode, ModelNode, ResultNode
+from dbt.contracts.graph.nodes import BatchContext, HookNode, ModelNode, ResultNode
 from dbt.events.types import (
     GenericExceptionOnRun,
     LogHookEndLine,
@@ -39,7 +39,7 @@ from dbt.events.types import (
 from dbt.exceptions import CompilationError, DbtInternalError, DbtRuntimeError
 from dbt.graph import ResourceTypeSelector
 from dbt.hooks import get_hook_dict
-from dbt.materializations.incremental.microbatch import BatchContext, MicrobatchBuilder
+from dbt.materializations.incremental.microbatch import MicrobatchBuilder
 from dbt.node_types import NodeType, RunHookType
 from dbt.task import group_lookup
 from dbt.task.base import BaseRunner
@@ -551,8 +551,7 @@ class MicrobatchModelRunner(ModelRunner):
                 )
                 # Update jinja context with batch context members
                 batch_context = microbatch_builder.build_batch_context(
-                    incremental_batch=self.relation_exists,
-                    start_time=batch[0],
+                    incremental_batch=self.relation_exists
                 )
                 context.update(batch_context)
 

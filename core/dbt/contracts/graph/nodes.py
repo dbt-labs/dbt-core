@@ -81,7 +81,6 @@ from dbt.events.types import (
 )
 from dbt.exceptions import ContractBreakingChangeError, ParsingError, ValidationError
 from dbt.flags import get_flags
-from dbt.materializations.incremental.microbatch import BatchContext
 from dbt.node_types import (
     REFABLE_NODE_TYPES,
     VERSIONED_NODE_TYPES,
@@ -441,6 +440,13 @@ class HookNode(HookNodeResource, CompiledNode):
     @classmethod
     def resource_class(cls) -> Type[HookNodeResource]:
         return HookNodeResource
+
+
+@dataclass
+class BatchContext:
+    id: str
+    event_time_start: datetime
+    event_time_end: datetime
 
 
 @dataclass

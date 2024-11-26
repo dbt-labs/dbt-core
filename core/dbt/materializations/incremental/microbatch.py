@@ -2,19 +2,11 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 import pytz
-from attr import dataclass
 
 from dbt.artifacts.resources.types import BatchSize
 from dbt.artifacts.schemas.batch_results import BatchType
 from dbt.contracts.graph.nodes import ModelNode, NodeConfig
 from dbt.exceptions import DbtInternalError, DbtRuntimeError
-
-
-@dataclass
-class BatchContext:
-    id: str
-    event_time_start: datetime
-    event_time_end: datetime
 
 
 class MicrobatchBuilder:
@@ -108,7 +100,7 @@ class MicrobatchBuilder:
 
         return batches
 
-    def build_batch_context(self, incremental_batch: bool, start_time: datetime) -> Dict[str, Any]:
+    def build_batch_context(self, incremental_batch: bool) -> Dict[str, Any]:
         """
         Create context with entries that reflect microbatch model + incremental execution state
 
