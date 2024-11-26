@@ -202,13 +202,14 @@ class ContextConfigGenerator(BaseContextConfigGenerator[C]):
         result = config_cls.from_dict({})
         return result
 
-    def _update_from_config(self, result: C, partial: Dict[str, Any], validate: bool = False) -> C:
+    def _update_from_config(self, result: C, partial: Dict[str, Any], validate: bool = True) -> C:
         translated = self._active_project.credentials.translate_aliases(partial)
         translated = self.translate_hook_names(translated)
 
         adapter_type = self._active_project.credentials.type
         adapter_config_cls = get_config_class_by_name(adapter_type)
 
+        # The "update_from" method in BaseConfig merges dictionaries and does a from_dict.
         updated = result.update_from(translated, adapter_config_cls, validate=validate)
         return updated
 
