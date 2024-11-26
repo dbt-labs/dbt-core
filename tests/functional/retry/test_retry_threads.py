@@ -54,4 +54,3 @@ class TestCustomThreadRetry:
 
         assert {n.node.name: n.status for n in results.results} == expected_statuses
         assert results.args["threads"] == 1
-        write_file(models__thread_model, "models", "thread_model.sql")
