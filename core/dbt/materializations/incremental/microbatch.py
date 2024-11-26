@@ -198,12 +198,7 @@ class MicrobatchBuilder:
         return start_time.strftime("%Y%M%d%H")
 
     @staticmethod
-    def format_batch_start(
-        batch_start: Optional[datetime], batch_size: BatchSize
-    ) -> Optional[str]:
-        if batch_start is None:
-            return batch_start
-
+    def format_batch_start(batch_start: datetime, batch_size: BatchSize) -> str:
         return str(
             batch_start.date() if (batch_start and batch_size != BatchSize.hour) else batch_start
         )
