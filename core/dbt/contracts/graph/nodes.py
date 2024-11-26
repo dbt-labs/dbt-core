@@ -451,6 +451,8 @@ class ModelNode(ModelResource, CompiledNode):
         dct = super().__post_serialize__(dct, context)
         if "_has_this" in dct:
             del dct["_has_this"]
+        if "previous_batch_results" in dct:
+            del dct["previous_batch_results"]
         return dct
 
     @classmethod
