@@ -81,6 +81,7 @@ from dbt.events.types import (
 )
 from dbt.exceptions import ContractBreakingChangeError, ParsingError, ValidationError
 from dbt.flags import get_flags
+from dbt.materializations.incremental.microbatch import BatchContext
 from dbt.node_types import (
     REFABLE_NODE_TYPES,
     VERSIONED_NODE_TYPES,
@@ -445,6 +446,7 @@ class HookNode(HookNodeResource, CompiledNode):
 @dataclass
 class ModelNode(ModelResource, CompiledNode):
     previous_batch_results: Optional[BatchResults] = None
+    batch_context: Optional[BatchContext] = None
     _has_this: Optional[bool] = None
 
     def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
