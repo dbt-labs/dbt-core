@@ -39,7 +39,7 @@ from dbt.events.types import (
 from dbt.exceptions import CompilationError, DbtInternalError, DbtRuntimeError
 from dbt.graph import ResourceTypeSelector
 from dbt.hooks import get_hook_dict
-from dbt.materializations.incremental.microbatch import MicrobatchBuilder
+from dbt.materializations.incremental.microbatch import BatchContext, MicrobatchBuilder
 from dbt.node_types import NodeType, RunHookType
 from dbt.task import group_lookup
 from dbt.task.base import BaseRunner
@@ -353,7 +353,7 @@ class MicrobatchModelRunner(ModelRunner):
     def describe_node(self) -> str:
         return f"{self.node.language} microbatch model {self.get_node_representation()}"
 
-    def describe_batch(self, batch_start: Optional[datetime]) -> str:
+    def describe_batch(self, batch_start: datetime) -> str:
         # Only visualize date if batch_start year/month/day
         formatted_batch_start = MicrobatchBuilder.format_batch_start(
             batch_start, self.node.config.batch_size
@@ -530,10 +530,16 @@ class MicrobatchModelRunner(ModelRunner):
             # call materialization_macro to get a batch-level run result
             start_time = time.perf_counter()
             try:
-                # Set start/end in context prior to re-compiling
+                # LEGACY: Set start/end in context prior to re-compiling (Will be removed for 1.10+)
+                # TODO: REMOVE before 1.10 GA
                 model.config["__dbt_internal_microbatch_event_time_start"] = batch[0]
                 model.config["__dbt_internal_microbatch_event_time_end"] = batch[1]
-
+                # Create batch context on model node prior to re-compiling
+                model.batch_context = BatchContext(
+                    id=MicrobatchBuilder.batch_id(batch[0], model.config.batch_size),
+                    event_time_start=batch[0],
+                    event_time_end=batch[1],
+                )
                 # Recompile node to re-resolve refs with event time filters rendered, update context
                 self.compiler.compile_node(
                     model,

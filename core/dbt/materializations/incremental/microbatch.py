@@ -120,7 +120,6 @@ class MicrobatchBuilder:
         batch_context["model"] = self.model.to_dict()
         batch_context["sql"] = self.model.compiled_code
         batch_context["compiled_code"] = self.model.compiled_code
-        batch_context["batch_id"] = self.batch_id(start_time=start_time)
 
         # Add incremental context variables for batches running incrementally
         if incremental_batch:
@@ -202,8 +201,8 @@ class MicrobatchBuilder:
         return truncated
 
     @staticmethod
-    def batch_id(start_time: datetime) -> str:
-        return start_time.strftime("%Y%M%d%H")
+    def batch_id(start_time: datetime, batch_size: BatchSize) -> str:
+        return MicrobatchBuilder.format_batch_start(start_time, batch_size).replace("_", "")
 
     @staticmethod
     def format_batch_start(batch_start: datetime, batch_size: BatchSize) -> str:
