@@ -13,7 +13,7 @@
         },
         "dbt_version": {
           "type": "string",
-          "default": "1.9.0b4"
+          "default": "1.10.0a1"
         },
         "generated_at": {
           "type": "string"
@@ -1802,10 +1802,13 @@
                     "version": {
                       "anyOf": [
                         {
-                          "type": "string"
+                          "type": "integer"
                         },
                         {
                           "type": "number"
+                        },
+                        {
+                          "type": "string"
                         },
                         {
                           "type": "null"
@@ -2456,10 +2459,13 @@
                     "version": {
                       "anyOf": [
                         {
-                          "type": "string"
+                          "type": "integer"
                         },
                         {
                           "type": "number"
+                        },
+                        {
+                          "type": "string"
                         },
                         {
                           "type": "null"
@@ -3250,10 +3256,13 @@
                     "version": {
                       "anyOf": [
                         {
-                          "type": "string"
+                          "type": "integer"
                         },
                         {
                           "type": "number"
+                        },
+                        {
+                          "type": "string"
                         },
                         {
                           "type": "null"
@@ -4063,10 +4072,13 @@
                     "version": {
                       "anyOf": [
                         {
-                          "type": "string"
+                          "type": "integer"
                         },
                         {
                           "type": "number"
+                        },
+                        {
+                          "type": "string"
                         },
                         {
                           "type": "null"
@@ -4292,10 +4304,13 @@
               "version": {
                 "anyOf": [
                   {
-                    "type": "string"
+                    "type": "integer"
                   },
                   {
                     "type": "number"
+                  },
+                  {
+                    "type": "string"
                   },
                   {
                     "type": "null"
@@ -4306,10 +4321,13 @@
               "latest_version": {
                 "anyOf": [
                   {
-                    "type": "string"
+                    "type": "integer"
                   },
                   {
                     "type": "number"
+                  },
+                  {
+                    "type": "string"
                   },
                   {
                     "type": "null"
@@ -5430,10 +5448,13 @@
                     "version": {
                       "anyOf": [
                         {
-                          "type": "string"
+                          "type": "integer"
                         },
                         {
                           "type": "number"
+                        },
+                        {
+                          "type": "string"
                         },
                         {
                           "type": "null"
@@ -6084,10 +6105,13 @@
                     "version": {
                       "anyOf": [
                         {
-                          "type": "string"
+                          "type": "integer"
                         },
                         {
                           "type": "number"
+                        },
+                        {
+                          "type": "string"
                         },
                         {
                           "type": "null"
@@ -7073,10 +7097,13 @@
                     "version": {
                       "anyOf": [
                         {
-                          "type": "string"
+                          "type": "integer"
                         },
                         {
                           "type": "number"
+                        },
+                        {
+                          "type": "string"
                         },
                         {
                           "type": "null"
@@ -8632,10 +8659,13 @@
                 "version": {
                   "anyOf": [
                     {
-                      "type": "string"
+                      "type": "integer"
                     },
                     {
                       "type": "number"
+                    },
+                    {
+                      "type": "string"
                     },
                     {
                       "type": "null"
@@ -9882,10 +9912,13 @@
                 "version": {
                   "anyOf": [
                     {
-                      "type": "string"
+                      "type": "integer"
                     },
                     {
                       "type": "number"
+                    },
+                    {
+                      "type": "string"
                     },
                     {
                       "type": "null"
@@ -11731,10 +11764,13 @@
                           "version": {
                             "anyOf": [
                               {
-                                "type": "string"
+                                "type": "integer"
                               },
                               {
                                 "type": "number"
+                              },
+                              {
+                                "type": "string"
                               },
                               {
                                 "type": "null"
@@ -12385,10 +12421,13 @@
                           "version": {
                             "anyOf": [
                               {
-                                "type": "string"
+                                "type": "integer"
                               },
                               {
                                 "type": "number"
+                              },
+                              {
+                                "type": "string"
                               },
                               {
                                 "type": "null"
@@ -13179,10 +13218,13 @@
                           "version": {
                             "anyOf": [
                               {
-                                "type": "string"
+                                "type": "integer"
                               },
                               {
                                 "type": "number"
+                              },
+                              {
+                                "type": "string"
                               },
                               {
                                 "type": "null"
@@ -13992,10 +14034,13 @@
                           "version": {
                             "anyOf": [
                               {
-                                "type": "string"
+                                "type": "integer"
                               },
                               {
                                 "type": "number"
+                              },
+                              {
+                                "type": "string"
                               },
                               {
                                 "type": "null"
@@ -14221,10 +14266,13 @@
                     "version": {
                       "anyOf": [
                         {
-                          "type": "string"
+                          "type": "integer"
                         },
                         {
                           "type": "number"
+                        },
+                        {
+                          "type": "string"
                         },
                         {
                           "type": "null"
@@ -14235,10 +14283,13 @@
                     "latest_version": {
                       "anyOf": [
                         {
-                          "type": "string"
+                          "type": "integer"
                         },
                         {
                           "type": "number"
+                        },
+                        {
+                          "type": "string"
                         },
                         {
                           "type": "null"
@@ -15359,10 +15410,13 @@
                           "version": {
                             "anyOf": [
                               {
-                                "type": "string"
+                                "type": "integer"
                               },
                               {
                                 "type": "number"
+                              },
+                              {
+                                "type": "string"
                               },
                               {
                                 "type": "null"
@@ -16013,10 +16067,13 @@
                           "version": {
                             "anyOf": [
                               {
-                                "type": "string"
+                                "type": "integer"
                               },
                               {
                                 "type": "number"
+                              },
+                              {
+                                "type": "string"
                               },
                               {
                                 "type": "null"
@@ -17002,10 +17059,13 @@
                           "version": {
                             "anyOf": [
                               {
-                                "type": "string"
+                                "type": "integer"
                               },
                               {
                                 "type": "number"
+                              },
+                              {
+                                "type": "string"
                               },
                               {
                                 "type": "null"
@@ -18350,10 +18410,13 @@
                           "version": {
                             "anyOf": [
                               {
-                                "type": "string"
+                                "type": "integer"
                               },
                               {
                                 "type": "number"
+                              },
+                              {
+                                "type": "string"
                               },
                               {
                                 "type": "null"
@@ -19593,10 +19656,13 @@
                           "version": {
                             "anyOf": [
                               {
-                                "type": "string"
+                                "type": "integer"
                               },
                               {
                                 "type": "number"
+                              },
+                              {
+                                "type": "string"
                               },
                               {
                                 "type": "null"
@@ -20028,10 +20094,13 @@
                           "version": {
                             "anyOf": [
                               {
-                                "type": "string"
+                                "type": "integer"
                               },
                               {
                                 "type": "number"
+                              },
+                              {
+                                "type": "string"
                               },
                               {
                                 "type": "null"
@@ -20679,10 +20748,13 @@
                           "version": {
                             "anyOf": [
                               {
-                                "type": "string"
+                                "type": "integer"
                               },
                               {
                                 "type": "number"
+                              },
+                              {
+                                "type": "string"
                               },
                               {
                                 "type": "null"
@@ -21057,10 +21129,13 @@
                                   "items": {
                                     "anyOf": [
                                       {
-                                        "type": "string"
+                                        "type": "integer"
                                       },
                                       {
                                         "type": "number"
+                                      },
+                                      {
+                                        "type": "string"
                                       }
                                     ]
                                   }
@@ -21078,10 +21153,13 @@
                                   "items": {
                                     "anyOf": [
                                       {
-                                        "type": "string"
+                                        "type": "integer"
                                       },
                                       {
                                         "type": "number"
+                                      },
+                                      {
+                                        "type": "string"
                                       }
                                     ]
                                   }
@@ -21104,10 +21182,13 @@
                     "version": {
                       "anyOf": [
                         {
-                          "type": "string"
+                          "type": "integer"
                         },
                         {
                           "type": "number"
+                        },
+                        {
+                          "type": "string"
                         },
                         {
                           "type": "null"
@@ -21583,10 +21664,13 @@
                 "version": {
                   "anyOf": [
                     {
-                      "type": "string"
+                      "type": "integer"
                     },
                     {
                       "type": "number"
+                    },
+                    {
+                      "type": "string"
                     },
                     {
                       "type": "null"
@@ -22241,10 +22325,13 @@
                 "version": {
                   "anyOf": [
                     {
-                      "type": "string"
+                      "type": "integer"
                     },
                     {
                       "type": "number"
+                    },
+                    {
+                      "type": "string"
                     },
                     {
                       "type": "null"
@@ -22626,10 +22713,13 @@
                         "items": {
                           "anyOf": [
                             {
-                              "type": "string"
+                              "type": "integer"
                             },
                             {
                               "type": "number"
+                            },
+                            {
+                              "type": "string"
                             }
                           ]
                         }
@@ -22647,10 +22737,13 @@
                         "items": {
                           "anyOf": [
                             {
-                              "type": "string"
+                              "type": "integer"
                             },
                             {
                               "type": "number"
+                            },
+                            {
+                              "type": "string"
                             }
                           ]
                         }
@@ -22673,10 +22766,13 @@
           "version": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "integer"
               },
               {
                 "type": "number"
+              },
+              {
+                "type": "string"
               },
               {
                 "type": "null"
