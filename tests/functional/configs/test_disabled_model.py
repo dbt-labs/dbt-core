@@ -1,8 +1,8 @@
 import pytest
 
-from dbt.exceptions import CompilationError, ParsingError, SchemaConfigError
-from dbt_common.dataclass_schema import ValidationError
+from dbt.exceptions import CompilationError, ParsingError
 from dbt.tests.util import get_manifest, run_dbt
+from dbt_common.dataclass_schema import ValidationError
 from tests.functional.configs.fixtures import (
     my_model,
     my_model_2,
