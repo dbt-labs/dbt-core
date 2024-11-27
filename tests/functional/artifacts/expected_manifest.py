@@ -1712,7 +1712,7 @@ def expected_versions_manifest(project):
                 "language": "sql",
                 "refs": [
                     {"name": "versioned_model", "package": None, "version": 2},
-                    {"name": "versioned_model", "package": None, "version": "2"},
+                    {"name": "versioned_model", "package": None, "version": 2},
                     {"name": "versioned_model", "package": None, "version": 2},
                     {"name": "versioned_model", "package": None, "version": None},
                     {"name": "versioned_model", "package": None, "version": 1},
