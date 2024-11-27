@@ -557,10 +557,10 @@ class MicrobatchModelRunner(ModelRunner):
                     ),
                 )
                 # Update jinja context with batch context members
-                batch_context = microbatch_builder.build_batch_context(
+                jinja_context = microbatch_builder.build_jinja_context_for_batch(
                     incremental_batch=self.relation_exists
                 )
-                context.update(batch_context)
+                context.update(jinja_context)
 
                 # Materialize batch and cache any materialized relations
                 result = MacroGenerator(

@@ -100,25 +100,25 @@ class MicrobatchBuilder:
 
         return batches
 
-    def build_batch_context(self, incremental_batch: bool) -> Dict[str, Any]:
+    def build_jinja_context_for_batch(self, incremental_batch: bool) -> Dict[str, Any]:
         """
         Create context with entries that reflect microbatch model + incremental execution state
 
         Assumes self.model has been (re)-compiled with necessary batch filters applied.
         """
-        batch_context: Dict[str, Any] = {}
+        jinja_context: Dict[str, Any] = {}
 
         # Microbatch model properties
-        batch_context["model"] = self.model.to_dict()
-        batch_context["sql"] = self.model.compiled_code
-        batch_context["compiled_code"] = self.model.compiled_code
+        jinja_context["model"] = self.model.to_dict()
+        jinja_context["sql"] = self.model.compiled_code
+        jinja_context["compiled_code"] = self.model.compiled_code
 
         # Add incremental context variables for batches running incrementally
         if incremental_batch:
-            batch_context["is_incremental"] = lambda: True
-            batch_context["should_full_refresh"] = lambda: False
+            jinja_context["is_incremental"] = lambda: True
+            jinja_context["should_full_refresh"] = lambda: False
 
-        return batch_context
+        return jinja_context
 
     @staticmethod
     def offset_timestamp(timestamp: datetime, batch_size: BatchSize, offset: int) -> datetime:
