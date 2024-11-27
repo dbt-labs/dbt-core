@@ -341,6 +341,13 @@ class MicrobatchModelRunner(ModelRunner):
         self.batches: Dict[int, BatchType] = {}
         self.relation_exists: bool = False
 
+    def compile(self, manifest: Manifest):
+        # The default compile function is _always_ called. However, we do our
+        # compilation _later_ in `_execute_microbatch_materialization`. This
+        # meant the node was being compiled _twice_ for each batch. To get around
+        # this, we've overriden the default compile method to do nothing
+        return self.node
+
     def set_batch_idx(self, batch_idx: int) -> None:
         self.batch_idx = batch_idx
 
