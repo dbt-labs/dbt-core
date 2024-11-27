@@ -194,7 +194,7 @@ class MicrobatchBuilder:
 
     @staticmethod
     def batch_id(start_time: datetime, batch_size: BatchSize) -> str:
-        return MicrobatchBuilder.format_batch_start(start_time, batch_size).replace("_", "")
+        return MicrobatchBuilder.format_batch_start(start_time, batch_size).replace("-", "")
 
     @staticmethod
     def format_batch_start(batch_start: datetime, batch_size: BatchSize) -> str:
