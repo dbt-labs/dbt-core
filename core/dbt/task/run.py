@@ -283,7 +283,6 @@ class ModelRunner(CompileRunner):
         hook_ctx: Any,
         context_config: Any,
         model: ModelNode,
-        manifest: Manifest,
         context: Dict[str, Any],
         materialization_macro: MacroProtocol,
     ) -> RunResult:
@@ -328,9 +327,7 @@ class ModelRunner(CompileRunner):
 
         hook_ctx = self.adapter.pre_model_hook(context_config)
 
-        return self._execute_model(
-            hook_ctx, context_config, model, manifest, context, materialization_macro
-        )
+        return self._execute_model(hook_ctx, context_config, model, context, materialization_macro)
 
 
 class MicrobatchModelRunner(ModelRunner):
@@ -522,7 +519,6 @@ class MicrobatchModelRunner(ModelRunner):
     def _execute_microbatch_materialization(
         self,
         model: ModelNode,
-        manifest: Manifest,
         context: Dict[str, Any],
         materialization_macro: MacroProtocol,
     ) -> RunResult:
@@ -644,36 +640,22 @@ class MicrobatchModelRunner(ModelRunner):
         else:
             return False
 
-    def _execute_microbatch_model(
-        self,
-        hook_ctx: Any,
-        context_config: Any,
-        model: ModelNode,
-        manifest: Manifest,
-        context: Dict[str, Any],
-        materialization_macro: MacroProtocol,
-    ) -> RunResult:
-        try:
-            batch_result = self._execute_microbatch_materialization(
-                model, manifest, context, materialization_macro
-            )
-        finally:
-            self.adapter.post_model_hook(context_config, hook_ctx)
-
-        return batch_result
-
     def _execute_model(
         self,
         hook_ctx: Any,
         context_config: Any,
         model: ModelNode,
-        manifest: Manifest,
         context: Dict[str, Any],
         materialization_macro: MacroProtocol,
     ) -> RunResult:
-        return self._execute_microbatch_model(
-            hook_ctx, context_config, model, manifest, context, materialization_macro
-        )
+        try:
+            batch_result = self._execute_microbatch_materialization(
+                model, context, materialization_macro
+            )
+        finally:
+            self.adapter.post_model_hook(context_config, hook_ctx)
+
+        return batch_result
 
 
 class RunTask(CompileTask):
