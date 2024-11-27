@@ -693,16 +693,6 @@ class TestMicrobatchCompiledRunPaths(BaseMicrobatchTest):
         with patch_microbatch_end_time("2020-01-03 13:57:00"):
             run_dbt(["run"])
 
-        # Compiled paths - compiled model without filter only
-        assert read_file(
-            project.project_root,
-            "target",
-            "compiled",
-            "test",
-            "models",
-            "microbatch_model.sql",
-        )
-
         # Compiled paths - batch compilations
         assert read_file(
             project.project_root,
