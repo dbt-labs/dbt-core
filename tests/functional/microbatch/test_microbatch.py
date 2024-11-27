@@ -498,6 +498,13 @@ microbatch_model_context_vars = """
 {{ config(materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='day', begin=modules.datetime.datetime(2020, 1, 1, 0, 0, 0)) }}
 {{ log("start: "~ model.config.__dbt_internal_microbatch_event_time_start, info=True)}}
 {{ log("end: "~ model.config.__dbt_internal_microbatch_event_time_end, info=True)}}
+{% if model.batch_context %}
+{{ log("batch_context.event_time_start: "~ model.batch_context.event_time_start, info=True)}}
+{{ log("batch_context.event_time_end: "~ model.batch_context.event_time_end, info=True)}}
+{{ log("batch_context.id: "~ model.batch_context.id, info=True)}}
+{{ log("start timezone: "~ model.batch_context.event_time_start.tzinfo, info=True)}}
+{{ log("end timezone: "~ model.batch_context.event_time_end.tzinfo, info=True)}}
+{% endif %}
 select * from {{ ref('input_model') }}
 """
 
@@ -516,12 +523,23 @@ class TestMicrobatchJinjaContextVarsAvailable(BaseMicrobatchTest):
 
         assert "start: 2020-01-01 00:00:00+00:00" in logs
         assert "end: 2020-01-02 00:00:00+00:00" in logs
+        assert "batch_context.event_time_start: 2020-01-01 00:00:00+00:00" in logs
+        assert "batch_context.event_time_end: 2020-01-02 00:00:00+00:00" in logs
+        assert "batch_context.id: 20200101" in logs
+        assert "start timezone: UTC" in logs
+        assert "end timezone: UTC" in logs
 
         assert "start: 2020-01-02 00:00:00+00:00" in logs
         assert "end: 2020-01-03 00:00:00+00:00" in logs
+        assert "batch_context.event_time_start: 2020-01-02 00:00:00+00:00" in logs
+        assert "batch_context.event_time_end: 2020-01-03 00:00:00+00:00" in logs
+        assert "batch_context.id: 20200102" in logs
 
         assert "start: 2020-01-03 00:00:00+00:00" in logs
         assert "end: 2020-01-03 13:57:00+00:00" in logs
+        assert "batch_context.event_time_start: 2020-01-03 00:00:00+00:00" in logs
+        assert "batch_context.event_time_end: 2020-01-03 13:57:00+00:00" in logs
+        assert "batch_context.id: 20200103" in logs
 
 
 microbatch_model_failing_incremental_partition_sql = """
