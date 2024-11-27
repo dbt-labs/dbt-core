@@ -139,6 +139,7 @@ class BaseContextConfigGenerator(Generic[T]):
     @abstractmethod
     def initial_result(self, resource_type: NodeType, base: bool) -> T: ...
 
+    # BaseContextConfigGenerator
     def calculate_node_config(
         self,
         config_call_dict: Dict[str, Any],
@@ -150,29 +151,28 @@ class BaseContextConfigGenerator(Generic[T]):
     ) -> BaseConfig:
         own_config = self.get_node_project(project_name)
 
-        result = self.initial_result(resource_type=resource_type, base=base)
+        # creates "default" config object ("cls.from_dict({})")
+        config_obj = self.initial_result(resource_type=resource_type, base=base)
 
         project_configs = self._project_configs(own_config, fqn, resource_type)
         for fqn_config in project_configs:
-            result = self._update_from_config(result, fqn_config)
+            config_obj = self._update_from_config(config_obj, fqn_config)
 
         # When schema files patch config, it has lower precedence than
         # config in the models (config_call_dict), so we add the patch_config_dict
         # before the config_call_dict
         if patch_config_dict:
-            result = self._update_from_config(result, patch_config_dict)
+            config_obj = self._update_from_config(config_obj, patch_config_dict)
 
         # config_calls are created in the 'experimental' model parser and
         # the ParseConfigObject (via add_config_call)
-        result = self._update_from_config(result, config_call_dict)
+        config_obj = self._update_from_config(config_obj, config_call_dict)
 
         if own_config.project_name != self._active_project.project_name:
             for fqn_config in self._active_project_configs(fqn, resource_type):
-                result = self._update_from_config(result, fqn_config)
+                config_obj = self._update_from_config(config_obj, fqn_config)
 
-        # this is mostly impactful in the snapshot config case
-        # TODO CT-211
-        return result  # type: ignore[return-value]
+        return config_obj  # type: ignore[return-value]
 
     @abstractmethod
     def calculate_node_config_dict(
@@ -223,6 +223,7 @@ class ContextConfigGenerator(BaseContextConfigGenerator[C]):
             project_dict["post-hook"] = project_dict.pop("post_hook")
         return project_dict
 
+    # ContextConfigGenerator
     def calculate_node_config_dict(
         self,
         config_call_dict: Dict[str, Any],
@@ -232,7 +233,9 @@ class ContextConfigGenerator(BaseContextConfigGenerator[C]):
         base: bool,
         patch_config_dict: Optional[dict] = None,
     ) -> Dict[str, Any]:
-        config = self.calculate_node_config(
+
+        # calls BaseContextConfigGenerator.calculate_node_config
+        config_obj = self.calculate_node_config(
             config_call_dict=config_call_dict,
             fqn=fqn,
             resource_type=resource_type,
@@ -241,17 +244,20 @@ class ContextConfigGenerator(BaseContextConfigGenerator[C]):
             patch_config_dict=patch_config_dict,
         )
         try:
-            finalized = config.finalize_and_validate()
+            # Call "finalize_and_validate" on the config obj
+            finalized = config_obj.finalize_and_validate()
+            # THEN return a dictionary!!! Why!!
             return finalized.to_dict(omit_none=True)
         except ValidationError as exc:
             # we got a ValidationError - probably bad types in config()
-            raise SchemaConfigError(exc, node=config) from exc
+            raise SchemaConfigError(exc, node=config_obj) from exc
 
 
 class UnrenderedConfigGenerator(BaseContextConfigGenerator[Dict[str, Any]]):
     def get_config_source(self, project: Project) -> ConfigSource:
         return UnrenderedConfig(project)
 
+    # UnrenderedConfigGenerator
     def calculate_node_config_dict(
         self,
         config_call_dict: Dict[str, Any],
@@ -261,7 +267,8 @@ class UnrenderedConfigGenerator(BaseContextConfigGenerator[Dict[str, Any]]):
         base: bool,
         patch_config_dict: Optional[dict] = None,
     ) -> Dict[str, Any]:
-        # TODO CT-211
+
+        # calls BaseContextConfigGenerator.calculate_node_config
         return self.calculate_node_config(
             config_call_dict=config_call_dict,
             fqn=fqn,
@@ -270,6 +277,7 @@ class UnrenderedConfigGenerator(BaseContextConfigGenerator[Dict[str, Any]]):
             base=base,
             patch_config_dict=patch_config_dict,
         )  # type: ignore[return-value]
+        # Note: this returns a config_obj, NOT a dictionary
 
     def initial_result(self, resource_type: NodeType, base: bool) -> Dict[str, Any]:
         return {}
@@ -308,6 +316,7 @@ class ContextConfig:
         # Cannot perform complex merge behaviours on unrendered configs as they may not be appropriate types.
         self._unrendered_config_call_dict.update(opts)
 
+    # ContextConfig
     def build_config_dict(
         self,
         base: bool = False,
@@ -316,12 +325,10 @@ class ContextConfig:
         patch_config_dict: Optional[dict] = None,
     ) -> Dict[str, Any]:
         if rendered:
-            # TODO CT-211
-            src = ContextConfigGenerator(self._active_project)  # type: ignore[var-annotated]
+            config_generator = ContextConfigGenerator(self._active_project)  # type: ignore[var-annotated]
             config_call_dict = self._config_call_dict
-        else:
-            # TODO CT-211
-            src = UnrenderedConfigGenerator(self._active_project)  # type: ignore[assignment]
+        else:  # unrendered
+            config_generator = UnrenderedConfigGenerator(self._active_project)  # type: ignore[assignment]
 
             # preserve legacy behaviour - using unreliable (potentially rendered) _config_call_dict
             if get_flags().state_modified_compare_more_unrendered_values is False:
@@ -334,7 +341,7 @@ class ContextConfig:
                 else:
                     config_call_dict = self._unrendered_config_call_dict
 
-        return src.calculate_node_config_dict(
+        return config_generator.calculate_node_config_dict(
             config_call_dict=config_call_dict,
             fqn=self._fqn,
             resource_type=self._resource_type,
