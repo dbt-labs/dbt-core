@@ -202,7 +202,7 @@ class ContextConfigGenerator(BaseContextConfigGenerator[C]):
         result = config_cls.from_dict({})
         return result
 
-    def _update_from_config(self, result: C, partial: Dict[str, Any], validate: bool = True) -> C:
+    def _update_from_config(self, result: C, partial: Dict[str, Any], validate: bool = False) -> C:
         translated = self._active_project.credentials.translate_aliases(partial)
         translated = self.translate_hook_names(translated)
 
