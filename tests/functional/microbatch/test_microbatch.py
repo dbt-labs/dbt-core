@@ -64,8 +64,8 @@ microbatch_yearly_model_downstream_sql = """
 select * from {{ ref('microbatch_model') }}
 """
 
-invalid_batch_context_macro_sql = """
-{% macro check_invalid_batch_context() %}
+invalid_batch_jinja_context_macro_sql = """
+{% macro check_invalid_batch_jinja_context() %}
 
 {% if model is not mapping %}
     {{ exceptions.raise_compiler_error("`model` is invalid: expected mapping type") }}
@@ -83,9 +83,9 @@ invalid_batch_context_macro_sql = """
 """
 
 microbatch_model_with_context_checks_sql = """
-{{ config(pre_hook="{{ check_invalid_batch_context() }}", materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='day', begin=modules.datetime.datetime(2020, 1, 1, 0, 0, 0)) }}
+{{ config(pre_hook="{{ check_invalid_batch_jinja_context() }}", materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='day', begin=modules.datetime.datetime(2020, 1, 1, 0, 0, 0)) }}
 
-{{ check_invalid_batch_context() }}
+{{ check_invalid_batch_jinja_context() }}
 select * from {{ ref('input_model') }}
 """
 
@@ -404,7 +404,7 @@ class TestMicrobatchJinjaContext(BaseMicrobatchTest):
 
     @pytest.fixture(scope="class")
     def macros(self):
-        return {"check_batch_context.sql": invalid_batch_context_macro_sql}
+        return {"check_batch_jinja_context.sql": invalid_batch_jinja_context_macro_sql}
 
     @pytest.fixture(scope="class")
     def models(self):
