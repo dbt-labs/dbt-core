@@ -466,7 +466,7 @@ class BatchContext(dbtClassMixin):
 @dataclass
 class ModelNode(ModelResource, CompiledNode):
     previous_batch_results: Optional[BatchResults] = None
-    batch_context: Optional[BatchContext] = None
+    batch: Optional[BatchContext] = None
     _has_this: Optional[bool] = None
 
     def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):

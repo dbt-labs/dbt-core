@@ -542,7 +542,7 @@ class MicrobatchModelRunner(ModelRunner):
                 model.config["__dbt_internal_microbatch_event_time_start"] = batch[0]
                 model.config["__dbt_internal_microbatch_event_time_end"] = batch[1]
                 # Create batch context on model node prior to re-compiling
-                model.batch_context = BatchContext(
+                model.batch = BatchContext(
                     id=MicrobatchBuilder.batch_id(batch[0], model.config.batch_size),
                     event_time_start=batch[0],
                     event_time_end=batch[1],
