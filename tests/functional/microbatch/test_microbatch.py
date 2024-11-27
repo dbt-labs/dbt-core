@@ -64,8 +64,8 @@ microbatch_yearly_model_downstream_sql = """
 select * from {{ ref('microbatch_model') }}
 """
 
-invalid_batch_context_macro_sql = """
-{% macro check_invalid_batch_context() %}
+invalid_batch_jinja_context_macro_sql = """
+{% macro check_invalid_batch_jinja_context() %}
 
 {% if model is not mapping %}
     {{ exceptions.raise_compiler_error("`model` is invalid: expected mapping type") }}
@@ -83,9 +83,9 @@ invalid_batch_context_macro_sql = """
 """
 
 microbatch_model_with_context_checks_sql = """
-{{ config(pre_hook="{{ check_invalid_batch_context() }}", materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='day', begin=modules.datetime.datetime(2020, 1, 1, 0, 0, 0)) }}
+{{ config(pre_hook="{{ check_invalid_batch_jinja_context() }}", materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='day', begin=modules.datetime.datetime(2020, 1, 1, 0, 0, 0)) }}
 
-{{ check_invalid_batch_context() }}
+{{ check_invalid_batch_jinja_context() }}
 select * from {{ ref('input_model') }}
 """
 
@@ -404,7 +404,7 @@ class TestMicrobatchJinjaContext(BaseMicrobatchTest):
 
     @pytest.fixture(scope="class")
     def macros(self):
-        return {"check_batch_context.sql": invalid_batch_context_macro_sql}
+        return {"check_batch_jinja_context.sql": invalid_batch_jinja_context_macro_sql}
 
     @pytest.fixture(scope="class")
     def models(self):
@@ -498,6 +498,13 @@ microbatch_model_context_vars = """
 {{ config(materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='day', begin=modules.datetime.datetime(2020, 1, 1, 0, 0, 0)) }}
 {{ log("start: "~ model.config.__dbt_internal_microbatch_event_time_start, info=True)}}
 {{ log("end: "~ model.config.__dbt_internal_microbatch_event_time_end, info=True)}}
+{% if model.batch %}
+{{ log("batch.event_time_start: "~ model.batch.event_time_start, info=True)}}
+{{ log("batch.event_time_end: "~ model.batch.event_time_end, info=True)}}
+{{ log("batch.id: "~ model.batch.id, info=True)}}
+{{ log("start timezone: "~ model.batch.event_time_start.tzinfo, info=True)}}
+{{ log("end timezone: "~ model.batch.event_time_end.tzinfo, info=True)}}
+{% endif %}
 select * from {{ ref('input_model') }}
 """
 
@@ -516,12 +523,23 @@ class TestMicrobatchJinjaContextVarsAvailable(BaseMicrobatchTest):
 
         assert "start: 2020-01-01 00:00:00+00:00" in logs
         assert "end: 2020-01-02 00:00:00+00:00" in logs
+        assert "batch.event_time_start: 2020-01-01 00:00:00+00:00" in logs
+        assert "batch.event_time_end: 2020-01-02 00:00:00+00:00" in logs
+        assert "batch.id: 20200101" in logs
+        assert "start timezone: UTC" in logs
+        assert "end timezone: UTC" in logs
 
         assert "start: 2020-01-02 00:00:00+00:00" in logs
         assert "end: 2020-01-03 00:00:00+00:00" in logs
+        assert "batch.event_time_start: 2020-01-02 00:00:00+00:00" in logs
+        assert "batch.event_time_end: 2020-01-03 00:00:00+00:00" in logs
+        assert "batch.id: 20200102" in logs
 
         assert "start: 2020-01-03 00:00:00+00:00" in logs
         assert "end: 2020-01-03 13:57:00+00:00" in logs
+        assert "batch.event_time_start: 2020-01-03 00:00:00+00:00" in logs
+        assert "batch.event_time_end: 2020-01-03 13:57:00+00:00" in logs
+        assert "batch.id: 20200103" in logs
 
 
 microbatch_model_failing_incremental_partition_sql = """
@@ -674,16 +692,6 @@ class TestMicrobatchCompiledRunPaths(BaseMicrobatchTest):
         # run all partitions from start - 2 expected rows in output, one failed
         with patch_microbatch_end_time("2020-01-03 13:57:00"):
             run_dbt(["run"])
-
-        # Compiled paths - compiled model without filter only
-        assert read_file(
-            project.project_root,
-            "target",
-            "compiled",
-            "test",
-            "models",
-            "microbatch_model.sql",
-        )
 
         # Compiled paths - batch compilations
         assert read_file(

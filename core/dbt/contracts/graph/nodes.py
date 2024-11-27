@@ -93,6 +93,7 @@ from dbt_common.contracts.constraints import (
     ConstraintType,
     ModelLevelConstraint,
 )
+from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_common.events.contextvars import set_log_contextvars
 from dbt_common.events.functions import warn_or_error
 
@@ -443,8 +444,29 @@ class HookNode(HookNodeResource, CompiledNode):
 
 
 @dataclass
+class BatchContext(dbtClassMixin):
+    id: str
+    event_time_start: datetime
+    event_time_end: datetime
+
+    def __post_serialize__(self, data, context):
+        # This is insane, but necessary, I apologize. Mashumaro handles the
+        # dictification of this class via a compile time generated `to_dict`
+        # method based off of the _typing_ of th class. By default `datetime`
+        # types are converted to strings. We don't want that, we want them to
+        # stay datetimes.
+        # Note: This is safe because the `BatchContext` isn't part of the artifact
+        # and thus doesn't get written out.
+        new_data = super().__post_serialize__(data, context)
+        new_data["event_time_start"] = self.event_time_start
+        new_data["event_time_end"] = self.event_time_end
+        return new_data
+
+
+@dataclass
 class ModelNode(ModelResource, CompiledNode):
     previous_batch_results: Optional[BatchResults] = None
+    batch: Optional[BatchContext] = None
     _has_this: Optional[bool] = None
 
     def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):

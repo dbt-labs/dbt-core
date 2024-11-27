@@ -27,7 +27,7 @@ from dbt.clients.jinja import MacroGenerator
 from dbt.config import RuntimeConfig
 from dbt.context.providers import generate_runtime_model_context
 from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.graph.nodes import HookNode, ModelNode, ResultNode
+from dbt.contracts.graph.nodes import BatchContext, HookNode, ModelNode, ResultNode
 from dbt.events.types import (
     GenericExceptionOnRun,
     LogHookEndLine,
@@ -341,6 +341,13 @@ class MicrobatchModelRunner(ModelRunner):
         self.batches: Dict[int, BatchType] = {}
         self.relation_exists: bool = False
 
+    def compile(self, manifest: Manifest):
+        # The default compile function is _always_ called. However, we do our
+        # compilation _later_ in `_execute_microbatch_materialization`. This
+        # meant the node was being compiled _twice_ for each batch. To get around
+        # this, we've overriden the default compile method to do nothing
+        return self.node
+
     def set_batch_idx(self, batch_idx: int) -> None:
         self.batch_idx = batch_idx
 
@@ -353,7 +360,7 @@ class MicrobatchModelRunner(ModelRunner):
     def describe_node(self) -> str:
         return f"{self.node.language} microbatch model {self.get_node_representation()}"
 
-    def describe_batch(self, batch_start: Optional[datetime]) -> str:
+    def describe_batch(self, batch_start: datetime) -> str:
         # Only visualize date if batch_start year/month/day
         formatted_batch_start = MicrobatchBuilder.format_batch_start(
             batch_start, self.node.config.batch_size
@@ -530,10 +537,16 @@ class MicrobatchModelRunner(ModelRunner):
             # call materialization_macro to get a batch-level run result
             start_time = time.perf_counter()
             try:
-                # Set start/end in context prior to re-compiling
+                # LEGACY: Set start/end in context prior to re-compiling (Will be removed for 1.10+)
+                # TODO: REMOVE before 1.10 GA
                 model.config["__dbt_internal_microbatch_event_time_start"] = batch[0]
                 model.config["__dbt_internal_microbatch_event_time_end"] = batch[1]
-
+                # Create batch context on model node prior to re-compiling
+                model.batch = BatchContext(
+                    id=MicrobatchBuilder.batch_id(batch[0], model.config.batch_size),
+                    event_time_start=batch[0],
+                    event_time_end=batch[1],
+                )
                 # Recompile node to re-resolve refs with event time filters rendered, update context
                 self.compiler.compile_node(
                     model,
@@ -544,10 +557,10 @@ class MicrobatchModelRunner(ModelRunner):
                     ),
                 )
                 # Update jinja context with batch context members
-                batch_context = microbatch_builder.build_batch_context(
+                jinja_context = microbatch_builder.build_jinja_context_for_batch(
                     incremental_batch=self.relation_exists
                 )
-                context.update(batch_context)
+                context.update(jinja_context)
 
                 # Materialize batch and cache any materialized relations
                 result = MacroGenerator(
