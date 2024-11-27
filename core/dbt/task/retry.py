@@ -136,7 +136,7 @@ class RetryTask(ConfiguredTask):
         # batch info if there were _no_ successful batches previously. This is
         # because passing the batch info _forces_ the microbatch process into
         # _incremental_ model, and it may be that we need to be in full refresh
-        # mode which is only handled if batch_info _isn't_ passed for a node
+        # mode which is only handled if previous_batch_results _isn't_ passed for a node
         batch_map = {
             result.unique_id: result.batch_results
             for result in self.previous_results.results

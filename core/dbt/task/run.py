@@ -445,8 +445,8 @@ class MicrobatchModelRunner(ModelRunner):
         result.batch_results.failed = sorted(result.batch_results.failed)
 
         # # If retrying, propagate previously successful batches into final result, even thoguh they were not run in this invocation
-        if self.node.batch_info is not None:
-            result.batch_results.successful += self.node.batch_info.successful
+        if self.node.previous_batch_results is not None:
+            result.batch_results.successful += self.node.previous_batch_results.successful
 
     def _build_succesful_run_batch_result(
         self,
@@ -508,15 +508,15 @@ class MicrobatchModelRunner(ModelRunner):
         )
 
         if self.batch_idx is None:
-            # Note currently (9/30/2024) model.batch_info is only ever _not_ `None`
+            # Note currently (9/30/2024) model.previous_batch_results is only ever _not_ `None`
             # IFF `dbt retry` is being run and the microbatch model had batches which
             # failed on the run of the model (which is being retried)
-            if model.batch_info is None:
+            if model.previous_batch_results is None:
                 end = microbatch_builder.build_end_time()
                 start = microbatch_builder.build_start_time(end)
                 batches = microbatch_builder.build_batches(start, end)
             else:
-                batches = model.batch_info.failed
+                batches = model.previous_batch_results.failed
                 # If there is batch info, then don't run as full_refresh and do force is_incremental
                 # not doing this risks blowing away the work that has already been done
                 if self._has_relation(model=model):
@@ -885,7 +885,7 @@ class RunTask(CompileTask):
                 if uid in self.batch_map:
                     node = self.manifest.ref_lookup.perform_lookup(uid, self.manifest)
                     if isinstance(node, ModelNode):
-                        node.batch_info = self.batch_map[uid]
+                        node.previous_batch_results = self.batch_map[uid]
 
     def before_run(self, adapter: BaseAdapter, selected_uids: AbstractSet[str]) -> RunStatus:
         with adapter.connection_named("master"):

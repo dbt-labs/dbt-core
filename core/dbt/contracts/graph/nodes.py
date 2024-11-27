@@ -444,13 +444,15 @@ class HookNode(HookNodeResource, CompiledNode):
 
 @dataclass
 class ModelNode(ModelResource, CompiledNode):
-    batch_info: Optional[BatchResults] = None
+    previous_batch_results: Optional[BatchResults] = None
     _has_this: Optional[bool] = None
 
     def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
         dct = super().__post_serialize__(dct, context)
         if "_has_this" in dct:
             del dct["_has_this"]
+        if "previous_batch_results" in dct:
+            del dct["previous_batch_results"]
         return dct
 
     @classmethod
