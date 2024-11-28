@@ -1,0 +1,6 @@
+kind: Fixes
+body: Access DBUG flag more consistently with the rest of the codebase in ManifestLoader
+time: 2024-11-28T16:29:36.236729+01:00
+custom:
+    Author: Threynaud
+    Issue: "11068"
