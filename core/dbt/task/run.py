@@ -705,34 +705,41 @@ class RunTask(CompileTask):
     ) -> RunResult:
         # Initial run computes batch metadata
         result = self.call_runner(runner)
+        batches = runner.batches
+        node = runner.node
+        relation_exists = runner.relation_exists
+
         # Return early if model should be skipped, or there are no batches to execute
         if result.status == RunStatus.Skipped:
             return result
         elif len(runner.batches) == 0:
             return result
 
-        relation_exists = runner.relation_exists
         batch_results: List[RunResult] = []
         batch_idx = 0
 
         # Run first batch runs in serial
         relation_exists = self._submit_batch(
-            runner, relation_exists, batch_idx, batch_results, pool, parallel=False
+            node, relation_exists, batches, batch_idx, batch_results, pool, parallel=False
         )
         batch_idx += 1
+
         # Subsequent batches can be run in parallel
         while batch_idx < len(runner.batches) - 1:
             parallel = runner._should_run_in_parallel(relation_exists)
             relation_exists = self._submit_batch(
-                runner, relation_exists, batch_idx, batch_results, pool, parallel
+                node, relation_exists, batches, batch_idx, batch_results, pool, parallel
             )
             batch_idx += 1
+
         # Wait until all submitted batches have completed
         while len(batch_results) != batch_idx:
             pass
 
         # Final batch runs in serial
-        self._submit_batch(runner, relation_exists, batch_idx, batch_results, pool, parallel=False)
+        self._submit_batch(
+            node, relation_exists, batches, batch_idx, batch_results, pool, parallel=False
+        )
 
         runner.merge_batch_results(result, batch_results)
         track_model_run(runner.node_index, runner.num_nodes, result, adapter=runner.adapter)
@@ -742,19 +749,20 @@ class RunTask(CompileTask):
 
     def _submit_batch(
         self,
-        runner: MicrobatchModelRunner,
+        node: ModelNode,
         relation_exists: bool,
+        batches: Dict[int, BatchType],
         batch_idx: int,
         batch_results: List[RunResult],
         pool: ThreadPool,
         parallel: bool,
     ):
-        batch_runner = MicrobatchModelRunner(
-            self.config, runner.adapter, deepcopy(runner.node), self.run_count, self.num_nodes
-        )
+        batch_runner = self.get_runner(deepcopy(node))
+        assert isinstance(batch_runner, MicrobatchModelRunner)
+
         batch_runner.set_batch_idx(batch_idx)
         batch_runner.set_relation_exists(relation_exists)
-        batch_runner.set_batches(runner.batches)
+        batch_runner.set_batches(batches)
 
         if parallel:
             fire_event(
