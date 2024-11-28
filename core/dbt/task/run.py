@@ -703,51 +703,76 @@ class RunTask(CompileTask):
         runner: MicrobatchModelRunner,
         pool: ThreadPool,
     ) -> RunResult:
-        # Initial run computes batch metadata, unless model is skipped
+        # Initial run computes batch metadata
         result = self.call_runner(runner)
+        # Return early if model should be skipped, or there are no batches to execute
         if result.status == RunStatus.Skipped:
             return result
+        elif len(runner.batches) == 0:
+            return result
 
-        batch_results: List[RunResult] = []
-
-        # Execute batches serially until a relation exists, at which point future batches are run in parallel
         relation_exists = runner.relation_exists
+        batch_results: List[RunResult] = []
         batch_idx = 0
-        while batch_idx < len(runner.batches):
-            batch_runner = MicrobatchModelRunner(
-                self.config, runner.adapter, deepcopy(runner.node), self.run_count, self.num_nodes
+
+        # Run first batch runs in serial
+        relation_exists = self._submit_batch(
+            runner, relation_exists, batch_idx, batch_results, pool, parallel=False
+        )
+        batch_idx += 1
+        # Subsequent batches can be run in parallel
+        while batch_idx < len(runner.batches) - 1:
+            parallel = runner._should_run_in_parallel(relation_exists)
+            relation_exists = self._submit_batch(
+                runner, relation_exists, batch_idx, batch_results, pool, parallel
             )
-            batch_runner.set_batch_idx(batch_idx)
-            batch_runner.set_relation_exists(relation_exists)
-            batch_runner.set_batches(runner.batches)
-
-            if runner._should_run_in_parallel(relation_exists):
-                fire_event(
-                    MicrobatchExecutionDebug(
-                        msg=f"{batch_runner.describe_batch} is being run concurrently"
-                    )
-                )
-                self._submit(pool, [batch_runner], batch_results.append)
-            else:
-                fire_event(
-                    MicrobatchExecutionDebug(
-                        msg=f"{batch_runner.describe_batch} is being run sequentially"
-                    )
-                )
-                batch_results.append(self.call_runner(batch_runner))
-                relation_exists = batch_runner.relation_exists
-
             batch_idx += 1
-
-        # Wait until all batches have completed
-        while len(batch_results) != len(runner.batches):
+        # Wait until all submitted batches have completed
+        while len(batch_results) != batch_idx:
             pass
+
+        # Final batch runs in serial
+        self._submit_batch(runner, relation_exists, batch_idx, batch_results, pool, parallel=False)
 
         runner.merge_batch_results(result, batch_results)
         track_model_run(runner.node_index, runner.num_nodes, result, adapter=runner.adapter)
         runner.print_result_line(result)
 
         return result
+
+    def _submit_batch(
+        self,
+        runner: MicrobatchModelRunner,
+        relation_exists: bool,
+        batch_idx: int,
+        batch_results: List[RunResult],
+        pool: ThreadPool,
+        parallel: bool,
+    ):
+        batch_runner = MicrobatchModelRunner(
+            self.config, runner.adapter, deepcopy(runner.node), self.run_count, self.num_nodes
+        )
+        batch_runner.set_batch_idx(batch_idx)
+        batch_runner.set_relation_exists(relation_exists)
+        batch_runner.set_batches(runner.batches)
+
+        if parallel:
+            fire_event(
+                MicrobatchExecutionDebug(
+                    msg=f"{batch_runner.describe_batch} is being run concurrently"
+                )
+            )
+            self._submit(pool, [batch_runner], batch_results.append)
+        else:
+            fire_event(
+                MicrobatchExecutionDebug(
+                    msg=f"{batch_runner.describe_batch} is being run sequentially"
+                )
+            )
+            batch_results.append(self.call_runner(batch_runner))
+            relation_exists = batch_runner.relation_exists
+
+        return relation_exists
 
     def _hook_keyfunc(self, hook: HookNode) -> Tuple[str, Optional[int]]:
         package_name = hook.package_name
