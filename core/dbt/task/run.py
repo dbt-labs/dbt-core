@@ -757,9 +757,16 @@ class RunTask(CompileTask):
         pool: ThreadPool,
         parallel: bool,
     ):
-        batch_runner = self.get_runner(deepcopy(node))
+        node_copy = deepcopy(node)
+        # Only run pre_hook(s) for first batch
+        if batch_idx != 0:
+            node_copy.config.pre_hook = []
+        # Only run post_hook(s) for last batch
+        elif batch_idx != len(batches) - 1:
+            node_copy.config.post_hook = []
+    
+        batch_runner = self.get_runner(node_copy)
         assert isinstance(batch_runner, MicrobatchModelRunner)
-
         batch_runner.set_batch_idx(batch_idx)
         batch_runner.set_relation_exists(relation_exists)
         batch_runner.set_batches(batches)
