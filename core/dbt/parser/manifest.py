@@ -626,6 +626,7 @@ class ManifestLoader:
             if self.root_project.args.REQUIRE_RESOURCE_NAMES_WITHOUT_SPACES
             else EventLevel.WARN
         )
+
         flags = get_flags()
 
         for node in self.manifest.nodes.values():
