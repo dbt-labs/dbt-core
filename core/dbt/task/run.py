@@ -602,14 +602,14 @@ class MicrobatchModelRunner(ModelRunner):
         )
         return relation is not None
 
-    def _should_run_in_parallel(
-        self,
-        relation_exists: bool,
-    ) -> bool:
+    def should_run_in_parallel(self) -> bool:
         if not self.adapter.supports(Capability.MicrobatchConcurrency):
             run_in_parallel = False
-        elif not relation_exists:
+        elif not self.relation_exists:
             # If the relation doesn't exist, we can't run in parallel
+            run_in_parallel = False
+        elif self.batch_idx == 0 or self.batch_idx == len(self.batches) - 1:
+            # First and last batch don't run in parallel
             run_in_parallel = False
         elif self.node.config.concurrent_batches is not None:
             # If the relation exists and the `concurrent_batches` config isn't None, use the config value
@@ -705,9 +705,7 @@ class RunTask(CompileTask):
     ) -> RunResult:
         # Initial run computes batch metadata
         result = self.call_runner(runner)
-        batches = runner.batches
-        node = runner.node
-        relation_exists = runner.relation_exists
+        batches, node, relation_exists = runner.batches, runner.node, runner.relation_exists
 
         # Return early if model should be skipped, or there are no batches to execute
         if result.status == RunStatus.Skipped:
@@ -717,30 +715,20 @@ class RunTask(CompileTask):
 
         batch_results: List[RunResult] = []
         batch_idx = 0
-
-        # Run first batch runs in serial
-        relation_exists = self._submit_batch(
-            node, relation_exists, batches, batch_idx, batch_results, pool, parallel=False
-        )
-        batch_idx += 1
-
-        # Subsequent batches can be run in parallel
+        # Run all batches except last batch, in parallel if possible
         while batch_idx < len(runner.batches) - 1:
-            parallel = runner._should_run_in_parallel(relation_exists)
             relation_exists = self._submit_batch(
-                node, relation_exists, batches, batch_idx, batch_results, pool, parallel
+                node, relation_exists, batches, batch_idx, batch_results, pool
             )
             batch_idx += 1
 
         # Wait until all submitted batches have completed
         while len(batch_results) != batch_idx:
             pass
+        # Final batch runs once all others complete to ensure post_hook runs at the end
+        self._submit_batch(node, relation_exists, batches, batch_idx, batch_results, pool)
 
-        # Final batch runs in serial
-        self._submit_batch(
-            node, relation_exists, batches, batch_idx, batch_results, pool, parallel=False
-        )
-
+        # Finalize run: merge results, track model run, and print final result line
         runner.merge_batch_results(result, batch_results)
         track_model_run(runner.node_index, runner.num_nodes, result, adapter=runner.adapter)
         runner.print_result_line(result)
@@ -755,7 +743,6 @@ class RunTask(CompileTask):
         batch_idx: int,
         batch_results: List[RunResult],
         pool: ThreadPool,
-        parallel: bool,
     ):
         node_copy = deepcopy(node)
         # Only run pre_hook(s) for first batch
@@ -764,14 +751,14 @@ class RunTask(CompileTask):
         # Only run post_hook(s) for last batch
         elif batch_idx != len(batches) - 1:
             node_copy.config.post_hook = []
-    
+
         batch_runner = self.get_runner(node_copy)
         assert isinstance(batch_runner, MicrobatchModelRunner)
         batch_runner.set_batch_idx(batch_idx)
         batch_runner.set_relation_exists(relation_exists)
         batch_runner.set_batches(batches)
 
-        if parallel:
+        if batch_runner.should_run_in_parallel():
             fire_event(
                 MicrobatchExecutionDebug(
                     msg=f"{batch_runner.describe_batch} is being run concurrently"
