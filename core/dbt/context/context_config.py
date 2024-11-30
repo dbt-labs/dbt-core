@@ -100,7 +100,7 @@ class BaseContextConfigGenerator(Generic[T]):
     def get_config_source(self, project: Project) -> ConfigSource:
         return RenderedConfig(project)
 
-    def get_node_project(self, project_name: str):
+    def get_node_project_config(self, project_name: str):
         if project_name == self._active_project.project_name:
             return self._active_project
         dependencies = self._active_project.load_dependencies()
@@ -132,14 +132,6 @@ class BaseContextConfigGenerator(Generic[T]):
         return self._project_configs(self._active_project, fqn, resource_type)
 
     @abstractmethod
-    def _update_from_config(
-        self, result: T, partial: Dict[str, Any], validate: bool = False
-    ) -> T: ...
-
-    @abstractmethod
-    def initial_result(self, resource_type: NodeType, base: bool) -> T: ...
-
-    # BaseContextConfigGenerator
     def calculate_node_config(
         self,
         config_call_dict: Dict[str, Any],
@@ -148,32 +140,17 @@ class BaseContextConfigGenerator(Generic[T]):
         project_name: str,
         base: bool,
         patch_config_dict: Optional[Dict[str, Any]] = None,
-    ) -> BaseConfig:
-        own_config = self.get_node_project(project_name)
+    ) -> T: ...
 
-        # creates "default" config object ("cls.from_dict({})")
-        config_obj = self.initial_result(resource_type=resource_type, base=base)
+    @abstractmethod
+    def _update_from_config(
+        self, result: T, partial: Dict[str, Any], validate: bool = False
+    ) -> T: ...
 
-        project_configs = self._project_configs(own_config, fqn, resource_type)
-        for fqn_config in project_configs:
-            config_obj = self._update_from_config(config_obj, fqn_config)
+    @abstractmethod
+    def initial_result(self, resource_type: NodeType, base: bool) -> T: ...
 
-        # When schema files patch config, it has lower precedence than
-        # config in the models (config_call_dict), so we add the patch_config_dict
-        # before the config_call_dict
-        if patch_config_dict:
-            config_obj = self._update_from_config(config_obj, patch_config_dict)
-
-        # config_calls are created in the 'experimental' model parser and
-        # the ParseConfigObject (via add_config_call)
-        config_obj = self._update_from_config(config_obj, config_call_dict)
-
-        if own_config.project_name != self._active_project.project_name:
-            for fqn_config in self._active_project_configs(fqn, resource_type):
-                config_obj = self._update_from_config(config_obj, fqn_config)
-
-        return config_obj  # type: ignore[return-value]
-
+    # BaseContextConfigGenerator
     @abstractmethod
     def calculate_node_config_dict(
         self,
@@ -193,8 +170,47 @@ class ContextConfigGenerator(BaseContextConfigGenerator[C]):
     def get_config_source(self, project: Project) -> ConfigSource:
         return RenderedConfig(project)
 
+    def calculate_node_config(
+        self,
+        config_call_dict: Dict[str, Any],
+        fqn: List[str],
+        resource_type: NodeType,
+        project_name: str,
+        base: bool,
+        patch_config_dict: Optional[Dict[str, Any]] = None,
+    ) -> C:
+        # Note: This method returns a BaseConfig object. This is a duplicate of
+        # of UnrenderedConfigGenerator.calculate_node_config, but calls methods
+        # that deal with config objects instead of dictionaries.
+        # Additions to one method, should probably also go in the other.
+
+        project_config = self.get_node_project_config(project_name)
+
+        # creates "default" config object ("cls.from_dict({})")
+        config_obj = self.initial_result(resource_type=resource_type, base=base)
+
+        project_configs = self._project_configs(project_config, fqn, resource_type)
+        for fqn_config in project_configs:
+            config_obj = self._update_from_config(config_obj, fqn_config)
+
+        # When schema files patch config, it has lower precedence than
+        # config in the models (config_call_dict), so we add the patch_config_dict
+        # before the config_call_dict
+        if patch_config_dict:
+            config_obj = self._update_from_config(config_obj, patch_config_dict)
+
+        # config_calls are created in the 'experimental' model parser and
+        # the ParseConfigObject (via add_config_call)
+        config_obj = self._update_from_config(config_obj, config_call_dict)
+
+        if project_config.project_name != self._active_project.project_name:
+            for fqn_config in self._active_project_configs(fqn, resource_type):
+                config_obj = self._update_from_config(config_obj, fqn_config)
+
+        return config_obj
+
     def initial_result(self, resource_type: NodeType, base: bool) -> C:
-        # defaults, own_config, config calls, active_config (if != own_config)
+        # defaults, project_config, config calls, active_config (if != project_config)
         config_cls = get_config_for(resource_type, base=base)
         # Calculate the defaults. We don't want to validate the defaults,
         # because it might be invalid in the case of required config members
@@ -234,7 +250,7 @@ class ContextConfigGenerator(BaseContextConfigGenerator[C]):
         patch_config_dict: Optional[dict] = None,
     ) -> Dict[str, Any]:
 
-        # calls BaseContextConfigGenerator.calculate_node_config
+        # returns a config object
         config_obj = self.calculate_node_config(
             config_call_dict=config_call_dict,
             fqn=fqn,
@@ -257,6 +273,45 @@ class UnrenderedConfigGenerator(BaseContextConfigGenerator[Dict[str, Any]]):
     def get_config_source(self, project: Project) -> ConfigSource:
         return UnrenderedConfig(project)
 
+    def calculate_node_config(
+        self,
+        config_call_dict: Dict[str, Any],
+        fqn: List[str],
+        resource_type: NodeType,
+        project_name: str,
+        base: bool,
+        patch_config_dict: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        # Note: This method returns a Dict[str, Any]. This is a duplicate of
+        # of ContextConfigGenerator.calculate_node_config, but calls methods
+        # that deal with dictionaries instead of config object.
+        # Additions to one method, should probably also go in the other.
+
+        project_config = self.get_node_project_config(project_name)
+
+        # creates "default" config object ({})
+        config_dict = self.initial_result(resource_type=resource_type, base=base)
+
+        project_configs = self._project_configs(project_config, fqn, resource_type)
+        for fqn_config in project_configs:
+            config_dict = self._update_from_config(config_dict, fqn_config)
+
+        # When schema files patch config, it has lower precedence than
+        # config in the models (config_call_dict), so we add the patch_config_dict
+        # before the config_call_dict
+        if patch_config_dict:
+            config_dict = self._update_from_config(config_dict, patch_config_dict)
+
+        # config_calls are created in the 'experimental' model parser and
+        # the ParseConfigObject (via add_config_call)
+        config_dict = self._update_from_config(config_dict, config_call_dict)
+
+        if project_config.project_name != self._active_project.project_name:
+            for fqn_config in self._active_project_configs(fqn, resource_type):
+                config_dict = self._update_from_config(config_dict, fqn_config)
+
+        return config_dict
+
     # UnrenderedConfigGenerator
     def calculate_node_config_dict(
         self,
@@ -267,17 +322,18 @@ class UnrenderedConfigGenerator(BaseContextConfigGenerator[Dict[str, Any]]):
         base: bool,
         patch_config_dict: Optional[dict] = None,
     ) -> Dict[str, Any]:
-
-        # calls BaseContextConfigGenerator.calculate_node_config
-        return self.calculate_node_config(
+        # Just call UnrenderedConfigGenerator.calculate_node_config, which
+        # will return a config dictionary
+        result = self.calculate_node_config(
             config_call_dict=config_call_dict,
             fqn=fqn,
             resource_type=resource_type,
             project_name=project_name,
             base=base,
             patch_config_dict=patch_config_dict,
-        )  # type: ignore[return-value]
-        # Note: this returns a config_obj, NOT a dictionary
+        )
+        # Note: this returns a dictionary
+        return result
 
     def initial_result(self, resource_type: NodeType, base: bool) -> Dict[str, Any]:
         return {}

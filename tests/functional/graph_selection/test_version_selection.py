@@ -54,7 +54,7 @@ class TestVersionSelection:
     def selectors(self):
         return selectors_yml
 
-    @pytest.mark.skip('broken until mash 3.15')
+    @pytest.mark.skip("broken until mash 3.15")
     def test_select_none_versions(self, project):
         manifest = run_dbt(["parse"])
         print(f"--- nodes.keys(): {manifest.nodes.keys()}")
@@ -77,7 +77,7 @@ class TestVersionSelection:
         results = run_dbt(["ls", "--select", "version:old"])
         assert sorted(results) == ["test.versioned.v1"]
 
-    @pytest.mark.skip('broken until mash 3.15')
+    @pytest.mark.skip("broken until mash 3.15")
     def test_select_prerelease_versions(self, project):
         results = run_dbt(["ls", "--select", "version:prerelease"])
         assert sorted(results) == [
