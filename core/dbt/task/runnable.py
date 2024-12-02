@@ -184,6 +184,8 @@ class GraphRunnableTask(ConfiguredTask):
                 self._flattened_nodes.append(self.manifest.saved_queries[uid])
             elif uid in self.manifest.unit_tests:
                 self._flattened_nodes.append(self.manifest.unit_tests[uid])
+            elif uid in self.manifest.exposures:
+                self._flattened_nodes.append(self.manifest.exposures[uid])
             else:
                 raise DbtInternalError(
                     f"Node selection returned {uid}, expected a node, a source, or a unit test"

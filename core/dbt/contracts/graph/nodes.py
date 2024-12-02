@@ -1378,7 +1378,7 @@ class SourceDefinition(
 
 
 @dataclass
-class Exposure(GraphNode, ExposureResource):
+class Exposure(NodeInfoMixin, GraphNode, ExposureResource):
     @property
     def depends_on_nodes(self):
         return self.depends_on.nodes
