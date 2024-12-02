@@ -7946,12 +7946,6 @@
                       {
                         "type": "array",
                         "items": {
-                          "type": "string"
-                        }
-                      },
-                      {
-                        "type": "array",
-                        "items": {
                           "type": "object",
                           "title": "ExternalPartition",
                           "properties": {
@@ -7981,6 +7975,12 @@
                             }
                           },
                           "additionalProperties": true
+                        }
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
                         }
                       },
                       {
@@ -17899,12 +17899,6 @@
                                 {
                                   "type": "array",
                                   "items": {
-                                    "type": "string"
-                                  }
-                                },
-                                {
-                                  "type": "array",
-                                  "items": {
                                     "type": "object",
                                     "title": "ExternalPartition",
                                     "properties": {
@@ -17934,6 +17928,12 @@
                                       }
                                     },
                                     "additionalProperties": true
+                                  }
+                                },
+                                {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
                                   }
                                 },
                                 {
