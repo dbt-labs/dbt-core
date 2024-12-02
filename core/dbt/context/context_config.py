@@ -175,10 +175,9 @@ class ContextConfigGenerator(BaseContextConfigGenerator[C]):
         project_name: str,
         patch_config_dict: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        # Note: This method returns a BaseConfig object. This is a duplicate of
-        # of UnrenderedConfigGenerator.generate_node_config, but calls methods
-        # that deal with config objects instead of dictionaries.
-        # Additions to one method, should probably also go in the other.
+        # Note: This method returns a dictionary object. This is a duplicate of
+        # of UnrenderedConfigGenerator.generate_node_config ... TODO: check to
+        # see if methods can be combined
 
         project_config = self.get_node_project_config(project_name)
         config_cls = get_config_for(resource_type)
