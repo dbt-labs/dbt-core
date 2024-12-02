@@ -53,14 +53,5 @@ RESOURCE_TYPES: Dict[NodeType, Type[BaseConfig]] = {
 }
 
 
-# base resource types are like resource types, except nothing has mandatory
-# configs.
-BASE_RESOURCE_TYPES: Dict[NodeType, Type[BaseConfig]] = RESOURCE_TYPES.copy()
-
-
 def get_config_for(resource_type: NodeType, base=False) -> Type[BaseConfig]:
-    if base:
-        lookup = BASE_RESOURCE_TYPES
-    else:
-        lookup = RESOURCE_TYPES
-    return lookup.get(resource_type, NodeConfig)
+    return RESOURCE_TYPES.get(resource_type, NodeConfig)

@@ -138,7 +138,6 @@ class BaseContextConfigGenerator(Generic[T]):
         fqn: List[str],
         resource_type: NodeType,
         project_name: str,
-        base: bool,
         patch_config_dict: Optional[Dict[str, Any]] = None,
     ) -> T: ...
 
@@ -148,7 +147,7 @@ class BaseContextConfigGenerator(Generic[T]):
     ) -> T: ...
 
     @abstractmethod
-    def initial_result(self, resource_type: NodeType, base: bool) -> T: ...
+    def initial_result(self, resource_type: NodeType) -> T: ...
 
     # BaseContextConfigGenerator
     @abstractmethod
@@ -158,7 +157,6 @@ class BaseContextConfigGenerator(Generic[T]):
         fqn: List[str],
         resource_type: NodeType,
         project_name: str,
-        base: bool,
         patch_config_dict: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]: ...
 
@@ -176,7 +174,6 @@ class ContextConfigGenerator(BaseContextConfigGenerator[C]):
         fqn: List[str],
         resource_type: NodeType,
         project_name: str,
-        base: bool,
         patch_config_dict: Optional[Dict[str, Any]] = None,
     ) -> C:
         # Note: This method returns a BaseConfig object. This is a duplicate of
@@ -187,7 +184,7 @@ class ContextConfigGenerator(BaseContextConfigGenerator[C]):
         project_config = self.get_node_project_config(project_name)
 
         # creates "default" config object ("cls.from_dict({})")
-        config_obj = self.initial_result(resource_type=resource_type, base=base)
+        config_obj = self.initial_result(resource_type=resource_type)
 
         project_configs = self._project_configs(project_config, fqn, resource_type)
         for fqn_config in project_configs:
@@ -209,9 +206,9 @@ class ContextConfigGenerator(BaseContextConfigGenerator[C]):
 
         return config_obj
 
-    def initial_result(self, resource_type: NodeType, base: bool) -> C:
+    def initial_result(self, resource_type: NodeType) -> C:
         # defaults, project_config, config calls, active_config (if != project_config)
-        config_cls = get_config_for(resource_type, base=base)
+        config_cls = get_config_for(resource_type)
         # Calculate the defaults. We don't want to validate the defaults,
         # because it might be invalid in the case of required config members
         # (such as on snapshots!)
@@ -246,7 +243,6 @@ class ContextConfigGenerator(BaseContextConfigGenerator[C]):
         fqn: List[str],
         resource_type: NodeType,
         project_name: str,
-        base: bool,
         patch_config_dict: Optional[dict] = None,
     ) -> Dict[str, Any]:
 
@@ -256,7 +252,6 @@ class ContextConfigGenerator(BaseContextConfigGenerator[C]):
             fqn=fqn,
             resource_type=resource_type,
             project_name=project_name,
-            base=base,
             patch_config_dict=patch_config_dict,
         )
         try:
@@ -279,7 +274,6 @@ class UnrenderedConfigGenerator(BaseContextConfigGenerator[Dict[str, Any]]):
         fqn: List[str],
         resource_type: NodeType,
         project_name: str,
-        base: bool,
         patch_config_dict: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         # Note: This method returns a Dict[str, Any]. This is a duplicate of
@@ -290,7 +284,7 @@ class UnrenderedConfigGenerator(BaseContextConfigGenerator[Dict[str, Any]]):
         project_config = self.get_node_project_config(project_name)
 
         # creates "default" config object ({})
-        config_dict = self.initial_result(resource_type=resource_type, base=base)
+        config_dict = self.initial_result(resource_type=resource_type)
 
         project_configs = self._project_configs(project_config, fqn, resource_type)
         for fqn_config in project_configs:
@@ -319,7 +313,6 @@ class UnrenderedConfigGenerator(BaseContextConfigGenerator[Dict[str, Any]]):
         fqn: List[str],
         resource_type: NodeType,
         project_name: str,
-        base: bool,
         patch_config_dict: Optional[dict] = None,
     ) -> Dict[str, Any]:
         # Just call UnrenderedConfigGenerator.calculate_node_config, which
@@ -329,13 +322,12 @@ class UnrenderedConfigGenerator(BaseContextConfigGenerator[Dict[str, Any]]):
             fqn=fqn,
             resource_type=resource_type,
             project_name=project_name,
-            base=base,
             patch_config_dict=patch_config_dict,
         )
         # Note: this returns a dictionary
         return result
 
-    def initial_result(self, resource_type: NodeType, base: bool) -> Dict[str, Any]:
+    def initial_result(self, resource_type: NodeType) -> Dict[str, Any]:
         return {}
 
     def _update_from_config(
@@ -375,7 +367,6 @@ class ContextConfig:
     # ContextConfig
     def build_config_dict(
         self,
-        base: bool = False,
         *,
         rendered: bool = True,
         patch_config_dict: Optional[dict] = None,
@@ -402,6 +393,5 @@ class ContextConfig:
             fqn=self._fqn,
             resource_type=self._resource_type,
             project_name=self._project_name,
-            base=base,
             patch_config_dict=patch_config_dict,
         )

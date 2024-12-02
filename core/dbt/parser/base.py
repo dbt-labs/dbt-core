@@ -443,7 +443,7 @@ class ConfiguredParser(
         self,
         config: ContextConfig,
     ) -> Dict[str, Any]:
-        config_dict = config.build_config_dict(base=True)
+        config_dict = config.build_config_dict()
         self._mangle_hooks(config_dict)
         return config_dict
 

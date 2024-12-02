@@ -307,7 +307,6 @@ class SourcePatcher:
             fqn=target.fqn,
             resource_type=NodeType.Source,
             project_name=target.package_name,
-            base=False,
             patch_config_dict=precedence_configs,
         )
 

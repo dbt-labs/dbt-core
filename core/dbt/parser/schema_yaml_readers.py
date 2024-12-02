@@ -169,7 +169,6 @@ class ExposureParser(YamlReader):
             fqn=fqn,
             resource_type=NodeType.Exposure,
             project_name=package_name,
-            base=False,
             patch_config_dict=precedence_configs,
         )
 
@@ -472,7 +471,6 @@ class MetricParser(YamlReader):
             fqn=fqn,
             resource_type=NodeType.Metric,
             project_name=package_name,
-            base=False,
             patch_config_dict=precedence_configs,
         )
         return config
@@ -641,7 +639,6 @@ class SemanticModelParser(YamlReader):
             fqn=fqn,
             resource_type=NodeType.SemanticModel,
             project_name=package_name,
-            base=False,
             patch_config_dict=precedence_configs,
         )
 
@@ -756,7 +753,6 @@ class SavedQueryParser(YamlReader):
             fqn=fqn,
             resource_type=NodeType.SavedQuery,
             project_name=package_name,
-            base=False,
             patch_config_dict=precedence_configs,
         )
 
