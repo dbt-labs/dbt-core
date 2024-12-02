@@ -164,7 +164,7 @@ class ExposureParser(YamlReader):
         # apply exposure configs
         precedence_configs.update(target.config)
 
-        return generator.calculate_node_config(
+        return generator.generate_node_config(
             config_call_dict={},
             fqn=fqn,
             resource_type=NodeType.Exposure,
@@ -466,7 +466,7 @@ class MetricParser(YamlReader):
         # first apply metric configs
         precedence_configs.update(target.config)
 
-        config = generator.calculate_node_config(
+        config = generator.generate_node_config(
             config_call_dict={},
             fqn=fqn,
             resource_type=NodeType.Metric,
@@ -634,7 +634,7 @@ class SemanticModelParser(YamlReader):
         # first apply semantic model configs
         precedence_configs.update(target.config)
 
-        config = generator.calculate_node_config(
+        config = generator.generate_node_config(
             config_call_dict={},
             fqn=fqn,
             resource_type=NodeType.SemanticModel,
@@ -748,7 +748,7 @@ class SavedQueryParser(YamlReader):
         # first apply semantic model configs
         precedence_configs.update(target.config)
 
-        config = generator.calculate_node_config(
+        config = generator.generate_node_config(
             config_call_dict={},
             fqn=fqn,
             resource_type=NodeType.SavedQuery,

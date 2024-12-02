@@ -302,7 +302,7 @@ class SourcePatcher:
         # it works while source configs can only include `enabled`.
         precedence_configs.update(target.table.config)
 
-        return generator.calculate_node_config(
+        return generator.generate_node_config(
             config_call_dict={},
             fqn=target.fqn,
             resource_type=NodeType.Source,

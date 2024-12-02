@@ -308,7 +308,7 @@ class ConfiguredParser(
     def update_parsed_node_config(
         self,
         parsed_node: FinalNode,
-        config: ContextConfig,
+        context_config: ContextConfig,
         context=None,
         patch_config_dict=None,
         patch_file_id=None,
@@ -330,7 +330,7 @@ class ConfiguredParser(
         ):
             if "materialized" not in patch_config_dict:
                 patch_config_dict["materialized"] = "table"
-        config_dict = config.build_config_dict(patch_config_dict=patch_config_dict)
+        config_dict = context_config.build_config_dict(patch_config_dict=patch_config_dict)
 
         # Set tags on node provided in config blocks. Tags are additive, so even if
         # config has been built before, we don't have to reset tags in the parsed_node.
@@ -396,12 +396,12 @@ class ConfiguredParser(
 
         # unrendered_config is used to compare the original database/schema/alias
         # values and to handle 'same_config' and 'same_contents' calls
-        parsed_node.unrendered_config = config.build_config_dict(
+        parsed_node.unrendered_config = context_config.build_config_dict(
             rendered=False, patch_config_dict=patch_config_dict
         )
 
-        parsed_node.config_call_dict = config._config_call_dict
-        parsed_node.unrendered_config_call_dict = config._unrendered_config_call_dict
+        parsed_node.config_call_dict = context_config._config_call_dict
+        parsed_node.unrendered_config_call_dict = context_config._unrendered_config_call_dict
 
         # do this once before we parse the node database/schema/alias, so
         # parsed_node.config is what it would be if they did nothing
@@ -421,7 +421,7 @@ class ConfiguredParser(
         if not hooks:
             return
         if not context:
-            context = self._context_for(parsed_node, config)
+            context = self._context_for(parsed_node, context_config)
         for hook in hooks:
             get_rendered(hook.sql, context, parsed_node, capture_macros=True)
 
