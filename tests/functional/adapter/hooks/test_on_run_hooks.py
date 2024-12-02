@@ -33,7 +33,7 @@ class Test__StartHookFail__FlagIsNone__ModelFail:
 
     @pytest.fixture(scope="class")
     def log_counts(self):
-        return "PASS=2 WARN=0 ERROR=2 SKIP=1 TOTAL=5"
+        return "PASS=2 WARN=0 ERROR=2 SKIP=1 NO-OP=0 TOTAL=5"
 
     @pytest.fixture(scope="class")
     def my_model_run_status(self):
@@ -90,7 +90,7 @@ class Test__StartHookFail__FlagIsTrue__ModelSkipped(Test__StartHookFail__FlagIsN
 
     @pytest.fixture(scope="class")
     def log_counts(self):
-        return "PASS=2 WARN=0 ERROR=1 SKIP=2 TOTAL=5"
+        return "PASS=2 WARN=0 ERROR=1 SKIP=2 NO-OP=0 TOTAL=5"
 
     @pytest.fixture(scope="class")
     def my_model_run_status(self):
@@ -125,7 +125,7 @@ class Test__ModelPass__EndHookFail:
         ]
 
         assert [(result.node.unique_id, result.status) for result in results] == expected_results
-        assert "PASS=3 WARN=0 ERROR=1 SKIP=1 TOTAL=5" in log_output
+        assert "PASS=3 WARN=0 ERROR=1 SKIP=1 NO-OP=0 TOTAL=5" in log_output
         assert "4 project hooks, 1 view model" in log_output
 
         run_results = get_artifact(project.project_root, "target", "run_results.json")
