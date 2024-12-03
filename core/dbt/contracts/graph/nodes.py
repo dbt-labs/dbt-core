@@ -1441,12 +1441,6 @@ class Exposure(NodeInfoMixin, GraphNode, ExposureResource):
     def group(self):
         return None
 
-    def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
-        dct = super().__post_serialize__(dct, context)
-        if "_event_status" in dct:
-            del dct["_event_status"]
-        return dct
-
 
 # ====================================
 # Metric node
@@ -1664,12 +1658,6 @@ class SavedQuery(NodeInfoMixin, GraphNode, SavedQueryResource):
             and self.same_exports(old)
             and True
         )
-
-    def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
-        dct = super().__post_serialize__(dct, context)
-        if "_event_status" in dct:
-            del dct["_event_status"]
-        return dct
 
 
 # ====================================
