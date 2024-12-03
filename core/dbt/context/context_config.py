@@ -3,6 +3,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any, Dict, Generic, Iterator, List, Optional, Type, TypeVar
 
+from dbt import hooks
 from dbt.adapters.factory import get_config_class_by_name
 from dbt.config import IsFQNResource, Project, RuntimeConfig
 from dbt.contracts.graph.model_config import get_config_for
@@ -91,6 +92,16 @@ class RenderedConfig(ConfigSource):
         else:
             model_configs = self.project.models
         return model_configs
+
+
+def fix_hooks(config_dict: Dict[str, Any]):
+    """Given a config dict that may have `pre-hook`/`post-hook` keys,
+    convert it from the yucky maybe-a-string, maybe-a-dict to a dict.
+    """
+    # Like most of parsing, this is a horrible hack :(
+    for key in hooks.ModelHookType:
+        if key in config_dict:
+            config_dict[key] = [hooks.get_hook_dict(h) for h in config_dict[key]]
 
 
 class BaseContextConfigGenerator(Generic[T]):
@@ -254,6 +265,7 @@ class ContextConfigGenerator(BaseContextConfigGenerator[C]):
             project_name=project_name,
             patch_config_dict=patch_config_dict,
         )
+        fix_hooks(config_dict)
         try:
             # Call "finalize_and_validate" on the config obj
             config_cls.validate(config_dict)
