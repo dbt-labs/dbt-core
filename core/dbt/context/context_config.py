@@ -55,8 +55,8 @@ class BaseConfigGenerator(Generic[T]):
     def _project_configs(
         self, project: Project, fqn: List[str], resource_type: NodeType
     ) -> Iterator[Dict[str, Any]]:
-        model_configs = self.get_model_configs(project, resource_type)
-        for level_config in fqn_search(model_configs, fqn):
+        resource_configs = self.get_resource_configs(project, resource_type)
+        for level_config in fqn_search(resource_configs, fqn):
             result = {}
             for key, value in level_config.items():
                 if key.startswith("+"):
@@ -72,7 +72,7 @@ class BaseConfigGenerator(Generic[T]):
         return self._project_configs(self._active_project, fqn, resource_type)
 
     @abstractmethod
-    def get_model_configs(self, project: Project, resource_type: NodeType) -> Dict[str, Any]: ...
+    def get_resource_configs(self, project: Project, resource_type: NodeType) -> Dict[str, Any]: ...
 
     @abstractmethod
     def merge_config_dicts(
@@ -107,28 +107,28 @@ class RenderedConfigGenerator(BaseConfigGenerator[C]):
     def __init__(self, active_project: RuntimeConfig):
         self._active_project = active_project
 
-    def get_model_configs(self, project: Project, resource_type: NodeType) -> Dict[str, Any]:
+    def get_resource_configs(self, project: Project, resource_type: NodeType) -> Dict[str, Any]:
         if resource_type == NodeType.Seed:
-            model_configs = project.seeds
+            resource_configs = project.seeds
         elif resource_type == NodeType.Snapshot:
-            model_configs = project.snapshots
+            resource_configs = project.snapshots
         elif resource_type == NodeType.Source:
-            model_configs = project.sources
+            resource_configs = project.sources
         elif resource_type == NodeType.Test:
-            model_configs = project.data_tests
+            resource_configs = project.data_tests
         elif resource_type == NodeType.Metric:
-            model_configs = project.metrics
+            resource_configs = project.metrics
         elif resource_type == NodeType.SemanticModel:
-            model_configs = project.semantic_models
+            resource_configs = project.semantic_models
         elif resource_type == NodeType.SavedQuery:
-            model_configs = project.saved_queries
+            resource_configs = project.saved_queries
         elif resource_type == NodeType.Exposure:
-            model_configs = project.exposures
+            resource_configs = project.exposures
         elif resource_type == NodeType.Unit:
-            model_configs = project.unit_tests
+            resource_configs = project.unit_tests
         else:
-            model_configs = project.models
-        return model_configs
+            resource_configs = project.models
+        return resource_configs
 
     def merge_config_dicts(
         self,
@@ -229,32 +229,33 @@ class RenderedConfigGenerator(BaseConfigGenerator[C]):
 
 
 class UnrenderedConfigGenerator(BaseConfigGenerator[Dict[str, Any]]):
-    def get_model_configs(self, project: Project, resource_type: NodeType) -> Dict[str, Any]:
+    def get_resource_configs(self, project: Project, resource_type: NodeType) -> Dict[str, Any]:
+        """ Get configs for this resource_type from the project's unrendered config"""
         unrendered = project.unrendered.project_dict
         if resource_type == NodeType.Seed:
-            model_configs = unrendered.get("seeds")
+            resource_configs = unrendered.get("seeds")
         elif resource_type == NodeType.Snapshot:
-            model_configs = unrendered.get("snapshots")
+            resource_configs = unrendered.get("snapshots")
         elif resource_type == NodeType.Source:
-            model_configs = unrendered.get("sources")
+            resource_configs = unrendered.get("sources")
         elif resource_type == NodeType.Test:
-            model_configs = unrendered.get("data_tests")
+            resource_configs = unrendered.get("data_tests")
         elif resource_type == NodeType.Metric:
-            model_configs = unrendered.get("metrics")
+            resource_configs = unrendered.get("metrics")
         elif resource_type == NodeType.SemanticModel:
-            model_configs = unrendered.get("semantic_models")
+            resource_configs = unrendered.get("semantic_models")
         elif resource_type == NodeType.SavedQuery:
-            model_configs = unrendered.get("saved_queries")
+            resource_configs = unrendered.get("saved_queries")
         elif resource_type == NodeType.Exposure:
-            model_configs = unrendered.get("exposures")
+            resource_configs = unrendered.get("exposures")
         elif resource_type == NodeType.Unit:
-            model_configs = unrendered.get("unit_tests")
+            resource_configs = unrendered.get("unit_tests")
         else:
-            model_configs = unrendered.get("models")
-        if model_configs is None:
+            resource_configs = unrendered.get("models")
+        if resource_configs is None:
             return {}
         else:
-            return model_configs
+            return resource_configs
 
     def merge_config_dicts(
         self,
