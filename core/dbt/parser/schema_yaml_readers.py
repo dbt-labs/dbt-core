@@ -23,8 +23,8 @@ from dbt.artifacts.resources import (
 )
 from dbt.clients.jinja import get_rendered
 from dbt.context.context_config import (
-    BaseContextConfigGenerator,
-    ContextConfigGenerator,
+    BaseConfigGenerator,
+    RenderedConfigGenerator,
     UnrenderedConfigGenerator,
 )
 from dbt.context.providers import (
@@ -94,15 +94,13 @@ class ExposureParser(YamlReader):
         fqn = self.schema_parser.get_fqn_prefix(path)
         fqn.append(unparsed.name)
 
+        # Also validates
         config = self._generate_exposure_config(
             target=unparsed,
             fqn=fqn,
             package_name=package_name,
             rendered=True,
         )
-
-        # Already validated
-        # config = config.finalize_and_validate()
 
         unrendered_config = self._generate_exposure_config(
             target=unparsed,
@@ -154,9 +152,9 @@ class ExposureParser(YamlReader):
     def _generate_exposure_config(
         self, target: UnparsedExposure, fqn: List[str], package_name: str, rendered: bool
     ):
-        generator: BaseContextConfigGenerator
+        generator: BaseConfigGenerator
         if rendered:
-            generator = ContextConfigGenerator(self.root_project)
+            generator = RenderedConfigGenerator(self.root_project)
         else:
             generator = UnrenderedConfigGenerator(self.root_project)
 
@@ -397,16 +395,13 @@ class MetricParser(YamlReader):
         fqn = self.schema_parser.get_fqn_prefix(path)
         fqn.append(unparsed.name)
 
-        # Following will validate also
+        # Also validates
         config = self._generate_metric_config(
             target=unparsed,
             fqn=fqn,
             package_name=package_name,
             rendered=True,
         )
-
-        # Already validated
-        # config = config.finalize_and_validate()
 
         unrendered_config = self._generate_metric_config(
             target=unparsed,
@@ -458,9 +453,9 @@ class MetricParser(YamlReader):
     def _generate_metric_config(
         self, target: UnparsedMetric, fqn: List[str], package_name: str, rendered: bool
     ):
-        generator: BaseContextConfigGenerator
+        generator: BaseConfigGenerator
         if rendered:
-            generator = ContextConfigGenerator(self.root_project)
+            generator = RenderedConfigGenerator(self.root_project)
         else:
             generator = UnrenderedConfigGenerator(self.root_project)
 
@@ -626,9 +621,9 @@ class SemanticModelParser(YamlReader):
     def _generate_semantic_model_config(
         self, target: UnparsedSemanticModel, fqn: List[str], package_name: str, rendered: bool
     ):
-        generator: BaseContextConfigGenerator
+        generator: BaseConfigGenerator
         if rendered:
-            generator = ContextConfigGenerator(self.root_project)
+            generator = RenderedConfigGenerator(self.root_project)
         else:
             generator = UnrenderedConfigGenerator(self.root_project)
 
@@ -655,15 +650,13 @@ class SemanticModelParser(YamlReader):
         fqn = self.schema_parser.get_fqn_prefix(path)
         fqn.append(unparsed.name)
 
+        # Also validates
         config = self._generate_semantic_model_config(
             target=unparsed,
             fqn=fqn,
             package_name=package_name,
             rendered=True,
         )
-
-        # Already validated
-        # config = config.finalize_and_validate()
 
         unrendered_config = self._generate_semantic_model_config(
             target=unparsed,
@@ -741,9 +734,9 @@ class SavedQueryParser(YamlReader):
     def _generate_saved_query_config(
         self, target: UnparsedSavedQuery, fqn: List[str], package_name: str, rendered: bool
     ):
-        generator: BaseContextConfigGenerator
+        generator: BaseConfigGenerator
         if rendered:
-            generator = ContextConfigGenerator(self.root_project)
+            generator = RenderedConfigGenerator(self.root_project)
         else:
             generator = UnrenderedConfigGenerator(self.root_project)
 
@@ -800,15 +793,13 @@ class SavedQueryParser(YamlReader):
         fqn = self.schema_parser.get_fqn_prefix(path)
         fqn.append(unparsed.name)
 
+        # Also validates
         config = self._generate_saved_query_config(
             target=unparsed,
             fqn=fqn,
             package_name=package_name,
             rendered=True,
         )
-
-        # Already validated
-        # config = config.finalize_and_validate()
 
         unrendered_config = self._generate_saved_query_config(
             target=unparsed,

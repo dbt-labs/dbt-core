@@ -37,7 +37,7 @@ def fix_hooks(config_dict: Dict[str, Any]):
             config_dict[key] = [hooks.get_hook_dict(h) for h in config_dict[key]]
 
 
-class BaseContextConfigGenerator(Generic[T]):
+class BaseConfigGenerator(Generic[T]):
     def __init__(self, active_project: RuntimeConfig):
         self._active_project = active_project
 
@@ -103,7 +103,7 @@ class BaseContextConfigGenerator(Generic[T]):
     ) -> Dict[str, Any]: ...
 
 
-class ContextConfigGenerator(BaseContextConfigGenerator[C]):
+class RenderedConfigGenerator(BaseConfigGenerator[C]):
     def __init__(self, active_project: RuntimeConfig):
         self._active_project = active_project
 
@@ -198,7 +198,7 @@ class ContextConfigGenerator(BaseContextConfigGenerator[C]):
             project_dict["post-hook"] = project_dict.pop("post_hook")
         return project_dict
 
-    # ContextConfigGenerator
+    # RenderedConfigGenerator
     def generate_node_config(
         self,
         config_call_dict: Dict[str, Any],
@@ -219,9 +219,7 @@ class ContextConfigGenerator(BaseContextConfigGenerator[C]):
         )
         fix_hooks(config_dict)
         try:
-            # Call "finalize_and_validate" on the config obj
             config_cls.validate(config_dict)
-            # return finalized.to_dict(omit_none=True)
             config_obj = config_cls.from_dict(config_dict)
             return config_obj
         except ValidationError as exc:
@@ -230,7 +228,7 @@ class ContextConfigGenerator(BaseContextConfigGenerator[C]):
             raise SchemaConfigError(exc, node=config_obj) from exc
 
 
-class UnrenderedConfigGenerator(BaseContextConfigGenerator[Dict[str, Any]]):
+class UnrenderedConfigGenerator(BaseConfigGenerator[Dict[str, Any]]):
     def get_model_configs(self, project: Project, resource_type: NodeType) -> Dict[str, Any]:
         unrendered = project.unrendered.project_dict
         if resource_type == NodeType.Seed:
@@ -267,7 +265,7 @@ class UnrenderedConfigGenerator(BaseContextConfigGenerator[Dict[str, Any]]):
         patch_config_dict: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         # Note: This method returns a Dict[str, Any]. This is a duplicate of
-        # of ContextConfigGenerator.generate_node_config, but calls methods
+        # of RenderedConfigGenerator.generate_node_config, but calls methods
         # that deal with dictionaries instead of config object.
         # Additions to one method, should probably also go in the other.
 
@@ -332,7 +330,7 @@ class UnrenderedConfigGenerator(BaseContextConfigGenerator[Dict[str, Any]]):
         return result_dict
 
 
-class ContextConfig:
+class ConfigBuilder:
     def __init__(
         self,
         active_project: RuntimeConfig,
@@ -355,7 +353,6 @@ class ContextConfig:
         # Cannot perform complex merge behaviours on unrendered configs as they may not be appropriate types.
         self._unrendered_config_call_dict.update(opts)
 
-    # ContextConfig
     def build_config_dict(
         self,
         *,
@@ -363,7 +360,7 @@ class ContextConfig:
         patch_config_dict: Optional[dict] = None,
     ) -> Dict[str, Any]:
         if rendered:
-            config_generator = ContextConfigGenerator(self._active_project)  # type: ignore[var-annotated]
+            config_generator = RenderedConfigGenerator(self._active_project)  # type: ignore[var-annotated]
             config_call_dict = self._config_call_dict
         else:  # unrendered
             config_generator = UnrenderedConfigGenerator(self._active_project)  # type: ignore[assignment]

@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Iterable, Iterator, List, Tuple, Union
 
-from dbt.context.context_config import ContextConfig
+from dbt.context.context_config import ConfigBuilder
 from dbt.contracts.files import FilePath
 from dbt.contracts.graph.nodes import HookNode
 from dbt.node_types import NodeType, RunHookType
@@ -92,7 +92,7 @@ class HookParser(SimpleParser[HookBlock, HookNode]):
         self,
         block: HookBlock,
         path: str,
-        config: ContextConfig,
+        config_builder: ConfigBuilder,
         fqn: List[str],
         name=None,
         **kwargs,
@@ -101,7 +101,7 @@ class HookParser(SimpleParser[HookBlock, HookNode]):
         return super()._create_parsetime_node(
             block=block,
             path=path,
-            config=config,
+            config_builder=config_builder,
             fqn=fqn,
             index=block.index,
             name=name,

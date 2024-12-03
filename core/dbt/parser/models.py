@@ -10,7 +10,7 @@ import dbt.tracking as tracking
 from dbt import utils
 from dbt.artifacts.resources import RefArgs
 from dbt.clients.jinja import get_rendered
-from dbt.context.context_config import ContextConfig
+from dbt.context.context_config import ConfigBuilder
 from dbt.contracts.graph.nodes import ModelNode
 from dbt.exceptions import (
     ModelConfigError,
@@ -233,15 +233,15 @@ class ModelParser(SimpleSQLParser[ModelNode]):
                 config_keys_defaults=config_keys_defaults,
             )
 
-    def render_update(self, node: ModelNode, config: ContextConfig) -> None:
+    def render_update(self, node: ModelNode, config_builder: ConfigBuilder) -> None:
         self.manifest._parsing_info.static_analysis_path_count += 1
         flags = get_flags()
         if node.language == ModelLanguage.python:
             try:
                 verify_python_model_code(node)
-                context = self._context_for(node, config)
-                self.parse_python_model(node, config, context)
-                self.update_parsed_node_config(node, config, context=context)
+                context = self._context_for(node, config_builder)
+                self.parse_python_model(node, config_builder, context)
+                self.update_parsed_node_config(node, config_builder, context=context)
 
             except ValidationError as exc:
                 # we got a ValidationError - probably bad types in config()
@@ -250,7 +250,7 @@ class ModelParser(SimpleSQLParser[ModelNode]):
 
         elif not flags.STATIC_PARSER:
             # jinja rendering
-            super().render_update(node, config)
+            super().render_update(node, config_builder)
             return
 
         # only sample for experimental parser correctness on normal runs,
@@ -277,9 +277,9 @@ class ModelParser(SimpleSQLParser[ModelNode]):
         statically_parsed: Optional[Union[str, Dict[str, List[Any]]]] = None
         experimental_sample: Optional[Union[str, Dict[str, List[Any]]]] = None
         exp_sample_node: Optional[ModelNode] = None
-        exp_sample_config: Optional[ContextConfig] = None
+        exp_sample_config_builder: Optional[ConfigBuilder] = None
         jinja_sample_node: Optional[ModelNode] = None
-        jinja_sample_config: Optional[ContextConfig] = None
+        jinja_sample_config_builder: Optional[ConfigBuilder] = None
         result: List[str] = []
 
         # sample the experimental parser only during a normal run
@@ -295,8 +295,10 @@ class ModelParser(SimpleSQLParser[ModelNode]):
             if isinstance(experimental_sample, dict):
                 model_parser_copy = self.partial_deepcopy()
                 exp_sample_node = deepcopy(node)
-                exp_sample_config = deepcopy(config)
-                model_parser_copy.populate(exp_sample_node, exp_sample_config, experimental_sample)
+                exp_sample_config_builder = deepcopy(config_builder)
+                model_parser_copy.populate(
+                    exp_sample_node, exp_sample_config_builder, experimental_sample
+                )
         # use the experimental parser exclusively if the flag is on
         if flags.USE_EXPERIMENTAL_PARSER:
             statically_parsed = self.run_experimental_parser(node)
@@ -317,36 +319,36 @@ class ModelParser(SimpleSQLParser[ModelNode]):
                 # but we can't really guarantee that going forward.
                 model_parser_copy = self.partial_deepcopy()
                 jinja_sample_node = deepcopy(node)
-                jinja_sample_config = deepcopy(config)
+                jinja_sample_config_builder = deepcopy(config_builder)
                 # rendering mutates the node and the config
                 super(ModelParser, model_parser_copy).render_update(
-                    jinja_sample_node, jinja_sample_config
+                    jinja_sample_node, jinja_sample_config_builder
                 )
 
             # update the unrendered config with values from the static parser.
             # values from yaml files are in there already
-            self.populate(node, config, statically_parsed)
+            self.populate(node, config_builder, statically_parsed)
 
             # if we took a jinja sample, compare now that the base node has been populated
-            if jinja_sample_node is not None and jinja_sample_config is not None:
+            if jinja_sample_node is not None and jinja_sample_config_builder is not None:
                 result = _get_stable_sample_result(
-                    jinja_sample_node, jinja_sample_config, node, config
+                    jinja_sample_node, jinja_sample_config_builder, node, config_builder
                 )
 
             # if we took an experimental sample, compare now that the base node has been populated
-            if exp_sample_node is not None and exp_sample_config is not None:
+            if exp_sample_node is not None and exp_sample_config_builder is not None:
                 result = _get_exp_sample_result(
                     exp_sample_node,
-                    exp_sample_config,
+                    exp_sample_config_builder,
                     node,
-                    config,
+                    config_builder,
                 )
 
             self.manifest._parsing_info.static_analysis_parsed_path_count += 1
         # if the static parser didn't succeed, fall back to jinja
         else:
             # jinja rendering
-            super().render_update(node, config)
+            super().render_update(node, config_builder)
 
             # if sampling, add the correct messages for tracking
             if exp_sample and isinstance(experimental_sample, str):
@@ -432,13 +434,15 @@ class ModelParser(SimpleSQLParser[ModelNode]):
     # this method updates the model node rendered and unrendered config as well
     # as the node object. Used to populate these values when circumventing jinja
     # rendering like the static parser.
-    def populate(self, node: ModelNode, config: ContextConfig, statically_parsed: Dict[str, Any]):
+    def populate(
+        self, node: ModelNode, config_builder: ConfigBuilder, statically_parsed: Dict[str, Any]
+    ):
         # manually fit configs in
-        config._config_call_dict = _get_config_call_dict(statically_parsed)
+        config_builder._config_call_dict = _get_config_call_dict(statically_parsed)
 
         # if there are hooks present this, it WILL render jinja. Will need to change
         # when the experimental parser supports hooks
-        self.update_parsed_node_config(node, config)
+        self.update_parsed_node_config(node, config_builder)
 
         # update the unrendered config with values from the file.
         # values from yaml files are in there already
@@ -488,11 +492,13 @@ def _shift_sources(static_parser_result: Dict[str, List[Any]]) -> Dict[str, List
 # returns a list of string codes to be sent as a tracking event
 def _get_exp_sample_result(
     sample_node: ModelNode,
-    sample_config: ContextConfig,
+    sample_config_builder: ConfigBuilder,
     node: ModelNode,
-    config: ContextConfig,
+    config_builder: ConfigBuilder,
 ) -> List[str]:
-    result: List[Tuple[int, str]] = _get_sample_result(sample_node, sample_config, node, config)
+    result: List[Tuple[int, str]] = _get_sample_result(
+        sample_node, sample_config_builder, node, config_builder
+    )
 
     def process(codemsg):
         code, msg = codemsg
@@ -504,11 +510,13 @@ def _get_exp_sample_result(
 # returns a list of string codes to be sent as a tracking event
 def _get_stable_sample_result(
     sample_node: ModelNode,
-    sample_config: ContextConfig,
+    sample_config_builder: ConfigBuilder,
     node: ModelNode,
-    config: ContextConfig,
+    config_builder: ConfigBuilder,
 ) -> List[str]:
-    result: List[Tuple[int, str]] = _get_sample_result(sample_node, sample_config, node, config)
+    result: List[Tuple[int, str]] = _get_sample_result(
+        sample_node, sample_config_builder, node, config_builder
+    )
 
     def process(codemsg):
         code, msg = codemsg
@@ -521,20 +529,20 @@ def _get_stable_sample_result(
 # before being sent as a tracking event
 def _get_sample_result(
     sample_node: ModelNode,
-    sample_config: ContextConfig,
+    sample_config_builder: ConfigBuilder,
     node: ModelNode,
-    config: ContextConfig,
+    config_builder: ConfigBuilder,
 ) -> List[Tuple[int, str]]:
     result: List[Tuple[int, str]] = []
     # look for false positive configs
-    for k in sample_config._config_call_dict.keys():
-        if k not in config._config_call_dict.keys():
+    for k in sample_config_builder._config_call_dict.keys():
+        if k not in config_builder._config_call_dict.keys():
             result += [(2, "false_positive_config_value")]
             break
 
     # look for missed configs
-    for k in config._config_call_dict.keys():
-        if k not in sample_config._config_call_dict.keys():
+    for k in config_builder._config_call_dict.keys():
+        if k not in sample_config_builder._config_call_dict.keys():
             result += [(3, "missed_config_value")]
             break
 

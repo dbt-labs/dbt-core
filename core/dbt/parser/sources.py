@@ -8,8 +8,8 @@ from dbt.adapters.factory import get_adapter
 from dbt.artifacts.resources import FreshnessThreshold, SourceConfig, Time
 from dbt.config import RuntimeConfig
 from dbt.context.context_config import (
-    BaseContextConfigGenerator,
-    ContextConfigGenerator,
+    BaseConfigGenerator,
+    RenderedConfigGenerator,
     UnrenderedConfigGenerator,
 )
 from dbt.contracts.graph.manifest import Manifest, SourceKey
@@ -152,9 +152,6 @@ class SourcePatcher:
             rendered=True,
         )
 
-        # Already validated
-        # config = config.finalize_and_validate()
-
         unrendered_config = self._generate_source_config(
             target=target,
             rendered=False,
@@ -289,9 +286,9 @@ class SourcePatcher:
         return node
 
     def _generate_source_config(self, target: UnpatchedSourceDefinition, rendered: bool):
-        generator: BaseContextConfigGenerator
+        generator: BaseConfigGenerator
         if rendered:
-            generator = ContextConfigGenerator(self.root_project)
+            generator = RenderedConfigGenerator(self.root_project)
         else:
             generator = UnrenderedConfigGenerator(self.root_project)
 
