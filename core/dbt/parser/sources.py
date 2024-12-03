@@ -146,12 +146,14 @@ class SourcePatcher:
         # make sure we don't do duplicate tags from source + table
         tags = sorted(set(itertools.chain(source.tags, table.tags)))
 
+        # This will also validate
         config = self._generate_source_config(
             target=target,
             rendered=True,
         )
 
-        config = config.finalize_and_validate()
+        # Already validated
+        # config = config.finalize_and_validate()
 
         unrendered_config = self._generate_source_config(
             target=target,

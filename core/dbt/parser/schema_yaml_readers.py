@@ -101,7 +101,8 @@ class ExposureParser(YamlReader):
             rendered=True,
         )
 
-        config = config.finalize_and_validate()
+        # Already validated
+        # config = config.finalize_and_validate()
 
         unrendered_config = self._generate_exposure_config(
             target=unparsed,
@@ -396,6 +397,7 @@ class MetricParser(YamlReader):
         fqn = self.schema_parser.get_fqn_prefix(path)
         fqn.append(unparsed.name)
 
+        # Following will validate also
         config = self._generate_metric_config(
             target=unparsed,
             fqn=fqn,
@@ -403,7 +405,8 @@ class MetricParser(YamlReader):
             rendered=True,
         )
 
-        config = config.finalize_and_validate()
+        # Already validated
+        # config = config.finalize_and_validate()
 
         unrendered_config = self._generate_metric_config(
             target=unparsed,
@@ -461,7 +464,7 @@ class MetricParser(YamlReader):
         else:
             generator = UnrenderedConfigGenerator(self.root_project)
 
-        # configs with precendence set
+        # configs with precedence set
         precedence_configs = dict()
         # first apply metric configs
         precedence_configs.update(target.config)
@@ -659,7 +662,8 @@ class SemanticModelParser(YamlReader):
             rendered=True,
         )
 
-        config = config.finalize_and_validate()
+        # Already validated
+        # config = config.finalize_and_validate()
 
         unrendered_config = self._generate_semantic_model_config(
             target=unparsed,
@@ -803,7 +807,8 @@ class SavedQueryParser(YamlReader):
             rendered=True,
         )
 
-        config = config.finalize_and_validate()
+        # Already validated
+        # config = config.finalize_and_validate()
 
         unrendered_config = self._generate_saved_query_config(
             target=unparsed,

@@ -1,9 +1,8 @@
 import pytest
 
 from dbt.artifacts.resources import MetricConfig
-from dbt.exceptions import CompilationError, ParsingError
+from dbt.exceptions import CompilationError, ParsingError, SchemaConfigError
 from dbt.tests.util import get_manifest, run_dbt, update_config_file
-from dbt_common.dataclass_schema import ValidationError
 from tests.functional.metrics.fixtures import (
     disabled_metric_level_schema_yml,
     enabled_metric_level_schema_yml,
@@ -170,7 +169,7 @@ class TestInvalidMetric(MetricConfigTests):
         }
 
     def test_invalid_config_metric(self, project):
-        with pytest.raises(ValidationError) as excinfo:
+        with pytest.raises(SchemaConfigError) as excinfo:
             run_dbt(["parse"])
         expected_msg = "'True and False' is not of type 'boolean'"
         assert expected_msg in str(excinfo.value)

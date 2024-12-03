@@ -1,8 +1,8 @@
 import pytest
 
 from dbt.artifacts.resources import ExposureConfig
+from dbt.exceptions import SchemaConfigError
 from dbt.tests.util import get_manifest, run_dbt, update_config_file
-from dbt_common.dataclass_schema import ValidationError
 from tests.functional.exposures.fixtures import (
     disabled_models_exposure_yml,
     enabled_yaml_level_exposure_yml,
@@ -126,7 +126,7 @@ class TestInvalidConfig(ExposureConfigTests):
         }
 
     def test_exposure_config_yaml_level(self, project):
-        with pytest.raises(ValidationError) as excinfo:
+        with pytest.raises(SchemaConfigError) as excinfo:
             run_dbt(["parse"])
         expected_msg = "'True and False' is not of type 'boolean'"
         assert expected_msg in str(excinfo.value)
