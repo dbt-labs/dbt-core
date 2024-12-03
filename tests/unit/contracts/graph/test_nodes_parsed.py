@@ -2084,7 +2084,6 @@ def basic_parsed_exposure_dict():
             "enabled": True,
         },
         "unrendered_config": {},
-        "_event_status": {},
     }
 
 
@@ -2105,7 +2104,6 @@ def basic_parsed_exposure_object():
         tags=[],
         config=ExposureConfig(),
         unrendered_config={},
-        _event_status={},
     )
 
 
@@ -2141,7 +2139,6 @@ def complex_parsed_exposure_dict():
             "enabled": True,
         },
         "unrendered_config": {},
-        "_event_status": {},
     }
 
 
@@ -2165,7 +2162,6 @@ def complex_parsed_exposure_object():
         original_file_path="models/something.yml",
         config=ExposureConfig(),
         unrendered_config={},
-        _event_status={},
     )
 
 
