@@ -1,4 +1,4 @@
-from dbt.runner.no_op_runner import NoOpRunner
+from dbt.runners.no_op_runner import NoOpRunner
 
 
 class ExposureRunner(NoOpRunner):

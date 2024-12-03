@@ -8,8 +8,8 @@ from dbt.contracts.graph.manifest import Manifest
 from dbt.exceptions import DbtInternalError
 from dbt.graph import Graph, GraphQueue, ResourceTypeSelector
 from dbt.node_types import NodeType
-from dbt.runner import ExposureRunner as exposure_runner
-from dbt.runner import SavedQueryRunner as saved_query_runner
+from dbt.runners import ExposureRunner as exposure_runner
+from dbt.runners import SavedQueryRunner as saved_query_runner
 from dbt.task.base import BaseRunner, resource_types_from_args
 from dbt.task.run import MicrobatchModelRunner
 
@@ -23,7 +23,7 @@ from .test import TestRunner as test_runner
 class BuildTask(RunTask):
     """The Build task processes all assets of a given process and attempts to
     'build' them in an opinionated fashion.  Every resource type outlined in
-    RUNNER_MAP will be processed by the mapped runner class.
+    RUNNER_MAP will be processed by the mapped runners class.
 
     I.E. a resource of type Model is handled by the ModelRunner which is
     imported as run_model_runner."""
