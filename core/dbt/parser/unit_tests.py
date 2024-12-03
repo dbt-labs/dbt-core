@@ -320,7 +320,9 @@ class UnitTestParser(YamlReader):
             NodeType.Unit,
             self.schema_parser.project.project_name,
         )
-        unit_test_config_dict = config_builder.build_config_dict(patch_config_dict=config_dict)
+        unit_test_config_dict = config_builder.build_config_dict(
+            rendered=True, patch_config_dict=config_dict
+        )
         unit_test_config_dict = self.render_entry(unit_test_config_dict)
 
         return UnitTestConfig.from_dict(unit_test_config_dict)
