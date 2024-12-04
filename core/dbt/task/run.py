@@ -608,9 +608,6 @@ class MicrobatchModelRunner(ModelRunner):
         elif not self.relation_exists:
             # If the relation doesn't exist, we can't run in parallel
             run_in_parallel = False
-        elif self.batch_idx == 0 or self.batch_idx == len(self.batches) - 1:
-            # First and last batch don't run in parallel
-            run_in_parallel = False
         elif self.node.config.concurrent_batches is not None:
             # If the relation exists and the `concurrent_batches` config isn't None, use the config value
             run_in_parallel = self.node.config.concurrent_batches
