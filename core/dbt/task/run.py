@@ -715,7 +715,20 @@ class RunTask(CompileTask):
 
         batch_results: List[RunResult] = []
         batch_idx = 0
-        # Run all batches except last batch, in parallel if possible
+
+        # Run first batch not in parallel
+        self._submit_batch(
+            node,
+            relation_exists,
+            batches,
+            batch_idx,
+            batch_results,
+            pool,
+            force_sequential_run=True,
+        )
+        batch_idx += 1
+
+        # Run all batches except first and last batch, in parallel if possible
         while batch_idx < len(runner.batches) - 1:
             relation_exists = self._submit_batch(
                 node, relation_exists, batches, batch_idx, batch_results, pool
