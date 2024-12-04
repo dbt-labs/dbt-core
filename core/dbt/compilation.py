@@ -206,11 +206,10 @@ class Linker:
             raise RuntimeError("Found a cycle: {}".format(cycle))
 
     def add_test_edges(self, manifest: Manifest) -> None:
-        # if not get_flags().USE_FAST_TEST_EDGES:
-        #    self.add_test_edges_1(manifest)
-        # else:
-        #    self.add_test_edges_2(manifest)
-        self.add_test_edges_2(manifest)
+        if not get_flags().USE_FAST_TEST_EDGES:
+            self.add_test_edges_1(manifest)
+        else:
+            self.add_test_edges_2(manifest)
 
     def add_test_edges_1(self, manifest: Manifest) -> None:
         """This method adds additional edges to the DAG. For a given non-test
