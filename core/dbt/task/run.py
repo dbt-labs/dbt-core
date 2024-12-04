@@ -726,7 +726,15 @@ class RunTask(CompileTask):
         while len(batch_results) != batch_idx:
             pass
         # Final batch runs once all others complete to ensure post_hook runs at the end
-        self._submit_batch(node, relation_exists, batches, batch_idx, batch_results, pool)
+        self._submit_batch(
+            node,
+            relation_exists,
+            batches,
+            batch_idx,
+            batch_results,
+            pool,
+            force_sequential_run=True,
+        )
 
         # Finalize run: merge results, track model run, and print final result line
         runner.merge_batch_results(result, batch_results)
