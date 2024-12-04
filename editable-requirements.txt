@@ -1,1 +1,2 @@
 -e ./core
+-e /Users/patricky/git/dbt-semantic-interfaces

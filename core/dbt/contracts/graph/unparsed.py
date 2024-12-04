@@ -27,8 +27,11 @@ from dbt.artifacts.resources import (
     UnitTestOutputFixture,
     UnitTestOverrides,
 )
+from dbt.artifacts.resources.v1.config import list_str, metas
 from dbt.exceptions import ParsingError
 from dbt.node_types import NodeType
+from dbt_common.contracts.config.base import CompareBehavior, MergeBehavior
+from dbt_common.contracts.config.metadata import ShowBehavior
 from dbt_common.contracts.config.properties import AdditionalPropertiesMixin
 from dbt_common.contracts.util import Mergeable
 from dbt_common.dataclass_schema import (
@@ -740,6 +743,12 @@ class UnparsedSavedQuery(dbtClassMixin):
     label: Optional[str] = None
     exports: List[UnparsedExport] = field(default_factory=list)
     config: Dict[str, Any] = field(default_factory=dict)
+    # Note: the order of the types is critical; it's the order that they will be checked against inputs.
+    #       if reversed, a single-string tag like `tag: "good"` becomes ['g','o','o','d']
+    tags: Union[str, List[str]] = field(
+        default_factory=list_str,
+        metadata=metas(ShowBehavior.Hide, MergeBehavior.Append, CompareBehavior.Exclude),
+    )
 
 
 def normalize_date(d: Optional[datetime.date]) -> Optional[datetime.datetime]:

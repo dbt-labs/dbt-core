@@ -20045,6 +20045,19 @@
                           "name"
                         ]
                       }
+                    },
+                    "tags": {
+                      "anyOf": [
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ]
                     }
                   },
                   "additionalProperties": false,
@@ -21600,6 +21613,19 @@
                 "name"
               ]
             }
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "string"
+              }
+            ]
           }
         },
         "additionalProperties": false,
