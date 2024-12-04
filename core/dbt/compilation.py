@@ -234,7 +234,7 @@ class Linker:
         # an upstream test if and only if the downstream node is already a
         # descendant of all the nodes the upstream test depends on. By following
         # that rule, it never makes the node dependent on new upstream nodes other
-        # than the test itself, and no cycles will be created.
+        # than the tests themselves, and no cycles will be created.
         #
         # One drawback (Drawback 1) of the approach taken in this function is
         # that it could still allow a downstream node to proceed before all
@@ -312,13 +312,13 @@ class Linker:
         graph: nx.DiGraph, manifest: Manifest
     ) -> Iterable[Tuple[UniqueID, UniqueID]]:
         # This function enforces the same execution behavior as add_test_edges,
-        # but executes more quickly in almost all cases, and adds far fewer
-        # edges. See the HISTORICAL NOTE above.
+        # but executes far more quickly and adds far fewer edges. See the
+        # HISTORICAL NOTE above.
         #
         # The idea is to first scan for "single-tested" nodes (which have tests
         # that depend only upon on that node) and "multi-tested" nodes (which
-        # have tests that also depend on other nodes). Single-tested nodes
-        # are handled quickly and easily.
+        # have tests that depend on multiple nodes). Single-tested nodes are
+        # handled quickly and easily.
         #
         # The less common but more complex case of multi-tested nodes is handled
         # by a specialized function.
@@ -375,18 +375,18 @@ class Linker:
         # Works through the graph in a breadth-first style, processing nodes from
         # a ready queue which initially consists of nodes with no ancestors,
         # and adding more nodes to the ready queue after all their ancestors
-        # have been processed. All the while, the relevant details of all known
-        # the "seen" (i.e. encountered) nodes are maintained in a SeenDetails
-        # record, including ancestor set which tests it is "awaiting" (i.e. which
-        # are tests of its ancestors), maintained in a SeenDetails record. The
-        # processing step adds test edges when every dependency of an awaited
-        # test is an ancestor of a node that is being processed. Downstream nodes
-        # are then exempted from awaiting that same test.
+        # have been processed. All the while, the relevant details of all nodes
+        # "seen" by the search so far are maintained in a SeenDetails record,
+        # including the ancestor set which tests it is "awaiting" (i.e. tests of
+        # its ancestors). The processing step adds test edges when every dependency
+        # of an awaited test is an ancestor of a node that is being processed.
+        # Downstream nodes are then exempted from awaiting the test.
         #
         # Memory consumption is potentially O(n^2) with n the number of nodes in
-        # the graph, since the average number of ancestors for each of n nodes
-        # could be O(n) but we only track ancestors that are multi-tested, which
-        # should keep things closer to O(n) in real-world scenarios.
+        # the graph, since the average number of ancestors and tests being awaited
+        # for each of the n nodes could itself be O(n) but we only track ancestors
+        # that are multi-tested, which should keep things closer to O(n) in real-
+        # world scenarios.
 
         new_edges: List[Tuple[UniqueID, UniqueID]] = []
         ready: deque = deque(source_nodes)
