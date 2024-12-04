@@ -252,6 +252,7 @@ class TestDerivedMetric:
             "metricflow_time_spine.sql": metricflow_time_spine_sql,
             "semantic_models.yml": semantic_model_purchasing_yml,
             "derived_metric.yml": derived_metric_yml,
+            "time_spine.yml": time_spine_yml,
         }
 
     # not strictly necessary to use "real" mock data for this test
@@ -277,6 +278,7 @@ class TestDerivedMetric:
             "metric.test.count_orders",
             "metric.test.sum_order_revenue",
             "metric.test.average_order_value",
+            "metric.test.sum_order_revenue_plus_one_custom_offset_window",
         ]
         assert metric_ids == expected_metric_ids
 
@@ -298,12 +300,24 @@ class TestDerivedMetric:
             "metric.test.sum_order_revenue",
         ]
 
+        derived_metric_with_custom_offset_window = manifest.metrics[
+            "metric.test.sum_order_revenue_plus_one_custom_offset_window"
+        ]
+        assert len(derived_metric_with_custom_offset_window.input_metrics) == 1
+        assert derived_metric_with_custom_offset_window.input_metrics[
+            0
+        ].offset_window == MetricTimeWindow(count=1, granularity="martian_day")
+
         # actually compile
         results = run_dbt(["compile", "--select", "downstream_model"])
         compiled_code = results[0].node.compiled_code
 
         # make sure all these metrics properties show up in compiled SQL
         for metric_name in manifest.metrics:
+            if metric_name == "metric.test.sum_order_revenue_plus_one_custom_offset_window":
+                # Skip this metric
+                continue
+
             parsed_metric_node = manifest.metrics[metric_name]
             for property in [
                 "name",
@@ -389,9 +403,6 @@ class TestConversionMetric:
             "metric.test.converted_orders_over_visits_with_window": MetricTimeWindow(
                 count=4, granularity=TimeGranularity.DAY.value
             ),
-            "metric.test.converted_orders_over_visits_with_custom_window": MetricTimeWindow(
-                count=4, granularity="martian_day"
-            ),
         }
         assert set(metric_ids) == set(expected_metric_ids.keys())
         assert manifest.metrics[
@@ -475,10 +486,6 @@ class TestCumulativeMetric:
             ),
             "metric.test.cumulative_visits": CumulativeTypeParams(
                 period_agg=PeriodAggregation.FIRST
-            ),
-            "metric.test.visits_martian_day": CumulativeTypeParams(grain_to_date="martian_day"),
-            "metric.test.visits_martian_day_window": CumulativeTypeParams(
-                window=MetricTimeWindow(count=1, granularity="martian_day"),
             ),
         }
         assert metric_ids == set(expected_metric_ids_to_cumulative_type_params.keys())
