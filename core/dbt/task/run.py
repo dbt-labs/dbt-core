@@ -743,6 +743,7 @@ class RunTask(CompileTask):
         batch_idx: int,
         batch_results: List[RunResult],
         pool: ThreadPool,
+        force_sequential_run: bool = False,
     ):
         node_copy = deepcopy(node)
         # Only run pre_hook(s) for first batch
@@ -758,7 +759,7 @@ class RunTask(CompileTask):
         batch_runner.set_relation_exists(relation_exists)
         batch_runner.set_batches(batches)
 
-        if batch_runner.should_run_in_parallel():
+        if not force_sequential_run and batch_runner.should_run_in_parallel():
             fire_event(
                 MicrobatchExecutionDebug(
                     msg=f"{batch_runner.describe_batch} is being run concurrently"
