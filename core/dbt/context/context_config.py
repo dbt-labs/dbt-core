@@ -162,9 +162,7 @@ class RenderedConfigGenerator(BaseConfigGenerator[C]):
         return resource_configs
 
     def initial_result(self, config_cls: Type[BaseConfig]) -> Dict[str, Any]:
-        # Calculate the defaults. We don't want to validate the defaults,
-        # because it might be invalid in the case of required config members
-        # (such as on snapshots!)
+        # Produce a dictionary with config defaults.
         result = config_cls.from_dict({}).to_dict()
         return result
 
@@ -202,7 +200,6 @@ class RenderedConfigGenerator(BaseConfigGenerator[C]):
     ) -> Dict[str, Any]:
 
         config_cls = get_config_for(resource_type)
-        # returns a config object
         config_dict = self.combine_config_dicts(
             config_call_dict=config_call_dict,
             fqn=fqn,
@@ -272,6 +269,8 @@ class UnrenderedConfigGenerator(BaseConfigGenerator[Dict[str, Any]]):
         return result
 
     def initial_result(self, config_cls: Type[BaseConfig]) -> Dict[str, Any]:
+        # We don't want the config defaults here, just the configs which have
+        # actually been set.
         return {}
 
     def _update_from_config(
@@ -286,6 +285,11 @@ class UnrenderedConfigGenerator(BaseConfigGenerator[Dict[str, Any]]):
 
 
 class ConfigBuilder:
+    """This object is included in various jinja contexts in order to collect the _config_call_dicts
+    and the _unrendered_config_call dicts from the config calls in sql files.
+    It is then used to run "build_config_dict" which calls the rendered or unrendered
+    config generators and returns a config dictionary."""
+
     def __init__(
         self,
         active_project: RuntimeConfig,
