@@ -717,7 +717,7 @@ class RunTask(CompileTask):
         batch_idx = 0
 
         # Run first batch not in parallel
-        self._submit_batch(
+        relation_exists = self._submit_batch(
             node,
             relation_exists,
             batches,
