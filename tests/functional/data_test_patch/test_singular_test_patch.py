@@ -2,12 +2,13 @@ from pathlib import Path
 
 import pytest
 
-from dbt.tests.util import get_artifact, run_dbt, run_dbt_and_capture
+from dbt.tests.util import get_artifact, run_dbt, run_dbt_and_capture, write_file
 from tests.functional.data_test_patch.fixtures import (
     tests__doc_block_md,
     tests__invalid_name_schema_yml,
     tests__malformed_schema_yml,
     tests__my_singular_test_sql,
+    tests__schema_2_yml,
     tests__schema_yml,
 )
 
@@ -30,6 +31,12 @@ class TestPatchSingularTest:
         assert my_singular_test_node["description"] == "Some docs from a doc block"
         assert my_singular_test_node["config"]["error_if"] == ">10"
         assert my_singular_test_node["config"]["meta"] == {"some_key": "some_val"}
+
+        # partial parsing test
+        write_file(tests__schema_2_yml, project.project_root, "tests", "schema.yml")
+        manifest = run_dbt(["parse"])
+        test_node = manifest.nodes["test.test.my_singular_test"]
+        assert test_node.description == "My singular test description"
 
 
 class TestPatchSingularTestInvalidName:

@@ -17,6 +17,16 @@ data_tests:
       some_key: some_val
 """
 
+tests__schema_2_yml = """
+data_tests:
+  - name: my_singular_test
+    description: "My singular test description"
+    config:
+      error_if: ">10"
+    meta:
+      some_key: some_val
+"""
+
 tests__doc_block_md = """
 {% docs my_singular_test_documentation %}
 
