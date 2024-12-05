@@ -921,7 +921,6 @@ class PartialParsing:
                 self.add_to_pp_files(self.saved_files[macro_file_id])
 
     def delete_schema_data_test_patch(self, schema_file, data_test):
-        print(f"--- in delete_schema_data_test_patch")
         data_test_unique_id = None
         for unique_id in schema_file.node_patches:
             if not unique_id.startswith("test"):
