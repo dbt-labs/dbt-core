@@ -13,8 +13,8 @@ data_tests:
     description: "{{ doc('my_singular_test_documentation') }}"
     config:
       error_if: ">10"
-    meta:
-      some_key: some_val
+      meta:
+        some_key: some_val
 """
 
 tests__schema_2_yml = """
@@ -23,8 +23,8 @@ data_tests:
     description: "My singular test description"
     config:
       error_if: ">10"
-    meta:
-      some_key: another_val
+      meta:
+        some_key: another_val
 """
 
 tests__doc_block_md = """

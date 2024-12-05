@@ -38,8 +38,8 @@ class TestPatchSingularTest:
         manifest = run_dbt(["parse"])
         test_node = manifest.nodes["test.test.my_singular_test"]
         assert test_node.description == "My singular test description"
-        print(f"--- config.meta: {test_node.config.meta}")
-        print(f"--- node.meta: {test_node.meta}")
+        assert test_node.config.meta == {"some_key": "another_val"}
+        assert test_node.meta == {"some_key": "another_val"}
 
 
 class TestPatchSingularTestInvalidName:
