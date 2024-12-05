@@ -24,7 +24,7 @@ data_tests:
     config:
       error_if: ">10"
     meta:
-      some_key: some_val
+      some_key: another_val
 """
 
 tests__doc_block_md = """

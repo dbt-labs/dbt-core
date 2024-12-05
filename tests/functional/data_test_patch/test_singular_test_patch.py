@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from dbt.tests.util import get_artifact, run_dbt, run_dbt_and_capture, write_file
+from dbt.tests.util import get_manifest, run_dbt, run_dbt_and_capture, write_file
 from tests.functional.data_test_patch.fixtures import (
     tests__doc_block_md,
     tests__invalid_name_schema_yml,
@@ -24,19 +24,22 @@ class TestPatchSingularTest:
 
     def test_compile(self, project):
         run_dbt(["compile"])
-        manifest = get_artifact(project.project_root, "target", "manifest.json")
-        assert len(manifest["nodes"]) == 1
+        manifest = get_manifest(project.project_root)
+        assert len(manifest.nodes) == 1
 
-        my_singular_test_node = manifest["nodes"]["test.test.my_singular_test"]
-        assert my_singular_test_node["description"] == "Some docs from a doc block"
-        assert my_singular_test_node["config"]["error_if"] == ">10"
-        assert my_singular_test_node["config"]["meta"] == {"some_key": "some_val"}
+        my_singular_test_node = manifest.nodes["test.test.my_singular_test"]
+        assert my_singular_test_node.description == "Some docs from a doc block"
+        assert my_singular_test_node.config.error_if == ">10"
+        assert my_singular_test_node.config.meta == {"some_key": "some_val"}
+        assert my_singular_test_node.meta == {"some_key": "some_val"}
 
         # partial parsing test
         write_file(tests__schema_2_yml, project.project_root, "tests", "schema.yml")
         manifest = run_dbt(["parse"])
         test_node = manifest.nodes["test.test.my_singular_test"]
         assert test_node.description == "My singular test description"
+        print(f"--- config.meta: {test_node.config.meta}")
+        print(f"--- node.meta: {test_node.meta}")
 
 
 class TestPatchSingularTestInvalidName:
