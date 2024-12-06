@@ -813,8 +813,9 @@ class RunTask(CompileTask):
         # Only run pre_hook(s) for first batch
         if batch_idx != 0:
             node_copy.config.pre_hook = []
+
         # Only run post_hook(s) for last batch
-        elif batch_idx != len(batches) - 1:
+        if batch_idx != len(batches) - 1:
             node_copy.config.post_hook = []
 
         batch_runner = self.get_runner(node_copy)
