@@ -12,6 +12,7 @@ from dbt.adapters.factory import adapter_management, get_adapter, register_adapt
 from dbt.cli.exceptions import ExceptionExit, ResultExit
 from dbt.cli.flags import Flags
 from dbt.config import RuntimeConfig
+from dbt.config.catalogs import Catalogs
 from dbt.config.runtime import UnsetProfile, load_profile, load_project
 from dbt.context.providers import generate_runtime_macro_context
 from dbt.context.query_header import generate_query_header_context
@@ -307,6 +308,29 @@ def runtime_config(func):
                     "adapter_unique_id": adapter_unique_id,
                 }
             )
+
+        return func(*args, **kwargs)
+
+    return update_wrapper(wrapper, func)
+
+
+def catalogs(func):
+    """A decorator used by click command functions for loading catalogs"""
+
+    def wrapper(*args, **kwargs):
+        ctx = args[0]
+        assert isinstance(ctx, Context)
+
+        req_strs = ["flags", "profile"]
+        reqs = [ctx.obj.get(req_str) for req_str in req_strs]
+        if None in reqs:
+            raise DbtProjectError("profile and flags required for runtime_config")
+
+        flags = ctx.obj["flags"]
+        profile = ctx.obj["profile"]
+
+        catalogs = Catalogs.load(flags.PROJECT_DIR, profile.profile_name, flags.VARS)
+        ctx.obj["catalogs"] = catalogs
 
         return func(*args, **kwargs)
 

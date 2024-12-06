@@ -564,6 +564,7 @@ def parse(ctx, **kwargs):
 @requires.profile
 @requires.project
 @requires.runtime_config
+@requires.catalogs
 @requires.manifest
 def run(ctx, **kwargs):
     """Compile SQL and execute against the current target database."""
