@@ -715,20 +715,27 @@ class RunTask(CompileTask):
 
         # Run first batch not in parallel
         relation_exists = self._submit_batch(
-            node,
-            relation_exists,
-            batches,
-            batch_idx,
-            batch_results,
-            pool,
+            node=node,
+            relation_exists=relation_exists,
+            batches=batches,
+            batch_idx=batch_idx,
+            batch_results=batch_results,
+            pool=pool,
             force_sequential_run=True,
         )
         batch_idx += 1
+        skip_batches = batch_results[0].status != RunStatus.Success
 
         # Run all batches except first and last batch, in parallel if possible
         while batch_idx < len(runner.batches) - 1:
             relation_exists = self._submit_batch(
-                node, relation_exists, batches, batch_idx, batch_results, pool
+                node=node,
+                relation_exists=relation_exists,
+                batches=batches,
+                batch_idx=batch_idx,
+                batch_results=batch_results,
+                pool=pool,
+                skip=skip_batches,
             )
             batch_idx += 1
 
@@ -737,13 +744,14 @@ class RunTask(CompileTask):
             pass
         # Final batch runs once all others complete to ensure post_hook runs at the end
         self._submit_batch(
-            node,
-            relation_exists,
-            batches,
-            batch_idx,
-            batch_results,
-            pool,
+            node=node,
+            relation_exists=relation_exists,
+            batches=batches,
+            batch_idx=batch_idx,
+            batch_results=batch_results,
+            pool=pool,
             force_sequential_run=True,
+            skip=skip_batches,
         )
 
         # Finalize run: merge results, track model run, and print final result line
@@ -762,6 +770,7 @@ class RunTask(CompileTask):
         batch_results: List[RunResult],
         pool: ThreadPool,
         force_sequential_run: bool = False,
+        skip: bool = False,
     ):
         node_copy = deepcopy(node)
         # Only run pre_hook(s) for first batch
@@ -776,6 +785,9 @@ class RunTask(CompileTask):
         batch_runner.set_batch_idx(batch_idx)
         batch_runner.set_relation_exists(relation_exists)
         batch_runner.set_batches(batches)
+
+        if skip:
+            batch_runner.do_skip()
 
         if not force_sequential_run and batch_runner.should_run_in_parallel():
             fire_event(
