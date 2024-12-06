@@ -35,6 +35,7 @@ from dbt.events.types import (
     LogModelResult,
     LogStartLine,
     MicrobatchExecutionDebug,
+    SkippingDetails,
 )
 from dbt.exceptions import CompilationError, DbtInternalError, DbtRuntimeError
 from dbt.graph import ResourceTypeSelector
@@ -431,6 +432,24 @@ class MicrobatchModelRunner(ModelRunner):
             )
         )
 
+    def print_skip_batch_line(self) -> None:
+        if self.batch_idx is None:
+            return
+
+        schema_name = getattr(self.node, "schema", "")
+        node_name = self.node.name
+
+        fire_event(
+            SkippingDetails(
+                resource_type=self.node.resource_type,
+                schema=schema_name,
+                node_name=node_name,
+                index=self.batch_idx + 1,
+                total=len(self.batches),
+                node_info=self.node.node_info,
+            )
+        )
+
     def before_execute(self) -> None:
         if self.batch_idx is None:
             self.print_start_line()
@@ -471,6 +490,20 @@ class MicrobatchModelRunner(ModelRunner):
         # # If retrying, propagate previously successful batches into final result, even thoguh they were not run in this invocation
         if self.node.previous_batch_results is not None:
             result.batch_results.successful += self.node.previous_batch_results.successful
+
+    def on_skip(self):
+        self.print_skip_batch_line()
+        return RunResult(
+            node=self.node,
+            status=RunStatus.Skipped,
+            timing=[],
+            thread_id=threading.current_thread().name,
+            execution_time=0.0,
+            message="SKIPPED",
+            adapter_response={},
+            failures=1,
+            batch_results=BatchResults(failed=[self.batches[self.batch_idx]]),
+        )
 
     def _build_succesful_run_batch_result(
         self,
