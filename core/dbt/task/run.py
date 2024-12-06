@@ -492,18 +492,22 @@ class MicrobatchModelRunner(ModelRunner):
             result.batch_results.successful += self.node.previous_batch_results.successful
 
     def on_skip(self):
-        self.print_skip_batch_line()
-        return RunResult(
-            node=self.node,
-            status=RunStatus.Skipped,
-            timing=[],
-            thread_id=threading.current_thread().name,
-            execution_time=0.0,
-            message="SKIPPED",
-            adapter_response={},
-            failures=1,
-            batch_results=BatchResults(failed=[self.batches[self.batch_idx]]),
-        )
+        # If node.batch is None, then we're dealing with skipping of the entire node
+        if self.batch_idx is None:
+            return super().on_skip()
+        else:
+            self.print_skip_batch_line()
+            return RunResult(
+                node=self.node,
+                status=RunStatus.Skipped,
+                timing=[],
+                thread_id=threading.current_thread().name,
+                execution_time=0.0,
+                message="SKIPPED",
+                adapter_response={},
+                failures=1,
+                batch_results=BatchResults(failed=[self.batches[self.batch_idx]]),
+            )
 
     def _build_succesful_run_batch_result(
         self,
