@@ -753,6 +753,7 @@ class RunTask(CompileTask):
         # Run first batch not in parallel
         relation_exists = self._submit_batch(
             node=node,
+            adapter=runner.adapter,
             relation_exists=relation_exists,
             batches=batches,
             batch_idx=batch_idx,
@@ -767,6 +768,7 @@ class RunTask(CompileTask):
         while batch_idx < len(runner.batches) - 1:
             relation_exists = self._submit_batch(
                 node=node,
+                adapter=runner.adapter,
                 relation_exists=relation_exists,
                 batches=batches,
                 batch_idx=batch_idx,
@@ -782,6 +784,7 @@ class RunTask(CompileTask):
         # Final batch runs once all others complete to ensure post_hook runs at the end
         self._submit_batch(
             node=node,
+            adapter=runner.adapter,
             relation_exists=relation_exists,
             batches=batches,
             batch_idx=batch_idx,
@@ -801,6 +804,7 @@ class RunTask(CompileTask):
     def _submit_batch(
         self,
         node: ModelNode,
+        adapter: BaseAdapter,
         relation_exists: bool,
         batches: Dict[int, BatchType],
         batch_idx: int,
@@ -818,8 +822,12 @@ class RunTask(CompileTask):
         if batch_idx != len(batches) - 1:
             node_copy.config.post_hook = []
 
-        batch_runner = self.get_runner(node_copy)
-        assert isinstance(batch_runner, MicrobatchModelRunner)
+        # TODO: We should be doing self.get_runner, however doing so
+        # currently causes the tracking of how many nodes there are to
+        # increment when we don't want it to
+        batch_runner = MicrobatchModelRunner(
+            self.config, adapter, node_copy, self.run_count, self.num_nodes
+        )
         batch_runner.set_batch_idx(batch_idx)
         batch_runner.set_relation_exists(relation_exists)
         batch_runner.set_batches(batches)
