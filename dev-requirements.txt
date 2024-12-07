@@ -10,7 +10,7 @@ docutils
 # flake8 must match what's in .pre-commit-config.yaml to be sure local env matches CI
 flake8==4.0.1
 flaky
-freezegun>=1.4.0,<1.5
+freezegun>=1.4.0,<1.6
 hypothesis
 ipdb
 # isort must match what's in .pre-commit-config.yaml to be sure local env matches CI
