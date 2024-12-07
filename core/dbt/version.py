@@ -8,7 +8,7 @@ from typing import Iterator, List, Optional, Tuple
 import requests
 
 import dbt_common.semver as semver
-from dbt_common.ui import green, red, yellow
+from dbt_common.ui import green, yellow
 
 PYPI_VERSION_URL = "https://pypi.org/pypi/dbt-core/json"
 
@@ -19,7 +19,7 @@ def get_version_information() -> str:
 
     core_msg_lines, core_info_msg = _get_core_msg_lines(installed, latest)
     core_msg = _format_core_msg(core_msg_lines)
-    plugin_version_msg = _get_plugins_msg(installed)
+    plugin_version_msg = _get_plugins_msg()
 
     msg_lines = [core_msg]
 
@@ -97,7 +97,7 @@ def _format_core_msg(lines: List[List[str]]) -> str:
     return msg + "\n".join(msg_lines)
 
 
-def _get_plugins_msg(installed: semver.VersionSpecifier) -> str:
+def _get_plugins_msg() -> str:
     msg_lines = ["Plugins:"]
 
     plugins = []
@@ -113,7 +113,7 @@ def _get_plugins_msg(installed: semver.VersionSpecifier) -> str:
 
     if display_update_msg:
         update_msg = (
-            "  At least one plugin is out of date or incompatible with dbt-core.\n"
+            "  At least one plugin is out of date with dbt-core.\n"
             "  You can find instructions for upgrading here:\n"
             "  https://docs.getdbt.com/docs/installation"
         )
@@ -129,11 +129,6 @@ def _get_plugin_msg_info(
     latest_plugin = get_latest_version(version_url=get_package_pypi_url(name))
 
     needs_update = False
-
-    if plugin.major != core.major or plugin.minor != core.minor:
-        compatibility_msg = red("Not compatible!")
-        needs_update = True
-        return (compatibility_msg, needs_update)
 
     if not latest_plugin:
         compatibility_msg = yellow("Could not determine latest version")
