@@ -1710,6 +1710,51 @@ class MicrobatchExecutionDebug(DebugLevel):
         return self.msg
 
 
+class LogStartBatch(InfoLevel):
+    def code(self) -> str:
+        return "Q045"
+
+    def message(self) -> str:
+        msg = f"START {self.description}"
+
+        # TODO update common so that we can append "batch" in `format_fancy_output_line`
+        formatted = format_fancy_output_line(
+            msg=msg,
+            status="RUN",
+            index=self.batch_index,
+            total=self.total_batches,
+        )
+        return f"Batch {formatted}"
+
+
+class LogBatchResult(DynamicLevel):
+    def code(self) -> str:
+        return "Q046"
+
+    def message(self) -> str:
+        if self.status == "error":
+            info = "ERROR creating"
+            status = red(self.status.upper())
+        elif self.status == "skipped":
+            info = "SKIP"
+            status = yellow(self.status.upper())
+        else:
+            info = "OK created"
+            status = green(self.status)
+
+        msg = f"{info} {self.description}"
+
+        # TODO update common so that we can append "batch" in `format_fancy_output_line`
+        formatted = format_fancy_output_line(
+            msg=msg,
+            status=status,
+            index=self.batch_index,
+            total=self.total_batches,
+            execution_time=self.execution_time,
+        )
+        return f"Batch {formatted}"
+
+
 # =======================================================
 # W - Node testing
 # =======================================================

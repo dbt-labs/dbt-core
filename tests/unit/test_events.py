@@ -421,6 +421,14 @@ sample_values = [
         snapshot_time_data_type="DATETIME", updated_at_data_type="DATETIMEZ"
     ),
     core_types.MicrobatchExecutionDebug(msg=""),
+    core_types.LogStartBatch(description="", batch_index=0, total_batches=0),
+    core_types.LogBatchResult(
+        description="",
+        status="",
+        batch_index=0,
+        total_batches=0,
+        execution_time=0,
+    ),
     # W - Node testing ======================
     core_types.CatchableExceptionOnRun(exc=""),
     core_types.InternalErrorOnRun(build_path="", exc=""),

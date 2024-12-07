@@ -264,7 +264,7 @@ class TestMicrobatchModelRunner:
             (False, False, False, True, False),
         ],
     )
-    def test__should_run_in_parallel(
+    def test_should_run_in_parallel(
         self,
         mocker: MockerFixture,
         model_runner: MicrobatchModelRunner,
@@ -276,11 +276,13 @@ class TestMicrobatchModelRunner:
     ) -> None:
         model_runner.node._has_this = has_this
         model_runner.node.config = ModelConfig(concurrent_batches=concurrent_batches)
+        model_runner.set_relation_exists(has_relation)
+
         mocked_supports = mocker.patch.object(model_runner.adapter, "supports")
         mocked_supports.return_value = adapter_microbatch_concurrency
 
-        # Assert result of _should_run_in_parallel
-        assert model_runner._should_run_in_parallel(has_relation) == expectation
+        # Assert result of should_run_in_parallel
+        assert model_runner.should_run_in_parallel() == expectation
 
 
 class TestRunTask:
