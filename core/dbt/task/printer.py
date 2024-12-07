@@ -48,6 +48,8 @@ def interpret_run_result(result) -> str:
         return "warn"
     elif result.status in (NodeStatus.Pass, NodeStatus.Success):
         return "pass"
+    elif result.status == NodeStatus.NoOp:
+        return "noop"
     else:
         raise RuntimeError(f"unhandled result {result}")
 
@@ -58,6 +60,7 @@ def print_run_status_line(results) -> None:
         "skip": 0,
         "pass": 0,
         "warn": 0,
+        "noop": 0,
         "total": 0,
     }
 
