@@ -23,8 +23,8 @@ from dbt.artifacts.resources import (
 )
 from dbt.clients.jinja import get_rendered
 from dbt.context.context_config import (
-    BaseContextConfigGenerator,
-    ContextConfigGenerator,
+    BaseConfigGenerator,
+    RenderedConfigGenerator,
     UnrenderedConfigGenerator,
 )
 from dbt.context.providers import (
@@ -94,14 +94,13 @@ class ExposureParser(YamlReader):
         fqn = self.schema_parser.get_fqn_prefix(path)
         fqn.append(unparsed.name)
 
+        # Also validates
         config = self._generate_exposure_config(
             target=unparsed,
             fqn=fqn,
             package_name=package_name,
             rendered=True,
         )
-
-        config = config.finalize_and_validate()
 
         unrendered_config = self._generate_exposure_config(
             target=unparsed,
@@ -153,9 +152,9 @@ class ExposureParser(YamlReader):
     def _generate_exposure_config(
         self, target: UnparsedExposure, fqn: List[str], package_name: str, rendered: bool
     ):
-        generator: BaseContextConfigGenerator
+        generator: BaseConfigGenerator
         if rendered:
-            generator = ContextConfigGenerator(self.root_project)
+            generator = RenderedConfigGenerator(self.root_project)
         else:
             generator = UnrenderedConfigGenerator(self.root_project)
 
@@ -164,12 +163,11 @@ class ExposureParser(YamlReader):
         # apply exposure configs
         precedence_configs.update(target.config)
 
-        return generator.calculate_node_config(
+        return generator.generate_node_config(
             config_call_dict={},
             fqn=fqn,
             resource_type=NodeType.Exposure,
             project_name=package_name,
-            base=False,
             patch_config_dict=precedence_configs,
         )
 
@@ -382,14 +380,13 @@ class MetricParser(YamlReader):
         fqn = self.schema_parser.get_fqn_prefix(path)
         fqn.append(unparsed.name)
 
+        # Also validates
         config = self._generate_metric_config(
             target=unparsed,
             fqn=fqn,
             package_name=package_name,
             rendered=True,
         )
-
-        config = config.finalize_and_validate()
 
         unrendered_config = self._generate_metric_config(
             target=unparsed,
@@ -439,23 +436,22 @@ class MetricParser(YamlReader):
     def _generate_metric_config(
         self, target: UnparsedMetric, fqn: List[str], package_name: str, rendered: bool
     ):
-        generator: BaseContextConfigGenerator
+        generator: BaseConfigGenerator
         if rendered:
-            generator = ContextConfigGenerator(self.root_project)
+            generator = RenderedConfigGenerator(self.root_project)
         else:
             generator = UnrenderedConfigGenerator(self.root_project)
 
-        # configs with precendence set
+        # configs with precedence set
         precedence_configs = dict()
         # first apply metric configs
         precedence_configs.update(target.config)
 
-        config = generator.calculate_node_config(
+        config = generator.generate_node_config(
             config_call_dict={},
             fqn=fqn,
             resource_type=NodeType.Metric,
             project_name=package_name,
-            base=False,
             patch_config_dict=precedence_configs,
         )
         return config
@@ -608,9 +604,9 @@ class SemanticModelParser(YamlReader):
     def _generate_semantic_model_config(
         self, target: UnparsedSemanticModel, fqn: List[str], package_name: str, rendered: bool
     ):
-        generator: BaseContextConfigGenerator
+        generator: BaseConfigGenerator
         if rendered:
-            generator = ContextConfigGenerator(self.root_project)
+            generator = RenderedConfigGenerator(self.root_project)
         else:
             generator = UnrenderedConfigGenerator(self.root_project)
 
@@ -619,12 +615,11 @@ class SemanticModelParser(YamlReader):
         # first apply semantic model configs
         precedence_configs.update(target.config)
 
-        config = generator.calculate_node_config(
+        config = generator.generate_node_config(
             config_call_dict={},
             fqn=fqn,
             resource_type=NodeType.SemanticModel,
             project_name=package_name,
-            base=False,
             patch_config_dict=precedence_configs,
         )
 
@@ -638,14 +633,13 @@ class SemanticModelParser(YamlReader):
         fqn = self.schema_parser.get_fqn_prefix(path)
         fqn.append(unparsed.name)
 
+        # Also validates
         config = self._generate_semantic_model_config(
             target=unparsed,
             fqn=fqn,
             package_name=package_name,
             rendered=True,
         )
-
-        config = config.finalize_and_validate()
 
         unrendered_config = self._generate_semantic_model_config(
             target=unparsed,
@@ -723,9 +717,9 @@ class SavedQueryParser(YamlReader):
     def _generate_saved_query_config(
         self, target: UnparsedSavedQuery, fqn: List[str], package_name: str, rendered: bool
     ):
-        generator: BaseContextConfigGenerator
+        generator: BaseConfigGenerator
         if rendered:
-            generator = ContextConfigGenerator(self.root_project)
+            generator = RenderedConfigGenerator(self.root_project)
         else:
             generator = UnrenderedConfigGenerator(self.root_project)
 
@@ -734,12 +728,11 @@ class SavedQueryParser(YamlReader):
         # first apply semantic model configs
         precedence_configs.update(target.config)
 
-        config = generator.calculate_node_config(
+        config = generator.generate_node_config(
             config_call_dict={},
             fqn=fqn,
             resource_type=NodeType.SavedQuery,
             project_name=package_name,
-            base=False,
             patch_config_dict=precedence_configs,
         )
 
@@ -783,14 +776,13 @@ class SavedQueryParser(YamlReader):
         fqn = self.schema_parser.get_fqn_prefix(path)
         fqn.append(unparsed.name)
 
+        # Also validates
         config = self._generate_saved_query_config(
             target=unparsed,
             fqn=fqn,
             package_name=package_name,
             rendered=True,
         )
-
-        config = config.finalize_and_validate()
 
         unrendered_config = self._generate_saved_query_config(
             target=unparsed,
