@@ -1,9 +1,9 @@
 from pathlib import Path
 
+from appdirs import user_config_dir
+
 from dbt.config.project import PartialProject
 from dbt.exceptions import DbtProjectError
-
-from appdirs import user_config_dir
 
 
 def default_project_dir() -> Path:
