@@ -16,7 +16,7 @@ def default_profiles_dir() -> Path:
     if (Path.cwd() / "profiles.yml").exists():
         return Path.cwd()
     else:
-        return user_config_dir() / Path("dbt")
+        return user_config_dir(appname="dbt", appauthor="dbt-labs")
 
 
 def default_log_path(project_dir: Path, verify_version: bool = False) -> Path:
