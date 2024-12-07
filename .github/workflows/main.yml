@@ -112,7 +112,7 @@ jobs:
 
       - name: Upload Unit Test Coverage to Codecov
         if: ${{ matrix.python-version == '3.11' }}
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           flags: unit
@@ -230,7 +230,7 @@ jobs:
 
       - name: Upload Integration Test Coverage to Codecov
         if: ${{ matrix.python-version == '3.11' }}
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           flags: integration
