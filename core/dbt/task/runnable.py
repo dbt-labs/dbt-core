@@ -626,6 +626,7 @@ class GraphRunnableTask(ConfiguredTask):
                 NodeStatus.Error,
                 NodeStatus.Fail,
                 NodeStatus.Skipped,  # propogate error message causing skip
+                NodeStatus.PartialSuccess,  # because partial success also means partial failure
             )
         ]
         return len(failures) == 0

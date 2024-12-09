@@ -613,7 +613,7 @@ class TestMicrobatchRetriesPartialSuccesses(BaseMicrobatchTest):
     def test_run_with_event_time(self, project):
         # run all partitions from start - 2 expected rows in output, one failed
         with patch_microbatch_end_time("2020-01-03 13:57:00"):
-            _, console_output = run_dbt_and_capture(["run"])
+            _, console_output = run_dbt_and_capture(["run"], expect_pass=False)
 
         assert "PARTIAL SUCCESS (2/3)" in console_output
         assert "Completed with 1 partial success" in console_output
