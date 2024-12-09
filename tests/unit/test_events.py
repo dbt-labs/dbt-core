@@ -453,7 +453,9 @@ sample_values = [
     core_types.OpenCommand(open_cmd="", profiles_dir=""),
     core_types.RunResultWarning(resource_type="", node_name="", path=""),
     core_types.RunResultFailure(resource_type="", node_name="", path=""),
-    core_types.StatsLine(stats={"error": 0, "skip": 0, "pass": 0, "warn": 0, "total": 0}),
+    core_types.StatsLine(
+        stats={"error": 0, "skip": 0, "pass": 0, "warn": 0, "noop": 0, "total": 0}
+    ),
     core_types.RunResultError(msg=""),
     core_types.RunResultErrorNoMessage(status=""),
     core_types.SQLCompiledPath(path=""),

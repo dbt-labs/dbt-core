@@ -1,5 +1,7 @@
 import pytest
 
+from dbt.artifacts.schemas.results import RunStatus
+from dbt.contracts.graph.nodes import SavedQuery
 from dbt.tests.util import run_dbt
 from tests.functional.saved_queries.fixtures import (
     saved_queries_yml,
@@ -36,4 +38,10 @@ packages:
         run_dbt(["deps"])
         result = run_dbt(["build"])
         assert len(result.results) == 3
-        assert "NO-OP" in [r.message for r in result.results]
+
+        saved_query_results = (
+            result for result in result.results if isinstance(result.node, SavedQuery)
+        )
+        assert {result.node.name for result in saved_query_results} == {"test_saved_query"}
+        assert all("NO-OP" in result.message for result in saved_query_results)
+        assert all(result.status == RunStatus.NoOp for result in saved_query_results)
