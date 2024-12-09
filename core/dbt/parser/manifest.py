@@ -627,9 +627,11 @@ class ManifestLoader:
             else EventLevel.WARN
         )
 
+        flags = get_flags()
+
         for node in self.manifest.nodes.values():
             if " " in node.name:
-                if improper_resource_names == 0 or self.root_project.args.DEBUG:
+                if improper_resource_names == 0 or flags.DEBUG:
                     fire_event(
                         SpacesInResourceNameDeprecation(
                             unique_id=node.unique_id,
@@ -641,7 +643,6 @@ class ManifestLoader:
 
         if improper_resource_names > 0:
             if level == EventLevel.WARN:
-                flags = get_flags()
                 dbt.deprecations.warn(
                     "resource-names-with-spaces",
                     count_invalid_names=improper_resource_names,

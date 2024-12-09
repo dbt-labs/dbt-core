@@ -66,7 +66,7 @@ class TestSemanticManifest:
             ),
             (
                 MetricTypeParams(
-                    window=MetricTimeWindow(count=1, granularity=TimeGranularity.MONTH)
+                    window=MetricTimeWindow(count=1, granularity=TimeGranularity.MONTH.value)
                 ),
                 1,
                 False,
@@ -75,7 +75,7 @@ class TestSemanticManifest:
             (
                 MetricTypeParams(
                     cumulative_type_params=CumulativeTypeParams(
-                        grain_to_date=TimeGranularity.MONTH,
+                        grain_to_date=TimeGranularity.MONTH.value,
                     )
                 ),
                 0,
@@ -85,7 +85,7 @@ class TestSemanticManifest:
             (
                 MetricTypeParams(
                     cumulative_type_params=CumulativeTypeParams(
-                        window=MetricTimeWindow(count=1, granularity=TimeGranularity.MONTH),
+                        window=MetricTimeWindow(count=1, granularity=TimeGranularity.MONTH.value),
                     )
                 ),
                 0,
@@ -100,7 +100,7 @@ class TestSemanticManifest:
             ),
             (
                 MetricTypeParams(
-                    window=MetricTimeWindow(count=1, granularity=TimeGranularity.MONTH)
+                    window=MetricTimeWindow(count=1, granularity=TimeGranularity.MONTH.value)
                 ),
                 0,
                 True,
@@ -109,7 +109,7 @@ class TestSemanticManifest:
             (
                 MetricTypeParams(
                     cumulative_type_params=CumulativeTypeParams(
-                        grain_to_date=TimeGranularity.MONTH,
+                        grain_to_date=TimeGranularity.MONTH.value,
                     )
                 ),
                 0,
@@ -119,7 +119,7 @@ class TestSemanticManifest:
             (
                 MetricTypeParams(
                     cumulative_type_params=CumulativeTypeParams(
-                        window=MetricTimeWindow(count=1, granularity=TimeGranularity.MONTH),
+                        window=MetricTimeWindow(count=1, granularity=TimeGranularity.MONTH.value),
                     )
                 ),
                 0,

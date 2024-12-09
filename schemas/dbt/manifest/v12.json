@@ -8960,19 +8960,7 @@
                                 "type": "integer"
                               },
                               "granularity": {
-                                "enum": [
-                                  "nanosecond",
-                                  "microsecond",
-                                  "millisecond",
-                                  "second",
-                                  "minute",
-                                  "hour",
-                                  "day",
-                                  "week",
-                                  "month",
-                                  "quarter",
-                                  "year"
-                                ]
+                                "type": "string"
                               }
                             },
                             "additionalProperties": false,
@@ -8990,19 +8978,7 @@
                       "offset_to_grain": {
                         "anyOf": [
                           {
-                            "enum": [
-                              "nanosecond",
-                              "microsecond",
-                              "millisecond",
-                              "second",
-                              "minute",
-                              "hour",
-                              "day",
-                              "week",
-                              "month",
-                              "quarter",
-                              "year"
-                            ]
+                            "type": "string"
                           },
                           {
                             "type": "null"
@@ -9086,19 +9062,7 @@
                                 "type": "integer"
                               },
                               "granularity": {
-                                "enum": [
-                                  "nanosecond",
-                                  "microsecond",
-                                  "millisecond",
-                                  "second",
-                                  "minute",
-                                  "hour",
-                                  "day",
-                                  "week",
-                                  "month",
-                                  "quarter",
-                                  "year"
-                                ]
+                                "type": "string"
                               }
                             },
                             "additionalProperties": false,
@@ -9116,19 +9080,7 @@
                       "offset_to_grain": {
                         "anyOf": [
                           {
-                            "enum": [
-                              "nanosecond",
-                              "microsecond",
-                              "millisecond",
-                              "second",
-                              "minute",
-                              "hour",
-                              "day",
-                              "week",
-                              "month",
-                              "quarter",
-                              "year"
-                            ]
+                            "type": "string"
                           },
                           {
                             "type": "null"
@@ -9285,19 +9237,7 @@
                                   "type": "integer"
                                 },
                                 "granularity": {
-                                  "enum": [
-                                    "nanosecond",
-                                    "microsecond",
-                                    "millisecond",
-                                    "second",
-                                    "minute",
-                                    "hour",
-                                    "day",
-                                    "week",
-                                    "month",
-                                    "quarter",
-                                    "year"
-                                  ]
+                                  "type": "string"
                                 }
                               },
                               "additionalProperties": false,
@@ -9315,19 +9255,7 @@
                         "offset_to_grain": {
                           "anyOf": [
                             {
-                              "enum": [
-                                "nanosecond",
-                                "microsecond",
-                                "millisecond",
-                                "second",
-                                "minute",
-                                "hour",
-                                "day",
-                                "week",
-                                "month",
-                                "quarter",
-                                "year"
-                              ]
+                              "type": "string"
                             },
                             {
                               "type": "null"
@@ -9520,19 +9448,7 @@
                                 "type": "integer"
                               },
                               "granularity": {
-                                "enum": [
-                                  "nanosecond",
-                                  "microsecond",
-                                  "millisecond",
-                                  "second",
-                                  "minute",
-                                  "hour",
-                                  "day",
-                                  "week",
-                                  "month",
-                                  "quarter",
-                                  "year"
-                                ]
+                                "type": "string"
                               }
                             },
                             "additionalProperties": false,
@@ -9605,19 +9521,7 @@
                                 "type": "integer"
                               },
                               "granularity": {
-                                "enum": [
-                                  "nanosecond",
-                                  "microsecond",
-                                  "millisecond",
-                                  "second",
-                                  "minute",
-                                  "hour",
-                                  "day",
-                                  "week",
-                                  "month",
-                                  "quarter",
-                                  "year"
-                                ]
+                                "type": "string"
                               }
                             },
                             "additionalProperties": false,
@@ -9635,19 +9539,7 @@
                       "grain_to_date": {
                         "anyOf": [
                           {
-                            "enum": [
-                              "nanosecond",
-                              "microsecond",
-                              "millisecond",
-                              "second",
-                              "minute",
-                              "hour",
-                              "day",
-                              "week",
-                              "month",
-                              "quarter",
-                              "year"
-                            ]
+                            "type": "string"
                           },
                           {
                             "type": "null"
@@ -9759,19 +9651,7 @@
           "time_granularity": {
             "anyOf": [
               {
-                "enum": [
-                  "nanosecond",
-                  "microsecond",
-                  "millisecond",
-                  "second",
-                  "minute",
-                  "hour",
-                  "day",
-                  "week",
-                  "month",
-                  "quarter",
-                  "year"
-                ]
+                "type": "string"
               },
               {
                 "type": "null"
@@ -18671,19 +18551,7 @@
                                           "type": "integer"
                                         },
                                         "granularity": {
-                                          "enum": [
-                                            "nanosecond",
-                                            "microsecond",
-                                            "millisecond",
-                                            "second",
-                                            "minute",
-                                            "hour",
-                                            "day",
-                                            "week",
-                                            "month",
-                                            "quarter",
-                                            "year"
-                                          ]
+                                          "type": "string"
                                         }
                                       },
                                       "additionalProperties": false,
@@ -18701,19 +18569,7 @@
                                 "offset_to_grain": {
                                   "anyOf": [
                                     {
-                                      "enum": [
-                                        "nanosecond",
-                                        "microsecond",
-                                        "millisecond",
-                                        "second",
-                                        "minute",
-                                        "hour",
-                                        "day",
-                                        "week",
-                                        "month",
-                                        "quarter",
-                                        "year"
-                                      ]
+                                      "type": "string"
                                     },
                                     {
                                       "type": "null"
@@ -18797,19 +18653,7 @@
                                           "type": "integer"
                                         },
                                         "granularity": {
-                                          "enum": [
-                                            "nanosecond",
-                                            "microsecond",
-                                            "millisecond",
-                                            "second",
-                                            "minute",
-                                            "hour",
-                                            "day",
-                                            "week",
-                                            "month",
-                                            "quarter",
-                                            "year"
-                                          ]
+                                          "type": "string"
                                         }
                                       },
                                       "additionalProperties": false,
@@ -18827,19 +18671,7 @@
                                 "offset_to_grain": {
                                   "anyOf": [
                                     {
-                                      "enum": [
-                                        "nanosecond",
-                                        "microsecond",
-                                        "millisecond",
-                                        "second",
-                                        "minute",
-                                        "hour",
-                                        "day",
-                                        "week",
-                                        "month",
-                                        "quarter",
-                                        "year"
-                                      ]
+                                      "type": "string"
                                     },
                                     {
                                       "type": "null"
@@ -18996,19 +18828,7 @@
                                             "type": "integer"
                                           },
                                           "granularity": {
-                                            "enum": [
-                                              "nanosecond",
-                                              "microsecond",
-                                              "millisecond",
-                                              "second",
-                                              "minute",
-                                              "hour",
-                                              "day",
-                                              "week",
-                                              "month",
-                                              "quarter",
-                                              "year"
-                                            ]
+                                            "type": "string"
                                           }
                                         },
                                         "additionalProperties": false,
@@ -19026,19 +18846,7 @@
                                   "offset_to_grain": {
                                     "anyOf": [
                                       {
-                                        "enum": [
-                                          "nanosecond",
-                                          "microsecond",
-                                          "millisecond",
-                                          "second",
-                                          "minute",
-                                          "hour",
-                                          "day",
-                                          "week",
-                                          "month",
-                                          "quarter",
-                                          "year"
-                                        ]
+                                        "type": "string"
                                       },
                                       {
                                         "type": "null"
@@ -19231,19 +19039,7 @@
                                           "type": "integer"
                                         },
                                         "granularity": {
-                                          "enum": [
-                                            "nanosecond",
-                                            "microsecond",
-                                            "millisecond",
-                                            "second",
-                                            "minute",
-                                            "hour",
-                                            "day",
-                                            "week",
-                                            "month",
-                                            "quarter",
-                                            "year"
-                                          ]
+                                          "type": "string"
                                         }
                                       },
                                       "additionalProperties": false,
@@ -19316,19 +19112,7 @@
                                           "type": "integer"
                                         },
                                         "granularity": {
-                                          "enum": [
-                                            "nanosecond",
-                                            "microsecond",
-                                            "millisecond",
-                                            "second",
-                                            "minute",
-                                            "hour",
-                                            "day",
-                                            "week",
-                                            "month",
-                                            "quarter",
-                                            "year"
-                                          ]
+                                          "type": "string"
                                         }
                                       },
                                       "additionalProperties": false,
@@ -19346,19 +19130,7 @@
                                 "grain_to_date": {
                                   "anyOf": [
                                     {
-                                      "enum": [
-                                        "nanosecond",
-                                        "microsecond",
-                                        "millisecond",
-                                        "second",
-                                        "minute",
-                                        "hour",
-                                        "day",
-                                        "week",
-                                        "month",
-                                        "quarter",
-                                        "year"
-                                      ]
+                                      "type": "string"
                                     },
                                     {
                                       "type": "null"
@@ -19470,19 +19242,7 @@
                     "time_granularity": {
                       "anyOf": [
                         {
-                          "enum": [
-                            "nanosecond",
-                            "microsecond",
-                            "millisecond",
-                            "second",
-                            "minute",
-                            "hour",
-                            "day",
-                            "week",
-                            "month",
-                            "quarter",
-                            "year"
-                          ]
+                          "type": "string"
                         },
                         {
                           "type": "null"

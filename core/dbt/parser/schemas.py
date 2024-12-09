@@ -1199,8 +1199,6 @@ class SingularTestPatchParser(PatchParser[UnparsedSingularTestUpdate, ParsedSing
         node.patch_path = patch.file_id
         node.description = patch.description
         node.created_at = time.time()
-        node.meta = patch.meta
-        node.docs = patch.docs
 
 
 class MacroPatchParser(PatchParser[UnparsedMacroUpdate, ParsedMacroPatch]):
