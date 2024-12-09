@@ -1057,11 +1057,20 @@ class TestWhenOnlyOneBatchRunBothPostAndPreHooks(BaseMicrobatchTest):
 
         return EventCatcher(event_to_catch=JinjaLogDebug, predicate=pre_or_post_hook)  # type: ignore
 
+    @pytest.fixture
+    def generic_exception_catcher(self) -> EventCatcher:
+        return EventCatcher(event_to_catch=GenericExceptionOnRun)  # type: ignore
+
     def test_microbatch(
-        self, mocker: MockerFixture, project, batch_log_catcher: EventCatcher
+        self,
+        project,
+        batch_log_catcher: EventCatcher,
+        generic_exception_catcher: EventCatcher,
     ) -> None:
         with patch_microbatch_end_time("2020-01-01 13:57:00"):
-            _ = run_dbt(["run"], callbacks=[batch_log_catcher.catch])
+            _ = run_dbt(
+                ["run"], callbacks=[batch_log_catcher.catch, generic_exception_catcher.catch]
+            )
 
         # There should be two logs as the pre-hook and post-hook should
         # both only be run once
@@ -1071,3 +1080,6 @@ class TestWhenOnlyOneBatchRunBothPostAndPreHooks(BaseMicrobatchTest):
         assert "pre-hook" in batch_log_catcher.caught_events[0].data.msg  # type: ignore
         assert "20200101" in batch_log_catcher.caught_events[1].data.msg  # type: ignore
         assert "post-hook" in batch_log_catcher.caught_events[1].data.msg  # type: ignore
+
+        # we had a bug where having only one batch caused a generic exception
+        assert len(generic_exception_catcher.caught_events) == 0

@@ -768,18 +768,21 @@ class RunTask(CompileTask):
         # Wait until all submitted batches have completed
         while len(batch_results) != batch_idx:
             pass
-        # Final batch runs once all others complete to ensure post_hook runs at the end
-        self._submit_batch(
-            node=node,
-            adapter=runner.adapter,
-            relation_exists=relation_exists,
-            batches=batches,
-            batch_idx=batch_idx,
-            batch_results=batch_results,
-            pool=pool,
-            force_sequential_run=True,
-            skip=skip_batches,
-        )
+
+        # Only run "last" batch if there is more than one batch
+        if len(batches) != 1:
+            # Final batch runs once all others complete to ensure post_hook runs at the end
+            self._submit_batch(
+                node=node,
+                adapter=runner.adapter,
+                relation_exists=relation_exists,
+                batches=batches,
+                batch_idx=batch_idx,
+                batch_results=batch_results,
+                pool=pool,
+                force_sequential_run=True,
+                skip=skip_batches,
+            )
 
         # Finalize run: merge results, track model run, and print final result line
         runner.merge_batch_results(result, batch_results)

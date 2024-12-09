@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix running of extra "last" batch when there is only one batch
+time: 2024-12-09T13:33:17.253326-06:00
+custom:
+  Author: QMalcolm
+  Issue: "11112"
