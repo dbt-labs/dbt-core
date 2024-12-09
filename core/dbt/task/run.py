@@ -387,12 +387,13 @@ class MicrobatchModelRunner(ModelRunner):
         return f"{self.node.language} microbatch model {self.get_node_representation()}"
 
     def describe_batch(self) -> str:
-        if self.batch_idx is None:
+        batch_start = self.batch_start
+        if batch_start is None:
             return ""
 
         # Only visualize date if batch_start year/month/day
         formatted_batch_start = MicrobatchBuilder.format_batch_start(
-            self.batch_start, self.node.config.batch_size
+            batch_start, self.node.config.batch_size
         )
         return f"batch {formatted_batch_start} of {self.get_node_representation()}"
 
