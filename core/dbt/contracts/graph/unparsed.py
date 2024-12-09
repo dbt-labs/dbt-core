@@ -564,7 +564,7 @@ class UnparsedMetricInput(dbtClassMixin):
     filter: Union[str, List[str], None] = None
     alias: Optional[str] = None
     offset_window: Optional[str] = None
-    offset_to_grain: Optional[str] = None  # str is really a TimeGranularity Enum
+    offset_to_grain: Optional[str] = None
 
 
 @dataclass

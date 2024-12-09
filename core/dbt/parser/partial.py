@@ -725,6 +725,7 @@ class PartialParsing:
         handle_change("semantic_models", self.delete_schema_semantic_model)
         handle_change("unit_tests", self.delete_schema_unit_test)
         handle_change("saved_queries", self.delete_schema_saved_query)
+        handle_change("data_tests", self.delete_schema_data_test_patch)
 
     def _handle_element_change(
         self, schema_file, saved_yaml_dict, new_yaml_dict, env_var_changes, dict_key: str, delete
@@ -918,6 +919,23 @@ class PartialParsing:
             if macro_file_id in self.new_files:
                 self.saved_files[macro_file_id] = deepcopy(self.new_files[macro_file_id])
                 self.add_to_pp_files(self.saved_files[macro_file_id])
+
+    def delete_schema_data_test_patch(self, schema_file, data_test):
+        data_test_unique_id = None
+        for unique_id in schema_file.node_patches:
+            if not unique_id.startswith("test"):
+                continue
+            parts = unique_id.split(".")
+            elem_name = parts[2]
+            if elem_name == data_test["name"]:
+                data_test_unique_id = unique_id
+                break
+        if data_test_unique_id and data_test_unique_id in self.saved_manifest.nodes:
+            singular_data_test = self.saved_manifest.nodes.pop(data_test_unique_id)
+            file_id = singular_data_test.file_id
+            if file_id in self.new_files:
+                self.saved_files[file_id] = deepcopy(self.new_files[file_id])
+                self.add_to_pp_files(self.saved_files[file_id])
 
     # exposures are created only from schema files, so just delete
     # the exposure or the disabled exposure.

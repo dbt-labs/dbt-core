@@ -103,3 +103,21 @@ models:
       - name: date_day
         granularity: day
 """
+
+time_spine_yml = """
+version: 2
+
+models:
+  - name: metricflow_time_spine
+    time_spine:
+      standard_granularity_column: date_day
+      custom_granularities:
+        - name: retail_month
+        - name: martian_day
+          column_name: martian_day
+    columns:
+      - name: date_day
+        granularity: day
+      - name: retail_month
+      - name: martian_day
+"""

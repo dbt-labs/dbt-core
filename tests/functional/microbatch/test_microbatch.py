@@ -7,6 +7,8 @@ from dbt.events.types import (
     ArtifactWritten,
     EndOfRunSummary,
     GenericExceptionOnRun,
+    JinjaLogDebug,
+    LogBatchResult,
     LogModelResult,
     MicrobatchExecutionDebug,
     MicrobatchMacroOutsideOfBatchesDeprecation,
@@ -51,6 +53,21 @@ select 3 as id, TIMESTAMP '2020-01-03 00:00:00-0' as event_time
 
 microbatch_model_sql = """
 {{ config(materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='day', begin=modules.datetime.datetime(2020, 1, 1, 0, 0, 0)) }}
+select * from {{ ref('input_model') }}
+"""
+
+microbatch_model_with_pre_and_post_sql = """
+{{ config(
+        materialized='incremental',
+        incremental_strategy='microbatch',
+        unique_key='id',
+        event_time='event_time',
+        batch_size='day',
+        begin=modules.datetime.datetime(2020, 1, 1, 0, 0, 0),
+        pre_hook='{{log("execute: " ~ execute ~ ", pre-hook run by batch " ~ model.batch.id)}}',
+        post_hook='{{log("execute: " ~ execute ~ ", post-hook run by batch " ~ model.batch.id)}}',
+    )
+}}
 select * from {{ ref('input_model') }}
 """
 
@@ -273,15 +290,18 @@ class TestMicrobatchCLI(BaseMicrobatchTest):
 
     def test_run_with_event_time(self, project):
         # run without --event-time-start or --event-time-end - 3 expected rows in output
-        catcher = EventCatcher(event_to_catch=LogModelResult)
+
+        model_catcher = EventCatcher(event_to_catch=LogModelResult)
+        batch_catcher = EventCatcher(event_to_catch=LogBatchResult)
 
         with patch_microbatch_end_time("2020-01-03 13:57:00"):
-            run_dbt([self.CLI_COMMAND_NAME], callbacks=[catcher.catch])
+            run_dbt([self.CLI_COMMAND_NAME], callbacks=[model_catcher.catch, batch_catcher.catch])
         self.assert_row_count(project, "microbatch_model", 3)
 
-        assert len(catcher.caught_events) == 5
+        assert len(model_catcher.caught_events) == 2
+        assert len(batch_catcher.caught_events) == 3
         batch_creation_events = 0
-        for caught_event in catcher.caught_events:
+        for caught_event in batch_catcher.caught_events:
             if "batch 2020" in caught_event.data.description:
                 batch_creation_events += 1
                 assert caught_event.data.execution_time > 0
@@ -666,6 +686,14 @@ microbatch_model_first_partition_failing_sql = """
 select * from {{ ref('input_model') }}
 """
 
+microbatch_model_second_batch_failing_sql = """
+{{ config(materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='day', begin=modules.datetime.datetime(2020, 1, 1, 0, 0, 0)) }}
+{% if '20200102' == model.batch.id %}
+ invalid_sql
+{% endif %}
+select * from {{ ref('input_model') }}
+"""
+
 
 class TestMicrobatchInitialBatchFailure(BaseMicrobatchTest):
     @pytest.fixture(scope="class")
@@ -673,6 +701,47 @@ class TestMicrobatchInitialBatchFailure(BaseMicrobatchTest):
         return {
             "input_model.sql": input_model_sql,
             "microbatch_model.sql": microbatch_model_first_partition_failing_sql,
+        }
+
+    def test_run_with_event_time(self, project):
+        # When the first batch of a microbatch model fails, the rest of the batches should
+        # be skipped and the model marked as failed (not _partial success_)
+
+        general_exc_catcher = EventCatcher(
+            GenericExceptionOnRun,
+            predicate=lambda event: event.data.node_info is not None,
+        )
+        batch_catcher = EventCatcher(
+            event_to_catch=LogBatchResult,
+            predicate=lambda event: event.data.status == "skipped",
+        )
+
+        # run all partitions from start - 2 expected rows in output, one failed
+        with patch_microbatch_end_time("2020-01-03 13:57:00"):
+            run_dbt(
+                ["run"],
+                expect_pass=False,
+                callbacks=[general_exc_catcher.catch, batch_catcher.catch],
+            )
+
+        assert len(general_exc_catcher.caught_events) == 1
+        assert len(batch_catcher.caught_events) == 2
+
+        # Because the first batch failed, and the rest of the batches were skipped, the table shouldn't
+        # exist in the data warehosue
+        relation_info = relation_from_name(project.adapter, "microbatch_model")
+        relation = project.adapter.get_relation(
+            relation_info.database, relation_info.schema, relation_info.name
+        )
+        assert relation is None
+
+
+class TestMicrobatchSecondBatchFailure(BaseMicrobatchTest):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "input_model.sql": input_model_sql,
+            "microbatch_model.sql": microbatch_model_second_batch_failing_sql,
         }
 
     def test_run_with_event_time(self, project):
@@ -875,7 +944,7 @@ class TestMicrobatchCanRunParallelOrSequential(BaseMicrobatchTest):
     def test_microbatch(
         self, mocker: MockerFixture, project, batch_exc_catcher: EventCatcher
     ) -> None:
-        mocked_srip = mocker.patch("dbt.task.run.MicrobatchModelRunner._should_run_in_parallel")
+        mocked_srip = mocker.patch("dbt.task.run.MicrobatchModelRunner.should_run_in_parallel")
 
         # Should be run in parallel
         mocked_srip.return_value = True
@@ -905,3 +974,100 @@ class TestMicrobatchCanRunParallelOrSequential(BaseMicrobatchTest):
                 some_batches_run_concurrently = True
                 break
         assert not some_batches_run_concurrently, "Found a batch being run concurrently!"
+
+
+class TestFirstAndLastBatchAlwaysSequential(BaseMicrobatchTest):
+    @pytest.fixture
+    def batch_exc_catcher(self) -> EventCatcher:
+        return EventCatcher(MicrobatchExecutionDebug)  # type: ignore
+
+    def test_microbatch(
+        self, mocker: MockerFixture, project, batch_exc_catcher: EventCatcher
+    ) -> None:
+        mocked_srip = mocker.patch("dbt.task.run.MicrobatchModelRunner.should_run_in_parallel")
+
+        # Should be run in parallel
+        mocked_srip.return_value = True
+        with patch_microbatch_end_time("2020-01-03 13:57:00"):
+            _ = run_dbt(["run"], callbacks=[batch_exc_catcher.catch])
+
+        assert len(batch_exc_catcher.caught_events) > 1
+
+        first_batch_event = batch_exc_catcher.caught_events[0]
+        last_batch_event = batch_exc_catcher.caught_events[-1]
+
+        for event in [first_batch_event, last_batch_event]:
+            assert "is being run sequentially" in event.data.msg  # type: ignore
+
+        for event in batch_exc_catcher.caught_events[1:-1]:
+            assert "is being run concurrently" in event.data.msg  # type: ignore
+
+
+class TestFirstBatchRunsPreHookLastBatchRunsPostHook(BaseMicrobatchTest):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "input_model.sql": input_model_sql,
+            "microbatch_model.sql": microbatch_model_with_pre_and_post_sql,
+        }
+
+    @pytest.fixture
+    def batch_log_catcher(self) -> EventCatcher:
+        def pre_or_post_hook(event) -> bool:
+            return "execute: True" in event.data.msg and (
+                "pre-hook" in event.data.msg or "post-hook" in event.data.msg
+            )
+
+        return EventCatcher(event_to_catch=JinjaLogDebug, predicate=pre_or_post_hook)  # type: ignore
+
+    def test_microbatch(
+        self, mocker: MockerFixture, project, batch_log_catcher: EventCatcher
+    ) -> None:
+        with patch_microbatch_end_time("2020-01-04 13:57:00"):
+            _ = run_dbt(["run"], callbacks=[batch_log_catcher.catch])
+
+        # There should be two logs as the pre-hook and post-hook should
+        # both only be run once
+        assert len(batch_log_catcher.caught_events) == 2
+
+        for event in batch_log_catcher.caught_events:
+            # batch id that should be firing pre-hook
+            if "20200101" in event.data.msg:  # type: ignore
+                assert "pre-hook" in event.data.msg  # type: ignore
+
+            # batch id that should be firing the post-hook
+            if "20200104" in event.data.msg:  # type: ignore
+                assert "post-hook" in event.data.msg  # type: ignore
+
+
+class TestWhenOnlyOneBatchRunBothPostAndPreHooks(BaseMicrobatchTest):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "input_model.sql": input_model_sql,
+            "microbatch_model.sql": microbatch_model_with_pre_and_post_sql,
+        }
+
+    @pytest.fixture
+    def batch_log_catcher(self) -> EventCatcher:
+        def pre_or_post_hook(event) -> bool:
+            return "execute: True" in event.data.msg and (
+                "pre-hook" in event.data.msg or "post-hook" in event.data.msg
+            )
+
+        return EventCatcher(event_to_catch=JinjaLogDebug, predicate=pre_or_post_hook)  # type: ignore
+
+    def test_microbatch(
+        self, mocker: MockerFixture, project, batch_log_catcher: EventCatcher
+    ) -> None:
+        with patch_microbatch_end_time("2020-01-01 13:57:00"):
+            _ = run_dbt(["run"], callbacks=[batch_log_catcher.catch])
+
+        # There should be two logs as the pre-hook and post-hook should
+        # both only be run once
+        assert len(batch_log_catcher.caught_events) == 2
+
+        assert "20200101" in batch_log_catcher.caught_events[0].data.msg  # type: ignore
+        assert "pre-hook" in batch_log_catcher.caught_events[0].data.msg  # type: ignore
+        assert "20200101" in batch_log_catcher.caught_events[1].data.msg  # type: ignore
+        assert "post-hook" in batch_log_catcher.caught_events[1].data.msg  # type: ignore

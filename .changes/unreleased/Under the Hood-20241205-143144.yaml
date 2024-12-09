@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Improve selection peformance by optimizing the select_children() and select_parents()
+  functions.
+time: 2024-12-05T14:31:44.584216-05:00
+custom:
+  Author: peterallenwebb
+  Issue: "11099"

@@ -228,19 +228,11 @@ class MetricParser(YamlReader):
     def _get_period_agg(self, unparsed_period_agg: str) -> PeriodAggregation:
         return PeriodAggregation(unparsed_period_agg)
 
-    def _get_optional_grain_to_date(
-        self, unparsed_grain_to_date: Optional[str]
-    ) -> Optional[TimeGranularity]:
-        if not unparsed_grain_to_date:
-            return None
-
-        return TimeGranularity(unparsed_grain_to_date)
-
     def _get_optional_time_window(
         self, unparsed_window: Optional[str]
     ) -> Optional[MetricTimeWindow]:
         if unparsed_window is not None:
-            parts = unparsed_window.split(" ")
+            parts = unparsed_window.lower().split(" ")
             if len(parts) != 2:
                 raise YamlParseDictError(
                     self.yaml.path,
@@ -252,16 +244,11 @@ class MetricParser(YamlReader):
 
             granularity = parts[1]
             # once we drop python 3.8 this could just be `granularity = parts[0].removesuffix('s')
-            if granularity.endswith("s"):
-                # months -> month
+            if granularity.endswith("s") and granularity[:-1] in [
+                item.value for item in TimeGranularity
+            ]:
+                # Can only remove the `s` if it's a standard grain, months -> month
                 granularity = granularity[:-1]
-            if granularity not in [item.value for item in TimeGranularity]:
-                raise YamlParseDictError(
-                    self.yaml.path,
-                    "window",
-                    {"window": unparsed_window},
-                    f"Invalid time granularity {granularity} in cumulative/conversion metric window string: ({unparsed_window})",
-                )
 
             count = parts[0]
             if not count.isdigit():
@@ -274,7 +261,7 @@ class MetricParser(YamlReader):
 
             return MetricTimeWindow(
                 count=int(count),
-                granularity=TimeGranularity(granularity),
+                granularity=granularity,
             )
         else:
             return None
@@ -283,16 +270,12 @@ class MetricParser(YamlReader):
         if isinstance(unparsed, str):
             return MetricInput(name=unparsed)
         else:
-            offset_to_grain: Optional[TimeGranularity] = None
-            if unparsed.offset_to_grain is not None:
-                offset_to_grain = TimeGranularity(unparsed.offset_to_grain)
-
             return MetricInput(
                 name=unparsed.name,
                 filter=parse_where_filter(unparsed.filter),
                 alias=unparsed.alias,
                 offset_window=self._get_optional_time_window(unparsed.offset_window),
-                offset_to_grain=offset_to_grain,
+                offset_to_grain=unparsed.offset_to_grain,
             )
 
     def _get_optional_metric_input(
@@ -354,9 +337,7 @@ class MetricParser(YamlReader):
                 window=self._get_optional_time_window(
                     unparsed_type_params.cumulative_type_params.window
                 ),
-                grain_to_date=self._get_optional_grain_to_date(
-                    unparsed_type_params.cumulative_type_params.grain_to_date
-                ),
+                grain_to_date=unparsed_type_params.cumulative_type_params.grain_to_date,
                 period_agg=self._get_period_agg(
                     unparsed_type_params.cumulative_type_params.period_agg
                 ),
@@ -369,6 +350,10 @@ class MetricParser(YamlReader):
 
         grain_to_date: Optional[TimeGranularity] = None
         if type_params.grain_to_date is not None:
+            # This should've been changed to a string (to support custom grain), but since this
+            # is a legacy field waiting to be deprecated, we will not support custom grain here
+            # in order to force customers off of using this field. The field to use should be
+            # `cumulative_type_params.grain_to_date`
             grain_to_date = TimeGranularity(type_params.grain_to_date)
 
         return MetricTypeParams(
@@ -435,9 +420,7 @@ class MetricParser(YamlReader):
             label=unparsed.label,
             type=MetricType(unparsed.type),
             type_params=self._get_metric_type_params(unparsed),
-            time_granularity=(
-                TimeGranularity(unparsed.time_granularity) if unparsed.time_granularity else None
-            ),
+            time_granularity=unparsed.time_granularity,
             filter=parse_where_filter(unparsed.filter),
             meta=unparsed.meta,
             tags=unparsed.tags,

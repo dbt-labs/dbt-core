@@ -32,6 +32,14 @@ https://github.com/dbt-labs/dbt-semantic-interfaces/blob/main/dbt_semantic_inter
 
 
 @dataclass
+class SemanticLayerElementConfig(dbtClassMixin):
+    meta: Dict[str, Any] = field(
+        default_factory=dict,
+        metadata=MergeBehavior.Update.meta(),
+    )
+
+
+@dataclass
 class Defaults(dbtClassMixin):
     agg_time_dimension: Optional[str] = None
 
@@ -72,6 +80,7 @@ class Dimension(dbtClassMixin):
     type_params: Optional[DimensionTypeParams] = None
     expr: Optional[str] = None
     metadata: Optional[SourceFileMetadata] = None
+    config: Optional[SemanticLayerElementConfig] = None
 
     @property
     def reference(self) -> DimensionReference:
@@ -106,6 +115,7 @@ class Entity(dbtClassMixin):
     label: Optional[str] = None
     role: Optional[str] = None
     expr: Optional[str] = None
+    config: Optional[SemanticLayerElementConfig] = None
 
     @property
     def reference(self) -> EntityReference:
@@ -147,6 +157,7 @@ class Measure(dbtClassMixin):
     agg_params: Optional[MeasureAggregationParameters] = None
     non_additive_dimension: Optional[NonAdditiveDimension] = None
     agg_time_dimension: Optional[str] = None
+    config: Optional[SemanticLayerElementConfig] = None
 
     @property
     def reference(self) -> MeasureReference:

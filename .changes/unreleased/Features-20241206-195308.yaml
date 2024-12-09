@@ -1,0 +1,7 @@
+kind: Features
+body: Ensure pre/post hooks only run on first/last batch respectively for microbatch
+  model batches
+time: 2024-12-06T19:53:08.928793-06:00
+custom:
+  Author: MichelleArk QMalcolm
+  Issue: 11094 11104

@@ -34,6 +34,7 @@ from tests.functional.metrics.fixtures import (
     semantic_model_people_yml,
     semantic_model_purchasing_yml,
 )
+from tests.functional.time_spines.fixtures import time_spine_yml
 
 
 class TestSimpleMetrics:
@@ -85,7 +86,7 @@ class TestSimpleMetrics:
         )
         assert (
             manifest.metrics["metric.test.number_of_people"].time_granularity
-            == TimeGranularity.MONTH
+            == TimeGranularity.MONTH.value
         )
         assert manifest.metrics["metric.test.collective_tenure"].time_granularity is None
 
@@ -251,6 +252,7 @@ class TestDerivedMetric:
             "metricflow_time_spine.sql": metricflow_time_spine_sql,
             "semantic_models.yml": semantic_model_purchasing_yml,
             "derived_metric.yml": derived_metric_yml,
+            "time_spine.yml": time_spine_yml,
         }
 
     # not strictly necessary to use "real" mock data for this test
@@ -276,6 +278,7 @@ class TestDerivedMetric:
             "metric.test.count_orders",
             "metric.test.sum_order_revenue",
             "metric.test.average_order_value",
+            "metric.test.sum_order_revenue_plus_one_custom_offset_window",
         ]
         assert metric_ids == expected_metric_ids
 
@@ -297,12 +300,24 @@ class TestDerivedMetric:
             "metric.test.sum_order_revenue",
         ]
 
+        derived_metric_with_custom_offset_window = manifest.metrics[
+            "metric.test.sum_order_revenue_plus_one_custom_offset_window"
+        ]
+        assert len(derived_metric_with_custom_offset_window.input_metrics) == 1
+        assert derived_metric_with_custom_offset_window.input_metrics[
+            0
+        ].offset_window == MetricTimeWindow(count=1, granularity="martian_day")
+
         # actually compile
         results = run_dbt(["compile", "--select", "downstream_model"])
         compiled_code = results[0].node.compiled_code
 
         # make sure all these metrics properties show up in compiled SQL
         for metric_name in manifest.metrics:
+            if metric_name == "metric.test.sum_order_revenue_plus_one_custom_offset_window":
+                # Skip this metric
+                continue
+
             parsed_metric_node = manifest.metrics[metric_name]
             for property in [
                 "name",
@@ -361,6 +376,7 @@ class TestConversionMetric:
             "metricflow_time_spine.sql": metricflow_time_spine_sql,
             "semantic_models.yml": conversion_semantic_model_purchasing_yml,
             "conversion_metric.yml": conversion_metric_yml,
+            "time_spine.yml": time_spine_yml,
         }
 
     @pytest.fixture(scope="class")
@@ -382,10 +398,13 @@ class TestConversionMetric:
         # make sure the metric is in the manifest
         manifest = get_manifest(project.project_root)
         metric_ids = list(manifest.metrics.keys())
-        expected_metric_ids = [
-            "metric.test.converted_orders_over_visits",
-        ]
-        assert metric_ids == expected_metric_ids
+        expected_metric_ids = {
+            "metric.test.converted_orders_over_visits": None,
+            "metric.test.converted_orders_over_visits_with_window": MetricTimeWindow(
+                count=4, granularity=TimeGranularity.DAY.value
+            ),
+        }
+        assert set(metric_ids) == set(expected_metric_ids.keys())
         assert manifest.metrics[
             "metric.test.converted_orders_over_visits"
         ].type_params.conversion_type_params
@@ -409,6 +428,14 @@ class TestConversionMetric:
             ].type_params.conversion_type_params.entity
             == "purchase"
         )
+        for (
+            metric_id,
+            expected_window,
+        ) in expected_metric_ids.items():
+            assert (
+                manifest.metrics[metric_id].type_params.conversion_type_params.window
+                == expected_window
+            ), f"Found unexpected conversion window for {metric_id}"
 
 
 class TestCumulativeMetric:
@@ -418,7 +445,8 @@ class TestCumulativeMetric:
             "purchasing.sql": purchasing_model_sql,
             "metricflow_time_spine.sql": metricflow_time_spine_sql,
             "semantic_models.yml": conversion_semantic_model_purchasing_yml,
-            "conversion_metric.yml": cumulative_metric_yml,
+            "cumulative_metric.yml": cumulative_metric_yml,
+            "time_spine.yml": time_spine_yml,
         }
 
     @pytest.fixture(scope="class")
@@ -436,25 +464,25 @@ class TestCumulativeMetric:
         metric_ids = set(manifest.metrics.keys())
         expected_metric_ids_to_cumulative_type_params = {
             "metric.test.weekly_visits": CumulativeTypeParams(
-                window=MetricTimeWindow(count=7, granularity=TimeGranularity.DAY),
+                window=MetricTimeWindow(count=7, granularity=TimeGranularity.DAY.value),
                 period_agg=PeriodAggregation.AVERAGE,
             ),
             "metric.test.cumulative_orders": CumulativeTypeParams(
                 period_agg=PeriodAggregation.LAST
             ),
             "metric.test.orders_ytd": CumulativeTypeParams(
-                grain_to_date=TimeGranularity.YEAR, period_agg=PeriodAggregation.FIRST
+                grain_to_date=TimeGranularity.YEAR.value, period_agg=PeriodAggregation.FIRST
             ),
             "metric.test.monthly_orders": CumulativeTypeParams(
-                window=MetricTimeWindow(count=1, granularity=TimeGranularity.MONTH),
+                window=MetricTimeWindow(count=1, granularity=TimeGranularity.MONTH.value),
                 period_agg=PeriodAggregation.AVERAGE,
             ),
             "metric.test.yearly_orders": CumulativeTypeParams(
-                window=MetricTimeWindow(count=1, granularity=TimeGranularity.YEAR),
+                window=MetricTimeWindow(count=1, granularity=TimeGranularity.YEAR.value),
                 period_agg=PeriodAggregation.FIRST,
             ),
             "metric.test.visits_mtd": CumulativeTypeParams(
-                grain_to_date=TimeGranularity.MONTH, period_agg=PeriodAggregation.FIRST
+                grain_to_date=TimeGranularity.MONTH.value, period_agg=PeriodAggregation.FIRST
             ),
             "metric.test.cumulative_visits": CumulativeTypeParams(
                 period_agg=PeriodAggregation.FIRST
