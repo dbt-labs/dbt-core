@@ -20,6 +20,7 @@ class ModelConfig(NodeConfig):
         default=AccessType.Protected,
         metadata=MergeBehavior.Clobber.meta(),
     )
+    generate_latest: bool = False
 
 
 @dataclass

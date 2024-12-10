@@ -38,6 +38,7 @@ models:
       materialized: table
       contract:
         enforced: true
+      generate_latest: true
     constraints:
       - type: primary_key
         columns: [id, user_name]
@@ -142,6 +143,7 @@ class TestVersionedModelConstraints:
         model_node = manifest.nodes["model.test.foo.v1"]
         assert model_node.contract.enforced is True
         assert len(model_node.constraints) == 1
+        assert model_node.config.generate_latest is True
 
 
 # test primary key defined across model and column level constraints, expect error
