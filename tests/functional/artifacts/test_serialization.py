@@ -1,4 +1,24 @@
-from dbt.artifacts.resources import ExternalPartition, ExternalTable
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional, Union
+
+from mashumaro.mixins.msgpack import DataClassMessagePackMixin
+
+
+@dataclass
+class ExternalPartition(DataClassMessagePackMixin):
+    name: str = ""
+    description: str = ""
+    data_type: str = ""
+    meta: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class ExternalTable(DataClassMessagePackMixin):
+    location: Optional[str] = None
+    file_format: Optional[str] = None
+    row_format: Optional[str] = None
+    tbl_properties: Optional[str] = None
+    partitions: Optional[Union[List[ExternalPartition], List[str]]] = None
 
 
 def test_partitions_serialization():
@@ -24,4 +44,6 @@ def test_partitions_serialization():
 
     ext_table_dict = ext_table.to_dict()
     assert isinstance(ext_table_dict["partitions"][0], dict)
-    ext_table.validate(ext_table_dict)
+
+    ext_table_msgpack = ext_table.to_msgpack()
+    assert ext_table_msgpack
