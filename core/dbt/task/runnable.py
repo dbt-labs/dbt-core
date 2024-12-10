@@ -80,7 +80,7 @@ class GraphRunnableTask(ConfiguredTask):
 
     def __init__(self, args: Flags, config: RuntimeConfig, manifest: Manifest) -> None:
         super().__init__(args, config, manifest)
-        self.config = config
+        self.config: RuntimeConfig = config
         self._flattened_nodes: Optional[List[ResultNode]] = None
         self._raise_next_tick: Optional[DbtRuntimeError] = None
         self._skipped_children: Dict[str, Optional[RunResult]] = {}

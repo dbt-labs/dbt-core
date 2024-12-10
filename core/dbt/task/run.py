@@ -283,10 +283,11 @@ class ModelRunner(CompileRunner):
     def _execute_model(
         self,
         hook_ctx: Any,
-        context_config: Any,
+        context_config: Dict[str, Any],
         model: ModelNode,
         context: Dict[str, Any],
         materialization_macro: MacroProtocol,
+        manifest: Manifest,
     ) -> RunResult:
         try:
             result = MacroGenerator(
@@ -295,10 +296,25 @@ class ModelRunner(CompileRunner):
         finally:
             self.adapter.post_model_hook(context_config, hook_ctx)
 
+        if model.config.generate_latest and model.latest_version == model.version:
+            self.generate_latest(model, manifest)
+
         for relation in self._materialization_relations(result, model):
             self.adapter.cache_added(relation.incorporate(dbt_created=True))
 
         return self._build_run_model_result(model, context)
+
+    def generate_latest(self, model: ModelNode, manifest):
+        model_context = generate_runtime_model_context(model, self.config, manifest)
+        print(f"-- running ModelRunner.generate_latest")
+
+    #       self.adapter.execute_macro(
+    #           macro_name="",
+    #           macro_resolver=manifest,
+    #           context_override=model_context,
+    #           kwargs={
+    #           },
+    #       )
 
     def execute(self, model, manifest):
         context = generate_runtime_model_context(model, self.config, manifest)
@@ -329,7 +345,9 @@ class ModelRunner(CompileRunner):
 
         hook_ctx = self.adapter.pre_model_hook(context_config)
 
-        return self._execute_model(hook_ctx, context_config, model, context, materialization_macro)
+        return self._execute_model(
+            hook_ctx, context_config, model, context, materialization_macro, manifest
+        )
 
 
 class MicrobatchModelRunner(ModelRunner):
@@ -674,10 +692,11 @@ class MicrobatchModelRunner(ModelRunner):
     def _execute_model(
         self,
         hook_ctx: Any,
-        context_config: Any,
+        context_config: Dict[str, Any],
         model: ModelNode,
         context: Dict[str, Any],
         materialization_macro: MacroProtocol,
+        manifest: Manifest,
     ) -> RunResult:
         try:
             batch_result = self._execute_microbatch_materialization(

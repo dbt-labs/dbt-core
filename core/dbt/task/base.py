@@ -141,7 +141,6 @@ class ConfiguredTask(BaseTask):
     def from_args(cls, args: Flags, *pargs, **kwargs):
         move_to_nearest_project_dir(args.project_dir)
         try:
-            # This is usually RuntimeConfig
             config = RuntimeConfig.from_args(args)
         except dbt.exceptions.DbtProjectError as exc:
             fire_event(LogDbtProjectError(exc=str(exc)))
@@ -167,8 +166,10 @@ class ExecutionContext:
 
 
 class BaseRunner(metaclass=ABCMeta):
-    def __init__(self, config, adapter, node, node_index: int, num_nodes: int) -> None:
-        self.config = config
+    def __init__(
+        self, config: RuntimeConfig, adapter, node, node_index: int, num_nodes: int
+    ) -> None:
+        self.config: RuntimeConfig = config
         self.compiler = Compiler(config)
         self.adapter = adapter
         self.node = node
