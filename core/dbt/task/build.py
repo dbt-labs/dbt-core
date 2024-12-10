@@ -1,18 +1,17 @@
-import threading
 from typing import Dict, List, Optional, Set, Type
 
-from dbt.artifacts.schemas.results import NodeStatus, RunStatus
+from dbt.artifacts.schemas.results import NodeStatus
 from dbt.artifacts.schemas.run import RunResult
 from dbt.cli.flags import Flags
 from dbt.config.runtime import RuntimeConfig
 from dbt.contracts.graph.manifest import Manifest
-from dbt.events.types import LogNodeNoOpResult
 from dbt.exceptions import DbtInternalError
 from dbt.graph import Graph, GraphQueue, ResourceTypeSelector
 from dbt.node_types import NodeType
+from dbt.runners import ExposureRunner as exposure_runner
+from dbt.runners import SavedQueryRunner as saved_query_runner
 from dbt.task.base import BaseRunner, resource_types_from_args
 from dbt.task.run import MicrobatchModelRunner
-from dbt_common.events.functions import fire_event
 
 from .run import ModelRunner as run_model_runner
 from .run import RunTask
@@ -21,48 +20,10 @@ from .snapshot import SnapshotRunner as snapshot_model_runner
 from .test import TestRunner as test_runner
 
 
-class SavedQueryRunner(BaseRunner):
-    # Stub. No-op Runner for Saved Queries, which require MetricFlow for execution.
-    @property
-    def description(self) -> str:
-        return f"saved query {self.node.name}"
-
-    def before_execute(self) -> None:
-        pass
-
-    def compile(self, manifest: Manifest):
-        return self.node
-
-    def after_execute(self, result) -> None:
-        fire_event(
-            LogNodeNoOpResult(
-                description=self.description,
-                index=self.node_index,
-                total=self.num_nodes,
-                node_info=self.node.node_info,
-            )
-        )
-
-    def execute(self, compiled_node, manifest):
-        # no-op
-        return RunResult(
-            node=compiled_node,
-            status=RunStatus.Success,
-            timing=[],
-            thread_id=threading.current_thread().name,
-            execution_time=0,
-            message="NO-OP",
-            adapter_response={},
-            failures=0,
-            batch_results=None,
-            agate_table=None,
-        )
-
-
 class BuildTask(RunTask):
     """The Build task processes all assets of a given process and attempts to
     'build' them in an opinionated fashion.  Every resource type outlined in
-    RUNNER_MAP will be processed by the mapped runner class.
+    RUNNER_MAP will be processed by the mapped runners class.
 
     I.E. a resource of type Model is handled by the ModelRunner which is
     imported as run_model_runner."""
@@ -80,7 +41,8 @@ class BuildTask(RunTask):
         NodeType.Seed: seed_runner,
         NodeType.Test: test_runner,
         NodeType.Unit: test_runner,
-        NodeType.SavedQuery: SavedQueryRunner,
+        NodeType.SavedQuery: saved_query_runner,
+        NodeType.Exposure: exposure_runner,
     }
     ALL_RESOURCE_VALUES = frozenset({x for x in RUNNER_MAP.keys()})
 

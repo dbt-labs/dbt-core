@@ -179,13 +179,14 @@ class TestBuildRunResultsState(BaseRunResultsState):
         results = run_dbt(
             ["build", "--select", "result:error+", "--state", "./state"], expect_pass=False
         )
-        assert len(results) == 4
+        assert len(results) == 5
         nodes = set([elem.node.name for elem in results])
         assert nodes == {
             "table_model",
             "view_model",
             "not_null_view_model_id",
             "unique_view_model_id",
+            "my_exposure",
         }
 
         results = run_dbt(["ls", "--select", "result:error+", "--state", "./state"])
@@ -443,7 +444,7 @@ class TestConcurrentSelectionBuildRunResultsState(BaseRunResultsState):
             ["build", "--select", "state:modified+", "result:error+", "--state", "./state"],
             expect_pass=False,
         )
-        assert len(results) == 5
+        assert len(results) == 6
         nodes = set([elem.node.name for elem in results])
         assert nodes == {
             "table_model_modified_example",
@@ -451,6 +452,7 @@ class TestConcurrentSelectionBuildRunResultsState(BaseRunResultsState):
             "table_model",
             "not_null_view_model_id",
             "unique_view_model_id",
+            "my_exposure",
         }
 
         self.update_view_model_failing_tests()
