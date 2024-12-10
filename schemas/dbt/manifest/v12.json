@@ -13,7 +13,7 @@
         },
         "dbt_version": {
           "type": "string",
-          "default": "1.9.0b4"
+          "default": "1.10.0a1"
         },
         "generated_at": {
           "type": "string"
@@ -3769,6 +3769,10 @@
                       "public"
                     ],
                     "default": "protected"
+                  },
+                  "generate_latest": {
+                    "type": "boolean",
+                    "default": false
                   }
                 },
                 "additionalProperties": true
@@ -9121,19 +9125,7 @@
                         "type": "integer"
                       },
                       "granularity": {
-                        "enum": [
-                          "nanosecond",
-                          "microsecond",
-                          "millisecond",
-                          "second",
-                          "minute",
-                          "hour",
-                          "day",
-                          "week",
-                          "month",
-                          "quarter",
-                          "year"
-                        ]
+                        "type": "string"
                       }
                     },
                     "additionalProperties": false,
@@ -13578,6 +13570,10 @@
                             "public"
                           ],
                           "default": "protected"
+                        },
+                        "generate_latest": {
+                          "type": "boolean",
+                          "default": false
                         }
                       },
                       "additionalProperties": true
@@ -18712,19 +18708,7 @@
                                   "type": "integer"
                                 },
                                 "granularity": {
-                                  "enum": [
-                                    "nanosecond",
-                                    "microsecond",
-                                    "millisecond",
-                                    "second",
-                                    "minute",
-                                    "hour",
-                                    "day",
-                                    "week",
-                                    "month",
-                                    "quarter",
-                                    "year"
-                                  ]
+                                  "type": "string"
                                 }
                               },
                               "additionalProperties": false,
@@ -20024,6 +20008,27 @@
                               }
                             ],
                             "default": null
+                          },
+                          "config": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "title": "SemanticLayerElementConfig",
+                                "properties": {
+                                  "meta": {
+                                    "type": "object",
+                                    "propertyNames": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
                           }
                         },
                         "additionalProperties": false,
@@ -20172,6 +20177,27 @@
                             "anyOf": [
                               {
                                 "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
+                          },
+                          "config": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "title": "SemanticLayerElementConfig",
+                                "properties": {
+                                  "meta": {
+                                    "type": "object",
+                                    "propertyNames": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                "additionalProperties": false
                               },
                               {
                                 "type": "null"
@@ -20335,6 +20361,27 @@
                                   "repo_file_path",
                                   "file_slice"
                                 ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
+                          },
+                          "config": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "title": "SemanticLayerElementConfig",
+                                "properties": {
+                                  "meta": {
+                                    "type": "object",
+                                    "propertyNames": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                "additionalProperties": false
                               },
                               {
                                 "type": "null"
@@ -21586,6 +21633,27 @@
                     }
                   ],
                   "default": null
+                },
+                "config": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "title": "SemanticLayerElementConfig",
+                      "properties": {
+                        "meta": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
                 }
               },
               "additionalProperties": false,
@@ -21734,6 +21802,27 @@
                   "anyOf": [
                     {
                       "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                },
+                "config": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "title": "SemanticLayerElementConfig",
+                      "properties": {
+                        "meta": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "additionalProperties": false
                     },
                     {
                       "type": "null"
@@ -21897,6 +21986,27 @@
                         "repo_file_path",
                         "file_slice"
                       ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                },
+                "config": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "title": "SemanticLayerElementConfig",
+                      "properties": {
+                        "meta": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "additionalProperties": false
                     },
                     {
                       "type": "null"
