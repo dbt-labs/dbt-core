@@ -735,3 +735,10 @@ show_resource_report = click.option(
     envvar="DBT_SHOW_RESOURCE_REPORT",
     hidden=True,
 )
+
+use_fast_test_edges = click.option(
+    "--use-fast-test-edges/--no-use-fast-test-edges",
+    envvar="DBT_USE_FAST_TEST_EDGES",
+    default=False,
+    hidden=True,
+)

@@ -27,12 +27,14 @@ from dbt.clients.jinja import MacroGenerator
 from dbt.config import RuntimeConfig
 from dbt.context.providers import generate_runtime_model_context
 from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.graph.nodes import HookNode, ModelNode, ResultNode
+from dbt.contracts.graph.nodes import BatchContext, HookNode, ModelNode, ResultNode
 from dbt.events.types import (
     GenericExceptionOnRun,
+    LogBatchResult,
     LogHookEndLine,
     LogHookStartLine,
     LogModelResult,
+    LogStartBatch,
     LogStartLine,
     MicrobatchExecutionDebug,
 )
@@ -283,7 +285,6 @@ class ModelRunner(CompileRunner):
         hook_ctx: Any,
         context_config: Any,
         model: ModelNode,
-        manifest: Manifest,
         context: Dict[str, Any],
         materialization_macro: MacroProtocol,
     ) -> RunResult:
@@ -328,9 +329,7 @@ class ModelRunner(CompileRunner):
 
         hook_ctx = self.adapter.pre_model_hook(context_config)
 
-        return self._execute_model(
-            hook_ctx, context_config, model, manifest, context, materialization_macro
-        )
+        return self._execute_model(hook_ctx, context_config, model, context, materialization_macro)
 
 
 class MicrobatchModelRunner(ModelRunner):
@@ -341,6 +340,33 @@ class MicrobatchModelRunner(ModelRunner):
         self.batches: Dict[int, BatchType] = {}
         self.relation_exists: bool = False
 
+    def compile(self, manifest: Manifest):
+        if self.batch_idx is not None:
+            batch = self.batches[self.batch_idx]
+
+            # LEGACY: Set start/end in context prior to re-compiling (Will be removed for 1.10+)
+            # TODO: REMOVE before 1.10 GA
+            self.node.config["__dbt_internal_microbatch_event_time_start"] = batch[0]
+            self.node.config["__dbt_internal_microbatch_event_time_end"] = batch[1]
+            # Create batch context on model node prior to re-compiling
+            self.node.batch = BatchContext(
+                id=MicrobatchBuilder.batch_id(batch[0], self.node.config.batch_size),
+                event_time_start=batch[0],
+                event_time_end=batch[1],
+            )
+            # Recompile node to re-resolve refs with event time filters rendered, update context
+            self.compiler.compile_node(
+                self.node,
+                manifest,
+                {},
+                split_suffix=MicrobatchBuilder.format_batch_start(
+                    batch[0], self.node.config.batch_size
+                ),
+            )
+
+        # Skips compilation for non-batch runs
+        return self.node
+
     def set_batch_idx(self, batch_idx: int) -> None:
         self.batch_idx = batch_idx
 
@@ -350,10 +376,21 @@ class MicrobatchModelRunner(ModelRunner):
     def set_batches(self, batches: Dict[int, BatchType]) -> None:
         self.batches = batches
 
+    @property
+    def batch_start(self) -> Optional[datetime]:
+        if self.batch_idx is None:
+            return None
+        else:
+            return self.batches[self.batch_idx][0]
+
     def describe_node(self) -> str:
         return f"{self.node.language} microbatch model {self.get_node_representation()}"
 
-    def describe_batch(self, batch_start: Optional[datetime]) -> str:
+    def describe_batch(self) -> str:
+        batch_start = self.batch_start
+        if batch_start is None:
+            return ""
+
         # Only visualize date if batch_start year/month/day
         formatted_batch_start = MicrobatchBuilder.format_batch_start(
             batch_start, self.node.config.batch_size
@@ -367,21 +404,23 @@ class MicrobatchModelRunner(ModelRunner):
         if self.batch_idx is None:
             return
 
-        batch_start = self.batches[self.batch_idx][0]
-        description = self.describe_batch(batch_start)
+        description = self.describe_batch()
         group = group_lookup.get(self.node.unique_id)
         if result.status == NodeStatus.Error:
             status = result.status
             level = EventLevel.ERROR
+        elif result.status == NodeStatus.Skipped:
+            status = result.status
+            level = EventLevel.INFO
         else:
             status = result.message
             level = EventLevel.INFO
         fire_event(
-            LogModelResult(
+            LogBatchResult(
                 description=description,
                 status=status,
-                index=self.batch_idx + 1,
-                total=len(self.batches),
+                batch_index=self.batch_idx + 1,
+                total_batches=len(self.batches),
                 execution_time=result.execution_time,
                 node_info=self.node.node_info,
                 group=group,
@@ -397,12 +436,12 @@ class MicrobatchModelRunner(ModelRunner):
         if batch_start is None:
             return
 
-        batch_description = self.describe_batch(batch_start)
+        batch_description = self.describe_batch()
         fire_event(
-            LogStartLine(
+            LogStartBatch(
                 description=batch_description,
-                index=self.batch_idx + 1,
-                total=len(self.batches),
+                batch_index=self.batch_idx + 1,
+                total_batches=len(self.batches),
                 node_info=self.node.node_info,
             )
         )
@@ -445,8 +484,27 @@ class MicrobatchModelRunner(ModelRunner):
         result.batch_results.failed = sorted(result.batch_results.failed)
 
         # # If retrying, propagate previously successful batches into final result, even thoguh they were not run in this invocation
-        if self.node.batch_info is not None:
-            result.batch_results.successful += self.node.batch_info.successful
+        if self.node.previous_batch_results is not None:
+            result.batch_results.successful += self.node.previous_batch_results.successful
+
+    def on_skip(self):
+        # If node.batch is None, then we're dealing with skipping of the entire node
+        if self.batch_idx is None:
+            return super().on_skip()
+        else:
+            result = RunResult(
+                node=self.node,
+                status=RunStatus.Skipped,
+                timing=[],
+                thread_id=threading.current_thread().name,
+                execution_time=0.0,
+                message="SKIPPED",
+                adapter_response={},
+                failures=1,
+                batch_results=BatchResults(failed=[self.batches[self.batch_idx]]),
+            )
+            self.print_batch_result_line(result=result)
+            return result
 
     def _build_succesful_run_batch_result(
         self,
@@ -495,7 +553,6 @@ class MicrobatchModelRunner(ModelRunner):
     def _execute_microbatch_materialization(
         self,
         model: ModelNode,
-        manifest: Manifest,
         context: Dict[str, Any],
         materialization_macro: MacroProtocol,
     ) -> RunResult:
@@ -508,15 +565,15 @@ class MicrobatchModelRunner(ModelRunner):
         )
 
         if self.batch_idx is None:
-            # Note currently (9/30/2024) model.batch_info is only ever _not_ `None`
+            # Note currently (9/30/2024) model.previous_batch_results is only ever _not_ `None`
             # IFF `dbt retry` is being run and the microbatch model had batches which
             # failed on the run of the model (which is being retried)
-            if model.batch_info is None:
+            if model.previous_batch_results is None:
                 end = microbatch_builder.build_end_time()
                 start = microbatch_builder.build_start_time(end)
                 batches = microbatch_builder.build_batches(start, end)
             else:
-                batches = model.batch_info.failed
+                batches = model.previous_batch_results.failed
                 # If there is batch info, then don't run as full_refresh and do force is_incremental
                 # not doing this risks blowing away the work that has already been done
                 if self._has_relation(model=model):
@@ -530,24 +587,11 @@ class MicrobatchModelRunner(ModelRunner):
             # call materialization_macro to get a batch-level run result
             start_time = time.perf_counter()
             try:
-                # Set start/end in context prior to re-compiling
-                model.config["__dbt_internal_microbatch_event_time_start"] = batch[0]
-                model.config["__dbt_internal_microbatch_event_time_end"] = batch[1]
-
-                # Recompile node to re-resolve refs with event time filters rendered, update context
-                self.compiler.compile_node(
-                    model,
-                    manifest,
-                    {},
-                    split_suffix=MicrobatchBuilder.format_batch_start(
-                        batch[0], model.config.batch_size
-                    ),
-                )
                 # Update jinja context with batch context members
-                batch_context = microbatch_builder.build_batch_context(
+                jinja_context = microbatch_builder.build_jinja_context_for_batch(
                     incremental_batch=self.relation_exists
                 )
-                context.update(batch_context)
+                context.update(jinja_context)
 
                 # Materialize batch and cache any materialized relations
                 result = MacroGenerator(
@@ -592,13 +636,10 @@ class MicrobatchModelRunner(ModelRunner):
         )
         return relation is not None
 
-    def _should_run_in_parallel(
-        self,
-        relation_exists: bool,
-    ) -> bool:
+    def should_run_in_parallel(self) -> bool:
         if not self.adapter.supports(Capability.MicrobatchConcurrency):
             run_in_parallel = False
-        elif not relation_exists:
+        elif not self.relation_exists:
             # If the relation doesn't exist, we can't run in parallel
             run_in_parallel = False
         elif self.node.config.concurrent_batches is not None:
@@ -630,36 +671,22 @@ class MicrobatchModelRunner(ModelRunner):
         else:
             return False
 
-    def _execute_microbatch_model(
-        self,
-        hook_ctx: Any,
-        context_config: Any,
-        model: ModelNode,
-        manifest: Manifest,
-        context: Dict[str, Any],
-        materialization_macro: MacroProtocol,
-    ) -> RunResult:
-        try:
-            batch_result = self._execute_microbatch_materialization(
-                model, manifest, context, materialization_macro
-            )
-        finally:
-            self.adapter.post_model_hook(context_config, hook_ctx)
-
-        return batch_result
-
     def _execute_model(
         self,
         hook_ctx: Any,
         context_config: Any,
         model: ModelNode,
-        manifest: Manifest,
         context: Dict[str, Any],
         materialization_macro: MacroProtocol,
     ) -> RunResult:
-        return self._execute_microbatch_model(
-            hook_ctx, context_config, model, manifest, context, materialization_macro
-        )
+        try:
+            batch_result = self._execute_microbatch_materialization(
+                model, context, materialization_macro
+            )
+        finally:
+            self.adapter.post_model_hook(context_config, hook_ctx)
+
+        return batch_result
 
 
 class RunTask(CompileTask):
@@ -707,51 +734,124 @@ class RunTask(CompileTask):
         runner: MicrobatchModelRunner,
         pool: ThreadPool,
     ) -> RunResult:
-        # Initial run computes batch metadata, unless model is skipped
+        # Initial run computes batch metadata
         result = self.call_runner(runner)
+        batches, node, relation_exists = runner.batches, runner.node, runner.relation_exists
+
+        # Return early if model should be skipped, or there are no batches to execute
         if result.status == RunStatus.Skipped:
+            return result
+        elif len(runner.batches) == 0:
             return result
 
         batch_results: List[RunResult] = []
-
-        # Execute batches serially until a relation exists, at which point future batches are run in parallel
-        relation_exists = runner.relation_exists
         batch_idx = 0
-        while batch_idx < len(runner.batches):
-            batch_runner = MicrobatchModelRunner(
-                self.config, runner.adapter, deepcopy(runner.node), self.run_count, self.num_nodes
+
+        # Run first batch not in parallel
+        relation_exists = self._submit_batch(
+            node=node,
+            adapter=runner.adapter,
+            relation_exists=relation_exists,
+            batches=batches,
+            batch_idx=batch_idx,
+            batch_results=batch_results,
+            pool=pool,
+            force_sequential_run=True,
+        )
+        batch_idx += 1
+        skip_batches = batch_results[0].status != RunStatus.Success
+
+        # Run all batches except first and last batch, in parallel if possible
+        while batch_idx < len(runner.batches) - 1:
+            relation_exists = self._submit_batch(
+                node=node,
+                adapter=runner.adapter,
+                relation_exists=relation_exists,
+                batches=batches,
+                batch_idx=batch_idx,
+                batch_results=batch_results,
+                pool=pool,
+                skip=skip_batches,
             )
-            batch_runner.set_batch_idx(batch_idx)
-            batch_runner.set_relation_exists(relation_exists)
-            batch_runner.set_batches(runner.batches)
-
-            if runner._should_run_in_parallel(relation_exists):
-                fire_event(
-                    MicrobatchExecutionDebug(
-                        msg=f"{batch_runner.describe_batch} is being run concurrently"
-                    )
-                )
-                self._submit(pool, [batch_runner], batch_results.append)
-            else:
-                fire_event(
-                    MicrobatchExecutionDebug(
-                        msg=f"{batch_runner.describe_batch} is being run sequentially"
-                    )
-                )
-                batch_results.append(self.call_runner(batch_runner))
-                relation_exists = batch_runner.relation_exists
-
             batch_idx += 1
 
-        # Wait until all batches have completed
-        while len(batch_results) != len(runner.batches):
+        # Wait until all submitted batches have completed
+        while len(batch_results) != batch_idx:
             pass
 
+        # Only run "last" batch if there is more than one batch
+        if len(batches) != 1:
+            # Final batch runs once all others complete to ensure post_hook runs at the end
+            self._submit_batch(
+                node=node,
+                adapter=runner.adapter,
+                relation_exists=relation_exists,
+                batches=batches,
+                batch_idx=batch_idx,
+                batch_results=batch_results,
+                pool=pool,
+                force_sequential_run=True,
+                skip=skip_batches,
+            )
+
+        # Finalize run: merge results, track model run, and print final result line
         runner.merge_batch_results(result, batch_results)
         track_model_run(runner.node_index, runner.num_nodes, result, adapter=runner.adapter)
         runner.print_result_line(result)
 
         return result
+
+    def _submit_batch(
+        self,
+        node: ModelNode,
+        adapter: BaseAdapter,
+        relation_exists: bool,
+        batches: Dict[int, BatchType],
+        batch_idx: int,
+        batch_results: List[RunResult],
+        pool: ThreadPool,
+        force_sequential_run: bool = False,
+        skip: bool = False,
+    ):
+        node_copy = deepcopy(node)
+        # Only run pre_hook(s) for first batch
+        if batch_idx != 0:
+            node_copy.config.pre_hook = []
+
+        # Only run post_hook(s) for last batch
+        if batch_idx != len(batches) - 1:
+            node_copy.config.post_hook = []
+
+        # TODO: We should be doing self.get_runner, however doing so
+        # currently causes the tracking of how many nodes there are to
+        # increment when we don't want it to
+        batch_runner = MicrobatchModelRunner(
+            self.config, adapter, node_copy, self.run_count, self.num_nodes
+        )
+        batch_runner.set_batch_idx(batch_idx)
+        batch_runner.set_relation_exists(relation_exists)
+        batch_runner.set_batches(batches)
+
+        if skip:
+            batch_runner.do_skip()
+
+        if not force_sequential_run and batch_runner.should_run_in_parallel():
+            fire_event(
+                MicrobatchExecutionDebug(
+                    msg=f"{batch_runner.describe_batch()} is being run concurrently"
+                )
+            )
+            self._submit(pool, [batch_runner], batch_results.append)
+        else:
+            fire_event(
+                MicrobatchExecutionDebug(
+                    msg=f"{batch_runner.describe_batch()} is being run sequentially"
+                )
+            )
+            batch_results.append(self.call_runner(batch_runner))
+            relation_exists = batch_runner.relation_exists
+
+        return relation_exists
 
     def _hook_keyfunc(self, hook: HookNode) -> Tuple[str, Optional[int]]:
         package_name = hook.package_name
@@ -885,7 +985,7 @@ class RunTask(CompileTask):
                 if uid in self.batch_map:
                     node = self.manifest.ref_lookup.perform_lookup(uid, self.manifest)
                     if isinstance(node, ModelNode):
-                        node.batch_info = self.batch_map[uid]
+                        node.previous_batch_results = self.batch_map[uid]
 
     def before_run(self, adapter: BaseAdapter, selected_uids: AbstractSet[str]) -> RunStatus:
         with adapter.connection_named("master"):

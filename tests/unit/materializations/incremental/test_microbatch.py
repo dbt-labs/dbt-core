@@ -489,11 +489,11 @@ class TestMicrobatchBuilder:
         assert len(actual_batches) == len(expected_batches)
         assert actual_batches == expected_batches
 
-    def test_build_batch_context_incremental_batch(self, microbatch_model):
+    def test_build_jinja_context_for_incremental_batch(self, microbatch_model):
         microbatch_builder = MicrobatchBuilder(
             model=microbatch_model, is_incremental=True, event_time_start=None, event_time_end=None
         )
-        context = microbatch_builder.build_batch_context(incremental_batch=True)
+        context = microbatch_builder.build_jinja_context_for_batch(incremental_batch=True)
 
         assert context["model"] == microbatch_model.to_dict()
         assert context["sql"] == microbatch_model.compiled_code
@@ -502,11 +502,11 @@ class TestMicrobatchBuilder:
         assert context["is_incremental"]() is True
         assert context["should_full_refresh"]() is False
 
-    def test_build_batch_context_incremental_batch_false(self, microbatch_model):
+    def test_build_jinja_context_for_incremental_batch_false(self, microbatch_model):
         microbatch_builder = MicrobatchBuilder(
             model=microbatch_model, is_incremental=True, event_time_start=None, event_time_end=None
         )
-        context = microbatch_builder.build_batch_context(incremental_batch=False)
+        context = microbatch_builder.build_jinja_context_for_batch(incremental_batch=False)
 
         assert context["model"] == microbatch_model.to_dict()
         assert context["sql"] == microbatch_model.compiled_code
@@ -605,7 +605,6 @@ class TestMicrobatchBuilder:
     @pytest.mark.parametrize(
         "batch_size,batch_start,expected_formatted_batch_start",
         [
-            (None, None, None),
             (BatchSize.year, datetime(2020, 1, 1, 1), "2020-01-01"),
             (BatchSize.month, datetime(2020, 1, 1, 1), "2020-01-01"),
             (BatchSize.day, datetime(2020, 1, 1, 1), "2020-01-01"),

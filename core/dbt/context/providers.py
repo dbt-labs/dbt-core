@@ -244,9 +244,10 @@ class BaseResolver(metaclass=abc.ABCMeta):
             and self.model.config.materialized == "incremental"
             and self.model.config.incremental_strategy == "microbatch"
             and self.manifest.use_microbatch_batches(project_name=self.config.project_name)
+            and self.model.batch is not None
         ):
-            start = self.model.config.get("__dbt_internal_microbatch_event_time_start")
-            end = self.model.config.get("__dbt_internal_microbatch_event_time_end")
+            start = self.model.batch.event_time_start
+            end = self.model.batch.event_time_end
 
             if start is not None or end is not None:
                 event_time_filter = EventTimeFilter(
