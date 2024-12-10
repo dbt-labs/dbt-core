@@ -1,0 +1,6 @@
+kind: Features
+body: Generate latest model version view
+time: 2024-12-10T13:07:34.723167-05:00
+custom:
+  Author: gshank
+  Issue: "7442"
