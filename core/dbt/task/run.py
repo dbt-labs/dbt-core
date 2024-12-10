@@ -376,10 +376,21 @@ class MicrobatchModelRunner(ModelRunner):
     def set_batches(self, batches: Dict[int, BatchType]) -> None:
         self.batches = batches
 
+    @property
+    def batch_start(self) -> Optional[datetime]:
+        if self.batch_idx is None:
+            return None
+        else:
+            return self.batches[self.batch_idx][0]
+
     def describe_node(self) -> str:
         return f"{self.node.language} microbatch model {self.get_node_representation()}"
 
-    def describe_batch(self, batch_start: datetime) -> str:
+    def describe_batch(self) -> str:
+        batch_start = self.batch_start
+        if batch_start is None:
+            return ""
+
         # Only visualize date if batch_start year/month/day
         formatted_batch_start = MicrobatchBuilder.format_batch_start(
             batch_start, self.node.config.batch_size
@@ -393,8 +404,7 @@ class MicrobatchModelRunner(ModelRunner):
         if self.batch_idx is None:
             return
 
-        batch_start = self.batches[self.batch_idx][0]
-        description = self.describe_batch(batch_start)
+        description = self.describe_batch()
         group = group_lookup.get(self.node.unique_id)
         if result.status == NodeStatus.Error:
             status = result.status
@@ -426,7 +436,7 @@ class MicrobatchModelRunner(ModelRunner):
         if batch_start is None:
             return
 
-        batch_description = self.describe_batch(batch_start)
+        batch_description = self.describe_batch()
         fire_event(
             LogStartBatch(
                 description=batch_description,
@@ -828,14 +838,14 @@ class RunTask(CompileTask):
         if not force_sequential_run and batch_runner.should_run_in_parallel():
             fire_event(
                 MicrobatchExecutionDebug(
-                    msg=f"{batch_runner.describe_batch} is being run concurrently"
+                    msg=f"{batch_runner.describe_batch()} is being run concurrently"
                 )
             )
             self._submit(pool, [batch_runner], batch_results.append)
         else:
             fire_event(
                 MicrobatchExecutionDebug(
-                    msg=f"{batch_runner.describe_batch} is being run sequentially"
+                    msg=f"{batch_runner.describe_batch()} is being run sequentially"
                 )
             )
             batch_results.append(self.call_runner(batch_runner))
