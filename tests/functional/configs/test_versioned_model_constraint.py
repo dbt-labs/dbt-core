@@ -1,7 +1,13 @@
 import pytest
 
 from dbt.exceptions import ParsingError
-from dbt.tests.util import get_manifest, rm_file, run_dbt, write_file
+from dbt.tests.util import (
+    check_table_does_exist,
+    get_manifest,
+    rm_file,
+    run_dbt,
+    write_file,
+)
 
 schema_yml = """
 models:
@@ -125,12 +131,10 @@ create_latest_version_view_sql = """
 
         {% set target_relation = this.incorporate(path={"identifier": model['name'] ~ '_latest'}) %}
 
-        {{ return(get_replace_view_sql(target_relation, "select * from " ~ this)) }}
-
-    {% else %}
-
-        -- no-op
-        select 1 as id
+        {% set view_sql = get_replace_view_sql(target_relation, "select * from " ~ this) %}
+        {% call statement(name="main") %}
+            {{ view_sql }}
+        {% endcall %}
 
     {% endif %}
 
@@ -171,6 +175,8 @@ class TestVersionedModelConstraints:
         assert model_node.contract.enforced is True
         assert len(model_node.constraints) == 1
         assert model_node.config.generate_latest is True
+        check_table_does_exist(project.adapter, "foo_v1")
+        check_table_does_exist(project.adapter, "foo_latest")
 
 
 # test primary key defined across model and column level constraints, expect error
