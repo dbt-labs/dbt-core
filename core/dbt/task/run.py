@@ -306,15 +306,18 @@ class ModelRunner(CompileRunner):
 
     def generate_latest(self, model: ModelNode, manifest):
         model_context = generate_runtime_model_context(model, self.config, manifest)
-        print(f"-- running ModelRunner.generate_latest")
 
-    #       self.adapter.execute_macro(
-    #           macro_name="",
-    #           macro_resolver=manifest,
-    #           context_override=model_context,
-    #           kwargs={
-    #           },
-    #       )
+        macro = manifest.find_macro_by_name(
+            "create_latest_version_view", self.config.project_name, model.package_name
+        )
+
+        if macro:
+            self.adapter.execute_macro(
+                macro_name="create_latest_version_view",
+                macro_resolver=manifest,
+                context_override=model_context,
+                kwargs={},
+            )
 
     def execute(self, model, manifest):
         context = generate_runtime_model_context(model, self.config, manifest)

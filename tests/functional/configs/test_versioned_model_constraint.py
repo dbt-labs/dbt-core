@@ -116,6 +116,27 @@ models:
 
 """
 
+create_latest_version_view_sql = """
+{% macro create_latest_version_view() %}
+
+    -- this hook will run only if the model is versioned, and only if it's the latest version
+    -- otherwise, it's a no-op
+    {% if model.get('version') and model.get('version') == model.get('latest_version') %}
+
+        {% set target_relation = this.incorporate(path={"identifier": model['name'] ~ '_latest'}) %}
+
+        {{ return(get_replace_view_sql(target_relation, "select * from " ~ this)) }}
+
+    {% else %}
+
+        -- no-op
+        select 1 as id
+
+    {% endif %}
+
+{% endmacro %}
+"""
+
 
 class TestVersionedModelConstraints:
     @pytest.fixture(scope="class")
@@ -123,6 +144,12 @@ class TestVersionedModelConstraints:
         return {
             "foo.sql": foo_sql,
             "schema.yml": schema_yml,
+        }
+
+    @pytest.fixture(scope="class")
+    def macros(self):
+        return {
+            "create_latest_version_view.sql": create_latest_version_view_sql,
         }
 
     def test_versioned_model_constraints(self, project):
