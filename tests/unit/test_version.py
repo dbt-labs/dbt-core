@@ -1,5 +1,5 @@
 import dbt.version
-from dbt_common.ui import green, red, yellow
+from dbt_common.ui import green, yellow
 
 
 class TestGetVersionInformation:
@@ -239,7 +239,7 @@ class TestGetVersionInformation:
                 "Plugins:",
                 f"  - foobar: 1.0.0 - {yellow('Update available!')}",
                 "",
-                "  At least one plugin is out of date or incompatible with dbt-core.",
+                "  At least one plugin is out of date with dbt-core.",
                 "  You can find instructions for upgrading here:",
                 "  https://docs.getdbt.com/docs/installation",
                 "",
@@ -269,127 +269,7 @@ class TestGetVersionInformation:
                 "Plugins:",
                 f"  - foobar: 1.0.0 - {yellow('Update available!')}",
                 "",
-                "  At least one plugin is out of date or incompatible with dbt-core.",
-                "  You can find instructions for upgrading here:",
-                "  https://docs.getdbt.com/docs/installation",
-                "",
-                "",
-            ]
-        )
-
-        assert expected == actual
-
-    def test_plugin_diff_core_major_match_latest(self, mocker):
-        mock_versions(
-            mocker,
-            installed="2.0.0",
-            latest="2.0.0",
-            plugins={
-                "foobar": ("1.0.0", "1.0.0"),
-            },
-        )
-
-        actual = dbt.version.get_version_information()
-        expected = "\n".join(
-            [
-                "Core:",
-                "  - installed: 2.0.0",
-                f"  - latest:    2.0.0 - {green('Up to date!')}",
-                "",
-                "Plugins:",
-                f"  - foobar: 1.0.0 - {red('Not compatible!')}",
-                "",
-                "  At least one plugin is out of date or incompatible with dbt-core.",
-                "  You can find instructions for upgrading here:",
-                "  https://docs.getdbt.com/docs/installation",
-                "",
-                "",
-            ]
-        )
-
-        assert expected == actual
-
-    def test_plugin_diff_core_major_no_latest(self, mocker):
-        mock_versions(
-            mocker,
-            installed="2.0.0",
-            latest="2.0.0",
-            plugins={
-                "foobar": ("1.0.0", None),
-            },
-        )
-
-        actual = dbt.version.get_version_information()
-        expected = "\n".join(
-            [
-                "Core:",
-                "  - installed: 2.0.0",
-                f"  - latest:    2.0.0 - {green('Up to date!')}",
-                "",
-                "Plugins:",
-                f"  - foobar: 1.0.0 - {red('Not compatible!')}",
-                "",
-                "  At least one plugin is out of date or incompatible with dbt-core.",
-                "  You can find instructions for upgrading here:",
-                "  https://docs.getdbt.com/docs/installation",
-                "",
-                "",
-            ]
-        )
-
-        assert expected == actual
-
-    def test_plugin_diff_core_major_ahead_latest(self, mocker):
-        mock_versions(
-            mocker,
-            installed="2.0.0",
-            latest="2.0.0",
-            plugins={
-                "foobar": ("1.0.0", "0.0.1"),
-            },
-        )
-
-        actual = dbt.version.get_version_information()
-        expected = "\n".join(
-            [
-                "Core:",
-                "  - installed: 2.0.0",
-                f"  - latest:    2.0.0 - {green('Up to date!')}",
-                "",
-                "Plugins:",
-                f"  - foobar: 1.0.0 - {red('Not compatible!')}",
-                "",
-                "  At least one plugin is out of date or incompatible with dbt-core.",
-                "  You can find instructions for upgrading here:",
-                "  https://docs.getdbt.com/docs/installation",
-                "",
-                "",
-            ]
-        )
-
-        assert expected == actual
-
-    def test_plugin_diff_core_major_behind_latest(self, mocker):
-        mock_versions(
-            mocker,
-            installed="2.0.0",
-            latest="2.0.0",
-            plugins={
-                "foobar": ("1.0.0", "1.1.0"),
-            },
-        )
-
-        actual = dbt.version.get_version_information()
-        expected = "\n".join(
-            [
-                "Core:",
-                "  - installed: 2.0.0",
-                f"  - latest:    2.0.0 - {green('Up to date!')}",
-                "",
-                "Plugins:",
-                f"  - foobar: 1.0.0 - {red('Not compatible!')}",
-                "",
-                "  At least one plugin is out of date or incompatible with dbt-core.",
+                "  At least one plugin is out of date with dbt-core.",
                 "  You can find instructions for upgrading here:",
                 "  https://docs.getdbt.com/docs/installation",
                 "",
@@ -417,11 +297,7 @@ class TestGetVersionInformation:
                 f"  - latest:    1.1.0 - {green('Up to date!')}",
                 "",
                 "Plugins:",
-                f"  - foobar: 1.0.0 - {red('Not compatible!')}",
-                "",
-                "  At least one plugin is out of date or incompatible with dbt-core.",
-                "  You can find instructions for upgrading here:",
-                "  https://docs.getdbt.com/docs/installation",
+                f"  - foobar: 1.0.0 - {green('Up to date!')}",
                 "",
                 "",
             ]
@@ -447,11 +323,7 @@ class TestGetVersionInformation:
                 f"  - latest:    1.1.0 - {green('Up to date!')}",
                 "",
                 "Plugins:",
-                f"  - foobar: 1.0.0 - {red('Not compatible!')}",
-                "",
-                "  At least one plugin is out of date or incompatible with dbt-core.",
-                "  You can find instructions for upgrading here:",
-                "  https://docs.getdbt.com/docs/installation",
+                f"  - foobar: 1.0.0 - {yellow('Could not determine latest version')}",
                 "",
                 "",
             ]
@@ -477,11 +349,131 @@ class TestGetVersionInformation:
                 f"  - latest:    1.1.0 - {green('Up to date!')}",
                 "",
                 "Plugins:",
-                f"  - foobar: 1.0.0 - {red('Not compatible!')}",
+                f"  - foobar: 1.0.0 - {yellow('Ahead of latest version!')}",
                 "",
-                "  At least one plugin is out of date or incompatible with dbt-core.",
-                "  You can find instructions for upgrading here:",
-                "  https://docs.getdbt.com/docs/installation",
+                "",
+            ]
+        )
+
+        assert expected == actual
+
+    def test_plugin_diff_plugin_minor_ahead_latest(self, mocker):
+        """
+        Now that adapters are decoupled from core, a higher minor version of a plugin
+        is compatible with a lower minor version of core.
+        """
+
+        mock_versions(
+            mocker,
+            installed="1.8.0",
+            latest="1.8.0",
+            plugins={
+                "foobar": ("1.9.0", "1.9.0"),
+            },
+        )
+
+        actual = dbt.version.get_version_information()
+        expected = "\n".join(
+            [
+                "Core:",
+                "  - installed: 1.8.0",
+                f"  - latest:    1.8.0 - {green('Up to date!')}",
+                "",
+                "Plugins:",
+                f"  - foobar: 1.9.0 - {green('Up to date!')}",
+                "",
+                "",
+            ]
+        )
+
+        assert expected == actual
+
+    def test_plugin_diff_plugin_patch_ahead_latest(self, mocker):
+        """
+        Now that adapters are decoupled from core, a higher minor version of a plugin
+        is compatible with a lower minor version of core.
+        """
+
+        mock_versions(
+            mocker,
+            installed="1.8.0",
+            latest="1.8.0",
+            plugins={
+                "foobar": ("1.8.4", "1.8.4"),
+            },
+        )
+
+        actual = dbt.version.get_version_information()
+        expected = "\n".join(
+            [
+                "Core:",
+                "  - installed: 1.8.0",
+                f"  - latest:    1.8.0 - {green('Up to date!')}",
+                "",
+                "Plugins:",
+                f"  - foobar: 1.8.4 - {green('Up to date!')}",
+                "",
+                "",
+            ]
+        )
+
+        assert expected == actual
+
+    def test_plugin_diff_plugin_minor_ahead_no_latest(self, mocker):
+        """
+        Now that adapters are decoupled from core, a higher minor version of a plugin
+        is compatible with a lower minor version of core.
+        """
+
+        mock_versions(
+            mocker,
+            installed="1.8.0",
+            latest="1.8.0",
+            plugins={
+                "foobar": ("1.9.0", None),
+            },
+        )
+
+        actual = dbt.version.get_version_information()
+        expected = "\n".join(
+            [
+                "Core:",
+                "  - installed: 1.8.0",
+                f"  - latest:    1.8.0 - {green('Up to date!')}",
+                "",
+                "Plugins:",
+                f"  - foobar: 1.9.0 - {yellow('Could not determine latest version')}",
+                "",
+                "",
+            ]
+        )
+
+        assert expected == actual
+
+    def test_plugin_diff_plugin_minor_behind_core_no_latest(self, mocker):
+        """
+        Now that adapters are decoupled from core, a lower minor version of a plugin (1.8)
+        is compatible with a higher minor version of core. (1.9)
+        """
+
+        mock_versions(
+            mocker,
+            installed="1.9.0",
+            latest="1.9.0",
+            plugins={
+                "foobar": ("1.8.0", "1.8.0"),
+            },
+        )
+
+        actual = dbt.version.get_version_information()
+        expected = "\n".join(
+            [
+                "Core:",
+                "  - installed: 1.9.0",
+                f"  - latest:    1.9.0 - {green('Up to date!')}",
+                "",
+                "Plugins:",
+                f"  - foobar: 1.8.0 - {green('Up to date!')}",
                 "",
                 "",
             ]
@@ -507,9 +499,9 @@ class TestGetVersionInformation:
                 f"  - latest:    1.1.0 - {green('Up to date!')}",
                 "",
                 "Plugins:",
-                f"  - foobar: 1.0.0 - {red('Not compatible!')}",
+                f"  - foobar: 1.0.0 - {yellow('Update available!')}",
                 "",
-                "  At least one plugin is out of date or incompatible with dbt-core.",
+                "  At least one plugin is out of date with dbt-core.",
                 "  You can find instructions for upgrading here:",
                 "  https://docs.getdbt.com/docs/installation",
                 "",
@@ -528,7 +520,6 @@ class TestGetVersionInformation:
                 "foobar": ("2.1.0", "2.1.0"),
                 "bazqux": ("2.1.0", None),
                 "quuux": ("2.1.0", "2.1.0"),
-                "corge": ("22.21.20", "22.21.21"),
                 "grault": ("2.1.0", "2.1.1"),
                 "garply": ("2.1.0-b1", None),
             },
@@ -545,11 +536,10 @@ class TestGetVersionInformation:
                 f"  - foobar: 2.1.0    - {green('Up to date!')}",
                 f"  - bazqux: 2.1.0    - {yellow('Could not determine latest version')}",
                 f"  - quuux:  2.1.0    - {green('Up to date!')}",
-                f"  - corge:  22.21.20 - {red('Not compatible!')}",
                 f"  - grault: 2.1.0    - {yellow('Update available!')}",
                 f"  - garply: 2.1.0-b1 - {yellow('Could not determine latest version')}",
                 "",
-                "  At least one plugin is out of date or incompatible with dbt-core.",
+                "  At least one plugin is out of date with dbt-core.",
                 "  You can find instructions for upgrading here:",
                 "  https://docs.getdbt.com/docs/installation",
                 "",
