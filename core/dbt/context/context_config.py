@@ -129,7 +129,7 @@ class BaseConfigGenerator(Generic[T]):
         resource_type: NodeType,
         project_name: str,
         patch_config_dict: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]: ...
+    ): ...
 
 
 class RenderedConfigGenerator(BaseConfigGenerator[C]):
@@ -197,7 +197,7 @@ class RenderedConfigGenerator(BaseConfigGenerator[C]):
         resource_type: NodeType,
         project_name: str,
         patch_config_dict: Optional[dict] = None,
-    ) -> Dict[str, Any]:
+    ) -> BaseConfig:
 
         config_cls = get_config_for(resource_type)
         config_dict = self.combine_config_dicts(
