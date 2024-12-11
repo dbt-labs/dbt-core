@@ -4,6 +4,7 @@ from dbt.exceptions import ParsingError
 from dbt.tests.util import (
     check_table_does_exist,
     get_manifest,
+    get_relation_columns,
     rm_file,
     run_dbt,
     write_file,
@@ -136,6 +137,8 @@ create_latest_version_view_sql = """
             {{ view_sql }}
         {% endcall %}
 
+        {{ adapter.commit() }}
+
     {% endif %}
 
 {% endmacro %}
@@ -176,6 +179,8 @@ class TestVersionedModelConstraints:
         assert len(model_node.constraints) == 1
         assert model_node.config.generate_latest is True
         check_table_does_exist(project.adapter, "foo_v1")
+        columns = get_relation_columns(project.adapter, "foo_latest")
+        assert columns == [("id", "integer", None), ("user_name", "text", None)]
         check_table_does_exist(project.adapter, "foo_latest")
 
 

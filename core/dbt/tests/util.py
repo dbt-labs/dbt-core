@@ -301,6 +301,7 @@ class TestProcessingException(Exception):
 #    adapter.config.credentials
 #    adapter.quote
 #    adapter.run_sql_for_tests
+# fetch = "one", or "all"
 def run_sql_with_adapter(adapter, sql, fetch=None):
     if sql.strip() == "":
         return

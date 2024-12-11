@@ -461,6 +461,7 @@ class TestProjInfo:
         return get_adapter_by_type(self.adapter_type)
 
     # Run sql from a path
+    # fetch = "one" or "all"
     def run_sql_file(self, sql_path, fetch=None):
         with open(sql_path, "r") as f:
             statements = f.read().split(";")
@@ -468,6 +469,7 @@ class TestProjInfo:
                 self.run_sql(statement, fetch)
 
     # Run sql from a string, using adapter saved at test startup
+    # fetch = "one" or "all"
     def run_sql(self, sql, fetch=None):
         return run_sql_with_adapter(self.adapter, sql, fetch=fetch)
 
