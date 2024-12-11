@@ -53,5 +53,5 @@ RESOURCE_TYPES: Dict[NodeType, Type[BaseConfig]] = {
 }
 
 
-def get_config_for(resource_type: NodeType, base=False) -> Type[BaseConfig]:
+def get_config_for(resource_type: NodeType) -> Type[BaseConfig]:
     return RESOURCE_TYPES.get(resource_type, NodeConfig)

@@ -1,5 +1,6 @@
 import pytest
-from dbt.tests.util import run_dbt, get_artifact
+
+from dbt.tests.util import run_dbt
 
 sources_yml = """
 sources:
@@ -27,7 +28,8 @@ get_partitions_sql = """
 {%- endmacro %}
 """
 
-class TestGraphSerialization():
+
+class TestGraphSerialization:
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -36,9 +38,7 @@ class TestGraphSerialization():
 
     @pytest.fixture(scope="class")
     def macros(self):
-        return {
-            "get_partitions.sql": get_partitions_sql
-        }
+        return {"get_partitions.sql": get_partitions_sql}
 
     def test_graph_serialization(self, project):
         manifest = run_dbt(["parse"])
