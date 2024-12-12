@@ -58,7 +58,7 @@ def test_extract_macro_calls(macro_string, expected_possible_macro_calls):
     ctx = generate_base_context(cli_vars)
 
     possible_macro_calls = statically_extract_macro_calls(macro_string, ctx)
-    assert possible_macro_calls == expected_possible_macro_calls
+    assert [c.name for c in possible_macro_calls] == expected_possible_macro_calls
 
 
 class TestStaticallyParseRefOrSource:
