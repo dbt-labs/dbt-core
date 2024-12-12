@@ -1487,14 +1487,17 @@ class ManifestLoader:
                     if not has_input_with_event_time_config:
                         fire_event(MicrobatchModelNoEventTimeInputs(model_name=node.name))
 
-    def check_forcing_batch_concurrency(self):
+    def check_forcing_batch_concurrency(self) -> None:
         if self.manifest.use_microbatch_batches(project_name=self.root_project.project_name):
             adapter = get_adapter(self.root_project)
 
             if not adapter.supports(Capability.MicrobatchConcurrency):
                 models_forcing_concurrent_batches = 0
                 for node in self.manifest.nodes.values():
-                    if node.config.concurrent_batches is True:
+                    if (
+                        hasattr(node.config, "concurrent_batches")
+                        and node.config.concurrent_batches is True
+                    ):
                         models_forcing_concurrent_batches += 1
 
                 if models_forcing_concurrent_batches > 0:
