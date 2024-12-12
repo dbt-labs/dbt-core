@@ -1501,7 +1501,7 @@ class ManifestLoader:
                         models_forcing_concurrent_batches += 1
 
                 if models_forcing_concurrent_batches > 0:
-                    fire_event(
+                    warn_or_error(
                         InvalidConcurrentBatchesConfig(
                             num_models=models_forcing_concurrent_batches,
                             adapter_type=adapter.type(),
