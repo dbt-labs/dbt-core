@@ -9,13 +9,12 @@ from dbt.adapters.postgres import PostgresAdapter
 from dbt.artifacts.resources.base import FileHash
 from dbt.config import RuntimeConfig
 from dbt.contracts.graph.manifest import Manifest, ManifestStateCheck
-from dbt.events.types import UnusedResourceConfigPath
+from dbt.events.types import InvalidConcurrentBatchesConfig, UnusedResourceConfigPath
 from dbt.flags import set_from_args
 from dbt.parser.manifest import ManifestLoader, _warn_for_unused_resource_config_paths
 from dbt.parser.read_files import FileDiff
 from dbt.tracking import User
 from dbt_common.events.event_manager_client import add_callback_to_manager
-from dbt_common.events.types import Note
 from tests.unit.fixtures import model_node
 from tests.utils import EventCatcher
 
@@ -260,7 +259,7 @@ class TestCheckForcingConcurrentBatches:
 
     @pytest.fixture
     def event_catcher(self) -> EventCatcher:
-        return EventCatcher(Note)  # type: ignore
+        return EventCatcher(InvalidConcurrentBatchesConfig)  # type: ignore
 
     @pytest.mark.parametrize(
         "adapter_support,concurrent_batches_config,expect_warning",
@@ -295,6 +294,6 @@ class TestCheckForcingConcurrentBatches:
 
         if expect_warning:
             assert len(event_catcher.caught_events) == 1
-            assert "Batches will be run sequentially" in event_catcher.caught_events[0].data.msg  # type: ignore
+            assert "Batches will be run sequentially" in event_catcher.caught_events[0].info.msg  # type: ignore
         else:
             assert len(event_catcher.caught_events) == 0

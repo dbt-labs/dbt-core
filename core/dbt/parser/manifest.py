@@ -67,6 +67,7 @@ from dbt.events.types import (
     ArtifactWritten,
     DeprecatedModel,
     DeprecatedReference,
+    InvalidConcurrentBatchesConfig,
     InvalidDisabledTargetInTestNode,
     MicrobatchModelNoEventTimeInputs,
     NodeNotFoundOrDisabled,
@@ -1498,10 +1499,10 @@ class ManifestLoader:
 
                 if models_forcing_concurrent_batches > 0:
                     fire_event(
-                        Note(
-                            msg=f"Found {models_forcing_concurrent_batches} microbatch model(s) with the `concurrent_batches` config set to true, but the {adapter.type()} adapter does not support running batches concurrently. Batches will be run sequentially."
-                        ),
-                        level=EventLevel.WARN,
+                        InvalidConcurrentBatchesConfig(
+                            num_models=models_forcing_concurrent_batches,
+                            adapter_type=adapter.type(),
+                        )
                     )
 
     def write_perf_info(self, target_path: str):
