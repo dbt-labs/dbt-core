@@ -17,6 +17,7 @@ import dbt.tracking
 import dbt.utils
 import dbt_common.utils
 from dbt import plugins
+from dbt.adapters.capability import Capability
 from dbt.adapters.factory import (
     get_adapter,
     get_adapter_package_names,
@@ -510,6 +511,7 @@ class ManifestLoader:
         self.check_for_model_deprecations()
         self.check_for_spaces_in_resource_names()
         self.check_for_microbatch_deprecations()
+        self.check_forcing_batch_concurrency()
 
         return self.manifest
 
@@ -1483,6 +1485,24 @@ class ManifestLoader:
 
                     if not has_input_with_event_time_config:
                         fire_event(MicrobatchModelNoEventTimeInputs(model_name=node.name))
+
+    def check_forcing_batch_concurrency(self):
+        if self.manifest.use_microbatch_batches(project_name=self.root_project.project_name):
+            adapter = get_adapter(self.root_project)
+
+            if not adapter.supports(Capability.MicrobatchConcurrency):
+                models_forcing_concurrent_batches = 0
+                for node in self.manifest.nodes.values():
+                    if node.config.concurrent_batches is True:
+                        models_forcing_concurrent_batches += 1
+
+                if models_forcing_concurrent_batches > 0:
+                    fire_event(
+                        Note(
+                            msg=f"Found {models_forcing_concurrent_batches} microbatch model(s) with the `concurrent_batches` config set to true, but the {adapter.type()} adapter does not support running batches concurrently. Batches will be run sequentially."
+                        ),
+                        level=EventLevel.WARN,
+                    )
 
     def write_perf_info(self, target_path: str):
         path = os.path.join(target_path, PERF_INFO_FILE_NAME)
