@@ -661,6 +661,7 @@ class UnparsedEntity(dbtClassMixin):
     label: Optional[str] = None
     role: Optional[str] = None
     expr: Optional[str] = None
+    config: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -681,6 +682,7 @@ class UnparsedMeasure(dbtClassMixin):
     non_additive_dimension: Optional[UnparsedNonAdditiveDimension] = None
     agg_time_dimension: Optional[str] = None
     create_metric: bool = False
+    config: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -698,6 +700,7 @@ class UnparsedDimension(dbtClassMixin):
     is_partition: bool = False
     type_params: Optional[UnparsedDimensionTypeParams] = None
     expr: Optional[str] = None
+    config: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass

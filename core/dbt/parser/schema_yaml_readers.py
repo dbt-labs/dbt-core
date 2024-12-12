@@ -21,6 +21,7 @@ from dbt.artifacts.resources import (
     WhereFilter,
     WhereFilterIntersection,
 )
+from dbt.artifacts.resources.v1.semantic_model import SemanticLayerElementConfig
 from dbt.clients.jinja import get_rendered
 from dbt.context.context_config import (
     BaseContextConfigGenerator,
@@ -536,6 +537,7 @@ class SemanticModelParser(YamlReader):
                     type_params=self._get_dimension_type_params(unparsed=unparsed.type_params),
                     expr=unparsed.expr,
                     metadata=None,  # TODO: requires a fair bit of parsing context
+                    config=SemanticLayerElementConfig(meta=unparsed.config.get("meta", {})),
                 )
             )
         return dimensions
@@ -551,6 +553,7 @@ class SemanticModelParser(YamlReader):
                     label=unparsed.label,
                     role=unparsed.role,
                     expr=unparsed.expr,
+                    config=SemanticLayerElementConfig(meta=unparsed.config.get("meta", {})),
                 )
             )
 
@@ -583,6 +586,7 @@ class SemanticModelParser(YamlReader):
                         unparsed.non_additive_dimension
                     ),
                     agg_time_dimension=unparsed.agg_time_dimension,
+                    config=SemanticLayerElementConfig(meta=unparsed.config.get("meta", {})),
                 )
             )
         return measures
