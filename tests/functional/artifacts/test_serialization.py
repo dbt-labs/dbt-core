@@ -1,3 +1,4 @@
+import pytest
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Union
 
@@ -21,6 +22,7 @@ class ExternalTable(DataClassMessagePackMixin):
     partitions: Optional[Union[List[ExternalPartition], List[str]]] = None
 
 
+@pytest.mark.skip("skip until mashumaro 3.15")
 def test_partitions_serialization():
 
     part1 = ExternalPartition(
