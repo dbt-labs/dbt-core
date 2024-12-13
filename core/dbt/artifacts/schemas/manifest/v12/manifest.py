@@ -28,6 +28,7 @@ from dbt.artifacts.schemas.base import (
     schema_version,
 )
 from dbt.artifacts.schemas.upgrades import upgrade_manifest_json
+from dbt_common.exceptions import DbtInternalError
 
 NodeEdgeMap = Dict[str, List[str]]
 UniqueID = str
@@ -187,6 +188,6 @@ class WritableManifest(ArtifactMixin):
         # that are not present in the schema, from_dict will work fine.
         # As long as validate is not called, the schema will not be enforced.
         # This is intentional, as it allows for safer schema upgrades.
-        raise RuntimeError(
+        raise DbtInternalError(
             "The WritableManifest should never be validated directly to allow for schema upgrades."
         )
