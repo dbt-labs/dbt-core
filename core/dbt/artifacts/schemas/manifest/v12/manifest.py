@@ -180,3 +180,13 @@ class WritableManifest(ArtifactMixin):
         if manifest_schema_version < cls.dbt_schema_version.version:
             data = upgrade_manifest_json(data, manifest_schema_version)
         return cls.from_dict(data)
+
+    @classmethod
+    def validate(cls, _):
+        # When dbt try to load an artifact with additional optional fields
+        # that are not present in the schema, from_dict will work fine.
+        # As long as validate is not called, the schema will not be enforced.
+        # This is intentional, as it allows for safer schema upgrades.
+        raise RuntimeError(
+            "The WritableManifest should never be validated directly to allow for schema upgrades."
+        )
