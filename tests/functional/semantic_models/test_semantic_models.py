@@ -35,6 +35,8 @@ class TestSemanticModelDependsOn:
             number_of_people_metric.depends_on.nodes
             == expected_depends_on_for_people_semantic_model
         )
+        print(number_of_people_metric.dimensions)
+        assert 0
 
 
 class TestSemanticModelNestedDocs:

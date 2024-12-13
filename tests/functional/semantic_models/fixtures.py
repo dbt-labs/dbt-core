@@ -69,6 +69,9 @@ semantic_models:
         type: TIME
         type_params:
           time_granularity: day
+        config:
+          meta:
+            cool: stuff
     measures:
       - name: years_tenure
         label: "Years Tenure"
