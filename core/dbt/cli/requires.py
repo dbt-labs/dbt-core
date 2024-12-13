@@ -324,7 +324,7 @@ def catalogs(func):
         req_strs = ["flags", "profile"]
         reqs = [ctx.obj.get(req_str) for req_str in req_strs]
         if None in reqs:
-            raise DbtProjectError("profile and flags required for runtime_config")
+            raise DbtProjectError("profile and flags required to load catalogs")
 
         flags = ctx.obj["flags"]
         profile = ctx.obj["profile"]
@@ -382,3 +382,6 @@ def setup_manifest(ctx: Context, write: bool = True, write_perf_info: bool = Fal
         adapter.set_macro_resolver(ctx.obj["manifest"])
         query_header_context = generate_query_header_context(adapter.config, ctx.obj["manifest"])  # type: ignore[attr-defined]
         adapter.connections.set_query_header(query_header_context)
+        catalogs = ctx.obj["catalogs"].catalogs if "catalogs" in ctx.obj else []
+        for catalog in catalogs:
+            adapter.set_catalog_integration(catalog.name, catalog.active_write_integration)
