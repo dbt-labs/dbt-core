@@ -886,7 +886,7 @@ class Manifest(MacroMethods, dbtClassMixin):
     state_check: ManifestStateCheck = field(default_factory=ManifestStateCheck)
     source_patches: MutableMapping[SourceKey, SourcePatch] = field(default_factory=dict)
     disabled: MutableMapping[str, List[GraphMemberNode]] = field(default_factory=dict)
-    env_vars: MutableMapping[str, str] = field(default_factory=dict)
+    env_vars: MutableMapping[str, Any] = field(default_factory=dict)
     semantic_models: MutableMapping[str, SemanticModel] = field(default_factory=dict)
     unit_tests: MutableMapping[str, UnitTestDefinition] = field(default_factory=dict)
     saved_queries: MutableMapping[str, SavedQuery] = field(default_factory=dict)

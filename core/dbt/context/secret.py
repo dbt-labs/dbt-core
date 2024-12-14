@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Union
 
 from dbt.constants import DEFAULT_ENV_PLACEHOLDER, SECRET_PLACEHOLDER
 from dbt.exceptions import EnvVarMissingError
@@ -12,12 +12,15 @@ class SecretContext(BaseContext):
     """This context is used in profiles.yml + packages.yml. It can render secret
     env vars that aren't usable elsewhere"""
 
+    _ENV_VAR_NOT_SET = object()
+
     @contextmember()
-    def env_var(self, var: str, default: Optional[str] = None) -> str:
+    def env_var(self, var: str, default: Any = _ENV_VAR_NOT_SET) -> Union[str, None]:
         """The env_var() function. Return the environment variable named 'var'.
         If there is no such environment variable set, return the default.
 
-        If the default is None, raise an exception for an undefined variable.
+        The default can be None but is required. If nothing is passed in
+        raise an exception for an undefined variable.
 
         In this context *only*, env_var will accept env vars prefixed with DBT_ENV_SECRET_.
         It will return the name of the secret env var, wrapped in 'start' and 'end' identifiers.
@@ -34,22 +37,23 @@ class SecretContext(BaseContext):
 
         if var in env:
             return_value = env[var]
-        elif default is not None:
+        # sentinel approach allows `none` to be passed in
+        # if nothing is passed in the below error is thrown
+        elif default is self._ENV_VAR_NOT_SET:
+            raise EnvVarMissingError(var)
+        else:
             return_value = default
 
-        if return_value is not None:
-            # store env vars in the internal manifest to power partial parsing
-            # if it's a 'secret' env var, we shouldn't even get here
-            # but just to be safe, don't save secrets
-            if not var.startswith(SECRET_ENV_PREFIX):
-                # If the environment variable is set from a default, store a string indicating
-                # that so we can skip partial parsing.  Otherwise the file will be scheduled for
-                # reparsing. If the default changes, the file will have been updated and therefore
-                # will be scheduled for reparsing anyways.
-                self.env_vars[var] = return_value if var in env else DEFAULT_ENV_PLACEHOLDER
-            return return_value
-        else:
-            raise EnvVarMissingError(var)
+        # store env vars in the internal manifest to power partial parsing
+        # if it's a 'secret' env var, we shouldn't even get here
+        # but just to be safe, don't save secrets
+        if not var.startswith(SECRET_ENV_PREFIX):
+            # If the environment variable is set from a default, store a string indicating
+            # that so we can skip partial parsing.  Otherwise the file will be scheduled for
+            # reparsing. If the default changes, the file will have been updated and therefore
+            # will be scheduled for reparsing anyways.
+            self.env_vars[var] = return_value if var in env else DEFAULT_ENV_PLACEHOLDER
+        return return_value
 
 
 def generate_secret_context(cli_vars: Dict[str, Any]) -> Dict[str, Any]:

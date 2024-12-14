@@ -6,7 +6,18 @@ import json
 import os
 import re
 import threading
-from typing import Any, Callable, Dict, Iterable, List, Mapping, NoReturn, Optional, Set
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    List,
+    Mapping,
+    NoReturn,
+    Optional,
+    Set,
+    Union,
+)
 
 # These modules are added to the context. Consider alternative
 # approaches which will extend well to potentially many modules
@@ -188,6 +199,7 @@ class BaseContext(metaclass=ContextMeta):
     # Set by ContextMeta
     _context_members_: Dict[str, Any]
     _context_attrs_: Dict[str, Any]
+    _ENV_VAR_NOT_SET: Any = object()
 
     # subclass is TargetContext
     def __init__(self, cli_vars: Dict[str, Any]) -> None:
@@ -302,31 +314,34 @@ class BaseContext(metaclass=ContextMeta):
         return Var(self._ctx, self.cli_vars)
 
     @contextmember()
-    def env_var(self, var: str, default: Optional[str] = None) -> str:
+    def env_var(self, var: str, default: Any = _ENV_VAR_NOT_SET) -> Union[str, None]:
         """The env_var() function. Return the environment variable named 'var'.
         If there is no such environment variable set, return the default.
 
-        If the default is None, raise an exception for an undefined variable.
+        The default can be None but is required. If nothing is passed in
+        raise an exception for an undefined variable.
         """
         return_value = None
         if var.startswith(SECRET_ENV_PREFIX):
             raise SecretEnvVarLocationError(var)
         env = get_invocation_context().env
+
         if var in env:
             return_value = env[var]
-        elif default is not None:
+        # sentinel approach allows `none` to be passed in
+        # if nothing is passed in the below error is thrown
+        elif default is self._ENV_VAR_NOT_SET:
+            raise EnvVarMissingError(var)
+        else:
             return_value = default
 
-        if return_value is not None:
-            # If the environment variable is set from a default, store a string indicating
-            # that so we can skip partial parsing.  Otherwise the file will be scheduled for
-            # reparsing. If the default changes, the file will have been updated and therefore
-            # will be scheduled for reparsing anyways.
-            self.env_vars[var] = return_value if var in env else DEFAULT_ENV_PLACEHOLDER
+        # If the environment variable is set from a default, store a string indicating
+        # that so we can skip partial parsing.  Otherwise the file will be scheduled for
+        # reparsing. If the default changes, the file will have been updated and therefore
+        # will be scheduled for reparsing anyways.
+        self.env_vars[var] = return_value if var in env else DEFAULT_ENV_PLACEHOLDER
 
-            return return_value
-        else:
-            raise EnvVarMissingError(var)
+        return return_value
 
     if os.environ.get("DBT_MACRO_DEBUGGING"):
 
