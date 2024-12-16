@@ -17,6 +17,7 @@ import dbt.tracking
 import dbt.utils
 import dbt_common.utils
 from dbt import plugins
+from dbt.adapters.capability import Capability
 from dbt.adapters.factory import (
     get_adapter,
     get_adapter_package_names,
@@ -66,6 +67,7 @@ from dbt.events.types import (
     ArtifactWritten,
     DeprecatedModel,
     DeprecatedReference,
+    InvalidConcurrentBatchesConfig,
     InvalidDisabledTargetInTestNode,
     MicrobatchModelNoEventTimeInputs,
     NodeNotFoundOrDisabled,
@@ -510,6 +512,7 @@ class ManifestLoader:
         self.check_for_model_deprecations()
         self.check_for_spaces_in_resource_names()
         self.check_for_microbatch_deprecations()
+        self.check_forcing_batch_concurrency()
 
         return self.manifest
 
@@ -1483,6 +1486,27 @@ class ManifestLoader:
 
                     if not has_input_with_event_time_config:
                         fire_event(MicrobatchModelNoEventTimeInputs(model_name=node.name))
+
+    def check_forcing_batch_concurrency(self) -> None:
+        if self.manifest.use_microbatch_batches(project_name=self.root_project.project_name):
+            adapter = get_adapter(self.root_project)
+
+            if not adapter.supports(Capability.MicrobatchConcurrency):
+                models_forcing_concurrent_batches = 0
+                for node in self.manifest.nodes.values():
+                    if (
+                        hasattr(node.config, "concurrent_batches")
+                        and node.config.concurrent_batches is True
+                    ):
+                        models_forcing_concurrent_batches += 1
+
+                if models_forcing_concurrent_batches > 0:
+                    warn_or_error(
+                        InvalidConcurrentBatchesConfig(
+                            num_models=models_forcing_concurrent_batches,
+                            adapter_type=adapter.type(),
+                        )
+                    )
 
     def write_perf_info(self, target_path: str):
         path = os.path.join(target_path, PERF_INFO_FILE_NAME)

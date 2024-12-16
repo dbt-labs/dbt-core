@@ -1961,6 +1961,14 @@ def test_basic_source_definition(
     pickle.loads(pickle.dumps(node))
 
 
+def test_extra_fields_source_definition_okay(minimum_parsed_source_definition_dict):
+    extra = minimum_parsed_source_definition_dict
+    extra["notvalid"] = "nope"
+    # Model still load fine with extra fields
+    loaded_source = SourceDefinition.from_dict(extra)
+    assert not hasattr(loaded_source, "notvalid")
+
+
 def test_invalid_missing(minimum_parsed_source_definition_dict):
     bad_missing_name = minimum_parsed_source_definition_dict
     del bad_missing_name["name"]

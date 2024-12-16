@@ -289,6 +289,7 @@ sample_values = [
     core_types.FreshnessConfigProblem(msg=""),
     core_types.SemanticValidationFailure(msg=""),
     core_types.MicrobatchModelNoEventTimeInputs(model_name=""),
+    core_types.InvalidConcurrentBatchesConfig(num_models=1, adapter_type=""),
     # M - Deps generation ======================
     core_types.GitSparseCheckoutSubdirectory(subdir=""),
     core_types.GitProgressCheckoutRevision(revision=""),

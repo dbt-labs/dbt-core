@@ -1,0 +1,6 @@
+kind: Fixes
+body: Warn about invalid usages of `concurrent_batches` config
+time: 2024-12-12T11:36:11.451962-06:00
+custom:
+  Author: QMalcolm
+  Issue: "11122"
