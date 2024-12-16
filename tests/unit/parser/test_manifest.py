@@ -254,7 +254,6 @@ class TestCheckForcingConcurrentBatches:
         mock_project = MagicMock(RuntimeConfig)
         mock_project.project_target_path = "mock_target_path"
         mock_project.project_name = "mock_project_name"
-        # patched_os_exist.return_value = True
         return ManifestLoader(mock_project, {})
 
     @pytest.fixture
