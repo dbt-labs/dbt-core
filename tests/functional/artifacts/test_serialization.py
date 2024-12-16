@@ -1,7 +1,7 @@
-import pytest
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Union
 
+import pytest
 from mashumaro.mixins.msgpack import DataClassMessagePackMixin
 
 
