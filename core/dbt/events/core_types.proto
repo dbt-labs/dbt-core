@@ -928,6 +928,18 @@ message MicrobatchModelNoEventTimeInputsMsg {
 }
 
 
+// I075
+message InvalidConcurrentBatchesConfig {
+    int32 num_models = 1;
+    string adapter_type = 2;
+}
+
+message InvalidConcurrentBatchesConfigMsg {
+    CoreEventInfo info = 1;
+    InvalidConcurrentBatchesConfig data = 2;
+}
+
+
 // M - Deps generation
 
 
