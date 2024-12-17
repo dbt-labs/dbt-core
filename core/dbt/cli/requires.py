@@ -375,6 +375,11 @@ def setup_manifest(ctx: Context, write: bool = True, write_perf_info: bool = Fal
         ctx.obj["manifest"] = parse_manifest(
             runtime_config, write_perf_info, write, ctx.obj["flags"].write_json
         )
+
+        adapter = get_adapter(runtime_config)
+        catalogs = ctx.obj["catalogs"].catalogs if "catalogs" in ctx.obj else []
+        for catalog in catalogs:
+            adapter.set_catalog_integration(catalog.name, catalog.active_write_integration)
     else:
         register_adapter(runtime_config, get_mp_context())
         adapter = get_adapter(runtime_config)
