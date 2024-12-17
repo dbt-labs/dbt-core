@@ -7,7 +7,7 @@ from dbt.adapters.factory import get_adapter, get_adapter_package_names
 from dbt.artifacts.resources import NodeVersion, RefArgs
 from dbt.clients.jinja import add_rendered_test_kwargs, get_rendered
 from dbt.context.configured import SchemaYamlVars, generate_schema_yml_context
-from dbt.context.context_config import ContextConfig
+from dbt.context.context_config import ConfigBuilder
 from dbt.context.macro_resolver import MacroResolver
 from dbt.context.providers import generate_test_context
 from dbt.contracts.files import FileHash
@@ -88,7 +88,7 @@ class SchemaGenericTestParser(SimpleParser):
         self,
         target: Union[UnpatchedSourceDefinition, UnparsedNodeUpdate],
         path: str,
-        config: ContextConfig,
+        config_builder: ConfigBuilder,
         tags: List[str],
         fqn: List[str],
         name: str,
@@ -130,7 +130,7 @@ class SchemaGenericTestParser(SimpleParser):
             "raw_code": raw_code,
             "language": "sql",
             "unique_id": self.generate_unique_id(name, test_hash),
-            "config": self.config_dict(config),
+            "config": self.config_dict(config_builder),
             "test_metadata": test_metadata,
             "column_name": column_name,
             "checksum": FileHash.empty().to_dict(omit_none=True),
@@ -200,11 +200,11 @@ class SchemaGenericTestParser(SimpleParser):
         relative_path = str(path.relative_to(*path.parts[:1]))
         fqn = self.get_fqn(relative_path, builder.fqn_name)
 
-        # this is the ContextConfig that is used in render_update
-        config: ContextConfig = self.initial_config(fqn)
-        # Adding the builder's config to the ContextConfig
+        # this is the ConfigBuilder that is used in render_update
+        config_builder: ConfigBuilder = self.initial_config_builder(fqn)
+        # Adding the builder's config to the ConfigBuilder
         # is needed to ensure the config makes it to the pre_model hook which dbt-snowflake needs
-        config.add_config_call(builder.config)
+        config_builder.add_config_call(builder.config)
         # builder.args contains keyword args for the test macro,
         # not configs which have been separated out in the builder.
         # The keyword args are not completely rendered until compilation.
@@ -223,7 +223,7 @@ class SchemaGenericTestParser(SimpleParser):
         node = self.create_test_node(
             target=target,
             path=compiled_path,
-            config=config,
+            config_builder=config_builder,
             fqn=fqn,
             tags=tags,
             name=builder.fqn_name,
@@ -233,7 +233,7 @@ class SchemaGenericTestParser(SimpleParser):
             file_key_name=file_key_name,
             description=builder.description,
         )
-        self.render_test_update(node, config, builder, schema_file_id)
+        self.render_test_update(node, config_builder, builder, schema_file_id)
 
         return node
 
@@ -278,7 +278,7 @@ class SchemaGenericTestParser(SimpleParser):
     # In the future we will look at generalizing this
     # more to handle additional macros or to use static
     # parsing to avoid jinja overhead.
-    def render_test_update(self, node, config, builder, schema_file_id):
+    def render_test_update(self, node, config_builder, builder, schema_file_id):
         macro_unique_id = self.macro_resolver.get_macro_id(
             node.package_name, "test_" + builder.name
         )
@@ -287,9 +287,9 @@ class SchemaGenericTestParser(SimpleParser):
         node.depends_on.add_macro(macro_unique_id)
         if macro_unique_id in ["macro.dbt.test_not_null", "macro.dbt.test_unique"]:
             config_call_dict = builder.get_static_config()
-            config._config_call_dict = config_call_dict
+            config_builder._config_call_dict = config_call_dict
             # This sets the config from dbt_project
-            self.update_parsed_node_config(node, config)
+            self.update_parsed_node_config(node, config_builder)
             # source node tests are processed at patch_source time
             if isinstance(builder.target, UnpatchedSourceDefinition):
                 sources = [builder.target.fqn[-2], builder.target.fqn[-1]]
@@ -303,7 +303,7 @@ class SchemaGenericTestParser(SimpleParser):
                     node,
                     self.root_project,
                     self.manifest,
-                    config,
+                    config_builder,
                     self.macro_resolver,
                 )
                 # update with rendered test kwargs (which collects any refs)
@@ -312,7 +312,7 @@ class SchemaGenericTestParser(SimpleParser):
                 add_rendered_test_kwargs(context, node, capture_macros=True)
                 # the parsed node is not rendered in the native context.
                 get_rendered(node.raw_code, context, node, capture_macros=True)
-                self.update_parsed_node_config(node, config)
+                self.update_parsed_node_config(node, config_builder)
                 # env_vars should have been updated in the context env_var method
             except ValidationError as exc:
                 # we got a ValidationError - probably bad types in config()
@@ -351,14 +351,14 @@ class SchemaGenericTestParser(SimpleParser):
     def render_with_context(
         self,
         node: GenericTestNode,
-        config: ContextConfig,
+        config_builder: ConfigBuilder,
     ) -> None:
-        """Given the parsed node and a ContextConfig to use during
+        """Given the parsed node and a ConfigBuilder to use during
         parsing, collect all the refs that might be squirreled away in the test
         arguments. This includes the implicit "model" argument.
         """
         # make a base context that doesn't have the magic kwargs field
-        context = self._context_for(node, config)
+        context = self._context_for(node, config_builder)
         # update it with the rendered test kwargs (which collects any refs)
         add_rendered_test_kwargs(context, node, capture_macros=True)
 

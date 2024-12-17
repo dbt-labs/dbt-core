@@ -10,7 +10,7 @@ from dbt.clients.jinja_static import statically_parse_ref_or_source
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.config import RuntimeConfig
 from dbt.context.configured import SchemaYamlVars, generate_schema_yml_context
-from dbt.context.context_config import ContextConfig
+from dbt.context.context_config import ConfigBuilder
 from dbt.contracts.files import SchemaSourceFile, SourceFile
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import (
@@ -292,7 +292,7 @@ class SchemaParser(SimpleParser[YamlBlock, ModelNode]):
                 snapshot_node = parser._create_parsetime_node(
                     block,
                     self.get_compiled_path(block),
-                    parser.initial_config(fqn),
+                    parser.initial_config_builder(fqn),
                     fqn,
                     snapshot["name"],
                 )
@@ -687,20 +687,20 @@ class PatchParser(YamlReader, Generic[NonSourceTarget, Parsed]):
                     unique_id=node.unique_id,
                     field_value=patch.config["access"],
                 )
-        # Get the ContextConfig that's used in calculating the config
+        # Get the ConfigBuilder that's used in calculating the config
         # This must match the model resource_type that's being patched
-        config = ContextConfig(
+        config_builder = ConfigBuilder(
             self.schema_parser.root_project,
             node.fqn,
             node.resource_type,
             self.schema_parser.project.project_name,
         )
         # We need to re-apply the config_call_dict after the patch config
-        config._config_call_dict = node.config_call_dict
-        config._unrendered_config_call_dict = node.unrendered_config_call_dict
+        config_builder._config_call_dict = node.config_call_dict
+        config_builder._unrendered_config_call_dict = node.unrendered_config_call_dict
         self.schema_parser.update_parsed_node_config(
             node,
-            config,
+            config_builder,
             patch_config_dict=patch.config,
             patch_file_id=patch.file_id,
         )
