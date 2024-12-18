@@ -59,6 +59,7 @@ class ParsedSourceMandatory(GraphResource, HasRelationMetadata):
 class SourceDefinition(ParsedSourceMandatory):
     quoting: Quoting = field(default_factory=Quoting)
     loaded_at_field: Optional[str] = None
+    loaded_at_query: Optional[str] = None
     freshness: Optional[FreshnessThreshold] = None
     external: Optional[ExternalTable] = None
     description: str = ""
