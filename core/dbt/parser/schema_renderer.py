@@ -37,11 +37,21 @@ class SchemaYamlRenderer(BaseRenderer):
         "tests" and "data_tests" are both currently supported but "tests" has been deprecated
         """
         # top level descriptions and data_tests
-        if len(keypath) >= 1 and keypath[0] in ("tests", "data_tests", "description"):
+        if len(keypath) >= 1 and keypath[0] in (
+            "tests",
+            "data_tests",
+            "description",
+            "loaded_at_query",
+        ):
             return True
 
         # columns descriptions and data_tests
-        if len(keypath) == 2 and keypath[1] in ("tests", "data_tests", "description"):
+        if len(keypath) == 2 and keypath[1] in (
+            "tests",
+            "data_tests",
+            "description",
+            "loaded_at_query",
+        ):
             return True
 
         # pre- and post-hooks
@@ -69,9 +79,8 @@ class SchemaYamlRenderer(BaseRenderer):
     def should_render_keypath(self, keypath: Keypath) -> bool:
         if len(keypath) < 1:
             return True
-
         if self.key == "sources":
-            if keypath[0] == "description":
+            if keypath[0] in ("description", "loaded_at_query"):
                 return False
             if keypath[0] == "tables":
                 if self._is_norender_key(keypath[2:]):

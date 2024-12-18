@@ -404,6 +404,48 @@ sources:
               - unique
 """
 
+SOURCE_CUSTOM_FRESHNESS_AT_SOURCE = """
+sources:
+  - name: my_source
+    loaded_at_query: "select 1 as id"
+    tables:
+      - name: my_table
+"""
+SOURCE_CUSTOM_FRESHNESS_AT_SOURCE_FIELD_AT_TABLE = """
+sources:
+  - name: my_source
+    loaded_at_query: "select 1 as id"
+    tables:
+      - name: my_table
+        loaded_at_field: test
+"""
+SOURCE_FIELD_AT_SOURCE_CUSTOM_FRESHNESS_AT_TABLE = """
+sources:
+  - name: my_source
+    loaded_at_field: test
+    tables:
+      - name: my_table
+        loaded_at_query: "select 1 as id"
+"""
+SOURCE_FIELD_AT_CUSTOM_FRESHNESS_BOTH_AT_TABLE = """
+sources:
+  - name: my_source
+    loaded_at_field: test
+    tables:
+      - name: my_table
+        loaded_at_query: "select 1 as id"
+        loaded_at_field: test
+"""
+SOURCE_FIELD_AT_CUSTOM_FRESHNESS_BOTH_AT_SOURCE = """
+sources:
+  - name: my_source
+    loaded_at_field: test
+    loaded_at_query: "select 1 as id"
+    tables:
+      - name: my_table
+        loaded_at_field: test
+"""
+
 
 class SchemaParserTest(BaseParserTest):
     def setUp(self):
@@ -447,6 +489,58 @@ class SchemaParserSourceTest(SchemaParserTest):
         self.assertEqual(source_values[0].table.name, "my_table")
         self.assertEqual(source_values[0].table.description, "")
         self.assertEqual(len(source_values[0].table.columns), 0)
+
+    @mock.patch("dbt.parser.sources.get_adapter")
+    def test_parse_source_custom_freshness_at_source(self, _):
+        block = self.file_block_for(SOURCE_CUSTOM_FRESHNESS_AT_SOURCE, "test_one.yml")
+        dct = yaml_from_file(block.file)
+        self.parser.parse_file(block, dct)
+        unpatched_src_default = self.parser.manifest.sources["source.snowplow.my_source.my_table"]
+        src_default = self.source_patcher.parse_source(unpatched_src_default)
+        assert src_default.loaded_at_query == "select 1 as id"
+
+    @mock.patch("dbt.parser.sources.get_adapter")
+    def test_parse_source_custom_freshness_at_source_field_at_table(self, _):
+        block = self.file_block_for(
+            SOURCE_CUSTOM_FRESHNESS_AT_SOURCE_FIELD_AT_TABLE, "test_one.yml"
+        )
+        dct = yaml_from_file(block.file)
+        self.parser.parse_file(block, dct)
+        unpatched_src_default = self.parser.manifest.sources["source.snowplow.my_source.my_table"]
+        src_default = self.source_patcher.parse_source(unpatched_src_default)
+        # source loaded_at_query not propagate to table since there's loaded_at_field defined
+        assert src_default.loaded_at_query is None
+
+    @mock.patch("dbt.parser.sources.get_adapter")
+    def test_parse_source_field_at_source_custom_freshness_at_table(self, _):
+        block = self.file_block_for(
+            SOURCE_FIELD_AT_SOURCE_CUSTOM_FRESHNESS_AT_TABLE, "test_one.yml"
+        )
+        dct = yaml_from_file(block.file)
+        self.parser.parse_file(block, dct)
+        unpatched_src_default = self.parser.manifest.sources["source.snowplow.my_source.my_table"]
+        src_default = self.source_patcher.parse_source(unpatched_src_default)
+        assert src_default.loaded_at_query == "select 1 as id"
+
+    @mock.patch("dbt.parser.sources.get_adapter")
+    def test_parse_source_field_at_custom_freshness_both_at_table_fails(self, _):
+        block = self.file_block_for(SOURCE_FIELD_AT_CUSTOM_FRESHNESS_BOTH_AT_TABLE, "test_one.yml")
+        dct = yaml_from_file(block.file)
+        self.parser.parse_file(block, dct)
+        unpatched_src_default = self.parser.manifest.sources["source.snowplow.my_source.my_table"]
+        with self.assertRaises(ParsingError):
+            self.source_patcher.parse_source(unpatched_src_default)
+
+    @mock.patch("dbt.parser.sources.get_adapter")
+    def test_parse_source_field_at_custom_freshness_both_at_source_fails(self, _):
+        block = self.file_block_for(
+            SOURCE_FIELD_AT_CUSTOM_FRESHNESS_BOTH_AT_SOURCE, "test_one.yml"
+        )
+        dct = yaml_from_file(block.file)
+        self.parser.parse_file(block, dct)
+        unpatched_src_default = self.parser.manifest.sources["source.snowplow.my_source.my_table"]
+        with self.assertRaises(ParsingError):
+            self.source_patcher.parse_source(unpatched_src_default)
 
     def test__parse_basic_source(self):
         block = self.file_block_for(SINGLE_TABLE_SOURCE, "test_one.yml")

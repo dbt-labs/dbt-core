@@ -317,6 +317,7 @@ class UnparsedSourceTableDefinition(HasColumnTests, HasColumnAndTestProps):
     config: Dict[str, Any] = field(default_factory=dict)
     loaded_at_field: Optional[str] = None
     loaded_at_field_present: Optional[bool] = None
+    loaded_at_query: Optional[str] = None
     identifier: Optional[str] = None
     quoting: Quoting = field(default_factory=Quoting)
     freshness: Optional[FreshnessThreshold] = field(default_factory=FreshnessThreshold)
@@ -342,6 +343,7 @@ class UnparsedSourceDefinition(dbtClassMixin):
     freshness: Optional[FreshnessThreshold] = field(default_factory=FreshnessThreshold)
     loaded_at_field: Optional[str] = None
     loaded_at_field_present: Optional[bool] = None
+    loaded_at_query: Optional[str] = None
     tables: List[UnparsedSourceTableDefinition] = field(default_factory=list)
     tags: List[str] = field(default_factory=list)
     config: Dict[str, Any] = field(default_factory=dict)
@@ -379,6 +381,7 @@ class SourceTablePatch(dbtClassMixin):
     docs: Optional[Docs] = None
     loaded_at_field: Optional[str] = None
     loaded_at_field_present: Optional[bool] = None
+    loaded_at_query: Optional[str] = None
     identifier: Optional[str] = None
     quoting: Quoting = field(default_factory=Quoting)
     freshness: Optional[FreshnessThreshold] = field(default_factory=FreshnessThreshold)
@@ -422,6 +425,7 @@ class SourcePatch(dbtClassMixin):
     freshness: Optional[Optional[FreshnessThreshold]] = field(default_factory=FreshnessThreshold)
     loaded_at_field: Optional[str] = None
     loaded_at_field_present: Optional[bool] = None
+    loaded_at_query: Optional[str] = None
     tables: Optional[List[SourceTablePatch]] = None
     tags: Optional[List[str]] = None
 

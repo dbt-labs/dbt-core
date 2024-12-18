@@ -880,7 +880,7 @@ T = TypeVar("T")
 
 # Base context collection, used for parsing configs.
 class ProviderContext(ManifestContext):
-    # subclasses are MacroContext, ModelContext, TestContext
+    # subclasses are MacroContext, ModelContext, TestContext, SourceContext
     def __init__(
         self,
         model,
@@ -893,7 +893,7 @@ class ProviderContext(ManifestContext):
             raise DbtInternalError(f"Invalid provider given to context: {provider}")
         # mypy appeasement - we know it'll be a RuntimeConfig
         self.config: RuntimeConfig
-        self.model: Union[Macro, ManifestNode] = model
+        self.model: Union[Macro, ManifestNode, SourceDefinition] = model
         super().__init__(config, manifest, model.package_name)
         self.sql_results: Dict[str, Optional[AttrDict]] = {}
         self.context_config: Optional[ContextConfig] = context_config
@@ -1556,6 +1556,20 @@ class MacroContext(ProviderContext):
             self._search_package = config.project_name
         else:
             self._search_package = search_package
+
+
+class SourceContext(ProviderContext):
+    # SourceContext is being used to render jinja SQL during execution of
+    # custom SQL in source freshness. It is not used for parsing.
+    model: SourceDefinition
+
+    @contextproperty()
+    def this(self) -> Optional[RelationProxy]:
+        return self.db_wrapper.Relation.create_from(self.config, self.model)
+
+    @contextproperty()
+    def source_node(self) -> SourceDefinition:
+        return self.model
 
 
 class ModelContext(ProviderContext):
