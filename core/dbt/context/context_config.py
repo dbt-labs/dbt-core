@@ -46,7 +46,7 @@ class UnrenderedConfig(ConfigSource):
         elif resource_type == NodeType.Source:
             model_configs = unrendered.get("sources")
         elif resource_type == NodeType.Test:
-            model_configs = unrendered.get("data_tests")
+            model_configs = unrendered.get("data_tests") or unrendered.get("tests")
         elif resource_type == NodeType.Metric:
             model_configs = unrendered.get("metrics")
         elif resource_type == NodeType.SemanticModel:
