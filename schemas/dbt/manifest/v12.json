@@ -7752,6 +7752,17 @@
             ],
             "default": null
           },
+          "loaded_at_query": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
           "freshness": {
             "anyOf": [
               {
@@ -17530,6 +17541,17 @@
                       "additionalProperties": false
                     },
                     "loaded_at_field": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
+                    },
+                    "loaded_at_query": {
                       "anyOf": [
                         {
                           "type": "string"

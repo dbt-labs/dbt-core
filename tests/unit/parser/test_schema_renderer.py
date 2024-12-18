@@ -56,10 +56,12 @@ class TestYamlRendering(unittest.TestCase):
         dct = {
             "name": "my_source",
             "description": "{{ alt_var }}",
+            "loaded_at_query": "select max(ordered_at) from {{ this }}",
             "tables": [
                 {
                     "name": "my_table",
                     "description": "{{ alt_var }}",
+                    "loaded_at_query": "select max(ordered_at) from {{ this }}",
                     "columns": [
                         {
                             "name": "id",
