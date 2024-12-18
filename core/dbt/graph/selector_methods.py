@@ -799,7 +799,11 @@ class StateSelectorMethod(SelectorMethod):
                 yield unique_id
 
         # checkers that can handle removed nodes
-        if checker.__name__ in ["check_modified_contract", "check_modified_content", "check_unmodified_content"]:
+        if checker.__name__ in [
+            "check_modified_contract",
+            "check_modified_content",
+            "check_unmodified_content",
+        ]:
             # ignore included_nodes, since those cannot contain removed nodes
             for previous_unique_id, previous_node in manifest.nodes.items():
                 # detect removed (deleted, renamed, or disabled) nodes
