@@ -40,7 +40,6 @@ class TestGenericTestUnrenderedConfig:
     def test_unrendered_config(self, project):
         manifest = run_dbt(["parse"])
         assert manifest
-        print(f"--- nodes: {manifest.nodes.keys()}")
         test_node_id = "test.test.unique_foo_id.fa8c520a2e"
         test_node = manifest.nodes[test_node_id]
         assert test_node.unrendered_config == {"store_failures": True}
