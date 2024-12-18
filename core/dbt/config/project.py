@@ -199,6 +199,9 @@ def load_raw_project(project_root: str) -> Dict[str, Any]:
     if not isinstance(project_dict, dict):
         raise DbtProjectError(f"{DBT_PROJECT_FILE_NAME} does not parse to a dictionary")
 
+    if "tests" in project_dict and "data_tests" not in project_dict:
+        project_dict["data_tests"] = project_dict.pop("tests")
+
     return project_dict
 
 
