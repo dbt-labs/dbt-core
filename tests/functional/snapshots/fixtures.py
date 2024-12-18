@@ -301,6 +301,10 @@ snapshots:
       updated_at: updated_at
       meta:
         owner: 'a_owner'
+    columns:
+      - name: id
+        data_tests:
+          - not_null
 """
 
 snapshots_pg__snapshot_mod_yml = """
@@ -313,6 +317,10 @@ snapshots:
       updated_at: updated_at
       meta:
         owner: 'b_owner'
+    columns:
+      - name: id
+        data_tests:
+          - not_null
 """
 
 snapshots_pg__snapshot_no_target_schema_sql = """
