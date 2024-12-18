@@ -195,11 +195,12 @@ def load_raw_project(project_root: str) -> Dict[str, Any]:
         )
 
     project_dict = _load_yaml(project_yaml_filepath)
-    if "tests" in project_dict:
-        project_dict["data_tests"] = project_dict.pop("tests")
 
     if not isinstance(project_dict, dict):
         raise DbtProjectError(f"{DBT_PROJECT_FILE_NAME} does not parse to a dictionary")
+
+    if "tests" in project_dict:
+        project_dict["data_tests"] = project_dict.pop("tests")
 
     return project_dict
 
