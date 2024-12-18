@@ -2,7 +2,6 @@ import pytest
 
 from dbt.tests.util import run_dbt
 
-
 dbt_project_update = """
 models:
   my_dbt_project:
@@ -25,7 +24,8 @@ models:
           - unique
 """
 
-class TestGenericTestUnrenderedConfig():
+
+class TestGenericTestUnrenderedConfig:
     @pytest.fixture(scope="class")
     def project_config_update(self):
         return dbt_project_update
@@ -41,6 +41,6 @@ class TestGenericTestUnrenderedConfig():
         manifest = run_dbt(["parse"])
         assert manifest
         print(f"--- nodes: {manifest.nodes.keys()}")
-        test_node_id = 'test.test.unique_foo_id.fa8c520a2e'
+        test_node_id = "test.test.unique_foo_id.fa8c520a2e"
         test_node = manifest.nodes[test_node_id]
         assert test_node.unrendered_config == {"store_failures": True}
