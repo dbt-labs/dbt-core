@@ -28,9 +28,9 @@ class TestCatalogsParsing:
     def test_catalog_parsing_adapter_initialialization(self, catalogs, project):
         write_config_file(catalogs, project.project_root, "catalogs.yml")
 
-        mock_set_catalog_integration = mock.Mock()
+        mock_add_catalog_integration = mock.Mock()
         with mock.patch.object(
-            type(project.adapter), "set_catalog_integration", mock_set_catalog_integration
+            type(project.adapter), "add_catalog_integrations", mock_add_catalog_integration
         ):
             run_dbt(["run"])
-            mock_set_catalog_integration.assert_called_once()
+            mock_add_catalog_integration.assert_called_once()

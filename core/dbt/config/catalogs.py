@@ -2,12 +2,33 @@ import os
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-from dbt.adapters.contracts.catalog_integration import CatalogIntegration
+from dbt.adapters.contracts.catalog import CatalogIntegrationType
+from dbt.adapters.relation_configs.formats import TableFormat
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.config.renderer import SecretRenderer
 from dbt_common.clients.system import load_file_contents
 from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_common.exceptions import CompilationError, DbtValidationError
+
+
+@dataclass
+class CatalogIntegration(dbtClassMixin):
+    name: str
+    external_volume: str
+    table_format: TableFormat
+    catalog_type: CatalogIntegrationType
+
+
+# satisfies dbt.adapters.protocol.CatalogIntegrationConfig
+@dataclass
+class AdapterCatalogIntegration:
+    catalog_name: str
+    integration_name: str
+    table_format: str
+    catalog_type: str
+    external_volume: Optional[str]
+    namespace: Optional[str]
+    adapter_configs: Optional[Dict]
 
 
 @dataclass
@@ -74,6 +95,31 @@ class Catalogs(dbtClassMixin):
             catalogs.append(catalog)
 
         return cls(catalogs=catalogs)
+
+    def get_active_adapter_write_catalog_integrations(self):
+        adapter_catalog_integrations: List[AdapterCatalogIntegration] = []
+
+        for catalog in self.catalogs:
+            active_write_integration = list(
+                filter(
+                    lambda c: c.name == catalog.active_write_integration,
+                    catalog.write_integrations,
+                )
+            )[0]
+
+            adapter_catalog_integrations.append(
+                AdapterCatalogIntegration(
+                    catalog_name=catalog.name,
+                    integration_name=catalog.active_write_integration,
+                    table_format=active_write_integration.table_format,
+                    catalog_type=active_write_integration.catalog_type,
+                    external_volume=active_write_integration.external_volume,
+                    namespace=None,  # namespaces on write_integrations are not yet supported
+                    adapter_configs={},  # configs on write_integrations not yet supported
+                )
+            )
+
+        return adapter_catalog_integrations
 
     @classmethod
     def _read_catalogs(cls, catalog_dir: str) -> Dict[str, Any]:

@@ -370,16 +370,18 @@ def setup_manifest(ctx: Context, write: bool = True, write_perf_info: bool = Fal
 
     runtime_config = ctx.obj["runtime_config"]
 
+    catalogs = ctx.obj["catalogs"] if "catalogs" in ctx.obj else None
+    catalog_integrations = (
+        catalogs.get_active_adapter_write_catalog_integrations() if catalogs else []
+    )
+
     # if a manifest has already been set on the context, don't overwrite it
     if ctx.obj.get("manifest") is None:
         ctx.obj["manifest"] = parse_manifest(
             runtime_config, write_perf_info, write, ctx.obj["flags"].write_json
         )
-
         adapter = get_adapter(runtime_config)
-        catalogs = ctx.obj["catalogs"].catalogs if "catalogs" in ctx.obj else []
-        for catalog in catalogs:
-            adapter.set_catalog_integration(catalog.name, catalog.active_write_integration)
+        adapter.add_catalog_integrations(catalog_integrations)
     else:
         register_adapter(runtime_config, get_mp_context())
         adapter = get_adapter(runtime_config)
@@ -387,6 +389,4 @@ def setup_manifest(ctx: Context, write: bool = True, write_perf_info: bool = Fal
         adapter.set_macro_resolver(ctx.obj["manifest"])
         query_header_context = generate_query_header_context(adapter.config, ctx.obj["manifest"])  # type: ignore[attr-defined]
         adapter.connections.set_query_header(query_header_context)
-        catalogs = ctx.obj["catalogs"].catalogs if "catalogs" in ctx.obj else []
-        for catalog in catalogs:
-            adapter.set_catalog_integration(catalog.name, catalog.active_write_integration)
+        adapter.add_catalog_integrations(catalog_integrations)
