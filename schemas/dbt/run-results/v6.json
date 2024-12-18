@@ -12,7 +12,7 @@
         },
         "dbt_version": {
           "type": "string",
-          "default": "1.9.0b2"
+          "default": "1.10.0a1"
         },
         "generated_at": {
           "type": "string"
@@ -55,7 +55,8 @@
                   "success",
                   "error",
                   "skipped",
-                  "partial success"
+                  "partial success",
+                  "no-op"
                 ]
               },
               {

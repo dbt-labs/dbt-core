@@ -1,0 +1,6 @@
+kind: Features
+body: Support "tags" in Saved Queries
+time: 2024-12-16T09:54:35.327675-08:00
+custom:
+    Author: theyostalservice
+    Issue: "11155"
