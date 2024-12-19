@@ -46,6 +46,7 @@ setup(
         "console_scripts": ["dbt = dbt.cli.main:cli"],
     },
     install_requires=[
+        "appdirs>=1.4.4",
         # ----
         # dbt-core uses these packages deeply, throughout the codebase, and there have been breaking changes in past patch releases (even though these are major-version-one).
         # Pin to the patch or minor version, and bump in each new minor version of dbt-core.
