@@ -4777,6 +4777,61 @@
                   }
                 ],
                 "default": null
+              },
+              "freshness": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "title": "ModelFreshness",
+                    "properties": {
+                      "depends_on": {
+                        "enum": [
+                          "all",
+                          "any"
+                        ],
+                        "default": "any"
+                      },
+                      "build_after": {
+                        "type": "object",
+                        "title": "Time",
+                        "properties": {
+                          "count": {
+                            "anyOf": [
+                              {
+                                "type": "integer"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
+                          },
+                          "period": {
+                            "anyOf": [
+                              {
+                                "enum": [
+                                  "minute",
+                                  "hour",
+                                  "day"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
+                          }
+                        },
+                        "additionalProperties": false
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
               }
             },
             "additionalProperties": false,
@@ -14568,6 +14623,61 @@
                           "required": [
                             "standard_granularity_column"
                           ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
+                    },
+                    "freshness": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "title": "ModelFreshness",
+                          "properties": {
+                            "depends_on": {
+                              "enum": [
+                                "all",
+                                "any"
+                              ],
+                              "default": "any"
+                            },
+                            "build_after": {
+                              "type": "object",
+                              "title": "Time",
+                              "properties": {
+                                "count": {
+                                  "anyOf": [
+                                    {
+                                      "type": "integer"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ],
+                                  "default": null
+                                },
+                                "period": {
+                                  "anyOf": [
+                                    {
+                                      "enum": [
+                                        "minute",
+                                        "hour",
+                                        "day"
+                                      ]
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ],
+                                  "default": null
+                                }
+                              },
+                              "additionalProperties": false
+                            }
+                          },
+                          "additionalProperties": false
                         },
                         {
                           "type": "null"
