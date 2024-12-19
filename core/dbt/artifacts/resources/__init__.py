@@ -46,7 +46,12 @@ from dbt.artifacts.resources.v1.metric import (
     MetricTimeWindow,
     MetricTypeParams,
 )
-from dbt.artifacts.resources.v1.model import Model, ModelConfig, TimeSpine
+from dbt.artifacts.resources.v1.model import (
+    Model,
+    ModelConfig,
+    ModelFreshness,
+    TimeSpine,
+)
 from dbt.artifacts.resources.v1.owner import Owner
 from dbt.artifacts.resources.v1.saved_query import (
     Export,

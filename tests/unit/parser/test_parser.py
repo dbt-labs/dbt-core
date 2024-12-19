@@ -8,6 +8,10 @@ import yaml
 
 from dbt import tracking
 from dbt.artifacts.resources import ModelConfig, RefArgs
+from dbt.artifacts.resources.v1.model import (
+    ModelBuildAfter,
+    ModelFreshnessDependsOnOptions,
+)
 from dbt.context.context_config import ContextConfig
 from dbt.contracts.files import FileHash, FilePath, SchemaSourceFile, SourceFile
 from dbt.contracts.graph.manifest import Manifest
@@ -299,6 +303,23 @@ models:
                 values: ['red', 'blue', 'green']
             - foreign_package.test_case:
                 arg: 100
+"""
+
+SINGLE_TALBE_MODEL_FRESHNESS = """
+models:
+    - name: my_model
+      description: A description of my model
+      freshness:
+        build_after: {count: 1, period: day}
+"""
+
+SINGLE_TALBE_MODEL_FRESHNESS_ONLY_DEPEND_ON = """
+models:
+    - name: my_model
+      description: A description of my model
+      freshness:
+        build_after:
+            depends_on: all
 """
 
 
@@ -700,6 +721,31 @@ class SchemaParserModelsTest(SchemaParserTest):
         self.parser.parse_file(block, dct)
         self.assertEqual(len(list(self.parser.manifest.sources)), 0)
         self.assertEqual(len(list(self.parser.manifest.nodes)), 4)
+
+    def test__parse_model_freshness(self):
+        block = self.file_block_for(SINGLE_TALBE_MODEL_FRESHNESS, "test_one.yml")
+        self.parser.manifest.files[block.file.file_id] = block.file
+        dct = yaml_from_file(block.file)
+        self.parser.parse_file(block, dct)
+        self.assert_has_manifest_lengths(self.parser.manifest, nodes=1)
+
+        assert self.parser.manifest.nodes[
+            "model.root.my_model"
+        ].freshness.build_after == ModelBuildAfter(
+            count=1, period="day", depends_on=ModelFreshnessDependsOnOptions.any
+        )
+
+    def test__parse_model_freshness_depend_on(self):
+        block = self.file_block_for(SINGLE_TALBE_MODEL_FRESHNESS_ONLY_DEPEND_ON, "test_one.yml")
+        self.parser.manifest.files[block.file.file_id] = block.file
+        dct = yaml_from_file(block.file)
+        self.parser.parse_file(block, dct)
+        self.assert_has_manifest_lengths(self.parser.manifest, nodes=1)
+        assert self.parser.manifest.nodes[
+            "model.root.my_model"
+        ].freshness.build_after == ModelBuildAfter(
+            count=0, period="hour", depends_on=ModelFreshnessDependsOnOptions.all
+        )
 
     def test__read_basic_model_tests_wrong_severity(self):
         block = self.yaml_block_for(SINGLE_TABLE_MODEL_TESTS_WRONG_SEVERITY, "test_one.yml")
