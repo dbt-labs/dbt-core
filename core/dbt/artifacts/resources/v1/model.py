@@ -36,7 +36,7 @@ class TimeSpine(dbtClassMixin):
     custom_granularities: List[CustomGranularity] = field(default_factory=list)
 
 
-class ModelFreshnessDependsOnOptions(enum.StrEnum):
+class ModelFreshnessDependsOnOptions(enum.Enum):
     all = "all"
     any = "any"
 
@@ -50,9 +50,7 @@ class ModelBuildAfter(Time):
 
 @dataclass
 class ModelFreshness(dbtClassMixin):
-    build_after: ModelBuildAfter = field(
-        default_factory=lambda: ModelBuildAfter(period=TimePeriod.hour, count=0)
-    )
+    build_after: ModelBuildAfter = field(default_factory=ModelBuildAfter)
 
 
 @dataclass

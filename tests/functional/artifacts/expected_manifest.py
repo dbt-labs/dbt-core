@@ -372,6 +372,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "version": None,
                 "latest_version": None,
                 "time_spine": None,
+                "freshness": None,
             },
             "model.test.second_model": {
                 "compiled_path": os.path.join(compiled_model_path, "second_model.sql"),
@@ -471,6 +472,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "version": None,
                 "latest_version": None,
                 "time_spine": None,
+                "freshness": None,
             },
             "seed.test.seed": {
                 "build_path": None,
@@ -1003,6 +1005,7 @@ def expected_references_manifest(project):
                 "latest_version": None,
                 "constraints": [],
                 "time_spine": None,
+                "freshness": None,
             },
             "model.test.ephemeral_summary": {
                 "alias": "ephemeral_summary",
@@ -1075,6 +1078,7 @@ def expected_references_manifest(project):
                 "latest_version": None,
                 "constraints": [],
                 "time_spine": None,
+                "freshness": None,
             },
             "model.test.view_summary": {
                 "alias": "view_summary",
@@ -1143,6 +1147,7 @@ def expected_references_manifest(project):
                 "latest_version": None,
                 "constraints": [],
                 "time_spine": None,
+                "freshness": None,
             },
             "seed.test.seed": {
                 "alias": "seed",
@@ -1609,6 +1614,7 @@ def expected_versions_manifest(project):
                 "version": 1,
                 "latest_version": 2,
                 "time_spine": None,
+                "freshness": None,
             },
             "model.test.versioned_model.v2": {
                 "alias": "versioned_model_v2",
@@ -1680,6 +1686,7 @@ def expected_versions_manifest(project):
                 "version": 2,
                 "latest_version": 2,
                 "time_spine": None,
+                "freshness": None,
             },
             "model.test.ref_versioned_model": {
                 "alias": "ref_versioned_model",
@@ -1738,6 +1745,7 @@ def expected_versions_manifest(project):
                 "version": None,
                 "latest_version": None,
                 "time_spine": None,
+                "freshness": None,
             },
             "test.test.unique_versioned_model_v1_first_name.6138195dec": {
                 "alias": "unique_versioned_model_v1_first_name",
