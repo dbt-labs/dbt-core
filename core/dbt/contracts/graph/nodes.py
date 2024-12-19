@@ -1378,7 +1378,7 @@ class SourceDefinition(
 
 
 @dataclass
-class Exposure(GraphNode, ExposureResource):
+class Exposure(NodeInfoMixin, GraphNode, ExposureResource):
     @property
     def depends_on_nodes(self):
         return self.depends_on.nodes
@@ -1440,6 +1440,12 @@ class Exposure(GraphNode, ExposureResource):
     @property
     def group(self):
         return None
+
+    def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
+        dct = super().__post_serialize__(dct, context)
+        if "_event_status" in dct:
+            del dct["_event_status"]
+        return dct
 
 
 # ====================================
@@ -1641,6 +1647,9 @@ class SavedQuery(NodeInfoMixin, GraphNode, SavedQueryResource):
 
         return True
 
+    def same_tags(self, old: "SavedQuery") -> bool:
+        return self.tags == old.tags
+
     def same_contents(self, old: Optional["SavedQuery"]) -> bool:
         # existing when it didn't before is a change!
         # metadata/tags changes are not "changes"
@@ -1656,8 +1665,15 @@ class SavedQuery(NodeInfoMixin, GraphNode, SavedQueryResource):
             and self.same_config(old)
             and self.same_group(old)
             and self.same_exports(old)
+            and self.same_tags(old)
             and True
         )
+
+    def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
+        dct = super().__post_serialize__(dct, context)
+        if "_event_status" in dct:
+            del dct["_event_status"]
+        return dct
 
 
 # ====================================

@@ -9151,19 +9151,7 @@
                         "type": "integer"
                       },
                       "granularity": {
-                        "enum": [
-                          "nanosecond",
-                          "microsecond",
-                          "millisecond",
-                          "second",
-                          "minute",
-                          "hour",
-                          "day",
-                          "week",
-                          "month",
-                          "quarter",
-                          "year"
-                        ]
+                        "type": "string"
                       }
                     },
                     "additionalProperties": false,
@@ -18775,19 +18763,7 @@
                                   "type": "integer"
                                 },
                                 "granularity": {
-                                  "enum": [
-                                    "nanosecond",
-                                    "microsecond",
-                                    "millisecond",
-                                    "second",
-                                    "minute",
-                                    "hour",
-                                    "day",
-                                    "week",
-                                    "month",
-                                    "quarter",
-                                    "year"
-                                  ]
+                                  "type": "string"
                                 }
                               },
                               "additionalProperties": false,
@@ -19874,6 +19850,19 @@
                           "name"
                         ]
                       }
+                    },
+                    "tags": {
+                      "anyOf": [
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ]
                     }
                   },
                   "additionalProperties": false,
@@ -20093,6 +20082,27 @@
                               }
                             ],
                             "default": null
+                          },
+                          "config": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "title": "SemanticLayerElementConfig",
+                                "properties": {
+                                  "meta": {
+                                    "type": "object",
+                                    "propertyNames": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
                           }
                         },
                         "additionalProperties": false,
@@ -20241,6 +20251,27 @@
                             "anyOf": [
                               {
                                 "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
+                          },
+                          "config": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "title": "SemanticLayerElementConfig",
+                                "properties": {
+                                  "meta": {
+                                    "type": "object",
+                                    "propertyNames": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                "additionalProperties": false
                               },
                               {
                                 "type": "null"
@@ -20404,6 +20435,27 @@
                                   "repo_file_path",
                                   "file_slice"
                                 ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
+                          },
+                          "config": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "title": "SemanticLayerElementConfig",
+                                "properties": {
+                                  "meta": {
+                                    "type": "object",
+                                    "propertyNames": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                "additionalProperties": false
                               },
                               {
                                 "type": "null"
@@ -21444,6 +21496,19 @@
                 "name"
               ]
             }
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "string"
+              }
+            ]
           }
         },
         "additionalProperties": false,
@@ -21670,6 +21735,27 @@
                     }
                   ],
                   "default": null
+                },
+                "config": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "title": "SemanticLayerElementConfig",
+                      "properties": {
+                        "meta": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
                 }
               },
               "additionalProperties": false,
@@ -21818,6 +21904,27 @@
                   "anyOf": [
                     {
                       "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                },
+                "config": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "title": "SemanticLayerElementConfig",
+                      "properties": {
+                        "meta": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "additionalProperties": false
                     },
                     {
                       "type": "null"
@@ -21981,6 +22088,27 @@
                         "repo_file_path",
                         "file_slice"
                       ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                },
+                "config": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "title": "SemanticLayerElementConfig",
+                      "properties": {
+                        "meta": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "additionalProperties": false
                     },
                     {
                       "type": "null"

@@ -967,6 +967,16 @@ class MicrobatchModelNoEventTimeInputs(WarnLevel):
         return warning_tag(msg)
 
 
+class InvalidConcurrentBatchesConfig(WarnLevel):
+    def code(self) -> str:
+        return "I075"
+
+    def message(self) -> str:
+        maybe_plural_count_of_models = pluralize(self.num_models, "microbatch model")
+        description = f"Found {maybe_plural_count_of_models} with the `concurrent_batches` config set to true, but the {self.adapter_type} adapter does not support running batches concurrently. Batches will be run sequentially."
+        return line_wrap_message(warning_tag(description))
+
+
 # =======================================================
 # M - Deps generation
 # =======================================================
@@ -1937,7 +1947,9 @@ class StatsLine(InfoLevel):
         return "Z023"
 
     def message(self) -> str:
-        stats_line = "Done. PASS={pass} WARN={warn} ERROR={error} SKIP={skip} TOTAL={total}"
+        stats_line = (
+            "Done. PASS={pass} WARN={warn} ERROR={error} SKIP={skip} NO-OP={noop} TOTAL={total}"
+        )
         return stats_line.format(**self.stats)
 
 
