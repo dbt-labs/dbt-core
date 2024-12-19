@@ -299,7 +299,7 @@ class SchemaParser(SimpleParser[YamlBlock, ModelNode]):
                 snapshot_node = parser._create_parsetime_node(
                     block,
                     compiled_path,
-                    parser.initial_config(fqn),
+                    parser.initial_config_builder(fqn),
                     fqn,
                     snapshot["name"],
                 )

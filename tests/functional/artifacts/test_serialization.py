@@ -1,12 +1,11 @@
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Union
 
-import pytest
-from mashumaro.mixins.msgpack import DataClassMessagePackMixin
+from dbt_common.dataclass_schema import dbtClassMixin
 
 
 @dataclass
-class ExternalPartition(DataClassMessagePackMixin):
+class ExternalPartition(dbtClassMixin):
     name: str = ""
     description: str = ""
     data_type: str = ""
@@ -14,7 +13,7 @@ class ExternalPartition(DataClassMessagePackMixin):
 
 
 @dataclass
-class ExternalTable(DataClassMessagePackMixin):
+class ExternalTable(dbtClassMixin):
     location: Optional[str] = None
     file_format: Optional[str] = None
     row_format: Optional[str] = None
@@ -22,7 +21,6 @@ class ExternalTable(DataClassMessagePackMixin):
     partitions: Optional[Union[List[ExternalPartition], List[str]]] = None
 
 
-@pytest.mark.skip("skip until mashumaro 3.15")
 def test_partitions_serialization():
 
     part1 = ExternalPartition(
