@@ -1,4 +1,4 @@
-from dbt.context.context_config import ContextConfig
+from dbt.context.context_config import ConfigBuilder
 from dbt.contracts.graph.nodes import SeedNode
 from dbt.node_types import NodeType
 from dbt.parser.base import SimpleSQLParser
@@ -24,5 +24,5 @@ class SeedParser(SimpleSQLParser[SeedNode]):
     def get_compiled_path(cls, block: FileBlock):
         return block.path.relative_path
 
-    def render_with_context(self, parsed_node: SeedNode, config: ContextConfig) -> None:
+    def render_with_context(self, parsed_node: SeedNode, config_builder: ConfigBuilder) -> None:
         """Seeds don't need to do any rendering."""
