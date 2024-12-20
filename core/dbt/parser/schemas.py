@@ -6,7 +6,12 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Generic, Iterable, List, Optional, Type, TypeVar
 
 from dbt.artifacts.resources import RefArgs
-from dbt.artifacts.resources.v1.model import CustomGranularity, TimeSpine
+from dbt.artifacts.resources.v1.model import (
+    CustomGranularity,
+    ModelBuildAfter,
+    ModelFreshness,
+    TimeSpine,
+)
 from dbt.clients.jinja_static import statically_parse_ref_or_source
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.config import RuntimeConfig
@@ -722,6 +727,7 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
         # code consistency.
         deprecation_date: Optional[datetime.datetime] = None
         time_spine: Optional[TimeSpine] = None
+        freshness: Optional[ModelFreshness] = None
         if isinstance(block.target, UnparsedModelUpdate):
             deprecation_date = block.target.deprecation_date
             time_spine = (
@@ -736,6 +742,17 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
                     ],
                 )
                 if block.target.time_spine
+                else None
+            )
+            freshness = (
+                ModelFreshness(
+                    build_after=ModelBuildAfter(
+                        count=block.target.freshness.build_after.count,
+                        period=block.target.freshness.build_after.period,
+                        depends_on=block.target.freshness.build_after.depends_on,
+                    ),
+                )
+                if block.target.freshness
                 else None
             )
         patch = ParsedNodePatch(
@@ -754,6 +771,7 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
             constraints=block.target.constraints,
             deprecation_date=deprecation_date,
             time_spine=time_spine,
+            freshness=freshness,
         )
         assert isinstance(self.yaml.file, SchemaSourceFile)
         source_file: SchemaSourceFile = self.yaml.file
@@ -1043,6 +1061,7 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
         # These two will have to be reapplied after config is built for versioned models
         self.patch_constraints(node, patch.constraints)
         self.patch_time_spine(node, patch.time_spine)
+        node.freshness = patch.freshness
         node.build_contract_checksum()
 
     def patch_constraints(self, node: ModelNode, constraints: List[Dict[str, Any]]) -> None:
