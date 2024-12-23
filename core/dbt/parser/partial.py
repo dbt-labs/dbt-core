@@ -860,7 +860,7 @@ class PartialParsing:
                         self.schedule_referencing_nodes_for_parsing(node.unique_id)
                     # If the latest version has changed or a version has been removed we need to
                     # reparse referencing nodes.
-                    if node.is_versioned:
+                    if node.is_versioned or elem.get("versions"):
                         self.schedule_referencing_nodes_for_parsing(node.unique_id)
             # remove from patches
             schema_file.node_patches.remove(elem_unique_id)
