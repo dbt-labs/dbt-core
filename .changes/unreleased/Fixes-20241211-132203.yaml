@@ -1,6 +1,0 @@
-kind: Fixes
-body: Fix circular dependency
-time: 2024-12-11T13:22:03.637443979-08:00
-custom:
-    Author: dradetsky
-    Issue: 11142
