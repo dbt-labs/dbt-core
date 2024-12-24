@@ -188,6 +188,33 @@ def test_schedule_macro_nodes_for_parsing_basic(partial_parsing):
     }
 
 
+def test_add_versioning(partial_parsing):
+    # Change schema file
+    schema_file_id = "my_test://" + normalize("models/schema.yml")
+    partial_parsing.new_files[schema_file_id].checksum = FileHash.from_contents("xyzabc")
+    partial_parsing.new_files[schema_file_id].dfy = {
+        "version": 2,
+        "models": [
+            {
+                "name": "my_model",
+                "description": "Test model",
+                "latest_version": 1,
+                "versions": [{"v": 1}],
+            },
+            {"name": "python_model", "description": "python"},
+            {"name": "not_null", "model": "test.my_test.test_my_model"},
+        ],
+    }
+    # Make my_model_untouched child of my_model
+    partial_parsing.saved_manifest.child_map["model.my_test.my_model"] = [
+        "model.my_test.my_model_untouched"
+    ]
+
+    partial_parsing.build_file_diff()
+    pp_files = partial_parsing.get_parsing_files()
+    assert "my_test://models/my_model_untouched.sql" in pp_files["my_test"]["ModelParser"]
+
+
 class TestFileDiff:
     @pytest.fixture
     def partial_parsing(self, manifest, files):
