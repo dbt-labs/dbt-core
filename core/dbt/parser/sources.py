@@ -8,8 +8,8 @@ from dbt.adapters.factory import get_adapter
 from dbt.artifacts.resources import FreshnessThreshold, SourceConfig, Time
 from dbt.config import RuntimeConfig
 from dbt.context.context_config import (
-    BaseContextConfigGenerator,
-    ContextConfigGenerator,
+    BaseConfigGenerator,
+    RenderedConfigGenerator,
     UnrenderedConfigGenerator,
 )
 from dbt.contracts.graph.manifest import Manifest, SourceKey
@@ -164,12 +164,11 @@ class SourcePatcher:
         # make sure we don't do duplicate tags from source + table
         tags = sorted(set(itertools.chain(source.tags, table.tags)))
 
+        # This will also validate
         config = self._generate_source_config(
             target=target,
             rendered=True,
         )
-
-        config = config.finalize_and_validate()
 
         unrendered_config = self._generate_source_config(
             target=target,
@@ -306,9 +305,9 @@ class SourcePatcher:
         return node
 
     def _generate_source_config(self, target: UnpatchedSourceDefinition, rendered: bool):
-        generator: BaseContextConfigGenerator
+        generator: BaseConfigGenerator
         if rendered:
-            generator = ContextConfigGenerator(self.root_project)
+            generator = RenderedConfigGenerator(self.root_project)
         else:
             generator = UnrenderedConfigGenerator(self.root_project)
 
@@ -321,12 +320,11 @@ class SourcePatcher:
         # it works while source configs can only include `enabled`.
         precedence_configs.update(target.table.config)
 
-        return generator.calculate_node_config(
+        return generator.generate_node_config(
             config_call_dict={},
             fqn=target.fqn,
             resource_type=NodeType.Source,
             project_name=target.package_name,
-            base=False,
             patch_config_dict=precedence_configs,
         )
 

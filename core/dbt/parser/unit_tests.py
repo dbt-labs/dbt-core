@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional, Set
 from dbt import utils
 from dbt.artifacts.resources import ModelConfig, UnitTestConfig, UnitTestFormat
 from dbt.config import RuntimeConfig
-from dbt.context.context_config import ContextConfig
+from dbt.context.context_config import ConfigBuilder
 from dbt.context.providers import generate_parse_exposure, get_rendered
 from dbt.contracts.files import FileHash, SchemaSourceFile
 from dbt.contracts.graph.manifest import Manifest
@@ -314,13 +314,15 @@ class UnitTestParser(YamlReader):
     def _build_unit_test_config(
         self, unit_test_fqn: List[str], config_dict: Dict[str, Any]
     ) -> UnitTestConfig:
-        config = ContextConfig(
+        config_builder = ConfigBuilder(
             self.schema_parser.root_project,
             unit_test_fqn,
             NodeType.Unit,
             self.schema_parser.project.project_name,
         )
-        unit_test_config_dict = config.build_config_dict(patch_config_dict=config_dict)
+        unit_test_config_dict = config_builder.build_config_dict(
+            rendered=True, patch_config_dict=config_dict
+        )
         unit_test_config_dict = self.render_entry(unit_test_config_dict)
 
         return UnitTestConfig.from_dict(unit_test_config_dict)

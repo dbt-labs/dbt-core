@@ -470,7 +470,7 @@ def make_semantic_model(
     return SemanticModel(
         name=name,
         resource_type=NodeType.SemanticModel,
-        model=model,
+        model=model.name,
         node_relation=NodeRelation(
             alias=model.alias,
             schema_name="dbt",
