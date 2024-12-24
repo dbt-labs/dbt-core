@@ -167,6 +167,14 @@ indirect_selection = click.option(
     default="eager",
 )
 
+maximum_seed_size_mib = click.option(
+    "--maximum-seed-size-mib",
+    envvar="DBT_MAXIMUM_SEED_SIZE_MIB",
+    help="Specify max size (MiB) for seed files that will be hashed for state comparison.",
+    type=click.INT,
+    default=1,
+)
+
 lock = click.option(
     "--lock",
     envvar=None,

@@ -5,7 +5,6 @@ from typing import Any, Dict, List, Optional, Union
 from mashumaro.types import SerializableType
 
 from dbt.artifacts.resources.base import FileHash
-from dbt.constants import MAXIMUM_SEED_SIZE
 from dbt_common.dataclass_schema import StrEnum, dbtClassMixin
 
 from .util import SourceKey
@@ -65,9 +64,8 @@ class FilePath(dbtClassMixin):
     def original_file_path(self) -> str:
         return os.path.join(self.searched_path, self.relative_path)
 
-    def seed_too_large(self) -> bool:
-        """Return whether the file this represents is over the seed size limit"""
-        return os.stat(self.full_path).st_size > MAXIMUM_SEED_SIZE
+    def file_size(self) -> int:
+        return os.stat(self.full_path).st_size
 
 
 @dataclass
