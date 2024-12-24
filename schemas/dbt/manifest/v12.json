@@ -4777,6 +4777,47 @@
                   }
                 ],
                 "default": null
+              },
+              "freshness": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "title": "ModelFreshness",
+                    "properties": {
+                      "build_after": {
+                        "type": "object",
+                        "title": "ModelBuildAfter",
+                        "properties": {
+                          "count": {
+                            "type": "integer",
+                            "default": 0
+                          },
+                          "period": {
+                            "enum": [
+                              "minute",
+                              "hour",
+                              "day"
+                            ],
+                            "default": "hour"
+                          },
+                          "depends_on": {
+                            "enum": [
+                              "all",
+                              "any"
+                            ],
+                            "default": "any"
+                          }
+                        },
+                        "additionalProperties": false
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
               }
             },
             "additionalProperties": false,
@@ -14579,6 +14620,47 @@
                           "required": [
                             "standard_granularity_column"
                           ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
+                    },
+                    "freshness": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "title": "ModelFreshness",
+                          "properties": {
+                            "build_after": {
+                              "type": "object",
+                              "title": "ModelBuildAfter",
+                              "properties": {
+                                "count": {
+                                  "type": "integer",
+                                  "default": 0
+                                },
+                                "period": {
+                                  "enum": [
+                                    "minute",
+                                    "hour",
+                                    "day"
+                                  ],
+                                  "default": "hour"
+                                },
+                                "depends_on": {
+                                  "enum": [
+                                    "all",
+                                    "any"
+                                  ],
+                                  "default": "any"
+                                }
+                              },
+                              "additionalProperties": false
+                            }
+                          },
+                          "additionalProperties": false
                         },
                         {
                           "type": "null"
