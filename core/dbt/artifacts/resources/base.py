@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import List, Optional
 
 from dbt.artifacts.resources.types import NodeType
+from dbt_common.clients.system import convert_path
 from dbt_common.dataclass_schema import dbtClassMixin
 
 
@@ -59,6 +60,27 @@ class FileHash(dbtClassMixin):
         data = contents.encode("utf-8")
         checksum = hashlib.new(name, data).hexdigest()
         return cls(name=name, checksum=checksum)
+
+    @classmethod
+    def from_path(cls, path: str, name="sha256") -> "FileHash":
+        """Create a file hash from the file at given path. The hash is always the
+        utf-8 encoding of the contents which is stripped to give similar hashes
+        as `FileHash.from_contents`.
+        """
+        path = convert_path(path)
+        chunk_size = 1 * 1024 * 1024
+        file_hash = hashlib.new(name)
+        with open(path, "r") as handle:
+            # Left and rightstrip start and end of contents to give identical
+            # results as the seed hashing implementation with from_contents
+            chunk = handle.read(chunk_size).lstrip()
+            while chunk:
+                next_chunk = handle.read(chunk_size)
+                if not next_chunk:
+                    chunk = chunk.rstrip()
+                file_hash.update(chunk.encode("utf-8"))
+                chunk = next_chunk
+        return cls(name=name, checksum=file_hash.hexdigest())
 
 
 @dataclass

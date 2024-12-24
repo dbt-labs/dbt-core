@@ -228,7 +228,7 @@ class TestChangedSeedContents(BaseModifiedState):
                     "./state",
                 ]
             )
-        assert ">1MB" in str(exc.value)
+        assert ">1MiB" in str(exc.value)
 
         # now check if unmodified returns none
         results = run_dbt(
