@@ -1,4 +1,4 @@
-ARG py_version=3.11.2
+ARG py_version=3.12.8
 
 FROM python:$py_version-slim-bullseye as base
 
