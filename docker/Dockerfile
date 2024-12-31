@@ -21,7 +21,7 @@ RUN apt-get update \
 ENV PYTHONIOENCODING=utf-8
 ENV LANG=C.UTF-8
 
-RUN python -m pip install --upgrade "pip==24.0" "setuptools==69.2.0" "wheel==0.43.0" --no-cache-dir
+RUN python -m pip install --upgrade "pip==24.3" "setuptools==75.6.0" "wheel==0.45.1" --no-cache-dir
 
 
 FROM base as dbt-core
