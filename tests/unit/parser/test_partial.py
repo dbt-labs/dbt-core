@@ -1,6 +1,7 @@
 import time
 from copy import deepcopy
 from typing import Dict, List
+from unittest import mock
 
 import pytest
 
@@ -188,10 +189,10 @@ def test_schedule_macro_nodes_for_parsing_basic(partial_parsing):
     }
 
 
-def test_add_versioning(partial_parsing):
-    # Change schema file
+def test_schedule_nodes_for_parsing_versioning(partial_parsing):
+    # Modify schema file to add versioning
     schema_file_id = "my_test://" + normalize("models/schema.yml")
-    partial_parsing.new_files[schema_file_id].checksum = FileHash.from_contents("xyzabc")
+    partial_parsing.new_files[schema_file_id].checksum = FileHash.from_contents("changed")
     partial_parsing.new_files[schema_file_id].dfy = {
         "version": 2,
         "models": [
@@ -205,14 +206,15 @@ def test_add_versioning(partial_parsing):
             {"name": "not_null", "model": "test.my_test.test_my_model"},
         ],
     }
-    # Make my_model_untouched child of my_model
-    partial_parsing.saved_manifest.child_map["model.my_test.my_model"] = [
-        "model.my_test.my_model_untouched"
-    ]
+    with mock.patch.object(
+        partial_parsing, "schedule_referencing_nodes_for_parsing"
+    ) as mock_schedule_referencing_nodes_for_parsing:
+        partial_parsing.build_file_diff()
+        partial_parsing.get_parsing_files()
 
-    partial_parsing.build_file_diff()
-    pp_files = partial_parsing.get_parsing_files()
-    assert "my_test://models/my_model_untouched.sql" in pp_files["my_test"]["ModelParser"]
+        mock_schedule_referencing_nodes_for_parsing.assert_called_once_with(
+            "model.my_test.my_model"
+        )
 
 
 class TestFileDiff:
