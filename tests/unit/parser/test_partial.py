@@ -189,7 +189,7 @@ def test_schedule_macro_nodes_for_parsing_basic(partial_parsing):
     }
 
 
-def test_schedule_nodes_for_parsing_versioning(partial_parsing):
+def test_schedule_nodes_for_parsing_versioning(partial_parsing) -> None:
     # Modify schema file to add versioning
     schema_file_id = "my_test://" + normalize("models/schema.yml")
     partial_parsing.new_files[schema_file_id].checksum = FileHash.from_contents("changed")

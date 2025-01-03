@@ -1,4 +1,5 @@
 import pathlib
+from typing import Dict
 
 import pytest
 
@@ -141,14 +142,14 @@ models:
 
 class TestAddingVersioningToModel:
     @pytest.fixture(scope="class")
-    def models(self):
+    def models(self) -> Dict[str, str]:
         return {
             "model_one.sql": model_one_sql,
             "model_one_downstream.sql": model_one_downstream_sql,
             "schema.yml": model_unversioned_schema_yml,
         }
 
-    def test_pp_newly_versioned_models(self, project):
+    def test_pp_newly_versioned_models(self, project) -> None:
         results = run_dbt(["run"])
         assert len(results) == 2
 
