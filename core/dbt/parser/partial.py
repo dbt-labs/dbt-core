@@ -844,10 +844,10 @@ class PartialParsing:
             ):
                 nodes: List[Union[ModelNode, SeedNode, SnapshotNode, AnalysisNode]] = []
                 if elem_unique_id in self.saved_manifest.nodes:
-                    nodes = [self.saved_manifest.nodes.pop(elem_unique_id)]  # type: ignore
+                    nodes = [self.saved_manifest.nodes.pop(elem_unique_id)]  # type: ignore[list-item]
                 else:
                     # The value of disabled items is a list of nodes
-                    nodes = self.saved_manifest.disabled.pop(elem_unique_id)  # type: ignore
+                    nodes = self.saved_manifest.disabled.pop(elem_unique_id)  # type: ignore[assignment]
                 # need to add the node source_file to pp_files
                 for node in nodes:
                     file_id = node.file_id
