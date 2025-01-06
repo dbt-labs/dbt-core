@@ -19,7 +19,7 @@ class CatalogIntegration(dbtClassMixin):
     catalog_type: CatalogIntegrationType
 
 
-# satisfies dbt.adapters.protocol.CatalogIntegrationConfig
+# satisfies dbt.adapters.protocol.CatalogIntegrationConfigProtocol
 @dataclass
 class AdapterCatalogIntegration:
     catalog_name: str
