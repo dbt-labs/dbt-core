@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from typing import Any, Dict, List, Optional, Union
 
 from dbt.artifacts.resources import (
@@ -21,6 +22,7 @@ from dbt.artifacts.resources import (
     WhereFilter,
     WhereFilterIntersection,
 )
+from dbt.artifacts.resources.v1.semantic_model import SemanticLayerElementConfig
 from dbt.clients.jinja import get_rendered
 from dbt.context.context_config import (
     BaseContextConfigGenerator,
@@ -536,6 +538,7 @@ class SemanticModelParser(YamlReader):
                     type_params=self._get_dimension_type_params(unparsed=unparsed.type_params),
                     expr=unparsed.expr,
                     metadata=None,  # TODO: requires a fair bit of parsing context
+                    config=SemanticLayerElementConfig(meta=unparsed.config.get("meta", {})),
                 )
             )
         return dimensions
@@ -551,6 +554,7 @@ class SemanticModelParser(YamlReader):
                     label=unparsed.label,
                     role=unparsed.role,
                     expr=unparsed.expr,
+                    config=SemanticLayerElementConfig(meta=unparsed.config.get("meta", {})),
                 )
             )
 
@@ -583,6 +587,7 @@ class SemanticModelParser(YamlReader):
                         unparsed.non_additive_dimension
                     ),
                     agg_time_dimension=unparsed.agg_time_dimension,
+                    config=SemanticLayerElementConfig(meta=unparsed.config.get("meta", {})),
                 )
             )
         return measures
@@ -638,12 +643,29 @@ class SemanticModelParser(YamlReader):
         fqn = self.schema_parser.get_fqn_prefix(path)
         fqn.append(unparsed.name)
 
+        entities = self._get_entities(unparsed.entities)
+        measures = self._get_measures(unparsed.measures)
+        dimensions = self._get_dimensions(unparsed.dimensions)
+
         config = self._generate_semantic_model_config(
             target=unparsed,
             fqn=fqn,
             package_name=package_name,
             rendered=True,
         )
+
+        # Combine configs according to the behavior documented here https://docs.getdbt.com/reference/configs-and-properties#combining-configs
+        elements: Sequence[Union[Dimension, Entity, Measure]] = [
+            *dimensions,
+            *entities,
+            *measures,
+        ]
+        for element in elements:
+            if config is not None:
+                if element.config is None:
+                    element.config = SemanticLayerElementConfig(meta=config.meta)
+                else:
+                    element.config.meta = {**config.get("meta", {}), **element.config.meta}
 
         config = config.finalize_and_validate()
 
@@ -666,9 +688,9 @@ class SemanticModelParser(YamlReader):
             path=path,
             resource_type=NodeType.SemanticModel,
             unique_id=unique_id,
-            entities=self._get_entities(unparsed.entities),
-            measures=self._get_measures(unparsed.measures),
-            dimensions=self._get_dimensions(unparsed.dimensions),
+            entities=entities,
+            measures=measures,
+            dimensions=dimensions,
             defaults=unparsed.defaults,
             primary_entity=unparsed.primary_entity,
             config=config,
