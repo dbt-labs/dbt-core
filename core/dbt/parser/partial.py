@@ -860,8 +860,8 @@ class PartialParsing:
                     # if the node's group has changed - need to reparse all referencing nodes to ensure valid ref access
                     if node.group != elem.get("group"):
                         self.schedule_referencing_nodes_for_parsing(node.unique_id)
-                    # If the latest version has changed or a version has been removed we need to
-                    # reparse referencing nodes.
+                    # If the latest version has changed, a version has been removed, or a version has been added,
+                    #  we need to reparse referencing nodes.
                     if node.is_versioned or elem.get("versions"):
                         self.schedule_referencing_nodes_for_parsing(node.unique_id)
             # remove from patches
