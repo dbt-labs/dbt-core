@@ -289,6 +289,7 @@ sample_values = [
     core_types.FreshnessConfigProblem(msg=""),
     core_types.SemanticValidationFailure(msg=""),
     core_types.MicrobatchModelNoEventTimeInputs(model_name=""),
+    core_types.InvalidConcurrentBatchesConfig(num_models=1, adapter_type=""),
     # M - Deps generation ======================
     core_types.GitSparseCheckoutSubdirectory(subdir=""),
     core_types.GitProgressCheckoutRevision(revision=""),
@@ -421,6 +422,14 @@ sample_values = [
         snapshot_time_data_type="DATETIME", updated_at_data_type="DATETIMEZ"
     ),
     core_types.MicrobatchExecutionDebug(msg=""),
+    core_types.LogStartBatch(description="", batch_index=0, total_batches=0),
+    core_types.LogBatchResult(
+        description="",
+        status="",
+        batch_index=0,
+        total_batches=0,
+        execution_time=0,
+    ),
     # W - Node testing ======================
     core_types.CatchableExceptionOnRun(exc=""),
     core_types.InternalErrorOnRun(build_path="", exc=""),
@@ -445,7 +454,9 @@ sample_values = [
     core_types.OpenCommand(open_cmd="", profiles_dir=""),
     core_types.RunResultWarning(resource_type="", node_name="", path=""),
     core_types.RunResultFailure(resource_type="", node_name="", path=""),
-    core_types.StatsLine(stats={"error": 0, "skip": 0, "pass": 0, "warn": 0, "total": 0}),
+    core_types.StatsLine(
+        stats={"error": 0, "skip": 0, "pass": 0, "warn": 0, "noop": 0, "total": 0}
+    ),
     core_types.RunResultError(msg=""),
     core_types.RunResultErrorNoMessage(status=""),
     core_types.SQLCompiledPath(path=""),

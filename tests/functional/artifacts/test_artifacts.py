@@ -663,6 +663,22 @@ class TestVerifyArtifacts(BaseVerifyProject):
             > 0
         )
 
+    # Test artifact with additional fields load fine
+    def test_load_artifact(self, project, manifest_schema_path, run_results_schema_path):
+        catcher = EventCatcher(ArtifactWritten)
+        results = run_dbt(args=["compile"], callbacks=[catcher.catch])
+        assert len(results) == 7
+        manifest_dct = get_artifact(os.path.join(project.project_root, "target", "manifest.json"))
+        # add a field that is not in the schema
+        for _, node in manifest_dct["nodes"].items():
+            node["something_else"] = "something_else"
+        # load the manifest with the additional field
+        loaded_manifest = WritableManifest.from_dict(manifest_dct)
+
+        # successfully loaded the manifest with the additional field, but the field should not be present
+        for _, node in loaded_manifest.nodes.items():
+            assert not hasattr(node, "something_else")
+
 
 class TestVerifyArtifactsReferences(BaseVerifyProject):
     @pytest.fixture(scope="class")

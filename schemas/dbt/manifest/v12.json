@@ -13,7 +13,7 @@
         },
         "dbt_version": {
           "type": "string",
-          "default": "1.9.0b4"
+          "default": "1.10.0a1"
         },
         "generated_at": {
           "type": "string"
@@ -4777,6 +4777,47 @@
                   }
                 ],
                 "default": null
+              },
+              "freshness": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "title": "ModelFreshness",
+                    "properties": {
+                      "build_after": {
+                        "type": "object",
+                        "title": "ModelBuildAfter",
+                        "properties": {
+                          "count": {
+                            "type": "integer",
+                            "default": 0
+                          },
+                          "period": {
+                            "enum": [
+                              "minute",
+                              "hour",
+                              "day"
+                            ],
+                            "default": "hour"
+                          },
+                          "depends_on": {
+                            "enum": [
+                              "all",
+                              "any"
+                            ],
+                            "default": "any"
+                          }
+                        },
+                        "additionalProperties": false
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
               }
             },
             "additionalProperties": false,
@@ -7752,6 +7793,17 @@
             ],
             "default": null
           },
+          "loaded_at_query": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
           "freshness": {
             "anyOf": [
               {
@@ -9121,19 +9173,7 @@
                         "type": "integer"
                       },
                       "granularity": {
-                        "enum": [
-                          "nanosecond",
-                          "microsecond",
-                          "millisecond",
-                          "second",
-                          "minute",
-                          "hour",
-                          "day",
-                          "week",
-                          "month",
-                          "quarter",
-                          "year"
-                        ]
+                        "type": "string"
                       }
                     },
                     "additionalProperties": false,
@@ -14586,6 +14626,47 @@
                         }
                       ],
                       "default": null
+                    },
+                    "freshness": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "title": "ModelFreshness",
+                          "properties": {
+                            "build_after": {
+                              "type": "object",
+                              "title": "ModelBuildAfter",
+                              "properties": {
+                                "count": {
+                                  "type": "integer",
+                                  "default": 0
+                                },
+                                "period": {
+                                  "enum": [
+                                    "minute",
+                                    "hour",
+                                    "day"
+                                  ],
+                                  "default": "hour"
+                                },
+                                "depends_on": {
+                                  "enum": [
+                                    "all",
+                                    "any"
+                                  ],
+                                  "default": "any"
+                                }
+                              },
+                              "additionalProperties": false
+                            }
+                          },
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
                     }
                   },
                   "additionalProperties": false,
@@ -17552,6 +17633,17 @@
                       ],
                       "default": null
                     },
+                    "loaded_at_query": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
+                    },
                     "freshness": {
                       "anyOf": [
                         {
@@ -18712,19 +18804,7 @@
                                   "type": "integer"
                                 },
                                 "granularity": {
-                                  "enum": [
-                                    "nanosecond",
-                                    "microsecond",
-                                    "millisecond",
-                                    "second",
-                                    "minute",
-                                    "hour",
-                                    "day",
-                                    "week",
-                                    "month",
-                                    "quarter",
-                                    "year"
-                                  ]
+                                  "type": "string"
                                 }
                               },
                               "additionalProperties": false,
@@ -19805,6 +19885,19 @@
                           "name"
                         ]
                       }
+                    },
+                    "tags": {
+                      "anyOf": [
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ]
                     }
                   },
                   "additionalProperties": false,
@@ -20024,6 +20117,27 @@
                               }
                             ],
                             "default": null
+                          },
+                          "config": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "title": "SemanticLayerElementConfig",
+                                "properties": {
+                                  "meta": {
+                                    "type": "object",
+                                    "propertyNames": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
                           }
                         },
                         "additionalProperties": false,
@@ -20172,6 +20286,27 @@
                             "anyOf": [
                               {
                                 "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
+                          },
+                          "config": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "title": "SemanticLayerElementConfig",
+                                "properties": {
+                                  "meta": {
+                                    "type": "object",
+                                    "propertyNames": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                "additionalProperties": false
                               },
                               {
                                 "type": "null"
@@ -20335,6 +20470,27 @@
                                   "repo_file_path",
                                   "file_slice"
                                 ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
+                          },
+                          "config": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "title": "SemanticLayerElementConfig",
+                                "properties": {
+                                  "meta": {
+                                    "type": "object",
+                                    "propertyNames": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                "additionalProperties": false
                               },
                               {
                                 "type": "null"
@@ -21360,6 +21516,19 @@
                 "name"
               ]
             }
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "string"
+              }
+            ]
           }
         },
         "additionalProperties": false,
@@ -21586,6 +21755,27 @@
                     }
                   ],
                   "default": null
+                },
+                "config": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "title": "SemanticLayerElementConfig",
+                      "properties": {
+                        "meta": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
                 }
               },
               "additionalProperties": false,
@@ -21734,6 +21924,27 @@
                   "anyOf": [
                     {
                       "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                },
+                "config": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "title": "SemanticLayerElementConfig",
+                      "properties": {
+                        "meta": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "additionalProperties": false
                     },
                     {
                       "type": "null"
@@ -21897,6 +22108,27 @@
                         "repo_file_path",
                         "file_slice"
                       ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                },
+                "config": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "title": "SemanticLayerElementConfig",
+                      "properties": {
+                        "meta": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "additionalProperties": false
                     },
                     {
                       "type": "null"

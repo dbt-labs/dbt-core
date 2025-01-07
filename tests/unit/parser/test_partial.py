@@ -1,6 +1,7 @@
 import time
 from copy import deepcopy
 from typing import Dict, List
+from unittest import mock
 
 import pytest
 
@@ -186,6 +187,34 @@ def test_schedule_macro_nodes_for_parsing_basic(partial_parsing):
     assert partial_parsing.project_parser_files == {
         "my_test": {"SchemaParser": ["my_test://models/schema.yml"]}
     }
+
+
+def test_schedule_nodes_for_parsing_versioning(partial_parsing) -> None:
+    # Modify schema file to add versioning
+    schema_file_id = "my_test://" + normalize("models/schema.yml")
+    partial_parsing.new_files[schema_file_id].checksum = FileHash.from_contents("changed")
+    partial_parsing.new_files[schema_file_id].dfy = {
+        "version": 2,
+        "models": [
+            {
+                "name": "my_model",
+                "description": "Test model",
+                "latest_version": 1,
+                "versions": [{"v": 1}],
+            },
+            {"name": "python_model", "description": "python"},
+            {"name": "not_null", "model": "test.my_test.test_my_model"},
+        ],
+    }
+    with mock.patch.object(
+        partial_parsing, "schedule_referencing_nodes_for_parsing"
+    ) as mock_schedule_referencing_nodes_for_parsing:
+        partial_parsing.build_file_diff()
+        partial_parsing.get_parsing_files()
+
+        mock_schedule_referencing_nodes_for_parsing.assert_called_once_with(
+            "model.my_test.my_model"
+        )
 
 
 class TestFileDiff:
