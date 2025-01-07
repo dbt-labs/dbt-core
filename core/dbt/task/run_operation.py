@@ -85,7 +85,7 @@ class RunOperationTask(ConfiguredTask):
             unique_id = macro.unique_id
             fqn = unique_id.split(".")
         else:
-            raise dbt_common.exceptions.macros.UndefinedMacroError(
+            raise dbt_common.exceptions.UndefinedMacroError(
                 f"dbt could not find a macro with the name '{macro_name}' in any package"
             )
 

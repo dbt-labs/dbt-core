@@ -13,7 +13,7 @@ from dbt.tests.util import (
     run_dbt_and_capture,
     write_file,
 )
-from dbt_common.exceptions.macros import UndefinedMacroError
+from dbt_common.exceptions import UndefinedMacroError
 from tests.functional.run_operations.fixtures import (
     happy_macros_sql,
     model_sql,
