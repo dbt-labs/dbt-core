@@ -1342,7 +1342,36 @@ class LogTestResult(DynamicLevel):
             return EventLevel.INFO
 
 
-# Skipped Q008, Q009, Q010
+class LogNodeResult(DynamicLevel):
+    def code(self) -> str:
+        return "Q008"
+
+    def message(self) -> str:
+        for status in self.status_to_message_map:
+            if self.status == status:
+                return self.status_to_message_map[status]
+
+        # Catch-all, we should never be here
+        return red(
+            f"Unknown status for {self.node_info.resource_type} '{self.node_info.unique_id}'"
+        )
+
+    @classmethod
+    def status_to_level(cls, status):
+        level_lookup = {
+            "success": EventLevel.INFO,
+            "no-op": EventLevel.INFO,
+            "error": EventLevel.ERROR,
+            "skipped": EventLevel.WARN,
+            "partial success": EventLevel.WARN,
+        }
+        if status in level_lookup:
+            return level_lookup[status]
+        else:
+            return EventLevel.INFO
+
+
+# Skipped Q009, Q010
 
 
 class LogStartLine(InfoLevel):
