@@ -769,6 +769,7 @@ class StateSelectorMethod(SelectorMethod):
 
         manifest: Manifest = self.previous_state.manifest
 
+        keyword_args = {}  # initialize here to handle disabled node check below
         for unique_id, node in self.all_nodes(included_nodes):
             previous_node: Optional[SelectorTarget] = None
 
@@ -787,7 +788,6 @@ class StateSelectorMethod(SelectorMethod):
             elif unique_id in manifest.saved_queries:
                 previous_node = SavedQuery.from_resource(manifest.saved_queries[unique_id])
 
-            keyword_args = {}
             if checker.__name__ in [
                 "same_contract",
                 "check_modified_content",
