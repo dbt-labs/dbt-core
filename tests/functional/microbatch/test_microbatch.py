@@ -464,9 +464,11 @@ class TestMicrobatchWithInputWithoutEventTime(BaseMicrobatchTest):
         assert len(catcher.caught_events) == 1
 
         # our partition grain is "day" so running the same day without new data should produce the same results
+        catcher.caught_events = []
         with patch_microbatch_end_time("2020-01-03 14:57:00"):
-            run_dbt(["run"])
+            run_dbt(["run"], callbacks=[catcher.catch])
         self.assert_row_count(project, "microbatch_model", 3)
+        assert len(catcher.caught_events) == 1
 
         # add next two days of data
         test_schema_relation = project.adapter.Relation.create(
