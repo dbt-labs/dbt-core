@@ -344,7 +344,7 @@ sample_values = [
         index=0,
         total=0,
         execution_time=0,
-        status_to_message_map={},
+        msg="",
     ),
     core_types.LogStartLine(description="", index=0, total=0),
     core_types.LogModelResult(

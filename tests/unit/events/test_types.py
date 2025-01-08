@@ -188,19 +188,15 @@ def test_dynamic_level_events():
     assert msg.info.level == "info"
 
 
-def test_log_node_level():
+def test_log_node_result():
     event = LogNodeResult(
         node_info={},
         status="error",
         index=1,
         total=0,
-        status_to_message_map={
-            "error": "red(error message)",
-            "skipped": "yellow(skipped message)",
-            "success": "green(success message)",
-        },
+        msg="some message",
     )
-    msg = msg_from_base_event(event, level=LogNodeResult.status_to_level(event.status))
+    msg = msg_from_base_event(event, level=EventLevel.ERROR)
     assert msg
-    assert msg.info.msg == "red(error message)"
+    assert msg.info.msg == "some message"
     assert msg.info.level == "error"

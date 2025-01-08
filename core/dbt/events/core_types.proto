@@ -1363,7 +1363,7 @@ message LogNodeResult {
     int32 index = 4;
     int32 total = 5;
     float execution_time = 6;
-    map<string, string> status_to_message_map = 7;
+    string msg = 7;
 }
 
 message LogNodeResultMsg {
