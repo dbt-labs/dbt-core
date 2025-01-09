@@ -1342,7 +1342,15 @@ class LogTestResult(DynamicLevel):
             return EventLevel.INFO
 
 
-# Skipped Q008, Q009, Q010
+class LogNodeResult(DynamicLevel):
+    def code(self) -> str:
+        return "Q008"
+
+    def message(self) -> str:
+        return self.msg
+
+
+# Skipped Q009, Q010
 
 
 class LogStartLine(InfoLevel):

@@ -4795,6 +4795,47 @@
                   }
                 ],
                 "default": null
+              },
+              "freshness": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "title": "ModelFreshness",
+                    "properties": {
+                      "build_after": {
+                        "type": "object",
+                        "title": "ModelBuildAfter",
+                        "properties": {
+                          "count": {
+                            "type": "integer",
+                            "default": 0
+                          },
+                          "period": {
+                            "enum": [
+                              "minute",
+                              "hour",
+                              "day"
+                            ],
+                            "default": "hour"
+                          },
+                          "depends_on": {
+                            "enum": [
+                              "all",
+                              "any"
+                            ],
+                            "default": "any"
+                          }
+                        },
+                        "additionalProperties": false
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
               }
             },
             "additionalProperties": false,
@@ -7769,6 +7810,17 @@
             "additionalProperties": false
           },
           "loaded_at_field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "loaded_at_query": {
             "anyOf": [
               {
                 "type": "string"
@@ -14625,6 +14677,47 @@
                         }
                       ],
                       "default": null
+                    },
+                    "freshness": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "title": "ModelFreshness",
+                          "properties": {
+                            "build_after": {
+                              "type": "object",
+                              "title": "ModelBuildAfter",
+                              "properties": {
+                                "count": {
+                                  "type": "integer",
+                                  "default": 0
+                                },
+                                "period": {
+                                  "enum": [
+                                    "minute",
+                                    "hour",
+                                    "day"
+                                  ],
+                                  "default": "hour"
+                                },
+                                "depends_on": {
+                                  "enum": [
+                                    "all",
+                                    "any"
+                                  ],
+                                  "default": "any"
+                                }
+                              },
+                              "additionalProperties": false
+                            }
+                          },
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
                     }
                   },
                   "additionalProperties": false,
@@ -17590,6 +17683,17 @@
                       "additionalProperties": false
                     },
                     "loaded_at_field": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
+                    },
+                    "loaded_at_query": {
                       "anyOf": [
                         {
                           "type": "string"

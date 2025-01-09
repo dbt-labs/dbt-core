@@ -3,6 +3,7 @@ from google.protobuf.json_format import MessageToDict
 from dbt.adapters.events.types import PluginLoadError, RollbackFailed
 from dbt.events import core_types_pb2
 from dbt.events.types import (
+    LogNodeResult,
     LogStartLine,
     LogTestResult,
     MainEncounteredError,
@@ -185,3 +186,17 @@ def test_dynamic_level_events():
     msg = msg_from_base_event(event, level=EventLevel.INFO)
     assert msg
     assert msg.info.level == "info"
+
+
+def test_log_node_result():
+    event = LogNodeResult(
+        node_info={},
+        status="error",
+        index=1,
+        total=0,
+        msg="some message",
+    )
+    msg = msg_from_base_event(event, level=EventLevel.ERROR)
+    assert msg
+    assert msg.info.msg == "some message"
+    assert msg.info.level == "error"

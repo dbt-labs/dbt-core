@@ -1,0 +1,6 @@
+kind: Fixes
+body: Ensure warning about microbatch lacking filter inputs is always fired
+time: 2025-01-07T17:37:19.373261-06:00
+custom:
+  Author: QMalcolm
+  Issue: "11159"

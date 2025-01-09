@@ -19,7 +19,6 @@ from dbt.events.types import (
 from dbt.node_types import NodeType
 from dbt.task.base import ConfiguredTask
 from dbt_common.events.functions import fire_event
-from dbt_common.exceptions import DbtInternalError
 
 RESULT_FILE_NAME = "run_results.json"
 
@@ -86,7 +85,7 @@ class RunOperationTask(ConfiguredTask):
             unique_id = macro.unique_id
             fqn = unique_id.split(".")
         else:
-            raise DbtInternalError(
+            raise dbt_common.exceptions.UndefinedMacroError(
                 f"dbt could not find a macro with the name '{macro_name}' in any package"
             )
 

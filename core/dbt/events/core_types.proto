@@ -1355,8 +1355,23 @@ message LogTestResultMsg {
     LogTestResult data = 2;
 }
 
+// Q008
+message LogNodeResult {
+    NodeInfo node_info = 1;
+    string description = 2;
+    string status = 3;
+    int32 index = 4;
+    int32 total = 5;
+    float execution_time = 6;
+    string msg = 7;
+}
 
-// Skipped Q008, Q009, Q010
+message LogNodeResultMsg {
+    CoreEventInfo info = 1;
+    LogNodeResult data = 2;
+}
+
+// Skipped Q009, Q010
 
 
 // Q011

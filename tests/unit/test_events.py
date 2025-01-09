@@ -338,6 +338,14 @@ sample_values = [
         execution_time=0,
         num_failures=0,
     ),
+    core_types.LogNodeResult(
+        description="",
+        status="",
+        index=0,
+        total=0,
+        execution_time=0,
+        msg="",
+    ),
     core_types.LogStartLine(description="", index=0, total=0),
     core_types.LogModelResult(
         description="",
