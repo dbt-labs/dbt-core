@@ -23,7 +23,7 @@ from dbt.artifacts.schemas.run import RunExecutionResult, RunResult
 from dbt.cli.flags import Flags
 from dbt.config.runtime import RuntimeConfig
 from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.graph.nodes import ResultNode
+from dbt.contracts.graph.nodes import Exposure, ResultNode
 from dbt.contracts.state import PreviousState
 from dbt.events.types import (
     ArtifactWritten,
@@ -619,19 +619,19 @@ class GraphRunnableTask(ConfiguredTask):
         if results is None:
             return False
 
-        failures = [
-            r
-            for r in results
-            if r.status
-            in (
-                NodeStatus.RuntimeErr,
-                NodeStatus.Error,
-                NodeStatus.Fail,
-                NodeStatus.Skipped,  # propogate error message causing skip
-                NodeStatus.PartialSuccess,  # because partial success also means partial failure
-            )
-        ]
-        return len(failures) == 0
+        num_runtime_errors = len([r for r in results if r.status == NodeStatus.RuntimeErr])
+        num_errors = len([r for r in results if r.status == NodeStatus.Error])
+        num_fails = len([r for r in results if r.status == NodeStatus.Fail])
+        num_skipped = len(
+            [
+                r
+                for r in results
+                if r.status == NodeStatus.Skipped and not isinstance(r.node, Exposure)
+            ]
+        )
+        num_partial_success = len([r for r in results if r.status == NodeStatus.PartialSuccess])
+        num_total = num_runtime_errors + num_errors + num_fails + num_skipped + num_partial_success
+        return num_total == 0
 
     def get_model_schemas(self, adapter, selected_uids: Iterable[str]) -> Set[BaseRelation]:
         if self.manifest is None:

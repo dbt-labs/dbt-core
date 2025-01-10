@@ -575,6 +575,9 @@ def test_single_run_error():
         class MockNode:
             unique_id: str = ""
             node_info = None
+            resource_type: str = "model"
+            name: str = "my_model"
+            original_file_path: str = "path/to/model.sql"
 
         error_result = RunResult(
             status=RunStatus.Error,
