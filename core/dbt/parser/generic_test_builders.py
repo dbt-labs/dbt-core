@@ -229,62 +229,6 @@ class TestBuilder(Generic[Testable]):
             test_args["column_name"] = name
         return test_name, test_args
 
-    @property
-    def enabled(self) -> Optional[bool]:
-        return self.config.get("enabled")
-
-    @property
-    def alias(self) -> Optional[str]:
-        return self.config.get("alias")
-
-    @property
-    def severity(self) -> Optional[str]:
-        sev = self.config.get("severity")
-        if sev:
-            return sev.upper()
-        else:
-            return None
-
-    @property
-    def store_failures(self) -> Optional[bool]:
-        return self.config.get("store_failures")
-
-    @property
-    def store_failures_as(self) -> Optional[bool]:
-        return self.config.get("store_failures_as")
-
-    @property
-    def where(self) -> Optional[str]:
-        return self.config.get("where")
-
-    @property
-    def limit(self) -> Optional[int]:
-        return self.config.get("limit")
-
-    @property
-    def warn_if(self) -> Optional[str]:
-        return self.config.get("warn_if")
-
-    @property
-    def error_if(self) -> Optional[str]:
-        return self.config.get("error_if")
-
-    @property
-    def fail_calc(self) -> Optional[str]:
-        return self.config.get("fail_calc")
-
-    @property
-    def meta(self) -> Optional[dict]:
-        return self.config.get("meta")
-
-    @property
-    def database(self) -> Optional[str]:
-        return self.config.get("database")
-
-    @property
-    def schema(self) -> Optional[str]:
-        return self.config.get("schema")
-
     def tags(self) -> List[str]:
         tags = self.config.get("tags", [])
         if isinstance(tags, str):
