@@ -285,36 +285,6 @@ class TestBuilder(Generic[Testable]):
     def schema(self) -> Optional[str]:
         return self.config.get("schema")
 
-    def get_static_config(self):
-        config = {}
-        if self.alias is not None:
-            config["alias"] = self.alias
-        if self.severity is not None:
-            config["severity"] = self.severity
-        if self.enabled is not None:
-            config["enabled"] = self.enabled
-        if self.where is not None:
-            config["where"] = self.where
-        if self.limit is not None:
-            config["limit"] = self.limit
-        if self.warn_if is not None:
-            config["warn_if"] = self.warn_if
-        if self.error_if is not None:
-            config["error_if"] = self.error_if
-        if self.fail_calc is not None:
-            config["fail_calc"] = self.fail_calc
-        if self.store_failures is not None:
-            config["store_failures"] = self.store_failures
-        if self.store_failures_as is not None:
-            config["store_failures_as"] = self.store_failures_as
-        if self.meta is not None:
-            config["meta"] = self.meta
-        if self.database is not None:
-            config["database"] = self.database
-        if self.schema is not None:
-            config["schema"] = self.schema
-        return config
-
     def tags(self) -> List[str]:
         tags = self.config.get("tags", [])
         if isinstance(tags, str):

@@ -5,7 +5,7 @@ import pytest
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import TestNode
 from dbt.exceptions import CompilationError
-from dbt.tests.util import get_manifest, run_dbt
+from dbt.tests.util import get_manifest, run_dbt, update_config_file
 
 custom_config_yml = """
 models:
@@ -23,6 +23,9 @@ models:
                 test_color: orange
                 store_failures: true
                 unlogged: True
+          - not_null:
+              config:
+                not_null_key: abc
 """
 
 mixed_config_yml = """
@@ -128,7 +131,7 @@ class TestCustomDataTestConfig(BaseDataTestsConfig):
 
     def test_custom_config(self, project):
         run_dbt(["run"])
-        run_dbt(["test", "--log-level", "debug"], expect_pass=False)
+        run_dbt(["test"], expect_pass=False)
 
         manifest = get_manifest(project.project_root)
         # Pattern to match the test_id without the specific suffix
@@ -139,14 +142,28 @@ class TestCustomDataTestConfig(BaseDataTestsConfig):
         assert "custom_config_key" in test_node.config
         assert test_node.config["custom_config_key"] == "some_value"
 
-        pattern = re.compile(r"test\.test\.custom_color_from_config.*")
-        test_node = _select_test_node(manifest, pattern)
-        assert "test_color" in test_node.config
-        assert "unlogged" in test_node.config
-
+        custom_color_pattern = re.compile(r"test\.test\.custom_color_from_config.*")
+        custom_color_test_node = _select_test_node(manifest, custom_color_pattern)
+        assert custom_color_test_node.config.get("test_color") == "orange"
+        assert custom_color_test_node.config.get("unlogged") is True
         persistence = get_table_persistence(project, "custom_color_from_config_table_color")
-
         assert persistence == "u"
+
+        not_null_pattern = re.compile(r"test\.test\.not_null.*")
+        not_null_test_node = _select_test_node(manifest, not_null_pattern)
+        assert not_null_test_node.config.get("not_null_key") == "abc"
+
+        # set dbt_project.yml config and ensure that schema configs override project configs
+        config_patch = {
+            "data_tests": {"test_color": "blue", "some_key": "strange", "not_null_key": "def"}
+        }
+        update_config_file(config_patch, project.project_root, "dbt_project.yml")
+        manifest = run_dbt(["parse"])
+        custom_color_test_node = _select_test_node(manifest, custom_color_pattern)
+        assert custom_color_test_node.config.get("test_color") == "orange"
+        assert custom_color_test_node.config.get("some_key") == "strange"
+        not_null_test_node = _select_test_node(manifest, not_null_pattern)
+        assert not_null_test_node.config.get("not_null_key") == "abc"
 
 
 class TestMixedDataTestConfig(BaseDataTestsConfig):
