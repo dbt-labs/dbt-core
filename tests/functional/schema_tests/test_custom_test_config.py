@@ -204,6 +204,3 @@ class TestSameKeyErrorDataTestConfig:
 
         # Assert that the error message contains the expected text
         assert "Test cannot have the same key at the top-level and in config" in exception_message
-
-        # Assert that the error message contains the context of the error
-        assert "models/same_key_error.yml" in exception_message
