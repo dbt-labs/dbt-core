@@ -8,11 +8,11 @@ import yaml
 
 from dbt import tracking
 from dbt.artifacts.resources import ModelConfig, RefArgs
+from dbt.context.context_config import ConfigBuilder
 from dbt.artifacts.resources.v1.model import (
     ModelBuildAfter,
     ModelFreshnessDependsOnOptions,
 )
-from dbt.context.context_config import ContextConfig
 from dbt.contracts.files import FileHash, FilePath, SchemaSourceFile, SourceFile
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.model_config import NodeConfig, SnapshotConfig, TestConfig
@@ -1425,7 +1425,7 @@ class StaticModelParserUnitTest(BaseParserTest):
             checksum=None,
             unrendered_config={"materialized": "table"},
         )
-        self.example_config = ContextConfig(
+        self.example_config_builder = ConfigBuilder(
             self.root_project_config,
             self.example_node.fqn,
             self.example_node.resource_type,
@@ -1455,90 +1455,92 @@ class StaticModelParserUnitTest(BaseParserTest):
     def test_sample_results(self):
         # --- missed ref --- #
         node = deepcopy(self.example_node)
-        config = deepcopy(self.example_config)
+        config_builder = deepcopy(self.example_config_builder)
         sample_node = deepcopy(self.example_node)
-        sample_config = deepcopy(self.example_config)
+        sample_config_builder = deepcopy(self.example_config_builder)
 
         sample_node.refs = []
         node.refs = ["myref"]
 
-        result = _get_sample_result(sample_node, sample_config, node, config)
+        result = _get_sample_result(sample_node, sample_config_builder, node, config_builder)
         self.assertEqual([(7, "missed_ref_value")], result)
 
         # --- false positive ref --- #
         node = deepcopy(self.example_node)
-        config = deepcopy(self.example_config)
+        config_builder = deepcopy(self.example_config_builder)
         sample_node = deepcopy(self.example_node)
-        sample_config = deepcopy(self.example_config)
+        sample_config_builder = deepcopy(self.example_config_builder)
 
         sample_node.refs = ["myref"]
         node.refs = []
 
-        result = _get_sample_result(sample_node, sample_config, node, config)
+        result = _get_sample_result(sample_node, sample_config_builder, node, config_builder)
         self.assertEqual([(6, "false_positive_ref_value")], result)
 
         # --- missed source --- #
         node = deepcopy(self.example_node)
-        config = deepcopy(self.example_config)
+        config_builder = deepcopy(self.example_config_builder)
         sample_node = deepcopy(self.example_node)
-        sample_config = deepcopy(self.example_config)
+        sample_config_builder = deepcopy(self.example_config_builder)
 
         sample_node.sources = []
         node.sources = [["abc", "def"]]
 
-        result = _get_sample_result(sample_node, sample_config, node, config)
+        result = _get_sample_result(sample_node, sample_config_builder, node, config_builder)
         self.assertEqual([(5, "missed_source_value")], result)
 
         # --- false positive source --- #
         node = deepcopy(self.example_node)
-        config = deepcopy(self.example_config)
+        config_builder = deepcopy(self.example_config_builder)
         sample_node = deepcopy(self.example_node)
-        sample_config = deepcopy(self.example_config)
+        sample_config_builder = deepcopy(self.example_config_builder)
 
         sample_node.sources = [["abc", "def"]]
         node.sources = []
 
-        result = _get_sample_result(sample_node, sample_config, node, config)
+        result = _get_sample_result(sample_node, sample_config_builder, node, config_builder)
         self.assertEqual([(4, "false_positive_source_value")], result)
 
         # --- missed config --- #
         node = deepcopy(self.example_node)
-        config = deepcopy(self.example_config)
+        config_builder = deepcopy(self.example_config_builder)
         sample_node = deepcopy(self.example_node)
-        sample_config = deepcopy(self.example_config)
+        sample_config_builder = deepcopy(self.example_config_builder)
 
-        sample_config._config_call_dict = {}
-        config._config_call_dict = {"key": "value"}
+        sample_config_builder._config_call_dict = {}
+        config_builder._config_call_dict = {"key": "value"}
 
-        result = _get_sample_result(sample_node, sample_config, node, config)
+        result = _get_sample_result(sample_node, sample_config_builder, node, config_builder)
         self.assertEqual([(3, "missed_config_value")], result)
 
         # --- false positive config --- #
         node = deepcopy(self.example_node)
-        config = deepcopy(self.example_config)
+        config_builder = deepcopy(self.example_config_builder)
         sample_node = deepcopy(self.example_node)
-        sample_config = deepcopy(self.example_config)
+        sample_config_builder = deepcopy(self.example_config_builder)
 
-        sample_config._config_call_dict = {"key": "value"}
-        config._config_call_dict = {}
+        sample_config_builder._config_call_dict = {"key": "value"}
+        config_builder._config_call_dict = {}
 
-        result = _get_sample_result(sample_node, sample_config, node, config)
+        result = _get_sample_result(sample_node, sample_config_builder, node, config_builder)
         self.assertEqual([(2, "false_positive_config_value")], result)
 
     def test_exp_sample_results(self):
         node = deepcopy(self.example_node)
-        config = deepcopy(self.example_config)
+        config_builder = deepcopy(self.example_config_builder)
         sample_node = deepcopy(self.example_node)
-        sample_config = deepcopy(self.example_config)
-        result = _get_exp_sample_result(sample_node, sample_config, node, config)
+        sample_config_builder = deepcopy(self.example_config_builder)
+        result = _get_exp_sample_result(sample_node, sample_config_builder, node, config_builder)
         self.assertEqual(["00_experimental_exact_match"], result)
 
     def test_stable_sample_results(self):
         node = deepcopy(self.example_node)
-        config = deepcopy(self.example_config)
+        config_builder = deepcopy(self.example_config_builder)
         sample_node = deepcopy(self.example_node)
-        sample_config = deepcopy(self.example_config)
-        result = _get_stable_sample_result(sample_node, sample_config, node, config)
+        sample_config_builder = deepcopy(self.example_config_builder)
+        result = _get_stable_sample_result(
+            sample_node, sample_config_builder, node, config_builder
+        )
         self.assertEqual(["80_stable_exact_match"], result)
 
 

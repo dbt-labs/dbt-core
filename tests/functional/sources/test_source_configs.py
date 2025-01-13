@@ -1,8 +1,8 @@
 import pytest
 
 from dbt.artifacts.resources import SourceConfig
+from dbt.exceptions import SchemaConfigError
 from dbt.tests.util import get_manifest, run_dbt, update_config_file
-from dbt_common.dataclass_schema import ValidationError
 from tests.functional.sources.fixtures import (
     all_configs_everywhere_schema_yml,
     all_configs_not_table_schema_yml,
@@ -175,7 +175,7 @@ class TestInvalidSourceConfig(SourceConfigTests):
         }
 
     def test_invalid_config_source(self, project):
-        with pytest.raises(ValidationError) as excinfo:
+        with pytest.raises(SchemaConfigError) as excinfo:
             run_dbt(["parse"])
         expected_msg = "'True and False' is not of type 'boolean'"
         assert expected_msg in str(excinfo.value)

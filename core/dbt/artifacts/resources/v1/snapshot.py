@@ -71,12 +71,6 @@ class SnapshotConfig(NodeConfig):
         if self.materialized and self.materialized != "snapshot":
             raise ValidationError("A snapshot must have a materialized value of 'snapshot'")
 
-    # Called by "calculate_node_config_dict" in ContextConfigGenerator
-    def finalize_and_validate(self):
-        data = self.to_dict(omit_none=True)
-        self.validate(data)
-        return self.from_dict(data)
-
 
 @dataclass
 class Snapshot(CompiledResource):

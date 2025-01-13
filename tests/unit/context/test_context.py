@@ -473,7 +473,7 @@ def test_model_parse_context(config_postgres, manifest_fx, get_adapter, get_incl
         model=mock_model(),
         config=config_postgres,
         manifest=manifest_fx,
-        context_config=mock.MagicMock(),
+        config_builder=mock.MagicMock(),
     )
     assert_has_keys(REQUIRED_MODEL_KEYS, MAYBE_KEYS, ctx)
 

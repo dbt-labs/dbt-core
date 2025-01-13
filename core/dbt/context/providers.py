@@ -40,7 +40,7 @@ from dbt.config import IsFQNResource, Project, RuntimeConfig
 from dbt.constants import DEFAULT_ENV_PLACEHOLDER
 from dbt.context.base import Var, contextmember, contextproperty
 from dbt.context.configured import FQNLookup
-from dbt.context.context_config import ContextConfig
+from dbt.context.context_config import ConfigBuilder
 from dbt.context.exceptions_jinja import wrapped_exports
 from dbt.context.macro_resolver import MacroResolver, TestMacroNamespace
 from dbt.context.macros import MacroNamespace, MacroNamespaceBuilder
@@ -367,14 +367,14 @@ class BaseMetricResolver(BaseResolver):
 
 
 class Config(Protocol):
-    def __init__(self, model, context_config: Optional[ContextConfig]): ...
+    def __init__(self, model, config_builder: Optional[ConfigBuilder]): ...
 
 
 # Implementation of "config(..)" calls in models
 class ParseConfigObject(Config):
-    def __init__(self, model, context_config: Optional[ContextConfig]):
+    def __init__(self, model, config_builder: Optional[ConfigBuilder]):
         self.model = model
-        self.context_config = context_config
+        self.config_builder = config_builder
 
     def _transform_config(self, config):
         for oldkey in ("pre_hook", "post_hook"):
@@ -395,19 +395,19 @@ class ParseConfigObject(Config):
 
         opts = self._transform_config(opts)
 
-        # it's ok to have a parse context with no context config, but you must
+        # it's ok to have a parse context with no config builder, but you must
         # not call it!
-        if self.context_config is None:
-            raise DbtRuntimeError("At parse time, did not receive a context config")
+        if self.config_builder is None:
+            raise DbtRuntimeError("At parse time, did not receive a config builder")
 
         # Track unrendered opts to build parsed node unrendered_config later on
         if get_flags().state_modified_compare_more_unrendered_values:
             unrendered_config = statically_parse_unrendered_config(self.model.raw_code)
             if unrendered_config:
-                self.context_config.add_unrendered_config_call(unrendered_config)
+                self.config_builder.add_unrendered_config_call(unrendered_config)
 
-        # Use rendered opts to populate context_config
-        self.context_config.add_config_call(opts)
+        # Use rendered opts to populate config builder
+        self.config_builder.add_config_call(opts)
         return ""
 
     def set(self, name, value):
@@ -427,7 +427,7 @@ class ParseConfigObject(Config):
 
 
 class RuntimeConfigObject(Config):
-    def __init__(self, model, context_config: Optional[ContextConfig] = None):
+    def __init__(self, model, config_builder: Optional[ConfigBuilder] = None):
         self.model = model
         # we never use or get a config, only the parser cares
 
@@ -887,7 +887,7 @@ class ProviderContext(ManifestContext):
         config: RuntimeConfig,
         manifest: Manifest,
         provider: Provider,
-        context_config: Optional[ContextConfig],
+        config_builder: Optional[ConfigBuilder],
     ) -> None:
         if provider is None:
             raise DbtInternalError(f"Invalid provider given to context: {provider}")
@@ -896,7 +896,7 @@ class ProviderContext(ManifestContext):
         self.model: Union[Macro, ManifestNode, SourceDefinition] = model
         super().__init__(config, manifest, model.package_name)
         self.sql_results: Dict[str, Optional[AttrDict]] = {}
-        self.context_config: Optional[ContextConfig] = context_config
+        self.config_builder: Optional[ConfigBuilder] = config_builder
         self.provider: Provider = provider
         self.adapter = get_adapter(self.config)
         # The macro namespace is used in creating the DatabaseWrapper
@@ -1165,7 +1165,7 @@ class ProviderContext(ManifestContext):
               {%- set unique_key = config.require('unique_key') -%}
               ...
         """  # noqa
-        return self.provider.Config(self.model, self.context_config)
+        return self.provider.Config(self.model, self.config_builder)
 
     @contextproperty()
     def execute(self) -> bool:
@@ -1703,12 +1703,12 @@ def generate_parser_model_context(
     model: ManifestNode,
     config: RuntimeConfig,
     manifest: Manifest,
-    context_config: ContextConfig,
+    config_builder: ConfigBuilder,
 ) -> Dict[str, Any]:
     # The __init__ method of ModelContext also initializes
     # a ManifestContext object which creates a MacroNamespaceBuilder
     # which adds every macro in the Manifest.
-    ctx = ModelContext(model, config, manifest, ParseProvider(), context_config)
+    ctx = ModelContext(model, config, manifest, ParseProvider(), config_builder)
     # The 'to_dict' method in ManifestContext moves all of the macro names
     # in the macro 'namespace' up to top level keys
     return ctx.to_dict()
@@ -1910,14 +1910,14 @@ class TestContext(ProviderContext):
         config: RuntimeConfig,
         manifest: Manifest,
         provider: Provider,
-        context_config: Optional[ContextConfig],
+        config_builder: Optional[ConfigBuilder],
         macro_resolver: MacroResolver,
     ) -> None:
         # this must be before super init so that macro_resolver exists for
         # build_namespace
         self.macro_resolver = macro_resolver
         self.thread_ctx = MacroStack()
-        super().__init__(model, config, manifest, provider, context_config)
+        super().__init__(model, config, manifest, provider, config_builder)
         self._build_test_namespace()
         # We need to rebuild this because it's already been built by
         # the ProviderContext with the wrong namespace.
@@ -1989,10 +1989,10 @@ def generate_test_context(
     model: ManifestNode,
     config: RuntimeConfig,
     manifest: Manifest,
-    context_config: ContextConfig,
+    config_builder: ConfigBuilder,
     macro_resolver: MacroResolver,
 ) -> Dict[str, Any]:
-    ctx = TestContext(model, config, manifest, ParseProvider(), context_config, macro_resolver)
+    ctx = TestContext(model, config, manifest, ParseProvider(), config_builder, macro_resolver)
     # The 'to_dict' method in ManifestContext moves all of the macro names
     # in the macro 'namespace' up to top level keys
     return ctx.to_dict()

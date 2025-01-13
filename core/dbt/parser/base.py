@@ -3,12 +3,12 @@ import itertools
 import os
 from typing import Any, Dict, Generic, List, Optional, TypeVar
 
-from dbt import hooks, utils
+from dbt import utils
 from dbt.adapters.factory import get_adapter  # noqa: F401
 from dbt.artifacts.resources import Contract
 from dbt.clients.jinja import MacroGenerator, get_rendered
 from dbt.config import RuntimeConfig
-from dbt.context.context_config import ContextConfig
+from dbt.context.context_config import ConfigBuilder
 from dbt.context.providers import (
     generate_generate_name_macro_context,
     generate_parser_model_context,
@@ -178,15 +178,6 @@ class ConfiguredParser(
         fqn.append(name)
         return fqn
 
-    def _mangle_hooks(self, config):
-        """Given a config dict that may have `pre-hook`/`post-hook` keys,
-        convert it from the yucky maybe-a-string, maybe-a-dict to a dict.
-        """
-        # Like most of parsing, this is a horrible hack :(
-        for key in hooks.ModelHookType:
-            if key in config:
-                config[key] = [hooks.get_hook_dict(h) for h in config[key]]
-
     def _create_error_node(
         self, name: str, path: str, original_file_path: str, raw_code: str, language: str = "sql"
     ) -> UnparsedNode:
@@ -209,7 +200,7 @@ class ConfiguredParser(
         self,
         block: ConfiguredBlockType,
         path: str,
-        config: ContextConfig,
+        config_builder: ConfigBuilder,
         fqn: List[str],
         name=None,
         **kwargs,
@@ -239,7 +230,7 @@ class ConfiguredParser(
             "raw_code": block.contents,
             "language": language,
             "unique_id": self.generate_unique_id(name),
-            "config": self.config_dict(config),
+            "config": self.config_dict(config_builder),
             "checksum": block.file.checksum.to_dict(omit_none=True),
         }
         dct.update(kwargs)
@@ -257,14 +248,18 @@ class ConfiguredParser(
             )
             raise DictParseError(exc, node=node)
 
-    def _context_for(self, parsed_node: FinalNode, config: ContextConfig) -> Dict[str, Any]:
-        return generate_parser_model_context(parsed_node, self.root_project, self.manifest, config)
+    def _context_for(
+        self, parsed_node: FinalNode, config_builder: ConfigBuilder
+    ) -> Dict[str, Any]:
+        return generate_parser_model_context(
+            parsed_node, self.root_project, self.manifest, config_builder
+        )
 
-    def render_with_context(self, parsed_node: FinalNode, config: ContextConfig):
-        # Given the parsed node and a ContextConfig to use during parsing,
+    def render_with_context(self, parsed_node: FinalNode, config_builder: ConfigBuilder):
+        # Given the parsed node and a ConfigBuilder to use during parsing,
         # render the node's sql with macro capture enabled.
         # Note: this mutates the config object when config calls are rendered.
-        context = self._context_for(parsed_node, config)
+        context = self._context_for(parsed_node, config_builder)
 
         # this goes through the process of rendering, but just throws away
         # the rendered result. The "macro capture" is the point?
@@ -274,14 +269,12 @@ class ConfiguredParser(
     # This is taking the original config for the node, converting it to a dict,
     # updating the config with new config passed in, then re-creating the
     # config from the dict in the node.
-    def update_parsed_node_config_dict(
+    def clean_and_fix_config_dict(
         self, parsed_node: FinalNode, config_dict: Dict[str, Any]
     ) -> None:
         # Overwrite node config
         final_config_dict = parsed_node.config.to_dict(omit_none=True)
         final_config_dict.update({k.strip(): v for (k, v) in config_dict.items()})
-        # re-mangle hooks, in case we got new ones
-        self._mangle_hooks(final_config_dict)
         parsed_node.config = parsed_node.config.from_dict(final_config_dict)
 
     def update_parsed_node_relation_names(
@@ -308,29 +301,33 @@ class ConfiguredParser(
     def update_parsed_node_config(
         self,
         parsed_node: FinalNode,
-        config: ContextConfig,
+        config_builder: ConfigBuilder,
         context=None,
         patch_config_dict=None,
         patch_file_id=None,
     ) -> None:
-        """Given the ContextConfig used for parsing and the parsed node,
-        generate and set the true values to use, overriding the temporary parse
-        values set in _build_intermediate_parsed_node.
+        """Given the ConfigBuilder used for parsing and the parsed node,
+        generate the final resource config and the unrendered_config
         """
 
-        # build_config_dict takes the config_call_dict in the ContextConfig object
-        # and calls calculate_node_config to combine dbt_project configs and
-        # config calls from SQL files, plus patch configs (from schema files)
-        # This normalize the config for a model node due #8520; should be improved latter
         if not patch_config_dict:
             patch_config_dict = {}
         if (
             parsed_node.resource_type == NodeType.Model
             and parsed_node.language == ModelLanguage.python
         ):
+            # This normalize the config for a python model node due #8520; should be improved latter
             if "materialized" not in patch_config_dict:
                 patch_config_dict["materialized"] = "table"
-        config_dict = config.build_config_dict(patch_config_dict=patch_config_dict)
+
+        # build_config_dict takes the config_call_dict in the ConfigBuilder object
+        # and calls generate_node_config to combine dbt_project configs and
+        # config calls from SQL files, plus patch configs (from schema files).
+        # Validation is performed when building the rendered config_dict and
+        # hooks are converted into hook objects for later rendering.
+        config_dict = config_builder.build_config_dict(
+            rendered=True, patch_config_dict=patch_config_dict
+        )
 
         # Set tags on node provided in config blocks. Tags are additive, so even if
         # config has been built before, we don't have to reset tags in the parsed_node.
@@ -396,16 +393,16 @@ class ConfiguredParser(
 
         # unrendered_config is used to compare the original database/schema/alias
         # values and to handle 'same_config' and 'same_contents' calls
-        parsed_node.unrendered_config = config.build_config_dict(
+        parsed_node.unrendered_config = config_builder.build_config_dict(
             rendered=False, patch_config_dict=patch_config_dict
         )
 
-        parsed_node.config_call_dict = config._config_call_dict
-        parsed_node.unrendered_config_call_dict = config._unrendered_config_call_dict
+        parsed_node.config_call_dict = config_builder._config_call_dict
+        parsed_node.unrendered_config_call_dict = config_builder._unrendered_config_call_dict
 
         # do this once before we parse the node database/schema/alias, so
         # parsed_node.config is what it would be if they did nothing
-        self.update_parsed_node_config_dict(parsed_node, config_dict)
+        self.clean_and_fix_config_dict(parsed_node, config_dict)
         # This updates the node database/schema/alias/relation_name
         self.update_parsed_node_relation_names(parsed_node, config_dict)
 
@@ -413,44 +410,36 @@ class ConfiguredParser(
         if parsed_node.resource_type == NodeType.Test:
             return
 
-        # at this point, we've collected our hooks. Use the node context to
-        # render each hook and collect refs/sources
+        # Use the node context to render each hook and collect refs/sources.
         assert hasattr(parsed_node.config, "pre_hook") and hasattr(parsed_node.config, "post_hook")
         hooks = list(itertools.chain(parsed_node.config.pre_hook, parsed_node.config.post_hook))
         # skip context rebuilding if there aren't any hooks
         if not hooks:
             return
         if not context:
-            context = self._context_for(parsed_node, config)
+            context = self._context_for(parsed_node, config_builder)
         for hook in hooks:
             get_rendered(hook.sql, context, parsed_node, capture_macros=True)
 
-    def initial_config(self, fqn: List[str]) -> ContextConfig:
-        config_version = min([self.project.config_version, self.root_project.config_version])
-        if config_version == 2:
-            return ContextConfig(
-                self.root_project,
-                fqn,
-                self.resource_type,
-                self.project.project_name,
-            )
-        else:
-            raise DbtInternalError(
-                f"Got an unexpected project version={config_version}, expected 2"
-            )
+    def initial_config_builder(self, fqn: List[str]) -> ConfigBuilder:
+        return ConfigBuilder(
+            self.root_project,
+            fqn,
+            self.resource_type,
+            self.project.project_name,
+        )
 
     def config_dict(
         self,
-        config: ContextConfig,
+        config_builder: ConfigBuilder,
     ) -> Dict[str, Any]:
-        config_dict = config.build_config_dict(base=True)
-        self._mangle_hooks(config_dict)
+        config_dict = config_builder.build_config_dict(rendered=True)
         return config_dict
 
-    def render_update(self, node: FinalNode, config: ContextConfig) -> None:
+    def render_update(self, node: FinalNode, config_builder: ConfigBuilder) -> None:
         try:
-            context = self.render_with_context(node, config)
-            self.update_parsed_node_config(node, config, context=context)
+            context = self.render_with_context(node, config_builder)
+            self.update_parsed_node_config(node, config_builder, context=context)
         except ValidationError as exc:
             # we got a ValidationError - probably bad types in config()
             raise ConfigUpdateError(exc, node=node) from exc
@@ -465,15 +454,15 @@ class ConfiguredParser(
         compiled_path: str = self.get_compiled_path(block)
         fqn = self.get_fqn(compiled_path, block.name)
 
-        config: ContextConfig = self.initial_config(fqn)
+        config_builder: ConfigBuilder = self.initial_config_builder(fqn)
 
         node = self._create_parsetime_node(
             block=block,
             path=compiled_path,
-            config=config,
+            config_builder=config_builder,
             fqn=fqn,
         )
-        self.render_update(node, config)
+        self.render_update(node, config_builder)
         self.add_result_node(block, node)
         return node
 
