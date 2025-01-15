@@ -16,7 +16,6 @@ from dbt_common.events.event_manager_client import (
 def snowplow_tracker(mocker):
     # initialize `active_user` without writing the cookie to disk
     initialize_from_flags(True, "")
-    mocker.patch("dbt.tracking.User.set_cookie").return_value = {"id": 42}
 
     # add the relevant callback to the event manager
     add_callback_to_manager(track_behavior_change_warn)
@@ -39,7 +38,7 @@ def test_false_evaluation_triggers_snowplow_tracking(snowplow_tracker):
     if behavior.my_flag:
         # trigger a False evaluation
         assert False, "This flag should evaluate to false and skip this line"
-    assert snowplow_tracker.called
+    assert not snowplow_tracker.called  # this fork disables tracking
 
 
 def test_true_evaluation_does_not_trigger_snowplow_tracking(snowplow_tracker):

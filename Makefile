@@ -3,7 +3,7 @@
 # Optional flag to run target in a docker container.
 # (example `make test USE_DOCKER=true`)
 ifeq ($(USE_DOCKER),true)
-	DOCKER_CMD := docker-compose run --rm test
+	DOCKER_CMD := docker compose run --rm test
 endif
 
 #
@@ -99,14 +99,14 @@ interop: clean
 	LOG_DIR=$(LOG_DIR) cargo run --manifest-path test/interop/log_parsing/Cargo.toml
 
 .PHONY: setup-db
-setup-db: ## Setup Postgres database with docker-compose for system testing.
+setup-db: ## Setup Postgres database with docker compose for system testing.
 	@\
-	docker-compose up -d database && \
+	docker compose up -d database && \
 	PGHOST=localhost PGUSER=root PGPASSWORD=password PGDATABASE=postgres bash test/setup_db.sh
 
-# This rule creates a file named .env that is used by docker-compose for passing
+# This rule creates a file named .env that is used by docker compose for passing
 # the USER_ID and GROUP_ID arguments to the Docker image.
-.env: ## Setup step for using using docker-compose with make target.
+.env: ## Setup step for using using docker compose with make target.
 	@touch .env
 ifneq ($(OS),Windows_NT)
 ifneq ($(shell uname -s), Darwin)

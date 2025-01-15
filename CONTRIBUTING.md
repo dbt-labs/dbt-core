@@ -78,9 +78,9 @@ source env/bin/activate
 
 This will create and activate a new Python virtual environment.
 
-#### Docker and `docker-compose`
+#### Docker and `docker compose`
 
-Docker and `docker-compose` are both used in testing. Specific instructions for you OS can be found [here](https://docs.docker.com/get-docker/).
+Docker and `docker compose` are both used in testing. Specific instructions for you OS can be found [here](https://docs.docker.com/get-docker/).
 
 
 #### Postgres (optional)
@@ -132,7 +132,7 @@ make setup-db
 ```
 or, alternatively:
 ```sh
-docker-compose up -d database
+docker compose up -d database
 PGHOST=localhost PGUSER=root PGPASSWORD=password PGDATABASE=postgres bash test/setup_db.sh
 ```
 
