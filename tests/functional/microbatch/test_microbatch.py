@@ -80,7 +80,7 @@ select * from {{ ref('input_model') }}
 """
 
 microbatch_hourly_model_sql = """
-{{ config(materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='hour', begin=modules.datetime.datetime(2020, 1, 1, 0, 0, 0)) }}
+{{ config(materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='hour', begin=datetime.combine(datetime.today(), datetime.min.time())) }}
 select * from {{ ref('input_model') }}
 """
 
