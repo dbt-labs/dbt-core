@@ -79,6 +79,11 @@ microbatch_model_force_concurrent_batches_sql = """
 select * from {{ ref('input_model') }}
 """
 
+microbatch_hourly_model_sql = """
+{{ config(materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='hour', begin=modules.datetime.datetime(2020, 1, 1, 0, 0, 0)) }}
+select * from {{ ref('input_model') }}
+"""
+
 microbatch_yearly_model_sql = """
 {{ config(materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='year', begin=modules.datetime.datetime(2020, 1, 1, 0, 0, 0)) }}
 select * from {{ ref('input_model') }}
@@ -884,6 +889,19 @@ class TestMicrobatchFullRefreshConfigFalse(BaseMicrobatchTest):
         with patch_microbatch_end_time("2020-01-03 13:57:00"):
             run_dbt(["run", "--full-refresh"])
         self.assert_row_count(project, "microbatch_model", 3)
+
+
+class TestMicrbobatchModelsHourly(BaseMicrobatchTest):
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "input_model.sql": input_model_sql,
+            "microbatch_model.sql": microbatch_hourly_model_sql,
+        }
+
+    def test_microbatch(self, project) -> None:
+        run_dbt(["run"])
 
 
 class TestMicrbobatchModelsRunWithSameCurrentTime(BaseMicrobatchTest):
