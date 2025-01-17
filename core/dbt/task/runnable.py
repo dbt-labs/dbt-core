@@ -49,16 +49,15 @@ from dbt.graph import (
     parse_difference,
 )
 from dbt.parser.manifest import write_manifest
+from dbt.task import group_lookup
 from dbt.task.base import BaseRunner, ConfiguredTask
+from dbt.task.printer import print_run_end_messages, print_run_result_error
 from dbt_common.context import _INVOCATION_CONTEXT_VAR, get_invocation_context
 from dbt_common.dataclass_schema import StrEnum
 from dbt_common.events.contextvars import log_contextvars, task_contextvars
 from dbt_common.events.functions import fire_event, warn_or_error
 from dbt_common.events.types import Formatting
 from dbt_common.exceptions import NotImplementedError
-
-from . import group_lookup
-from .printer import print_run_end_messages, print_run_result_error
 
 RESULT_FILE_NAME = "run_results.json"
 
