@@ -121,7 +121,7 @@ models:
 
 groups_yml_with_multiple_emails = """
 groups:
-  - name: my_group_with_owner_metadata
+  - name: my_group_with_multiple_emails
     owner:
       name: my_name
       email:
@@ -132,7 +132,7 @@ groups:
 
 models:
   - name: my_model
-    group: my_group_with_owner_metadata
+    group: my_group_with_multiple_emails
     access: public
     columns:
       - name: my_column
@@ -338,7 +338,7 @@ class TestRunResultGroupWithMultipleEmails:
             if log_json["info"]["name"] == "RunResultError":
                 assert "group" in log_json["data"]
                 group_data = log_json["data"]["group"]
-                assert group_data["name"] == "my_group_with_owner_metadata"
+                assert group_data["name"] == "my_group_with_multiple_emails"
                 assert group_data["owner"] == {
                     "name": "my_name",
                     "email": "['my.email@gmail.com', 'my.second.email@gmail.com']",
