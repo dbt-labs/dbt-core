@@ -8426,6 +8426,15 @@
               }
             ],
             "default": null
+          },
+          "doc_blocks": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
           }
         },
         "additionalProperties": false,
@@ -18431,6 +18440,15 @@
                         }
                       ],
                       "default": null
+                    },
+                    "doc_blocks": {
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
                     }
                   },
                   "additionalProperties": false,

@@ -1714,17 +1714,17 @@ def _process_docs_for_source(
     context: Dict[str, Any],
     source: SourceDefinition,
 ):
-    table_description = source.description
-    source_description = source.source_description
-    table_description = get_rendered(table_description, context)
-    source_description = get_rendered(source_description, context)
-    source.description = table_description
-    source.source_description = source_description
+    source.description, source.doc_blocks = _get_description_and_doc_blocks(
+        source.description, context
+    )
+    source.source_description, source.doc_blocks = _get_description_and_doc_blocks(
+        source.source_description, context
+    )
 
     for column in source.columns.values():
-        column_desc = column.description
-        column_desc = get_rendered(column_desc, context)
-        column.description = column_desc
+        column.description, column.doc_blocks = _get_description_and_doc_blocks(
+            column.description, context
+        )
 
 
 # macro argument descriptions

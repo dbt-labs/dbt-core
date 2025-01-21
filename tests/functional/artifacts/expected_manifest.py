@@ -1319,7 +1319,7 @@ def expected_references_manifest(project):
                         "tags": [],
                         "constraints": [],
                         "granularity": None,
-                        "doc_blocks": [],
+                        "doc_blocks": [["doc", "column_info"]],
                     }
                 },
                 "config": {
