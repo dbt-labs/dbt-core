@@ -316,6 +316,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                         "tags": [],
                         "constraints": [],
                         "granularity": None,
+                        "doc_blocks": [],
                     },
                     "first_name": {
                         "name": "first_name",
@@ -326,6 +327,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                         "tags": [],
                         "constraints": [],
                         "granularity": None,
+                        "doc_blocks": [],
                     },
                     "email": {
                         "name": "email",
@@ -336,6 +338,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                         "tags": [],
                         "constraints": [],
                         "granularity": None,
+                        "doc_blocks": [],
                     },
                     "ip_address": {
                         "name": "ip_address",
@@ -346,6 +349,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                         "tags": [],
                         "constraints": [],
                         "granularity": None,
+                        "doc_blocks": [],
                     },
                     "updated_at": {
                         "name": "updated_at",
@@ -356,6 +360,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                         "tags": [],
                         "constraints": [],
                         "granularity": None,
+                        "doc_blocks": [],
                     },
                 },
                 "contract": {"checksum": None, "enforced": False, "alias_types": True},
@@ -373,6 +378,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "latest_version": None,
                 "time_spine": None,
                 "freshness": None,
+                "doc_blocks": [],
             },
             "model.test.second_model": {
                 "compiled_path": os.path.join(compiled_model_path, "second_model.sql"),
@@ -416,6 +422,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                         "tags": [],
                         "constraints": [],
                         "granularity": None,
+                        "doc_blocks": [],
                     },
                     "first_name": {
                         "name": "first_name",
@@ -426,6 +433,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                         "tags": [],
                         "constraints": [],
                         "granularity": None,
+                        "doc_blocks": [],
                     },
                     "email": {
                         "name": "email",
@@ -436,6 +444,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                         "tags": [],
                         "constraints": [],
                         "granularity": None,
+                        "doc_blocks": [],
                     },
                     "ip_address": {
                         "name": "ip_address",
@@ -446,6 +455,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                         "tags": [],
                         "constraints": [],
                         "granularity": None,
+                        "doc_blocks": [],
                     },
                     "updated_at": {
                         "name": "updated_at",
@@ -456,6 +466,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                         "tags": [],
                         "constraints": [],
                         "granularity": None,
+                        "doc_blocks": [],
                     },
                 },
                 "contract": {"checksum": None, "enforced": False, "alias_types": True},
@@ -473,6 +484,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "latest_version": None,
                 "time_spine": None,
                 "freshness": None,
+                "doc_blocks": [],
             },
             "seed.test.seed": {
                 "build_path": None,
@@ -506,6 +518,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                         "tags": [],
                         "constraints": [],
                         "granularity": None,
+                        "doc_blocks": [],
                     },
                     "first_name": {
                         "name": "first_name",
@@ -516,6 +529,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                         "tags": [],
                         "constraints": [],
                         "granularity": None,
+                        "doc_blocks": [],
                     },
                     "email": {
                         "name": "email",
@@ -526,6 +540,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                         "tags": [],
                         "constraints": [],
                         "granularity": None,
+                        "doc_blocks": [],
                     },
                     "ip_address": {
                         "name": "ip_address",
@@ -536,6 +551,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                         "tags": [],
                         "constraints": [],
                         "granularity": None,
+                        "doc_blocks": [],
                     },
                     "updated_at": {
                         "name": "updated_at",
@@ -546,6 +562,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                         "tags": [],
                         "constraints": [],
                         "granularity": None,
+                        "doc_blocks": [],
                     },
                 },
                 "docs": {"node_color": None, "show": True},
@@ -554,6 +571,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "relation_name": relation_name_node_format.format(
                     project.database, my_schema_name, "seed"
                 ),
+                "doc_blocks": [],
             },
             "test.test.not_null_model_id.d01cc630e6": {
                 "alias": "not_null_model_id",
@@ -607,6 +625,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "checksum": {"name": "none", "checksum": ""},
                 "unrendered_config": unrendered_test_config,
                 "contract": {"checksum": None, "enforced": False, "alias_types": True},
+                "doc_blocks": [],
             },
             "snapshot.test.snapshot_seed": {
                 "alias": "snapshot_seed",
@@ -653,6 +672,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "tags": [],
                 "unique_id": "snapshot.test.snapshot_seed",
                 "unrendered_config": unrendered_snapshot_config,
+                "doc_blocks": [],
             },
             "test.test.test_nothing_model_.5d38568946": {
                 "alias": "test_nothing_model_",
@@ -705,6 +725,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 },
                 "checksum": {"name": "none", "checksum": ""},
                 "unrendered_config": unrendered_test_config,
+                "doc_blocks": [],
             },
             "test.test.unique_model_id.67b76558ff": {
                 "alias": "unique_model_id",
@@ -758,6 +779,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 },
                 "checksum": {"name": "none", "checksum": ""},
                 "unrendered_config": unrendered_test_config,
+                "doc_blocks": [],
             },
         },
         "sources": {
@@ -773,6 +795,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                         "tags": [],
                         "constraints": [],
                         "granularity": None,
+                        "doc_blocks": [],
                     }
                 },
                 "config": {
