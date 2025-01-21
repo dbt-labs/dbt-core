@@ -1661,8 +1661,8 @@ DocsContextCallback = Callable[[ResultNode], Dict[str, Any]]
 
 def _get_doc_blocks(s: str) -> Tuple[List[List[str]], bool]:
     ast = parse(s)
-    has_doc_blocks = False
     doc_blocks: List[List[str]] = []
+    has_doc_blocks = False
 
     if not hasattr(ast, "body"):
         return doc_blocks, has_doc_blocks
