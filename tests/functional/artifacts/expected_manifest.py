@@ -1029,6 +1029,7 @@ def expected_references_manifest(project):
                 "constraints": [],
                 "time_spine": None,
                 "freshness": None,
+                "doc_blocks": [],
             },
             "model.test.ephemeral_summary": {
                 "alias": "ephemeral_summary",
@@ -1045,6 +1046,7 @@ def expected_references_manifest(project):
                         "tags": [],
                         "constraints": [],
                         "granularity": None,
+                        "doc_blocks": [["doc", "summary_first_name"]],
                     },
                     "ct": {
                         "description": "The number of instances of the first name",
@@ -1055,6 +1057,7 @@ def expected_references_manifest(project):
                         "tags": [],
                         "constraints": [],
                         "granularity": None,
+                        "doc_blocks": [["doc", "summary_count"]],
                     },
                 },
                 "config": get_rendered_model_config(materialized="table", group="test_group"),
@@ -1102,6 +1105,7 @@ def expected_references_manifest(project):
                 "constraints": [],
                 "time_spine": None,
                 "freshness": None,
+                "doc_blocks": [["doc", "ephemeral_summary"]],
             },
             "model.test.view_summary": {
                 "alias": "view_summary",
@@ -1118,6 +1122,7 @@ def expected_references_manifest(project):
                         "tags": [],
                         "constraints": [],
                         "granularity": None,
+                        "doc_blocks": [["doc", "summary_first_name"]],
                     },
                     "ct": {
                         "description": "The number of instances of the first name",
@@ -1128,6 +1133,7 @@ def expected_references_manifest(project):
                         "tags": [],
                         "constraints": [],
                         "granularity": None,
+                        "doc_blocks": [["doc", "summary_count"]],
                     },
                 },
                 "config": get_rendered_model_config(),
@@ -1171,6 +1177,7 @@ def expected_references_manifest(project):
                 "constraints": [],
                 "time_spine": None,
                 "freshness": None,
+                "doc_blocks": [["doc", "view_summary"]],
             },
             "seed.test.seed": {
                 "alias": "seed",
@@ -1186,6 +1193,7 @@ def expected_references_manifest(project):
                         "tags": [],
                         "constraints": [],
                         "granularity": None,
+                        "doc_blocks": [],
                     },
                     "first_name": {
                         "name": "first_name",
@@ -1196,6 +1204,7 @@ def expected_references_manifest(project):
                         "tags": [],
                         "constraints": [],
                         "granularity": None,
+                        "doc_blocks": [],
                     },
                     "email": {
                         "name": "email",
@@ -1206,6 +1215,7 @@ def expected_references_manifest(project):
                         "tags": [],
                         "constraints": [],
                         "granularity": None,
+                        "doc_blocks": [],
                     },
                     "ip_address": {
                         "name": "ip_address",
@@ -1216,6 +1226,7 @@ def expected_references_manifest(project):
                         "tags": [],
                         "constraints": [],
                         "granularity": None,
+                        "doc_blocks": [],
                     },
                     "updated_at": {
                         "name": "updated_at",
@@ -1226,6 +1237,7 @@ def expected_references_manifest(project):
                         "tags": [],
                         "constraints": [],
                         "granularity": None,
+                        "doc_blocks": [],
                     },
                 },
                 "config": get_rendered_seed_config(),
@@ -1250,6 +1262,7 @@ def expected_references_manifest(project):
                 "checksum": checksum_file(seed_path),
                 "unrendered_config": get_unrendered_seed_config(),
                 "relation_name": '"{0}"."{1}".seed'.format(project.database, my_schema_name),
+                "doc_blocks": [],
             },
             "snapshot.test.snapshot_seed": {
                 "alias": "snapshot_seed",
@@ -1291,6 +1304,7 @@ def expected_references_manifest(project):
                 "unrendered_config": get_unrendered_snapshot_config(
                     target_schema=alternate_schema
                 ),
+                "doc_blocks": [],
             },
         },
         "sources": {
@@ -1305,6 +1319,7 @@ def expected_references_manifest(project):
                         "tags": [],
                         "constraints": [],
                         "granularity": None,
+                        "doc_blocks": [],
                     }
                 },
                 "config": {
@@ -1578,6 +1593,7 @@ def expected_versions_manifest(project):
                         "tags": [],
                         "constraints": [],
                         "granularity": None,
+                        "doc_blocks": [],
                     },
                     "ct": {
                         "description": "The number of instances of the first name",
@@ -1588,6 +1604,7 @@ def expected_versions_manifest(project):
                         "tags": [],
                         "constraints": [],
                         "granularity": None,
+                        "doc_blocks": [],
                     },
                 },
                 "config": get_rendered_model_config(
@@ -1638,6 +1655,7 @@ def expected_versions_manifest(project):
                 "latest_version": 2,
                 "time_spine": None,
                 "freshness": None,
+                "doc_blocks": [],
             },
             "model.test.versioned_model.v2": {
                 "alias": "versioned_model_v2",
@@ -1654,6 +1672,7 @@ def expected_versions_manifest(project):
                         "tags": [],
                         "constraints": [],
                         "granularity": None,
+                        "doc_blocks": [],
                     },
                     "extra": {
                         "description": "",
@@ -1664,6 +1683,7 @@ def expected_versions_manifest(project):
                         "tags": [],
                         "constraints": [],
                         "granularity": None,
+                        "doc_blocks": [],
                     },
                 },
                 "config": get_rendered_model_config(
@@ -1710,6 +1730,7 @@ def expected_versions_manifest(project):
                 "latest_version": 2,
                 "time_spine": None,
                 "freshness": None,
+                "doc_blocks": [],
             },
             "model.test.ref_versioned_model": {
                 "alias": "ref_versioned_model",
@@ -1769,6 +1790,7 @@ def expected_versions_manifest(project):
                 "latest_version": None,
                 "time_spine": None,
                 "freshness": None,
+                "doc_blocks": [],
             },
             "test.test.unique_versioned_model_v1_first_name.6138195dec": {
                 "alias": "unique_versioned_model_v1_first_name",
@@ -1822,6 +1844,7 @@ def expected_versions_manifest(project):
                 },
                 "checksum": {"name": "none", "checksum": ""},
                 "unrendered_config": unrendered_test_config,
+                "doc_blocks": [],
             },
             "test.test.unique_versioned_model_v1_count.0b4c0b688a": {
                 "alias": "unique_versioned_model_v1_count",
@@ -1875,6 +1898,7 @@ def expected_versions_manifest(project):
                 },
                 "checksum": {"name": "none", "checksum": ""},
                 "unrendered_config": unrendered_test_config,
+                "doc_blocks": [],
             },
             "test.test.unique_versioned_model_v2_first_name.998430d28e": {
                 "alias": "unique_versioned_model_v2_first_name",
@@ -1928,6 +1952,7 @@ def expected_versions_manifest(project):
                 },
                 "checksum": {"name": "none", "checksum": ""},
                 "unrendered_config": unrendered_test_config,
+                "doc_blocks": [],
             },
         },
         "exposures": {
