@@ -10,6 +10,7 @@ from itertools import chain
 from typing import Any, Callable, Dict, List, Mapping, Optional, Set, Tuple, Type, Union
 
 import msgpack
+from jinja2.nodes import Call, TemplateData
 
 import dbt.deprecations
 import dbt.exceptions
@@ -115,6 +116,7 @@ from dbt.parser.snapshots import SnapshotParser
 from dbt.parser.sources import SourcePatcher
 from dbt.parser.unit_tests import process_models_for_unit_test
 from dbt.version import __version__
+from dbt_common.clients.jinja import parse
 from dbt_common.clients.system import make_directory, path_exists, read_json, write_file
 from dbt_common.constants import SECRET_ENV_PREFIX
 from dbt_common.dataclass_schema import StrEnum, dbtClassMixin
@@ -1657,14 +1659,54 @@ def _check_manifest(manifest: Manifest, config: RuntimeConfig) -> None:
 DocsContextCallback = Callable[[ResultNode], Dict[str, Any]]
 
 
+def _get_doc_blocks(s: str) -> Tuple[List[List[str]], bool]:
+    ast = parse(s)
+    has_doc_blocks = False
+    doc_blocks: List[List[str]] = []
+
+    if not hasattr(ast, "body"):
+        return doc_blocks, has_doc_blocks
+
+    for statement in ast.body:
+        for node in statement.nodes:
+            if isinstance(node, TemplateData) and hasattr(node, "data"):
+                doc_blocks.append(["str", node.data])
+            if (
+                isinstance(node, Call)
+                and hasattr(node, "node")
+                and hasattr(node, "args")
+                and node.node.name == "doc"
+            ):
+                doc_block = ["doc"]
+                doc_block.extend([arg.value for arg in node.args])
+                doc_blocks.append(doc_block)
+                has_doc_blocks = True
+
+    return doc_blocks, has_doc_blocks
+
+
+def _get_description_and_doc_blocks(description, context):
+    doc_blocks, has_doc_blocks = _get_doc_blocks(description)
+
+    if has_doc_blocks:
+        description = get_rendered(description, context)
+    else:
+        doc_blocks = []
+
+    return description, doc_blocks
+
+
 # node and column descriptions
 def _process_docs_for_node(
     context: Dict[str, Any],
     node: ManifestNode,
 ):
-    node.description = get_rendered(node.description, context)
+    node.description, node.doc_blocks = _get_description_and_doc_blocks(node.description, context)
+
     for column_name, column in node.columns.items():
-        column.description = get_rendered(column.description, context)
+        column.description, column.doc_blocks = _get_description_and_doc_blocks(
+            column.description, context
+        )
 
 
 # source and table descriptions, column descriptions
