@@ -17,6 +17,7 @@ from dbt.contracts.files import (
 )
 from dbt.events.types import InputFileDiffError
 from dbt.exceptions import ParsingError
+from dbt.flags import get_flags
 from dbt.parser.common import schema_file_keys
 from dbt.parser.schemas import yaml_from_file
 from dbt.parser.search import filesystem_search
@@ -123,12 +124,14 @@ def validate_yaml(file_path, dct):
 
 # Special processing for big seed files
 def load_seed_source_file(match: FilePath, project_name) -> SourceFile:
-    if match.seed_too_large():
+    # Users can configure the maximum seed size (MiB) that will be hashed for state comparison
+    maximum_seed_size = get_flags().MAXIMUM_SEED_SIZE_MIB * 1024 * 1024
+    # maximum_seed_size = 0 means no limit
+    if match.file_size() > maximum_seed_size and maximum_seed_size != 0:
         # We don't want to calculate a hash of this file. Use the path.
         source_file = SourceFile.big_seed(match)
     else:
-        file_contents = load_file_contents(match.absolute_path, strip=True)
-        checksum = FileHash.from_contents(file_contents)
+        checksum = FileHash.from_path(match.absolute_path)
         source_file = SourceFile(path=match, checksum=checksum)
         source_file.contents = ""
     source_file.parse_file_type = ParseFileType.Seed

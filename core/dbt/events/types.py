@@ -1,6 +1,6 @@
 import json
 
-from dbt.constants import MAXIMUM_SEED_SIZE_NAME, PIN_PACKAGE_URL
+from dbt.constants import PIN_PACKAGE_URL
 from dbt.events.base_types import (
     DebugLevel,
     DynamicLevel,
@@ -8,6 +8,7 @@ from dbt.events.base_types import (
     InfoLevel,
     WarnLevel,
 )
+from dbt.flags import get_flags
 from dbt_common.events.base_types import EventLevel
 from dbt_common.events.format import (
     format_fancy_output_line,
@@ -675,10 +676,11 @@ class SeedIncreased(WarnLevel):
         return "I052"
 
     def message(self) -> str:
+        maximum_seed_size_name = str(get_flags().MAXIMUM_SEED_SIZE_MIB) + "MiB"
         msg = (
             f"Found a seed ({self.package_name}.{self.name}) "
-            f">{MAXIMUM_SEED_SIZE_NAME} in size. The previous file was "
-            f"<={MAXIMUM_SEED_SIZE_NAME}, so it has changed"
+            f">{maximum_seed_size_name} in size. The previous file was "
+            f"<={maximum_seed_size_name}, so it has changed"
         )
         return msg
 
@@ -688,9 +690,10 @@ class SeedExceedsLimitSamePath(WarnLevel):
         return "I053"
 
     def message(self) -> str:
+        maximum_seed_size_name = str(get_flags().MAXIMUM_SEED_SIZE_MIB) + "MiB"
         msg = (
             f"Found a seed ({self.package_name}.{self.name}) "
-            f">{MAXIMUM_SEED_SIZE_NAME} in size at the same path, dbt "
+            f">{maximum_seed_size_name} in size at the same path, dbt "
             f"cannot tell if it has changed: assuming they are the same"
         )
         return msg
@@ -701,9 +704,10 @@ class SeedExceedsLimitAndPathChanged(WarnLevel):
         return "I054"
 
     def message(self) -> str:
+        maximum_seed_size_name = str(get_flags().MAXIMUM_SEED_SIZE_MIB) + "MiB"
         msg = (
             f"Found a seed ({self.package_name}.{self.name}) "
-            f">{MAXIMUM_SEED_SIZE_NAME} in size. The previous file was in "
+            f">{maximum_seed_size_name} in size. The previous file was in "
             f"a different location, assuming it has changed"
         )
         return msg
@@ -714,9 +718,10 @@ class SeedExceedsLimitChecksumChanged(WarnLevel):
         return "I055"
 
     def message(self) -> str:
+        maximum_seed_size_name = str(get_flags().MAXIMUM_SEED_SIZE_MIB) + "MiB"
         msg = (
             f"Found a seed ({self.package_name}.{self.name}) "
-            f">{MAXIMUM_SEED_SIZE_NAME} in size. The previous file had a "
+            f">{maximum_seed_size_name} in size. The previous file had a "
             f"checksum type of {self.checksum_name}, so it has changed"
         )
         return msg
