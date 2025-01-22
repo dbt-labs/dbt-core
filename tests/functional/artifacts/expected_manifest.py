@@ -840,6 +840,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "unrendered_config": {},
                 "unrendered_database": None,
                 "unrendered_schema": "{{ var('test_schema') }}",
+                "doc_blocks": [],
             },
         },
         "exposures": {
