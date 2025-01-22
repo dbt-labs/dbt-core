@@ -626,10 +626,7 @@
                     "doc_blocks": {
                       "type": "array",
                       "items": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        }
+                        "type": "string"
                       }
                     }
                   },
@@ -742,10 +739,7 @@
               "doc_blocks": {
                 "type": "array",
                 "items": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
+                  "type": "string"
                 }
               },
               "root_path": {
@@ -1689,10 +1683,7 @@
                     "doc_blocks": {
                       "type": "array",
                       "items": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        }
+                        "type": "string"
                       }
                     }
                   },
@@ -1805,10 +1796,7 @@
               "doc_blocks": {
                 "type": "array",
                 "items": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
+                  "type": "string"
                 }
               },
               "language": {
@@ -2361,10 +2349,7 @@
                     "doc_blocks": {
                       "type": "array",
                       "items": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        }
+                        "type": "string"
                       }
                     }
                   },
@@ -2477,10 +2462,7 @@
               "doc_blocks": {
                 "type": "array",
                 "items": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
+                  "type": "string"
                 }
               },
               "language": {
@@ -3173,10 +3155,7 @@
                     "doc_blocks": {
                       "type": "array",
                       "items": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        }
+                        "type": "string"
                       }
                     }
                   },
@@ -3289,10 +3268,7 @@
               "doc_blocks": {
                 "type": "array",
                 "items": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
+                  "type": "string"
                 }
               },
               "language": {
@@ -4004,10 +3980,7 @@
                     "doc_blocks": {
                       "type": "array",
                       "items": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        }
+                        "type": "string"
                       }
                     }
                   },
@@ -4120,10 +4093,7 @@
               "doc_blocks": {
                 "type": "array",
                 "items": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
+                  "type": "string"
                 }
               },
               "language": {
@@ -5430,10 +5400,7 @@
                     "doc_blocks": {
                       "type": "array",
                       "items": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        }
+                        "type": "string"
                       }
                     }
                   },
@@ -5546,10 +5513,7 @@
               "doc_blocks": {
                 "type": "array",
                 "items": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
+                  "type": "string"
                 }
               },
               "language": {
@@ -6102,10 +6066,7 @@
                     "doc_blocks": {
                       "type": "array",
                       "items": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        }
+                        "type": "string"
                       }
                     }
                   },
@@ -6218,10 +6179,7 @@
               "doc_blocks": {
                 "type": "array",
                 "items": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
+                  "type": "string"
                 }
               },
               "language": {
@@ -7109,10 +7067,7 @@
                     "doc_blocks": {
                       "type": "array",
                       "items": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        }
+                        "type": "string"
                       }
                     }
                   },
@@ -7225,10 +7180,7 @@
               "doc_blocks": {
                 "type": "array",
                 "items": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
+                  "type": "string"
                 }
               },
               "language": {
@@ -8320,10 +8272,7 @@
                 "doc_blocks": {
                   "type": "array",
                   "items": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
+                    "type": "string"
                   }
                 }
               },
@@ -8430,10 +8379,7 @@
           "doc_blocks": {
             "type": "array",
             "items": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
+              "type": "string"
             }
           }
         },
@@ -10649,10 +10595,7 @@
                           "doc_blocks": {
                             "type": "array",
                             "items": {
-                              "type": "array",
-                              "items": {
-                                "type": "string"
-                              }
+                              "type": "string"
                             }
                           }
                         },
@@ -10765,10 +10708,7 @@
                     "doc_blocks": {
                       "type": "array",
                       "items": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        }
+                        "type": "string"
                       }
                     },
                     "root_path": {
@@ -11712,10 +11652,7 @@
                           "doc_blocks": {
                             "type": "array",
                             "items": {
-                              "type": "array",
-                              "items": {
-                                "type": "string"
-                              }
+                              "type": "string"
                             }
                           }
                         },
@@ -11828,10 +11765,7 @@
                     "doc_blocks": {
                       "type": "array",
                       "items": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        }
+                        "type": "string"
                       }
                     },
                     "language": {
@@ -12384,10 +12318,7 @@
                           "doc_blocks": {
                             "type": "array",
                             "items": {
-                              "type": "array",
-                              "items": {
-                                "type": "string"
-                              }
+                              "type": "string"
                             }
                           }
                         },
@@ -12500,10 +12431,7 @@
                     "doc_blocks": {
                       "type": "array",
                       "items": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        }
+                        "type": "string"
                       }
                     },
                     "language": {
@@ -13196,10 +13124,7 @@
                           "doc_blocks": {
                             "type": "array",
                             "items": {
-                              "type": "array",
-                              "items": {
-                                "type": "string"
-                              }
+                              "type": "string"
                             }
                           }
                         },
@@ -13312,10 +13237,7 @@
                     "doc_blocks": {
                       "type": "array",
                       "items": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        }
+                        "type": "string"
                       }
                     },
                     "language": {
@@ -14027,10 +13949,7 @@
                           "doc_blocks": {
                             "type": "array",
                             "items": {
-                              "type": "array",
-                              "items": {
-                                "type": "string"
-                              }
+                              "type": "string"
                             }
                           }
                         },
@@ -14143,10 +14062,7 @@
                     "doc_blocks": {
                       "type": "array",
                       "items": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        }
+                        "type": "string"
                       }
                     },
                     "language": {
@@ -15453,10 +15369,7 @@
                           "doc_blocks": {
                             "type": "array",
                             "items": {
-                              "type": "array",
-                              "items": {
-                                "type": "string"
-                              }
+                              "type": "string"
                             }
                           }
                         },
@@ -15569,10 +15482,7 @@
                     "doc_blocks": {
                       "type": "array",
                       "items": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        }
+                        "type": "string"
                       }
                     },
                     "language": {
@@ -16125,10 +16035,7 @@
                           "doc_blocks": {
                             "type": "array",
                             "items": {
-                              "type": "array",
-                              "items": {
-                                "type": "string"
-                              }
+                              "type": "string"
                             }
                           }
                         },
@@ -16241,10 +16148,7 @@
                     "doc_blocks": {
                       "type": "array",
                       "items": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        }
+                        "type": "string"
                       }
                     },
                     "language": {
@@ -17132,10 +17036,7 @@
                           "doc_blocks": {
                             "type": "array",
                             "items": {
-                              "type": "array",
-                              "items": {
-                                "type": "string"
-                              }
+                              "type": "string"
                             }
                           }
                         },
@@ -17248,10 +17149,7 @@
                     "doc_blocks": {
                       "type": "array",
                       "items": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        }
+                        "type": "string"
                       }
                     },
                     "language": {
@@ -18334,10 +18232,7 @@
                           "doc_blocks": {
                             "type": "array",
                             "items": {
-                              "type": "array",
-                              "items": {
-                                "type": "string"
-                              }
+                              "type": "string"
                             }
                           }
                         },
@@ -18444,10 +18339,7 @@
                     "doc_blocks": {
                       "type": "array",
                       "items": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        }
+                        "type": "string"
                       }
                     }
                   },

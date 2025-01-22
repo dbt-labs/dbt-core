@@ -84,7 +84,7 @@ class TestGoodDocsBlocks:
         model_data = manifest["nodes"]["model.test.model"]
 
         assert model_data["description"] == "My model is just a copy of the seed"
-        assert model_data["doc_blocks"] == [["doc", "my_model_doc"]]
+        assert model_data["doc_blocks"] == ["doc.test.my_model_doc"]
 
         assert {
             "name": "id",
@@ -95,7 +95,7 @@ class TestGoodDocsBlocks:
             "quote": None,
             "tags": [],
             "granularity": None,
-            "doc_blocks": [["doc", "my_model_doc__id"]],
+            "doc_blocks": ["doc.test.my_model_doc__id"],
         } == model_data["columns"]["id"]
 
         assert {
@@ -119,7 +119,7 @@ class TestGoodDocsBlocks:
             "quote": None,
             "tags": [],
             "granularity": None,
-            "doc_blocks": [["doc", "test", "my_model_doc__last_name"]],
+            "doc_blocks": ["doc.test.my_model_doc__last_name"],
         } == model_data["columns"]["last_name"]
 
         assert {
@@ -132,9 +132,8 @@ class TestGoodDocsBlocks:
             "tags": [],
             "granularity": None,
             "doc_blocks": [
-                ["doc", "my_model_doc__id"],
-                ["str", " The user's first name "],
-                ["doc", "test", "my_model_doc__last_name"],
+                "doc.test.my_model_doc__id",
+                "doc.test.my_model_doc__last_name",
             ],
         } == model_data["columns"]["tricky"]
 
@@ -168,7 +167,7 @@ class TestGoodDocsBlocksAltPath:
         model_data = manifest["nodes"]["model.test.model"]
 
         assert model_data["description"] == "Alt text about the model"
-        assert model_data["doc_blocks"] == [["doc", "my_model_doc"]]
+        assert model_data["doc_blocks"] == ["doc.test.my_model_doc"]
 
         assert {
             "name": "id",
@@ -179,7 +178,7 @@ class TestGoodDocsBlocksAltPath:
             "quote": None,
             "tags": [],
             "granularity": None,
-            "doc_blocks": [["doc", "my_model_doc__id"]],
+            "doc_blocks": ["doc.test.my_model_doc__id"],
         } == model_data["columns"]["id"]
 
         assert {
@@ -203,7 +202,7 @@ class TestGoodDocsBlocksAltPath:
             "quote": None,
             "tags": [],
             "granularity": None,
-            "doc_blocks": [["doc", "test", "my_model_doc__last_name"]],
+            "doc_blocks": ["doc.test.my_model_doc__last_name"],
         } == model_data["columns"]["last_name"]
 
         assert {
@@ -216,9 +215,8 @@ class TestGoodDocsBlocksAltPath:
             "tags": [],
             "granularity": None,
             "doc_blocks": [
-                ["doc", "my_model_doc__id"],
-                ["str", " The user's first name "],
-                ["doc", "test", "my_model_doc__last_name"],
+                "doc.test.my_model_doc__id",
+                "doc.test.my_model_doc__last_name",
             ],
         } == model_data["columns"]["tricky"]
 
