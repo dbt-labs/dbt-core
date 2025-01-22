@@ -1046,7 +1046,7 @@ def expected_references_manifest(project):
                         "tags": [],
                         "constraints": [],
                         "granularity": None,
-                        "doc_blocks": [["doc", "summary_first_name"]],
+                        "doc_blocks": ["doc.test.summary_first_name"],
                     },
                     "ct": {
                         "description": "The number of instances of the first name",
@@ -1057,7 +1057,7 @@ def expected_references_manifest(project):
                         "tags": [],
                         "constraints": [],
                         "granularity": None,
-                        "doc_blocks": [["doc", "summary_count"]],
+                        "doc_blocks": ["doc.test.summary_count"],
                     },
                 },
                 "config": get_rendered_model_config(materialized="table", group="test_group"),
@@ -1105,7 +1105,7 @@ def expected_references_manifest(project):
                 "constraints": [],
                 "time_spine": None,
                 "freshness": None,
-                "doc_blocks": [["doc", "ephemeral_summary"]],
+                "doc_blocks": ["doc.test.ephemeral_summary"],
             },
             "model.test.view_summary": {
                 "alias": "view_summary",
@@ -1122,7 +1122,7 @@ def expected_references_manifest(project):
                         "tags": [],
                         "constraints": [],
                         "granularity": None,
-                        "doc_blocks": [["doc", "summary_first_name"]],
+                        "doc_blocks": ["doc.test.summary_first_name"],
                     },
                     "ct": {
                         "description": "The number of instances of the first name",
@@ -1133,7 +1133,7 @@ def expected_references_manifest(project):
                         "tags": [],
                         "constraints": [],
                         "granularity": None,
-                        "doc_blocks": [["doc", "summary_count"]],
+                        "doc_blocks": ["doc.test.summary_count"],
                     },
                 },
                 "config": get_rendered_model_config(),
@@ -1177,7 +1177,7 @@ def expected_references_manifest(project):
                 "constraints": [],
                 "time_spine": None,
                 "freshness": None,
-                "doc_blocks": [["doc", "view_summary"]],
+                "doc_blocks": ["doc.test.view_summary"],
             },
             "seed.test.seed": {
                 "alias": "seed",
@@ -1319,7 +1319,7 @@ def expected_references_manifest(project):
                         "tags": [],
                         "constraints": [],
                         "granularity": None,
-                        "doc_blocks": [["doc", "column_info"]],
+                        "doc_blocks": ["doc.test.column_info"],
                     }
                 },
                 "config": {
@@ -1363,6 +1363,7 @@ def expected_references_manifest(project):
                 "unrendered_config": {},
                 "unrendered_database": None,
                 "unrendered_schema": "{{ var('test_schema') }}",
+                "doc_blocks": ["doc.test.table_info"],
             },
         },
         "exposures": {
