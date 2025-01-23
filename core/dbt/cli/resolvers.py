@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from appdirs import user_config_dir
+
 from dbt.config.project import PartialProject
 from dbt.exceptions import DbtProjectError
 
@@ -11,7 +13,10 @@ def default_project_dir() -> Path:
 
 
 def default_profiles_dir() -> Path:
-    return Path.cwd() if (Path.cwd() / "profiles.yml").exists() else Path.home() / ".dbt"
+    if (Path.cwd() / "profiles.yml").exists():
+        return Path.cwd()
+    else:
+        return Path(user_config_dir(appname="dbt", appauthor="dbt-labs"))
 
 
 def default_log_path(project_dir: Path, verify_version: bool = False) -> Path:

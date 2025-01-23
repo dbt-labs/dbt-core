@@ -2,6 +2,7 @@ git+https://github.com/dbt-labs/dbt-adapters.git@main
 git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-tests-adapter
 git+https://github.com/dbt-labs/dbt-common.git@main
 git+https://github.com/dbt-labs/dbt-postgres.git@main
+appdirs
 # black must match what's in .pre-commit-config.yaml to be sure local env matches CI
 black==24.3.0
 bumpversion
@@ -29,6 +30,7 @@ pytest-split
 pytest-xdist
 sphinx
 tox>=3.13
+types-appdirs
 types-docutils
 types-PyYAML
 types-Jinja2
