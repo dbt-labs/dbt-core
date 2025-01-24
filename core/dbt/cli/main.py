@@ -556,6 +556,7 @@ def parse(ctx, **kwargs):
 @p.event_time_start
 @p.event_time_end
 @p.sample
+@p.sample_window
 @p.select
 @p.selector
 @p.target_path

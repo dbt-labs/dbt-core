@@ -1,3 +1,4 @@
+import freezegun
 import pytest
 
 from dbt.events.types import JinjaLogInfo
@@ -54,6 +55,7 @@ class TestSampleMode:
             (False, 3, False),
         ],
     )
+    @freezegun.freeze_time("2025-01-03T00:00:0Z")
     def test_sample_mode(
         self,
         project,
@@ -64,9 +66,7 @@ class TestSampleMode:
     ):
         run_args = ["run"]
         if use_sample_mode:
-            run_args.extend(
-                ["--sample", "--event-time-start=2025-01-02", "--event-time-end=2025-01-03"]
-            )
+            run_args.extend(["--sample", "--sample-window=1 day"])
 
         _ = run_dbt(run_args, callbacks=[event_catcher.catch])
         assert len(event_catcher.caught_events) == 1

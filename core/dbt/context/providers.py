@@ -253,15 +253,11 @@ class BaseResolver(metaclass=abc.ABCMeta):
                     start=self.model.batch.event_time_start,
                     end=self.model.batch.event_time_end,
                 )
-            elif (
-                self.config.args.sample
-                and self.config.args.event_time_start
-                and self.config.args.event_time_end
-            ):
+            elif self.config.args.sample and self.config.args.sample_window:
                 event_time_filter = EventTimeFilter(
                     field_name=target.config.event_time,
-                    start=self.config.args.event_time_start,
-                    end=self.config.args.event_time_end,
+                    start=self.config.args.sample_window.start,
+                    end=self.config.args.sample_window.end,
                 )
 
         return event_time_filter

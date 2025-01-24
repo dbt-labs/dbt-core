@@ -2,7 +2,13 @@ from pathlib import Path
 
 import click
 
-from dbt.cli.option_types import YAML, ChoiceTuple, Package, WarnErrorOptionsType
+from dbt.cli.option_types import (
+    YAML,
+    ChoiceTuple,
+    Package,
+    SampleWindowType,
+    WarnErrorOptionsType,
+)
 from dbt.cli.options import MultiOption
 from dbt.cli.resolvers import default_profiles_dir, default_project_dir
 from dbt.version import get_version_information
@@ -524,6 +530,14 @@ sample = click.option(
     help="Run in sample mode, creating only samples of models where possible",
     default=False,
     is_flag=True,
+)
+
+sample_window = click.option(
+    "--sample-window",
+    envvar="DBT_SAMPLE_WINDOW",
+    help="The time window to use with sample mode. Example: '3 days'.",
+    default=None,
+    type=SampleWindowType(),
 )
 
 # `--select` and `--models` are analogous for most commands except `dbt list` for legacy reasons.
