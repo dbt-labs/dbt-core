@@ -241,19 +241,28 @@ class BaseResolver(metaclass=abc.ABCMeta):
             (isinstance(target.config, NodeConfig) or isinstance(target.config, SourceConfig))
             and target.config.event_time
             and isinstance(self.model, ModelNode)
-            and self.model.config.materialized == "incremental"
-            and self.model.config.incremental_strategy == "microbatch"
-            and self.manifest.use_microbatch_batches(project_name=self.config.project_name)
-            and self.model.batch is not None
         ):
-            start = self.model.batch.event_time_start
-            end = self.model.batch.event_time_end
-
-            event_time_filter = EventTimeFilter(
-                field_name=target.config.event_time,
-                start=start,
-                end=end,
-            )
+            if (
+                self.model.config.materialized == "incremental"
+                and self.model.config.incremental_strategy == "microbatch"
+                and self.manifest.use_microbatch_batches(project_name=self.config.project_name)
+                and self.model.batch is not None
+            ):
+                event_time_filter = EventTimeFilter(
+                    field_name=target.config.event_time,
+                    start=self.model.batch.event_time_start,
+                    end=self.model.batch.event_time_end,
+                )
+            elif (
+                self.config.args.sample
+                and self.config.args.event_time_start
+                and self.config.args.event_time_end
+            ):
+                event_time_filter = EventTimeFilter(
+                    field_name=target.config.event_time,
+                    start=self.config.args.event_time_start,
+                    end=self.config.args.event_time_end,
+                )
 
         return event_time_filter
 
