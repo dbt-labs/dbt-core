@@ -249,12 +249,11 @@ class BaseResolver(metaclass=abc.ABCMeta):
             start = self.model.batch.event_time_start
             end = self.model.batch.event_time_end
 
-            if start is not None or end is not None:
-                event_time_filter = EventTimeFilter(
-                    field_name=target.config.event_time,
-                    start=start,
-                    end=end,
-                )
+            event_time_filter = EventTimeFilter(
+                field_name=target.config.event_time,
+                start=start,
+                end=end,
+            )
 
         return event_time_filter
 
