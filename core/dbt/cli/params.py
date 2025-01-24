@@ -518,6 +518,14 @@ resource_type = click.option(
     default=(),
 )
 
+sample = click.option(
+    "--sample",
+    envvar="DBT_SAMPLE",
+    help="Run in sample mode, creating only samples of models where possible",
+    default=False,
+    is_flag=True,
+)
+
 # `--select` and `--models` are analogous for most commands except `dbt list` for legacy reasons.
 # Most CLI arguments should use the combined `select` option that aliases `--models` to `--select`.
 # However, if you need to split out these separators (like `dbt ls`), use the `models` and `raw_select` options instead.
