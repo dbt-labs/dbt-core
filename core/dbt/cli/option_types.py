@@ -1,15 +1,14 @@
 from datetime import datetime
 
 import pytz
-from attr import dataclass
 from click import Choice, ParamType
 
 from dbt.artifacts.resources.types import BatchSize
 from dbt.config.utils import normalize_warn_error_options, parse_cli_yaml_string
+from dbt.event_time.sample_window import SampleWindow
 from dbt.events import ALL_EVENT_NAMES
 from dbt.exceptions import OptionNotYamlDictError, ValidationError
 from dbt.materializations.incremental.microbatch import MicrobatchBuilder
-from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_common.exceptions import DbtValidationError
 from dbt_common.helper_types import WarnErrorOptions
 
@@ -95,26 +94,6 @@ class ChoiceTuple(Choice):
             super().convert(value, param, ctx)
 
         return value
-
-
-# TODO: This data class should probably live somewhere else, but I'm unsure where the right place is.
-@dataclass
-class SampleWindow(dbtClassMixin):
-    start: datetime
-    end: datetime
-
-    def __post_serialize__(self, data, context):
-        # This is insane, but necessary, I apologize. Mashumaro handles the
-        # dictification of this class via a compile time generated `to_dict`
-        # method based off of the _typing_ of th class. By default `datetime`
-        # types are converted to strings. We don't want that, we want them to
-        # stay datetimes.
-        # Note: This is safe because the `BatchContext` isn't part of the artifact
-        # and thus doesn't get written out.
-        new_data = super().__post_serialize__(data, context)
-        new_data["start"] = self.start
-        new_data["end"] = self.end
-        return new_data
 
 
 class SampleWindowType(ParamType):
