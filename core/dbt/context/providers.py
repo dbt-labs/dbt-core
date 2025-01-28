@@ -237,23 +237,53 @@ class BaseResolver(metaclass=abc.ABCMeta):
 
     def resolve_event_time_filter(self, target: ManifestNode) -> Optional[EventTimeFilter]:
         event_time_filter = None
+        sample_mode = bool(self.config.args.sample and self.config.args.sample_window)
+
+        # TODO The number of branches here is getting rough. We should consider ways to simplify
+        # what is going on to make it easier to maintain
+
+        # Only do event time filtering if the base node has the necessary event time configs
         if (
             (isinstance(target.config, NodeConfig) or isinstance(target.config, SourceConfig))
             and target.config.event_time
             and isinstance(self.model, ModelNode)
         ):
+
+            # Handling of microbatch models
             if (
                 self.model.config.materialized == "incremental"
                 and self.model.config.incremental_strategy == "microbatch"
                 and self.manifest.use_microbatch_batches(project_name=self.config.project_name)
                 and self.model.batch is not None
             ):
-                event_time_filter = EventTimeFilter(
-                    field_name=target.config.event_time,
-                    start=self.model.batch.event_time_start,
-                    end=self.model.batch.event_time_end,
-                )
-            elif self.config.args.sample and self.config.args.sample_window:
+                # Sample mode microbatch models
+                if sample_mode:
+                    start = (
+                        self.config.args.sample_window.start
+                        if self.config.args.sample_window.start > self.model.batch.event_time_start
+                        else self.model.batch.event_time_start
+                    )
+                    end = (
+                        self.config.args.sample_window.end
+                        if self.config.args.sample_window.end < self.model.batch.event_time_end
+                        else self.model.batch.event_time_end
+                    )
+                    event_time_filter = EventTimeFilter(
+                        field_name=target.config.event_time,
+                        start=start,
+                        end=end,
+                    )
+
+                # Regular microbatch models
+                else:
+                    event_time_filter = EventTimeFilter(
+                        field_name=target.config.event_time,
+                        start=self.model.batch.event_time_start,
+                        end=self.model.batch.event_time_end,
+                    )
+
+            # Sample mode _non_ microbatch models
+            elif sample_mode:
                 event_time_filter = EventTimeFilter(
                     field_name=target.config.event_time,
                     start=self.config.args.sample_window.start,
