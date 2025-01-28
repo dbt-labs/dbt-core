@@ -5,10 +5,10 @@ from click import Choice, ParamType
 
 from dbt.artifacts.resources.types import BatchSize
 from dbt.config.utils import normalize_warn_error_options, parse_cli_yaml_string
+from dbt.event_time.event_time import offset_timestamp
 from dbt.event_time.sample_window import SampleWindow
 from dbt.events import ALL_EVENT_NAMES
 from dbt.exceptions import OptionNotYamlDictError, ValidationError
-from dbt.materializations.incremental.microbatch import MicrobatchBuilder
 from dbt_common.exceptions import DbtValidationError
 from dbt_common.helper_types import WarnErrorOptions
 
@@ -134,9 +134,7 @@ class SampleWindowType(ParamType):
                     ctx,
                 )
 
-            start = MicrobatchBuilder.offset_timestamp(
-                timestamp=end, batch_size=batch_size, offset=-1 * lookback
-            )
+            start = offset_timestamp(timestamp=end, batch_size=batch_size, offset=-1 * lookback)
 
             return SampleWindow(start=start, end=end)
         else:
