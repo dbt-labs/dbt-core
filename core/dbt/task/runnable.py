@@ -49,15 +49,15 @@ from dbt.graph import (
     parse_difference,
 )
 from dbt.parser.manifest import write_manifest
+from dbt.task import group_lookup
 from dbt.task.base import BaseRunner, ConfiguredTask
+from dbt.task.printer import print_run_end_messages, print_run_result_error
 from dbt_common.context import _INVOCATION_CONTEXT_VAR, get_invocation_context
 from dbt_common.dataclass_schema import StrEnum
 from dbt_common.events.contextvars import log_contextvars, task_contextvars
 from dbt_common.events.functions import fire_event, warn_or_error
 from dbt_common.events.types import Formatting
 from dbt_common.exceptions import NotImplementedError
-
-from .printer import print_run_end_messages, print_run_result_error
 
 RESULT_FILE_NAME = "run_results.json"
 
@@ -538,6 +538,8 @@ class GraphRunnableTask(ConfiguredTask):
                 res = []
 
                 for index, node in enumerate(self._flattened_nodes or []):
+                    group = group_lookup.get(node.unique_id)
+
                     if node.unique_id not in executed_node_ids:
                         fire_event(
                             SkippingDetails(
@@ -547,6 +549,7 @@ class GraphRunnableTask(ConfiguredTask):
                                 index=index + 1,
                                 total=self.num_nodes,
                                 node_info=node.node_info,
+                                group=group,
                             )
                         )
                         skipped_node_result = mark_node_as_skipped(node, executed_node_ids, None)
