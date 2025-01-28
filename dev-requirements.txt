@@ -1,5 +1,5 @@
 # These point to main to catch any regressions before they are released to OSS
-git+https://github.com/dbt-labs/dbt-adapters.git@main
+git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-adapters
 git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-tests-adapter
 git+https://github.com/dbt-labs/dbt-common.git@main
 git+https://github.com/dbt-labs/dbt-postgres.git@main
