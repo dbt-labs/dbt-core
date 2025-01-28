@@ -34,6 +34,7 @@ types-PyYAML
 types-Jinja2
 types-mock
 types-protobuf>=5.0,<6.0
+types-python-dateutil
 types-pytz
 types-requests
 types-setuptools
