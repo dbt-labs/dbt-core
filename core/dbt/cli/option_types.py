@@ -1,11 +1,8 @@
-from datetime import datetime
+from typing import Optional
 
-import pytz
-from click import Choice, ParamType
+from click import Choice, Context, Parameter, ParamType
 
-from dbt.artifacts.resources.types import BatchSize
 from dbt.config.utils import normalize_warn_error_options, parse_cli_yaml_string
-from dbt.event_time.event_time import offset_timestamp
 from dbt.event_time.sample_window import SampleWindow
 from dbt.events import ALL_EVENT_NAMES
 from dbt.exceptions import OptionNotYamlDictError, ValidationError
@@ -99,43 +96,16 @@ class ChoiceTuple(Choice):
 class SampleWindowType(ParamType):
     name = "SAMPLE_WINDOW"
 
-    def convert(self, value, param, ctx):
+    def convert(
+        self, value, param: Optional[Parameter], ctx: Optional[Context]
+    ) -> Optional[SampleWindow]:
         if value is None:
-            return
+            return None
 
         if isinstance(value, str):
-            end = datetime.now(tz=pytz.UTC)
-
-            relative_window = value.split(" ")
-            if len(relative_window) != 2:
-                self.fail(
-                    f"Cannot load SAMPLE_WINDOW from '{value}'. Must be of form 'DAYS_INT GRAIN_SIZE'.",
-                    param,
-                    ctx,
-                )
-
             try:
-                lookback = int(relative_window[0])
-            except Exception:
-                raise self.fail(
-                    f"Unable to convert '{relative_window[0]}' to an integer", param, ctx
-                )
-
-            try:
-                batch_size_string = relative_window[1].lower().rstrip("s")
-                batch_size = BatchSize[batch_size_string]
-            except Exception:
-                grains = [size.value for size in BatchSize]
-                grain_plurals = [BatchSize.plural(size) for size in BatchSize]
-                valid_grains = grains + grain_plurals
-                self.fail(
-                    f"Invalid grain size '{relative_window[1]}'. Must be one of {valid_grains}",
-                    param,
-                    ctx,
-                )
-
-            start = offset_timestamp(timestamp=end, batch_size=batch_size, offset=-1 * lookback)
-
-            return SampleWindow(start=start, end=end)
+                return SampleWindow.from_relative_string(value)
+            except Exception as e:
+                self.fail(e.__str__(), param, ctx)
         else:
             self.fail(f"Cannot load SAMPLE_WINDOW from type {type(value)}", param, ctx)
