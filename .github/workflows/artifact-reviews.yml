@@ -14,8 +14,8 @@ on:
     types: [opened, synchronize, reopened, edited]
 
 jobs:
-  enforce-reviews:
-    name: "Enforce Additional Reviews"
+  check-reviews:
+    name: "Validate Additional Reviews"
     runs-on: ubuntu-latest
     steps:
       - name: "Checkout code"
@@ -35,8 +35,7 @@ jobs:
         run: |
           SENSITIVE_CHANGES=false
           while IFS= read -r file; do
-            # TODO: validate what files we care about
-            if [[ "$file" == artifacts/* ]] || [[ "$file" == validation/* ]]; then
+            if [[ "$file" == core/dbt/artifacts/* ]] ; then
               SENSITIVE_CHANGES=true
               break
             fi
@@ -72,10 +71,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    #   TODO: should this post a PR comment?  probably... same as changelog.
-      - name: "Fail if not enough approvals"
+      - name: "Notify and failif not enough approvals"
         if: ${{ steps.sensitive_files_changed.outputs.SENSITIVE_CHANGES == 'true' && steps.check_approvals.outputs.CORE_APPROVALS != '2' }}
         run: |
-          echo "Error: Changes to sensitive files require at least 2 approvals from core team members"
-          echo "Current number of core team approvals: $CORE_APPROVALS"
+          title="PR Approval Requirements Not Met"
+          message="Changes to artifact directory files requires at least 2 approvals from core team members. Current number of core team approvals: $CORE_APPROVALS "
+          echo "::error title=$title::$message"
           exit 1
