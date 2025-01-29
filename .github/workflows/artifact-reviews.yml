@@ -1,0 +1,81 @@
+# **what?**
+# Enforces additional reviews when artifact or validation files are modified.
+
+# **why?**
+# Ensure sensitive files receive proper review from designated team members.
+
+# **when?**
+# This will run when PRs are opened, synchronized, reopened, or edited.
+
+name: "Enforce Additional Reviews on Artifact and Validations Changes"
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+jobs:
+  enforce-reviews:
+    name: "Enforce Additional Reviews"
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Checkout code"
+        uses: actions/checkout@v4
+
+      - name: "Get list of changed files"
+        id: changed_files
+        run: |
+          CHANGED_FILES=$(gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files | jq -r '.[].filename')
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: "Check if any sensitive files were changed"
+        id: sensitive_files_changed
+        run: |
+          SENSITIVE_CHANGES=false
+          while IFS= read -r file; do
+            # TODO: validate what files we care about
+            if [[ "$file" == artifacts/* ]] || [[ "$file" == validation/* ]]; then
+              SENSITIVE_CHANGES=true
+              break
+            fi
+          done <<< "$CHANGED_FILES"
+          echo "SENSITIVE_CHANGES=$SENSITIVE_CHANGES" >> $GITHUB_OUTPUT
+
+      - name: "Get Core Team Members"
+        if: ${{ steps.sensitive_files_changed.outputs.SENSITIVE_CHANGES == 'true' }}
+        id: core_members
+        run: |
+          gh api -H "Accept: application/vnd.github+json" \
+          /orgs/dbt-labs/teams/core-group/members > core_members.json
+        env:
+          GH_TOKEN: ${{ secrets.IT_TEAM_MEMBERSHIP }}
+
+      - name: "Verify 2 core team approvals"
+        id: check_approvals
+        if: ${{ steps.sensitive_files_changed.outputs.SENSITIVE_CHANGES == 'true' }}
+        run: |
+
+            # Get all reviews
+            REVIEWS=$(gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/reviews)
+
+            # Count approved reviews from core team members
+            CORE_APPROVALS=0
+            while IFS= read -r member; do
+              APPROVED=$(echo "$REVIEWS" | jq --arg user "$member" \
+                '.[] | select(.user.login == $user and .state == "APPROVED") | .user.login' | wc -l)
+              CORE_APPROVALS=$((CORE_APPROVALS + APPROVED))
+            done <<< "$CORE_MEMBERS"
+
+            echo "CORE_APPROVALS=$CORE_APPROVALS" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    #   TODO: should this post a PR comment?  probably... same as changelog.
+      - name: "Fail if not enough approvals"
+        if: ${{ steps.sensitive_files_changed.outputs.SENSITIVE_CHANGES == 'true' && steps.check_approvals.outputs.CORE_APPROVALS != '2' }}
+        run: |
+          echo "Error: Changes to sensitive files require at least 2 approvals from core team members"
+          echo "Current number of core team approvals: $CORE_APPROVALS"
+          exit 1
