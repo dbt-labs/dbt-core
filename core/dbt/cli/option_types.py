@@ -1,5 +1,6 @@
 from typing import Optional
 
+import pytz
 from click import Choice, Context, Parameter, ParamType
 
 from dbt.config.utils import normalize_warn_error_options, parse_cli_yaml_string
@@ -104,7 +105,16 @@ class SampleWindowType(ParamType):
 
         if isinstance(value, str):
             try:
-                return SampleWindow.from_relative_string(value)
+                # Try and identify if it's a "dict" or a "str"
+                if value.lstrip()[0] == "{":
+                    param_option_name: str = param.opts[0] if param.opts else param.name  # type: ignore
+                    parsed_dict = parse_cli_yaml_string(value, param_option_name.strip("-"))
+                    sample_window = SampleWindow.from_dict(parsed_dict)
+                    sample_window.start = sample_window.start.replace(tzinfo=pytz.UTC)
+                    sample_window.end = sample_window.end.replace(tzinfo=pytz.UTC)
+                    return sample_window
+                else:
+                    return SampleWindow.from_relative_string(value)
             except Exception as e:
                 self.fail(e.__str__(), param, ctx)
         else:
