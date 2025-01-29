@@ -525,7 +525,7 @@ resource_type = click.option(
 )
 
 sample = click.option(
-    "--sample",
+    "--sample/--no-sample",
     envvar="DBT_SAMPLE",
     help="Run in sample mode, creating only samples of models where possible",
     default=False,
