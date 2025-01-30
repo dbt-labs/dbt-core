@@ -18,6 +18,12 @@ on:
   #    paths-ignore: [ '.changes/**', '.github/**', 'tests/**', '**.md', '**.yml' ]
 
   workflow_dispatch:
+    inputs:
+      target_branch:
+        description: "The branch to check against"
+        type: string
+        default: 'main'
+        required: true
 
 # no special access is needed
 permissions: read-all
@@ -43,6 +49,7 @@ jobs:
         uses: actions/checkout@v4
         with:
             path: ${{ env.DBT_REPO_DIRECTORY }}
+            ref: ${{ inputs.target_branch }}
 
       - name: Check for changes in core/dbt/artifacts
         # https://github.com/marketplace/actions/paths-changes-filter
