@@ -9,13 +9,13 @@
 # occur so we want to proactively alert to it.
 #
 # **when?**
-# On pushes to `develop` and release branches. Manual runs are also enabled.
+# Only can be run manually
 name: Artifact Schema Check
 
 on:
-  pull_request:
-    types: [ opened, reopened, labeled, unlabeled, synchronize ]
-    paths-ignore: [ '.changes/**', '.github/**', 'tests/**', '**.md', '**.yml' ]
+  #  pull_request:
+  #    types: [ opened, reopened, labeled, unlabeled, synchronize ]
+  #    paths-ignore: [ '.changes/**', '.github/**', 'tests/**', '**.md', '**.yml' ]
 
   workflow_dispatch:
 
