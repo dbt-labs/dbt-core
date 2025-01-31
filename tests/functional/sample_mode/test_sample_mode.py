@@ -1,8 +1,10 @@
+import os
 from datetime import datetime
 
 import freezegun
 import pytest
 import pytz
+from pytest_mock import MockerFixture
 
 from dbt.artifacts.resources.types import BatchSize
 from dbt.event_time.sample_window import SampleWindow
@@ -69,29 +71,36 @@ class TestBasicSampleMode(BaseSampleMode):
         return EventCatcher(event_to_catch=JinjaLogInfo)  # type: ignore
 
     @pytest.mark.parametrize(
-        "use_sample_mode,expected_row_count,arg_value_in_jinja",
+        "sample_mode_available,run_sample_mode,expected_row_count,arg_value_in_jinja",
         [
-            (True, 1, True),
-            (False, 3, False),
+            (True, True, 1, True),
+            (True, False, 3, False),
+            (False, True, 3, True),
+            (False, False, 3, False),
         ],
     )
     @freezegun.freeze_time("2025-01-03T02:03:0Z")
     def test_sample_mode(
         self,
         project,
+        mocker: MockerFixture,
         event_catcher: EventCatcher,
-        use_sample_mode: bool,
+        sample_mode_available: bool,
+        run_sample_mode: bool,
         expected_row_count: int,
         arg_value_in_jinja: bool,
     ):
         run_args = ["run"]
         expected_sample_window = None
-        if use_sample_mode:
+        if run_sample_mode:
             run_args.extend(["--sample", "--sample-window=1 day"])
             expected_sample_window = SampleWindow(
                 start=datetime(2025, 1, 2, 2, 3, 0, 0, tzinfo=pytz.UTC),
                 end=datetime(2025, 1, 3, 2, 3, 0, 0, tzinfo=pytz.UTC),
             )
+
+        if sample_mode_available:
+            mocker.patch.dict(os.environ, {"DBT_EXPERIMENTAL_SAMPLE_MODE": "1"})
 
         _ = run_dbt(run_args, callbacks=[event_catcher.catch])
         assert len(event_catcher.caught_events) == 2
@@ -124,6 +133,7 @@ class TestMicrobatchSampleMode(BaseSampleMode):
     def test_sample_mode(
         self,
         project,
+        mocker: MockerFixture,
         event_time_end_catcher: EventCatcher,
         event_time_start_catcher: EventCatcher,
     ):
@@ -146,6 +156,7 @@ class TestMicrobatchSampleMode(BaseSampleMode):
             ),
         ]
 
+        mocker.patch.dict(os.environ, {"DBT_EXPERIMENTAL_SAMPLE_MODE": "True"})
         _ = run_dbt(
             ["run", "--sample", "--sample-window=2 day"],
             callbacks=[event_time_end_catcher.catch, event_time_start_catcher.catch],

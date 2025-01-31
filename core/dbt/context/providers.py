@@ -238,7 +238,8 @@ class BaseResolver(metaclass=abc.ABCMeta):
     def resolve_event_time_filter(self, target: ManifestNode) -> Optional[EventTimeFilter]:
         event_time_filter = None
         sample_mode = bool(
-            getattr(self.config.args, "sample", False)
+            os.environ.get("DBT_EXPERIMENTAL_SAMPLE_MODE")
+            and getattr(self.config.args, "sample", False)
             and getattr(self.config.args, "sample_window", None)
         )
 
