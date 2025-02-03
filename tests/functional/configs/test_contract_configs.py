@@ -2,6 +2,7 @@ import os
 
 import pytest
 
+from dbt.artifacts.resources.v1.components import ColumnInfo
 from dbt.exceptions import ParsingError, ValidationError
 from dbt.tests.util import (
     get_artifact,
@@ -10,6 +11,7 @@ from dbt.tests.util import (
     run_dbt_and_capture,
     write_file,
 )
+from dbt_common.contracts.constraints import ColumnLevelConstraint, ConstraintType
 
 my_model_sql = """
 {{
@@ -331,9 +333,74 @@ class TestModelLevelContractEnabledConfigs:
 
         assert contract_actual_config.enforced is True
 
-        expected_columns = "{'id': ColumnInfo(name='id', description='hello', meta={}, data_type='integer', constraints=[ColumnLevelConstraint(type=<ConstraintType.not_null: 'not_null'>, name=None, expression=None, warn_unenforced=True, warn_unsupported=True, to=None, to_columns=[]), ColumnLevelConstraint(type=<ConstraintType.primary_key: 'primary_key'>, name=None, expression=None, warn_unenforced=True, warn_unsupported=True, to=None, to_columns=[]), ColumnLevelConstraint(type=<ConstraintType.check: 'check'>, name=None, expression='(id > 0)', warn_unenforced=True, warn_unsupported=True, to=None, to_columns=[])], quote=True, tags=[], _extra={}, granularity=None), 'color': ColumnInfo(name='color', description='', meta={}, data_type='string', constraints=[], quote=None, tags=[], _extra={}, granularity=None), 'date_day': ColumnInfo(name='date_day', description='', meta={}, data_type='date', constraints=[], quote=None, tags=[], _extra={}, granularity=None)}"
+        expected_columns = {
+            "id": ColumnInfo(
+                name="id",
+                description="hello",
+                meta={},
+                data_type="integer",
+                doc_blocks=[],
+                constraints=[
+                    ColumnLevelConstraint(
+                        type=ConstraintType.not_null,
+                        name=None,
+                        expression=None,
+                        warn_unenforced=True,
+                        warn_unsupported=True,
+                        to=None,
+                        to_columns=[],
+                    ),
+                    ColumnLevelConstraint(
+                        type=ConstraintType.primary_key,
+                        name=None,
+                        expression=None,
+                        warn_unenforced=True,
+                        warn_unsupported=True,
+                        to=None,
+                        to_columns=[],
+                    ),
+                    ColumnLevelConstraint(
+                        type=ConstraintType.check,
+                        name=None,
+                        expression="(id > 0)",
+                        warn_unenforced=True,
+                        warn_unsupported=True,
+                        to=None,
+                        to_columns=[],
+                    ),
+                ],
+                quote=True,
+                tags=[],
+                _extra={},
+                granularity=None,
+            ),
+            "color": ColumnInfo(
+                name="color",
+                description="",
+                doc_blocks=[],
+                meta={},
+                data_type="string",
+                constraints=[],
+                quote=None,
+                tags=[],
+                _extra={},
+                granularity=None,
+            ),
+            "date_day": ColumnInfo(
+                name="date_day",
+                description="",
+                doc_blocks=[],
+                meta={},
+                data_type="date",
+                constraints=[],
+                quote=None,
+                tags=[],
+                _extra={},
+                granularity=None,
+            ),
+        }
 
-        assert expected_columns == str(my_model_columns)
+        assert expected_columns == my_model_columns
 
         # compiled fields aren't in the manifest above because it only has parsed fields
         manifest_json = get_artifact(project.project_root, "target", "manifest.json")

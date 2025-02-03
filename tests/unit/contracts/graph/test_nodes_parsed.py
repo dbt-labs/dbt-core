@@ -207,6 +207,7 @@ def base_parsed_model_dict():
         "config_call_dict": {},
         "access": AccessType.Protected.value,
         "constraints": [],
+        "doc_blocks": [],
     }
 
 
@@ -315,6 +316,7 @@ def complex_parsed_model_dict():
                 "meta": {},
                 "tags": [],
                 "constraints": [],
+                "doc_blocks": [],
             },
         },
         "checksum": {
@@ -330,6 +332,7 @@ def complex_parsed_model_dict():
         "config_call_dict": {},
         "access": AccessType.Protected.value,
         "constraints": [],
+        "doc_blocks": [],
     }
 
 
@@ -538,6 +541,7 @@ def basic_parsed_seed_dict():
         "unrendered_config": {},
         "unrendered_config_call_dict": {},
         "config_call_dict": {},
+        "doc_blocks": [],
     }
 
 
@@ -632,6 +636,7 @@ def complex_parsed_seed_dict():
                 "meta": {},
                 "tags": [],
                 "constraints": [],
+                "doc_blocks": [],
             }
         },
         "meta": {"foo": 1000},
@@ -644,6 +649,7 @@ def complex_parsed_seed_dict():
         },
         "unrendered_config_call_dict": {},
         "config_call_dict": {},
+        "doc_blocks": [],
     }
 
 
@@ -844,6 +850,7 @@ def base_parsed_hook_dict():
         "unrendered_config": {},
         "unrendered_config_call_dict": {},
         "config_call_dict": {},
+        "doc_blocks": [],
     }
 
 
@@ -925,6 +932,7 @@ def complex_parsed_hook_dict():
                 "meta": {},
                 "tags": [],
                 "constraints": [],
+                "doc_blocks": [],
             },
         },
         "index": 13,
@@ -938,6 +946,7 @@ def complex_parsed_hook_dict():
         },
         "unrendered_config_call_dict": {},
         "config_call_dict": {},
+        "doc_blocks": [],
     }
 
 
@@ -1083,6 +1092,7 @@ def basic_parsed_schema_test_dict():
         "unrendered_config": {},
         "unrendered_config_call_dict": {},
         "config_call_dict": {},
+        "doc_blocks": [],
     }
 
 
@@ -1158,6 +1168,7 @@ def complex_parsed_schema_test_dict():
                 "meta": {},
                 "tags": [],
                 "constraints": [],
+                "doc_blocks": [],
             },
         },
         "column_name": "id",
@@ -1172,6 +1183,7 @@ def complex_parsed_schema_test_dict():
         "unrendered_config": {"materialized": "table", "severity": "WARN"},
         "unrendered_config_call_dict": {},
         "config_call_dict": {},
+        "doc_blocks": [],
     }
 
 
@@ -1567,6 +1579,7 @@ def basic_timestamp_snapshot_dict():
         },
         "unrendered_config_call_dict": {},
         "config_call_dict": {},
+        "doc_blocks": [],
     }
 
 
@@ -1672,6 +1685,7 @@ def basic_check_snapshot_dict():
         },
         "unrendered_config_call_dict": {},
         "config_call_dict": {},
+        "doc_blocks": [],
     }
 
 
@@ -1881,6 +1895,7 @@ def basic_parsed_source_definition_dict():
             "enabled": True,
         },
         "unrendered_config": {},
+        "doc_blocks": [],
     }
 
 
@@ -1913,6 +1928,7 @@ def complex_parsed_source_definition_dict():
         "freshness": {"warn_after": {"period": "hour", "count": 1}, "error_after": {}},
         "loaded_at_field": "loaded_at",
         "unrendered_config": {},
+        "doc_blocks": [],
     }
 
 

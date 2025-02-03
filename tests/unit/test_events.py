@@ -338,6 +338,14 @@ sample_values = [
         execution_time=0,
         num_failures=0,
     ),
+    core_types.LogNodeResult(
+        description="",
+        status="",
+        index=0,
+        total=0,
+        execution_time=0,
+        msg="",
+    ),
     core_types.LogStartLine(description="", index=0, total=0),
     core_types.LogModelResult(
         description="",
@@ -567,6 +575,9 @@ def test_single_run_error():
         class MockNode:
             unique_id: str = ""
             node_info = None
+            resource_type: str = "model"
+            name: str = "my_model"
+            original_file_path: str = "path/to/model.sql"
 
         error_result = RunResult(
             status=RunStatus.Error,

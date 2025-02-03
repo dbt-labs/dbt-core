@@ -68,6 +68,7 @@ class ColumnInfo(AdditionalPropertiesMixin, ExtensibleDbtClassMixin):
     tags: List[str] = field(default_factory=list)
     _extra: Dict[str, Any] = field(default_factory=dict)
     granularity: Optional[TimeGranularity] = None
+    doc_blocks: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -197,6 +198,7 @@ class ParsedResource(ParsedResourceMandatory):
     unrendered_config_call_dict: Dict[str, Any] = field(default_factory=dict)
     relation_name: Optional[str] = None
     raw_code: str = ""
+    doc_blocks: List[str] = field(default_factory=list)
 
     def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
         dct = super().__post_serialize__(dct, context)

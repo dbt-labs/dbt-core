@@ -286,7 +286,7 @@ class SchemaGenericTestParser(SimpleParser):
         # to the context in rendering processing
         node.depends_on.add_macro(macro_unique_id)
         if macro_unique_id in ["macro.dbt.test_not_null", "macro.dbt.test_unique"]:
-            config_call_dict = builder.get_static_config()
+            config_call_dict = builder.config
             config._config_call_dict = config_call_dict
             # This sets the config from dbt_project
             self.update_parsed_node_config(node, config)
