@@ -22,7 +22,7 @@ class SampleWindow(dbtClassMixin):
         # method based off of the _typing_ of th class. By default `datetime`
         # types are converted to strings. We don't want that, we want them to
         # stay datetimes.
-        # Note: This is safe because the `BatchContext` isn't part of the artifact
+        # Note: This is safe because the `SampleWindow` isn't part of the artifact
         # and thus doesn't get written out.
         new_data = super().__post_serialize__(data, context)
         new_data["start"] = self.start
