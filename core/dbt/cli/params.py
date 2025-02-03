@@ -530,6 +530,7 @@ sample = click.option(
     help="Run in sample mode, creating only samples of models where possible",
     default=False,
     is_flag=True,
+    hidden=True,  # TODO: Unhide
 )
 
 sample_window = click.option(
@@ -538,6 +539,7 @@ sample_window = click.option(
     help="The time window to use with sample mode. Example: '3 days'.",
     default=None,
     type=SampleWindowType(),
+    hidden=True,  # TODO: Unhide
 )
 
 # `--select` and `--models` are analogous for most commands except `dbt list` for legacy reasons.
