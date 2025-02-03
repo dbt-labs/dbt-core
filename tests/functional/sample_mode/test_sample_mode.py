@@ -1,6 +1,6 @@
 import os
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional, Tuple
 
 import freezegun
 import pytest
@@ -160,6 +160,39 @@ class TestMicrobatchSampleMode(BaseSampleMode):
     def event_time_end_catcher(self) -> EventCatcher:
         return EventCatcher(event_to_catch=JinjaLogInfo, predicate=lambda event: "batch.event_time_end" in event.info.msg)  # type: ignore
 
+    @pytest.mark.parametrize(
+        "sample_mode_available,expected_batches,expected_filters",
+        [
+            (
+                True,
+                [
+                    ("2025-01-01 00:00:00", "2025-01-02 00:00:00"),
+                    ("2025-01-02 00:00:00", "2025-01-03 00:00:00"),
+                    ("2025-01-03 00:00:00", "2025-01-04 00:00:00"),
+                ],
+                [
+                    "event_time >= '2025-01-01 02:03:00+00:00' and event_time < '2025-01-02 00:00:00+00:00'",
+                    "event_time >= '2025-01-02 00:00:00+00:00' and event_time < '2025-01-03 00:00:00+00:00'",
+                    "event_time >= '2025-01-03 00:00:00+00:00' and event_time < '2025-01-03 02:03:00+00:00'",
+                ],
+            ),
+            (
+                False,
+                [
+                    ("2024-12-31 00:00:00", "2025-01-01 00:00:00"),
+                    ("2025-01-01 00:00:00", "2025-01-02 00:00:00"),
+                    ("2025-01-02 00:00:00", "2025-01-03 00:00:00"),
+                    ("2025-01-03 00:00:00", "2025-01-04 00:00:00"),
+                ],
+                [
+                    "event_time >= '2024-12-31 00:00:00+00:00' and event_time < '2025-01-01 00:00:00+00:00'",
+                    "event_time >= '2025-01-01 00:00:00+00:00' and event_time < '2025-01-02 00:00:00+00:00'",
+                    "event_time >= '2025-01-02 00:00:00+00:00' and event_time < '2025-01-03 00:00:00+00:00'",
+                    "event_time >= '2025-01-03 00:00:00+00:00' and event_time < '2025-01-04 00:00:00+00:00'",
+                ],
+            ),
+        ],
+    )
     @freezegun.freeze_time("2025-01-03T02:03:0Z")
     def test_sample_mode(
         self,
@@ -167,27 +200,12 @@ class TestMicrobatchSampleMode(BaseSampleMode):
         mocker: MockerFixture,
         event_time_end_catcher: EventCatcher,
         event_time_start_catcher: EventCatcher,
+        sample_mode_available: bool,
+        expected_batches: List[Tuple[str, str]],
+        expected_filters: List[str],
     ):
-        expected_batches = [
-            ("2025-01-01 00:00:00", "2025-01-02 00:00:00"),
-            ("2025-01-02 00:00:00", "2025-01-03 00:00:00"),
-            ("2025-01-03 00:00:00", "2025-01-04 00:00:00"),
-        ]
-
-        # These are different from the expected batches because the sample window might only operate on "part" of a given batch
-        expected_filters = [
-            (
-                "event_time >= '2025-01-01 02:03:00+00:00' and event_time < '2025-01-02 00:00:00+00:00'"
-            ),
-            (
-                "event_time >= '2025-01-02 00:00:00+00:00' and event_time < '2025-01-03 00:00:00+00:00'"
-            ),
-            (
-                "event_time >= '2025-01-03 00:00:00+00:00' and event_time < '2025-01-03 02:03:00+00:00'"
-            ),
-        ]
-
-        mocker.patch.dict(os.environ, {"DBT_EXPERIMENTAL_SAMPLE_MODE": "True"})
+        if sample_mode_available:
+            mocker.patch.dict(os.environ, {"DBT_EXPERIMENTAL_SAMPLE_MODE": "True"})
         _ = run_dbt(
             ["run", "--sample", "--sample-window=2 day"],
             callbacks=[event_time_end_catcher.catch, event_time_start_catcher.catch],
