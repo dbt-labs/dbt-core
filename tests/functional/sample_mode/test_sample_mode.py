@@ -18,9 +18,9 @@ input_model_sql = """
 {{ config(materialized='table', event_time='event_time') }}
 select 1 as id, TIMESTAMP '2020-01-01 01:25:00-0' as event_time
 UNION ALL
-select 2 as id, TIMESTAMP '2025-01-01 13:47:00-0' as event_time
+select 2 as id, TIMESTAMP '2025-01-02 13:47:00-0' as event_time
 UNION ALL
-select 3 as id, TIMESTAMP '2025-01-02 12:32:00-0' as event_time
+select 3 as id, TIMESTAMP '2025-01-03 01:32:00-0' as event_time
 """
 
 later_input_model_sql = """
@@ -29,7 +29,7 @@ select 1 as id, TIMESTAMP '2020-01-01 01:25:00-0' as event_time
 UNION ALL
 select 2 as id, TIMESTAMP '2025-01-02 13:47:00-0' as event_time
 UNION ALL
-select 3 as id, TIMESTAMP '2025-01-03 12:32:00-0' as event_time
+select 3 as id, TIMESTAMP '2025-01-03 01:32:00-0' as event_time
 UNION ALL
 select 4 as id, TIMESTAMP '2025-01-04 14:32:00-0' as event_time
 UNION ALL
@@ -104,7 +104,7 @@ class TestBasicSampleMode(BaseSampleMode):
     @pytest.mark.parametrize(
         "sample_mode_available,run_sample_mode,expected_row_count,arg_value_in_jinja",
         [
-            (True, True, 1, True),
+            (True, True, 2, True),
             (True, False, 3, False),
             (False, True, 3, True),
             (False, False, 3, False),
