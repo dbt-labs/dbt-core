@@ -1,3 +1,4 @@
+import json
 from unittest import mock
 
 import pytest
@@ -7,6 +8,7 @@ from dbt.events.types import (
     ArtifactWritten,
     EndOfRunSummary,
     GenericExceptionOnRun,
+    InvalidConcurrentBatchesConfig,
     JinjaLogDebug,
     LogBatchResult,
     LogModelResult,
@@ -14,6 +16,7 @@ from dbt.events.types import (
     MicrobatchMacroOutsideOfBatchesDeprecation,
     MicrobatchModelNoEventTimeInputs,
 )
+from dbt.tests.fixtures.project import TestProjInfo
 from dbt.tests.util import (
     get_artifact,
     patch_microbatch_end_time,
@@ -68,6 +71,11 @@ microbatch_model_with_pre_and_post_sql = """
         post_hook='{{log("execute: " ~ execute ~ ", post-hook run by batch " ~ model.batch.id)}}',
     )
 }}
+select * from {{ ref('input_model') }}
+"""
+
+microbatch_model_force_concurrent_batches_sql = """
+{{ config(materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='day', begin=modules.datetime.datetime(2020, 1, 1, 0, 0, 0), concurrent_batches=true) }}
 select * from {{ ref('input_model') }}
 """
 
@@ -327,6 +335,19 @@ class TestMicrobatchCLIBuild(TestMicrobatchCLI):
     CLI_COMMAND_NAME = "build"
 
 
+class TestMicrobatchCLIRunOutputJSON(BaseMicrobatchTest):
+    def test_list_output_json(self, project: TestProjInfo):
+        """Test whether the command `dbt list --output json` works"""
+        model_catcher = EventCatcher(event_to_catch=LogModelResult)
+        batch_catcher = EventCatcher(event_to_catch=LogBatchResult)
+
+        _, microbatch_json = run_dbt(
+            ["list", "--output", "json"], callbacks=[model_catcher.catch, batch_catcher.catch]
+        )
+        microbatch_dict = json.loads(microbatch_json)
+        assert microbatch_dict["config"]["begin"] == "2020-01-01T00:00:00"
+
+
 class TestMicroBatchBoundsDefault(BaseMicrobatchTest):
     def test_run_with_event_time(self, project):
         # initial run -- backfills all data
@@ -458,9 +479,11 @@ class TestMicrobatchWithInputWithoutEventTime(BaseMicrobatchTest):
         assert len(catcher.caught_events) == 1
 
         # our partition grain is "day" so running the same day without new data should produce the same results
+        catcher.caught_events = []
         with patch_microbatch_end_time("2020-01-03 14:57:00"):
-            run_dbt(["run"])
+            run_dbt(["run"], callbacks=[catcher.catch])
         self.assert_row_count(project, "microbatch_model", 3)
+        assert len(catcher.caught_events) == 1
 
         # add next two days of data
         test_schema_relation = project.adapter.Relation.create(
@@ -1083,3 +1106,42 @@ class TestWhenOnlyOneBatchRunBothPostAndPreHooks(BaseMicrobatchTest):
 
         # we had a bug where having only one batch caused a generic exception
         assert len(generic_exception_catcher.caught_events) == 0
+
+
+class TestCanSilenceInvalidConcurrentBatchesConfigWarning(BaseMicrobatchTest):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "input_model.sql": input_model_sql,
+            "microbatch_model.sql": microbatch_model_force_concurrent_batches_sql,
+        }
+
+    @pytest.fixture
+    def event_catcher(self) -> EventCatcher:
+        return EventCatcher(event_to_catch=InvalidConcurrentBatchesConfig)  # type: ignore
+
+    def test_microbatch(
+        self,
+        project,
+        event_catcher: EventCatcher,
+    ) -> None:
+        # This test works because postgres doesn't support concurrent batch execution
+        # If the postgres adapter starts supporting concurrent batch execution we'll
+        # need to start mocking the return value of `adapter.supports()`
+
+        with patch_microbatch_end_time("2020-01-01 13:57:00"):
+            _ = run_dbt(["run"], callbacks=[event_catcher.catch])
+        # We didn't silence the warning, so we get it
+        assert len(event_catcher.caught_events) == 1
+
+        # Clear caught events
+        event_catcher.caught_events = []
+
+        # Run again with silencing
+        with patch_microbatch_end_time("2020-01-01 13:57:00"):
+            _ = run_dbt(
+                ["run", "--warn-error-options", "{'silence': ['InvalidConcurrentBatchesConfig']}"],
+                callbacks=[event_catcher.catch],
+            )
+        # Because we silenced the warning, it shouldn't get fired
+        assert len(event_catcher.caught_events) == 0

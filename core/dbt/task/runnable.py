@@ -23,7 +23,7 @@ from dbt.artifacts.schemas.run import RunExecutionResult, RunResult
 from dbt.cli.flags import Flags
 from dbt.config.runtime import RuntimeConfig
 from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.graph.nodes import ResultNode
+from dbt.contracts.graph.nodes import Exposure, ResultNode
 from dbt.contracts.state import PreviousState
 from dbt.events.types import (
     ArtifactWritten,
@@ -49,15 +49,15 @@ from dbt.graph import (
     parse_difference,
 )
 from dbt.parser.manifest import write_manifest
+from dbt.task import group_lookup
 from dbt.task.base import BaseRunner, ConfiguredTask
+from dbt.task.printer import print_run_end_messages, print_run_result_error
 from dbt_common.context import _INVOCATION_CONTEXT_VAR, get_invocation_context
 from dbt_common.dataclass_schema import StrEnum
 from dbt_common.events.contextvars import log_contextvars, task_contextvars
 from dbt_common.events.functions import fire_event, warn_or_error
 from dbt_common.events.types import Formatting
 from dbt_common.exceptions import NotImplementedError
-
-from .printer import print_run_end_messages, print_run_result_error
 
 RESULT_FILE_NAME = "run_results.json"
 
@@ -184,6 +184,8 @@ class GraphRunnableTask(ConfiguredTask):
                 self._flattened_nodes.append(self.manifest.saved_queries[uid])
             elif uid in self.manifest.unit_tests:
                 self._flattened_nodes.append(self.manifest.unit_tests[uid])
+            elif uid in self.manifest.exposures:
+                self._flattened_nodes.append(self.manifest.exposures[uid])
             else:
                 raise DbtInternalError(
                     f"Node selection returned {uid}, expected a node, a source, or a unit test"
@@ -536,6 +538,8 @@ class GraphRunnableTask(ConfiguredTask):
                 res = []
 
                 for index, node in enumerate(self._flattened_nodes or []):
+                    group = group_lookup.get(node.unique_id)
+
                     if node.unique_id not in executed_node_ids:
                         fire_event(
                             SkippingDetails(
@@ -545,6 +549,7 @@ class GraphRunnableTask(ConfiguredTask):
                                 index=index + 1,
                                 total=self.num_nodes,
                                 node_info=node.node_info,
+                                group=group,
                             )
                         )
                         skipped_node_result = mark_node_as_skipped(node, executed_node_ids, None)
@@ -617,19 +622,19 @@ class GraphRunnableTask(ConfiguredTask):
         if results is None:
             return False
 
-        failures = [
-            r
-            for r in results
-            if r.status
-            in (
-                NodeStatus.RuntimeErr,
-                NodeStatus.Error,
-                NodeStatus.Fail,
-                NodeStatus.Skipped,  # propogate error message causing skip
-                NodeStatus.PartialSuccess,  # because partial success also means partial failure
-            )
-        ]
-        return len(failures) == 0
+        num_runtime_errors = len([r for r in results if r.status == NodeStatus.RuntimeErr])
+        num_errors = len([r for r in results if r.status == NodeStatus.Error])
+        num_fails = len([r for r in results if r.status == NodeStatus.Fail])
+        num_skipped = len(
+            [
+                r
+                for r in results
+                if r.status == NodeStatus.Skipped and not isinstance(r.node, Exposure)
+            ]
+        )
+        num_partial_success = len([r for r in results if r.status == NodeStatus.PartialSuccess])
+        num_total = num_runtime_errors + num_errors + num_fails + num_skipped + num_partial_success
+        return num_total == 0
 
     def get_model_schemas(self, adapter, selected_uids: Iterable[str]) -> Set[BaseRelation]:
         if self.manifest is None:

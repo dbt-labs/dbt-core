@@ -15,6 +15,8 @@ from dbt.artifacts.schemas.freshness import (
     PartialSourceFreshnessResult,
     SourceFreshnessResult,
 )
+from dbt.clients import jinja
+from dbt.context.providers import RuntimeProvider, SourceContext
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import HookNode, SourceDefinition
 from dbt.contracts.results import RunStatus
@@ -114,7 +116,22 @@ class FreshnessRunner(BaseRunner):
             adapter_response: Optional[AdapterResponse] = None
             freshness: Optional[FreshnessResponse] = None
 
-            if compiled_node.loaded_at_field is not None:
+            if compiled_node.loaded_at_query is not None:
+                # within the context user can have access to `this`, `source_node`(`model` will point to the same thing),  etc
+                compiled_code = jinja.get_rendered(
+                    compiled_node.loaded_at_query,
+                    SourceContext(
+                        compiled_node, self.config, manifest, RuntimeProvider(), None
+                    ).to_dict(),
+                    compiled_node,
+                )
+                adapter_response, freshness = self.adapter.calculate_freshness_from_custom_sql(
+                    relation,
+                    compiled_code,
+                    macro_resolver=manifest,
+                )
+                status = compiled_node.freshness.status(freshness["age"])
+            elif compiled_node.loaded_at_field is not None:
                 adapter_response, freshness = self.adapter.calculate_freshness(
                     relation,
                     compiled_node.loaded_at_field,
@@ -146,7 +163,6 @@ class FreshnessRunner(BaseRunner):
                 raise DbtRuntimeError(
                     f"Could not compute freshness for source {compiled_node.name}: no 'loaded_at_field' provided and {self.adapter.type()} adapter does not support metadata-based freshness checks."
                 )
-
         # adapter_response was not returned in previous versions, so this will be None
         # we cannot call to_dict() on NoneType
         if adapter_response:

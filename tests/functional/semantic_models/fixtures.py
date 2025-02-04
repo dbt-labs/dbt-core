@@ -403,3 +403,91 @@ metrics:
     type_params:
       measure: sum_of_things
 """
+
+semantic_model_dimensions_entities_measures_meta_config = """
+version: 2
+
+semantic_models:
+  - name: semantic_people
+    label: "Semantic People"
+    model: ref('people')
+    dimensions:
+      - name: favorite_color
+        label: "Favorite Color"
+        type: categorical
+        config:
+          meta:
+            dimension: one
+      - name: created_at
+        label: "Created At"
+        type: TIME
+        type_params:
+          time_granularity: day
+    measures:
+      - name: years_tenure
+        label: "Years Tenure"
+        agg: SUM
+        expr: tenure
+        config:
+          meta:
+            measure: two
+      - name: people
+        label: "People"
+        agg: count
+        expr: id
+    entities:
+      - name: id
+        label: "Primary ID"
+        type: primary
+        config:
+          meta:
+            entity: three
+    defaults:
+      agg_time_dimension: created_at
+"""
+
+semantic_model_meta_clobbering_yml = """
+version: 2
+
+semantic_models:
+  - name: semantic_people
+    label: "Semantic People"
+    model: ref('people')
+    config:
+      meta:
+        model_level: "should_be_inherited"
+        component_level: "should_be_overridden"
+    dimensions:
+      - name: favorite_color
+        label: "Favorite Color"
+        type: categorical
+        config:
+          meta:
+            component_level: "dimension_override"
+      - name: created_at
+        label: "Created At"
+        type: TIME
+        type_params:
+          time_granularity: day
+    measures:
+      - name: years_tenure
+        label: "Years Tenure"
+        agg: SUM
+        expr: tenure
+        config:
+          meta:
+            component_level: "measure_override"
+      - name: people
+        label: "People"
+        agg: count
+        expr: id
+    entities:
+      - name: id
+        label: "Primary ID"
+        type: primary
+        config:
+          meta:
+            component_level: "entity_override"
+    defaults:
+      agg_time_dimension: created_at
+"""

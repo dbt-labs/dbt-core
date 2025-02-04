@@ -17,6 +17,7 @@ from dbt.graph import ResourceTypeSelector
 from dbt.node_types import NodeType
 from dbt.task.base import resource_types_from_args
 from dbt.task.runnable import GraphRunnableTask
+from dbt.utils import JSONEncoder
 from dbt_common.events.contextvars import task_contextvars
 from dbt_common.events.functions import fire_event, warn_or_error
 from dbt_common.events.types import PrintEvent
@@ -142,7 +143,8 @@ class ListTask(GraphRunnableTask):
                         if self.args.output_keys
                         else k in self.ALLOWED_KEYS
                     )
-                }
+                },
+                cls=JSONEncoder,
             )
 
     def generate_paths(self) -> Iterator[str]:

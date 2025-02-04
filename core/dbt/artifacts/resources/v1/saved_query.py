@@ -2,16 +2,18 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional, Union
 
 from dbt.artifacts.resources.base import GraphResource
 from dbt.artifacts.resources.types import NodeType
 from dbt.artifacts.resources.v1.components import DependsOn, RefArgs
+from dbt.artifacts.resources.v1.config import list_str, metas
 from dbt.artifacts.resources.v1.semantic_layer_components import (
     SourceFileMetadata,
     WhereFilterIntersection,
 )
 from dbt_common.contracts.config.base import BaseConfig, CompareBehavior, MergeBehavior
+from dbt_common.contracts.config.metadata import ShowBehavior
 from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_semantic_interfaces.type_enums.export_destination_type import (
     ExportDestinationType,
@@ -95,6 +97,10 @@ class SavedQuery(SavedQueryMandatory):
     depends_on: DependsOn = field(default_factory=DependsOn)
     created_at: float = field(default_factory=lambda: time.time())
     refs: List[RefArgs] = field(default_factory=list)
+    tags: Union[List[str], str] = field(
+        default_factory=list_str,
+        metadata=metas(ShowBehavior.Hide, MergeBehavior.Append, CompareBehavior.Exclude),
+    )
 
     @property
     def metrics(self) -> List[str]:

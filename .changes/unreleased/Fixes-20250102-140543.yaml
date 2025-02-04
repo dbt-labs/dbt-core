@@ -1,0 +1,6 @@
+kind: Fixes
+body: Make partial parsing reparse referencing nodes of newly versioned models.
+time: 2025-01-02T14:05:43.629959-05:00
+custom:
+    Author: d-cole
+    Issue: "8872"

@@ -14,6 +14,7 @@ from tests.functional.saved_queries.fixtures import (
     saved_query_with_cache_configs_defined_yml,
     saved_query_with_export_configs_defined_at_saved_query_level_yml,
     saved_query_with_extra_config_attributes_yml,
+    saved_query_with_tags_defined_yml,
     saved_query_without_export_configs_defined_yml,
 )
 from tests.functional.semantic_models.fixtures import (
@@ -322,3 +323,36 @@ class TestSavedQueryCacheConfigsOverride(BaseConfigProject):
         result = runner.invoke(["parse"])
         assert result.success
         assert saved_query.config.cache.enabled is True
+
+
+# the tags defined in project yaml for the SavedQuery is additive to the query's
+class TestSavedQueryTagsAdditiveWithConfig(BaseConfigProject):
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "saved-queries": {"+tags": ["tag_b", "tag_c"]},
+        }
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "saved_queries.yml": saved_query_with_tags_defined_yml,
+            "schema.yml": schema_yml,
+            "fct_revenue.sql": fct_revenue_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+            "docs.md": saved_query_description,
+        }
+
+    def test_saved_query_tags_are_additive_unique_and_sorted(
+        self,
+        project,
+    ):
+        runner = dbtTestRunner()
+
+        # parse with default fixture project config
+        result = runner.invoke(["parse"])
+        assert result.success
+        assert isinstance(result.result, Manifest)
+        assert len(result.result.saved_queries) == 1
+        saved_query = result.result.saved_queries["saved_query.test.test_saved_query"]
+        assert saved_query.tags == ["tag_a", "tag_b", "tag_c"]

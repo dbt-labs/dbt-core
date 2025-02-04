@@ -680,17 +680,24 @@ class StateSelectorMethod(SelectorMethod):
     def check_modified_content(
         self, old: Optional[SelectorTarget], new: SelectorTarget, adapter_type: str
     ) -> bool:
+        different_contents = False
         if isinstance(
             new,
             (SourceDefinition, Exposure, Metric, SemanticModel, UnitTestDefinition, SavedQuery),
         ):
             # these all overwrite `same_contents`
             different_contents = not new.same_contents(old)  # type: ignore
-        else:
+        elif new:  # because we also pull in deleted/disabled nodes, this could be None
             different_contents = not new.same_contents(old, adapter_type)  # type: ignore
 
         upstream_macro_change = self.check_macros_modified(new)
-        return different_contents or upstream_macro_change
+
+        check_modified_contract = False
+        if isinstance(old, ModelNode):
+            func = self.check_modified_contract("same_contract", adapter_type)
+            check_modified_contract = func(old, new)
+
+        return different_contents or upstream_macro_change or check_modified_contract
 
     def check_unmodified_content(
         self, old: Optional[SelectorTarget], new: SelectorTarget, adapter_type: str
@@ -762,6 +769,7 @@ class StateSelectorMethod(SelectorMethod):
 
         manifest: Manifest = self.previous_state.manifest
 
+        keyword_args = {}  # initialize here to handle disabled node check below
         for unique_id, node in self.all_nodes(included_nodes):
             previous_node: Optional[SelectorTarget] = None
 
@@ -780,7 +788,6 @@ class StateSelectorMethod(SelectorMethod):
             elif unique_id in manifest.saved_queries:
                 previous_node = SavedQuery.from_resource(manifest.saved_queries[unique_id])
 
-            keyword_args = {}
             if checker.__name__ in [
                 "same_contract",
                 "check_modified_content",
@@ -792,7 +799,11 @@ class StateSelectorMethod(SelectorMethod):
                 yield unique_id
 
         # checkers that can handle removed nodes
-        if checker.__name__ in ["check_modified_contract"]:
+        if checker.__name__ in [
+            "check_modified_contract",
+            "check_modified_content",
+            "check_unmodified_content",
+        ]:
             # ignore included_nodes, since those cannot contain removed nodes
             for previous_unique_id, previous_node in manifest.nodes.items():
                 # detect removed (deleted, renamed, or disabled) nodes

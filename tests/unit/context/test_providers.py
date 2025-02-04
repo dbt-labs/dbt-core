@@ -1,7 +1,11 @@
+import os
 from argparse import Namespace
+from datetime import datetime
+from typing import Optional
 from unittest import mock
 
 import pytest
+import pytz
 from pytest_mock import MockerFixture
 
 from dbt.adapters.base import BaseRelation
@@ -13,7 +17,8 @@ from dbt.context.providers import (
     RuntimeRefResolver,
     RuntimeSourceResolver,
 )
-from dbt.contracts.graph.nodes import ModelNode
+from dbt.contracts.graph.nodes import BatchContext, ModelNode
+from dbt.event_time.sample_window import SampleWindow
 from dbt.flags import set_from_args
 
 
@@ -41,13 +46,124 @@ class TestBaseResolver:
         assert resolver.resolve_limit == expected_resolve_limit
 
     @pytest.mark.parametrize(
-        "use_microbatch_batches,materialized,incremental_strategy,resolver_model_node,expect_filter",
+        "use_microbatch_batches,materialized,incremental_strategy,sample_mode_available,run_sample_mode,sample_window,resolver_model_node,expect_filter",
         [
-            (True, "incremental", "microbatch", True, True),
-            (True, "incremental", "microbatch", False, False),
-            (False, "incremental", "microbatch", True, False),
-            (True, "table", "microbatch", True, False),
-            (True, "incremental", "merge", True, False),
+            # Microbatch model without sample
+            (
+                True,
+                "incremental",
+                "microbatch",
+                True,
+                False,
+                None,
+                True,
+                True,
+            ),
+            # Microbatch model with sample
+            (
+                True,
+                "incremental",
+                "microbatch",
+                True,
+                True,
+                SampleWindow(
+                    start=datetime(2024, 1, 1, tzinfo=pytz.UTC),
+                    end=datetime(2025, 1, 1, tzinfo=pytz.UTC),
+                ),
+                True,
+                True,
+            ),
+            # Normal model with sample
+            (
+                False,
+                "table",
+                None,
+                True,
+                True,
+                SampleWindow(
+                    start=datetime(2024, 1, 1, tzinfo=pytz.UTC),
+                    end=datetime(2025, 1, 1, tzinfo=pytz.UTC),
+                ),
+                True,
+                True,
+            ),
+            # Incremental merge model with sample
+            (
+                True,
+                "incremental",
+                "merge",
+                True,
+                True,
+                SampleWindow(
+                    start=datetime(2024, 1, 1, tzinfo=pytz.UTC),
+                    end=datetime(2025, 1, 1, tzinfo=pytz.UTC),
+                ),
+                True,
+                True,
+            ),
+            # Normal model with sample, but sample mode not available
+            (
+                False,
+                "table",
+                None,
+                False,
+                True,
+                SampleWindow(
+                    start=datetime(2024, 1, 1, tzinfo=pytz.UTC),
+                    end=datetime(2025, 1, 1, tzinfo=pytz.UTC),
+                ),
+                True,
+                False,
+            ),
+            # Sample, but not model node
+            (
+                False,
+                "table",
+                None,
+                True,
+                True,
+                SampleWindow(
+                    start=datetime(2024, 1, 1, tzinfo=pytz.UTC),
+                    end=datetime(2025, 1, 1, tzinfo=pytz.UTC),
+                ),
+                False,
+                False,
+            ),
+            # Microbatch, but not model node
+            (
+                True,
+                "incremental",
+                "microbatch",
+                False,
+                False,
+                None,
+                False,
+                False,
+            ),
+            # Mircrobatch model, but not using batches
+            (
+                False,
+                "incremental",
+                "microbatch",
+                False,
+                False,
+                None,
+                True,
+                False,
+            ),
+            # Non microbatch model, but supposed to use batches
+            (
+                True,
+                "table",
+                "microbatch",
+                False,
+                False,
+                None,
+                True,
+                False,
+            ),
+            # Incremental merge
+            (True, "incremental", "merge", False, False, None, True, False),
         ],
     )
     def test_resolve_event_time_filter(
@@ -56,7 +172,10 @@ class TestBaseResolver:
         resolver: ResolverSubclass,
         use_microbatch_batches: bool,
         materialized: str,
-        incremental_strategy: str,
+        incremental_strategy: Optional[str],
+        sample_mode_available: bool,
+        run_sample_mode: bool,
+        sample_window: Optional[SampleWindow],
         resolver_model_node: bool,
         expect_filter: bool,
     ) -> None:
@@ -65,11 +184,22 @@ class TestBaseResolver:
         target.config = mock.MagicMock(NodeConfig)
         target.config.event_time = "created_at"
 
+        # Declare whether sample mode is available
+        if sample_mode_available:
+            mocker.patch.dict(os.environ, {"DBT_EXPERIMENTAL_SAMPLE_MODE": "1"})
+
         # Resolver mocking
         resolver.config.args.EVENT_TIME_END = None
         resolver.config.args.EVENT_TIME_START = None
+        resolver.config.args.sample = run_sample_mode
+        resolver.config.args.sample_window = sample_window
         if resolver_model_node:
             resolver.model = mock.MagicMock(spec=ModelNode)
+        resolver.model.batch = BatchContext(
+            id="1",
+            event_time_start=datetime(2024, 1, 1, tzinfo=pytz.UTC),
+            event_time_end=datetime(2025, 1, 1, tzinfo=pytz.UTC),
+        )
         resolver.model.config = mock.MagicMock(NodeConfig)
         resolver.model.config.materialized = materialized
         resolver.model.config.incremental_strategy = incremental_strategy

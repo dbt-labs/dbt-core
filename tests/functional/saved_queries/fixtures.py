@@ -164,3 +164,27 @@ saved_queries:
             export_as: table
             schema: my_export_schema_name
 """
+
+saved_query_with_tags_defined_yml = """
+saved_queries:
+  - name: test_saved_query
+    description: "{{ doc('saved_query_description') }}"
+    label: Test Saved Query
+    tags:
+        - tag_a
+        - tag_c
+    query_params:
+        metrics:
+            - simple_metric
+        group_by:
+            - "Dimension('id__ds')"
+        where:
+            - "{{ TimeDimension('id__ds', 'DAY') }} <= now()"
+            - "{{ TimeDimension('id__ds', 'DAY') }} >= '2023-01-01'"
+    exports:
+        - name: my_export
+          config:
+            alias: my_export_alias
+            export_as: table
+            schema: my_export_schema_name
+"""

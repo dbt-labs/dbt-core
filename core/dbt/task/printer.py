@@ -1,6 +1,7 @@
 from typing import Dict, Optional, Union
 
 from dbt.artifacts.schemas.results import NodeStatus
+from dbt.contracts.graph.nodes import Exposure
 from dbt.events.types import (
     CheckNodeTestFailure,
     EndOfRunSummary,
@@ -48,6 +49,8 @@ def interpret_run_result(result) -> str:
         return "warn"
     elif result.status in (NodeStatus.Pass, NodeStatus.Success):
         return "pass"
+    elif result.status == NodeStatus.NoOp:
+        return "noop"
     else:
         raise RuntimeError(f"unhandled result {result}")
 
@@ -58,6 +61,7 @@ def print_run_status_line(results) -> None:
         "skip": 0,
         "pass": 0,
         "warn": 0,
+        "noop": 0,
         "total": 0,
     }
 
@@ -80,7 +84,9 @@ def print_run_result_error(
     node_info = None
     if hasattr(result, "node") and result.node:
         node_info = result.node.node_info
-    if result.status == NodeStatus.Fail or (is_warning and result.status == NodeStatus.Warn):
+    if result.status in (NodeStatus.Fail, NodeStatus.Error) or (
+        is_warning and result.status == NodeStatus.Warn
+    ):
         if newline:
             fire_event(Formatting(""))
         if is_warning:
@@ -112,11 +118,11 @@ def print_run_result_error(
         else:
             fire_event(RunResultErrorNoMessage(status=result.status, node_info=node_info))
 
-        if result.node.compiled_path is not None:
+        if getattr(result.node, "compiled_path", None):
             fire_event(Formatting(""))
             fire_event(SQLCompiledPath(path=result.node.compiled_path, node_info=node_info))
 
-        if result.node.should_store_failures:
+        if getattr(result.node, "should_store_failures", None):
             fire_event(Formatting(""))
             fire_event(
                 CheckNodeTestFailure(relation_name=result.node.relation_name, node_info=node_info)
@@ -136,10 +142,13 @@ def print_run_end_messages(results, keyboard_interrupt: bool = False) -> None:
     for r in results:
         if r.status in (NodeStatus.RuntimeErr, NodeStatus.Error, NodeStatus.Fail):
             errors.append(r)
-        elif r.status == NodeStatus.Skipped and r.message is not None:
-            # this means we skipped a node because of an issue upstream,
-            # so include it as an error
-            errors.append(r)
+        elif r.status == NodeStatus.Skipped and r.message:
+            if isinstance(r.node, Exposure):
+                # Don't include exposure skips in errors list
+                continue
+            else:
+                # This means we skipped a node because of an issue upstream, so include it as an error
+                errors.append(r)
         elif r.status == NodeStatus.Warn:
             warnings.append(r)
         elif r.status == NodeStatus.PartialSuccess:

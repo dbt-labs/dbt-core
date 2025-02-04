@@ -237,23 +237,61 @@ class BaseResolver(metaclass=abc.ABCMeta):
 
     def resolve_event_time_filter(self, target: ManifestNode) -> Optional[EventTimeFilter]:
         event_time_filter = None
+        sample_mode = bool(
+            os.environ.get("DBT_EXPERIMENTAL_SAMPLE_MODE")
+            and getattr(self.config.args, "sample", False)
+            and getattr(self.config.args, "sample_window", None)
+        )
+
+        # TODO The number of branches here is getting rough. We should consider ways to simplify
+        # what is going on to make it easier to maintain
+
+        # Only do event time filtering if the base node has the necessary event time configs
         if (
             (isinstance(target.config, NodeConfig) or isinstance(target.config, SourceConfig))
             and target.config.event_time
             and isinstance(self.model, ModelNode)
-            and self.model.config.materialized == "incremental"
-            and self.model.config.incremental_strategy == "microbatch"
-            and self.manifest.use_microbatch_batches(project_name=self.config.project_name)
-            and self.model.batch is not None
         ):
-            start = self.model.batch.event_time_start
-            end = self.model.batch.event_time_end
 
-            if start is not None or end is not None:
+            # Handling of microbatch models
+            if (
+                self.model.config.materialized == "incremental"
+                and self.model.config.incremental_strategy == "microbatch"
+                and self.manifest.use_microbatch_batches(project_name=self.config.project_name)
+                and self.model.batch is not None
+            ):
+                # Sample mode microbatch models
+                if sample_mode:
+                    start = (
+                        self.config.args.sample_window.start
+                        if self.config.args.sample_window.start > self.model.batch.event_time_start
+                        else self.model.batch.event_time_start
+                    )
+                    end = (
+                        self.config.args.sample_window.end
+                        if self.config.args.sample_window.end < self.model.batch.event_time_end
+                        else self.model.batch.event_time_end
+                    )
+                    event_time_filter = EventTimeFilter(
+                        field_name=target.config.event_time,
+                        start=start,
+                        end=end,
+                    )
+
+                # Regular microbatch models
+                else:
+                    event_time_filter = EventTimeFilter(
+                        field_name=target.config.event_time,
+                        start=self.model.batch.event_time_start,
+                        end=self.model.batch.event_time_end,
+                    )
+
+            # Sample mode _non_ microbatch models
+            elif sample_mode:
                 event_time_filter = EventTimeFilter(
                     field_name=target.config.event_time,
-                    start=start,
-                    end=end,
+                    start=self.config.args.sample_window.start,
+                    end=self.config.args.sample_window.end,
                 )
 
         return event_time_filter
@@ -880,7 +918,7 @@ T = TypeVar("T")
 
 # Base context collection, used for parsing configs.
 class ProviderContext(ManifestContext):
-    # subclasses are MacroContext, ModelContext, TestContext
+    # subclasses are MacroContext, ModelContext, TestContext, SourceContext
     def __init__(
         self,
         model,
@@ -893,7 +931,7 @@ class ProviderContext(ManifestContext):
             raise DbtInternalError(f"Invalid provider given to context: {provider}")
         # mypy appeasement - we know it'll be a RuntimeConfig
         self.config: RuntimeConfig
-        self.model: Union[Macro, ManifestNode] = model
+        self.model: Union[Macro, ManifestNode, SourceDefinition] = model
         super().__init__(config, manifest, model.package_name)
         self.sql_results: Dict[str, Optional[AttrDict]] = {}
         self.context_config: Optional[ContextConfig] = context_config
@@ -1556,6 +1594,20 @@ class MacroContext(ProviderContext):
             self._search_package = config.project_name
         else:
             self._search_package = search_package
+
+
+class SourceContext(ProviderContext):
+    # SourceContext is being used to render jinja SQL during execution of
+    # custom SQL in source freshness. It is not used for parsing.
+    model: SourceDefinition
+
+    @contextproperty()
+    def this(self) -> Optional[RelationProxy]:
+        return self.db_wrapper.Relation.create_from(self.config, self.model)
+
+    @contextproperty()
+    def source_node(self) -> SourceDefinition:
+        return self.model
 
 
 class ModelContext(ProviderContext):

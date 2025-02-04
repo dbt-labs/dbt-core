@@ -178,10 +178,12 @@ class NodeSelector(MethodManager):
         elif unique_id in self.manifest.saved_queries:
             saved_query = self.manifest.saved_queries[unique_id]
             return saved_query.config.enabled
-
-        node = self.manifest.nodes[unique_id]
-
-        return node.config.enabled
+        elif unique_id in self.manifest.exposures:
+            exposure = self.manifest.exposures[unique_id]
+            return exposure.config.enabled
+        else:
+            node = self.manifest.nodes[unique_id]
+            return node.config.enabled
 
     def _is_empty_node(self, unique_id: UniqueId) -> bool:
         if unique_id in self.manifest.nodes:

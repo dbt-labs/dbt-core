@@ -1,0 +1,6 @@
+kind: Fixes
+body: update adapter version messages
+time: 2024-10-25T10:43:39.274723-05:00
+custom:
+  Author: dave-connors-3
+  Issue: "10230"

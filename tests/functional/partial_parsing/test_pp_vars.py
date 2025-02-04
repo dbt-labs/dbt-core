@@ -104,7 +104,7 @@ class TestEnvVars:
         schema_file = manifest.files[source.file_id]
         test_id = "test.test.source_not_null_seed_sources_raw_customers_id.e39ee7bf0d"
         test_node = manifest.nodes[test_id]
-        assert test_node.config.severity == "WARN"
+        assert test_node.config.severity == "warn"
 
         # Change severity env var
         os.environ["ENV_VAR_SEVERITY"] = "error"
@@ -125,7 +125,7 @@ class TestEnvVars:
         }
         assert expected_schema_file_env_vars == schema_file.env_vars
         test_node = manifest.nodes[test_id]
-        assert test_node.config.severity == "ERROR"
+        assert test_node.config.severity == "error"
 
         # Change database env var
         os.environ["ENV_VAR_DATABASE"] = "test_dbt"

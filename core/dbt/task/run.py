@@ -1,4 +1,5 @@
 import functools
+import os
 import threading
 import time
 from copy import deepcopy
@@ -577,11 +578,23 @@ class MicrobatchModelRunner(ModelRunner):
         context: Dict[str, Any],
         materialization_macro: MacroProtocol,
     ) -> RunResult:
+        # TODO: This method has gotten a little large. It may be time to break it up into more manageable parts.
+        event_time_start = getattr(self.config.args, "EVENT_TIME_START", None)
+        event_time_end = getattr(self.config.args, "EVENT_TIME_END", None)
+
+        if (
+            os.environ.get("DBT_EXPERIMENTAL_SAMPLE_MODE")
+            and getattr(self.config.args, "SAMPLE", None)
+            and getattr(self.config.args, "SAMPLE_WINDOW", None)
+        ):
+            event_time_start = self.config.args.sample_window.start
+            event_time_end = self.config.args.sample_window.end
+
         microbatch_builder = MicrobatchBuilder(
             model=model,
             is_incremental=self._is_incremental(model),
-            event_time_start=getattr(self.config.args, "EVENT_TIME_START", None),
-            event_time_end=getattr(self.config.args, "EVENT_TIME_END", None),
+            event_time_start=event_time_start,
+            event_time_end=event_time_end,
             default_end_time=self.config.invoked_at,
         )
 

@@ -1,5 +1,5 @@
 from dbt.contracts.graph.nodes import SavedQuery
-from dbt.task.build import SavedQueryRunner
+from dbt.runners import SavedQueryRunner
 
 
 def test_saved_query_runner_on_skip(saved_query: SavedQuery):
