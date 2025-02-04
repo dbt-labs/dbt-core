@@ -257,6 +257,8 @@ class GraphRunnableTask(ConfiguredTask):
                 result = None
                 thread_exception = e
             finally:
+                if result.status in (NodeStatus.Error, NodeStatus.Fail, NodeStatus.PartialSuccess):
+                    model_span.set_status(StatusCode.ERROR)
                 context.detach(token)
                 model_span.end()
                 if result is not None:
@@ -294,9 +296,6 @@ class GraphRunnableTask(ConfiguredTask):
             runner.node.clear_event_status()
 
         fail_fast = get_flags().FAIL_FAST
-
-        if result.status in (NodeStatus.Error, NodeStatus.Fail, NodeStatus.PartialSuccess):
-            model_span.set_status(StatusCode.ERROR)
 
         if (
             result.status in (NodeStatus.Error, NodeStatus.Fail, NodeStatus.PartialSuccess)
