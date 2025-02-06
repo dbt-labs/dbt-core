@@ -675,7 +675,7 @@ class MicrobatchModelRunner(ModelRunner):
         if (
             relation is not None
             and relation.type == "table"
-            and model.config.materialized == "incremental"
+            and model.config.materialized in ["incremental","ephemeral"]
         ):
             if model.config.full_refresh is not None:
                 return not model.config.full_refresh
