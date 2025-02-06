@@ -1,0 +1,6 @@
+kind: Features
+body: Allows pass through is is_incremental function to pass through to ephemeral models"
+time: 2025-02-06T15:29:55.182223-06:00
+custom:
+    Author: michael-urrutia
+    Issue: na
