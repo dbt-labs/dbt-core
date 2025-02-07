@@ -48,6 +48,10 @@ models:
       - v: 2
         columns:
           - name: other_id
+  - name: test_model
+    columns:
+      - name: test
+        doc_blocks: 2
 """
 
 
@@ -55,6 +59,7 @@ class TestVersionedModelDocsBlock:
     @pytest.fixture(scope="class")
     def models(self):
         return {
+            "test_model.sql": "select 1 as fun",
             "model_1.sql": model_1,
             "model_versioned.sql": model_versioned,
             "schema.yml": schema_yml,
