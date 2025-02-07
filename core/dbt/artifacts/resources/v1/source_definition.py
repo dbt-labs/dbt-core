@@ -74,4 +74,3 @@ class SourceDefinition(ParsedSourceMandatory):
     created_at: float = field(default_factory=lambda: time.time())
     unrendered_database: Optional[str] = None
     unrendered_schema: Optional[str] = None
-    doc_blocks: List[str] = field(default_factory=list)

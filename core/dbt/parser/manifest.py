@@ -10,7 +10,6 @@ from itertools import chain
 from typing import Any, Callable, Dict, List, Mapping, Optional, Set, Tuple, Type, Union
 
 import msgpack
-from jinja2.nodes import Call
 
 import dbt.deprecations
 import dbt.exceptions
@@ -116,7 +115,6 @@ from dbt.parser.snapshots import SnapshotParser
 from dbt.parser.sources import SourcePatcher
 from dbt.parser.unit_tests import process_models_for_unit_test
 from dbt.version import __version__
-from dbt_common.clients.jinja import parse
 from dbt_common.clients.system import make_directory, path_exists, read_json, write_file
 from dbt_common.constants import SECRET_ENV_PREFIX
 from dbt_common.dataclass_schema import StrEnum, dbtClassMixin
@@ -1242,7 +1240,7 @@ class ManifestLoader:
                 self.manifest,
                 config.project_name,
             )
-            _process_docs_for_node(ctx, node, self.manifest)
+            _process_docs_for_node(ctx, node)
         for source in self.manifest.sources.values():
             if source.created_at < self.started_at:
                 continue
@@ -1252,7 +1250,7 @@ class ManifestLoader:
                 self.manifest,
                 config.project_name,
             )
-            _process_docs_for_source(ctx, source, self.manifest)
+            _process_docs_for_source(ctx, source)
         for macro in self.manifest.macros.values():
             if macro.created_at < self.started_at:
                 continue
@@ -1659,54 +1657,13 @@ def _check_manifest(manifest: Manifest, config: RuntimeConfig) -> None:
 DocsContextCallback = Callable[[ResultNode], Dict[str, Any]]
 
 
-def _get_doc_blocks(description: str, manifest: Manifest, node_package: str) -> List[str]:
-    ast = parse(description)
-    doc_blocks: List[str] = []
-
-    if not hasattr(ast, "body"):
-        return doc_blocks
-
-    for statement in ast.body:
-        for node in statement.nodes:
-            if (
-                isinstance(node, Call)
-                and hasattr(node, "node")
-                and hasattr(node, "args")
-                and node.node.name == "doc"
-            ):
-                doc_args = [arg.value for arg in node.args]
-
-                if len(doc_args) == 1:
-                    package, name = None, doc_args[0]
-                elif len(doc_args) == 2:
-                    package, name = doc_args
-                else:
-                    continue
-
-                if not manifest.metadata.project_name:
-                    continue
-
-                resolved_doc = manifest.resolve_doc(
-                    name, package, manifest.metadata.project_name, node_package
-                )
-
-                if resolved_doc:
-                    doc_blocks.append(resolved_doc.unique_id)
-
-    return doc_blocks
-
-
 # node and column descriptions
 def _process_docs_for_node(
     context: Dict[str, Any],
     node: ManifestNode,
-    manifest: Manifest,
 ):
-    node.doc_blocks = _get_doc_blocks(node.description, manifest, node.package_name)
     node.description = get_rendered(node.description, context)
-
     for column_name, column in node.columns.items():
-        column.doc_blocks = _get_doc_blocks(column.description, manifest, node.package_name)
         column.description = get_rendered(column.description, context)
 
 
@@ -1714,16 +1671,18 @@ def _process_docs_for_node(
 def _process_docs_for_source(
     context: Dict[str, Any],
     source: SourceDefinition,
-    manifest: Manifest,
 ):
-    source.doc_blocks = _get_doc_blocks(source.description, manifest, source.package_name)
-    source.description = get_rendered(source.description, context)
-
-    source.source_description = get_rendered(source.source_description, context)
+    table_description = source.description
+    source_description = source.source_description
+    table_description = get_rendered(table_description, context)
+    source_description = get_rendered(source_description, context)
+    source.description = table_description
+    source.source_description = source_description
 
     for column in source.columns.values():
-        column.doc_blocks = _get_doc_blocks(column.description, manifest, source.package_name)
-        column.description = get_rendered(column.description, context)
+        column_desc = column.description
+        column_desc = get_rendered(column_desc, context)
+        column.description = column_desc
 
 
 # macro argument descriptions
@@ -2081,7 +2040,7 @@ def process_node(config: RuntimeConfig, manifest: Manifest, node: ManifestNode):
     _process_sources_for_node(manifest, config.project_name, node)
     _process_refs(manifest, config.project_name, node, config.dependencies)
     ctx = generate_runtime_docs_context(config, node, manifest, config.project_name)
-    _process_docs_for_node(ctx, node, manifest)
+    _process_docs_for_node(ctx, node)
 
 
 def write_semantic_manifest(manifest: Manifest, target_path: str) -> None:

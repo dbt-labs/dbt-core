@@ -622,12 +622,6 @@
                         }
                       ],
                       "default": null
-                    },
-                    "doc_blocks": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
                     }
                   },
                   "additionalProperties": true,
@@ -735,12 +729,6 @@
               "raw_code": {
                 "type": "string",
                 "default": ""
-              },
-              "doc_blocks": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
               },
               "root_path": {
                 "anyOf": [
@@ -1679,12 +1667,6 @@
                         }
                       ],
                       "default": null
-                    },
-                    "doc_blocks": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
                     }
                   },
                   "additionalProperties": true,
@@ -1792,12 +1774,6 @@
               "raw_code": {
                 "type": "string",
                 "default": ""
-              },
-              "doc_blocks": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
               },
               "language": {
                 "type": "string",
@@ -2345,12 +2321,6 @@
                         }
                       ],
                       "default": null
-                    },
-                    "doc_blocks": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
                     }
                   },
                   "additionalProperties": true,
@@ -2458,12 +2428,6 @@
               "raw_code": {
                 "type": "string",
                 "default": ""
-              },
-              "doc_blocks": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
               },
               "language": {
                 "type": "string",
@@ -3151,12 +3115,6 @@
                         }
                       ],
                       "default": null
-                    },
-                    "doc_blocks": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
                     }
                   },
                   "additionalProperties": true,
@@ -3264,12 +3222,6 @@
               "raw_code": {
                 "type": "string",
                 "default": ""
-              },
-              "doc_blocks": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
               },
               "language": {
                 "type": "string",
@@ -3976,12 +3928,6 @@
                         }
                       ],
                       "default": null
-                    },
-                    "doc_blocks": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
                     }
                   },
                   "additionalProperties": true,
@@ -4089,12 +4035,6 @@
               "raw_code": {
                 "type": "string",
                 "default": ""
-              },
-              "doc_blocks": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
               },
               "language": {
                 "type": "string",
@@ -5396,12 +5336,6 @@
                         }
                       ],
                       "default": null
-                    },
-                    "doc_blocks": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
                     }
                   },
                   "additionalProperties": true,
@@ -5509,12 +5443,6 @@
               "raw_code": {
                 "type": "string",
                 "default": ""
-              },
-              "doc_blocks": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
               },
               "language": {
                 "type": "string",
@@ -6062,12 +5990,6 @@
                         }
                       ],
                       "default": null
-                    },
-                    "doc_blocks": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
                     }
                   },
                   "additionalProperties": true,
@@ -6175,12 +6097,6 @@
               "raw_code": {
                 "type": "string",
                 "default": ""
-              },
-              "doc_blocks": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
               },
               "language": {
                 "type": "string",
@@ -7063,12 +6979,6 @@
                         }
                       ],
                       "default": null
-                    },
-                    "doc_blocks": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
                     }
                   },
                   "additionalProperties": true,
@@ -7176,12 +7086,6 @@
               "raw_code": {
                 "type": "string",
                 "default": ""
-              },
-              "doc_blocks": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
               },
               "language": {
                 "type": "string",
@@ -8268,12 +8172,6 @@
                     }
                   ],
                   "default": null
-                },
-                "doc_blocks": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
                 }
               },
               "additionalProperties": true,
@@ -8375,12 +8273,6 @@
               }
             ],
             "default": null
-          },
-          "doc_blocks": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
           }
         },
         "additionalProperties": false,
@@ -8653,12 +8545,6 @@
                 "anyOf": [
                   {
                     "type": "string"
-                  },
-                  {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
                   },
                   {
                     "type": "null"
@@ -10018,12 +9904,6 @@
                     "type": "string"
                   },
                   {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  },
-                  {
                     "type": "null"
                   }
                 ],
@@ -10591,12 +10471,6 @@
                               }
                             ],
                             "default": null
-                          },
-                          "doc_blocks": {
-                            "type": "array",
-                            "items": {
-                              "type": "string"
-                            }
                           }
                         },
                         "additionalProperties": true,
@@ -10704,12 +10578,6 @@
                     "raw_code": {
                       "type": "string",
                       "default": ""
-                    },
-                    "doc_blocks": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
                     },
                     "root_path": {
                       "anyOf": [
@@ -11648,12 +11516,6 @@
                               }
                             ],
                             "default": null
-                          },
-                          "doc_blocks": {
-                            "type": "array",
-                            "items": {
-                              "type": "string"
-                            }
                           }
                         },
                         "additionalProperties": true,
@@ -11761,12 +11623,6 @@
                     "raw_code": {
                       "type": "string",
                       "default": ""
-                    },
-                    "doc_blocks": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
                     },
                     "language": {
                       "type": "string",
@@ -12314,12 +12170,6 @@
                               }
                             ],
                             "default": null
-                          },
-                          "doc_blocks": {
-                            "type": "array",
-                            "items": {
-                              "type": "string"
-                            }
                           }
                         },
                         "additionalProperties": true,
@@ -12427,12 +12277,6 @@
                     "raw_code": {
                       "type": "string",
                       "default": ""
-                    },
-                    "doc_blocks": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
                     },
                     "language": {
                       "type": "string",
@@ -13120,12 +12964,6 @@
                               }
                             ],
                             "default": null
-                          },
-                          "doc_blocks": {
-                            "type": "array",
-                            "items": {
-                              "type": "string"
-                            }
                           }
                         },
                         "additionalProperties": true,
@@ -13233,12 +13071,6 @@
                     "raw_code": {
                       "type": "string",
                       "default": ""
-                    },
-                    "doc_blocks": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
                     },
                     "language": {
                       "type": "string",
@@ -13945,12 +13777,6 @@
                               }
                             ],
                             "default": null
-                          },
-                          "doc_blocks": {
-                            "type": "array",
-                            "items": {
-                              "type": "string"
-                            }
                           }
                         },
                         "additionalProperties": true,
@@ -14058,12 +13884,6 @@
                     "raw_code": {
                       "type": "string",
                       "default": ""
-                    },
-                    "doc_blocks": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
                     },
                     "language": {
                       "type": "string",
@@ -15365,12 +15185,6 @@
                               }
                             ],
                             "default": null
-                          },
-                          "doc_blocks": {
-                            "type": "array",
-                            "items": {
-                              "type": "string"
-                            }
                           }
                         },
                         "additionalProperties": true,
@@ -15478,12 +15292,6 @@
                     "raw_code": {
                       "type": "string",
                       "default": ""
-                    },
-                    "doc_blocks": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
                     },
                     "language": {
                       "type": "string",
@@ -16031,12 +15839,6 @@
                               }
                             ],
                             "default": null
-                          },
-                          "doc_blocks": {
-                            "type": "array",
-                            "items": {
-                              "type": "string"
-                            }
                           }
                         },
                         "additionalProperties": true,
@@ -16144,12 +15946,6 @@
                     "raw_code": {
                       "type": "string",
                       "default": ""
-                    },
-                    "doc_blocks": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
                     },
                     "language": {
                       "type": "string",
@@ -17032,12 +16828,6 @@
                               }
                             ],
                             "default": null
-                          },
-                          "doc_blocks": {
-                            "type": "array",
-                            "items": {
-                              "type": "string"
-                            }
                           }
                         },
                         "additionalProperties": true,
@@ -17145,12 +16935,6 @@
                     "raw_code": {
                       "type": "string",
                       "default": ""
-                    },
-                    "doc_blocks": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
                     },
                     "language": {
                       "type": "string",
@@ -18228,12 +18012,6 @@
                               }
                             ],
                             "default": null
-                          },
-                          "doc_blocks": {
-                            "type": "array",
-                            "items": {
-                              "type": "string"
-                            }
                           }
                         },
                         "additionalProperties": true,
@@ -18335,12 +18113,6 @@
                         }
                       ],
                       "default": null
-                    },
-                    "doc_blocks": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
                     }
                   },
                   "additionalProperties": false,
@@ -18411,12 +18183,6 @@
                           "anyOf": [
                             {
                               "type": "string"
-                            },
-                            {
-                              "type": "array",
-                              "items": {
-                                "type": "string"
-                              }
                             },
                             {
                               "type": "null"
