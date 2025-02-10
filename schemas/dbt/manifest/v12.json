@@ -28,6 +28,16 @@
             }
           ]
         },
+        "invocation_started_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "env": {
           "type": "object",
           "additionalProperties": {
@@ -8547,6 +8557,12 @@
                     "type": "string"
                   },
                   {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  {
                     "type": "null"
                   }
                 ],
@@ -9902,6 +9918,12 @@
                 "anyOf": [
                   {
                     "type": "string"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
                   },
                   {
                     "type": "null"
@@ -18183,6 +18205,12 @@
                           "anyOf": [
                             {
                               "type": "string"
+                            },
+                            {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
                             },
                             {
                               "type": "null"

@@ -57,7 +57,9 @@ class BaseArtifactMetadata(dbtClassMixin):
     dbt_version: str = __version__
     generated_at: datetime = dataclasses.field(default_factory=datetime.utcnow)
     invocation_id: Optional[str] = dataclasses.field(default_factory=get_invocation_id)
-    invocation_started_at: datetime = dataclasses.field(default_factory=get_invocation_started_at)
+    invocation_started_at: Optional[datetime] = dataclasses.field(
+        default_factory=get_invocation_started_at
+    )
     env: Dict[str, str] = dataclasses.field(default_factory=get_metadata_vars)
 
     def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
