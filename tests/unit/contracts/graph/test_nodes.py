@@ -209,6 +209,7 @@ def basic_compiled_dict():
         "config_call_dict": {},
         "access": "protected",
         "constraints": [],
+        "doc_blocks": [],
     }
 
 
@@ -236,10 +237,12 @@ def test_basic_compiled_model(basic_compiled_dict, basic_compiled_model):
     assert node.is_ephemeral is False
 
 
-def test_invalid_extra_fields_model(minimal_uncompiled_dict):
-    bad_extra = minimal_uncompiled_dict
-    bad_extra["notvalid"] = "nope"
-    assert_fails_validation(bad_extra, ModelNode)
+def test_extra_fields_model_okay(minimal_uncompiled_dict):
+    extra = minimal_uncompiled_dict
+    extra["notvalid"] = "nope"
+    # Model still load fine with extra fields
+    loaded_model = ModelNode.from_dict(extra)
+    assert not hasattr(loaded_model, "notvalid")
 
 
 def test_invalid_bad_type_model(minimal_uncompiled_dict):
@@ -527,6 +530,7 @@ def basic_compiled_schema_test_dict():
         },
         "unrendered_config_call_dict": {},
         "config_call_dict": {},
+        "doc_blocks": [],
     }
 
 

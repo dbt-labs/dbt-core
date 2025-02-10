@@ -967,6 +967,16 @@ class MicrobatchModelNoEventTimeInputs(WarnLevel):
         return warning_tag(msg)
 
 
+class InvalidConcurrentBatchesConfig(WarnLevel):
+    def code(self) -> str:
+        return "I075"
+
+    def message(self) -> str:
+        maybe_plural_count_of_models = pluralize(self.num_models, "microbatch model")
+        description = f"Found {maybe_plural_count_of_models} with the `concurrent_batches` config set to true, but the {self.adapter_type} adapter does not support running batches concurrently. Batches will be run sequentially."
+        return line_wrap_message(warning_tag(description))
+
+
 # =======================================================
 # M - Deps generation
 # =======================================================
@@ -1332,7 +1342,15 @@ class LogTestResult(DynamicLevel):
             return EventLevel.INFO
 
 
-# Skipped Q008, Q009, Q010
+class LogNodeResult(DynamicLevel):
+    def code(self) -> str:
+        return "Q008"
+
+    def message(self) -> str:
+        return self.msg
+
+
+# Skipped Q009, Q010
 
 
 class LogStartLine(InfoLevel):
@@ -1710,6 +1728,51 @@ class MicrobatchExecutionDebug(DebugLevel):
         return self.msg
 
 
+class LogStartBatch(InfoLevel):
+    def code(self) -> str:
+        return "Q045"
+
+    def message(self) -> str:
+        msg = f"START {self.description}"
+
+        # TODO update common so that we can append "batch" in `format_fancy_output_line`
+        formatted = format_fancy_output_line(
+            msg=msg,
+            status="RUN",
+            index=self.batch_index,
+            total=self.total_batches,
+        )
+        return f"Batch {formatted}"
+
+
+class LogBatchResult(DynamicLevel):
+    def code(self) -> str:
+        return "Q046"
+
+    def message(self) -> str:
+        if self.status == "error":
+            info = "ERROR creating"
+            status = red(self.status.upper())
+        elif self.status == "skipped":
+            info = "SKIP"
+            status = yellow(self.status.upper())
+        else:
+            info = "OK created"
+            status = green(self.status)
+
+        msg = f"{info} {self.description}"
+
+        # TODO update common so that we can append "batch" in `format_fancy_output_line`
+        formatted = format_fancy_output_line(
+            msg=msg,
+            status=status,
+            index=self.batch_index,
+            total=self.total_batches,
+            execution_time=self.execution_time,
+        )
+        return f"Batch {formatted}"
+
+
 # =======================================================
 # W - Node testing
 # =======================================================
@@ -1892,7 +1955,9 @@ class StatsLine(InfoLevel):
         return "Z023"
 
     def message(self) -> str:
-        stats_line = "Done. PASS={pass} WARN={warn} ERROR={error} SKIP={skip} TOTAL={total}"
+        stats_line = (
+            "Done. PASS={pass} WARN={warn} ERROR={error} SKIP={skip} NO-OP={noop} TOTAL={total}"
+        )
         return stats_line.format(**self.stats)
 
 

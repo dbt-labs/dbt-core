@@ -140,6 +140,7 @@ def global_flags(func):
     @p.warn_error
     @p.warn_error_options
     @p.write_json
+    @p.use_fast_test_edges
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         return func(*args, **kwargs)
@@ -189,6 +190,7 @@ def cli(ctx, **kwargs):
 @requires.preflight
 @requires.profile
 @requires.project
+@requires.catalogs
 @requires.runtime_config
 @requires.manifest
 def build(ctx, **kwargs):
@@ -563,8 +565,8 @@ def parse(ctx, **kwargs):
 @requires.preflight
 @requires.profile
 @requires.project
-@requires.runtime_config
 @requires.catalogs
+@requires.runtime_config
 @requires.manifest
 def run(ctx, **kwargs):
     """Compile SQL and execute against the current target database."""

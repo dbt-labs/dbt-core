@@ -18,6 +18,7 @@ from dbt.artifacts.resources import (
     MacroArgument,
     MaturityType,
     MeasureAggregationParameters,
+    ModelFreshness,
     NodeVersion,
     Owner,
     Quoting,
@@ -27,8 +28,11 @@ from dbt.artifacts.resources import (
     UnitTestOutputFixture,
     UnitTestOverrides,
 )
+from dbt.artifacts.resources.v1.config import list_str, metas
 from dbt.exceptions import ParsingError
 from dbt.node_types import NodeType
+from dbt_common.contracts.config.base import CompareBehavior, MergeBehavior
+from dbt_common.contracts.config.metadata import ShowBehavior
 from dbt_common.contracts.config.properties import AdditionalPropertiesMixin
 from dbt_common.contracts.util import Mergeable
 from dbt_common.dataclass_schema import (
@@ -221,6 +225,7 @@ class UnparsedModelUpdate(UnparsedNodeUpdate):
     versions: Sequence[UnparsedVersion] = field(default_factory=list)
     deprecation_date: Optional[datetime.datetime] = None
     time_spine: Optional[TimeSpine] = None
+    freshness: Optional[ModelFreshness] = None
 
     def __post_init__(self) -> None:
         if self.latest_version:
@@ -317,6 +322,7 @@ class UnparsedSourceTableDefinition(HasColumnTests, HasColumnAndTestProps):
     config: Dict[str, Any] = field(default_factory=dict)
     loaded_at_field: Optional[str] = None
     loaded_at_field_present: Optional[bool] = None
+    loaded_at_query: Optional[str] = None
     identifier: Optional[str] = None
     quoting: Quoting = field(default_factory=Quoting)
     freshness: Optional[FreshnessThreshold] = field(default_factory=FreshnessThreshold)
@@ -342,6 +348,7 @@ class UnparsedSourceDefinition(dbtClassMixin):
     freshness: Optional[FreshnessThreshold] = field(default_factory=FreshnessThreshold)
     loaded_at_field: Optional[str] = None
     loaded_at_field_present: Optional[bool] = None
+    loaded_at_query: Optional[str] = None
     tables: List[UnparsedSourceTableDefinition] = field(default_factory=list)
     tags: List[str] = field(default_factory=list)
     config: Dict[str, Any] = field(default_factory=dict)
@@ -379,6 +386,7 @@ class SourceTablePatch(dbtClassMixin):
     docs: Optional[Docs] = None
     loaded_at_field: Optional[str] = None
     loaded_at_field_present: Optional[bool] = None
+    loaded_at_query: Optional[str] = None
     identifier: Optional[str] = None
     quoting: Quoting = field(default_factory=Quoting)
     freshness: Optional[FreshnessThreshold] = field(default_factory=FreshnessThreshold)
@@ -422,6 +430,7 @@ class SourcePatch(dbtClassMixin):
     freshness: Optional[Optional[FreshnessThreshold]] = field(default_factory=FreshnessThreshold)
     loaded_at_field: Optional[str] = None
     loaded_at_field_present: Optional[bool] = None
+    loaded_at_query: Optional[str] = None
     tables: Optional[List[SourceTablePatch]] = None
     tags: Optional[List[str]] = None
 
@@ -661,6 +670,7 @@ class UnparsedEntity(dbtClassMixin):
     label: Optional[str] = None
     role: Optional[str] = None
     expr: Optional[str] = None
+    config: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -681,6 +691,7 @@ class UnparsedMeasure(dbtClassMixin):
     non_additive_dimension: Optional[UnparsedNonAdditiveDimension] = None
     agg_time_dimension: Optional[str] = None
     create_metric: bool = False
+    config: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -698,6 +709,7 @@ class UnparsedDimension(dbtClassMixin):
     is_partition: bool = False
     type_params: Optional[UnparsedDimensionTypeParams] = None
     expr: Optional[str] = None
+    config: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -740,6 +752,12 @@ class UnparsedSavedQuery(dbtClassMixin):
     label: Optional[str] = None
     exports: List[UnparsedExport] = field(default_factory=list)
     config: Dict[str, Any] = field(default_factory=dict)
+    # Note: the order of the types is critical; it's the order that they will be checked against inputs.
+    #       if reversed, a single-string tag like `tag: "good"` becomes ['g','o','o','d']
+    tags: Union[str, List[str]] = field(
+        default_factory=list_str,
+        metadata=metas(ShowBehavior.Hide, MergeBehavior.Append, CompareBehavior.Exclude),
+    )
 
 
 def normalize_date(d: Optional[datetime.date]) -> Optional[datetime.datetime]:

@@ -676,6 +676,15 @@ class TestDeleteUnversionedContractedModel(BaseModifiedState):
         assert expected_warning in logs
         assert expected_change in logs
 
+        # the same but for general-purpose state:modified
+        _, logs = run_dbt_and_capture(
+            ["run", "--models", "state:modified.contract", "--state", "./state"]
+        )
+        expected_warning = "While comparing to previous project state, dbt detected a breaking change to an unversioned model"
+        expected_change = "Contracted model 'model.test.table_model' was deleted or renamed"
+        assert expected_warning in logs
+        assert expected_change in logs
+
 
 class TestDeleteVersionedContractedModel(BaseModifiedState):
     MODEL_UNIQUE_ID = "model.test.table_model.v1"
@@ -692,6 +701,14 @@ class TestDeleteVersionedContractedModel(BaseModifiedState):
         # since the models are versioned, they raise an error
         with pytest.raises(ContractBreakingChangeError) as e:
             run_dbt(["run", "--models", "state:modified.contract", "--state", "./state"])
+
+        assert "Contracted model 'model.test.table_model.v1' was deleted or renamed." in str(
+            e.value
+        )
+
+        # the same but for general-purpose state:modified
+        with pytest.raises(ContractBreakingChangeError) as e:
+            run_dbt(["run", "--models", "state:modified", "--state", "./state"])
 
         assert "Contracted model 'model.test.table_model.v1' was deleted or renamed." in str(
             e.value

@@ -1,25 +1,15 @@
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
-from dbt.adapters.base.catalog import CatalogIntegrationType
-from dbt.adapters.relation_configs.formats import TableFormat
+from dbt.artifacts.resources import Catalog, CatalogIntegration, Catalogs
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.config.renderer import SecretRenderer
 from dbt_common.clients.system import load_file_contents
-from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_common.exceptions import CompilationError, DbtValidationError
 
 
-@dataclass
-class CatalogIntegration(dbtClassMixin):
-    name: str
-    external_volume: str
-    table_format: TableFormat
-    catalog_type: CatalogIntegrationType
-
-
-# satisfies dbt.adapters.protocol.CatalogIntegrationConfigProtocol
+# satisfies dbt.adapters.protocol.CatalogIntegrationConfig
 @dataclass
 class AdapterCatalogIntegration:
     catalog_name: str
@@ -30,25 +20,34 @@ class AdapterCatalogIntegration:
     namespace: Optional[str]
     adapter_properties: Optional[Dict]
 
+    @classmethod
+    def from_catalog_integration(
+        cls, catalog: Catalog, catalog_integration: CatalogIntegration
+    ) -> "AdapterCatalogIntegration":
+        return cls(
+            catalog_name=catalog.name,
+            integration_name=catalog_integration.name,
+            table_format=catalog_integration.table_format,
+            catalog_type=str(catalog_integration.catalog_type),
+            external_volume=catalog_integration.external_volume,
+            namespace=None,  # namespaces on write_integrations are not yet supported
+            adapter_properties={},  # configs on write_integrations not yet supported
+        )
+
 
 @dataclass
-class Catalog(dbtClassMixin):
-    name: str
-    # If not specified, active_write_integration defaults to the integration in integrations if there is only one.
-    active_write_integration: Optional[str] = None
-    write_integrations: List[CatalogIntegration] = field(default_factory=list)
-
+class CatalogLoader:
     @classmethod
-    def render(
+    def load(
         cls, raw_catalog: Dict[str, Any], renderer: SecretRenderer, default_profile_name: str
-    ) -> "Catalog":
+    ) -> Catalog:
         try:
             rendered_catalog = renderer.render_data(raw_catalog)
         except CompilationError:
             # TODO: better error
             raise
 
-        cls.validate(rendered_catalog)
+        Catalog.validate(rendered_catalog)
 
         write_integrations = []
         for raw_write_integration in rendered_catalog.get("write_integrations", []):
@@ -72,52 +71,48 @@ class Catalog(dbtClassMixin):
         elif not active_write_integration and len(write_integrations) == 1:
             active_write_integration = write_integrations[0].name
 
-        return cls(
+        return Catalog(
             name=raw_catalog["name"],
             active_write_integration=active_write_integration,
             write_integrations=write_integrations,
         )
 
 
-@dataclass
-class Catalogs(dbtClassMixin):
-    catalogs: List[Catalog]
-
+class CatalogsLoader:
     @classmethod
-    def load(cls, catalog_dir: str, profile: str, cli_vars: Dict[str, Any]) -> "Catalogs":
+    def load(cls, catalog_dir: str, profile: str, cli_vars: Dict[str, Any]) -> Catalogs:
         catalogs = []
 
         raw_catalogs = cls._read_catalogs(catalog_dir)
 
         catalogs_renderer = SecretRenderer(cli_vars)
         for raw_catalog in raw_catalogs.get("catalogs", []):
-            catalog = Catalog.render(raw_catalog, catalogs_renderer, profile)
+            catalog = CatalogLoader.load(raw_catalog, catalogs_renderer, profile)
             catalogs.append(catalog)
 
-        return cls(catalogs=catalogs)
+        return Catalogs(catalogs=catalogs)
 
-    def get_active_adapter_write_catalog_integrations(self):
+    @staticmethod
+    def get_active_adapter_write_catalog_integrations(
+        catalogs: Catalogs,
+    ) -> List[AdapterCatalogIntegration]:
         adapter_catalog_integrations: List[AdapterCatalogIntegration] = []
 
-        for catalog in self.catalogs:
-            active_write_integration = list(
+        for catalog in catalogs.catalogs:
+            active_write_integration = next(
                 filter(
                     lambda c: c.name == catalog.active_write_integration,
                     catalog.write_integrations,
-                )
-            )[0]
-
-            adapter_catalog_integrations.append(
-                AdapterCatalogIntegration(
-                    catalog_name=catalog.name,
-                    integration_name=catalog.active_write_integration,
-                    table_format=active_write_integration.table_format,
-                    catalog_type=active_write_integration.catalog_type,
-                    external_volume=active_write_integration.external_volume,
-                    namespace=None,  # namespaces on write_integrations are not yet supported
-                    adapter_properties={},  # configs on write_integrations not yet supported
-                )
+                ),
+                None,
             )
+
+            if active_write_integration is not None:
+                adapter_catalog_integrations.append(
+                    AdapterCatalogIntegration.from_catalog_integration(
+                        catalog, active_write_integration
+                    )
+                )
 
         return adapter_catalog_integrations
 
@@ -125,7 +120,6 @@ class Catalogs(dbtClassMixin):
     def _read_catalogs(cls, catalog_dir: str) -> Dict[str, Any]:
         path = os.path.join(catalog_dir, "catalogs.yml")
 
-        contents = None
         if os.path.isfile(path):
             try:
                 contents = load_file_contents(path, strip=False)
