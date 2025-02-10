@@ -2,7 +2,7 @@ import os
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-from dbt.adapters.contracts.catalog import CatalogIntegrationType
+from dbt.adapters.base.catalog import CatalogIntegrationType
 from dbt.adapters.relation_configs.formats import TableFormat
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.config.renderer import SecretRenderer
@@ -28,7 +28,7 @@ class AdapterCatalogIntegration:
     catalog_type: str
     external_volume: Optional[str]
     namespace: Optional[str]
-    adapter_configs: Optional[Dict]
+    adapter_properties: Optional[Dict]
 
 
 @dataclass
@@ -115,7 +115,7 @@ class Catalogs(dbtClassMixin):
                     catalog_type=active_write_integration.catalog_type,
                     external_volume=active_write_integration.external_volume,
                     namespace=None,  # namespaces on write_integrations are not yet supported
-                    adapter_configs={},  # configs on write_integrations not yet supported
+                    adapter_properties={},  # configs on write_integrations not yet supported
                 )
             )
 
