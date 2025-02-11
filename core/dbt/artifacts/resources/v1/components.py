@@ -70,6 +70,18 @@ class ColumnInfo(AdditionalPropertiesMixin, ExtensibleDbtClassMixin):
     granularity: Optional[TimeGranularity] = None
     doc_blocks: List[str] = field(default_factory=list)
 
+    def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None) -> dict:
+        dct = super().__post_serialize__(dct, context)
+
+        # Remove doc_blocks from output if they are not a list of strings
+        if isinstance(dct["doc_blocks"], list):
+            if not all(isinstance(x, str) for x in dct["doc_blocks"]):
+                dct["doc_blocks"] = []
+        else:
+            dct["doc_blocks"] = []
+
+        return dct
+
 
 @dataclass
 class InjectedCTE(dbtClassMixin):
@@ -202,10 +214,19 @@ class ParsedResource(ParsedResourceMandatory):
 
     def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
         dct = super().__post_serialize__(dct, context)
+
         if context and context.get("artifact") and "config_call_dict" in dct:
             del dct["config_call_dict"]
         if context and context.get("artifact") and "unrendered_config_call_dict" in dct:
             del dct["unrendered_config_call_dict"]
+
+        # Remove doc_blocks from output if they are not a list of strings
+        if isinstance(dct["doc_blocks"], list):
+            if not all(isinstance(x, str) for x in dct["doc_blocks"]):
+                dct["doc_blocks"] = []
+        else:
+            dct["doc_blocks"] = []
+
         return dct
 
 
