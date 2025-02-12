@@ -38,6 +38,19 @@ UNION ALL
 select 6 as id, TIMESTAMP '2025-01-06 12:32:00-0' as event_time
 """
 
+input_seed_csv = """id,event_time
+1,'2020-01-01 01:25:00-0'
+2,'2025-01-02 13:47:00-0'
+3,'2025-01-03 01:32:00-0'
+"""
+
+seed_properties_yml = """
+seeds:
+    - name: input_seed
+      config:
+        event_time: event_time
+"""
+
 sample_mode_model_sql = """
 {{ config(materialized='table', event_time='event_time') }}
 
@@ -46,6 +59,12 @@ sample_mode_model_sql = """
 {% endif %}
 
 SELECT * FROM {{ ref("input_model") }}
+"""
+
+sample_input_seed_sql = """
+{{ config(materialized='table') }}
+
+SELECT * FROM {{ ref("input_seed") }}
 """
 
 sample_microbatch_model_sql = """
@@ -367,4 +386,52 @@ class TestIncrementalModelSampleModeSpecific(BaseSampleMode):
             project=project,
             relation_name="sample_incremental_merge",
             expected_row_count=expected_rows,
+        )
+
+
+class TestSampleSeedRefs(BaseSampleMode):
+    @pytest.fixture(scope="class")
+    def seeds(self):
+        return {
+            "input_seed.csv": input_seed_csv,
+            "properties.yml": seed_properties_yml,
+        }
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "sample_input_seed.sql": sample_input_seed_sql,
+        }
+
+    @pytest.mark.parametrize(
+        "sample_mode_available,run_sample_mode,expected_row_count",
+        [
+            (True, True, 2),
+            (True, False, 3),
+            (False, True, 3),
+            (False, False, 3),
+        ],
+    )
+    @freezegun.freeze_time("2025-01-03T02:03:0Z")
+    def test_sample_mode(
+        self,
+        project,
+        mocker: MockerFixture,
+        sample_mode_available: bool,
+        run_sample_mode: bool,
+        expected_row_count: int,
+    ):
+        run_args = ["run"]
+        if run_sample_mode:
+            run_args.append("--sample=1 day")
+
+        if sample_mode_available:
+            mocker.patch.dict(os.environ, {"DBT_EXPERIMENTAL_SAMPLE_MODE": "1"})
+
+        _ = run_dbt(["seed"])
+        _ = run_dbt(run_args)
+        self.assert_row_count(
+            project=project,
+            relation_name="sample_input_seed",
+            expected_row_count=expected_row_count,
         )

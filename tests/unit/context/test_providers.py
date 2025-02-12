@@ -1,7 +1,7 @@
 import os
 from argparse import Namespace
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 from unittest import mock
 
 import pytest
@@ -9,7 +9,7 @@ import pytz
 from pytest_mock import MockerFixture
 
 from dbt.adapters.base import BaseRelation
-from dbt.artifacts.resources import NodeConfig, Quoting
+from dbt.artifacts.resources import NodeConfig, Quoting, SeedConfig
 from dbt.artifacts.resources.types import BatchSize
 from dbt.context.providers import (
     BaseResolver,
@@ -46,7 +46,7 @@ class TestBaseResolver:
         assert resolver.resolve_limit == expected_resolve_limit
 
     @pytest.mark.parametrize(
-        "use_microbatch_batches,materialized,incremental_strategy,sample_mode_available,sample,resolver_model_node,expect_filter",
+        "use_microbatch_batches,materialized,incremental_strategy,sample_mode_available,sample,resolver_model_node,target_type,expect_filter",
         [
             # Microbatch model without sample
             (
@@ -56,6 +56,7 @@ class TestBaseResolver:
                 True,
                 None,
                 True,
+                NodeConfig,
                 True,
             ),
             # Microbatch model with sample
@@ -69,6 +70,7 @@ class TestBaseResolver:
                     end=datetime(2025, 1, 1, tzinfo=pytz.UTC),
                 ),
                 True,
+                NodeConfig,
                 True,
             ),
             # Normal model with sample
@@ -82,6 +84,7 @@ class TestBaseResolver:
                     end=datetime(2025, 1, 1, tzinfo=pytz.UTC),
                 ),
                 True,
+                NodeConfig,
                 True,
             ),
             # Incremental merge model with sample
@@ -95,6 +98,7 @@ class TestBaseResolver:
                     end=datetime(2025, 1, 1, tzinfo=pytz.UTC),
                 ),
                 True,
+                NodeConfig,
                 True,
             ),
             # Normal model with sample, but sample mode not available
@@ -108,6 +112,7 @@ class TestBaseResolver:
                     end=datetime(2025, 1, 1, tzinfo=pytz.UTC),
                 ),
                 True,
+                NodeConfig,
                 False,
             ),
             # Sample, but not model node
@@ -121,6 +126,7 @@ class TestBaseResolver:
                     end=datetime(2025, 1, 1, tzinfo=pytz.UTC),
                 ),
                 False,
+                NodeConfig,
                 False,
             ),
             # Microbatch, but not model node
@@ -131,6 +137,7 @@ class TestBaseResolver:
                 False,
                 None,
                 False,
+                NodeConfig,
                 False,
             ),
             # Mircrobatch model, but not using batches
@@ -141,6 +148,7 @@ class TestBaseResolver:
                 False,
                 None,
                 True,
+                NodeConfig,
                 False,
             ),
             # Non microbatch model, but supposed to use batches
@@ -151,10 +159,35 @@ class TestBaseResolver:
                 False,
                 None,
                 True,
+                NodeConfig,
                 False,
             ),
             # Incremental merge
-            (True, "incremental", "merge", False, None, True, False),
+            (True, "incremental", "merge", False, None, True, NodeConfig, False),
+            # Target seed node, with sample
+            (
+                False,
+                "table",
+                None,
+                True,
+                SampleWindow.from_relative_string("2 days"),
+                True,
+                SeedConfig,
+                True,
+            ),
+            # Target seed node, with sample, but sample mode not availavle
+            (
+                False,
+                "table",
+                None,
+                False,
+                SampleWindow.from_relative_string("2 days"),
+                True,
+                SeedConfig,
+                False,
+            ),
+            # Target seed node, without sample, but sample mode availavle
+            (False, "table", None, True, None, True, SeedConfig, False),
         ],
     )
     def test_resolve_event_time_filter(
@@ -167,11 +200,12 @@ class TestBaseResolver:
         sample_mode_available: bool,
         sample: Optional[SampleWindow],
         resolver_model_node: bool,
+        target_type: Any,
         expect_filter: bool,
     ) -> None:
         # Target mocking
         target = mock.Mock()
-        target.config = mock.MagicMock(NodeConfig)
+        target.config = mock.MagicMock(target_type)
         target.config.event_time = "created_at"
 
         # Declare whether sample mode is available

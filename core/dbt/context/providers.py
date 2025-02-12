@@ -28,7 +28,13 @@ from dbt.adapters.factory import (
     get_adapter_package_names,
     get_adapter_type_names,
 )
-from dbt.artifacts.resources import NodeConfig, NodeVersion, RefArgs, SourceConfig
+from dbt.artifacts.resources import (
+    NodeConfig,
+    NodeVersion,
+    RefArgs,
+    SeedConfig,
+    SourceConfig,
+)
 from dbt.clients.jinja import (
     MacroGenerator,
     MacroStack,
@@ -247,7 +253,11 @@ class BaseResolver(metaclass=abc.ABCMeta):
 
         # Only do event time filtering if the base node has the necessary event time configs
         if (
-            (isinstance(target.config, NodeConfig) or isinstance(target.config, SourceConfig))
+            (
+                isinstance(target.config, NodeConfig)
+                or isinstance(target.config, SourceConfig)
+                or isinstance(target.config, SeedConfig)
+            )
             and target.config.event_time
             and isinstance(self.model, ModelNode)
         ):
