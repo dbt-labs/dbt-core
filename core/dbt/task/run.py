@@ -561,13 +561,11 @@ class MicrobatchModelRunner(ModelRunner):
         event_time_start = getattr(self.config.args, "EVENT_TIME_START", None)
         event_time_end = getattr(self.config.args, "EVENT_TIME_END", None)
 
-        if (
-            os.environ.get("DBT_EXPERIMENTAL_SAMPLE_MODE")
-            and getattr(self.config.args, "SAMPLE", None)
-            and getattr(self.config.args, "SAMPLE_WINDOW", None)
+        if os.environ.get("DBT_EXPERIMENTAL_SAMPLE_MODE") and getattr(
+            self.config.args, "SAMPLE", None
         ):
-            event_time_start = self.config.args.sample_window.start
-            event_time_end = self.config.args.sample_window.end
+            event_time_start = self.config.args.sample.start
+            event_time_end = self.config.args.sample.end
 
         microbatch_builder = MicrobatchBuilder(
             model=model,

@@ -94,8 +94,8 @@ class ChoiceTuple(Choice):
         return value
 
 
-class SampleWindowType(ParamType):
-    name = "SAMPLE_WINDOW"
+class SampleType(ParamType):
+    name = "SAMPLE"
 
     def convert(
         self, value, param: Optional[Parameter], ctx: Optional[Context]

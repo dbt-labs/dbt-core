@@ -46,7 +46,7 @@ class TestBaseResolver:
         assert resolver.resolve_limit == expected_resolve_limit
 
     @pytest.mark.parametrize(
-        "use_microbatch_batches,materialized,incremental_strategy,sample_mode_available,run_sample_mode,sample_window,resolver_model_node,expect_filter",
+        "use_microbatch_batches,materialized,incremental_strategy,sample_mode_available,sample,resolver_model_node,expect_filter",
         [
             # Microbatch model without sample
             (
@@ -54,7 +54,6 @@ class TestBaseResolver:
                 "incremental",
                 "microbatch",
                 True,
-                False,
                 None,
                 True,
                 True,
@@ -64,7 +63,6 @@ class TestBaseResolver:
                 True,
                 "incremental",
                 "microbatch",
-                True,
                 True,
                 SampleWindow(
                     start=datetime(2024, 1, 1, tzinfo=pytz.UTC),
@@ -79,7 +77,6 @@ class TestBaseResolver:
                 "table",
                 None,
                 True,
-                True,
                 SampleWindow(
                     start=datetime(2024, 1, 1, tzinfo=pytz.UTC),
                     end=datetime(2025, 1, 1, tzinfo=pytz.UTC),
@@ -92,7 +89,6 @@ class TestBaseResolver:
                 True,
                 "incremental",
                 "merge",
-                True,
                 True,
                 SampleWindow(
                     start=datetime(2024, 1, 1, tzinfo=pytz.UTC),
@@ -107,7 +103,6 @@ class TestBaseResolver:
                 "table",
                 None,
                 False,
-                True,
                 SampleWindow(
                     start=datetime(2024, 1, 1, tzinfo=pytz.UTC),
                     end=datetime(2025, 1, 1, tzinfo=pytz.UTC),
@@ -120,7 +115,6 @@ class TestBaseResolver:
                 False,
                 "table",
                 None,
-                True,
                 True,
                 SampleWindow(
                     start=datetime(2024, 1, 1, tzinfo=pytz.UTC),
@@ -135,7 +129,6 @@ class TestBaseResolver:
                 "incremental",
                 "microbatch",
                 False,
-                False,
                 None,
                 False,
                 False,
@@ -145,7 +138,6 @@ class TestBaseResolver:
                 False,
                 "incremental",
                 "microbatch",
-                False,
                 False,
                 None,
                 True,
@@ -157,13 +149,12 @@ class TestBaseResolver:
                 "table",
                 "microbatch",
                 False,
-                False,
                 None,
                 True,
                 False,
             ),
             # Incremental merge
-            (True, "incremental", "merge", False, False, None, True, False),
+            (True, "incremental", "merge", False, None, True, False),
         ],
     )
     def test_resolve_event_time_filter(
@@ -174,8 +165,7 @@ class TestBaseResolver:
         materialized: str,
         incremental_strategy: Optional[str],
         sample_mode_available: bool,
-        run_sample_mode: bool,
-        sample_window: Optional[SampleWindow],
+        sample: Optional[SampleWindow],
         resolver_model_node: bool,
         expect_filter: bool,
     ) -> None:
@@ -191,8 +181,7 @@ class TestBaseResolver:
         # Resolver mocking
         resolver.config.args.EVENT_TIME_END = None
         resolver.config.args.EVENT_TIME_START = None
-        resolver.config.args.sample = run_sample_mode
-        resolver.config.args.sample_window = sample_window
+        resolver.config.args.sample = sample
         if resolver_model_node:
             resolver.model = mock.MagicMock(spec=ModelNode)
         resolver.model.batch = BatchContext(

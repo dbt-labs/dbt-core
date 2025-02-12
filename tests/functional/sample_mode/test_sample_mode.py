@@ -42,8 +42,7 @@ sample_mode_model_sql = """
 {{ config(materialized='table', event_time='event_time') }}
 
 {% if execute %}
-    {{ log("Sample mode: " ~ invocation_args_dict.get("sample"), info=true) }}
-    {{ log("Sample window: " ~ invocation_args_dict.get("sample_window"), info=true) }}
+    {{ log("Sample: " ~ invocation_args_dict.get("sample"), info=true) }}
 {% endif %}
 
 SELECT * FROM {{ ref("input_model") }}
@@ -65,7 +64,7 @@ sample_incremental_merge_sql = """
 
 {% if execute %}
     {{ log("is_incremental: " ~ is_incremental(), info=true) }}
-    {{ log("sample window: " ~ invocation_args_dict.get("sample_window"), info=true) }}
+    {{ log("sample: " ~ invocation_args_dict.get("sample"), info=true) }}
 {% endif %}
 
 SELECT * FROM {{ ref("input_model") }}
@@ -102,12 +101,12 @@ class TestBasicSampleMode(BaseSampleMode):
         return EventCatcher(event_to_catch=JinjaLogInfo)  # type: ignore
 
     @pytest.mark.parametrize(
-        "sample_mode_available,run_sample_mode,expected_row_count,arg_value_in_jinja",
+        "sample_mode_available,run_sample_mode,expected_row_count",
         [
-            (True, True, 2, True),
-            (True, False, 3, False),
-            (False, True, 3, True),
-            (False, False, 3, False),
+            (True, True, 2),
+            (True, False, 3),
+            (False, True, 3),
+            (False, False, 3),
         ],
     )
     @freezegun.freeze_time("2025-01-03T02:03:0Z")
@@ -119,13 +118,12 @@ class TestBasicSampleMode(BaseSampleMode):
         sample_mode_available: bool,
         run_sample_mode: bool,
         expected_row_count: int,
-        arg_value_in_jinja: bool,
     ):
         run_args = ["run"]
-        expected_sample_window = None
+        expected_sample = None
         if run_sample_mode:
-            run_args.extend(["--sample", "--sample-window=1 day"])
-            expected_sample_window = SampleWindow(
+            run_args.append("--sample=1 day")
+            expected_sample = SampleWindow(
                 start=datetime(2025, 1, 2, 2, 3, 0, 0, tzinfo=pytz.UTC),
                 end=datetime(2025, 1, 3, 2, 3, 0, 0, tzinfo=pytz.UTC),
             )
@@ -134,9 +132,8 @@ class TestBasicSampleMode(BaseSampleMode):
             mocker.patch.dict(os.environ, {"DBT_EXPERIMENTAL_SAMPLE_MODE": "1"})
 
         _ = run_dbt(run_args, callbacks=[event_catcher.catch])
-        assert len(event_catcher.caught_events) == 2
-        assert event_catcher.caught_events[0].info.msg == f"Sample mode: {arg_value_in_jinja}"  # type: ignore
-        assert event_catcher.caught_events[1].info.msg == f"Sample window: {expected_sample_window}"  # type: ignore
+        assert len(event_catcher.caught_events) == 1
+        assert event_catcher.caught_events[0].info.msg == f"Sample: {expected_sample}"  # type: ignore
         self.assert_row_count(
             project=project,
             relation_name="sample_mode_model",
@@ -207,7 +204,7 @@ class TestMicrobatchSampleMode(BaseSampleMode):
         if sample_mode_available:
             mocker.patch.dict(os.environ, {"DBT_EXPERIMENTAL_SAMPLE_MODE": "True"})
         _ = run_dbt(
-            ["run", "--sample", "--sample-window=2 day"],
+            ["run", "--sample=2 day"],
             callbacks=[event_time_end_catcher.catch, event_time_start_catcher.catch],
         )
         assert len(event_time_start_catcher.caught_events) == len(expected_batches)
@@ -254,12 +251,12 @@ class TestIncrementalModelSampleModeRelative(BaseSampleMode):
         return EventCatcher(event_to_catch=JinjaLogInfo, predicate=lambda event: "is_incremental: True" in event.info.msg)  # type: ignore
 
     @pytest.mark.parametrize(
-        "sample_mode_available,run_sample_mode,sample_window,expected_rows",
+        "sample_mode_available,sample,expected_rows",
         [
-            (True, False, None, 6),
-            (True, True, "3 days", 6),
-            (True, True, "2 days", 5),
-            (False, True, "2 days", 6),
+            (True, None, 6),
+            (True, "3 days", 6),
+            (True, "2 days", 5),
+            (False, "2 days", 6),
         ],
     )
     @freezegun.freeze_time("2025-01-06T18:03:0Z")
@@ -269,8 +266,7 @@ class TestIncrementalModelSampleModeRelative(BaseSampleMode):
         mocker: MockerFixture,
         event_catcher: EventCatcher,
         sample_mode_available: bool,
-        run_sample_mode: bool,
-        sample_window: Optional[str],
+        sample: Optional[str],
         expected_rows: int,
     ):
         # writing the input_model is necessary because we've parametrized the test
@@ -293,8 +289,8 @@ class TestIncrementalModelSampleModeRelative(BaseSampleMode):
         write_file(later_input_model_sql, "models", "input_model.sql")
 
         run_args = ["run"]
-        if run_sample_mode:
-            run_args.extend(["--sample", f"--sample-window={sample_window}"])
+        if sample is not None:
+            run_args.extend([f"--sample={sample}"])
 
         _ = run_dbt(run_args, callbacks=[event_catcher.catch])
 
@@ -322,14 +318,14 @@ class TestIncrementalModelSampleModeSpecific(BaseSampleMode):
         return EventCatcher(event_to_catch=JinjaLogInfo, predicate=lambda event: "is_incremental: True" in event.info.msg)  # type: ignore
 
     @pytest.mark.parametrize(
-        "sample_mode_available,run_sample_mode,sample_window,expected_rows",
+        "sample_mode_available,sample,expected_rows",
         [
-            (True, False, None, 6),
-            (True, True, "{'start': '2025-01-03', 'end': '2025-01-07'}", 6),
-            (True, True, "{'start': '2025-01-04', 'end': '2025-01-06'}", 5),
-            (True, True, "{'start': '2025-01-05', 'end': '2025-01-07'}", 5),
-            (True, True, "{'start': '2024-12-31', 'end': '2025-01-03'}", 3),
-            (False, True, "{'start': '2024-12-31', 'end': '2025-01-03'}", 6),
+            (True, None, 6),
+            (True, "{'start': '2025-01-03', 'end': '2025-01-07'}", 6),
+            (True, "{'start': '2025-01-04', 'end': '2025-01-06'}", 5),
+            (True, "{'start': '2025-01-05', 'end': '2025-01-07'}", 5),
+            (True, "{'start': '2024-12-31', 'end': '2025-01-03'}", 3),
+            (False, "{'start': '2024-12-31', 'end': '2025-01-03'}", 6),
         ],
     )
     def test_incremental_model_sample(
@@ -338,8 +334,7 @@ class TestIncrementalModelSampleModeSpecific(BaseSampleMode):
         mocker: MockerFixture,
         event_catcher: EventCatcher,
         sample_mode_available: bool,
-        run_sample_mode: bool,
-        sample_window: Optional[str],
+        sample: Optional[str],
         expected_rows: int,
     ):
         # writing the input_model is necessary because we've parametrized the test
@@ -362,8 +357,8 @@ class TestIncrementalModelSampleModeSpecific(BaseSampleMode):
         write_file(later_input_model_sql, "models", "input_model.sql")
 
         run_args = ["run"]
-        if run_sample_mode:
-            run_args.extend(["--sample", f"--sample-window={sample_window}"])
+        if sample is not None:
+            run_args.extend([f"--sample={sample}"])
 
         _ = run_dbt(run_args, callbacks=[event_catcher.catch])
 

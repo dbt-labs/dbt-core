@@ -239,8 +239,7 @@ class BaseResolver(metaclass=abc.ABCMeta):
         event_time_filter = None
         sample_mode = bool(
             os.environ.get("DBT_EXPERIMENTAL_SAMPLE_MODE")
-            and getattr(self.config.args, "sample", False)
-            and getattr(self.config.args, "sample_window", None)
+            and getattr(self.config.args, "sample", None)
         )
 
         # TODO The number of branches here is getting rough. We should consider ways to simplify
@@ -263,13 +262,13 @@ class BaseResolver(metaclass=abc.ABCMeta):
                 # Sample mode microbatch models
                 if sample_mode:
                     start = (
-                        self.config.args.sample_window.start
-                        if self.config.args.sample_window.start > self.model.batch.event_time_start
+                        self.config.args.sample.start
+                        if self.config.args.sample.start > self.model.batch.event_time_start
                         else self.model.batch.event_time_start
                     )
                     end = (
-                        self.config.args.sample_window.end
-                        if self.config.args.sample_window.end < self.model.batch.event_time_end
+                        self.config.args.sample.end
+                        if self.config.args.sample.end < self.model.batch.event_time_end
                         else self.model.batch.event_time_end
                     )
                     event_time_filter = EventTimeFilter(
@@ -290,8 +289,8 @@ class BaseResolver(metaclass=abc.ABCMeta):
             elif sample_mode:
                 event_time_filter = EventTimeFilter(
                     field_name=target.config.event_time,
-                    start=self.config.args.sample_window.start,
-                    end=self.config.args.sample_window.end,
+                    start=self.config.args.sample.start,
+                    end=self.config.args.sample.end,
                 )
 
         return event_time_filter

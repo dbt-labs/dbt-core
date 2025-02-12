@@ -6,7 +6,7 @@ from dbt.cli.option_types import (
     YAML,
     ChoiceTuple,
     Package,
-    SampleWindowType,
+    SampleType,
     WarnErrorOptionsType,
 )
 from dbt.cli.options import MultiOption
@@ -525,20 +525,11 @@ resource_type = click.option(
 )
 
 sample = click.option(
-    "--sample/--no-sample",
+    "--sample",
     envvar="DBT_SAMPLE",
-    help="Run in sample mode, creating only samples of models where possible",
-    default=False,
-    is_flag=True,
-    hidden=True,  # TODO: Unhide
-)
-
-sample_window = click.option(
-    "--sample-window",
-    envvar="DBT_SAMPLE_WINDOW",
-    help="The time window to use with sample mode. Example: '3 days'.",
+    help="Run in sample mode with given SAMPLE_WINDOW spec, such that ref/source calls are sampled by the sample window.",
     default=None,
-    type=SampleWindowType(),
+    type=SampleType(),
     hidden=True,  # TODO: Unhide
 )
 

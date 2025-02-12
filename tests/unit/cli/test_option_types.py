@@ -6,7 +6,7 @@ import pytest
 import pytz
 from click import BadParameter, Option
 
-from dbt.cli.option_types import YAML, SampleWindowType
+from dbt.cli.option_types import YAML, SampleType
 from dbt.event_time.sample_window import SampleWindow
 
 
@@ -32,7 +32,7 @@ class TestYAML:
         assert "--vars" in e.value.format_message()
 
 
-class TestSampleWindowType:
+class TestSampleType:
     @pytest.mark.parametrize(
         "input,expected_result",
         [
@@ -61,7 +61,7 @@ class TestSampleWindowType:
     )
     def test_convert(self, input: str, expected_result: Union[SampleWindow, Exception]):
         try:
-            result = SampleWindowType().convert(input, Option(["--sample-window"]), None)
+            result = SampleType().convert(input, Option(["--sample"]), None)
             assert result == expected_result
         except Exception as e:
             assert str(e) == str(expected_result)
@@ -76,5 +76,5 @@ class TestSampleWindowType:
             start=datetime(2025, 1, 25, 2, 3, 0, 0, pytz.UTC),
             end=datetime(2025, 1, 28, 2, 3, 0, 0, pytz.UTC),
         )
-        result = SampleWindowType().convert(input, Option(["--sample-window"]), None)
+        result = SampleType().convert(input, Option(["--sample"]), None)
         assert result == expected_result
