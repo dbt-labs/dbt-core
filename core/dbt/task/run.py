@@ -55,6 +55,7 @@ from dbt_common.events.contextvars import log_contextvars
 from dbt_common.events.functions import fire_event, get_invocation_id
 from dbt_common.events.types import Formatting
 from dbt_common.exceptions import DbtValidationError
+from dbt_common.invocation import get_invocation_started_at
 
 
 @functools.total_ordering
@@ -574,7 +575,7 @@ class MicrobatchModelRunner(ModelRunner):
             is_incremental=self._is_incremental(model),
             event_time_start=event_time_start,
             event_time_end=event_time_end,
-            default_end_time=self.config.invoked_at,
+            default_end_time=get_invocation_started_at(),
         )
 
         if self.batch_idx is None:
