@@ -49,6 +49,8 @@ seeds:
     - name: input_seed
       config:
         event_time: event_time
+        column_types:
+            event_time: timestamp
 """
 
 sample_mode_model_sql = """
