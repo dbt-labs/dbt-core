@@ -459,3 +459,66 @@ class TestSecondaryProfiles(BaseConfigTest):
             "Secondary profile 'secondary_profile_1' cannot have nested secondary profiles",
             str(exc.exception),
         )
+
+    def test_secondary_profiles_no_outputs(self):
+        profile_data_with_no_outputs = deepcopy(self.default_profile_data)
+        profile_data_with_no_outputs["default"]["outputs"]["postgres"]["secondary_profiles"] = [
+            {
+                "secondary_profile_1": {
+                    "target": "secondary_target_1",
+                }
+            }
+        ]
+        renderer = empty_profile_renderer()
+        with self.assertRaises(dbt.exceptions.DbtProfileError) as exc:
+            dbt.config.Profile.from_raw_profiles(profile_data_with_no_outputs, "default", renderer)
+        self.assertIn("outputs not specified", str(exc.exception))
+        self.assertIn("secondary_profile_1", str(exc.exception))
+
+    def test_secondary_profiles_no_target(self):
+        profile_data_with_no_target = deepcopy(self.default_profile_data)
+        profile_data_with_no_target["default"]["outputs"]["postgres"]["secondary_profiles"] = [
+            {
+                "secondary_profile_1": {
+                    "outputs": {
+                        "secondary_target_1": {
+                            "type": "postgres",
+                            "host": "secondary-host",
+                            "port": 1234,
+                            "user": "secondary_user",
+                            "password": "secondary_password",
+                            "schema": "secondary_schema",
+                            "database": "secondary_db",
+                        }
+                    }
+                }
+            }
+        ]
+        renderer = empty_profile_renderer()
+        with self.assertRaises(dbt.exceptions.DbtProfileError) as exc:
+            dbt.config.Profile.from_raw_profiles(profile_data_with_no_target, "default", renderer)
+        self.assertIn("does not have a target named 'default'", str(exc.exception))
+
+    def test_secondary_profiles_no_host(self):
+        profile_data_with_no_host = deepcopy(self.default_profile_data)
+        profile_data_with_no_host["default"]["outputs"]["postgres"]["secondary_profiles"] = [
+            {
+                "secondary_profile_1": {
+                    "target": "secondary_target_1",
+                    "outputs": {
+                        "secondary_target_1": {
+                            "type": "postgres",
+                            "port": 1234,
+                            "user": "secondary_user",
+                            "password": "secondary_password",
+                            "schema": "secondary_schema",
+                            "database": "secondary_db",
+                        }
+                    },
+                }
+            }
+        ]
+        renderer = empty_profile_renderer()
+        with self.assertRaises(dbt.exceptions.DbtProfileError) as exc:
+            dbt.config.Profile.from_raw_profiles(profile_data_with_no_host, "default", renderer)
+        self.assertIn("'host' is a required property", str(exc.exception))
