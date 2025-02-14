@@ -254,13 +254,9 @@ class BaseResolver(metaclass=abc.ABCMeta):
 
         # Only do event time filtering if the base node has the necessary event time configs
         if (
-            (
-                isinstance(target.config, NodeConfig)
-                or isinstance(target.config, SourceConfig)
-                or isinstance(target.config, SeedConfig)
-            )
+            isinstance(target.config, (NodeConfig, SeedConfig, SourceConfig))
             and target.config.event_time
-            and (isinstance(self.model, ModelNode) or isinstance(self.model, SnapshotNode))
+            and isinstance(self.model, (ModelNode, SnapshotNode))
         ):
 
             # Handling of microbatch models
