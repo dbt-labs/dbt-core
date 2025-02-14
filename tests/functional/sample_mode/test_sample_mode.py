@@ -122,12 +122,14 @@ class TestBasicSampleMode(BaseSampleMode):
         return EventCatcher(event_to_catch=JinjaLogInfo)  # type: ignore
 
     @pytest.mark.parametrize(
-        "sample_mode_available,run_sample_mode,expected_row_count",
+        "dbt_command,sample_mode_available,run_sample_mode,expected_row_count",
         [
-            (True, True, 2),
-            (True, False, 3),
-            (False, True, 3),
-            (False, False, 3),
+            ("run", True, True, 2),
+            ("run", True, False, 3),
+            ("run", False, True, 3),
+            ("run", False, False, 3),
+            ("build", True, True, 2),
+            ("build", False, True, 3),
         ],
     )
     @freezegun.freeze_time("2025-01-03T02:03:0Z")
@@ -136,11 +138,12 @@ class TestBasicSampleMode(BaseSampleMode):
         project,
         mocker: MockerFixture,
         event_catcher: EventCatcher,
+        dbt_command: str,
         sample_mode_available: bool,
         run_sample_mode: bool,
         expected_row_count: int,
     ):
-        run_args = ["run"]
+        run_args = [dbt_command]
         expected_sample = None
         if run_sample_mode:
             run_args.append("--sample=1 day")

@@ -179,6 +179,7 @@ def cli(ctx, **kwargs):
 @p.project_dir
 @p.resource_type
 @p.exclude_resource_type
+@p.sample
 @p.select
 @p.selector
 @p.show
