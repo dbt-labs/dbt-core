@@ -60,6 +60,7 @@ class Profile(HasCredentials):
     credentials: Credentials
     profile_env_vars: Dict[str, Any]
     log_cache_events: bool
+    secondary_profiles: Dict[str, "Profile"]
 
     def __init__(
         self,
@@ -79,6 +80,7 @@ class Profile(HasCredentials):
         self.log_cache_events = (
             get_flags().LOG_CACHE_EVENTS
         )  # never available on init, set for adapter instantiation via AdapterRequiredConfig
+        self.secondary_profiles = {}
 
     def to_profile_info(self, serialize_credentials: bool = False) -> Dict[str, Any]:
         """Unlike to_project_config, this dict is not a mirror of any existing
@@ -325,12 +327,48 @@ defined in your profiles.yml file. You can find profiles.yml here:
             profile_data, profile_name, target_name
         )
 
-        return cls.from_credentials(
+        profile = cls.from_credentials(
             credentials=credentials,
             profile_name=profile_name,
             target_name=target_name,
             threads=threads,
         )
+
+        raw_secondary_profiles = profile_data.pop("secondary_profiles", [])
+
+        if raw_secondary_profiles:
+            for p in raw_secondary_profiles:
+                for secondary_profile_name, secondary_raw_profile in p.items():
+                    if secondary_profile_name in profile.secondary_profiles:
+                        raise DbtProfileError(
+                            f"Secondary profile '{secondary_profile_name}' is already defined"
+                        )
+
+                    secondary_target_name, secondary_profile_data = cls.render_profile(
+                        secondary_raw_profile, secondary_profile_name, target_override, renderer
+                    )
+
+                    if secondary_profile_data.get("secondary_profiles"):
+                        raise DbtProfileError(
+                            f"Secondary profile '{secondary_profile_name}' cannot have nested secondary profiles"
+                        )
+
+                    secondary_threads = secondary_profile_data.pop("threads", DEFAULT_THREADS)
+                    if threads_override is not None:
+                        secondary_threads = threads_override
+
+                    secondary_credentials: Credentials = cls._credentials_from_profile(
+                        secondary_profile_data, secondary_profile_name, secondary_target_name
+                    )
+
+                    profile.secondary_profiles[secondary_profile_name] = cls.from_credentials(
+                        credentials=secondary_credentials,
+                        profile_name=secondary_profile_name,
+                        target_name=secondary_target_name,
+                        threads=secondary_threads,
+                    )
+
+        return profile
 
     @classmethod
     def from_raw_profiles(
