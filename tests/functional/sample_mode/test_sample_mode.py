@@ -95,6 +95,14 @@ SELECT * FROM {{ ref("input_model") }}
 {% endif %}
 """
 
+snapshot_input_model_sql = """
+{% snapshot snapshot_input_model %}
+    {{ config(strategy='timestamp', unique_key='id', updated_at='event_time') }}
+
+    select * from {{ ref('input_model') }}
+{% endsnapshot %}
+"""
+
 
 class BaseSampleMode:
     # TODO This is now used in 3 test files, it might be worth turning into a full test utility method
@@ -440,3 +448,51 @@ class TestSampleSeedRefs(BaseSampleMode):
             relation_name="sample_input_seed",
             expected_row_count=expected_row_count,
         )
+
+
+class TestSamplingModelFromSnapshot(BaseSampleMode):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "input_model.sql": input_model_sql,
+        }
+
+    @pytest.fixture(scope="class")
+    def snapshots(self):
+        return {
+            "snapshot_input_model.sql": snapshot_input_model_sql,
+        }
+
+    @pytest.mark.parametrize(
+        "sample_mode_available,run_sample_mode,expected_row_count",
+        [
+            (True, True, 2),
+            (True, False, 3),
+            (False, True, 3),
+            (False, False, 3),
+        ],
+    )
+    @freezegun.freeze_time("2025-01-03T02:03:0Z")
+    def test_sample_mode(
+        self,
+        project,
+        mocker: MockerFixture,
+        sample_mode_available: bool,
+        run_sample_mode: bool,
+        expected_row_count: int,
+    ):
+        run_args = ["build"]
+        if run_sample_mode:
+            run_args.append("--sample=1 day")
+
+        if sample_mode_available:
+            mocker.patch.dict(os.environ, {"DBT_EXPERIMENTAL_SAMPLE_MODE": "1"})
+
+        _ = run_dbt(run_args)
+        self.assert_row_count(
+            project=project,
+            relation_name="snapshot_input_model",
+            expected_row_count=expected_row_count,
+        )
+        relation = relation_from_name(project.adapter, "snapshot_input_model")
+        project.run_sql(f"drop table if exists {relation}")
