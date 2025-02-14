@@ -97,10 +97,16 @@ SELECT * FROM {{ ref("input_model") }}
 
 snapshot_input_model_sql = """
 {% snapshot snapshot_input_model %}
-    {{ config(strategy='timestamp', unique_key='id', updated_at='event_time') }}
+    {{ config(strategy='timestamp', unique_key='id', updated_at='event_time', event_time='event_time') }}
 
     select * from {{ ref('input_model') }}
 {% endsnapshot %}
+"""
+
+model_from_snapshot_sql = """
+{{ config(materialized='table') }}
+
+SELECT * FROM {{ ref('snapshot_input_model') }}
 """
 
 
@@ -115,6 +121,10 @@ class BaseSampleMode:
             run_dbt(["show", "--inline", f"select * from {relation}"])
 
             assert result[0] == expected_row_count
+
+    def drop_table(self, project, relation_name: str):
+        relation = relation_from_name(project.adapter, "snapshot_input_model")
+        project.run_sql(f"drop table if exists {relation}")
 
 
 class TestBasicSampleMode(BaseSampleMode):
@@ -494,5 +504,66 @@ class TestSamplingModelFromSnapshot(BaseSampleMode):
             relation_name="snapshot_input_model",
             expected_row_count=expected_row_count,
         )
-        relation = relation_from_name(project.adapter, "snapshot_input_model")
-        project.run_sql(f"drop table if exists {relation}")
+        self.drop_table(project, "snapshot_input_model")
+
+
+class TestSamplingSnapshot(BaseSampleMode):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "input_model.sql": input_model_sql,
+        }
+
+    @pytest.fixture(scope="class")
+    def snapshots(self):
+        return {
+            "snapshot_input_model.sql": snapshot_input_model_sql,
+        }
+
+    @pytest.mark.parametrize(
+        "sample_mode_available,run_sample_mode,expected_row_count",
+        [
+            (True, True, 2),
+            (True, False, 3),
+            (False, True, 3),
+            (False, False, 3),
+        ],
+    )
+    @freezegun.freeze_time("2025-01-03T02:03:0Z")
+    def test_sample_mode(
+        self,
+        project,
+        mocker: MockerFixture,
+        sample_mode_available: bool,
+        run_sample_mode: bool,
+        expected_row_count: int,
+    ):
+        run_args = ["build"]
+
+        # create the snapshot before building a model that depends on it
+        _ = run_dbt(run_args)
+        # Snapshot should always have 3 in this test because we don't sample it
+        self.assert_row_count(
+            project=project,
+            relation_name="snapshot_input_model",
+            expected_row_count=3,
+        )
+
+        if run_sample_mode:
+            run_args.append("--sample=1 day")
+
+        if sample_mode_available:
+            mocker.patch.dict(os.environ, {"DBT_EXPERIMENTAL_SAMPLE_MODE": "1"})
+
+        # create model that depends on the snapshot
+        write_file(
+            model_from_snapshot_sql, project.project_root, "models", "model_from_snapshot.sql"
+        )
+
+        _ = run_dbt(run_args)
+        self.assert_row_count(
+            project=project,
+            relation_name="model_from_snapshot",
+            expected_row_count=expected_row_count,
+        )
+        self.drop_table(project, "snapshot_input_model")

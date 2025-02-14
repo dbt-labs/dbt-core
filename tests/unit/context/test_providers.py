@@ -9,7 +9,7 @@ import pytz
 from pytest_mock import MockerFixture
 
 from dbt.adapters.base import BaseRelation
-from dbt.artifacts.resources import NodeConfig, Quoting, SeedConfig
+from dbt.artifacts.resources import NodeConfig, Quoting, SeedConfig, SnapshotConfig
 from dbt.artifacts.resources.types import BatchSize
 from dbt.context.providers import (
     BaseResolver,
@@ -225,6 +225,18 @@ class TestBaseResolver:
             ),
             # Target model from snapshot, without sample, but sample mode availavle
             (False, "table", None, True, None, True, NodeConfig, SnapshotNode, False),
+            # Target snapshot from model, with sample
+            (
+                False,
+                "table",
+                None,
+                True,
+                SampleWindow.from_relative_string("2 days"),
+                True,
+                SnapshotConfig,
+                ModelNode,
+                True,
+            ),
         ],
     )
     def test_resolve_event_time_filter(
