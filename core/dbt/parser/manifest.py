@@ -1672,6 +1672,7 @@ def _get_doc_blocks(description: str, manifest: Manifest, node_package: str) -> 
                 isinstance(node, Call)
                 and hasattr(node, "node")
                 and hasattr(node, "args")
+                and hasattr(node.node, "name")
                 and node.node.name == "doc"
             ):
                 doc_args = [arg.value for arg in node.args]
