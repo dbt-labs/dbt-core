@@ -1,0 +1,6 @@
+kind: Features
+body: Allow sampling nodes snapshots  depend on and of snapshots as a dependency
+time: 2025-02-14T15:29:57.118017-06:00
+custom:
+  Author: QMalcolm
+  Issue: "11301"
