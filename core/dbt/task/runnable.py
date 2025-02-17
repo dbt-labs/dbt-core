@@ -226,18 +226,25 @@ class GraphRunnableTask(ConfiguredTask):
 
         return cls(self.config, adapter, node, run_count, num_nodes)
 
-    def call_runner(self, runner: BaseRunner) -> RunResult:
+    def call_runner(self, runner: BaseRunner, parent_context=None) -> RunResult:
         tracer = trace.get_tracer("dbt-runner")
         node_info = runner.node.node_info
-        model_span = tracer.start_span(node_info["unique_id"])
+        if parent_context is None:
+            parent_context = context.get_current()
+        model_span = tracer.start_span(node_info["unique_id"], context=parent_context)
         ctx = trace.set_span_in_context(model_span)
         token = context.attach(ctx)
         self._node_span_context_mapping[node_info["unique_id"]] = model_span.get_span_context()
-        for parent_node in runner.node.depends_on.nodes:
-            if parent_node in self._node_span_context_mapping:
-                model_span.add_link(
-                    self._node_span_context_mapping[parent_node], {"model_name": parent_node}
-                )
+        if hasattr(runner.node.depends_on, "nodes"):
+            for parent_node in runner.node.depends_on.nodes:
+                if parent_node in self._node_span_context_mapping:
+                    try:
+                        model_span.add_link(
+                            self._node_span_context_mapping[parent_node],
+                            {"model_name": parent_node},
+                        )
+                    except Exception:
+                        pass
         with log_contextvars(node_info=node_info):
             runner.node.update_event_status(
                 started_at=datetime.utcnow().isoformat(), node_status=RunningStatus.Started
@@ -323,6 +330,7 @@ class GraphRunnableTask(ConfiguredTask):
 
         This does still go through the callback path for result collection.
         """
+        args.append(context.get_current())
         if self.config.args.single_threaded:
             callback(self.call_runner(*args))
         else:
