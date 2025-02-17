@@ -8,11 +8,10 @@ import re
 import threading
 from typing import Any, Callable, Dict, Iterable, List, Mapping, NoReturn, Optional, Set
 
-import opentelemetry
-
 # These modules are added to the context. Consider alternative
 # approaches which will extend well to potentially many modules
 import pytz
+from opentelemetry import context, trace
 
 import dbt.flags as flags_module
 from dbt import tracking, utils
@@ -88,9 +87,14 @@ def get_itertools_module_context() -> Dict[str, Any]:
     return {name: getattr(itertools, name) for name in context_exports}
 
 
-def get_context_opentelemetry() -> Dict[str, Dict[str, Any]]:
-    context_exports = ["trace", "context"]
-    return {name: getattr(opentelemetry, name) for name in context_exports}
+def get_otel_trace_module_context() -> Dict[str, Dict[str, Any]]:
+    context_exports = trace.__all__
+    return {name: getattr(trace, name) for name in context_exports}
+
+
+def get_otel_context_module_context() -> Dict[str, Dict[str, Any]]:
+    context_exports = context.__all__
+    return {name: getattr(context, name) for name in context_exports}
 
 
 def get_context_modules() -> Dict[str, Dict[str, Any]]:
@@ -99,7 +103,10 @@ def get_context_modules() -> Dict[str, Dict[str, Any]]:
         "datetime": get_datetime_module_context(),
         "re": get_re_module_context(),
         "itertools": get_itertools_module_context(),
-        "opentelemetry": get_context_opentelemetry(),
+        "opentelemetry": {
+            "trace": get_otel_trace_module_context(),
+            "context": get_otel_context_module_context(),
+        },
     }
 
 
