@@ -42,3 +42,4 @@ class TestDocBlocksBackCompat:
 
         for column_name, column in model_data["columns"].items():
             assert column["description"] == f"This is a test for column {column_name}"
+            assert column["doc_blocks"] == []
