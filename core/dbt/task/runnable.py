@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import AbstractSet, Dict, Iterable, List, Optional, Set, Tuple, Type, Union
 
 from opentelemetry import context, trace
-from opentelemetry.trace import SpanContext, StatusCode
+from opentelemetry.trace import Link, SpanContext, StatusCode
 
 import dbt.exceptions
 import dbt.tracking
@@ -95,6 +95,7 @@ class GraphRunnableTask(ConfiguredTask):
         self.run_count: int = 0
         self.started_at: float = 0
         self._node_span_context_mapping: Dict[str, SpanContext] = {}
+        self._dbt_tracer = trace.get_tracer("com.dbt.runner")
 
         if self.args.state:
             self.previous_state = PreviousState(
@@ -227,25 +228,21 @@ class GraphRunnableTask(ConfiguredTask):
         return cls(self.config, adapter, node, run_count, num_nodes)
 
     def call_runner(self, runner: BaseRunner, parent_context=None) -> RunResult:
-        tracer = trace.get_tracer("dbt-runner")
         node_info = runner.node.node_info
-        if parent_context is None:
-            parent_context = context.get_current()
-        model_span = tracer.start_span(node_info["unique_id"], context=parent_context)
-        ctx = trace.set_span_in_context(model_span)
-        token = context.attach(ctx)
-        self._node_span_context_mapping[node_info["unique_id"]] = model_span.get_span_context()
+        links = []
         if hasattr(runner.node.depends_on, "nodes"):
             for parent_node in runner.node.depends_on.nodes:
                 if parent_node in self._node_span_context_mapping:
-                    try:
-                        model_span.add_link(
+                    links.append(
+                        Link(
                             self._node_span_context_mapping[parent_node],
-                            {"model_name": parent_node},
-                        )
-                    except Exception:
-                        pass
-        with log_contextvars(node_info=node_info):
+                            {"parent_model_fqn": parent_node},
+                        ),
+                    )
+        with log_contextvars(node_info=node_info), self._dbt_tracer.start_as_current_span(
+            node_info["unique_id"], context=parent_context, links=links
+        ) as node_span:
+            self._node_span_context_mapping[node_info["unique_id"]] = node_span.get_span_context()
             runner.node.update_event_status(
                 started_at=datetime.utcnow().isoformat(), node_status=RunningStatus.Started
             )
@@ -265,9 +262,7 @@ class GraphRunnableTask(ConfiguredTask):
                 thread_exception = e
             finally:
                 if result.status in (NodeStatus.Error, NodeStatus.Fail, NodeStatus.PartialSuccess):
-                    model_span.set_status(StatusCode.ERROR)
-                context.detach(token)
-                model_span.end()
+                    node_span.set_status(StatusCode.ERROR)
                 if result is not None:
                     fire_event(
                         NodeFinished(

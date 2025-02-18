@@ -7,7 +7,7 @@ from datetime import datetime
 from multiprocessing.pool import ThreadPool
 from typing import AbstractSet, Any, Dict, Iterable, List, Optional, Set, Tuple, Type
 
-from opentelemetry import context, trace
+from opentelemetry import trace
 
 from dbt import tracking, utils
 from dbt.adapters.base import BaseAdapter, BaseRelation
@@ -700,6 +700,7 @@ class RunTask(CompileTask):
     ) -> None:
         super().__init__(args, config, manifest)
         self.batch_map = batch_map
+        self._dbt_tracer = trace.get_tracer("com.dbt.runner")
 
     def raise_on_first_error(self) -> bool:
         return False
@@ -891,8 +892,7 @@ class RunTask(CompileTask):
         if num_hooks == 0:
             return status
 
-        tracer = trace.get_tracer("dbt-runner")
-        with tracer.start_as_current_span(hook_type, context=context.get_current()) as _:
+        with self._dbt_tracer.start_as_current_span(hook_type) as _:
             for idx, hook in enumerate(ordered_hooks, 1):
                 with log_contextvars(node_info=hook.node_info):
                     hook.index = idx
