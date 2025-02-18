@@ -8,6 +8,7 @@ from multiprocessing.pool import ThreadPool
 from typing import AbstractSet, Any, Dict, Iterable, List, Optional, Set, Tuple, Type
 
 from opentelemetry import trace
+from opentelemetry.trace import StatusCode
 
 from dbt import tracking, utils
 from dbt.adapters.base import BaseAdapter, BaseRelation
@@ -892,7 +893,7 @@ class RunTask(CompileTask):
         if num_hooks == 0:
             return status
 
-        with self._dbt_tracer.start_as_current_span(hook_type) as _:
+        with self._dbt_tracer.start_as_current_span(hook_type) as hook_span:
             for idx, hook in enumerate(ordered_hooks, 1):
                 with log_contextvars(node_info=hook.node_info):
                     hook.index = idx
@@ -934,6 +935,7 @@ class RunTask(CompileTask):
                         else:
                             message = f"{hook_name} failed, error:\n {message}"
                             failed = True
+                            hook_span.set_status(StatusCode.ERROR)
                     else:
                         status = RunStatus.Skipped
                         message = f"{hook_name} skipped"
