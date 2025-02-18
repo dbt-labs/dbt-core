@@ -42,6 +42,7 @@ class BaseSimpleSeedColumnOverride:
                     "seed_tricky": {
                         "enabled": True,
                         "+column_types": self.seed_tricky_types(),
+                        "+delimiter": "|",
                     },
                 },
             },
