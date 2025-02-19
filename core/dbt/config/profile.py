@@ -2,8 +2,6 @@ import os
 from dataclasses import dataclass
 from typing import Any, Dict, Optional, Tuple
 
-from typing_extensions import Self
-
 from dbt.adapters.contracts.connection import Credentials, HasCredentials
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.contracts.project import ProfileConfig
@@ -62,7 +60,7 @@ class Profile(HasCredentials):
     credentials: Credentials
     profile_env_vars: Dict[str, Any]
     log_cache_events: bool
-    secondary_profiles: Dict[str, Self]
+    secondary_profiles: Dict[str, "Profile"]
 
     def __init__(
         self,
@@ -233,7 +231,7 @@ defined in your profiles.yml file. You can find profiles.yml here:
         threads: int,
         profile_name: str,
         target_name: str,
-    ) -> Self:
+    ) -> "Profile":
         """Create a profile from an existing set of Credentials and the
         remaining information.
 
@@ -304,7 +302,7 @@ defined in your profiles.yml file. You can find profiles.yml here:
         target_override: Optional[str] = None,
         threads_override: Optional[int] = None,
         is_secondary: bool = False,
-    ) -> Self:
+    ) -> "Profile":
         """Create a profile from its raw profile information.
 
          (this is an intermediate step, mostly useful for unit testing)
@@ -374,7 +372,7 @@ defined in your profiles.yml file. You can find profiles.yml here:
         renderer: ProfileRenderer,
         target_override: Optional[str] = None,
         threads_override: Optional[int] = None,
-    ) -> Self:
+    ) -> "Profile":
         """
         :param raw_profiles: The profile data, from disk as yaml.
         :param profile_name: The profile name to use.
@@ -415,7 +413,7 @@ defined in your profiles.yml file. You can find profiles.yml here:
         profile_name_override: Optional[str] = None,
         target_override: Optional[str] = None,
         threads_override: Optional[int] = None,
-    ) -> Self:
+    ) -> "Profile":
         """Given the raw profiles as read from disk and the name of the desired
         profile if specified, return the profile component of the runtime
         config.
