@@ -20,8 +20,8 @@ on:
 
 # only run this once per PR at a time
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: false  # wait for in-progress runs to complete to prevent race condition
 
 env:
     required_approvals: 2
