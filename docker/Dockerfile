@@ -1,4 +1,4 @@
-ARG py_version=3.11.2
+ARG py_version=3.12.9
 
 FROM python:$py_version-slim-bookworm as base
 
