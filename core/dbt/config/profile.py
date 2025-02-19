@@ -1,6 +1,6 @@
 import os
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Self, Tuple
 
 from dbt.adapters.contracts.connection import Credentials, HasCredentials
 from dbt.clients.yaml_helper import load_yaml_text
@@ -60,7 +60,7 @@ class Profile(HasCredentials):
     credentials: Credentials
     profile_env_vars: Dict[str, Any]
     log_cache_events: bool
-    secondary_profiles: Dict[str, "Profile"]
+    secondary_profiles: Dict[str, Self]
 
     def __init__(
         self,
@@ -231,7 +231,7 @@ defined in your profiles.yml file. You can find profiles.yml here:
         threads: int,
         profile_name: str,
         target_name: str,
-    ) -> "Profile":
+    ) -> Self:
         """Create a profile from an existing set of Credentials and the
         remaining information.
 
@@ -259,7 +259,7 @@ defined in your profiles.yml file. You can find profiles.yml here:
         profile_name: str,
         target_override: Optional[str],
         renderer: ProfileRenderer,
-        infer_target_name: bool = False,
+        is_secondary: bool = False,
     ) -> Tuple[str, Dict[str, Any]]:
         """This is a containment zone for the hateful way we're rendering
         profiles.
@@ -276,7 +276,9 @@ defined in your profiles.yml file. You can find profiles.yml here:
         elif "target" in raw_profile:
             # render the target if it was parsed from yaml
             target_name = renderer.render_value(raw_profile["target"])
-        elif infer_target_name and len(raw_profile["outputs"]) == 1:
+        elif is_secondary and len(raw_profile["outputs"]) == 1:
+            # if we only have one target, we can infer the target name
+            # currently, this is only used for secondary profiles
             target_name = next(iter(raw_profile["outputs"]))
             fire_event(MissingProfileTarget(profile_name=profile_name, target_name=target_name))
         else:
@@ -299,7 +301,8 @@ defined in your profiles.yml file. You can find profiles.yml here:
         renderer: ProfileRenderer,
         target_override: Optional[str] = None,
         threads_override: Optional[int] = None,
-    ) -> "Profile":
+        is_secondary: bool = False,
+    ) -> Self:
         """Create a profile from its raw profile information.
 
          (this is an intermediate step, mostly useful for unit testing)
@@ -318,8 +321,14 @@ defined in your profiles.yml file. You can find profiles.yml here:
         """
         # TODO: should it be, and the values coerced to bool?
         target_name, profile_data = cls.render_profile(
-            raw_profile, profile_name, target_override, renderer
+            raw_profile, profile_name, target_override, renderer, is_secondary=is_secondary
         )
+
+        if is_secondary:
+            if "secondary_profiles" in profile_data:
+                raise DbtProfileError(
+                    f"Secondary profile '{profile_name}' cannot have nested secondary profiles"
+                )
 
         # valid connections never include the number of threads, but it's
         # stored on a per-connection level in the raw configs
@@ -338,43 +347,21 @@ defined in your profiles.yml file. You can find profiles.yml here:
             threads=threads,
         )
 
-        raw_secondary_profiles = profile_data.pop("secondary_profiles", [])
-
-        if raw_secondary_profiles:
-            for p in raw_secondary_profiles:
-                for secondary_profile_name, secondary_raw_profile in p.items():
-                    if secondary_profile_name in profile.secondary_profiles:
-                        raise DbtProfileError(
-                            f"Secondary profile '{secondary_profile_name}' is already defined"
-                        )
-
-                    secondary_target_name, secondary_profile_data = cls.render_profile(
-                        secondary_raw_profile,
-                        secondary_profile_name,
-                        target_override,
-                        renderer,
-                        infer_target_name=True,
+        for p in profile_data.pop("secondary_profiles", []):
+            for secondary_profile_name, secondary_raw_profile in p.items():
+                if secondary_profile_name in profile.secondary_profiles:
+                    raise DbtProfileError(
+                        f"Secondary profile '{secondary_profile_name}' is already defined"
                     )
 
-                    if secondary_profile_data.get("secondary_profiles"):
-                        raise DbtProfileError(
-                            f"Secondary profile '{secondary_profile_name}' cannot have nested secondary profiles"
-                        )
-
-                    secondary_threads = secondary_profile_data.pop("threads", DEFAULT_THREADS)
-                    if threads_override is not None:
-                        secondary_threads = threads_override
-
-                    secondary_credentials: Credentials = cls._credentials_from_profile(
-                        secondary_profile_data, secondary_profile_name, secondary_target_name
-                    )
-
-                    profile.secondary_profiles[secondary_profile_name] = cls.from_credentials(
-                        credentials=secondary_credentials,
-                        profile_name=secondary_profile_name,
-                        target_name=secondary_target_name,
-                        threads=secondary_threads,
-                    )
+                profile.secondary_profiles[secondary_profile_name] = cls.from_raw_profile_info(
+                    secondary_raw_profile,
+                    secondary_profile_name,
+                    renderer,
+                    target_override=target_override,
+                    threads_override=threads_override,
+                    is_secondary=True,
+                )
 
         return profile
 
@@ -386,7 +373,7 @@ defined in your profiles.yml file. You can find profiles.yml here:
         renderer: ProfileRenderer,
         target_override: Optional[str] = None,
         threads_override: Optional[int] = None,
-    ) -> "Profile":
+    ) -> Self:
         """
         :param raw_profiles: The profile data, from disk as yaml.
         :param profile_name: The profile name to use.
@@ -427,7 +414,7 @@ defined in your profiles.yml file. You can find profiles.yml here:
         profile_name_override: Optional[str] = None,
         target_override: Optional[str] = None,
         threads_override: Optional[int] = None,
-    ) -> "Profile":
+    ) -> Self:
         """Given the raw profiles as read from disk and the name of the desired
         profile if specified, return the profile component of the runtime
         config.
