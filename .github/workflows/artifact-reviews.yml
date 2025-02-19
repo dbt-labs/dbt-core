@@ -16,7 +16,7 @@ on:
     types: [opened, synchronize, reopened, edited]
   # retrigger check on review events
   pull_request_review:
-    types: [submitted, dismissed]
+    types: [submitted, edited, dismissed]
 
 # only run this once per PR at a time
 concurrency:
@@ -38,11 +38,13 @@ jobs:
       - name: "Dismiss previous workflow runs"
         run: |
           # Get all check runs for this PR's SHA
-          checks=$(gh api repos/${{ github.repository }}/commits/${{ github.event.pull_request.head.sha }}/check-runs \
+          cleanup_checks=$(gh api repos/${{ github.repository }}/commits/${{ github.event.pull_request.head.sha }}/check-runs \
+            --jq '.check_runs[] | select(.name == "Cleanup Previous Runs")')
+          review_checks=$(gh api repos/${{ github.repository }}/commits/${{ github.event.pull_request.head.sha }}/check-runs \
             --jq '.check_runs[] | select(.name == "Validate Additional Reviews")')
 
           # For each check run from this workflow (except current), dismiss it
-          echo "$checks" | jq -r '. | select(.id != ${{ github.run_id }}) | .id' | \
+          { echo "$cleanup_checks"; echo "$review_checks"; } | jq -r '. | select(.id != ${{ github.run_id }}) | .id' | \
           while read -r check_id; do
             echo "Dismissing check $check_id"
             gh api repos/${{ github.repository }}/check-runs/$check_id \
