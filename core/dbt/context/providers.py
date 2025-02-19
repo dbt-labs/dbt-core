@@ -981,6 +981,15 @@ class ProviderContext(ManifestContext):
                 ret_val = self.sql_results[name]
                 self.sql_results[name] = None
                 return ret_val
+        elif not self.execute:
+            from dbt_common.clients import agate_helper
+            return AttrDict(
+                {
+                    "response": None,   # needs stubbing
+                    "data": None,       # needs stubbing
+                    "table": agate_helper.empty_table(),
+                }
+            )
         else:
             # Handle trying to load a result that was never stored
             return None
