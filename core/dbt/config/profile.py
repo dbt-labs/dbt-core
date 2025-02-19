@@ -324,11 +324,10 @@ defined in your profiles.yml file. You can find profiles.yml here:
             raw_profile, profile_name, target_override, renderer, is_secondary=is_secondary
         )
 
-        if is_secondary:
-            if "secondary_profiles" in profile_data:
-                raise DbtProfileError(
-                    f"Secondary profile '{profile_name}' cannot have nested secondary profiles"
-                )
+        if is_secondary and "secondary_profiles" in profile_data:
+            raise DbtProfileError(
+                f"Secondary profile '{profile_name}' cannot have nested secondary profiles"
+            )
 
         # valid connections never include the number of threads, but it's
         # stored on a per-connection level in the raw configs
