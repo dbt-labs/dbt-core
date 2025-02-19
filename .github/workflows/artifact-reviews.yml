@@ -111,14 +111,17 @@ jobs:
 
             # Get all reviews
             REVIEWS=$(gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/reviews)
-
-            # Count approved reviews from core team members
+            # Count approved reviews from core team members (only most recent review per user)
             CORE_APPROVALS=0
             while IFS= read -r member; do
-              echo "$member"
-              echo "$user"
-              APPROVED=$(echo "$REVIEWS" | jq --arg user "$member" \
-                '.[] | select(.user.login == $user and .state == "APPROVED") | .user.login' | wc -l)
+              echo "member: $member"
+              APPROVED=$(echo "$REVIEWS" | jq --arg user "$member" '
+                group_by(.user.login) |
+                map(select(.[0].user.login == $user) |
+                    sort_by(.submitted_at) |
+                    last) |
+                map(select(.state == "APPROVED")) |
+                length')
               CORE_APPROVALS=$((CORE_APPROVALS + APPROVED))
             done <<< "${{ steps.core_members.outputs.membership }}"
 
@@ -128,7 +131,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: "Notify and fail if not enough approvals"
-        if: ${{ steps.artifact_files_changed.outputs.artifact_changes == 'true' && steps.check_approvals.outputs.CORE_APPROVALS != env.required_approvals }}
+        if: ${{ steps.artifact_files_changed.outputs.artifact_changes == 'true' && steps.check_approvals.outputs.CORE_APPROVALS < fromJSON(env.required_approvals) }}
         run: |
           title="PR Approval Requirements Not Met"
           message="Changes to artifact directory files requires at least ${{ env.required_approvals }} approvals from core team members. Current number of core team approvals: ${{ steps.check_approvals.outputs.CORE_APPROVALS }} "
@@ -136,7 +139,7 @@ jobs:
           exit 1
 
       - name: "Notify of sufficient approvals"
-        if: ${{ steps.artifact_files_changed.outputs.artifact_changes == 'true' && steps.check_approvals.outputs.CORE_APPROVALS >= env.required_approvals }}
+        if: ${{ steps.artifact_files_changed.outputs.artifact_changes == 'true' && steps.check_approvals.outputs.CORE_APPROVALS >= fromJSON(env.required_approvals) }}
         run: |
           title="Extra requirements met"
           message="Changes to artifact directory files requires at least ${{ env.required_approvals }} approvals from core team members. Current number of core team approvals: ${{ steps.check_approvals.outputs.CORE_APPROVALS }} "
