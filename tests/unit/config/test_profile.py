@@ -363,6 +363,46 @@ class TestSecondaryProfiles(BaseConfigTest):
             profile.threads, 10
         )  # primary profile should also have overridden threads
 
+    def test_secondary_profiles_multiple_outputs(self):
+        profile_data_with_multiple_outputs = deepcopy(self.default_profile_data)
+        profile_data_with_multiple_outputs["default"]["outputs"]["postgres"][
+            "secondary_profiles"
+        ] = [
+            {
+                "secondary_profile_1": {
+                    "target": "secondary_target_2",
+                    "outputs": {
+                        "secondary_target_1": {
+                            "type": "postgres",
+                            "host": "secondary-host",
+                            "port": 1234,
+                            "user": "secondary_user",
+                            "password": "secondary_password",
+                            "schema": "secondary_schema",
+                            "database": "secondary_db",
+                        },
+                        "secondary_target_2": {
+                            "type": "postgres",
+                            "host": "another-secondary-host",
+                            "port": 5678,
+                            "user": "another_secondary_user",
+                            "password": "another_secondary_password",
+                            "schema": "another_secondary_schema",
+                            "database": "another_secondary_db",
+                        },
+                    },
+                }
+            }
+        ]
+        renderer = empty_profile_renderer()
+        profile = dbt.config.Profile.from_raw_profiles(
+            profile_data_with_multiple_outputs, "default", renderer
+        )
+        self.assertIn("secondary_profile_1", profile.secondary_profiles)
+        secondary_profile = profile.secondary_profiles["secondary_profile_1"]
+        self.assertEqual(secondary_profile.profile_name, "secondary_profile_1")
+        self.assertEqual(secondary_profile.target_name, "secondary_target_2")
+
     def test_secondary_profiles_duplicate_names(self):
         profile_data_with_duplicate_secondary = deepcopy(self.default_profile_data)
         profile_data_with_duplicate_secondary["default"]["outputs"]["postgres"][
@@ -475,7 +515,7 @@ class TestSecondaryProfiles(BaseConfigTest):
         self.assertIn("outputs not specified", str(exc.exception))
         self.assertIn("secondary_profile_1", str(exc.exception))
 
-    def test_secondary_profiles_no_target(self):
+    def test_secondary_profiles_no_target_single_output(self):
         profile_data_with_no_target = deepcopy(self.default_profile_data)
         profile_data_with_no_target["default"]["outputs"]["postgres"]["secondary_profiles"] = [
             {
@@ -495,9 +535,54 @@ class TestSecondaryProfiles(BaseConfigTest):
             }
         ]
         renderer = empty_profile_renderer()
+
+        profile = dbt.config.Profile.from_raw_profiles(
+            profile_data_with_no_target, "default", renderer
+        )
+        self.assertIn("secondary_profile_1", profile.secondary_profiles)
+        secondary_profile = profile.secondary_profiles["secondary_profile_1"]
+        self.assertEqual(secondary_profile.profile_name, "secondary_profile_1")
+        self.assertEqual(secondary_profile.target_name, "secondary_target_1")
+
+    def test_secondary_profiles_no_target_multiple_outputs(self):
+        profile_data_with_duplicate_secondary = deepcopy(self.default_profile_data)
+        profile_data_with_duplicate_secondary["default"]["outputs"]["postgres"][
+            "secondary_profiles"
+        ] = [
+            {
+                "secondary_profile_1": {
+                    "outputs": {
+                        "secondary_target_1": {
+                            "type": "postgres",
+                            "host": "secondary-host",
+                            "port": 1234,
+                            "user": "secondary_user",
+                            "password": "secondary_password",
+                            "schema": "secondary_schema",
+                            "database": "secondary_db",
+                        },
+                        "secondary_target_2": {
+                            "type": "postgres",
+                            "host": "another-secondary-host",
+                            "port": 5678,
+                            "user": "another_secondary_user",
+                            "password": "another_secondary_password",
+                            "schema": "another_secondary_schema",
+                            "database": "another_secondary_db",
+                        },
+                    }
+                }
+            }
+        ]
+        renderer = empty_profile_renderer()
         with self.assertRaises(dbt.exceptions.DbtProfileError) as exc:
-            dbt.config.Profile.from_raw_profiles(profile_data_with_no_target, "default", renderer)
-        self.assertIn("does not have a target named 'default'", str(exc.exception))
+            dbt.config.Profile.from_raw_profiles(
+                profile_data_with_duplicate_secondary, "default", renderer
+            )
+        self.assertIn(
+            "The profile 'secondary_profile_1' does not have a target named 'default'",
+            str(exc.exception),
+        )
 
     def test_secondary_profiles_no_host(self):
         profile_data_with_no_host = deepcopy(self.default_profile_data)

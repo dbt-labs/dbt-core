@@ -259,6 +259,7 @@ defined in your profiles.yml file. You can find profiles.yml here:
         profile_name: str,
         target_override: Optional[str],
         renderer: ProfileRenderer,
+        infer_target_name: bool = False,
     ) -> Tuple[str, Dict[str, Any]]:
         """This is a containment zone for the hateful way we're rendering
         profiles.
@@ -275,6 +276,9 @@ defined in your profiles.yml file. You can find profiles.yml here:
         elif "target" in raw_profile:
             # render the target if it was parsed from yaml
             target_name = renderer.render_value(raw_profile["target"])
+        elif infer_target_name and len(raw_profile["outputs"]) == 1:
+            target_name = next(iter(raw_profile["outputs"]))
+            fire_event(MissingProfileTarget(profile_name=profile_name, target_name=target_name))
         else:
             target_name = "default"
             fire_event(MissingProfileTarget(profile_name=profile_name, target_name=target_name))
@@ -345,7 +349,11 @@ defined in your profiles.yml file. You can find profiles.yml here:
                         )
 
                     secondary_target_name, secondary_profile_data = cls.render_profile(
-                        secondary_raw_profile, secondary_profile_name, target_override, renderer
+                        secondary_raw_profile,
+                        secondary_profile_name,
+                        target_override,
+                        renderer,
+                        infer_target_name=True,
                     )
 
                     if secondary_profile_data.get("secondary_profiles"):
