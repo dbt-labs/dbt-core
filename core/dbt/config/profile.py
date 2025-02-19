@@ -1,6 +1,8 @@
 import os
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, Self, Tuple
+from typing import Any, Dict, Optional, Tuple
+
+from typing_extensions import Self
 
 from dbt.adapters.contracts.connection import Credentials, HasCredentials
 from dbt.clients.yaml_helper import load_yaml_text
