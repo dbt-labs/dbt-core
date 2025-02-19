@@ -276,10 +276,11 @@ defined in your profiles.yml file. You can find profiles.yml here:
         elif "target" in raw_profile:
             # render the target if it was parsed from yaml
             target_name = renderer.render_value(raw_profile["target"])
-        elif is_secondary and len(raw_profile["outputs"]) == 1:
+        elif is_secondary and len(raw_profile.get("outputs", [])) == 1:
             # if we only have one target, we can infer the target name
             # currently, this is only used for secondary profiles
             target_name = next(iter(raw_profile["outputs"]))
+            # the event name is slightly misleading, but the message indicates that we inferred the target name for a profile
             fire_event(MissingProfileTarget(profile_name=profile_name, target_name=target_name))
         else:
             target_name = "default"
