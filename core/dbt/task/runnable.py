@@ -264,6 +264,9 @@ class GraphRunnableTask(ConfiguredTask):
                 if result.status in (NodeStatus.Error, NodeStatus.Fail, NodeStatus.PartialSuccess):
                     node_span.set_status(StatusCode.ERROR)
                 node_span.set_attribute("node.status", result.status.value)
+                node_span.set_attribute("node.materialization", node_info["materialized"])
+                node_span.set_attribute("node.database", node_info["node_relation"]["database"])
+                node_span.set_attribute("node.schema", node_info["node_relation"]["schema"])
                 if result is not None:
                     fire_event(
                         NodeFinished(
