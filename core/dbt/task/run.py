@@ -941,6 +941,7 @@ class RunTask(CompileTask):
                         message = f"{hook_name} skipped"
 
                     hook.update_event_status(node_status=status)
+                    hook_span.set_attribute("node.status", status.value)
 
                     self.node_results.append(
                         RunResult(
@@ -999,8 +1000,9 @@ class RunTask(CompileTask):
         with adapter.connection_named("master"):
             self.defer_to_manifest()
             required_schemas = self.get_model_schemas(adapter, selected_uids)
-            self.create_schemas(adapter, required_schemas)
-            self.populate_adapter_cache(adapter, required_schemas)
+            with self._dbt_tracer.start_as_current_span("metadata setup") as _:
+                self.create_schemas(adapter, required_schemas)
+                self.populate_adapter_cache(adapter, required_schemas)
             self.populate_microbatch_batches(selected_uids)
             group_lookup.init(self.manifest, selected_uids)
             run_hooks_status = self.safe_run_hooks(adapter, RunHookType.Start, {})
