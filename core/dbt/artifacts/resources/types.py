@@ -75,3 +75,6 @@ class BatchSize(StrEnum):
     day = "day"
     month = "month"
     year = "year"
+
+    def plural(self) -> str:
+        return str(self) + "s"

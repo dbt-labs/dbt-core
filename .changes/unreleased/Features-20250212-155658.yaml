@@ -1,0 +1,6 @@
+kind: Features
+body: Combine `--sample` and `--sample-window` CLI params
+time: 2025-02-12T15:56:58.546879-06:00
+custom:
+  Author: QMalcolm
+  Issue: "11299"
