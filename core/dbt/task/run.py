@@ -783,11 +783,8 @@ class RunTask(CompileTask):
             cause = self._skipped_children.pop(runner.node.unique_id)
             runner.do_skip(cause=cause)
 
-        if isinstance(runner, MicrobatchModelRunner):
-            callback(self.handle_microbatch_model(runner, pool))
-        else:
-            args = [runner]
-            self._submit(pool, args, callback)
+        args = [runner]
+        self._submit(pool, args, callback)
 
     def handle_microbatch_model(
         self,
